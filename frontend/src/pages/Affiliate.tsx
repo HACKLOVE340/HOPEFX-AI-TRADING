@@ -210,7 +210,7 @@ const Affiliate: React.FC = () => {
           </p>
           <div style={styles.tierGrid}>
             {Object.entries(LEVEL_RATES).map(([level, rate]) => (
-              <div key={level} style={{ ...styles.tierCard, borderColor: LEVEL_COLORS[level] }}>
+              <div key={level} style={{ ...styles.tierCard, border: `1px solid ${LEVEL_COLORS[level]}` }}>
                 <div style={{ color: LEVEL_COLORS[level], fontWeight: 700, textTransform: 'capitalize', marginBottom: 4 }}>{level}</div>
                 <div style={{ fontSize: 24, fontWeight: 800, color: '#f8fafc' }}>{rate}</div>
                 <div style={{ fontSize: 12, color: '#64748b' }}>commission</div>
@@ -238,7 +238,7 @@ const Affiliate: React.FC = () => {
         <div>
           <h1 style={styles.heading}>Affiliate Program</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ ...styles.levelBadge, background: LEVEL_COLORS[account.level] + '22', color: LEVEL_COLORS[account.level], borderColor: LEVEL_COLORS[account.level] }}>
+            <span style={{ ...styles.levelBadge, background: LEVEL_COLORS[account.level] + '22', color: LEVEL_COLORS[account.level], border: `1px solid ${LEVEL_COLORS[account.level]}` }}>
               {account.level.toUpperCase()}
             </span>
             <span style={{ color: '#64748b', fontSize: 14 }}>
@@ -387,7 +387,7 @@ const styles: Record<string, React.CSSProperties> = {
   heading: { fontSize: 28, fontWeight: 700, marginBottom: 6, color: '#f8fafc' },
   levelBadge: {
     fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20,
-    border: '1px solid', letterSpacing: 1,
+    letterSpacing: 1,
   },
   enrollCard: {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
@@ -395,7 +395,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tierGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 },
   tierCard: {
-    background: '#0f172a', border: '1px solid', borderRadius: 8,
+    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
     padding: '14px 10px', textAlign: 'center',
   },
   primaryBtn: {

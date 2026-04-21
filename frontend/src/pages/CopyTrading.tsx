@@ -46,7 +46,7 @@ const LeaderCard: React.FC<{
     onClick={onSelect}
     style={{
       ...s.leaderCard,
-      borderColor: selected ? '#f59e0b' : '#334155',
+      border: `1px solid ${selected ? '#f59e0b' : '#334155'}`,
       boxShadow: selected ? '0 0 0 1px #f59e0b' : 'none',
       cursor: 'pointer',
     }}

@@ -158,9 +158,11 @@ const Login: React.FC = () => {
 
   const inputStyle = (field: string): React.CSSProperties => ({
     ...s.input,
-    borderColor: error && !loading
-      ? (focusField === field ? '#ef4444' : '#7f1d1d')
-      : (focusField === field ? '#3b82f6' : '#334155'),
+    border: `1px solid ${
+      error && !loading
+        ? (focusField === field ? '#ef4444' : '#7f1d1d')
+        : (focusField === field ? '#3b82f6' : '#334155')
+    }`,
     boxShadow: focusField === field
       ? (error && !loading ? '0 0 0 3px rgba(239,68,68,0.15)' : '0 0 0 3px rgba(59,130,246,0.15)')
       : 'none',

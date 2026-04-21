@@ -153,7 +153,7 @@ const TwoFactorSetup: React.FC = () => {
       </div>
 
       {/* Status banner */}
-      <div style={{ ...s.statusBanner, background: is2FAEnabled ? '#14532d' : '#1e293b', borderColor: is2FAEnabled ? '#166534' : '#334155' }}>
+      <div style={{ ...s.statusBanner, background: is2FAEnabled ? '#14532d' : '#1e293b', border: `1px solid ${is2FAEnabled ? '#166534' : '#334155'}` }}>
         <span style={{ fontSize: 20 }}>{is2FAEnabled ? '🔒' : '🔓'}</span>
         <div>
           <div style={{ fontWeight: 600, color: is2FAEnabled ? '#4ade80' : '#94a3b8' }}>
@@ -256,7 +256,7 @@ const TwoFactorSetup: React.FC = () => {
 
       {/* ── DISABLE 2FA ── */}
       {is2FAEnabled && step !== 'active' && step !== 'backup' && (
-        <div style={{ ...s.card, borderColor: '#7f1d1d' }}>
+        <div style={{ ...s.card, border: '1px solid #7f1d1d' }}>
           <h2 style={{ ...s.cardTitle, color: '#f87171' }}>Disable 2FA</h2>
           <p style={s.cardText}>Enter your current authenticator code to disable 2FA.</p>
           <label style={s.label}>Current TOTP code</label>
@@ -290,7 +290,7 @@ const s: Record<string, React.CSSProperties> = {
   header:       { marginBottom: 24 },
   title:        { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
   subtitle:     { fontSize: 14, color: '#64748b', margin: 0 },
-  statusBanner: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 10, border: '1px solid', marginBottom: 20 },
+  statusBanner: { display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderRadius: 10, border: '1px solid #334155', marginBottom: 20 },
   card:         { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 16 },
   cardTitle:    { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 10px' },
   cardText:     { fontSize: 14, color: '#94a3b8', margin: '0 0 20px', lineHeight: 1.6 },

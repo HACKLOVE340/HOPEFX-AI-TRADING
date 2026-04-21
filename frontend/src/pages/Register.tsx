@@ -216,8 +216,8 @@ const Register: React.FC = () => {
 
   const inputStyle = (field: string): React.CSSProperties => ({
     ...s.input,
-    borderColor: focusField === field ? '#3b82f6' : '#334155',
-    boxShadow:   focusField === field ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none',
+    border:    `1px solid ${focusField === field ? '#3b82f6' : '#334155'}`,
+    boxShadow: focusField === field ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none',
   });
 
   return (
@@ -231,7 +231,7 @@ const Register: React.FC = () => {
         <p style={s.tagline}>Create your free account</p>
 
         {/* Plan badge */}
-        <div style={{ ...s.planBadge, borderColor: planInfo.color, color: planInfo.color }}>
+        <div style={{ ...s.planBadge, border: `1px solid ${planInfo.color}`, color: planInfo.color }}>
           {planInfo.label}
         </div>
 
@@ -321,11 +321,13 @@ const Register: React.FC = () => {
                   style={{
                     ...inputStyle('confirm'),
                     paddingRight: 44,
-                    borderColor: confirm && confirm !== password
-                      ? 'rgba(248,113,113,0.5)'
-                      : confirm && confirm === password
-                        ? 'rgba(34,197,94,0.5)'
-                        : focusField === 'confirm' ? '#3b82f6' : '#334155',
+                    border: `1px solid ${
+                      confirm && confirm !== password
+                        ? 'rgba(248,113,113,0.5)'
+                        : confirm && confirm === password
+                          ? 'rgba(34,197,94,0.5)'
+                          : focusField === 'confirm' ? '#3b82f6' : '#334155'
+                    }`,
                   }}
                   placeholder="Repeat password"
                   autoComplete="new-password"
@@ -414,7 +416,7 @@ const s: Record<string, React.CSSProperties> = {
   tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 16px' },
   planBadge: {
     fontSize: 12, fontWeight: 700, letterSpacing: 0.5,
-    border: '1px solid', borderRadius: 20, padding: '4px 14px',
+    borderRadius: 20, padding: '4px 14px',
     width: 'fit-content', margin: '0 auto 24px',
     display: 'flex', justifyContent: 'center',
   } as React.CSSProperties,

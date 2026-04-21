@@ -153,7 +153,7 @@ const StatusPage: React.FC = () => {
   if (error || !data) {
     return (
       <div style={styles.page}>
-        <div style={{ ...styles.banner, background: '#450a0a', borderColor: '#dc2626' }}>
+        <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
           <span style={{ fontSize: 32 }}>❌</span>
           <div>
             <div style={styles.bannerTitle}>Status unavailable</div>
@@ -180,7 +180,7 @@ const StatusPage: React.FC = () => {
       <div style={{
         ...styles.banner,
         background: STATUS_BG[status],
-        borderColor: STATUS_BORDER[status],
+        border: `1px solid ${STATUS_BORDER[status]}`,
       }}>
         <span style={{ fontSize: 32 }}>{STATUS_ICON[status]}</span>
         <div>
@@ -283,7 +283,7 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100vh',
   },
   banner: {
-    border: '1px solid',
+    border: '1px solid #334155',
     borderRadius: 12,
     padding: '20px 24px',
     marginBottom: 32,

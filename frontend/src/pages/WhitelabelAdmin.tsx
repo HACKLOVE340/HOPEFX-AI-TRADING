@@ -176,7 +176,7 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
           <div style={s.fieldLabel}>Enabled Features</div>
           <div style={s.featureGrid}>
             {tenant.features.map((f) => (
-              <span key={f} style={{ ...s.featurePill, background: `${color}22`, color, borderColor: color }}>
+              <span key={f} style={{ ...s.featurePill, background: `${color}22`, color, border: `1px solid ${color}` }}>
                 {f}
               </span>
             ))}
@@ -215,7 +215,7 @@ const TenantRow: React.FC<{
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <span style={{ ...s.statusBadge, color: statusColor(tenant.status), borderColor: statusColor(tenant.status) }}>
+        <span style={{ ...s.statusBadge, color: statusColor(tenant.status), border: `1px solid ${statusColor(tenant.status)}` }}>
           {tenant.status}
         </span>
         <span style={{ fontSize: 12, color: '#64748b' }}>{tenant.features.length} features</span>
@@ -352,7 +352,7 @@ const WhitelabelAdmin: React.FC = () => {
           return (
             <button
               key={f}
-              style={{ ...s.statCard, ...(filter === f ? { borderColor: '#3b82f6' } : {}) }}
+              style={{ ...s.statCard, ...(filter === f ? { border: '1px solid #3b82f6' } : {}) }}
               onClick={() => setFilter(f)}
             >
               <div style={{ fontSize: 24, fontWeight: 800, color: f === 'all' ? '#f8fafc' : statusColor(f) }}>{count}</div>
@@ -421,7 +421,7 @@ const s: Record<string, React.CSSProperties> = {
   },
   statusBadge: {
     fontSize: 11, fontWeight: 700, padding: '2px 8px',
-    borderRadius: 4, border: '1px solid', textTransform: 'capitalize',
+    borderRadius: 4, textTransform: 'capitalize',
   },
   actionBtn: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
@@ -471,7 +471,7 @@ const s: Record<string, React.CSSProperties> = {
   featureGrid: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   featureCheck: { display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, color: '#94a3b8' },
   featurePill: {
-    fontSize: 11, padding: '2px 8px', borderRadius: 4, border: '1px solid',
+    fontSize: 11, padding: '2px 8px', borderRadius: 4,
   },
   saveBtn: {
     flex: 1, background: '#3b82f6', border: 'none', borderRadius: 8,

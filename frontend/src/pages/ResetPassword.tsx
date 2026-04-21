@@ -101,8 +101,8 @@ const ResetPassword: React.FC = () => {
 
   const inputStyle = (field: string): React.CSSProperties => ({
     ...s.input,
-    borderColor: focusField === field ? '#3b82f6' : '#334155',
-    boxShadow:   focusField === field ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none',
+    border:    `1px solid ${focusField === field ? '#3b82f6' : '#334155'}`,
+    boxShadow: focusField === field ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none',
   });
 
   return (
@@ -184,11 +184,13 @@ const ResetPassword: React.FC = () => {
                     style={{
                       ...inputStyle('confirm'),
                       paddingRight: 44,
-                      borderColor: confirm && confirm !== password
-                        ? 'rgba(248,113,113,0.5)'
-                        : confirm && confirm === password
-                          ? 'rgba(34,197,94,0.5)'
-                          : focusField === 'confirm' ? '#3b82f6' : '#334155',
+                      border: `1px solid ${
+                        confirm && confirm !== password
+                          ? 'rgba(248,113,113,0.5)'
+                          : confirm && confirm === password
+                            ? 'rgba(34,197,94,0.5)'
+                            : focusField === 'confirm' ? '#3b82f6' : '#334155'
+                      }`,
                     }}
                     placeholder="Repeat password"
                     autoComplete="new-password"

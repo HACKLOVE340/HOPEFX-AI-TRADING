@@ -123,7 +123,7 @@ function buildAccCols(
       render: (r) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onEdit(r)} style={btnStyle}>Edit</button>
-          <button onClick={() => onDelete(r)} style={{ ...btnStyle, color: '#f87171', borderColor: 'rgba(248,113,113,0.3)' }}>Del</button>
+          <button onClick={() => onDelete(r)} style={{ ...btnStyle, color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>Del</button>
         </div>
       ),
     },
@@ -170,7 +170,7 @@ function buildMemberCols(
       render: (r) => (
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onRoleChange(r)} style={btnStyle}>Role</button>
-          <button onClick={() => onRemove(r)} style={{ ...btnStyle, color: '#f87171', borderColor: 'rgba(248,113,113,0.3)' }}>Remove</button>
+          <button onClick={() => onRemove(r)} style={{ ...btnStyle, color: '#f87171', border: '1px solid rgba(248,113,113,0.3)' }}>Remove</button>
         </div>
       ),
     },

@@ -142,7 +142,7 @@ const ABTesting: React.FC = () => {
         {sel && (
           <div style={s.card}>
             <div style={s.cardTitle}>Results — {sel.symbol}</div>
-            <div style={{ ...s.winnerBanner, borderColor: sel.significant ? '#4ade80' : '#facc15' }}>
+            <div style={{ ...s.winnerBanner, border: `1px solid ${sel.significant ? '#4ade80' : '#facc15'}` }}>
               <div style={{ fontSize:12, color:'#94a3b8' }}>Winner</div>
               <div style={{ fontSize:20, fontWeight:800, color: sel.significant ? '#4ade80' : '#facc15' }}>
                 {sel.winner}
@@ -206,7 +206,7 @@ const s: Record<string, React.CSSProperties> = {
   select: { width:'100%', background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'#f8fafc', padding:'9px 12px', fontSize:14, outline:'none' },
   input: { width:'100%', background:'#0f172a', border:'1px solid #334155', borderRadius:8, color:'#f8fafc', padding:'9px 12px', fontSize:14, outline:'none', boxSizing:'border-box' },
   btn: { width:'100%', background:'#3b82f6', border:'none', borderRadius:8, color:'#fff', padding:'10px', fontSize:14, cursor:'pointer', fontWeight:600 },
-  winnerBanner: { background:'rgba(74,222,128,0.08)', border:'1px solid', borderRadius:8, padding:'14px 16px', marginBottom:12 },
+  winnerBanner: { background:'rgba(74,222,128,0.08)', border:'1px solid #334155', borderRadius:8, padding:'14px 16px', marginBottom:12 },
   histRow: { display:'flex', gap:16, alignItems:'center', padding:'10px 12px', borderRadius:6, cursor:'pointer', flexWrap:'wrap' },
   errorBox: {
     background:'rgba(248,113,113,0.1)', border:'1px solid #f87171', borderRadius:6,

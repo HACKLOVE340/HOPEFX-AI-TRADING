@@ -158,7 +158,7 @@ const FeedCard: React.FC<{
           ...s.dirBadge,
           background: isBuy ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
           color: isBuy ? '#4ade80' : '#f87171',
-          borderColor: isBuy ? '#4ade80' : '#f87171',
+          border: `1px solid ${isBuy ? '#4ade80' : '#f87171'}`,
         }}>
           {item.direction}
         </div>
@@ -426,7 +426,7 @@ const s: Record<string, React.CSSProperties> = {
     color: '#94a3b8', padding: '8px 16px', fontSize: 13, cursor: 'pointer',
   },
   optBtnActive: {
-    background: 'rgba(74,222,128,0.15)', borderColor: '#4ade80', color: '#4ade80',
+    background: 'rgba(74,222,128,0.15)', border: '1px solid #4ade80', color: '#4ade80',
   },
   filterRow: { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 },
   filterBtn: {
@@ -434,7 +434,7 @@ const s: Record<string, React.CSSProperties> = {
     color: '#64748b', padding: '6px 14px', fontSize: 12, cursor: 'pointer',
   },
   filterBtnActive: {
-    background: '#3b82f6', borderColor: '#3b82f6', color: '#fff',
+    background: '#3b82f6', border: '1px solid #3b82f6', color: '#fff',
   },
   actionError: {
     background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8,
@@ -465,7 +465,7 @@ const s: Record<string, React.CSSProperties> = {
   timeAgo:  { fontSize: 11, color: '#64748b' },
   dirBadge: {
     fontSize: 11, fontWeight: 700, padding: '3px 10px',
-    borderRadius: 4, border: '1px solid', letterSpacing: '0.05em',
+    borderRadius: 4, letterSpacing: '0.05em',
   },
   signalInfo: { marginBottom: 14 },
   symbol: { fontSize: 20, fontWeight: 800, marginBottom: 8 },
@@ -488,8 +488,8 @@ const s: Record<string, React.CSSProperties> = {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
     color: '#94a3b8', padding: '5px 12px', fontSize: 13, cursor: 'pointer',
   },
-  actionActive:     { background: 'rgba(74,222,128,0.15)', borderColor: '#4ade80', color: '#4ade80' },
-  actionActiveDown: { background: 'rgba(248,113,113,0.15)', borderColor: '#f87171', color: '#f87171' },
+  actionActive:     { background: 'rgba(74,222,128,0.15)', border: '1px solid #4ade80', color: '#4ade80' },
+  actionActiveDown: { background: 'rgba(248,113,113,0.15)', border: '1px solid #f87171', color: '#f87171' },
   copyTradeBtn: {
     marginLeft: 'auto', background: 'rgba(59,130,246,0.15)', border: '1px solid #3b82f6',
     borderRadius: 6, color: '#60a5fa', padding: '5px 14px', fontSize: 12,

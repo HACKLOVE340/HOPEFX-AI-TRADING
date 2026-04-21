@@ -89,7 +89,7 @@ const Step1Broker: React.FC<{ state: WizardState; setState: (s: WizardState) => 
           <button key={b.id} onClick={() => setState({ ...state, broker: b.id })}
             style={{
               ...s.optionBtn,
-              borderColor: state.broker === b.id ? '#f59e0b' : '#334155',
+              border: `1px solid ${state.broker === b.id ? '#f59e0b' : '#334155'}`,
               background: state.broker === b.id ? '#1c1a0a' : '#1e293b',
             }}>
             <div style={{ fontWeight: 600, color: '#f1f5f9', textAlign: 'left' }}>{b.name}</div>
@@ -128,7 +128,7 @@ const Step2Risk: React.FC<{ state: WizardState; setState: (s: WizardState) => vo
           <button key={l.id} onClick={() => setState({ ...state, riskLevel: l.id })}
             style={{
               ...s.optionBtn,
-              borderColor: state.riskLevel === l.id ? '#f59e0b' : '#334155',
+              border: `1px solid ${state.riskLevel === l.id ? '#f59e0b' : '#334155'}`,
               background: state.riskLevel === l.id ? '#1c1a0a' : '#1e293b',
             }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -160,7 +160,7 @@ const Step3PropFirm: React.FC<{ state: WizardState; setState: (s: WizardState) =
           <button key={f.id} onClick={() => setState({ ...state, propFirm: f.id })}
             style={{
               ...s.optionBtn,
-              borderColor: state.propFirm === f.id ? '#f59e0b' : '#334155',
+              border: `1px solid ${state.propFirm === f.id ? '#f59e0b' : '#334155'}`,
               background: state.propFirm === f.id ? '#1c1a0a' : '#1e293b',
             }}>
             <div style={{ fontWeight: 600, color: '#f1f5f9', textAlign: 'left' }}>{f.name}</div>
@@ -264,7 +264,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
           {starting ? '⟳ Starting…' : '📈 Launch Paper Trading'}
         </button>
       ) : (
-        <div style={{ ...s.resultBox, borderColor: '#14532d', background: '#052e16' }}>
+        <div style={{ ...s.resultBox, border: '1px solid #14532d', background: '#052e16' }}>
           <div style={{ color: '#4ade80', fontWeight: 600 }}>✓ Paper trading active!</div>
           <div style={{ fontSize: 13, color: '#86efac', marginTop: 4 }}>
             Head to the Dashboard to watch your first AI signals.

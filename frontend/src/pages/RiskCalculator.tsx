@@ -300,7 +300,7 @@ const TradeVisualizer: React.FC<{ entry: number; sl: number; tp: number }> = ({
         }} />
         {/* Price lines */}
         {levels.map((l) => (
-          <div key={l.label} style={{ ...s.vizLine, bottom: `${pct(l.price)}%`, borderColor: l.color }}>
+          <div key={l.label} style={{ ...s.vizLine, bottom: `${pct(l.price)}%`, borderTopColor: l.color }}>
             <span style={{ ...s.vizLineLabel, color: l.color }}>{l.label}</span>
             <span style={{ ...s.vizLinePrice, color: l.color }}>{l.price.toFixed(2)}</span>
           </div>

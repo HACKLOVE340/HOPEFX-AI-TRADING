@@ -458,7 +458,7 @@ const s: Record<string, React.CSSProperties> = {
     background: 'transparent', border: '1px solid #334155', borderRadius: 8,
     color: '#64748b', padding: '8px 16px', fontSize: 13, cursor: 'pointer',
   },
-  tabActive: { background: '#1e293b', color: '#f8fafc', borderColor: '#475569' },
+  tabActive: { background: '#1e293b', color: '#f8fafc', border: '1px solid #475569' },
   card: {
     background: '#1e293b', borderRadius: 12, padding: 20,
     border: '1px solid #334155',

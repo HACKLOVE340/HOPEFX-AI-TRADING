@@ -81,7 +81,7 @@ const ForgotPassword: React.FC = () => {
                   onBlur={() => setFocused(false)}
                   style={{
                     ...s.input,
-                    borderColor: focused ? '#3b82f6' : '#334155',
+                    border:    `1px solid ${focused ? '#3b82f6' : '#334155'}`,
                     boxShadow: focused ? '0 0 0 3px rgba(59,130,246,0.15)' : 'none',
                   }}
                   placeholder="trader@hopefx.io"

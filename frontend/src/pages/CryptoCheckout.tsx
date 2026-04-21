@@ -78,7 +78,7 @@ const PlanCard: React.FC<{
     onClick={onSelect}
     style={{
       ...styles.planCard,
-      borderColor: selected ? '#3b82f6' : '#334155',
+      border: `2px solid ${selected ? '#3b82f6' : '#334155'}`,
       background: selected ? '#1e3a5f' : '#1e293b',
       cursor: 'pointer',
     }}
@@ -103,7 +103,7 @@ const CryptoButton: React.FC<{
       onClick={onSelect}
       style={{
         ...styles.cryptoBtn,
-        borderColor: selected ? meta.color : '#334155',
+        border: `2px solid ${selected ? meta.color : '#334155'}`,
         background: selected ? meta.color + '18' : '#1e293b',
       }}
     >
@@ -312,7 +312,7 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
                   style={{
                     ...styles.networkBtn,
                     background: usdtNetwork === n ? '#26a17b22' : 'transparent',
-                    borderColor: usdtNetwork === n ? '#26a17b' : '#334155',
+                    border: `1px solid ${usdtNetwork === n ? '#26a17b' : '#334155'}`,
                     color: usdtNetwork === n ? '#26a17b' : '#94a3b8',
                   }}
                 >
@@ -493,7 +493,7 @@ const styles: Record<string, React.CSSProperties> = {
   sectionTitle: { fontSize: 16, fontWeight: 600, color: '#94a3b8', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
   planGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
   planCard: {
-    border: '2px solid', borderRadius: 10, padding: '18px 16px',
+    border: '2px solid #334155', borderRadius: 10, padding: '18px 16px',
     transition: 'border-color 0.15s, background 0.15s',
   },
   planName: { fontSize: 16, fontWeight: 700, color: '#e2e8f0', marginBottom: 6 },
@@ -504,7 +504,7 @@ const styles: Record<string, React.CSSProperties> = {
   cryptoGrid: { display: 'flex', gap: 12, flexWrap: 'wrap' },
   cryptoBtn: {
     display: 'flex', alignItems: 'center', gap: 12,
-    padding: '14px 20px', border: '2px solid', borderRadius: 10,
+    padding: '14px 20px', border: '2px solid #334155', borderRadius: 10,
     cursor: 'pointer', transition: 'all 0.15s', minWidth: 140,
   },
   cryptoIcon: { fontSize: 28, fontWeight: 700 },
@@ -513,7 +513,7 @@ const styles: Record<string, React.CSSProperties> = {
   networkRow: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 },
   networkLabel: { fontSize: 13, color: '#64748b' },
   networkBtn: {
-    padding: '6px 14px', border: '1px solid', borderRadius: 6,
+    padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
     fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
   },
   flwBanner: {

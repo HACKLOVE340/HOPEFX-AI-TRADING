@@ -332,7 +332,7 @@ const Marketplace: React.FC = () => {
               ...styles.categoryPill,
               background: category === c ? '#3b82f6' : '#1e293b',
               color: category === c ? '#fff' : '#94a3b8',
-              borderColor: category === c ? '#3b82f6' : '#334155',
+              border: `1px solid ${category === c ? '#3b82f6' : '#334155'}`,
             }}
           >
             {c === 'all' ? 'All' : c.replace('_', ' ')}
@@ -396,7 +396,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   categoryRow: { display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 },
   categoryPill: {
-    padding: '6px 14px', border: '1px solid', borderRadius: 20,
+    padding: '6px 14px', border: '1px solid #334155', borderRadius: 20,
     fontSize: 13, cursor: 'pointer', fontWeight: 500, textTransform: 'capitalize',
   },
   grid: {
