@@ -499,9 +499,29 @@ class StripeProductionClient:
 
         Returns:
             Parsed event dict, or None if signature verification fails.
+
+        Raises:
+            RuntimeError: In production when STRIPE_WEBHOOK_SECRET is not set.
+                Signature verification cannot be bypassed in production — an
+                unsigned webhook endpoint allows arbitrary event injection.
         """
+        app_env = os.environ.get("APP_ENV", "development").lower()
+        is_production = app_env == "production"
+
         if not self._webhook_secret:
-            logger.warning("STRIPE_WEBHOOK_SECRET not set — skipping signature verification")
+            if is_production:
+                # Hard failure — never accept unsigned webhooks in production.
+                raise RuntimeError(
+                    "STRIPE_WEBHOOK_SECRET is not set but APP_ENV=production. "
+                    "Stripe webhook signature verification is required in production. "
+                    "Set STRIPE_WEBHOOK_SECRET to the whsec_... value from the "
+                    "Stripe Dashboard → Webhooks → your endpoint → Signing secret."
+                )
+            # Non-production: warn loudly and parse raw JSON (dev/test convenience only).
+            logger.warning(
+                "STRIPE_WEBHOOK_SECRET not set — skipping signature verification. "
+                "This is only acceptable in development/test environments."
+            )
             import json
 
             try:
@@ -510,6 +530,11 @@ class StripeProductionClient:
                 return None
 
         if not self._stripe_available:
+            if is_production:
+                raise RuntimeError(
+                    "stripe package is not installed but APP_ENV=production. "
+                    "Install stripe: pip install stripe"
+                )
             import json
 
             try:

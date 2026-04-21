@@ -251,6 +251,12 @@ async def stripe_webhook(request: Request):
     """
     Stripe webhook receiver — production client with signature verification.
 
+    This endpoint is intentionally unauthenticated: Stripe calls it directly
+    using HTTPS + HMAC-SHA256 signature (stripe-signature header).
+    Signature verification is enforced via STRIPE_WEBHOOK_SECRET.
+    In production, a missing STRIPE_WEBHOOK_SECRET raises RuntimeError at
+    startup (see monetization/stripe_live.py verify_webhook).
+
     Handles: payment_intent.succeeded, payment_intent.payment_failed,
     customer.subscription.*, invoice.paid, invoice.payment_failed,
     radar.early_fraud_warning.created.
@@ -265,7 +271,12 @@ async def stripe_webhook(request: Request):
     sig = request.headers.get("stripe-signature", "")
 
     client = get_stripe_client()
-    event = client.verify_webhook(payload, sig)
+    try:
+        event = client.verify_webhook(payload, sig)
+    except RuntimeError as exc:
+        # Misconfiguration (e.g. missing STRIPE_WEBHOOK_SECRET in production).
+        logger.critical("Stripe webhook misconfiguration: %s", exc)
+        raise HTTPException(status_code=500, detail="Webhook endpoint misconfigured — check server logs") from None
 
     if event is None:
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
