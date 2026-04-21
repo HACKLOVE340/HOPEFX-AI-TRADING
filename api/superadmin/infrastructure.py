@@ -1064,32 +1064,60 @@ async def update_broker_routing(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+def _wl_db_session():
+    """Return a DB session or None."""
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception:
+        return None
+
+
+def _wl_model():
+    """Return the WhitelabelTenant ORM class or None."""
+    try:
+        from database.models import WhitelabelTenant
+        return WhitelabelTenant
+    except Exception:
+        return None
+
+
 def _get_tenant_store() -> dict:
-    """Load tenant registry from Redis or config store."""
+    """Load tenant registry from DB (primary) with Redis fallback."""
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            rows = db.query(Model).all()
+            return {r.id: r.to_dict() for r in rows}
+        except Exception as exc:
+            logger.debug("Whitelabel DB read error: %s", exc)
+        finally:
+            db.close()
+    # Redis fallback
     try:
         from cache.redis_client import get_redis_client
         import json as _json
-
         rc = get_redis_client()
         if rc:
             raw = rc.get("whitelabel:tenants")
             if raw:
                 return _json.loads(raw)
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        pass
     return {}
 
 
 def _save_tenant_store(store: dict) -> None:
+    """Sync Redis cache from the in-memory store dict (DB writes happen per-endpoint)."""
     try:
         from cache.redis_client import get_redis_client
         import json as _json
-
         rc = get_redis_client()
         if rc:
-            rc.set("whitelabel:tenants", _json.dumps(store))
+            rc.set("whitelabel:tenants", _json.dumps(store), ex=3600)
     except Exception as exc:
-        logger.warning("Tenant store save error: %s", exc)
+        logger.warning("Tenant store Redis sync error: %s", exc)
 
 
 @router.get("/whitelabel/tenants")
@@ -1101,13 +1129,35 @@ async def list_tenants(
 ) -> dict:
     """All white-label tenants — superadmin only."""
     tenants: list[dict] = []
-    try:
-        # Try to pull from the whitelabel admin module's data store
-        from api.whitelabel_admin import _get_tenants
 
+    # DB first (paginated)
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            q = db.query(Model)
+            if status:
+                q = q.filter(Model.status == status)
+            total = q.count()
+            offset = (page - 1) * limit
+            rows = q.order_by(Model.created_at.desc()).offset(offset).limit(limit).all()
+            return {
+                "tenants": [r.to_dict() for r in rows],
+                "total": total,
+                "page": page,
+                "limit": limit,
+            }
+        except Exception as exc:
+            logger.debug("Whitelabel DB list error: %s", exc)
+        finally:
+            db.close()
+
+    # Redis / in-memory fallback
+    try:
+        from api.whitelabel_admin import _get_tenants
         tenants = _get_tenants()
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        pass
     if not tenants:
         store = _get_tenant_store()
         tenants = list(store.values())
@@ -1115,7 +1165,7 @@ async def list_tenants(
         tenants = [t for t in tenants if t.get("status") == status]
     total = len(tenants)
     offset = (page - 1) * limit
-    return {"tenants": tenants[offset : offset + limit], "total": total, "page": page, "limit": limit}
+    return {"tenants": tenants[offset: offset + limit], "total": total, "page": page, "limit": limit}
 
 
 @router.get("/whitelabel/tenants/{tenant_id}")
@@ -1123,15 +1173,27 @@ async def get_tenant(
     tenant_id: str,
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
+    # DB first
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = db.query(Model).filter(Model.id == tenant_id).first()
+            if row:
+                return row.to_dict()
+        except Exception as exc:
+            logger.debug("Whitelabel DB get error: %s", exc)
+        finally:
+            db.close()
+    # Redis fallback
     store = _get_tenant_store()
     tenant = store.get(tenant_id)
     if not tenant:
         try:
             from api.whitelabel_admin import _get_tenant_by_id
-
             tenant = _get_tenant_by_id(tenant_id)
         except Exception:
-            logger.debug("Suppressed exception (no detail) in %s", __name__)
+            pass
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
@@ -1143,35 +1205,74 @@ async def create_tenant(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "tenant_create", f"name={body.name} domain={body.domain}")
-    tenant_id = str(uuid.uuid4())
+    import hashlib as _hashlib
+    import json as _json
     import secrets as _secrets
 
-    tenant = {
+    tenant_id = str(uuid.uuid4())
+    raw_api_key = _secrets.token_urlsafe(32)
+    api_key_hash = _hashlib.sha256(raw_api_key.encode()).hexdigest()
+    now = _utcnow()
+
+    tenant_dict = {
         "tenant_id": tenant_id,
         "name": body.name,
         "domain": body.domain,
         "status": "trial",
         "plan": body.plan,
         "user_count": 0,
-        "created_at": _utcnow().isoformat(),
+        "created_at": now.isoformat(),
         "monthly_revenue": 0.0,
         "branding": {
             "primary_color": body.primary_color,
             "logo_url": "",
             "company_name": body.company_name or body.name,
         },
-        "api_key": _secrets.token_urlsafe(32),
+        # Return raw key once — never stored in plaintext after this response
+        "api_key": raw_api_key,
     }
+
+    # DB write (primary)
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = Model(
+                id=tenant_id,
+                name=body.name,
+                owner_email=getattr(body, "owner_email", user.sub),
+                status="trial",
+                tier=body.plan,
+                features_json=_json.dumps([]),
+                primary_color=body.primary_color,
+                company_name=body.company_name or body.name,
+                custom_domain=body.domain,
+                api_key_hash=api_key_hash,
+                created_at=now,
+                updated_at=now,
+            )
+            db.add(row)
+            db.commit()
+            tenant_dict.update(row.to_dict())
+            # Restore raw key for this response only
+            tenant_dict["api_key"] = raw_api_key
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Whitelabel DB insert error: %s", exc)
+        finally:
+            db.close()
+
+    # Redis cache sync
     store = _get_tenant_store()
-    store[tenant_id] = tenant
+    store[tenant_id] = {k: v for k, v in tenant_dict.items() if k != "api_key"}
     _save_tenant_store(store)
+
     try:
         from api.whitelabel_admin import _create_tenant
-
-        _create_tenant(tenant)
+        _create_tenant(tenant_dict)
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
-    return tenant
+        pass
+    return tenant_dict
 
 
 @router.patch("/whitelabel/tenants/{tenant_id}")
@@ -1181,6 +1282,44 @@ async def update_tenant(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "tenant_update", f"tenant={tenant_id}")
+    now = _utcnow()
+
+    # DB write (primary)
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = db.query(Model).filter(Model.id == tenant_id).first()
+            if not row:
+                raise HTTPException(status_code=404, detail="Tenant not found")
+            if body.status is not None:
+                row.status = body.status
+            if body.plan is not None:
+                row.tier = body.plan
+            if body.primary_color is not None:
+                row.primary_color = body.primary_color
+            if body.logo_url is not None:
+                row.logo_url = body.logo_url
+            if body.company_name is not None:
+                row.company_name = body.company_name
+            row.updated_at = now
+            db.commit()
+            result = row.to_dict()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Whitelabel DB update error: %s", exc)
+            raise HTTPException(status_code=500, detail="Failed to update tenant") from None
+        finally:
+            db.close()
+        # Sync Redis
+        store = _get_tenant_store()
+        store[tenant_id] = result
+        _save_tenant_store(store)
+        return result
+
+    # Redis-only fallback
     store = _get_tenant_store()
     tenant = store.get(tenant_id, {})
     if not tenant:
@@ -1200,16 +1339,37 @@ async def update_tenant(
     return tenant
 
 
+def _wl_set_status(tenant_id: str, status: str, actor: str) -> None:
+    """Update tenant status in DB and Redis."""
+    now = _utcnow()
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = db.query(Model).filter(Model.id == tenant_id).first()
+            if row:
+                row.status = status
+                row.updated_at = now
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Whitelabel status update DB error: %s", exc)
+        finally:
+            db.close()
+    # Redis sync
+    store = _get_tenant_store()
+    if tenant_id in store:
+        store[tenant_id]["status"] = status
+        _save_tenant_store(store)
+
+
 @router.post("/whitelabel/tenants/{tenant_id}/suspend")
 async def suspend_tenant(
     tenant_id: str,
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "tenant_suspend", f"tenant={tenant_id}")
-    store = _get_tenant_store()
-    if tenant_id in store:
-        store[tenant_id]["status"] = "suspended"
-        _save_tenant_store(store)
+    _wl_set_status(tenant_id, "suspended", user.sub)
     return {"tenant_id": tenant_id, "status": "suspended"}
 
 
@@ -1219,10 +1379,7 @@ async def activate_tenant(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "tenant_activate", f"tenant={tenant_id}")
-    store = _get_tenant_store()
-    if tenant_id in store:
-        store[tenant_id]["status"] = "active"
-        _save_tenant_store(store)
+    _wl_set_status(tenant_id, "active", user.sub)
     return {"tenant_id": tenant_id, "status": "active"}
 
 
@@ -1232,6 +1389,21 @@ async def delete_tenant(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     _log_superadmin_action(user, "tenant_delete", f"tenant={tenant_id}")
+    # DB delete
+    Model = _wl_model()
+    db = _wl_db_session()
+    if Model is not None and db is not None:
+        try:
+            row = db.query(Model).filter(Model.id == tenant_id).first()
+            if row:
+                db.delete(row)
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            logger.warning("Whitelabel DB delete error: %s", exc)
+        finally:
+            db.close()
+    # Redis sync
     store = _get_tenant_store()
     store.pop(tenant_id, None)
     _save_tenant_store(store)
