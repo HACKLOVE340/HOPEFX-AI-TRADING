@@ -441,10 +441,15 @@ class ExecutionSystem:
 
 
 async def _connect_oanda() -> Any | None:
-    account_id = os.getenv("OANDA_ACCOUNT_ID", "")
-    api_token = os.getenv("OANDA_API_TOKEN", "")
+    from config.settings import resolve_oanda_account, resolve_oanda_token
+
+    account_id = resolve_oanda_account()
+    api_token = resolve_oanda_token()
     if not account_id or not api_token:
-        logger.warning("OANDA credentials not set — skipping OANDA broker")
+        logger.warning(
+            "OANDA credentials not set — skipping OANDA broker. "
+            "Set OANDA_API_KEY and OANDA_ACCOUNT_ID."
+        )
         return None
     try:
         from brokers.oanda import OANDABroker

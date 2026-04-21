@@ -152,10 +152,14 @@ class MarketIngest:
         self._tick_count: int = 0
         self._last_tick: dict | None = None
 
-        # Credentials from env
-        self._api_key = os.environ.get("OANDA_API_KEY", "")
-        self._api_secret = os.environ.get("OANDA_API_SECRET", os.environ.get("OANDA_API_KEY", ""))
-        self._account_id = os.environ.get("OANDA_ACCOUNT_ID", "")
+        # Credentials from env — use canonical resolver to handle all aliases.
+        from config.settings import resolve_oanda_account, resolve_oanda_token
+
+        self._api_key = resolve_oanda_token()
+        # OANDA_API_SECRET is a legacy alias for the token; OANDA does not use
+        # a separate secret — the token is the only credential required.
+        self._api_secret = self._api_key
+        self._account_id = resolve_oanda_account()
         self._practice = os.environ.get("OANDA_PRACTICE", "true").lower() != "false"
 
     # ── lifecycle ─────────────────────────────────────────────────────────────

@@ -65,10 +65,93 @@ class RedisSettings(BaseSettings):
         return values
 
 
+def resolve_oanda_token() -> str:
+    """
+    Return the OANDA API token from the first set env var in priority order.
+
+    Canonical name: OANDA_API_KEY
+    Accepted aliases (legacy / broker-config style):
+      OANDA_ACCESS_TOKEN, OANDA_API_TOKEN, BROKER_OANDA_TOKEN
+
+    Use this helper everywhere instead of calling os.getenv() directly so
+    that operators only need to set one variable and the alias confusion is
+    contained to a single place.
+    """
+    for var in (
+        "OANDA_API_KEY",
+        "OANDA_ACCESS_TOKEN",
+        "OANDA_API_TOKEN",
+        "BROKER_OANDA_TOKEN",
+    ):
+        val = os.getenv(var, "").strip()
+        if val:
+            if var != "OANDA_API_KEY":
+                logger.warning(
+                    "OANDA token read from %s — prefer OANDA_API_KEY (canonical name)", var
+                )
+            return val
+    return ""
+
+
+def resolve_oanda_account() -> str:
+    """
+    Return the OANDA account ID from the first set env var in priority order.
+
+    Canonical name: OANDA_ACCOUNT_ID
+    Accepted alias: BROKER_OANDA_ACCOUNT
+    """
+    for var in ("OANDA_ACCOUNT_ID", "BROKER_OANDA_ACCOUNT"):
+        val = os.getenv(var, "").strip()
+        if val:
+            if var != "OANDA_ACCOUNT_ID":
+                logger.warning(
+                    "OANDA account ID read from %s — prefer OANDA_ACCOUNT_ID (canonical name)", var
+                )
+            return val
+    return ""
+
+
+def resolve_oanda_environment() -> str:
+    """
+    Return the OANDA environment ('practice' or 'live') from env vars.
+
+    Canonical name: OANDA_ENVIRONMENT
+    Accepted aliases: OANDA_ENV, BROKER_OANDA_ENVIRONMENT
+    """
+    for var in ("OANDA_ENVIRONMENT", "OANDA_ENV", "BROKER_OANDA_ENVIRONMENT"):
+        val = os.getenv(var, "").strip().lower()
+        if val in ("practice", "live"):
+            if var != "OANDA_ENVIRONMENT":
+                logger.warning(
+                    "OANDA environment read from %s — prefer OANDA_ENVIRONMENT (canonical name)", var
+                )
+            return val
+    return "practice"
+
+
 class BrokerSettings(BaseSettings):
+    # OANDA — resolved via resolve_oanda_token() to handle all legacy aliases.
+    # Do not add new OANDA_* aliases here; update resolve_oanda_token() instead.
     oanda_token: SecretStr | None = None
     oanda_account: str | None = None
     oanda_environment: Literal["practice", "live"] = "practice"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _resolve_oanda_aliases(cls, values: Any) -> Any:
+        """Populate oanda_token/account/environment from canonical resolver."""
+        if isinstance(values, dict):
+            if not values.get("oanda_token"):
+                token = resolve_oanda_token()
+                if token:
+                    values["oanda_token"] = token
+            if not values.get("oanda_account"):
+                account = resolve_oanda_account()
+                if account:
+                    values["oanda_account"] = account
+            if not values.get("oanda_environment"):
+                values["oanda_environment"] = resolve_oanda_environment()
+        return values
 
     mt5_server: str | None = None
     mt5_login: int | None = None

@@ -179,8 +179,10 @@ class OANDABroker:
     ) -> None:
         # Accept both dict-style config and keyword-argument style.
         cfg = config or {}
-        self._account_id = _resolve_env(account_id or cfg.get("login", os.getenv("OANDA_ACCOUNT_ID", "")))
-        self._token = _resolve_env(api_key or cfg.get("password", os.getenv("OANDA_API_TOKEN", "")))
+        from config.settings import resolve_oanda_account, resolve_oanda_token
+
+        self._account_id = _resolve_env(account_id or cfg.get("login", resolve_oanda_account()))
+        self._token = _resolve_env(api_key or cfg.get("password", resolve_oanda_token()))
         _server = _resolve_env(server or cfg.get("server", os.getenv("OANDA_ENVIRONMENT", "practice")))
         self._base_url = _LIVE_BASE if _server == "live" else _PRACTICE_BASE
         self._timeout = float(cfg.get("timeout_seconds", _DEFAULT_TIMEOUT))
@@ -594,12 +596,15 @@ class OANDAConnector:
     LIVE_URL = _LIVE_BASE
 
     def __init__(self, config: dict[str, Any]) -> None:
-        api_key = config.get("api_key") or os.getenv("OANDA_API_TOKEN", "")
-        account_id = config.get("account_id") or os.getenv("OANDA_ACCOUNT_ID", "")
+        from config.settings import resolve_oanda_account, resolve_oanda_token
+
+        api_key = config.get("api_key") or resolve_oanda_token()
+        account_id = config.get("account_id") or resolve_oanda_account()
         if not api_key or not account_id:
             raise ValueError(
                 "OANDAConnector requires 'api_key' and 'account_id' in config "
-                "or OANDA_API_TOKEN / OANDA_ACCOUNT_ID env vars."
+                "or OANDA_API_KEY env var (canonical). "
+                "Aliases accepted: OANDA_ACCESS_TOKEN, OANDA_API_TOKEN, BROKER_OANDA_TOKEN."
             )
         if not validate_oanda_account_id(account_id):
             raise ValueError(
