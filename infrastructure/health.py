@@ -148,17 +148,17 @@ class HealthChecker:
         start_time = time.time()
 
         try:
-            result = await asyncio.wait_for(self._checks[name](), timeout=10.0)
+            result = await asyncio.wait_for(self._checks[name](), timeout=3.0)
             result.response_time_ms = (time.time() - start_time) * 1000
             self._last_results[name] = result
             return result
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             result = HealthCheck(
                 name=name,
-                status=HealthStatus.UNHEALTHY,
+                status=HealthStatus.DEGRADED,
                 response_time_ms=(time.time() - start_time) * 1000,
-                message="Health check timeout",
+                message="Health check timed out (3s) — dependency may be slow",
             )
             self._last_results[name] = result
             return result
@@ -306,21 +306,39 @@ class HealthChecker:
 
         try:
             start = time.time()
-            healthy = await s.cache.health_check_async()
+            healthy = await asyncio.wait_for(s.cache.health_check_async(), timeout=2.0)
+            elapsed_ms = (time.time() - start) * 1000
+            using_fallback = getattr(s.cache, "_using_fallback", False)
 
-            if healthy:
+            if healthy and not using_fallback:
                 return HealthCheck(
                     name="cache",
                     status=HealthStatus.HEALTHY,
-                    response_time_ms=(time.time() - start) * 1000,
-                    message="Cache connection OK",
-                    details={"using_fallback": getattr(s.cache, "_using_fallback", False)},
+                    response_time_ms=elapsed_ms,
+                    message="Redis cache connection OK",
+                    details={"using_fallback": False},
+                )
+            if healthy and using_fallback:
+                return HealthCheck(
+                    name="cache",
+                    status=HealthStatus.DEGRADED,
+                    response_time_ms=elapsed_ms,
+                    message="Cache using in-memory fallback (Redis unavailable)",
+                    details={"using_fallback": True},
                 )
             return HealthCheck(
                 name="cache",
                 status=HealthStatus.DEGRADED,
-                response_time_ms=0,
-                message="Cache unhealthy, using fallback",
+                response_time_ms=elapsed_ms,
+                message="Cache unhealthy — using in-memory fallback",
+                details={"using_fallback": True},
+            )
+        except (asyncio.TimeoutError, TimeoutError):
+            return HealthCheck(
+                name="cache",
+                status=HealthStatus.DEGRADED,
+                response_time_ms=2000.0,
+                message="Cache health check timed out (2s) — Redis may be slow",
             )
         except Exception as e:
             return HealthCheck(

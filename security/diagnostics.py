@@ -80,8 +80,10 @@ _SPA_ROUTES: list[str] = [
 ]
 
 # Required environment variables — (name, description, is_secret)
+# SECURITY_JWT_SECRET is the canonical name (also accepted: JWT_SECRET_KEY).
+# SECRET_KEY is a legacy alias kept for backward compatibility — check both.
 _REQUIRED_ENV_VARS: list[tuple[str, str, bool]] = [
-    ("SECRET_KEY", "JWT signing key", True),
+    ("SECURITY_JWT_SECRET", "JWT signing key (canonical name)", True),
     ("DATABASE_URL", "Primary database connection string", True),
     ("REDIS_URL", "Redis connection string", False),
     ("APP_ENV", "Application environment (development/production)", False),
@@ -317,8 +319,19 @@ class DiagnosticsEngine:
         t0 = time.monotonic()
         missing_req: list[str] = []
         missing_opt: list[str] = []
+
+        # Aliases: if any alias is set, the var is considered present
+        _ALIASES: dict[str, list[str]] = {
+            "SECURITY_JWT_SECRET": ["JWT_SECRET_KEY", "SECRET_KEY"],
+        }
+
         for name, desc, _ in _REQUIRED_ENV_VARS:
-            if not os.getenv(name, ""):
+            val = os.getenv(name, "")
+            if not val:
+                # Check known aliases before reporting missing
+                aliases = _ALIASES.get(name, [])
+                val = next((os.getenv(a, "") for a in aliases if os.getenv(a, "")), "")
+            if not val:
                 missing_req.append(f"{name} ({desc})")
         for name, desc in _OPTIONAL_ENV_VARS:
             if not os.getenv(name, ""):

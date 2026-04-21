@@ -150,6 +150,25 @@ ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8000
 BROKER_TYPE=paper
 REQUIRE_EMAIL_VERIFICATION=false
 
+# -- Risk management defaults -------------------------------------------------
+RISK_MAX_POSITION_SIZE_PCT=0.02
+RISK_MAX_DRAWDOWN_PCT=0.10
+RISK_MAX_DAILY_LOSS_PCT=0.05
+INITIAL_BALANCE=100000
+
+# -- Signal engine ------------------------------------------------------------
+SIGNAL_ENGINE_AUTO_TRADE=false
+ML_MIN_TRADE_PROB=0.58
+
+# -- News blackout window (minutes around high-impact events) -----------------
+NEWS_BLACKOUT_BEFORE_MIN=5
+NEWS_BLACKOUT_AFTER_MIN=5
+
+# -- FIX protocol (leave blank for paper trading) -----------------------------
+FIX_CONFIG_FILE=fix.cfg
+FIX_SENDER_COMP_ID=
+FIX_TARGET_COMP_ID=
+
 # -- OANDA --------------------------------------------------------------------
 OANDA_API_KEY=
 OANDA_ACCOUNT_ID=
