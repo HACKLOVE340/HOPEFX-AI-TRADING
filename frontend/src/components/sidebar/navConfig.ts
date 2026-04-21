@@ -81,6 +81,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/profile',      label: 'Profile',        icon: '👤', group: 'account',   plan: 'free',         featureKey: 'profile'      },
   { path: '/wallet',       label: 'Wallet',         icon: '💰', group: 'account',   plan: 'starter',      featureKey: 'wallet'       },
   { path: '/sub-accounts', label: 'Sub-Accounts',   icon: '👥', group: 'account',   plan: 'elite',        featureKey: 'sub-accounts' },
+  { path: '/elite',        label: 'Elite Hub',      icon: '⭐', group: 'account',   plan: 'elite',        featureKey: 'elite'        },
   { path: '/pricing',      label: 'Upgrade Plan',   icon: '💳', group: 'account',   plan: 'free',         featureKey: 'settings'     },
   { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',         featureKey: 'settings'     },
 

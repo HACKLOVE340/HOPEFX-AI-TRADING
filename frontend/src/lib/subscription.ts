@@ -112,6 +112,7 @@ export const PLAN_FEATURES: Record<string, Plan> = {
 
   // ── Elite ─────────────────────────────────────────────────────────────────
   'sub-accounts': 'elite',
+  'elite':        'elite',   // Elite Hub: dedicated support, custom dev, account manager
 };
 
 /** Routes that require admin or above */

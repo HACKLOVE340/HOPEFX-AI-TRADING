@@ -1020,3 +1020,252 @@ async def get_transactions(
         "limit": limit,
         "offset": offset,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Elite Tier 5 — Dedicated Support, Custom Development, Account Manager
+# ─────────────────────────────────────────────────────────────────────────────
+
+import uuid as _uuid
+
+
+def _assert_elite(user: TokenPayload) -> None:
+    """Raise 403 unless the user holds an Elite subscription (or is admin/superadmin)."""
+    # Admins and superadmins bypass the plan gate
+    role = getattr(user, "role", "user")
+    if role in ("admin", "superadmin"):
+        return
+
+    try:
+        mgr = _get_subscription_manager()
+        sub = mgr.get_user_subscription(user.sub)
+        tier = ""
+        if sub is not None:
+            tier = sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier)
+        if tier.lower() != "elite":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Elite subscription required for this feature.",
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("_assert_elite: subscription check failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Elite subscription required for this feature.",
+        ) from exc
+
+
+# ── Account Manager ───────────────────────────────────────────────────────────
+
+# Default account manager contact — overridden by ELITE_AM_* env vars in production.
+_DEFAULT_ACCOUNT_MANAGER = {
+    "name": os.getenv("ELITE_AM_NAME", "HopeFX Elite Support"),
+    "email": os.getenv("ELITE_AM_EMAIL", "elite@hopefx.io"),
+    "phone": os.getenv("ELITE_AM_PHONE", "+1-800-HOPEFX-1"),
+    "calendar_url": os.getenv("ELITE_AM_CALENDAR_URL", "https://calendly.com/hopefx-elite"),
+    "slack_channel": os.getenv("ELITE_AM_SLACK", "#elite-support"),
+    "response_sla": {
+        "urgent": "1 hour",
+        "high": "4 hours",
+        "normal": "24 hours",
+    },
+    "support_hours": "24/7 for urgent; Mon–Fri 08:00–20:00 UTC for normal",
+}
+
+
+@router.get("/elite/account-manager", summary="Get dedicated account manager contact (Elite)")
+async def get_account_manager(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the dedicated account manager details for the authenticated Elite user.
+
+    Contact details are configured via ELITE_AM_* environment variables.
+    """
+    _assert_elite(user)
+    return _DEFAULT_ACCOUNT_MANAGER
+
+
+# ── Support Tickets ───────────────────────────────────────────────────────────
+
+
+class SupportTicketRequest(BaseModel):
+    subject: str = Field(..., min_length=5, max_length=200)
+    message: str = Field(..., min_length=20, max_length=5000)
+    priority: str = Field("high", pattern="^(normal|high|urgent)$")
+    category: str = Field("general", pattern="^(general|technical|billing|strategy|api|onboarding)$")
+
+
+@router.post("/elite/support/ticket", summary="Submit a dedicated support ticket (Elite)")
+async def create_support_ticket(
+    body: SupportTicketRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Create a dedicated support ticket for an Elite subscriber.
+
+    Tickets are persisted in the DB store under the key
+    ``elite:support:{ticket_id}`` and can be retrieved via
+    GET /api/billing/elite/support/tickets.
+    """
+    _assert_elite(user)
+
+    from api.db_store import db_set
+
+    ticket_id = f"ELITE-{_uuid.uuid4().hex[:10].upper()}"
+    now = datetime.now(tz=UTC).isoformat()
+
+    ticket = {
+        "ticket_id": ticket_id,
+        "user_id": user.sub,
+        "subject": body.subject,
+        "message": body.message,
+        "priority": body.priority,
+        "category": body.category,
+        "status": "open",
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    db_set(f"elite:support:{ticket_id}", ticket, changed_by=user.sub)
+
+    # SLA response times by priority
+    sla_map = {"urgent": "1 hour", "high": "4 hours", "normal": "24 hours"}
+
+    return {
+        "ticket_id": ticket_id,
+        "status": "open",
+        "priority": body.priority,
+        "sla": sla_map.get(body.priority, "24 hours"),
+        "message": (
+            f"Ticket {ticket_id} submitted. "
+            f"Your dedicated account manager will respond within {sla_map.get(body.priority, '24 hours')}."
+        ),
+        "contact_email": _DEFAULT_ACCOUNT_MANAGER["email"],
+    }
+
+
+@router.get("/elite/support/tickets", summary="List support tickets for the authenticated Elite user")
+async def list_support_tickets(
+    limit: int = 50,
+    offset: int = 0,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return all support tickets submitted by the authenticated Elite user.
+
+    Tickets are stored in the DB store and filtered by user_id.
+    """
+    _assert_elite(user)
+
+    from api.db_store import db_get, db_keys_prefix
+
+    keys = db_keys_prefix("elite:support:ELITE-")
+    all_tickets = [db_get(k) for k in keys]
+    user_tickets = [
+        t for t in all_tickets
+        if isinstance(t, dict) and t.get("user_id") == user.sub
+    ]
+    # Sort newest first
+    user_tickets.sort(key=lambda t: t.get("created_at", ""), reverse=True)
+    page = user_tickets[offset : offset + limit]
+
+    return {
+        "tickets": page,
+        "total": len(user_tickets),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+# ── Custom Development Requests ───────────────────────────────────────────────
+
+
+class CustomDevRequest(BaseModel):
+    title: str = Field(..., min_length=5, max_length=200)
+    description: str = Field(..., min_length=50, max_length=10000)
+    request_type: str = Field(
+        "strategy",
+        pattern="^(strategy|indicator|integration|dashboard|api|other)$",
+    )
+    target_symbols: list[str] = Field(default_factory=list)
+    target_timeframes: list[str] = Field(default_factory=list)
+    budget_usd: float | None = Field(None, ge=0)
+    deadline: str | None = None  # ISO date string YYYY-MM-DD
+
+
+@router.post("/elite/custom-dev/request", summary="Submit a custom development request (Elite)")
+async def submit_custom_dev_request(
+    body: CustomDevRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Submit a bespoke development request (strategy, indicator, integration, etc.)
+    for an Elite subscriber.
+
+    Requests are persisted under ``elite:custom_dev:{request_id}`` and reviewed
+    by the HopeFX development team within 2 business days.
+    """
+    _assert_elite(user)
+
+    from api.db_store import db_set
+
+    request_id = f"CDR-{_uuid.uuid4().hex[:10].upper()}"
+    now = datetime.now(tz=UTC).isoformat()
+
+    dev_request = {
+        "request_id": request_id,
+        "user_id": user.sub,
+        "title": body.title,
+        "description": body.description,
+        "request_type": body.request_type,
+        "target_symbols": body.target_symbols,
+        "target_timeframes": body.target_timeframes,
+        "budget_usd": body.budget_usd,
+        "deadline": body.deadline,
+        "status": "submitted",
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    db_set(f"elite:custom_dev:{request_id}", dev_request, changed_by=user.sub)
+
+    return {
+        "request_id": request_id,
+        "status": "submitted",
+        "message": (
+            f"Custom development request {request_id} submitted. "
+            "Our team will provide a scoping estimate within 2 business days."
+        ),
+        "contact_email": _DEFAULT_ACCOUNT_MANAGER["email"],
+    }
+
+
+@router.get("/elite/custom-dev/requests", summary="List custom development requests for the authenticated Elite user")
+async def list_custom_dev_requests(
+    limit: int = 50,
+    offset: int = 0,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return all custom development requests submitted by the authenticated Elite user.
+    """
+    _assert_elite(user)
+
+    from api.db_store import db_get, db_keys_prefix
+
+    keys = db_keys_prefix("elite:custom_dev:CDR-")
+    all_reqs = [db_get(k) for k in keys]
+    user_reqs = [
+        r for r in all_reqs
+        if isinstance(r, dict) and r.get("user_id") == user.sub
+    ]
+    user_reqs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    page = user_reqs[offset : offset + limit]
+
+    return {
+        "requests": page,
+        "total": len(user_reqs),
+        "limit": limit,
+        "offset": offset,
+    }

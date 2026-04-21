@@ -159,6 +159,7 @@ def register_page_routes(app: FastAPI) -> None:
             "/privacy", "/terms", "/security-dashboard", "/tca",
             "/correlation", "/geopolitical", "/sub-accounts",
             "/ab-testing", "/auto-heal", "/crypto-checkout",
+            "/elite",
         ]
 
         async def _spa_index(_req: Request) -> FileResponse:

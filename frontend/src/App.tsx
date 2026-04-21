@@ -88,6 +88,7 @@ const ReplayPage   = React.lazy(() => import('./pages/ReplayPage'));
 const Profile        = React.lazy(() => import('./pages/Profile'));
 const Wallet         = React.lazy(() => import('./pages/Wallet'));
 const SubAccounts    = React.lazy(() => import('./pages/SubAccounts'));
+const EliteDashboard = React.lazy(() => import('./pages/EliteDashboard'));
 const CryptoCheckout = React.lazy(() => import('./pages/CryptoCheckout'));
 const PricingPage    = React.lazy(() => import('./pages/PricingPage'));
 const Settings       = React.lazy(() => import('./pages/Settings'));
@@ -399,6 +400,7 @@ const AppShell: React.FC = () => {
             <Route path="/profile/:id"  element={wrap(<Profile />)} />
             <Route path="/wallet"       element={wrap(gated('wallet',       <Wallet />))} />
             <Route path="/sub-accounts" element={wrap(gated('sub-accounts', <SubAccounts />))} />
+            <Route path="/elite"        element={wrap(gated('elite',        <EliteDashboard />))} />
             <Route path="/checkout"     element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
             <Route path="/settings"     element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />

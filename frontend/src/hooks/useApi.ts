@@ -939,3 +939,46 @@ export const signalEngineApi = {
   generate:     (payload: object) => api.post('/signals/generate', payload),
   filterStats:  ()              => api.get('/ml/signal-filter/stats'),
 };
+
+// ── Elite Tier 5 ──────────────────────────────────────────────────────────────
+// All endpoints require an active Elite subscription (or admin/superadmin role).
+// Backend: /api/billing/elite/*
+
+export interface SupportTicketPayload {
+  subject: string;
+  message: string;
+  priority: 'normal' | 'high' | 'urgent';
+  category: 'general' | 'technical' | 'billing' | 'strategy' | 'api' | 'onboarding';
+}
+
+export interface CustomDevPayload {
+  title: string;
+  description: string;
+  request_type: 'strategy' | 'indicator' | 'integration' | 'dashboard' | 'api' | 'other';
+  target_symbols: string[];
+  target_timeframes: string[];
+  budget_usd?: number;
+  deadline?: string;
+}
+
+export const eliteApi = {
+  /** Dedicated account manager contact details. */
+  accountManager:    () =>
+    api.get('/billing/elite/account-manager'),
+
+  /** Submit a dedicated support ticket. */
+  createTicket:      (payload: SupportTicketPayload) =>
+    api.post('/billing/elite/support/ticket', payload),
+
+  /** List all support tickets for the authenticated user. */
+  listTickets:       (limit = 50, offset = 0) =>
+    api.get('/billing/elite/support/tickets', { params: { limit, offset } }),
+
+  /** Submit a custom development request. */
+  submitCustomDev:   (payload: CustomDevPayload) =>
+    api.post('/billing/elite/custom-dev/request', payload),
+
+  /** List all custom development requests for the authenticated user. */
+  listCustomDevReqs: (limit = 50, offset = 0) =>
+    api.get('/billing/elite/custom-dev/requests', { params: { limit, offset } }),
+};
