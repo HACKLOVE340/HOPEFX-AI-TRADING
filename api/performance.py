@@ -19,8 +19,10 @@ from __future__ import annotations
 import logging
 import math
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -216,11 +218,15 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
     response_model=list[EquityPoint],
     summary="Equity curve time series",
 )
-async def equity_curve():
+async def equity_curve(
+    _user: TokenPayload = Depends(require_role("trader")),
+):
     """
     Return the equity curve as a list of {time, value} points.
     Used by the dashboard equity chart and drawdown chart.
     Returns an empty list when no paper trading data is available yet.
+
+    Requires trader role — exposes live account equity values.
     """
     return _load_equity_curve()
 
@@ -244,7 +250,9 @@ async def public_performance():
     "/weekly-report/generate",
     summary="Trigger weekly performance report generation",
 )
-async def generate_weekly_report():
+async def generate_weekly_report(
+    _user: TokenPayload = Depends(require_role("admin")),
+):
     """
     Manually trigger the weekly performance report.
     Generates JSON + HTML output in reports/output/ and sends email if configured.
@@ -285,7 +293,9 @@ async def generate_weekly_report():
     "/weekly-report/latest",
     summary="Get the most recent weekly performance report",
 )
-async def get_latest_weekly_report():
+async def get_latest_weekly_report(
+    _user: TokenPayload = Depends(require_role("admin")),
+):
     """
     Return the most recently generated weekly report as JSON.
     Returns 404 if no report has been generated yet.
@@ -310,7 +320,9 @@ async def get_latest_weekly_report():
     "/weekly-report/list",
     summary="List all generated weekly reports",
 )
-async def list_weekly_reports():
+async def list_weekly_reports(
+    _user: TokenPayload = Depends(require_role("admin")),
+):
     """Return a list of all generated weekly report filenames."""
     output_dir = _Path(__file__).parent.parent / "reports" / "output"
     reports = sorted(output_dir.glob("weekly_*.json"), reverse=True)
