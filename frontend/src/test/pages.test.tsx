@@ -230,12 +230,12 @@ describe('Login page', () => {
 
   it('renders email field', async () => {
     await renderLogin();
-    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email or username/i)).toBeInTheDocument();
   });
 
   it('renders password field', async () => {
     await renderLogin();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
   });
 
   it('renders AI-Powered tagline', async () => {

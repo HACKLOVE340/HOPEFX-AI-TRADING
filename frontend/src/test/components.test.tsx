@@ -388,12 +388,12 @@ describe('Login page', () => {
 
   it('renders email input', async () => {
     await renderLogin();
-    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/email or username/i)).toBeInTheDocument();
   });
 
   it('renders password input', async () => {
     await renderLogin();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
   });
 
   it('renders sign in button', async () => {
@@ -409,7 +409,7 @@ describe('Login page', () => {
 
   it('shows error when only email provided', async () => {
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'user@test.com' } });
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: 'user@test.com' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
     expect(screen.getByText(/required/i)).toBeInTheDocument();
   });
@@ -421,8 +421,8 @@ describe('Login page', () => {
     } as never);
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'trader@hopefx.io' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass123' } });
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: 'trader@hopefx.io' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'pass123' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -437,8 +437,8 @@ describe('Login page', () => {
     } as never);
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'trader@hopefx.io' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass123' } });
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: 'trader@hopefx.io' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'pass123' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -453,8 +453,8 @@ describe('Login page', () => {
     });
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'bad@test.com' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'wrong' } });
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: 'bad@test.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -467,8 +467,8 @@ describe('Login page', () => {
     vi.mocked(authApi.login).mockRejectedValueOnce(new Error('Network error'));
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: 'user@test.com' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass' } });
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: 'user@test.com' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -483,8 +483,8 @@ describe('Login page', () => {
     } as never);
 
     await renderLogin();
-    fireEvent.change(screen.getByLabelText(/^email$/i), { target: { value: '  Trader@HopeFX.io  ' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'pass' } });
+    fireEvent.change(screen.getByLabelText(/email or username/i), { target: { value: '  Trader@HopeFX.io  ' } });
+    fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
     await waitFor(() => {
@@ -504,7 +504,7 @@ describe('Login page', () => {
 
   it('password input is type=password', async () => {
     await renderLogin();
-    const input = screen.getByLabelText(/password/i) as HTMLInputElement;
+    const input = screen.getByLabelText(/^password$/i) as HTMLInputElement;
     expect(input.type).toBe('password');
   });
 });
