@@ -175,6 +175,8 @@ def _enforce_tls(redis_url: str) -> str:
 
     Set REDIS_TLS_SKIP_VERIFY=true only in controlled test environments
     where the Redis server uses a self-signed certificate.
+    Setting REDIS_TLS_SKIP_VERIFY=true with APP_ENV=production raises
+    RuntimeError at connection time — this is intentional.
     """
     app_env = os.getenv("APP_ENV", "development").lower()
     # IS_FORCE_TLS is the canonical env var (user-facing); REDIS_FORCE_TLS is
@@ -241,8 +243,24 @@ async def _try_direct(
             # Build a ConnectionPool with SSLConnection so we can pass the
             # individual ssl_* params that redis-py 7.x actually accepts.
             skip_verify = os.getenv("REDIS_TLS_SKIP_VERIFY", "false").lower() == "true"
+            app_env = os.getenv("APP_ENV", "development").lower()
+
+            if skip_verify and app_env == "production":
+                # Hard failure — disabling certificate verification in production
+                # allows MITM attacks against the Redis connection, which carries
+                # session tokens and the JWT revocation blacklist.
+                raise RuntimeError(
+                    "REDIS_TLS_SKIP_VERIFY=true is not permitted when APP_ENV=production. "
+                    "Certificate verification must be enabled in production. "
+                    "Provide a valid CA certificate via REDIS_TLS_CA_CERT, or use a "
+                    "Redis server with a certificate signed by a trusted CA."
+                )
+
             if skip_verify:
-                logger.warning("Redis TLS: certificate verification disabled (REDIS_TLS_SKIP_VERIFY=true)")
+                logger.warning(
+                    "Redis TLS: certificate verification disabled (REDIS_TLS_SKIP_VERIFY=true). "
+                    "Only acceptable in controlled test environments with self-signed certs."
+                )
 
             ssl_kwargs: dict = {
                 "ssl_cert_reqs": "none" if skip_verify else "required",
