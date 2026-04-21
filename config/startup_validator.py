@@ -173,15 +173,20 @@ def _validate_broker(errors: list[str], dev_mode: bool) -> None:
 
 
 def _validate_oanda_credentials(errors: list[str]) -> None:
-    oanda_key = _env("BROKER_OANDA_TOKEN") or _env("OANDA_API_KEY")
-    oanda_acct = _env("BROKER_OANDA_ACCOUNT") or _env("OANDA_ACCOUNT_ID")
+    from config.settings import resolve_oanda_account, resolve_oanda_token
+
+    oanda_key = resolve_oanda_token()
+    oanda_acct = resolve_oanda_account()
     if not oanda_key:
         errors.append(
-            "MISSING  BROKER_OANDA_TOKEN (or OANDA_API_KEY): required when BROKER_TYPE=oanda",
+            "MISSING  OANDA_API_KEY: required when BROKER_TYPE=oanda. "
+            "Accepted aliases: OANDA_ACCESS_TOKEN, OANDA_API_TOKEN, BROKER_OANDA_TOKEN "
+            "(prefer OANDA_API_KEY — canonical name).",
         )
     if not oanda_acct:
         errors.append(
-            "MISSING  BROKER_OANDA_ACCOUNT (or OANDA_ACCOUNT_ID): required when BROKER_TYPE=oanda",
+            "MISSING  OANDA_ACCOUNT_ID: required when BROKER_TYPE=oanda. "
+            "Accepted alias: BROKER_OANDA_ACCOUNT (prefer OANDA_ACCOUNT_ID — canonical name).",
         )
 
 
@@ -317,9 +322,10 @@ def _validate_ibkr_port(errors: list[str]) -> None:
 
 
 def _validate_stripe(errors: list[str]) -> None:
-    """Warn when STRIPE_SECRET_KEY is absent; error on placeholder values."""
+    """Validate Stripe configuration; hard-fail in production on missing webhook secret."""
     key = _env("STRIPE_SECRET_KEY")
     webhook = _env("STRIPE_WEBHOOK_SECRET")
+    billing_enabled = _env("FEATURE_BILLING_SUBSCRIPTION").lower() in ("true", "1", "yes")
 
     if not key:
         if _is_dev():
@@ -337,10 +343,36 @@ def _validate_stripe(errors: list[str]) -> None:
     elif not key.startswith(("sk_live_", "sk_test_")):
         errors.append(f"INVALID  STRIPE_SECRET_KEY: expected sk_live_... or sk_test_... prefix, got {key[:12]!r}...")
 
-    if not webhook and not _is_dev():
-        logger.warning(
-            "STRIPE_WEBHOOK_SECRET not set — webhook signature verification will reject all events. "
-            "Set to whsec_... from your Stripe dashboard."
+    if not webhook:
+        if not _is_dev() and billing_enabled:
+            # Hard error in production with billing enabled — an unsigned webhook
+            # endpoint allows arbitrary event injection (fake payment confirmations,
+            # subscription upgrades, etc.).
+            errors.append(
+                "MISSING  STRIPE_WEBHOOK_SECRET: required in production when "
+                "FEATURE_BILLING_SUBSCRIPTION=true. Without it, the webhook endpoint "
+                "accepts unsigned requests, enabling fake payment event injection. "
+                "Set to whsec_... from Stripe Dashboard → Webhooks → your endpoint → Signing secret."
+            )
+        elif not _is_dev():
+            logger.warning(
+                "STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification "
+                "is disabled. Set to whsec_... from your Stripe dashboard."
+            )
+    elif webhook.startswith("CHANGE_ME"):
+        errors.append("INSECURE STRIPE_WEBHOOK_SECRET: placeholder value — replace with the real whsec_... value.")
+
+
+def _validate_redis_tls(errors: list[str]) -> None:
+    """Hard-fail in production when Redis TLS certificate verification is disabled."""
+    skip_verify = _env("REDIS_TLS_SKIP_VERIFY").lower()
+    if skip_verify == "true":
+        errors.append(
+            "INSECURE REDIS_TLS_SKIP_VERIFY=true is not permitted in production. "
+            "Disabling TLS certificate verification exposes the Redis connection "
+            "(which carries session tokens and the JWT revocation blacklist) to "
+            "MITM attacks. Remove REDIS_TLS_SKIP_VERIFY or set it to false. "
+            "If using a self-signed cert, provide the CA via REDIS_TLS_CA_CERT instead."
         )
 
 
@@ -379,6 +411,7 @@ def validate_environment(*, strict: bool = True) -> None:
     if not dev_mode:
         _validate_database(errors)
         _validate_redis(errors)
+        _validate_redis_tls(errors)
         _validate_encryption_key(errors)
         _validate_kill_switch_token(errors)
         _validate_argocd_webhook(errors)
