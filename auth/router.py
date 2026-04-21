@@ -268,17 +268,23 @@ async def register(body: RegisterRequest, request: Request):
         except Exception as _e:
             logger.warning("Verification email failed: %s", _e)
 
-    # Auto-assign FREE tier so paper trading works immediately after signup
+    # Auto-assign FREE tier so paper trading works immediately after signup.
+    # Must use the user's UUID (not username) as the subscription key so that
+    # /api/billing/subscription lookups by user.sub (JWT sub = UUID) work.
     try:
         from monetization.subscription import SubscriptionTier, subscription_manager
 
-        existing = subscription_manager.get_user_subscription(body.username)
-        if not existing:
-            subscription_manager.create_subscription(
-                body.username,
-                SubscriptionTier.FREE,
-            )
-            logger.info("FREE tier assigned to new user %s", body.username)
+        # Resolve the UUID for the newly created user.
+        new_user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
+        user_uuid = new_user.id if new_user else None
+
+        if user_uuid:
+            existing = subscription_manager.get_user_subscription(user_uuid)
+            if not existing:
+                subscription_manager.create_subscription(user_uuid, SubscriptionTier.FREE)
+                logger.info("FREE tier assigned to new user %s (id=%s)", body.username, user_uuid)
+        else:
+            logger.warning("Could not resolve UUID for new user %s — free tier skipped", body.username)
     except Exception as _tier_err:
         logger.debug("Free tier assignment skipped: %s", _tier_err)
 

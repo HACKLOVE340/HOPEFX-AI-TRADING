@@ -52,7 +52,9 @@ export function useWebSocket(enabled = true) {
   const unmounted      = useRef(false);
   const authedRef      = useRef(false);
 
-  const storeState = () => useStore.getState();
+  // Stable ref to useStore.getState — never changes, so it's safe in
+  // useCallback deps without causing reconnect loops on every render.
+  const getState = useStore.getState;
 
   const handleMessage = useCallback((raw: string) => {
     let msg: WsMessage;
@@ -62,12 +64,12 @@ export function useWebSocket(enabled = true) {
     const {
       setWsStatus, setHeartbeat, setPrice,
       upsertPosition, removePosition, addSignal, setAccount,
-    } = storeState();
+    } = getState();
 
     switch (msg.type) {
       case 'connected':
         if (msg.auth_required) {
-          const token = storeState().token;
+          const token = getState().token;
           if (token && wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }));
           }
@@ -107,7 +109,7 @@ export function useWebSocket(enabled = true) {
         break;
 
       case 'alert_triggered':
-        storeState().addTriggeredAlert(msg.data as import('../store').TriggeredAlert);
+        getState().addTriggeredAlert(msg.data as import('../store').TriggeredAlert);
         break;
 
       case 'account_update':
@@ -135,7 +137,7 @@ export function useWebSocket(enabled = true) {
       default:
         break;
     }
-  }, [storeState]);
+  }, [getState]);
 
   const startHeartbeat = useCallback((ws: WebSocket) => {
     if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
@@ -148,11 +150,11 @@ export function useWebSocket(enabled = true) {
 
   /** Poll REST prices when WS is unavailable so the UI shows recent data. */
   const pollRestPrices = useCallback(async () => {
-    const token = storeState().token ?? localStorage.getItem('hopefx_access_token');
+    const token = getState().token ?? localStorage.getItem('hopefx_access_token');
     if (!token) return; // not authenticated — skip silently
     try {
       const res = await tradingApi.prices();
-      const { setPrice } = storeState();
+      const { setPrice } = getState();
       const now = Date.now();
       for (const [symbol, raw] of Object.entries(res.data)) {
         const mid = (raw.bid + raw.ask) / 2;
@@ -169,7 +171,7 @@ export function useWebSocket(enabled = true) {
     } catch {
       // Non-fatal — WS reconnect will restore live data
     }
-  }, [storeState]);
+  }, [getState]);
 
   const startRestPoll = useCallback(() => {
     if (restPollTimer.current) return; // already running
@@ -188,7 +190,7 @@ export function useWebSocket(enabled = true) {
     if (unmounted.current) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    storeState().setWsStatus('connecting');
+    getState().setWsStatus('connecting');
     authedRef.current = false;
 
     const ws = new WebSocket(WS_URL);
@@ -203,21 +205,21 @@ export function useWebSocket(enabled = true) {
 
     ws.onmessage = (event) => handleMessage(event.data as string);
     ws.onerror = () => {
-      storeState().setWsStatus('error');
+      getState().setWsStatus('error');
       startRestPoll(); // WS errored — start REST fallback
     };
 
     ws.onclose = () => {
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
       if (unmounted.current) return;
-      storeState().setWsStatus('disconnected');
+      getState().setWsStatus('disconnected');
       authedRef.current = false;
       startRestPoll(); // WS closed — start REST fallback
       const delay = reconnectDelay.current;
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_MS);
       reconnectTimer.current = setTimeout(connect, delay);
     };
-  }, [handleMessage, storeState, startHeartbeat, startRestPoll, stopRestPoll]);
+  }, [handleMessage, getState, startHeartbeat, startRestPoll, stopRestPoll]);
 
   useEffect(() => {
     if (!enabled) return;

@@ -21,9 +21,9 @@
  */
 
 import React, { Suspense } from 'react';
-import { useBootstrapData } from '../hooks/useOrchestratorData';
-// useWebSocket is intentionally NOT imported here — the global connection is
-// managed in App.tsx to prevent duplicate sockets per page navigation.
+// useBootstrapData and useWebSocket are intentionally NOT imported here —
+// both are managed globally in AppShell (App.tsx) to prevent duplicate
+// polling and duplicate WebSocket connections on page navigation.
 import { useStore } from '../store';
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
 import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
@@ -44,10 +44,7 @@ const LiveSignalFeed      = React.lazy(() => import('../components/panels/LiveSi
 // ── Dashboard inner ───────────────────────────────────────────────────────────
 
 function DashboardInner() {
-  // WebSocket is managed globally in App.tsx — no duplicate connection here.
-  // Bootstrap all REST data
-  useBootstrapData();
-
+  // Data is bootstrapped globally in AppShell — read from store directly.
   const wsStatus = useStore((s) => s.wsStatus);
 
   return (

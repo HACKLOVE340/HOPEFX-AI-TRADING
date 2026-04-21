@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useParams } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 
 function extractErrorMessage(err: unknown, fallback: string): string {
@@ -169,8 +170,10 @@ const EditModal: React.FC<{
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const Profile: React.FC = () => {
-  // Determine trader_id from URL hash: /profile#<id> or /profile (own)
-  const traderId = window.location.hash.slice(1) || 'me';
+  // Resolve trader ID from the React Router :id param (/profile/:id)
+  // or default to 'me' for the /profile route (own profile).
+  const { id: paramId } = useParams<{ id?: string }>();
+  const traderId = paramId || 'me';
   const isOwnProfile = traderId === 'me';
 
   const [profile, setProfile]     = useState<ProfileData | null>(null);
