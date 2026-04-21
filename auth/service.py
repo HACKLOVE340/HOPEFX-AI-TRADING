@@ -526,19 +526,20 @@ class AuthService:
 
     def logout(
         self,
-        raw_refresh_token: str,
+        raw_refresh_token: str | None,
         access_token: str | None = None,
     ) -> tuple[bool, str]:
         from database.user_models import UserSession
 
-        # Revoke refresh session in DB
-        token_hash = _hash_token(raw_refresh_token)
-        with self._sf() as session:
-            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash).first()
-            if sess_row:
-                sess_row.is_revoked = True
-                sess_row.revoked_at = _now()
-                session.commit()
+        # Revoke refresh session in DB (only when a refresh token was supplied)
+        if raw_refresh_token:
+            token_hash = _hash_token(raw_refresh_token)
+            with self._sf() as session:
+                sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash).first()
+                if sess_row:
+                    sess_row.is_revoked = True
+                    sess_row.revoked_at = _now()
+                    session.commit()
 
         # Blacklist the access token immediately so it can't be reused
         if access_token:
