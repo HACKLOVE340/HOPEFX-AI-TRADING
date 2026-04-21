@@ -2,11 +2,24 @@
  * Onboarding Wizard — 5-step guided setup.
  * Shown on first login, skip-able, resumable via localStorage.
  * Steps: broker → risk level → prop firm rules → first backtest → paper trading
+ *
+ * Post-onboarding destination is role-aware:
+ *   superadmin → /superadmin
+ *   admin      → /audit
+ *   trader/user → /dashboard
  */
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { useStore } from '../store';
+import type { UserRole } from '../store';
+
+function resolvePostOnboardingPath(role: UserRole | undefined): string {
+  if (role === 'superadmin') return '/superadmin';
+  if (role === 'admin') return '/audit';
+  return '/dashboard';
+}
 
 const STORAGE_KEY = 'hopefx_onboarding_step';
 
@@ -266,15 +279,17 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
 
 const Onboarding: React.FC = () => {
   const navigate  = useNavigate();
+  const user      = useStore((s) => s.user);
   const savedStep = parseInt(localStorage.getItem(STORAGE_KEY) ?? '0', 10);
   const [step, setStep] = useState(Math.min(savedStep, STEPS.length - 1));
   const [state, setState] = useState<WizardState>({
     broker: null, riskLevel: null, propFirm: null, backtestDone: false, paperStarted: false,
   });
 
+  const destination = resolvePostOnboardingPath(user?.role);
   const saveStep = (n: number) => { setStep(n); localStorage.setItem(STORAGE_KEY, String(n)); };
-  const finish   = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate('/dashboard'); };
-  const skip     = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate('/dashboard'); };
+  const finish   = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
+  const skip     = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
 
   const canAdvance = () => {
     if (step === 0) return state.broker !== null;
