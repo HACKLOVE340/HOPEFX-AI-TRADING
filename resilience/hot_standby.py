@@ -349,13 +349,15 @@ class HotStandbyReplicator:
             try:
                 # GETSET pattern: only refresh if we still own the key
                 current = await self._redis.get(_KEY_LEADER)
-                if current and current.decode() == self._pod_id:
+                # decode_responses=True returns str; bytes clients return bytes
+                current_str = current.decode() if isinstance(current, bytes) else current
+                if current_str and current_str == self._pod_id:
                     await self._redis.pexpire(_KEY_LEADER, int(_LEADER_TTL_S * 1000))
                 else:
                     # Lost the leader key — demote
                     logger.critical(
                         "HotStandbyReplicator: lost leader key! current=%s pod=%s — demoting",
-                        current,
+                        current_str,
                         self._pod_id,
                     )
                     await self._demote()
@@ -387,7 +389,9 @@ class HotStandbyReplicator:
                     self._stats.missed_heartbeats += 1
                     age_s = _HEARTBEAT_INTERVAL_S * self._stats.missed_heartbeats
                 else:
-                    last_ts = float(raw.decode())
+                    # decode_responses=True returns str; bytes clients return bytes
+                    raw_str = raw.decode() if isinstance(raw, bytes) else raw
+                    last_ts = float(raw_str)
                     age_s = time.time() - last_ts
                     if age_s < _HEARTBEAT_INTERVAL_S * 1.5:
                         self._stats.missed_heartbeats = 0
@@ -446,7 +450,8 @@ class HotStandbyReplicator:
             if initial:
                 # Key exists — check if it's ours (restart scenario)
                 current = await self._redis.get(_KEY_LEADER)
-                if current and current.decode() == self._pod_id:
+                current_str = current.decode() if isinstance(current, bytes) else current
+                if current_str and current_str == self._pod_id:
                     # We already own it (e.g. pod restart with same hostname)
                     await self._redis.pexpire(_KEY_LEADER, ttl_ms)
                     return True
@@ -551,10 +556,16 @@ class HotStandbyReplicator:
                 logger.warning("HotStandbyReplicator: no state snapshot in Redis — starting with empty state")
                 return None
 
-            positions = json.loads(pos_raw.decode())
-            equity_data = json.loads(equity_raw.decode())
-            fills = json.loads(fills_raw.decode()) if fills_raw else []
-            version = int(ver_raw.decode()) if ver_raw else 0
+            # decode_responses=True returns str; bytes clients return bytes — handle both
+            def _to_str(v: bytes | str | None) -> str | None:
+                if v is None:
+                    return None
+                return v.decode() if isinstance(v, bytes) else v
+
+            positions = json.loads(_to_str(pos_raw))
+            equity_data = json.loads(_to_str(equity_raw))
+            fills = json.loads(_to_str(fills_raw)) if fills_raw else []
+            version = int(_to_str(ver_raw)) if ver_raw else 0
 
             snapshot = StateSnapshot(
                 positions=positions,
