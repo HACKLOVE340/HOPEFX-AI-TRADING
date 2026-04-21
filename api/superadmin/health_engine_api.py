@@ -26,7 +26,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from api._shared import TokenPayload, _require_superadmin
+from api.superadmin._shared import TokenPayload, _require_superadmin
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -57,7 +57,7 @@ def _push_history(report_dict: dict[str, Any]) -> None:
         rc.lpush(_HISTORY_KEY, json.dumps(report_dict))
         rc.ltrim(_HISTORY_KEY, 0, _HISTORY_MAX - 1)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
 
 @router.get("/health-engine/status")
@@ -125,7 +125,7 @@ async def get_history(
             try:
                 entries.append(json.loads(raw))
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         return {"entries": entries, "count": len(entries)}
     except Exception as exc:
         return {"entries": [], "count": 0, "error": str(exc)}

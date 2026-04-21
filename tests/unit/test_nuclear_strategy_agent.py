@@ -1448,6 +1448,7 @@ class TestDeleteHistoryEndpoint:
         payload = {
             "sub": "test-admin",
             "role": "admin",
+            "type": "access",
             "exp": int(time.time()) + 3600,
         }
         token = jwt.encode(payload, secret, algorithm="HS256")

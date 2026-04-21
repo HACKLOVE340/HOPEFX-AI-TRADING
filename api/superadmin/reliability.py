@@ -102,7 +102,7 @@ async def _probe_broker() -> dict[str, Any]:
                 "broker_type": broker_type,
             }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     # Fallback: check config
     broker_type = os.getenv("BROKER_TYPE", os.getenv("BROKER_DEFAULT", "paper"))
     return {
@@ -130,7 +130,7 @@ async def _probe_ml_engine() -> dict[str, Any]:
                     **data,
                 }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     try:
         from ml.predictor import get_predictor
         pred = get_predictor()
@@ -159,7 +159,7 @@ async def _probe_trading_engine() -> dict[str, Any]:
                 "engine_status": status,
             }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return {
         "status": "warning",
         "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -199,7 +199,7 @@ async def _probe_websocket_server() -> dict[str, Any]:
                 "connected_clients": clients,
             }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return {
         "status": "ok",
         "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -243,7 +243,7 @@ async def _probe_data_feed() -> dict[str, Any]:
                     "tick_age_seconds": round(age_s, 1),
                 }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return {
         "status": "warning",
         "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -390,7 +390,7 @@ async def _probe_decision_engine() -> dict[str, Any]:
                 "detail": f"decision_engine ready={ready}",
             }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     try:
         from core.decision.HOPEFXDecisionEngine import HOPEFXDecisionEngine
         return {
@@ -599,7 +599,7 @@ async def get_reliability_status(
             rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))
             rc.ltrim(_RELIABILITY_HISTORY_KEY, 0, _RELIABILITY_HISTORY_MAX - 1)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
     return snapshot
 
@@ -693,7 +693,7 @@ async def emit_test_trace(
                     trace_id = format(ctx.trace_id, "032x")
                     span_id = format(ctx.span_id, "016x")
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
         return {
             "trace_id": trace_id,
@@ -861,7 +861,7 @@ async def validate_toggle_persisted(
     try:
         body = await request.json()
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
     key = body.get("key", "")
     expected = body.get("expected_value")
@@ -919,7 +919,7 @@ async def validate_toggle_persisted(
                     "match": live_val == expected,
                 }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
     # Determine overall consistency
     layer_matches = [
@@ -967,7 +967,7 @@ async def get_reliability_metrics(
                 "keyspace_misses": info.get("keyspace_misses", 0),
             }
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
     return {
         "system": system,
@@ -1004,7 +1004,7 @@ async def get_reliability_history(
                 try:
                     items.append(json.loads(raw))
                 except Exception:
-                    pass
+                    logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     except Exception as exc:
         logger.warning("reliability_history: %s", exc)
 

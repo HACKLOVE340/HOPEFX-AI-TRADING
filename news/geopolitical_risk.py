@@ -583,12 +583,10 @@ class GeopoliticalRiskProvider:
         # ── 6. Graceful degradation ────────────────────────────────────────────
         # Never raise RuntimeError — doing so in an async poll task silently
         # kills the task and leaves the system without geopolitical data.
-        # Log at CRITICAL in production so operators are alerted, but always
-        # return an empty list so callers can continue operating.
-        # In production: CRITICAL so operators are paged.
-        # In development: INFO — outbound HTTPS is commonly blocked in sandboxed
-        # environments and this is expected behaviour, not an error.
-        _log_fn = logger.critical if _is_production else logger.info
+        # Log at CRITICAL in production so operators are paged; WARNING in
+        # development so the condition is visible without being fatal.
+        # Always return an empty list so callers can continue operating.
+        _log_fn = logger.critical if _is_production else logger.warning
         if not self._all_sources_warned:
             _log_fn(
                 "All geopolitical data sources unavailable and cache empty — "

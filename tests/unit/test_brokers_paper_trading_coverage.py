@@ -529,7 +529,11 @@ class TestClosePosition:
         _buy(broker, "EURUSD")
         _buy(broker, "XAUUSD")
         closed = await broker.close_all_positions()
-        assert closed == 2
+        # close_all_positions returns a list of closed symbol strings
+        assert isinstance(closed, list)
+        assert len(closed) == 2
+        assert set(closed) == {"EURUSD", "XAUUSD"}
+        assert broker.positions == {}
         assert broker.positions == {}
 
 

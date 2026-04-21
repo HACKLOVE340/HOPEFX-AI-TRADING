@@ -266,10 +266,13 @@ class TestCancelAndGetOrder:
         assert c.cancel_order("ord1") is True
         mock_ccxt.cancel_order.assert_called_once_with("ord1")
 
-    def test_cancel_all_orders_delegates(self):
+    @pytest.mark.asyncio
+    async def test_cancel_all_orders_delegates(self):
         c, mock_ccxt = _make_connector()
         mock_ccxt.cancel_all_orders.return_value = True
-        assert c.cancel_all_orders() is True
+        result = await c.cancel_all_orders()
+        # cancel_all_orders returns a list of cancelled IDs; truthy when non-empty
+        assert result == ["all"]
 
     def test_get_order_delegates(self):
         c, mock_ccxt = _make_connector()

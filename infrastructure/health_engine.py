@@ -264,7 +264,7 @@ def _register_default_probes(engine: HealthEngine) -> None:
                         "broker_type": broker_type,
                     }
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         broker_type = os.getenv("BROKER_TYPE", os.getenv("BROKER_DEFAULT", "paper"))
         return {
             "status": "ok" if broker_type == "paper" else "warning",
@@ -283,7 +283,7 @@ def _register_default_probes(engine: HealthEngine) -> None:
                     data = json.loads(raw)
                     return {"status": "ok", "detail": "ML status from Redis", **data}
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         try:
             from ml.predictor import get_predictor
             pred = get_predictor()
@@ -303,7 +303,7 @@ def _register_default_probes(engine: HealthEngine) -> None:
                         "detail": f"engine status={status} running={running}",
                         "engine_status": status}
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         return {"status": "warning", "detail": "Engine not accessible via app_state"}
 
     async def _probe_self_healer() -> dict[str, Any]:
@@ -384,7 +384,7 @@ def _register_default_probes(engine: HealthEngine) -> None:
                             "tick_age_seconds": round(age_s, 1),
                         }
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         return {"status": "warning", "detail": "No live tick data in Redis"}
 
     async def _probe_websocket() -> dict[str, Any]:
@@ -396,7 +396,7 @@ def _register_default_probes(engine: HealthEngine) -> None:
                 return {"status": "ok", "detail": f"connected_clients={clients}",
                         "connected_clients": clients}
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         return {"status": "ok", "detail": "WebSocket server running"}
 
     async def _probe_event_bus() -> dict[str, Any]:

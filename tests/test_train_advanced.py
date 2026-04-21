@@ -135,7 +135,12 @@ class TestWalkForwardEval:
         from ml.advanced_features import build_advanced_features
 
         df = _make_ohlcv(n=200)
-        return build_advanced_features(df, macro_df=None)
+        X, y = build_advanced_features(df, macro_df=None)
+        # Force balanced classes so XGBoost classifier does not raise on single-class splits.
+        y = y.copy()
+        y.iloc[::2] = 0
+        y.iloc[1::2] = 1
+        return X, y
 
     def test_returns_mean_accuracy(self, xy):
         from ml.train_advanced import walk_forward_eval
@@ -209,6 +214,10 @@ def _make_cv_oos_split():
 
     df = _make_ohlcv(n=200)
     X, y = build_advanced_features(df, macro_df=None)
+    # Force balanced classes so XGBoost classifier does not raise on single-class splits.
+    y = y.copy()
+    y.iloc[::2] = 0
+    y.iloc[1::2] = 1
     split = int(len(X) * 0.80)
     return X.iloc[:split], y.iloc[:split], X.iloc[split:], y.iloc[split:]
 
@@ -229,6 +238,10 @@ class TestTrainFinalModel:
 
         df = _make_ohlcv(n=200)
         X, y = build_advanced_features(df, macro_df=None)
+        # Force balanced classes so XGBoost classifier does not raise on single-class splits.
+        y = y.copy()
+        y.iloc[::2] = 0
+        y.iloc[1::2] = 1
         model, metrics = train_final_model(X, y, use_stacking=False)
 
         ta.MODEL_DIR = original
@@ -265,6 +278,7 @@ class TestExtractFeatureImportance:
         try:
             df = _make_ohlcv(n=200)
             X, y = build_advanced_features(df, macro_df=None)
+            y = y.copy(); y.iloc[::2] = 0; y.iloc[1::2] = 1
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
             assert isinstance(imp, dict)
@@ -282,6 +296,7 @@ class TestExtractFeatureImportance:
         try:
             df = _make_ohlcv(n=200)
             X, y = build_advanced_features(df, macro_df=None)
+            y = y.copy(); y.iloc[::2] = 0; y.iloc[1::2] = 1
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
             for k, v in imp.items():

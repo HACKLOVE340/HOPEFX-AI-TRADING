@@ -149,7 +149,8 @@ else:
             return decorator
 
         def conf(self):
-            pass
+            """No-op configuration accessor for the null Celery stub."""
+            return None
 
     app = _NoOpCelery()  # type: ignore[assignment]
 
@@ -386,7 +387,7 @@ def register_celery_health(redis_client) -> None:
             try:
                 redis_client.delete("celery:active_workers")
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
     except Exception as exc:
         logger.warning("Celery signal registration failed: %s", exc)

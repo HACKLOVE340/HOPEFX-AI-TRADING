@@ -266,11 +266,11 @@ async def list_blocked_ips(
         try:
             members.update(r.smembers("hopefx:security:blocked_ips"))
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         try:
             members.update(r.lrange("security:blocked_ips", 0, -1))
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         # Return plain list — matches frontend expectation (string[])
         return sorted(members)
     except Exception as exc:

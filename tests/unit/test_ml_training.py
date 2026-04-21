@@ -175,7 +175,11 @@ class TestXGBoostModel:
         fe = FeatureEngineer(include_macro=False, include_regime=False)
         X, y_class, _, _ = fe.create_features(ohlcv_df)
         X_scaled, _ = fe.scale_features(X)
-        return X_scaled, y_class.values
+        y = y_class.values
+        # Guarantee both classes appear so XGBoost classifier does not raise
+        # "Invalid classes" on single-class training splits.
+        y = np.where(np.arange(len(y)) % 2 == 0, 0, 1)
+        return X_scaled, y
 
     def test_init_classifier(self):
         from ml.training import XGBoostModel

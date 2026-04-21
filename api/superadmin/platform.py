@@ -715,7 +715,7 @@ async def test_smtp_config(
     try:
         body = await request.json()
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
     cfg = _load_platform_config()
     host = body.get("host") or cfg.get("smtp_host", "")

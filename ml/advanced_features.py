@@ -577,8 +577,8 @@ def build_filtered_target(
     atr = _atr(df, 14)
 
     # Entry at next bar's open; exit at close[t+horizon]
-    entry_price = o.shift(-1)                          # open[t+1]
-    exit_price = c.shift(-horizon)                     # close[t+horizon]
+    entry_price = o.shift(-1)                          # open[t+1]  # lookahead-ok: label construction
+    exit_price = c.shift(-horizon)                     # close[t+horizon]  # lookahead-ok: label construction
 
     # Return from realistic entry to exit
     future_ret = (exit_price - entry_price) / entry_price.replace(0, np.nan)
@@ -667,8 +667,8 @@ def build_advanced_features(
     else:
         # Unfiltered path: same entry/exit convention as build_filtered_target.
         # Entry at open[t+1], exit at close[t+horizon].
-        entry_price = d["open"].shift(-1)
-        exit_price = d["close"].shift(-horizon)
+        entry_price = d["open"].shift(-1)   # lookahead-ok: label construction
+        exit_price = d["close"].shift(-horizon)  # lookahead-ok: label construction
         future_ret = (exit_price - entry_price) / entry_price.replace(0, np.nan)
         y_raw = (future_ret > 0).astype(float)
         y_raw[y_raw.isna()] = np.nan

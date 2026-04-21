@@ -240,8 +240,8 @@ class FeatureEngineer:
         # Target variable — entry at open[t+1], exit at close[t+horizon].
         # Using close[t] as entry introduces optimism bias: in live trading
         # you always fill at the next bar's open, not the current close.
-        entry_price = data["open"].shift(-1)
-        exit_price = data[target_col].shift(-prediction_horizon)
+        entry_price = data["open"].shift(-1)  # lookahead-ok: label construction
+        exit_price = data[target_col].shift(-prediction_horizon)  # lookahead-ok: label construction
         future_returns = (exit_price - entry_price) / entry_price.replace(0, float("nan"))
 
         # Classification target: 1 if price goes up from entry, 0 if down

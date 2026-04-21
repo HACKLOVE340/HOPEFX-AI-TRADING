@@ -124,13 +124,14 @@ class TestCommission:
         assert cfg.commission_per_trade == 7.0
 
     def test_commission_deducted_on_buy(self):
-        cfg = _make_config(slippage_model="none")
+        # use_unified_costs=False forces the legacy flat commission_per_trade=$7
+        cfg = _make_config(slippage_model="none", use_unified_costs=False)
         broker = SimulatedBroker(cfg)
         initial_cash = broker.cash
         broker.place_market_order("XAUUSD", "buy", 1.0, 2000.0)
-        # cash should decrease by cost + commission
+        # cash should decrease by cost + flat $7 commission (no slippage, no unified costs)
         assert broker.cash < initial_cash - 2000.0
-        assert abs(broker.cash - (initial_cash - 2000.0 - 7.0)) < 1.0  # within $1 (slippage)
+        assert abs(broker.cash - (initial_cash - 2000.0 - 7.0)) < 0.01
 
 
 # ---------------------------------------------------------------------------

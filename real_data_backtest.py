@@ -331,9 +331,9 @@ def generate_ml_signals(
             df_out.loc[no_pred, "signal"] = heuristic["signal"].values
             df_out.loc[no_pred, "signal_source"] = "heuristic_fallback"
 
-        n_long = int((df_out["signal"] == 1).sum())
-        n_short = int((df_out["signal"] == -1).sum())
-        n_flat = int((df_out["signal"] == 0).sum())
+        n_long = int((df_out["signal"] == 1).sum())   # healer: ignore — boolean sum, no NaN
+        n_short = int((df_out["signal"] == -1).sum())  # healer: ignore — boolean sum, no NaN
+        n_flat = int((df_out["signal"] == 0).sum())    # healer: ignore — boolean sum, no NaN
         logger.info(
             "ML signals: long=%d  short=%d  flat=%d  abstain_rate=%.1f%%",
             n_long, n_short, n_flat,

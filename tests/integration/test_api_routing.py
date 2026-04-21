@@ -140,9 +140,9 @@ class TestAuthEndpoints:
 
     def test_me_endpoint_with_valid_token(self, client):
         r = client.get("/api/auth/me", headers=_headers("user"))
-        # May return 200 (user found), 401 (token not accepted by this route),
-        # 404 (user not in DB), or 500 (DB unavailable) — all valid in test env
-        assert r.status_code in (200, 401, 404, 500)
+        # May return 200 (user found), 401 (token not accepted), 404 (user not in DB),
+        # 500/503 (DB unavailable in test env) — all valid in test environment
+        assert r.status_code in (200, 401, 404, 500, 503)
 
     def test_expired_token_returns_401(self, client):
         expired = jwt.encode(

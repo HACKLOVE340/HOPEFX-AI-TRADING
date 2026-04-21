@@ -437,7 +437,7 @@ async def flag_anomalies(
             try:
                 aw = AnomalyWeighter.load(_ANOMALY_MODEL_PATH)
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
         if aw is None:
             store = _get_live_store()
@@ -508,7 +508,7 @@ async def anomaly_report(
             try:
                 aw = AnomalyWeighter.load(_ANOMALY_MODEL_PATH)
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
         if aw is None:
             store = _get_live_store()

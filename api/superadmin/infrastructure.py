@@ -1104,7 +1104,7 @@ def _get_tenant_store() -> dict:
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return {}
 
 
@@ -1157,7 +1157,7 @@ async def list_tenants(
         from api.whitelabel_admin import _get_tenants
         tenants = _get_tenants()
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     if not tenants:
         store = _get_tenant_store()
         tenants = list(store.values())
@@ -1193,7 +1193,7 @@ async def get_tenant(
             from api.whitelabel_admin import _get_tenant_by_id
             tenant = _get_tenant_by_id(tenant_id)
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
     return tenant
@@ -1271,7 +1271,7 @@ async def create_tenant(
         from api.whitelabel_admin import _create_tenant
         _create_tenant(tenant_dict)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return tenant_dict
 
 
@@ -1518,7 +1518,7 @@ def _gdpr_store() -> dict:
             if raw:
                 return _json.loads(raw)
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return {}
 
 
@@ -3065,7 +3065,7 @@ async def _check_celery_service() -> dict:
                     # Refresh the Redis heartbeat
                     rc.set("celery:active_workers", str(worker_count), ex=300)
             except Exception:
-                pass  # Celery not installed or no workers — use Redis value
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110 — Celery not installed or no workers
             return {
                 "status": "healthy" if worker_count > 0 else "no_workers",
                 "latency_ms": round((time.time() - start) * 1000),

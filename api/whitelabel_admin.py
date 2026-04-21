@@ -96,7 +96,7 @@ def _row_to_dict(row: Any) -> dict:
     try:
         features = json.loads(getattr(row, "features_json", "[]") or "[]")
     except Exception:
-        pass
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     return {
         "tenant_id": row.id,
         "name": row.name,
@@ -156,7 +156,7 @@ async def create_tenant(
             try:
                 valid_features.append(FeatureFlag(f).value)
             except ValueError:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
         now = datetime.now(UTC)
         trial_ends = (now + timedelta(days=body.trial_days)) if body.trial_days > 0 else None
@@ -315,7 +315,7 @@ async def enable_feature(
         try:
             features = json.loads(row.features_json or "[]")
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         if flag_val not in features:
             features.append(flag_val)
         row.features_json = json.dumps(features)
@@ -346,7 +346,7 @@ async def disable_feature(
         try:
             features = json.loads(row.features_json or "[]")
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         row.features_json = json.dumps([f for f in features if f != flag_val])
         row.updated_at = datetime.now(UTC)
         db.commit()
@@ -394,7 +394,7 @@ async def preview_tenant(tenant_id: str, user: TokenPayload = Depends(get_curren
         try:
             features = json.loads(row.features_json or "[]")
         except Exception:
-            pass
+            logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         return {
             "tenant_id": tenant_id,
             "company_name": row.company_name or row.name,

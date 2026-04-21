@@ -205,7 +205,9 @@ class TestPaperTradingBrokerPositions:
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         closed = asyncio.run(broker.close_all_positions())
-        assert closed == 2
+        assert isinstance(closed, list)
+        assert len(closed) == 2
+        assert set(closed) == {"XAUUSD", "EURUSD"}
         assert len(broker.positions) == 0
 
 

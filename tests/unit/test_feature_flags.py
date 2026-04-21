@@ -118,11 +118,15 @@ class TestFeatureFlags:
                 assert ff.ML_PREDICTIONS is True, f"Expected ML_PREDICTIONS=True for env value '{truthy}'"
 
     def test_global_flags_singleton_uses_live_env(self):
-        """The module-level `flags` singleton reads from the live environment."""
-        with patch.dict(os.environ, {"FEATURE_REPLAY": "true"}):
-            assert flags.REPLAY_ENGINE is True
-        # Back to default after context exits
-        assert flags.REPLAY_ENGINE is False
+        """The module-level `flags` singleton reads from the live environment.
+
+        Uses DEEP_ENSEMBLE (default=False, EXPERIMENTAL) so the assertion
+        after the context manager checks the real default, not a promoted flag.
+        """
+        with patch.dict(os.environ, {"FEATURE_DEEP_ENSEMBLE": "true"}):
+            assert flags.DEEP_ENSEMBLE is True
+        # Back to default (False) after context exits
+        assert flags.DEEP_ENSEMBLE is False
 
     # ── registry ──────────────────────────────────────────────────────────
 

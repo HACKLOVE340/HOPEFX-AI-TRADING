@@ -1261,7 +1261,7 @@ if SQLALCHEMY_AVAILABLE:
             try:
                 features = _json.loads(self.features_json or "[]")
             except Exception:
-                pass
+                logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
             return {
                 "tenant_id": self.id,
                 "name": self.name,
