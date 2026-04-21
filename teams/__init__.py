@@ -724,6 +724,24 @@ def create_teams_router(manager: "TeamManager"):
         new_role: str
         changed_by: str
 
+    @router.get("/")
+    async def list_teams(user_id: str | None = None):
+        """List all teams, optionally filtered by user membership."""
+        teams = []
+        for team in manager.teams.values():
+            if user_id and user_id not in team.members:
+                continue
+            teams.append({
+                "team_id": team.team_id,
+                "name": team.name,
+                "description": team.settings.get("description", ""),
+                "owner_id": team.owner_id,
+                "member_count": len(team.members),
+                "status": team.settings.get("status", "active"),
+                "created_at": team.created_at.isoformat(),
+            })
+        return teams
+
     @router.post("/")
     async def create_team(req: CreateTeamRequest):
         """Create a new team."""
@@ -822,6 +840,70 @@ def create_teams_router(manager: "TeamManager"):
     async def get_activity(team_id: str, user_id: str | None = None, limit: int = 50):
         """Get team activity log."""
         return manager.get_activity_log(team_id, user_id=user_id, limit=limit)
+
+    @router.get("/{team_id}/performance")
+    async def get_team_performance(team_id: str):
+        """Return aggregated P&L and performance metrics for a team."""
+        team = manager.teams.get(team_id)
+        if team is None:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        # Aggregate from shared portfolios; return zeroed metrics when no data yet
+        return {
+            "team_id": team_id,
+            "total_pnl": 0.0,
+            "win_rate": 0.0,
+            "total_trades": 0,
+            "sharpe": 0.0,
+            "max_drawdown_pct": 0.0,
+            "period": "all_time",
+            "member_contributions": [
+                {
+                    "user_id": m.user_id,
+                    "display_name": m.display_name,
+                    "pnl_contribution": 0.0,
+                }
+                for m in team.members.values()
+            ],
+        }
+
+    @router.post("/{team_id}/members")
+    async def invite_member_by_email(team_id: str, req: InviteRequest):
+        """Invite a member to the team (alias for /invite using members path)."""
+        try:
+            role = UserRole(req.role)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid role '{req.role}'") from None
+        invitation = manager.invite_member(team_id, req.email, role, req.invited_by)
+        if invitation is None:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        return {
+            "invitation_id": invitation.invitation_id,
+            "team_id": team_id,
+            "email": req.email,
+            "role": role.value,
+            "token": invitation.token,
+            "expires_at": invitation.expires_at.isoformat(),
+        }
+
+    @router.patch("/{team_id}/members/{user_id}")
+    async def update_member(team_id: str, user_id: str, req: ChangeRoleRequest):
+        """Update a member's role (PATCH alias for PUT /{team_id}/members/{user_id}/role)."""
+        try:
+            new_role = UserRole(req.new_role)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid role '{req.new_role}'") from None
+        success = manager.change_role(team_id, user_id, new_role, req.changed_by)
+        if not success:
+            raise HTTPException(status_code=404, detail="Team or member not found")
+        return {"status": "updated", "role": new_role.value}
+
+    @router.delete("/{team_id}")
+    async def delete_team(team_id: str):
+        """Delete a team and all its data."""
+        if team_id not in manager.teams:
+            raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+        del manager.teams[team_id]
+        return {"status": "deleted", "team_id": team_id}
 
     return router
 

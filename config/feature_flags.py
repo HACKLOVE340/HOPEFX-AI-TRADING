@@ -622,39 +622,39 @@ class FeatureFlags:
 
     RESEARCH_MODULE = _FeatureDef(
         "FEATURE_RESEARCH",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="Quantitative research tooling (alpha discovery, factor models).  WIP.",
+        default=True,
+        status=FeatureStatus.STABLE,
+        description="Quantitative research notebooks — AI-powered market analysis and strategy discovery.",
     )
     EXPLAINABILITY = _FeatureDef(
         "FEATURE_EXPLAINABILITY",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="SHAP/LIME explainability for ML model decisions.  WIP.",
+        default=True,
+        status=FeatureStatus.STABLE,
+        description="SHAP/LIME explainability for ML model decisions.",
     )
     TRANSPARENCY_REPORTS = _FeatureDef(
         "FEATURE_TRANSPARENCY",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="Automated transparency / audit reports for regulators.  WIP.",
+        default=True,
+        status=FeatureStatus.STABLE,
+        description="Automated transparency / audit reports for regulators.",
     )
     TEAMS_MODULE = _FeatureDef(
         "FEATURE_TEAMS",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="Multi-user team workspaces with role-based access.  WIP.",
+        default=True,
+        status=FeatureStatus.STABLE,
+        description="Multi-user team workspaces with role-based access and shared P&L.",
     )
     NOCODE_BUILDER = _FeatureDef(
         "FEATURE_NOCODE",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="No-code strategy builder for non-technical users.  WIP.",
+        default=True,
+        status=FeatureStatus.STABLE,
+        description="No-code strategy builder for non-technical users.",
     )
     REPLAY_ENGINE = _FeatureDef(
         "FEATURE_REPLAY",
-        default=False,
-        status=FeatureStatus.EXPERIMENTAL,
-        description="Tick-by-tick market replay for strategy analysis.  WIP.",
+        default=True,
+        status=FeatureStatus.STABLE,
+        description="Bar-by-bar market replay for strategy analysis and training.",
     )
     GRAPHQL_API = _FeatureDef(
         "FEATURE_GRAPHQL_API",

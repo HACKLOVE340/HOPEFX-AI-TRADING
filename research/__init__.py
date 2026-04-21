@@ -644,6 +644,54 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         results = engine.execute_all(notebook_id)
         return {"notebook_id": notebook_id, "results": results}
 
+    @router.get("/notebooks/{notebook_id}")
+    async def get_notebook(notebook_id: str):
+        """Return a single notebook by ID including all cells and results."""
+        nb = engine.notebooks.get(notebook_id)
+        if nb is None:
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        return {
+            "notebook_id": nb.notebook_id,
+            "title": nb.title,
+            "description": nb.description,
+            "author": nb.author,
+            "tags": nb.tags,
+            "version": nb.version,
+            "created_at": nb.created_at.isoformat(),
+            "updated_at": nb.updated_at.isoformat(),
+            "cells": [
+                {
+                    "cell_id": c.cell_id,
+                    "cell_type": c.cell_type.value,
+                    "content": c.content,
+                    "output": c.output,
+                    "status": c.status.value,
+                    "execution_count": c.execution_count,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in nb.cells
+            ],
+        }
+
+    @router.delete("/notebooks/{notebook_id}", status_code=204)
+    async def delete_notebook(
+        notebook_id: str,
+        user: TokenPayload = Depends(require_role("trader")),
+    ):
+        """Delete a notebook. Requires: role >= 'trader'."""
+        if notebook_id not in engine.notebooks:
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        del engine.notebooks[notebook_id]
+
+    @router.post("/notebooks/{notebook_id}/run")
+    async def run_notebook(
+        notebook_id: str,
+        user: TokenPayload = Depends(require_role("trader")),
+    ):
+        """Execute all cells in a notebook (alias for /execute). Requires: role >= 'trader'."""
+        results = engine.execute_all(notebook_id)
+        return {"notebook_id": notebook_id, "results": results}
+
     @router.get("/notebooks/{notebook_id}/export")
     async def export_notebook(notebook_id: str, export_format: str = "json"):
         """Export a notebook as JSON or Python script."""
@@ -654,7 +702,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     @router.get("/templates")
     async def list_templates():
-        """list available notebook templates."""
+        """List available notebook templates."""
         return engine.get_templates()
 
     @router.post("/notebooks/from-template/{template_id}")

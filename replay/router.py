@@ -45,6 +45,25 @@ def create_replay_router(engine: "ChartReplayEngine"):
         stop_loss: float | None = None
         take_profit: float | None = None
 
+    @router.get("/sessions")
+    async def list_sessions():
+        """List all active replay sessions."""
+        sessions = []
+        for session in engine.sessions.values():
+            sessions.append({
+                "session_id": session.session_id,
+                "symbol": session.symbol,
+                "timeframe": session.timeframe,
+                "status": session.state.value,
+                "current_bar": getattr(session, "current_bar_index", 0),
+                "total_bars": len(engine.data_cache.get(f"{session.symbol}_{session.timeframe}", [])),
+                "current_price": getattr(session, "current_price", 0.0),
+                "equity": session.current_balance,
+                "pnl": session.current_balance - session.initial_balance,
+                "created_at": session.created_at.isoformat(),
+            })
+        return sessions
+
     @router.post("/sessions")
     async def create_session(req: CreateSessionRequest):
         """Create a new replay session."""
@@ -119,6 +138,105 @@ def create_replay_router(engine: "ChartReplayEngine"):
         if not summary:
             raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return summary
+
+    @router.get("/sessions/{session_id}")
+    async def get_session(session_id: str):
+        """Return full session state including bars and trades."""
+        session = engine.sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        data_key = f"{session.symbol}_{session.timeframe}"
+        bars_raw = engine.data_cache.get(data_key, [])
+        bar_idx = getattr(session, "current_bar_index", 0)
+        # Return bars up to current position so the frontend can render the chart
+        visible_bars = bars_raw[:bar_idx + 1] if bars_raw else []
+        return {
+            "session_id": session.session_id,
+            "symbol": session.symbol,
+            "timeframe": session.timeframe,
+            "start_date": session.start_date.isoformat(),
+            "end_date": session.end_date.isoformat(),
+            "current_bar": bar_idx,
+            "total_bars": len(bars_raw),
+            "status": session.state.value,
+            "current_price": visible_bars[-1].close if visible_bars else 0.0,
+            "equity": session.current_balance,
+            "pnl": session.current_balance - session.initial_balance,
+            "trades": session.trades,
+            "bars": [
+                {
+                    "time": int(b.timestamp.timestamp()),
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
+                for b in visible_bars
+            ],
+            "created_at": session.created_at.isoformat(),
+        }
+
+    @router.post("/sessions/{session_id}/step")
+    async def step_session(session_id: str):
+        """Advance the replay session by exactly one bar."""
+        session = engine.sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        data_key = f"{session.symbol}_{session.timeframe}"
+        bars = engine.data_cache.get(data_key, [])
+        bar_idx = getattr(session, "current_bar_index", 0)
+        if bar_idx >= len(bars) - 1:
+            from replay.models import ReplayState
+            session.state = ReplayState.FINISHED
+            return {"session_id": session_id, "status": "completed", "current_bar": bar_idx}
+        bar_idx += 1
+        session.current_bar_index = bar_idx  # type: ignore[attr-defined]
+        current_bar = bars[bar_idx]
+        return {
+            "session_id": session_id,
+            "current_bar": bar_idx,
+            "total_bars": len(bars),
+            "status": session.state.value,
+            "bar": {
+                "time": int(current_bar.timestamp.timestamp()),
+                "open": current_bar.open,
+                "high": current_bar.high,
+                "low": current_bar.low,
+                "close": current_bar.close,
+                "volume": current_bar.volume,
+            },
+        }
+
+    @router.post("/sessions/{session_id}/run")
+    async def run_session(session_id: str, bars: int = 10):
+        """Advance the replay session by N bars at once."""
+        session = engine.sessions.get(session_id)
+        if session is None:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        data_key = f"{session.symbol}_{session.timeframe}"
+        all_bars = engine.data_cache.get(data_key, [])
+        bar_idx = getattr(session, "current_bar_index", 0)
+        new_idx = min(bar_idx + max(1, bars), len(all_bars) - 1)
+        session.current_bar_index = new_idx  # type: ignore[attr-defined]
+        if new_idx >= len(all_bars) - 1:
+            from replay.models import ReplayState
+            session.state = ReplayState.FINISHED
+        advanced = new_idx - bar_idx
+        return {
+            "session_id": session_id,
+            "bars_advanced": advanced,
+            "current_bar": new_idx,
+            "total_bars": len(all_bars),
+            "status": session.state.value,
+        }
+
+    @router.delete("/sessions/{session_id}", status_code=204)
+    async def delete_session(session_id: str):
+        """Delete a replay session."""
+        if session_id not in engine.sessions:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        del engine.sessions[session_id]
 
     @router.post("/sessions/{session_id}/orders")
     async def place_order(session_id: str, req: PlaceOrderRequest):

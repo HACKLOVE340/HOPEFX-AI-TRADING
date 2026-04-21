@@ -49,6 +49,8 @@ class ReplaySession:
     state: ReplayState = ReplayState.IDLE
     initial_balance: float = 100000.0
     current_balance: float = 100000.0
+    # Index into the loaded bar array — incremented by step/run endpoints
+    current_bar_index: int = 0
     trades: list[dict[str, Any]] = field(default_factory=list)
     positions: list[dict[str, Any]] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
