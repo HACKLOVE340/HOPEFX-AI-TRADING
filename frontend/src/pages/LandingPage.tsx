@@ -118,18 +118,28 @@ const FEATURES: Feature[] = [
 
 const PLANS: Plan[] = [
   {
-    name: 'Starter', monthly: 29, annual: 19,
-    features: ['1 active strategy', '5 symbols', 'Paper trading', 'Basic backtesting', 'Email alerts'],
+    name: 'Free', monthly: 0, annual: 0,
+    features: ['Paper trading', '3 symbols', '1 strategy', 'Basic backtesting', 'Email alerts'],
+    cta: 'Get started', href: '/register?plan=free',
+  },
+  {
+    name: 'Starter', monthly: 1800, annual: 1260,
+    features: ['Live trading', '10 symbols', '3 strategies', 'Full backtesting', 'Email + Telegram alerts'],
     cta: 'Get started', href: '/register?plan=starter',
   },
   {
-    name: 'Pro', monthly: 79, annual: 55, featured: true, badge: 'Most popular',
-    features: ['10 active strategies', '20 symbols', 'Live trading', 'Full backtesting + PDF', 'Discord / Slack / Telegram', 'Marketplace access', 'Crypto payments'],
+    name: 'Professional', monthly: 4500, annual: 3150, featured: true, badge: 'Most popular',
+    features: ['20 symbols', '10 strategies', 'AI strategy generator', 'Marketplace access', 'Prop firm rules', 'Crypto payments', 'Discord / Slack / Telegram'],
     cta: 'Start free trial', href: '/register?plan=professional',
   },
   {
-    name: 'Elite', monthly: 199, annual: 139,
-    features: ['Unlimited strategies', 'All symbols', 'Priority support', 'API access', 'White-label option', 'Affiliate program', 'Custom integrations'],
+    name: 'Enterprise', monthly: 7500, annual: 5250,
+    features: ['All symbols', 'Unlimited strategies', 'Research tools', 'Team accounts', 'Trade replay', 'Priority support', 'API access'],
+    cta: 'Contact sales', href: '/register?plan=enterprise',
+  },
+  {
+    name: 'Elite', monthly: 10000, annual: 7000,
+    features: ['Everything in Enterprise', 'Sub-accounts', 'White-label option', 'Affiliate program', 'Custom integrations', 'Dedicated support', '0.1% commission'],
     cta: 'Contact sales', href: '/register?plan=elite',
     badge: 'Best value',
   },
@@ -704,7 +714,7 @@ function PricingSection() {
 
   return (
     <section id="pricing" className="py-24 px-4">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <Reveal>
           <p className="text-xs font-bold text-neon-blue uppercase tracking-widest mb-3">Pricing</p>
           <h2 className="text-4xl font-extrabold text-slate-100 tracking-tight mb-4">
@@ -739,9 +749,9 @@ function PricingSection() {
           </div>
         </Reveal>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {PLANS.map((plan, i) => (
-            <Reveal key={plan.name} delay={i * 0.6}>
+            <Reveal key={plan.name} delay={i * 0.15}>
               <motion.div
                 className={`relative rounded-2xl p-7 flex flex-col h-full ${
                   plan.featured
@@ -769,13 +779,17 @@ function PricingSection() {
                         transition={{ duration: 0.18 }}
                         className="text-4xl font-extrabold text-slate-100 font-mono tabular-nums"
                       >
-                        ${annual ? plan.annual : plan.monthly}
+                        {(annual ? plan.annual : plan.monthly) === 0
+                          ? 'Free'
+                          : `$${(annual ? plan.annual : plan.monthly).toLocaleString()}`}
                       </motion.span>
                     </AnimatePresence>
-                    <span className="text-sm text-slate-500 mb-1.5">/mo</span>
+                    {(annual ? plan.annual : plan.monthly) > 0 && (
+                      <span className="text-sm text-slate-500 mb-1.5">/mo</span>
+                    )}
                   </div>
-                  {annual && (
-                    <p className="text-2xs text-slate-500 mt-1">Billed annually</p>
+                  {annual && plan.annual > 0 && (
+                    <p className="text-2xs text-slate-500 mt-1">Billed annually — save 30%</p>
                   )}
                 </div>
 

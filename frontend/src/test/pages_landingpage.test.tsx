@@ -9,7 +9,7 @@
  * - Hero section: headline, subheadline, CTA buttons, stats
  * - Features section: all 9 feature titles
  * - How it works section: all 4 steps
- * - Pricing section: all 3 plans, monthly/annual toggle
+ * - Pricing section: all 5 plans (free/starter/professional/enterprise/elite), monthly/annual toggle
  * - Testimonials section
  * - Footer
  * - Live ticker (WebSocket mock)
@@ -331,14 +331,25 @@ describe('LandingPage — Pricing section', () => {
     expect(screen.getByText(/simple, transparent pricing/i)).toBeInTheDocument();
   });
 
+  it('renders Free plan', async () => {
+    await renderLanding();
+    const freeEls = screen.getAllByText('Free');
+    expect(freeEls.length).toBeGreaterThan(0);
+  });
+
   it('renders Starter plan', async () => {
     await renderLanding();
     expect(screen.getByText('Starter')).toBeInTheDocument();
   });
 
-  it('renders Pro plan', async () => {
+  it('renders Professional plan', async () => {
     await renderLanding();
-    expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.getByText('Professional')).toBeInTheDocument();
+  });
+
+  it('renders Enterprise plan', async () => {
+    await renderLanding();
+    expect(screen.getByText('Enterprise')).toBeInTheDocument();
   });
 
   it('renders Elite plan', async () => {
@@ -346,7 +357,7 @@ describe('LandingPage — Pricing section', () => {
     expect(screen.getByText('Elite')).toBeInTheDocument();
   });
 
-  it('renders Most popular badge on Pro plan', async () => {
+  it('renders Most popular badge on Professional plan', async () => {
     await renderLanding();
     expect(screen.getByText('Most popular')).toBeInTheDocument();
   });
@@ -361,46 +372,47 @@ describe('LandingPage — Pricing section', () => {
     expect(screen.getByText(/annual/i)).toBeInTheDocument();
   });
 
-  it('shows monthly price $29 for Starter by default', async () => {
+  it('shows monthly price $1,800 for Starter by default', async () => {
     await renderLanding();
-    expect(screen.getByText('$29')).toBeInTheDocument();
+    expect(screen.getByText('$1,800')).toBeInTheDocument();
   });
 
-  it('shows monthly price $79 for Pro by default', async () => {
+  it('shows monthly price $4,500 for Professional by default', async () => {
     await renderLanding();
-    expect(screen.getByText('$79')).toBeInTheDocument();
+    expect(screen.getByText('$4,500')).toBeInTheDocument();
   });
 
-  it('shows monthly price $199 for Elite by default', async () => {
+  it('shows monthly price $10,000 for Elite by default', async () => {
     await renderLanding();
-    expect(screen.getByText('$199')).toBeInTheDocument();
+    expect(screen.getByText('$10,000')).toBeInTheDocument();
   });
 
   it('switches to annual pricing on toggle click', async () => {
     await renderLanding();
     const annualBtn = screen.getByRole('button', { name: /annual/i });
     fireEvent.click(annualBtn);
-    await waitFor(() => expect(screen.getByText('$19')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('$1,260')).toBeInTheDocument());
   });
 
-  it('shows annual price $55 for Pro after toggle', async () => {
+  it('shows annual price $3,150 for Professional after toggle', async () => {
     await renderLanding();
     fireEvent.click(screen.getByRole('button', { name: /annual/i }));
-    await waitFor(() => expect(screen.getByText('$55')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('$3,150')).toBeInTheDocument());
   });
 
-  it('shows annual price $139 for Elite after toggle', async () => {
+  it('shows annual price $7,000 for Elite after toggle', async () => {
     await renderLanding();
     fireEvent.click(screen.getByRole('button', { name: /annual/i }));
-    await waitFor(() => expect(screen.getByText('$139')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('$7,000')).toBeInTheDocument());
   });
 
-  it('renders Get started CTA for Starter', async () => {
+  it('renders Get started CTA for Free plan', async () => {
     await renderLanding();
-    expect(screen.getByRole('link', { name: /get started/i })).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: /get started/i });
+    expect(links.length).toBeGreaterThan(0);
   });
 
-  it('renders Start free trial CTA for Pro', async () => {
+  it('renders Start free trial CTA for Professional', async () => {
     await renderLanding();
     const trialLinks = screen.getAllByRole('link', { name: /start free trial/i });
     expect(trialLinks.length).toBeGreaterThan(0);
@@ -408,27 +420,30 @@ describe('LandingPage — Pricing section', () => {
 
   it('renders Contact sales CTA for Elite', async () => {
     await renderLanding();
-    expect(screen.getByRole('link', { name: /contact sales/i })).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: /contact sales/i });
+    expect(links.length).toBeGreaterThan(0);
   });
 
   it('Starter plan links to /register?plan=starter', async () => {
     await renderLanding();
-    const link = screen.getByRole('link', { name: /get started/i });
-    expect(link).toHaveAttribute('href', '/register?plan=starter');
+    const links = screen.getAllByRole('link', { name: /get started/i });
+    const starterLink = links.find(l => l.getAttribute('href') === '/register?plan=starter');
+    expect(starterLink).toBeTruthy();
   });
 
   it('Elite plan links to /register?plan=elite', async () => {
     await renderLanding();
-    const link = screen.getByRole('link', { name: /contact sales/i });
-    expect(link).toHaveAttribute('href', '/register?plan=elite');
+    const links = screen.getAllByRole('link', { name: /contact sales/i });
+    const eliteLink = links.find(l => l.getAttribute('href') === '/register?plan=elite');
+    expect(eliteLink).toBeTruthy();
   });
 
-  it('renders Starter plan features', async () => {
+  it('renders Free plan features', async () => {
     await renderLanding();
     expect(screen.getByText('Paper trading')).toBeInTheDocument();
   });
 
-  it('renders Pro plan features', async () => {
+  it('renders Professional plan features', async () => {
     await renderLanding();
     expect(screen.getByText('Marketplace access')).toBeInTheDocument();
   });
