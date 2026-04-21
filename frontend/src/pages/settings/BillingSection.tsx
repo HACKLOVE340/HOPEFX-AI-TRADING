@@ -121,14 +121,16 @@ const BillingSection: React.FC = () => {
       {/* Plan comparison */}
       <Card>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
           {[
-            { name: 'Starter', price: '$29', features: ['5 strategies', '1 broker', 'Email alerts', 'Basic analytics'] },
-            { name: 'Pro',     price: '$79', features: ['All strategies', '3 brokers', 'All alerts', 'Advanced analytics', 'AI signals', 'Copy trading'], highlight: true },
-            { name: 'Elite',   price: '$199', features: ['Everything in Pro', 'Unlimited brokers', 'White-label', 'Priority support', 'Custom strategies', 'API access'] },
-          ].map(({ name, price, features, highlight }) => (
-            <div key={name} style={{
-              padding: '16px', borderRadius: 10,
+            { id: 'free',         name: 'Free',         price: '$0',      features: ['Paper trading', '5 signals/day', '3 backtests/mo', '1 strategy'] },
+            { id: 'starter',      name: 'Starter',      price: '$1,800',  features: ['Live trading', '20 signals/day', '10 backtests/mo', '3 strategies'] },
+            { id: 'professional', name: 'Professional', price: '$4,500',  features: ['AI charting', 'ML signals', 'Pattern recognition', 'Copy trading', 'API access'], highlight: true },
+            { id: 'enterprise',   name: 'Enterprise',   price: '$7,500',  features: ['Unlimited strategies', 'News integration', 'Research tools', 'Teams', 'Market replay'] },
+            { id: 'elite',        name: 'Elite',        price: '$10,000', features: ['Sub-accounts', 'Dedicated support', 'Custom development', 'White-label', '0.1% commission'] },
+          ].map(({ id, name, price, features, highlight }) => (
+            <div key={id} style={{
+              padding: '14px', borderRadius: 10,
               border: `1px solid ${highlight ? '#3b82f6' : '#334155'}`,
               background: highlight ? '#0c1a2e' : '#0f172a',
               position: 'relative',
@@ -137,17 +139,17 @@ const BillingSection: React.FC = () => {
                 <div style={{
                   position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
                   background: '#3b82f6', color: '#fff', fontSize: 10, fontWeight: 700,
-                  padding: '2px 10px', borderRadius: 10, whiteSpace: 'nowrap',
+                  padding: '2px 8px', borderRadius: 10, whiteSpace: 'nowrap',
                 }}>
                   MOST POPULAR
                 </div>
               )}
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{name}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: highlight ? '#60a5fa' : '#94a3b8', marginBottom: 12 }}>
-                {price}<span style={{ fontSize: 12, fontWeight: 400, color: '#64748b' }}>/mo</span>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>{name}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: PLAN_COLORS[id] ?? '#94a3b8', marginBottom: 10 }}>
+                {price}<span style={{ fontSize: 11, fontWeight: 400, color: '#64748b' }}>/mo</span>
               </div>
               {features.map((f) => (
-                <div key={f} style={{ fontSize: 12, color: '#94a3b8', marginBottom: 4, display: 'flex', gap: 6 }}>
+                <div key={f} style={{ fontSize: 11, color: '#94a3b8', marginBottom: 3, display: 'flex', gap: 5 }}>
                   <span style={{ color: '#22c55e' }}>✓</span> {f}
                 </div>
               ))}
@@ -155,9 +157,9 @@ const BillingSection: React.FC = () => {
                 variant={highlight ? 'primary' : 'secondary'}
                 size="sm"
                 onClick={() => navigate('/checkout')}
-                style={{ marginTop: 12, width: '100%', justifyContent: 'center' }}
+                style={{ marginTop: 10, width: '100%', justifyContent: 'center' }}
               >
-                {billing?.plan?.toLowerCase() === name.toLowerCase() ? 'Current plan' : 'Select'}
+                {billing?.plan?.toLowerCase() === id ? 'Current plan' : 'Select'}
               </Button>
             </div>
           ))}

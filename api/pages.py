@@ -9,14 +9,24 @@ api/pages.py
 HTML page routes for the frontend.
 
 Routes served:
-  GET /login              — login page
-  GET /register           — registration page
-  GET /security           — security & privacy page
-  GET /marketplace        — strategy marketplace
-  GET /affiliate          — affiliate programme
-  GET /docs/FAQ.md        — FAQ documentation
-  GET /docs/API.md        — API reference documentation
-  GET /docs/MOBILE_GUIDE.md — mobile usage guide
+  GET /login              — React SPA (Login.tsx handles the route)
+  GET /register           — React SPA (Register.tsx handles the route)
+  GET /forgot-password    — React SPA
+  GET /reset-password     — React SPA
+  GET /security           — React SPA (SecurityDashboard.tsx)
+  GET /marketplace        — React SPA (Marketplace.tsx)
+  GET /affiliate          — React SPA (Affiliate.tsx)
+  GET /privacy            — React SPA (PrivacyPolicy.tsx)
+  GET /terms              — React SPA (TermsAndRiskDisclosure.tsx)
+  GET /auth.js            — legacy shared JS helpers (kept for backward compat)
+  GET /docs/FAQ.md        — FAQ documentation (template)
+  GET /docs/API.md        — API reference documentation (template)
+  GET /docs/MOBILE_GUIDE.md — mobile usage guide (template)
+
+NOTE: /login, /register, and all other SPA routes are served by the React
+SPA (static/index.html). React Router handles the path client-side.
+The old template-based login/register pages are no longer used — the React
+SPA provides a full-featured auth UI with CSRF, TOTP, and role-based routing.
 """
 
 from __future__ import annotations
@@ -24,7 +34,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, HTMLResponse
 
 logger = logging.getLogger(__name__)
@@ -32,6 +42,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Pages"])
 
 _TEMPLATES = Path(__file__).parent.parent / "templates"
+_STATIC    = Path(__file__).parent.parent / "static"
+_SPA_INDEX = _STATIC / "index.html"
 
 
 def _read(name: str) -> str:
@@ -46,66 +58,98 @@ def _read(name: str) -> str:
         )
 
 
+def _spa() -> FileResponse | HTMLResponse:
+    """Serve the React SPA index.html, falling back to a minimal redirect."""
+    if _SPA_INDEX.exists():
+        return FileResponse(str(_SPA_INDEX))
+    # SPA not built yet — redirect to API docs as a fallback
+    return HTMLResponse(
+        content='<html><head><meta http-equiv="refresh" content="0;url=/docs"></head>'
+                '<body>Redirecting to API docs…</body></html>',
+        status_code=200,
+    )
+
+
 # ── Shared JS assets ─────────────────────────────────────────────────────────
+# Kept for backward compatibility with any bookmarked or cached pages that
+# still reference /auth.js. New code uses the React SPA exclusively.
 
 @router.get("/auth.js", include_in_schema=False)
 async def auth_js():
-    """Shared auth helpers (token storage, silent refresh, authFetch)."""
-    return FileResponse(_TEMPLATES / "auth.js", media_type="application/javascript")
+    """Legacy shared auth helpers — served for backward compatibility."""
+    js_path = _TEMPLATES / "auth.js"
+    if js_path.exists():
+        return FileResponse(str(js_path), media_type="application/javascript")
+    return HTMLResponse(content="// auth.js not found", media_type="application/javascript")
 
 
-# ── Auth pages ────────────────────────────────────────────────────────────────
+# ── Auth pages → React SPA ────────────────────────────────────────────────────
+# These routes previously served Jinja2 templates. They now serve the React
+# SPA so React Router can handle the path with the full-featured Login.tsx /
+# Register.tsx components (CSRF, TOTP, role-based redirect, etc.).
 
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
 async def login_page():
-    """Login page — unauthenticated users are directed here."""
-    return HTMLResponse(content=_read("login.html"))
+    """Login — served by the React SPA (Login.tsx)."""
+    return _spa()
 
 
 @router.get("/register", response_class=HTMLResponse, include_in_schema=False)
 async def register_page():
-    """Account registration page."""
-    return HTMLResponse(content=_read("register.html"))
+    """Registration — served by the React SPA (Register.tsx)."""
+    return _spa()
 
 
-# ── Info pages ────────────────────────────────────────────────────────────────
+@router.get("/forgot-password", response_class=HTMLResponse, include_in_schema=False)
+async def forgot_password_page():
+    """Forgot password — served by the React SPA (ForgotPassword.tsx)."""
+    return _spa()
+
+
+@router.get("/reset-password", response_class=HTMLResponse, include_in_schema=False)
+async def reset_password_page():
+    """Reset password — served by the React SPA (ResetPassword.tsx)."""
+    return _spa()
+
+
+# ── Info / community pages → React SPA ───────────────────────────────────────
 
 @router.get("/security", response_class=HTMLResponse, include_in_schema=False)
 async def security_page():
-    """Security & privacy information page."""
-    return HTMLResponse(content=_read("security.html"))
+    """Security dashboard — served by the React SPA (SecurityDashboard.tsx)."""
+    return _spa()
 
 
 @router.get("/marketplace", response_class=HTMLResponse, include_in_schema=False)
 async def marketplace_page():
-    """Strategy marketplace — browse and deploy AI trading strategies."""
-    return HTMLResponse(content=_read("marketplace.html"))
+    """Strategy marketplace — served by the React SPA (Marketplace.tsx)."""
+    return _spa()
 
 
 @router.get("/affiliate", response_class=HTMLResponse, include_in_schema=False)
 async def affiliate_page():
-    """Affiliate programme — earn commissions by referring traders."""
-    return HTMLResponse(content=_read("affiliate.html"))
+    """Affiliate programme — served by the React SPA (Affiliate.tsx)."""
+    return _spa()
 
 
-# ── Legal / company pages ─────────────────────────────────────────────────────
+# ── Legal pages → React SPA ───────────────────────────────────────────────────
 
 @router.get("/about", response_class=HTMLResponse, include_in_schema=False)
 async def about_page():
-    """About HOPEFX — mission, technology, and team."""
-    return HTMLResponse(content=_read("about.html"))
+    """About HOPEFX — served by the React SPA."""
+    return _spa()
 
 
 @router.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
 async def privacy_page():
-    """Privacy Policy — data collection, use, and user rights."""
-    return HTMLResponse(content=_read("privacy.html"))
+    """Privacy Policy — served by the React SPA (PrivacyPolicy.tsx)."""
+    return _spa()
 
 
 @router.get("/terms", response_class=HTMLResponse, include_in_schema=False)
 async def terms_page():
-    """Terms of Service — rules governing use of the platform."""
-    return HTMLResponse(content=_read("terms.html"))
+    """Terms of Service — served by the React SPA (TermsAndRiskDisclosure.tsx)."""
+    return _spa()
 
 
 # ── Documentation pages ───────────────────────────────────────────────────────

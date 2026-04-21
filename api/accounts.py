@@ -154,12 +154,52 @@ async def list_sub_accounts(
     return {"accounts": accounts, "total": len(accounts)}
 
 
+def _require_elite_plan(user: TokenPayload) -> None:
+    """Raise 403 if the user's subscription is below Elite tier.
+
+    Admins and superadmins bypass the plan gate — they always have full access.
+    """
+    role = getattr(user, "role", "user")
+    if role in ("admin", "superadmin"):
+        return
+    try:
+        from monetization.subscription import SubscriptionTier, subscription_manager
+
+        sub = subscription_manager.get_user_subscription(user.sub)
+        if sub is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Sub-accounts require an Elite subscription ($10,000/mo). Upgrade at /checkout.",
+            )
+        tier_order = [
+            SubscriptionTier.FREE,
+            SubscriptionTier.STARTER,
+            SubscriptionTier.PROFESSIONAL,
+            SubscriptionTier.ENTERPRISE,
+            SubscriptionTier.ELITE,
+        ]
+        current_tier = getattr(sub, "tier", SubscriptionTier.FREE)
+        if tier_order.index(current_tier) < tier_order.index(SubscriptionTier.ELITE):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"Sub-accounts require an Elite subscription ($10,000/mo). "
+                    f"Your current plan: {current_tier.value}. Upgrade at /checkout."
+                ),
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Elite plan check failed (allowing through): %s", exc)
+
+
 @router.post("/sub-accounts", status_code=status.HTTP_201_CREATED)
 async def create_sub_account(
     req: CreateSubAccountRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a new sub-account under the current user."""
+    """Create a new sub-account under the current user. Requires Elite plan."""
+    _require_elite_plan(user)
     existing = _load_sub_accounts(user.sub)
     if len(existing) >= 10:
         raise HTTPException(
