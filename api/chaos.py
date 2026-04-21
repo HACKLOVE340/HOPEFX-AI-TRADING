@@ -28,7 +28,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
-from api.auth import TokenPayload, get_current_user, require_role
+from api.auth import TokenPayload, require_role
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -220,7 +220,7 @@ async def run_single_scenario(
 
 
 @router.get("/results", response_model=list[ScenarioResultOut])
-async def get_chaos_results(user: TokenPayload = Depends(get_current_user)) -> list[ScenarioResultOut]:
+async def get_chaos_results(user: TokenPayload = Depends(require_role("admin"))) -> list[ScenarioResultOut]:
     """Return results from the last chaos run."""
     if not _last_chaos_results:
         return []
@@ -304,7 +304,7 @@ async def run_mutation_tests(
 
 
 @router.get("/mutation/results", response_model=MutationResultOut | None)
-async def get_mutation_results(user: TokenPayload = Depends(get_current_user)) -> MutationResultOut | None:
+async def get_mutation_results(user: TokenPayload = Depends(require_role("admin"))) -> MutationResultOut | None:
     """Return the last mutation test report, or null if none has run."""
     if _last_mutation_report is None:
         return None
@@ -326,7 +326,7 @@ async def get_mutation_results(user: TokenPayload = Depends(get_current_user)) -
 
 
 @router.get("/status", response_model=ChaosStatusResponse)
-async def get_chaos_status(user: TokenPayload = Depends(get_current_user)) -> ChaosStatusResponse:
+async def get_chaos_status(user: TokenPayload = Depends(require_role("admin"))) -> ChaosStatusResponse:
     """Combined chaos + mutation testing status."""
     chaos_passed = chaos_failed = None
     if _last_chaos_results:
