@@ -738,9 +738,9 @@ async def get_marketplace_stats(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.get("/analytics/dashboard")
-async def get_analytics_dashboard(user: TokenPayload = Depends(get_current_user)):
+async def get_analytics_dashboard(user: TokenPayload = Depends(require_role("admin"))):
     """
-    Get revenue analytics dashboard data.
+    Get revenue analytics dashboard data. Admin only.
     """
     return revenue_analytics.get_dashboard_data()
 
@@ -749,10 +749,10 @@ async def get_analytics_dashboard(user: TokenPayload = Depends(get_current_user)
 async def get_analytics_report(
     period: str = Query("monthly", pattern="^(daily|weekly|monthly|quarterly|yearly)$"),
     include_projections: bool = True,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
-    Generate comprehensive revenue report.
+    Generate comprehensive revenue report. Admin only.
     """
     try:
         time_period = TimePeriod(period)
@@ -766,9 +766,9 @@ async def get_analytics_report(
 
 
 @router.get("/analytics/revenue")
-async def get_revenue_breakdown(user: TokenPayload = Depends(get_current_user)):
+async def get_revenue_breakdown(user: TokenPayload = Depends(require_role("admin"))):
     """
-    Get revenue breakdown by source and tier.
+    Get revenue breakdown by source and tier. Admin only.
     """
     return {
         "by_source": {k: float(v) for k, v in revenue_analytics.get_revenue_by_source().items()},
@@ -777,9 +777,9 @@ async def get_revenue_breakdown(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.get("/analytics/growth")
-async def get_growth_metrics(user: TokenPayload = Depends(get_current_user)):
+async def get_growth_metrics(user: TokenPayload = Depends(require_role("admin"))):
     """
-    Get growth metrics (MRR, ARR, churn, LTV, etc).
+    Get growth metrics (MRR, ARR, churn, LTV, etc). Admin only.
     """
     metrics = revenue_analytics.get_growth_metrics()
     return {
@@ -800,9 +800,9 @@ async def get_growth_metrics(user: TokenPayload = Depends(get_current_user)):
 
 
 @router.post("/partner/signup")
-async def partner_signup(request: PartnerSignupRequest, user: TokenPayload = Depends(get_current_user)):
+async def partner_signup(request: PartnerSignupRequest, user: TokenPayload = Depends(require_role("admin"))):
     """
-    Apply to become a partner.
+    Register a new partner. Admin only.
     """
     try:
         partner_type = PartnerType(request.partner_type.lower())
@@ -829,9 +829,9 @@ async def partner_signup(request: PartnerSignupRequest, user: TokenPayload = Dep
 
 
 @router.get("/partner/{partner_id}")
-async def get_partner(partner_id: str, user: TokenPayload = Depends(get_current_user)):
+async def get_partner(partner_id: str, user: TokenPayload = Depends(require_role("admin"))):
     """
-    Get partner details.
+    Get partner details. Admin only.
     """
     partner = enterprise_manager.get_partner(partner_id)
     if not partner:
@@ -844,9 +844,9 @@ async def get_partner(partner_id: str, user: TokenPayload = Depends(get_current_
 
 
 @router.post("/white-label/create")
-async def create_white_label(request: WhiteLabelRequest, user: TokenPayload = Depends(get_current_user)):
+async def create_white_label(request: WhiteLabelRequest, user: TokenPayload = Depends(require_role("admin"))):
     """
-    Create a white-label instance for a partner.
+    Create a white-label instance for a partner. Admin only.
     """
     config = WhiteLabelConfig(
         company_name=request.company_name,
@@ -879,9 +879,9 @@ async def create_white_label(request: WhiteLabelRequest, user: TokenPayload = De
 
 
 @router.get("/enterprise/stats")
-async def get_enterprise_stats(user: TokenPayload = Depends(get_current_user)):
+async def get_enterprise_stats(user: TokenPayload = Depends(require_role("admin"))):
     """
-    Get enterprise program statistics.
+    Get enterprise program statistics. Admin only.
     """
     return enterprise_manager.get_enterprise_stats()
 
