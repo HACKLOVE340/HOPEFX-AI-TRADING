@@ -15,28 +15,48 @@ import {
   Moon,
   BarChart2,
   WifiOff,
+  Crown,
+  Globe,
 } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { ConnectionStatus } from './ConnectionStatus'
+import { useStore } from '../store/useStore'
+import type { UserRole } from '../store/useStore'
 
-const navItems = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/trading', icon: TrendingUp, label: 'Trading' },
-  { path: '/prop-firm', icon: Shield, label: 'Prop Firm' },
-  { path: '/performance', icon: BarChart2, label: 'Performance' },
-  { path: '/pnl',         icon: TrendingUp, label: 'Live P&L' },
-  { path: '/copy-trading', icon: Users, label: 'Copy Trading' },
-  { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
-  { path: '/wallet', icon: Wallet, label: 'Wallet' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
+// Nav items visible to all authenticated users
+const BASE_NAV = [
+  { path: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',    minRole: 'user'       as UserRole },
+  { path: '/trading',      icon: TrendingUp,      label: 'Trading',      minRole: 'trader'     as UserRole },
+  { path: '/prop-firm',    icon: Shield,          label: 'Prop Firm',    minRole: 'trader'     as UserRole },
+  { path: '/performance',  icon: BarChart2,       label: 'Performance',  minRole: 'trader'     as UserRole },
+  { path: '/pnl',          icon: TrendingUp,      label: 'Live P&L',     minRole: 'trader'     as UserRole },
+  { path: '/copy-trading', icon: Users,           label: 'Copy Trading', minRole: 'trader'     as UserRole },
+  { path: '/leaderboard',  icon: Trophy,          label: 'Leaderboard',  minRole: 'user'       as UserRole },
+  { path: '/wallet',       icon: Wallet,          label: 'Wallet',       minRole: 'user'       as UserRole },
+  { path: '/settings',     icon: Settings,        label: 'Settings',     minRole: 'user'       as UserRole },
+  // Admin section — visible to admin and superadmin
+  { path: '/admin',        icon: Shield,          label: 'Admin Panel',  minRole: 'admin'      as UserRole },
+  // SuperAdmin section — visible to superadmin only
+  { path: '/superadmin',   icon: Crown,           label: 'SuperAdmin',   minRole: 'superadmin' as UserRole },
+  { path: '/whitelabel',   icon: Globe,           label: 'Whitelabel',   minRole: 'superadmin' as UserRole },
 ]
+
+const ROLE_RANK: Record<UserRole, number> = {
+  user: 0, trader: 1, admin: 2, superadmin: 3,
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
   const { connected, latency, noLiveFeed, noLiveFeedMessage } = useWebSocket()
   const { isDark, toggle: toggleTheme } = useTheme()
+  const user = useStore((s) => s.user)
+  const userRank = ROLE_RANK[user?.role ?? 'user'] ?? 0
+
+  const navItems = BASE_NAV.filter(
+    (item) => userRank >= ROLE_RANK[item.minRole]
+  )
 
   return (
     <div className="min-h-screen bg-slate-950 dark:bg-slate-950 text-slate-100 dark:text-slate-100">
@@ -72,26 +92,42 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-xs text-slate-500 mt-1">GodMode v9.5</p>
           </div>
 
-          <nav className="px-4 space-y-2">
-            {navItems.map((item) => {
+          <nav className="px-4 space-y-1">
+            {navItems.map((item, idx) => {
               const Icon = item.icon
               const isActive = location.pathname === item.path
+              // Insert a divider before the first admin-only item
+              const prevItem = navItems[idx - 1]
+              const showDivider = idx > 0 &&
+                ROLE_RANK[item.minRole] >= ROLE_RANK['admin'] &&
+                ROLE_RANK[prevItem.minRole] < ROLE_RANK['admin']
 
               return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  onClick={() => setSidebarOpen(false)}
-                  className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
-                    ${isActive
-                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}
-                  `}
-                >
-                  <Icon className="w-5 h-5" />
-                  <span className="font-medium">{item.label}</span>
-                </Link>
+                <div key={item.path}>
+                  {showDivider && (
+                    <div className="my-2 border-t border-slate-800" />
+                  )}
+                  <Link
+                    to={item.path}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`
+                      flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors
+                      ${isActive
+                        ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        : item.minRole === 'superadmin'
+                          ? 'text-purple-400 hover:bg-purple-500/10 hover:text-purple-300'
+                          : item.minRole === 'admin'
+                            ? 'text-amber-400/80 hover:bg-amber-500/10 hover:text-amber-300'
+                            : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}
+                    `}
+                  >
+                    <Icon className="w-5 h-5" />
+                    <span className="font-medium text-sm">{item.label}</span>
+                    {item.minRole === 'superadmin' && !isActive && (
+                      <Crown className="w-3 h-3 ml-auto opacity-50" />
+                    )}
+                  </Link>
+                </div>
               )
             })}
           </nav>

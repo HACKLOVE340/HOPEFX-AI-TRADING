@@ -37,6 +37,7 @@ import ABTesting            from './pages/ABTesting'
 import CorrelationDashboard from './pages/CorrelationDashboard'
 import CustomIndicators     from './pages/CustomIndicators'
 import WhitelabelAdmin      from './pages/WhitelabelAdmin'
+import SuperAdminDashboard  from './pages/SuperAdminDashboard'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard'
@@ -94,11 +95,14 @@ function App() {
         <Route path="/walk-forward" element={<AuthGuard><Layout><ErrorBoundary label="Walk Forward"><WalkForward /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/profile"      element={<AuthGuard><Layout><ErrorBoundary label="Profile"><Profile /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/feed"         element={<AuthGuard><Layout><ErrorBoundary label="Social Feed"><SocialFeed /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/admin"        element={<AuthGuard><Layout><ErrorBoundary label="Admin"><AdminPanel /></ErrorBoundary></Layout></AuthGuard>} />
+        {/* Admin routes — require admin role (superadmin passes via rank hierarchy) */}
+        <Route path="/admin"        element={<AuthGuard requiredRole="admin"><Layout><ErrorBoundary label="Admin"><AdminPanel /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/ab-testing"   element={<AuthGuard><Layout><ErrorBoundary label="A/B Testing"><ABTesting /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/correlation"  element={<AuthGuard><Layout><ErrorBoundary label="Correlation"><CorrelationDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/indicators"   element={<AuthGuard><Layout><ErrorBoundary label="Indicators"><CustomIndicators /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/whitelabel"   element={<AuthGuard><Layout><ErrorBoundary label="Whitelabel"><WhitelabelAdmin /></ErrorBoundary></Layout></AuthGuard>} />
+        {/* Superadmin-only routes */}
+        <Route path="/superadmin"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="SuperAdmin"><SuperAdminDashboard /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/whitelabel"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Whitelabel"><WhitelabelAdmin /></ErrorBoundary></Layout></AuthGuard>} />
 
         {/* ── Fallback ───────────────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to="/" replace />} />
