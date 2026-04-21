@@ -1,14 +1,34 @@
 /**
  * NotFound — 404 page shown for any unmatched route.
- * Provides navigation back to the dashboard and a link to the previous page.
+ *
+ * "Go to Dashboard" resolves to the role-appropriate landing page:
+ *   superadmin → /superadmin
+ *   admin      → /audit
+ *   trader/user → /dashboard
+ *
+ * Unauthenticated visitors are sent to /login.
  */
 
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useStore, selectIsAuth } from '../store';
+import type { UserRole } from '../store';
+
+function dashboardForRole(role: UserRole | undefined, isAuth: boolean): string {
+  if (!isAuth) return '/login';
+  if (role === 'superadmin') return '/superadmin';
+  if (role === 'admin') return '/audit';
+  return '/dashboard';
+}
 
 const NotFound: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isAuth   = useStore(selectIsAuth);
+  const user     = useStore((s) => s.user);
+
+  const destination = dashboardForRole(user?.role, isAuth);
+  const btnLabel    = isAuth ? 'Go to Dashboard' : 'Sign In';
 
   return (
     <div
@@ -66,7 +86,7 @@ const NotFound: React.FC = () => {
       {/* Actions */}
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
         <button
-          onClick={() => navigate('/dashboard', { replace: true })}
+          onClick={() => navigate(destination, { replace: true })}
           style={{
             background:   '#3b82f6',
             border:       'none',
@@ -81,7 +101,7 @@ const NotFound: React.FC = () => {
           onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#2563eb'; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#3b82f6'; }}
         >
-          Go to Dashboard
+          {btnLabel}
         </button>
 
         <button
