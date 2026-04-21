@@ -72,6 +72,96 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
             "timeframe": strategy.timeframe,
         }
 
+    @router.get("/strategies/{strategy_id}")
+    async def get_strategy(strategy_id: str):
+        """Return a single strategy by ID with all rules."""
+        strategy = builder.strategies.get(strategy_id)
+        if strategy is None:
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        return strategy.to_dict()
+
+    @router.patch("/strategies/{strategy_id}")
+    async def update_strategy(strategy_id: str, req: CreateStrategyRequest):
+        """Update strategy metadata (name, description, symbol, timeframe)."""
+        strategy = builder.strategies.get(strategy_id)
+        if strategy is None:
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        if req.name:
+            strategy.name = req.name
+        if req.description is not None:
+            strategy.description = req.description
+        if req.symbol:
+            strategy.symbol = req.symbol
+        if req.timeframe:
+            strategy.timeframe = req.timeframe
+        return strategy.to_dict()
+
+    @router.delete("/strategies/{strategy_id}", status_code=204)
+    async def delete_strategy(strategy_id: str):
+        """Delete a strategy."""
+        if strategy_id not in builder.strategies:
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        del builder.strategies[strategy_id]
+
+    @router.post("/strategies/{strategy_id}/compile")
+    async def compile_strategy(strategy_id: str):
+        """Compile a strategy to Python and validate it."""
+        code = builder.export_to_python(strategy_id)
+        if not code:
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        strategy = builder.strategies.get(strategy_id)
+        return {
+            "strategy_id": strategy_id,
+            "status": "compiled",
+            "code": code,
+            "rules_count": len(strategy.rules) if strategy else 0,
+        }
+
+    @router.post("/strategies/{strategy_id}/backtest")
+    async def backtest_strategy(strategy_id: str):
+        """Queue a backtest for a no-code strategy."""
+        strategy = builder.strategies.get(strategy_id)
+        if strategy is None:
+            raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
+        try:
+            from backtesting.engine import BacktestEngine
+            engine = BacktestEngine()
+            result = engine.run_strategy_backtest(
+                strategy_id=strategy_id,
+                symbol=strategy.symbol,
+                timeframe=strategy.timeframe,
+            )
+            return result
+        except Exception as exc:
+            return {
+                "strategy_id": strategy_id,
+                "status": "pending",
+                "message": f"Backtest queued — engine unavailable: {exc}",
+                "symbol": strategy.symbol,
+                "timeframe": strategy.timeframe,
+            }
+
+    @router.get("/blocks")
+    async def list_blocks():
+        """Return available building blocks (indicators, conditions, actions)."""
+        return {
+            "indicators": builder.get_available_indicators(),
+            "conditions": [
+                {"id": "crosses_above", "label": "Crosses above"},
+                {"id": "crosses_below", "label": "Crosses below"},
+                {"id": "greater_than",  "label": "Greater than"},
+                {"id": "less_than",     "label": "Less than"},
+                {"id": "equals",        "label": "Equals"},
+            ],
+            "actions": [
+                {"id": "buy",        "label": "Buy"},
+                {"id": "sell",       "label": "Sell"},
+                {"id": "close_all",  "label": "Close all"},
+                {"id": "close_long", "label": "Close long"},
+                {"id": "close_short","label": "Close short"},
+            ],
+        }
+
     @router.get("/strategies/{strategy_id}/export")
     async def export_strategy(strategy_id: str):
         """Export a no-code strategy as Python code."""
