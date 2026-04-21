@@ -188,14 +188,29 @@ const Register: React.FC = () => {
         username: username.trim(),
         password,
       });
-      try {
-        await authApi.activateFreeTier(username.trim(), refCode || undefined);
-      } catch (tierErr: unknown) {
-        console.warn('[Register] Free tier activation failed (non-fatal):', tierErr);
-      }
+
+      // Auto-login immediately after registration so we have the real user.id
+      // (UUID) needed for activateFreeTier. The register endpoint only returns
+      // {message} — it does not expose the user ID.
       try {
         const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
-        setAuth(loginRes.data.access_token, loginRes.data.user);
+        const { access_token, refresh_token, user } = loginRes.data;
+
+        // Persist tokens to localStorage before setAuth so the axios interceptor
+        // can read them on the very next request (activateFreeTier POST).
+        localStorage.setItem('hopefx_access_token', access_token);
+        if (refresh_token) {
+          localStorage.setItem('hopefx_refresh_token', refresh_token);
+        }
+        setAuth(access_token, user);
+
+        // Activate free tier using the real UUID from the login response.
+        try {
+          await authApi.activateFreeTier(user.id, refCode || undefined);
+        } catch (tierErr: unknown) {
+          console.warn('[Register] Free tier activation failed (non-fatal):', tierErr);
+        }
+
         // Warm CSRF cache before navigating so the first POST after registration
         // (e.g. 2FA setup, onboarding) never races against a cold CSRF fetch.
         await prefetchCsrfToken();
@@ -204,6 +219,7 @@ const Register: React.FC = () => {
       } catch (loginErr: unknown) {
         console.warn('[Register] Auto-login after registration failed:', loginErr);
       }
+
       setSuccess('Account created! Redirecting to login…');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err: unknown) {

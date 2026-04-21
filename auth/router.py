@@ -360,18 +360,29 @@ async def login(body: LoginRequest, request: Request, response: Response):
             logger.debug("Username lookup failed: %s", _exc)
             raise HTTPException(status_code=401, detail="Invalid credentials") from _exc
 
-    ok, msg, tokens = await asyncio.to_thread(
-        functools.partial(
-            _svc().login,
-            email=resolved_email,
-            password=body.password,
-            ip_address=ip,
-            device_info=device,
-            totp_code=body.totp_code,
+    try:
+        ok, msg, tokens = await asyncio.to_thread(
+            functools.partial(
+                _svc().login,
+                email=resolved_email,
+                password=body.password,
+                ip_address=ip,
+                device_info=device,
+                totp_code=body.totp_code,
+            )
         )
-    )
+    except Exception as _login_exc:
+        logger.error("Login service error for %s: %s", resolved_email, _login_exc)
+        raise HTTPException(status_code=503, detail="Authentication service temporarily unavailable") from _login_exc
+
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
+
+    # Guard: service should always return a token dict on success, but be
+    # defensive so a None tokens dict doesn't cause an AttributeError below.
+    if not tokens or not isinstance(tokens, dict):
+        logger.error("Login service returned ok=True but tokens=%r for %s", tokens, resolved_email)
+        raise HTTPException(status_code=500, detail="Authentication service error")
 
     # Fire-and-forget login alert (non-blocking)
     try:
@@ -391,8 +402,10 @@ async def login(body: LoginRequest, request: Request, response: Response):
     _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
 
     if access_token:
-        # Access tokens are short-lived (15 min); match cookie max_age to that.
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")) * 60
+        # Cookie max_age must match the token TTL — read the same env var the
+        # service uses (default 60 min, not 15) so the cookie doesn't expire
+        # before the token does, which would force unnecessary re-logins.
+        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=access_token,

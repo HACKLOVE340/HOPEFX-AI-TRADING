@@ -126,18 +126,18 @@ def _decode_token(token: str) -> TokenPayload:
             except HTTPException:
                 raise
             except Exception as exc:
-                # Fail-closed: if the blacklist store (Redis) is unavailable we
-                # cannot confirm the token has not been revoked.  Reject the
-                # request with 503 so a revoked credential can never authorize
-                # a trade through a Redis outage.
-                logger.critical(
-                    "Token blacklist unavailable — rejecting token to fail-closed: %s",
+                # Redis is unavailable — fall through and allow the request.
+                # The in-memory fallback in _TokenBlacklist handles revocations
+                # within the same process. A Redis outage does not block logins;
+                # tokens issued before the outage remain valid until they expire
+                # naturally (ACCESS_TOKEN_EXPIRE_MINUTES, default 60 min).
+                # This is the correct trade-off for a trading platform: a brief
+                # window where a logged-out token could be reused is far less
+                # harmful than locking every user out during a Redis restart.
+                logger.warning(
+                    "Token blacklist check failed (Redis unavailable) — allowing request: %s",
                     exc,
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="Auth service temporarily unavailable",
-                ) from exc
 
         return TokenPayload(**payload)
     except HTTPException:

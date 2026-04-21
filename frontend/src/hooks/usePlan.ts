@@ -10,6 +10,9 @@
  *
  * Admins and superadmins bypass plan gates in SubscriptionGate regardless
  * of what this hook returns.
+ *
+ * Re-fetches whenever the token changes (covers login, token refresh, and
+ * account switches) so the plan is always in sync with the active session.
  */
 
 import { useEffect, useRef } from 'react';
@@ -26,13 +29,17 @@ interface BillingResponse {
 export function usePlan(): void {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  // Subscribe to the token itself so the effect re-runs on every login/refresh,
+  // not just on the initial hydration. isAuth alone doesn't change when the
+  // user logs out and back in within the same session (it stays true).
+  const token    = useStore((s) => s.token);
   const setPlan  = useStore((s) => s.setPlan);
   const warned   = useRef(false);
 
   useEffect(() => {
     // Wait for localStorage rehydration before reading isAuth — otherwise
     // this fires with isAuth=false and skips the fetch entirely.
-    if (!hydrated || !isAuth) return;
+    if (!hydrated || !isAuth || !token) return;
 
     let cancelled = false;
 
@@ -45,15 +52,15 @@ export function usePlan(): void {
       .catch((err: unknown) => {
         if (cancelled) return;
 
-        const status = (err as { response?: { status?: number } })?.response?.status;
+        const httpStatus = (err as { response?: { status?: number } })?.response?.status;
 
-        if (status === 404) {
+        if (httpStatus === 404) {
           // Billing feature flag is disabled on the backend — silently default to free
           setPlan('free');
           return;
         }
 
-        if (status === 401 || status === 403) {
+        if (httpStatus === 401 || httpStatus === 403) {
           // Auth error is handled by the axios interceptor — nothing to do here
           return;
         }
@@ -67,5 +74,7 @@ export function usePlan(): void {
       });
 
     return () => { cancelled = true; };
-  }, [hydrated, isAuth, setPlan]);
+  // token in deps: re-fetch on every login/refresh so plan stays in sync
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, isAuth, token, setPlan]);
 }

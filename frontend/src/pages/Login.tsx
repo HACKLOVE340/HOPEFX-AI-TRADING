@@ -137,11 +137,11 @@ const Login: React.FC = () => {
         localStorage.setItem('hopefx_refresh_token', res.data.refresh_token);
       }
 
-      setLoading(false);
       setAuth(res.data.access_token, res.data.user);
-      // Warm the CSRF cache before navigating so the first POST (e.g. 2FA setup,
-      // order placement) never races against a cold CSRF fetch and gets a 403.
-      await prefetchCsrfToken();
+      // Fire CSRF prefetch without awaiting — it runs in the background so
+      // navigation is instant. The interceptor will retry on the first POST
+      // if the token isn't ready yet.
+      void prefetchCsrfToken();
       navigate(resolveDestination(res.data.user.role as UserRole), { replace: true });
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;

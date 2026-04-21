@@ -176,6 +176,7 @@ export default defineConfig({
           if (id.includes('pages/Profile') ||
               id.includes('pages/Wallet') ||
               id.includes('pages/SubAccounts') ||
+              id.includes('pages/EliteDashboard') ||
               id.includes('pages/TwoFactorSetup')) {
             return 'app-account';
           }
