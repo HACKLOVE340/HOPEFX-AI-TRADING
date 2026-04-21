@@ -30,6 +30,7 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
+import { useBootstrapData } from './hooks/useOrchestratorData';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
@@ -329,6 +330,9 @@ const AppShell: React.FC = () => {
 
   useWebSocket(isAuth && hydrated);
   usePlan();
+  // Bootstrap all global data (orchestrator health, positions, signals, ML health,
+  // calendar, feeds, etc.) for every authenticated session — not just TradingDashboard.
+  useBootstrapData();
 
   // Hold the entire shell until localStorage rehydration is complete.
   // This prevents every child query from firing with token=null and

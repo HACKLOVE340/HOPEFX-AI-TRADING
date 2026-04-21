@@ -7,7 +7,7 @@
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
-import { dataLayerApi, performanceApi, tradingApi, signalsApi } from '../lib/api';
+import { dataLayerApi, performanceApi, tradingApi, signalsApi, mlExtendedApi, calendarApi } from '../lib/api';
 import type {
   OrchestratorHealth,
   QualityReport,
@@ -310,6 +310,96 @@ export function useSignalSummary() {
   });
 }
 
+// ── Weekly performance report (every 5 min) ───────────────────────────────────
+
+export function useWeeklyPerformance() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
+  return useQuery({
+    queryKey: ['performance', 'weekly'],
+    queryFn:  async () => {
+      const res = await performanceApi.weekly();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth,
+    refetchInterval: 5 * 60_000,
+    staleTime:       2.5 * 60_000,
+  });
+}
+
+// ── Signal analytics (every 60s) ──────────────────────────────────────────────
+
+export function useSignalAnalytics() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
+  return useQuery({
+    queryKey: ['signals', 'analytics'],
+    queryFn:  async () => {
+      const res = await signalsApi.analytics();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── ML model health (every 60s) ───────────────────────────────────────────────
+
+export function useMLHealth() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
+  return useQuery({
+    queryKey: ['ml', 'health'],
+    queryFn:  async () => {
+      const res = await mlExtendedApi.health();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── High-impact calendar events (every 15 min) ────────────────────────────────
+
+export function useHighImpactCalendar() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
+  return useQuery({
+    queryKey: ['calendar', 'high-impact'],
+    queryFn:  async () => {
+      const res = await calendarApi.highImpact();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth,
+    refetchInterval: 15 * 60_000,
+    staleTime:       7.5 * 60_000,
+  });
+}
+
+// ── Data feed status (every 30s) ──────────────────────────────────────────────
+
+export function useDataFeeds() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+
+  return useQuery({
+    queryKey: ['data-layer', 'feeds'],
+    queryFn:  async () => {
+      const res = await dataLayerApi.feeds();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth,
+    refetchInterval: 30_000,
+    staleTime:       15_000,
+  });
+}
+
 // ── Bootstrap all data on mount ───────────────────────────────────────────────
 
 export function useBootstrapData() {
@@ -320,8 +410,13 @@ export function useBootstrapData() {
   useQualityReport();
   useEquityCurve();
   usePerformanceSummary();
+  useWeeklyPerformance();
   useAccount();
   usePositions();
   useSignals();
   useSignalSummary();
+  useSignalAnalytics();
+  useMLHealth();
+  useHighImpactCalendar();
+  useDataFeeds();
 }
