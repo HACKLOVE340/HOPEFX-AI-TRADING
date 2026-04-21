@@ -415,12 +415,12 @@ const AppShell: React.FC = () => {
             <Route path="/superadmin"          element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
             <Route path="/system-reliability"  element={wrap(superAdminOnly(<SystemReliability />))} />
 
-            {/* Fallback — authenticated users go to /dashboard, others to /login */}
+            {/* Fallback — authenticated users see 404 page, others redirect to /login */}
             <Route
               path="*"
               element={
                 isAuth
-                  ? <Navigate to="/dashboard" replace />
+                  ? <NotFound />
                   : <Navigate to="/login" replace />
               }
             />
