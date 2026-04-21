@@ -15,7 +15,7 @@
  *   - ML model accuracy card
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import {
   useStore,
@@ -24,8 +24,7 @@ import {
   selectSignals,
   selectWsStatus,
 } from '../store';
-import { tradingApi, mlApi, performanceApi } from '../hooks/useApi';
-import type { Position, Signal, AccountMetrics } from '../types';
+import { mlApi, performanceApi } from '../hooks/useApi';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -340,45 +339,15 @@ const WsBadge: React.FC = () => {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
+  // Positions, signals, and account are populated by AppShell's useBootstrapData
+  // (TanStack Query, 30 s refetch) and the global WebSocket feed. Reading from
+  // the store here avoids a duplicate polling loop that would fire the same three
+  // endpoints on every render cycle.
   const account  = useStore(selectAccount);
   const wsStatus = useStore(selectWsStatus);
   const [equityHistory, setEquityHistory] = useState<EquityPoint[]>([]);
 
-  // WebSocket and price simulator are managed at the AppShell level (App.tsx).
-  // Dashboard only reads from the Zustand store — no duplicate connections.
-
-  const poll = useCallback(async () => {
-    try {
-      const [posRes, sigRes, accRes] = await Promise.allSettled([
-        tradingApi.positions(),
-        tradingApi.signals(),
-        tradingApi.account(),
-      ]);
-      const store = useStore.getState();
-      if (posRes.status === 'fulfilled') {
-        type PosData = { positions?: Position[] };
-        store.setPositions(((posRes.value.data as PosData)?.positions) ?? []);
-      }
-      if (sigRes.status === 'fulfilled') {
-        type SigData = { signals?: Signal[] };
-        store.setSignals(((sigRes.value.data as SigData)?.signals) ?? []);
-      }
-      if (accRes.status === 'fulfilled') {
-        store.setAccount(accRes.value.data as AccountMetrics);
-      }
-    } catch (err: unknown) {
-      // Promise.allSettled should not throw; log if it does
-      console.error('[Dashboard] poll error:', err);
-    }
-  }, []);
-
-  useEffect(() => {
-    poll();
-    const t = setInterval(poll, 30_000);
-    return () => clearInterval(t);
-  }, [poll]);
-
-  // Fetch real equity curve from performance API
+  // Equity curve is not part of useBootstrapData — fetch it once on mount.
   useEffect(() => {
     performanceApi.equityCurve()
       .then((r) => {

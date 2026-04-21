@@ -147,19 +147,43 @@ def register_page_routes(app: FastAPI) -> None:
         # earlier /api/* or static-asset route.
 
         _SPA_ROUTES = [
-            "/dashboard", "/trade", "/trading", "/portfolio", "/profile",
-            "/settings", "/admin", "/superadmin", "/onboarding",
+            # ── Public / auth ──────────────────────────────────────────────
+            "/",
             "/login", "/register", "/forgot-password", "/reset-password",
-            "/2fa-setup", "/wallet", "/watchlist", "/leaderboard",
-            "/copy-trading", "/social", "/marketplace", "/affiliate",
-            "/performance", "/risk-calculator", "/economic-calendar",
-            "/price-alerts", "/trade-journal", "/custom-indicators",
-            "/ai-strategy", "/backtest", "/walk-forward", "/prop-firm",
-            "/nuclear", "/whitelabel", "/audit-log", "/status",
-            "/privacy", "/terms", "/security-dashboard", "/tca",
-            "/correlation", "/geopolitical", "/sub-accounts",
-            "/ab-testing", "/auto-heal", "/crypto-checkout",
-            "/elite",
+            "/onboarding", "/pricing", "/terms", "/risk-disclosure",
+            "/privacy", "/status",
+
+            # ── Core trading ───────────────────────────────────────────────
+            "/dashboard", "/home",
+            "/trade", "/trading", "/terminal",
+            "/portfolio", "/performance",
+            "/watchlist", "/alerts", "/calendar",
+
+            # ── Analysis & research ────────────────────────────────────────
+            "/nuclear", "/geopolitical", "/correlation", "/tca",
+            "/ai-strategy", "/indicators", "/walk-forward",
+            "/ab-testing", "/replay", "/research",
+            "/backtest",
+
+            # ── Tools ──────────────────────────────────────────────────────
+            "/journal", "/prop-firm", "/copy-trading", "/risk-calc",
+            "/risk-calculator",
+
+            # ── Community / social ─────────────────────────────────────────
+            "/leaderboard", "/feed", "/social",
+            "/marketplace", "/affiliate", "/teams",
+
+            # ── Account ────────────────────────────────────────────────────
+            "/profile", "/wallet", "/sub-accounts", "/elite",
+            "/checkout", "/crypto-checkout", "/settings", "/2fa-setup",
+
+            # ── Admin ──────────────────────────────────────────────────────
+            "/admin", "/audit", "/audit-log",
+            "/security", "/security-dashboard",
+            "/auto-heal", "/whitelabel",
+
+            # ── Super admin ────────────────────────────────────────────────
+            "/superadmin", "/system-reliability",
         ]
 
         async def _spa_index(_req: Request) -> FileResponse:
