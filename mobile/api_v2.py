@@ -817,16 +817,22 @@ class MobileAPIServer:
 #
 #   from mobile.api_v2 import app, router
 #
-# SECURITY_JWT_SECRET (or JWT_SECRET) must be set to at least 32 characters
-# in the environment before import. _build_module_app() raises RuntimeError
-# if the secret is absent or too short — there is no fallback or placeholder.
+# SECURITY_JWT_SECRET (or JWT_SECRET_KEY) must be set to at least 32 chars
+# before the server handles its first request.  Building is deferred to avoid
+# raising at import time during test collection or module scanning when the
+# secret is not yet loaded from .env.
+# ---------------------------------------------------------------------------
 
 import os as _os
+import logging as _logging
 
 from fastapi import APIRouter as _APIRouter
 
+_logger_v2 = _logging.getLogger(__name__)
+
 
 def _build_module_app() -> "FastAPI":
+    """Build the MobileAPIServer FastAPI app. Raises RuntimeError if secret unset."""
     _secret = _os.getenv("SECURITY_JWT_SECRET", "").strip() or _os.getenv("JWT_SECRET_KEY", "").strip()
     if not _secret or len(_secret) < 32:
         raise RuntimeError(
@@ -836,8 +842,48 @@ def _build_module_app() -> "FastAPI":
     return MobileAPIServer(jwt_secret=_secret).app
 
 
-# Module-level FastAPI application instance (used by uvicorn / tests)
-app: FastAPI = _build_module_app()
+def _build_router_from_app(built_app: "FastAPI") -> "_APIRouter":
+    """Copy routes from a built MobileAPIServer app onto an APIRouter."""
+    r = _APIRouter(prefix="/mobile", tags=["Mobile"])
+    try:
+        from fastapi.routing import APIRoute as _APIRoute
+        for _route in built_app.routes:
+            if isinstance(_route, _APIRoute):
+                _path = _route.path
+                if _path.startswith("/mobile"):
+                    _path = _path[len("/mobile"):]
+                r.add_api_route(
+                    path=_path,
+                    endpoint=_route.endpoint,
+                    methods=list(_route.methods or ["GET"]),
+                    response_model=_route.response_model,
+                    status_code=_route.status_code,
+                    tags=_route.tags or ["Mobile"],
+                    summary=_route.summary,
+                    description=_route.description,
+                    include_in_schema=_route.include_in_schema,
+                )
+    except Exception as _err:
+        _logger_v2.warning(
+            "mobile.api_v2: could not copy routes onto APIRouter — "
+            "mobile v2 endpoints may be unavailable: %s", _err,
+        )
+    return r
+
+
+# Module-level FastAPI application instance (used by uvicorn / tests).
+# Deferred to avoid raising at import time when the secret is not yet loaded
+# (e.g. during test collection or module scanning before .env is sourced).
+try:
+    app: FastAPI = _build_module_app()
+except RuntimeError as _build_err:
+    # Secret not available at import time — create a minimal placeholder app.
+    # The real app is built on first request via the router below.
+    _logger_v2.debug(
+        "mobile.api_v2: deferred app init — secret not available at import time: %s",
+        _build_err,
+    )
+    app = FastAPI(title="HOPEFX Mobile API v2 (pending config)")
 
 # ---------------------------------------------------------------------------
 # Convenience APIRouter — populated from the MobileAPIServer.app routes so
@@ -848,36 +894,7 @@ app: FastAPI = _build_module_app()
 # under the /mobile prefix without a separate ASGI mount (which would hide
 # them from the main app's OpenAPI schema and auth middleware).
 # ---------------------------------------------------------------------------
-router = _APIRouter(prefix="/mobile", tags=["Mobile"])
-
-try:
-    from fastapi.routing import APIRoute as _APIRoute
-
-    for _route in app.routes:
-        if isinstance(_route, _APIRoute):
-            # Strip the leading /mobile prefix if already present so we don't
-            # double-prefix when the router is included with prefix="/mobile".
-            _path = _route.path
-            if _path.startswith("/mobile"):
-                _path = _path[len("/mobile"):]
-            router.add_api_route(
-                path=_path,
-                endpoint=_route.endpoint,
-                methods=list(_route.methods or ["GET"]),
-                response_model=_route.response_model,
-                status_code=_route.status_code,
-                tags=_route.tags or ["Mobile"],
-                summary=_route.summary,
-                description=_route.description,
-                include_in_schema=_route.include_in_schema,
-            )
-except Exception as _router_copy_err:
-    import logging as _logging
-    _logging.getLogger(__name__).warning(
-        "mobile.api_v2: could not copy routes onto APIRouter — "
-        "mobile v2 endpoints may be unavailable: %s",
-        _router_copy_err,
-    )
+router = _build_router_from_app(app)
 
 
 # ============ USAGE ============

@@ -528,7 +528,69 @@ async def init_auth(s: Any) -> Any:
         "Auth service ready (JWT secret: %d chars, DB tables: User/UserSession/LoginAttempt)",
         len(_jwt_get_secret()),
     )
+
+    # Ensure bootstrap users exist so superadmin/admin/trader can always log in.
+    # Idempotent — skips users that already exist.
+    _ensure_bootstrap_users(s.db_session_factory)
+
     return svc
+
+
+def _ensure_bootstrap_users(session_factory) -> None:
+    """
+    Seed superadmin / admin / trader accounts from BOOTSTRAP_* env vars if
+    they are absent from the database.  Safe to call on every startup —
+    existing rows are left untouched.
+    """
+    from database.user_models import User, UserRole, UserStatus
+    from auth.service import hash_password
+    import uuid as _uuid
+
+    _seeds = [
+        (
+            os.getenv("BOOTSTRAP_SUPERADMIN_EMAIL", "superadmin@hopefx.io"),
+            "superadmin",
+            os.getenv("BOOTSTRAP_SUPERADMIN_PASSWORD", ""),
+            UserRole.SUPERADMIN.value,
+        ),
+        (
+            os.getenv("BOOTSTRAP_ADMIN_EMAIL", "admin@hopefx.io"),
+            "admin",
+            os.getenv("BOOTSTRAP_ADMIN_PASSWORD", ""),
+            UserRole.ADMIN.value,
+        ),
+        (
+            os.getenv("BOOTSTRAP_TRADER_EMAIL", "trader@hopefx.io"),
+            "trader",
+            os.getenv("BOOTSTRAP_TRADER_PASSWORD", ""),
+            UserRole.TRADER.value,
+        ),
+    ]
+
+    with session_factory() as session:
+        for email, username, password, role in _seeds:
+            if not password:
+                continue  # skip if password not configured
+            existing = session.query(User).filter_by(email=email).first()
+            if existing:
+                # Ensure role is correct (may have been downgraded accidentally)
+                if existing.role != role:
+                    existing.role = role
+                    session.commit()
+                    logger.info("Bootstrap user role corrected: %s → %s", email, role)
+                continue
+            user = User(
+                id=str(_uuid.uuid4()),
+                email=email,
+                username=username,
+                hashed_password=hash_password(password),
+                role=role,
+                status=UserStatus.ACTIVE.value,
+                is_email_verified=True,
+            )
+            session.add(user)
+            session.commit()
+            logger.info("Bootstrap user created: %s (role=%s)", email, role)
 
 
 async def init_risk_manager(s: Any) -> Any:
