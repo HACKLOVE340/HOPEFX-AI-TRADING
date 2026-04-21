@@ -1,35 +1,54 @@
 /**
- * Pricing page — full plan comparison with live prices from /api/billing/plans.
+ * Pricing page — full plan comparison with live prices from /api/pricing/plans.
  *
  * Wires to:
- *   GET /api/billing/plans       — canonical 5-tier plan catalogue
+ *   GET /api/pricing/plans        — canonical 5-tier plan catalogue (rich data)
+ *   GET /api/pricing/faq          — FAQ entries
  *   GET /api/billing/subscription — current user plan (to highlight active)
+ *
+ * Falls back to /api/billing/plans if /api/pricing/plans is unavailable.
  */
 
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi';
+import { api, pricingApi } from '../hooks/useApi';
 import { useStore, selectIsAuth } from '../store';
-import { PLAN_COLORS, PLAN_LABELS, normalisePlan } from '../lib/subscription';
-import type { Plan } from '../lib/subscription';
+import { normalisePlan } from '../lib/subscription';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+interface PlanLimits {
+  signals_per_day: number;
+  backtests_per_month: number;
+  live_accounts: number;
+  max_strategies: number;
+  max_brokers: number;
+}
+
+/** Rich plan data from /api/pricing/plans */
 interface PlanData {
   id: string;
   name: string;
+  tagline?: string;
   price_usd_monthly: number;
   price_usd_annual: number;
+  annual_savings_pct?: number;
   commission_rate: number;
-  features: string[];
-  limits: {
-    signals_per_day: number;
-    backtests_per_month: number;
-    live_accounts: number;
-    max_strategies: number;
-    max_brokers: number;
-  };
+  commission_label?: string;
+  badge?: string | null;
+  cta?: string;
+  cta_href?: string;
+  /** Rich pricing API: boolean feature map */
+  features: Record<string, boolean> | string[];
+  limits: PlanLimits;
+  highlights?: string[];
+}
+
+/** Normalise features — billing API returns string[], pricing API returns boolean map */
+function hasFeature(plan: PlanData, key: string): boolean {
+  if (Array.isArray(plan.features)) return plan.features.includes(key);
+  return Boolean((plan.features as Record<string, boolean>)[key]);
 }
 
 // ── Feature display map ───────────────────────────────────────────────────────
@@ -130,9 +149,14 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
 
       {/* Plan name */}
       <div style={{ fontSize: 11, fontWeight: 700, color: accent, textTransform: 'uppercase',
-        letterSpacing: '0.08em', marginBottom: 8 }}>
+        letterSpacing: '0.08em', marginBottom: 4 }}>
         {plan.name}
       </div>
+      {plan.tagline && (
+        <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, lineHeight: 1.4 }}>
+          {plan.tagline}
+        </div>
+      )}
 
       {/* Price */}
       <div style={{ marginBottom: 4 }}>
@@ -180,21 +204,29 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
         ))}
       </div>
 
-      {/* Feature list */}
+      {/* Feature list — use highlights if available, else full feature matrix */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {ALL_FEATURES.map(f => {
-          const included = plan.features.includes(f);
-          return (
-            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-              <span style={{ color: included ? '#22c55e' : '#334155', fontSize: 14, flexShrink: 0 }}>
-                {included ? '✓' : '✕'}
-              </span>
-              <span style={{ color: included ? '#cbd5e1' : '#475569' }}>
-                {FEATURE_LABELS[f] ?? f}
-              </span>
-            </div>
-          );
-        })}
+        {plan.highlights && plan.highlights.length > 0
+          ? plan.highlights.map(h => (
+              <div key={h} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                <span style={{ color: '#22c55e', fontSize: 14, flexShrink: 0 }}>✓</span>
+                <span style={{ color: '#cbd5e1' }}>{h}</span>
+              </div>
+            ))
+          : ALL_FEATURES.map(f => {
+              const included = hasFeature(plan, f);
+              return (
+                <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                  <span style={{ color: included ? '#22c55e' : '#334155', fontSize: 14, flexShrink: 0 }}>
+                    {included ? '✓' : '✕'}
+                  </span>
+                  <span style={{ color: included ? '#cbd5e1' : '#475569' }}>
+                    {FEATURE_LABELS[f] ?? f}
+                  </span>
+                </div>
+              );
+            })
+        }
       </div>
     </div>
   );
@@ -253,12 +285,28 @@ const PricingPage: React.FC = () => {
   const [annual, setAnnual] = useState(false);
 
   const { data: plansData, isLoading } = useQuery({
-    queryKey: ['billing-plans'],
-    queryFn: () => api.get<{ plans: PlanData[] }>('/billing/plans').then(r => r.data),
+    queryKey: ['pricing-plans', annual ? 'annual' : 'monthly'],
+    queryFn: () =>
+      pricingApi.getPlans(annual ? 'annual' : 'monthly')
+        .then(r => r.data as { plans: PlanData[] })
+        .catch(() =>
+          // Fallback to billing plans if pricing endpoint not yet deployed
+          api.get<{ plans: PlanData[] }>('/billing/plans').then(r => r.data)
+        ),
     staleTime: 5 * 60_000,
   });
 
+  const { data: faqData } = useQuery({
+    queryKey: ['pricing-faq'],
+    queryFn: () =>
+      pricingApi.getFaq()
+        .then(r => (r.data as { faq: Array<{ question: string; answer: string }> }).faq)
+        .catch(() => null),
+    staleTime: 30 * 60_000,
+  });
+
   const plans = plansData?.plans ?? [];
+  const faqItems = faqData ?? FAQ.map(f => ({ question: f.q, answer: f.a }));
 
   const handleSelect = (planId: string) => {
     if (!isAuth) {
@@ -353,7 +401,9 @@ const PricingPage: React.FC = () => {
         <h2 style={{ margin: '0 0 24px', fontSize: 22, fontWeight: 700, color: '#e2e8f0', textAlign: 'center' }}>
           Frequently asked questions
         </h2>
-        {FAQ.map(item => <FAQItem key={item.q} q={item.q} a={item.a} />)}
+        {faqItems.map(item => (
+          <FAQItem key={item.question} q={item.question} a={item.answer} />
+        ))}
       </div>
 
       {/* CTA */}

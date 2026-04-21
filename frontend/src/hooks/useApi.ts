@@ -901,6 +901,25 @@ export const allocatorApi = {
   history:      (limit = 50)   => api.get('/performance/equity-curve', { params: { limit } }),
 };
 
+// ── Pricing catalogue (public — no auth required) ─────────────────────────────
+
+export const pricingApi = {
+  /** Full 5-tier plan catalogue with feature matrix. */
+  getPlans:      (billingCycle: 'monthly' | 'annual' = 'monthly') =>
+    api.get('/pricing/plans', { params: { billing_cycle: billingCycle } }),
+  /** Side-by-side feature comparison between two tiers. */
+  compare:       (tierA: string, tierB: string) =>
+    api.get('/pricing/compare', { params: { tier_a: tierA, tier_b: tierB } }),
+  /** Ordered upgrade options from the user's current tier. */
+  upgradePath:   (currentTier: string) =>
+    api.get('/pricing/upgrade-path', { params: { current_tier: currentTier } }),
+  /** Pricing FAQ entries. */
+  getFaq:        () => api.get('/pricing/faq'),
+  /** Estimate monthly cost for a tier + trade volume. */
+  estimate:      (body: { tier: string; billing_cycle?: string; trade_volume_usd?: number }) =>
+    api.post('/pricing/estimate', body),
+};
+
 // ── LLM / AI Provider ─────────────────────────────────────────────────────────
 
 export const llmApi = {

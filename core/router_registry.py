@@ -229,6 +229,16 @@ def register_routers(
     else:
         logger.debug("BILLING_SUBSCRIPTION disabled — set FEATURE_BILLING_SUBSCRIPTION=true to enable")
 
+    # ── Public pricing catalogue (/api/pricing) — no auth required ────────────
+    try:
+        from api.pricing import router as pricing_router
+
+        if pricing_router is not None:
+            _include_router_deduped(app, pricing_router)
+            logger.info("Pricing router registered (/api/pricing)")
+    except Exception as _pricing_err:
+        logger.warning("Pricing router not registered: %s", _pricing_err)
+
     if feature_flags.ADVANCED_TRADING:
         from api.advanced_trading import _adv_router as advanced_compat_router
         from api.advanced_trading import public_router as advanced_public_router
