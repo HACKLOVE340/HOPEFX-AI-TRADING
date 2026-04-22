@@ -6,7 +6,7 @@
 """add plan and country columns to users
 
 Revision ID: g1h2i3j4k5l6
-Revises: f1a2b3c4d5e6
+Revises: c1d2e3f4a5b6
 Create Date: 2026-04-19 00:00:00.000000
 
 Adds two columns to the ``users`` table:
@@ -27,7 +27,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "g1h2i3j4k5l6"  # pragma: allowlist secret
-down_revision: str | Sequence[str] | None = "f1a2b3c4d5e6"  # pragma: allowlist secret
+down_revision: str | Sequence[str] | None = "c1d2e3f4a5b6"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
