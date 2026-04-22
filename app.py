@@ -443,6 +443,19 @@ async def lifespan(_app: FastAPI):
     setup_rate_limiting(_app)
     await kill_switch.start()
     await startup_event()
+    # Start Sharpe circuit breaker as a top-level lifespan task so it always
+    # runs even if startup_event() raises before reaching the call inside it.
+    # Mirrors the pattern used for Prometheus, WS broadcasters, and nuclear engine.
+    try:
+        from ml.sharpe_circuit_breaker import get_sharpe_cb as _get_sharpe_cb
+
+        _scb_task = asyncio.create_task(_get_sharpe_cb().run(), name="sharpe_circuit_breaker")
+        _scb_task.add_done_callback(lambda _: None)
+        if hasattr(app_state, "background_tasks"):
+            app_state.background_tasks.append(_scb_task)
+        logger.info("✓ Sharpe circuit breaker task started (lifespan)")
+    except Exception as _scb_err:
+        logger.warning("Sharpe circuit breaker not started (non-fatal): %s", _scb_err)
     # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
     try:
         from prometheus_monitoring import _sync_loop as _prom_sync_loop
