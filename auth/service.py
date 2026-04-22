@@ -465,6 +465,7 @@ class AuthService:
                         "email": user.email,
                         "username": user.username,
                         "role": user.role,
+                        "plan": getattr(user, "plan", "free"),
                         "kyc_status": user.kyc_status,
                         "totp_enabled": user.totp_enabled,
                     },
