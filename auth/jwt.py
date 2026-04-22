@@ -168,7 +168,7 @@ def decode_access_token(token: str) -> dict:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password with bcrypt (SHA-256 pre-hash, cost factor 12)."""
+    """Hash a password with bcrypt (BLAKE2b pre-hash, cost factor 12)."""
     prepared = _prepare_password(password)
     if _BCRYPT_DIRECT:
         return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode("utf-8")
