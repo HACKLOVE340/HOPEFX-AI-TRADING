@@ -12,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 
 import jwt
-from passlib.context import CryptContext
 
 logger = logging.getLogger(__name__)
 
@@ -71,23 +70,10 @@ def _get_access_token_expire_minutes() -> int:
 # directly. Kept for backward compatibility; prefer _get_access_token_expire_minutes().
 ACCESS_TOKEN_EXPIRE_MINUTES = _get_access_token_expire_minutes()
 
-# Password hashing — bcrypt with SHA-256 pre-hash to handle passwords >72 bytes.
-#
-# bcrypt silently truncates at 72 bytes; SHA-256 pre-hashing avoids that limit
+# Password hashing — bcrypt with BLAKE2b pre-hash to handle passwords >72 bytes.
+# bcrypt silently truncates at 72 bytes; BLAKE2b pre-hashing avoids that limit
 # while keeping the full bcrypt cost factor for brute-force resistance.
-#
-# passlib 1.7.x + bcrypt 4.x raises ValueError("password cannot be longer than
-# 72 bytes") when the *raw* password is passed through passlib's bcrypt handler
-# even though our pre-hash always produces a 44-char ASCII string.  The root
-# cause is passlib calling bcrypt.checkpw with the raw bytes before our hook
-# runs.  We bypass passlib entirely and call bcrypt directly.
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-try:
-    import bcrypt as _bcrypt_lib
-
-    _BCRYPT_DIRECT = True
-except ImportError:
-    _BCRYPT_DIRECT = False
+import bcrypt as _bcrypt_lib
 
 
 def _prepare_password(password: str) -> bytes:
@@ -168,21 +154,16 @@ def decode_access_token(token: str) -> dict:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password with bcrypt (SHA-256 pre-hash, cost factor 12)."""
+    """Hash a password with bcrypt (BLAKE2b pre-hash, cost factor 12)."""
     prepared = _prepare_password(password)
-    if _BCRYPT_DIRECT:
-        return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode("utf-8")
-    # passlib fallback (older bcrypt versions)
-    return pwd_context.hash(prepared.decode("ascii"))
+    return _bcrypt_lib.hashpw(prepared, _bcrypt_lib.gensalt(rounds=12)).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against a stored bcrypt hash."""
     prepared = _prepare_password(plain_password)
-    if _BCRYPT_DIRECT:
-        try:
-            return _bcrypt_lib.checkpw(prepared, hashed_password.encode("utf-8"))
-        except (ValueError, TypeError) as exc:
-            logger.warning("bcrypt verification failed: %s", exc)
-            return False
-    return pwd_context.verify(prepared.decode("ascii"), hashed_password)
+    try:
+        return _bcrypt_lib.checkpw(prepared, hashed_password.encode("utf-8"))
+    except (ValueError, TypeError) as exc:
+        logger.warning("bcrypt verification failed: %s", exc)
+        return False
