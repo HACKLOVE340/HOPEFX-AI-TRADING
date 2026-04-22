@@ -598,23 +598,167 @@ class StripeProductionClient:
         logger.warning("Payment failed: PI=%s error=%s", pi_id, error.get("message", ""))
         return {"handled": True, "action": "payment_failed", "pi_id": pi_id}
 
+    # ── Subscription plan mapping ─────────────────────────────────────────────
+
+    def _resolve_plan_from_subscription(self, data: dict) -> str:
+        """
+        Map a Stripe subscription to an internal plan name.
+
+        Reads STRIPE_PRICE_<PLAN>_MONTHLY / _ANNUAL env vars to match the
+        subscription's first line-item price ID to a plan name.
+
+        Returns 'free' when the subscription is cancelled/unpaid or the
+        price ID is unrecognised.
+        """
+        status = data.get("status", "")
+        if status in ("canceled", "unpaid", "incomplete_expired"):
+            return "free"
+
+        # Build price→plan map from env
+        price_map: dict[str, str] = {}
+        for plan in ("starter", "professional", "enterprise"):
+            for cadence in ("monthly", "annual"):
+                env_key = f"STRIPE_PRICE_{plan.upper()}_{cadence.upper()}"
+                price_id = os.getenv(env_key, "").strip()
+                if price_id:
+                    price_map[price_id] = plan
+
+        # Extract price IDs from the subscription line items
+        items = data.get("items", {}).get("data", [])
+        for item in items:
+            price_id = (item.get("price") or {}).get("id", "")
+            if price_id in price_map:
+                return price_map[price_id]
+
+        # Fallback: check metadata set at subscription creation time
+        plan_meta = (data.get("metadata") or {}).get("plan", "")
+        if plan_meta in ("starter", "professional", "enterprise"):
+            return plan_meta
+
+        logger.warning(
+            "Could not resolve plan from subscription %s — keeping existing plan",
+            data.get("id", ""),
+        )
+        return ""  # empty string = do not update plan
+
+    def _resolve_user_id_from_customer(self, customer_id: str) -> str | None:
+        """
+        Return the HopeFX user_id stored in the Stripe customer's metadata.
+
+        Falls back to a Stripe API call when the customer_id is not already
+        cached in the subscription manager.
+        """
+        if not customer_id:
+            return None
+
+        # Fast path: subscription manager cache
+        try:
+            from monetization.subscription import subscription_manager as _sub_mgr
+            for sub in getattr(_sub_mgr, "_subscriptions", {}).values():
+                if getattr(sub, "stripe_customer_id", None) == customer_id:
+                    return sub.user_id
+        except Exception:
+            pass
+
+        # Slow path: Stripe API
+        if not self._stripe_available:
+            return None
+        try:
+            import stripe as _s
+            customer = _s.Customer.retrieve(customer_id)
+            return (customer.get("metadata") or {}).get("user_id")
+        except Exception as exc:
+            logger.warning("Could not retrieve Stripe customer %s: %s", customer_id, exc)
+            return None
+
+    def _update_user_plan(self, user_id: str, plan: str) -> bool:
+        """
+        Persist the resolved plan to User.plan in the database.
+
+        Uses the sync SQLAlchemy session so it works from both sync and async
+        contexts (the session is committed and closed immediately).
+        Returns True on success.
+        """
+        try:
+            from database.connection import get_db_manager
+            from database.user_models import User
+
+            manager = get_db_manager()
+            if manager is None or manager._session_factory is None:
+                logger.error("_update_user_plan: database not initialised")
+                return False
+
+            session = manager._session_factory()
+            try:
+                user = session.query(User).filter(User.id == user_id).first()
+                if user is None:
+                    logger.warning("_update_user_plan: user %s not found", user_id)
+                    return False
+                old_plan = user.plan
+                user.plan = plan
+                session.commit()
+                logger.info(
+                    "User plan updated: user_id=%s %s → %s",
+                    user_id, old_plan, plan,
+                )
+                return True
+            except Exception:
+                session.rollback()
+                raise
+            finally:
+                session.close()
+        except Exception as exc:
+            logger.error("_update_user_plan failed for user %s: %s", user_id, exc)
+            return False
+
     def _on_subscription_created(self, data: dict) -> dict:
         sub_id = data.get("id", "")
         customer = data.get("customer", "")
         status = data.get("status", "")
         logger.info("Subscription created: %s customer=%s status=%s", sub_id, customer, status)
-        return {"handled": True, "action": "subscription_created", "sub_id": sub_id}
+
+        plan = self._resolve_plan_from_subscription(data)
+        if plan:
+            user_id = self._resolve_user_id_from_customer(customer)
+            if user_id:
+                self._update_user_plan(user_id, plan)
+            else:
+                logger.warning("subscription_created: no user_id for customer %s", customer)
+
+        return {"handled": True, "action": "subscription_created", "sub_id": sub_id, "plan": plan}
 
     def _on_subscription_updated(self, data: dict) -> dict:
         sub_id = data.get("id", "")
+        customer = data.get("customer", "")
         status = data.get("status", "")
-        logger.info("Subscription updated: %s status=%s", sub_id, status)
-        return {"handled": True, "action": "subscription_updated", "sub_id": sub_id}
+        logger.info("Subscription updated: %s customer=%s status=%s", sub_id, customer, status)
+
+        plan = self._resolve_plan_from_subscription(data)
+        if plan:
+            user_id = self._resolve_user_id_from_customer(customer)
+            if user_id:
+                self._update_user_plan(user_id, plan)
+            else:
+                logger.warning("subscription_updated: no user_id for customer %s", customer)
+        elif data.get("status", "") in ("canceled", "unpaid", "incomplete_expired"):
+            # Subscription lapsed — downgrade to free
+            user_id = self._resolve_user_id_from_customer(customer)
+            if user_id:
+                self._update_user_plan(user_id, "free")
+
+        return {"handled": True, "action": "subscription_updated", "sub_id": sub_id, "plan": plan}
 
     def _on_subscription_deleted(self, data: dict) -> dict:
         sub_id = data.get("id", "")
         customer = data.get("customer", "")
         logger.info("Subscription cancelled: %s customer=%s", sub_id, customer)
+
+        user_id = self._resolve_user_id_from_customer(customer)
+        if user_id:
+            self._update_user_plan(user_id, "free")
+        else:
+            logger.warning("subscription_deleted: no user_id for customer %s", customer)
+
         return {"handled": True, "action": "subscription_cancelled", "sub_id": sub_id}
 
     def _on_invoice_paid(self, data: dict) -> dict:

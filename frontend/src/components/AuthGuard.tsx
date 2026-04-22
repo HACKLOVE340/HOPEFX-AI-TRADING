@@ -2,13 +2,18 @@
  * AuthGuard — redirects unauthenticated users to /login.
  * Preserves the attempted URL so login can redirect back.
  *
- * On every mount it fetches /api/auth/me and syncs the user object
- * (including role) from the server. This ensures a role change (e.g.
- * admin → superadmin) is reflected immediately without requiring a
- * logout/login cycle, even when the old role is cached in localStorage.
+ * Session-restore flow (page refresh)
+ * ------------------------------------
+ * The access token is intentionally NOT persisted to localStorage.
+ * After a page refresh isAuthenticated=true but token=null.
+ * We call /api/auth/me immediately — the 401 response interceptor in
+ * useApi.ts will transparently call /auth/refresh with the httpOnly
+ * refresh-token cookie, obtain a new access token, update Zustand, and
+ * retry the /me request.  AuthGuard stays in the spinner ("syncing") until
+ * the /me round-trip (including any silent refresh) completes.
  *
- * Also checks JWT expiry: if the persisted token is already expired the
- * store is cleared immediately, preventing stale isAuthenticated=true.
+ * This prevents the page-refresh-kicks-to-/login bug without persisting
+ * the access token to localStorage.
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -29,7 +34,7 @@ const ROLE_RANK: Record<import('../store').UserRole, number> = {
 };
 
 function isTokenExpired(token: string | null): boolean {
-  if (!token) return true;
+  if (!token) return false; // null token = not restored yet, not expired
   try {
     const payload = JSON.parse(atob(token.split('.')[1]!.replace(/-/g, '+').replace(/_/g, '/')));
     return typeof payload.exp === 'number' && payload.exp * 1000 < Date.now();
@@ -46,45 +51,56 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
   const clearAuth = useStore((s) => s.clearAuth);
   const location  = useLocation();
 
-  // syncing=true while /api/auth/me is in-flight so guards don't render
-  // with a stale cached role before the server response arrives.
+  // syncing=true for any authenticated session until the server confirms the
+  // user profile.  Covers both first-load (token already in memory) and
+  // page-refresh (token=null, silent refresh running in interceptor).
   const synced  = useRef(false);
-  const [syncing, setSyncing] = useState(!synced.current && isAuth && !isTokenExpired(token));
+  const [syncing, setSyncing] = useState(isAuth);
 
   useEffect(() => {
-    if (isAuth && isTokenExpired(token)) {
+    if (!isAuth) {
+      setSyncing(false);
+      return;
+    }
+
+    // Token is present but has expired → clear session immediately.
+    // token=null is NOT expired — it means the access token hasn't been
+    // restored from the refresh cookie yet.
+    if (token && isTokenExpired(token)) {
       clearAuth();
       setSyncing(false);
       return;
     }
-    // Fetch fresh user profile once per mount to pick up any role changes
-    // that happened server-side since the token was issued / cached.
-    if (isAuth && token && !synced.current) {
+
+    // Fetch fresh user profile on every mount.
+    // If token is null the request returns 401; the response interceptor in
+    // useApi.ts silently refreshes via the httpOnly cookie, updates Zustand,
+    // and retries the request — all transparently inside this .then() chain.
+    if (!synced.current) {
       synced.current = true;
       setSyncing(true);
       authApi.me()
         .then((res) => {
           const fresh = res.data;
-          if (fresh && (fresh.role !== user?.role || fresh.email !== user?.email)) {
-            setAuth(token, fresh);
+          // Grab the token after the interceptor may have restored it.
+          const currentToken = useStore.getState().token;
+          if (fresh && currentToken) {
+            const changed =
+              fresh.role  !== user?.role  ||
+              fresh.email !== user?.email ||
+              fresh.plan  !== user?.plan;
+            if (changed) setAuth(currentToken, fresh);
           }
         })
         .catch(() => {
-          // /me failed (expired / revoked token) — clear session
+          // /me failed even after silent-refresh attempt → force re-login.
           clearAuth();
         })
         .finally(() => setSyncing(false));
-    } else {
-      setSyncing(false);
     }
   }, [isAuth, token, user, setAuth, clearAuth]);
 
-  if (!isAuth || isTokenExpired(token)) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  // Hold rendering until role is confirmed from server — prevents SuperAdminGuard
-  // from seeing a stale cached role and showing "Access Denied" on first load.
+  // While restoring session or fetching fresh profile, show a neutral spinner.
   if (syncing) {
     return (
       <div style={{
@@ -99,6 +115,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     );
+  }
+
+  // Not authenticated after all restoration attempts → send to login.
+  if (!isAuth) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
   if (requiredRole && user) {

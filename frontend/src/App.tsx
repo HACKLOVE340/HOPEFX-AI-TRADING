@@ -385,10 +385,10 @@ const AppShell: React.FC = () => {
             <Route path="/tca"          element={wrap(gated('tca',          <TCADashboard />))} />
 
             {/* Community */}
-            <Route path="/leaderboard"  element={wrap(<Leaderboard />)} />
+            <Route path="/leaderboard"  element={wrap(gated('leaderboard',  <Leaderboard />))} />
             <Route path="/feed"         element={wrap(gated('feed',         <SocialFeed />))} />
-            <Route path="/marketplace"  element={wrap(<Marketplace />)} />
-            <Route path="/affiliate"    element={wrap(<Affiliate />)} />
+            <Route path="/marketplace"  element={wrap(gated('marketplace',  <Marketplace />))} />
+            <Route path="/affiliate"    element={wrap(gated('affiliate',    <Affiliate />))} />
 
             {/* Enterprise features */}
             <Route path="/research"     element={wrap(gated('research',     <ResearchPage />))} />
