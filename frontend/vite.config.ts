@@ -13,8 +13,9 @@ export default defineConfig({
   server: {
     port: 5173,
     host: '0.0.0.0',
-    // Allow all external hostnames (required for Gitpod/Ona preview tunnels)
-    allowedHosts: true,
+    // Restrict to localhost and explicit tunnel hostnames; allowedHosts:true
+    // opens DNS rebinding attack surface so we enumerate allowed hosts instead.
+    allowedHosts: ['localhost', '127.0.0.1', '.gitpod.io', '.ona.io', '.preview.app.github.dev'],
     proxy: {
       // Forward all /api/* requests to the FastAPI backend
       '/api': {

@@ -533,13 +533,23 @@ class KillSwitch:
             import inspect
 
             if inspect.iscoroutinefunction(cancel_fn):
-                # Async broker (OANDA, MT5) — schedule on the running loop or run in new loop
+                # Async broker (OANDA, MT5) — must wait for completion; fire-and-forget
+                # is unsafe because orders may remain open if the task is GC-collected.
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(cancel_fn())
-                    logger.warning(
-                        "KillSwitch._broker_cancel_all: async cancel_all_orders scheduled on %s", broker_name
-                    )
+                    # Block synchronously up to 10s so kill switch activation is confirmed
+                    future = asyncio.run_coroutine_threadsafe(cancel_fn(), loop)
+                    try:
+                        future.result(timeout=10)
+                    except Exception as _cancel_exc:
+                        logger.error(
+                            "KillSwitch._broker_cancel_all: cancel_all_orders on %s failed: %s",
+                            broker_name, _cancel_exc,
+                        )
+                    else:
+                        logger.warning(
+                            "KillSwitch._broker_cancel_all: async cancel_all_orders completed on %s", broker_name
+                        )
                 except RuntimeError:
                     # No running loop — run synchronously in a new loop
                     asyncio.run(cancel_fn())

@@ -64,8 +64,13 @@ class EncryptionManager:
     def __init__(self, master_key: str = ""):
         key = master_key or os.environ.get("CONFIG_ENCRYPTION_KEY", "")
         if not key:
-            # Auto-generate an ephemeral key; persist it to .encryption_key in cwd
-            # so the same key survives process restarts within the same directory.
+            _app_env = os.environ.get("APP_ENV", "").lower()
+            if _app_env == "production":
+                raise RuntimeError(
+                    "CONFIG_ENCRYPTION_KEY must be set in production. "
+                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                )
+            # Dev/staging only — auto-generate an ephemeral key persisted locally.
             key_file = Path(".encryption_key")
             if key_file.exists():
                 key = key_file.read_text(encoding="utf-8").strip()
@@ -103,12 +108,18 @@ class EncryptionManager:
     def encrypt(self, data: str) -> str:
         if self._fernet:
             return self._fernet.encrypt(data.encode()).decode()
-        return base64.b64encode(data.encode()).decode()
+        raise RuntimeError(
+            "cryptography package is required for encryption. "
+            "Install it with: pip install cryptography"
+        )
 
     def decrypt(self, token: str) -> str:
         if self._fernet:
             return self._fernet.decrypt(token.encode()).decode()
-        return base64.b64decode(token.encode()).decode()
+        raise RuntimeError(
+            "cryptography package is required for decryption. "
+            "Install it with: pip install cryptography"
+        )
 
     def hash_password(self, password: str, salt: bytes | None = None) -> str:
         if salt is None:

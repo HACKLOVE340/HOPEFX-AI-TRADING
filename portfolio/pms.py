@@ -142,7 +142,7 @@ class PortfolioManager:
             "quantity": quantity,
             "price": price,
             "commission": commission,
-            "realized_pnl": pos.realized_pnl - sum(t.get("realized_pnl", 0) for t in self.trade_history[-10:]),
+            "realized_pnl": pos.realized_pnl,
             "position_after": pos.quantity,
         }
         self.trade_history.append(trade_record)

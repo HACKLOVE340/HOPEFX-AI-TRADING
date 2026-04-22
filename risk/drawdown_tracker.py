@@ -112,6 +112,8 @@ class DrawdownTracker:
         drawdown_mode: str = os.getenv("RISK_DRAWDOWN_MODE", "equity"),
         alert_pct_of_limit: float = float(os.getenv("RISK_ALERT_PCT_OF_LIMIT", "0.80")),
     ) -> None:
+        if initial_balance <= 0:
+            raise ValueError(f"DrawdownTracker: initial_balance must be > 0, got {initial_balance}")
         self.max_total_dd_pct = max_total_dd_pct
         self.max_daily_dd_pct = max_daily_dd_pct
         self.drawdown_mode = drawdown_mode.lower()

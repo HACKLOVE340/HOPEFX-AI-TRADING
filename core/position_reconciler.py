@@ -163,12 +163,15 @@ class PositionReconciler:
                     db_qty = float(pos.quantity or 0)
                     qty_diff = abs(db_qty - broker_qty)
 
-                    current_price_for_drift = price or 0.0
-                    db_value = db_qty * current_price_for_drift
-                    broker_value = broker_qty * current_price_for_drift
-                    value_diff = abs(db_value - broker_value)
+                    if price:
+                        db_value = db_qty * price
+                        broker_value = broker_qty * price
+                        value_diff = abs(db_value - broker_value)
+                    else:
+                        db_value = broker_value = 0.0
+                        value_diff = 0.0
 
-                    if qty_diff > self._drift_qty or value_diff > self._drift_value:
+                    if qty_diff > self._drift_qty or (price and value_diff > self._drift_value):
                         await self._trigger_drift_halt(
                             symbol=pos.symbol,
                             db_qty=db_qty,
