@@ -10,7 +10,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import { tradingApi } from './useApi';
-import type { PriceTick, Position, Signal, AccountMetrics } from '../types';
+import type {
+  PriceTick, Position, Signal, AccountMetrics,
+  EquityPoint, MicrostructureSnapshot, SentimentResponse,
+} from '../types';
 
 const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
@@ -34,7 +37,13 @@ interface WsMessage {
     | 'signal'
     | 'alert_triggered'
     | 'account_update'
+    | 'equity_update'
+    | 'microstructure'
+    | 'sentiment_update'
     | 'heartbeat'
+    | 'pong'
+    | 'subscribed'
+    | 'unsubscribed'
     | 'no_live_feed'
     | 'error';
   data?:          unknown;
@@ -64,6 +73,7 @@ export function useWebSocket(enabled = true) {
     const {
       setWsStatus, setHeartbeat, setPrice,
       upsertPosition, removePosition, addSignal, setAccount,
+      setEquityCurve, setMicrostructure, setSentiment,
     } = getState();
 
     switch (msg.type) {
@@ -121,6 +131,24 @@ export function useWebSocket(enabled = true) {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
+        break;
+
+      case 'equity_update':
+        setEquityCurve(msg.data as EquityPoint[]);
+        break;
+
+      case 'microstructure':
+        setMicrostructure(msg.data as MicrostructureSnapshot);
+        break;
+
+      case 'sentiment_update':
+        setSentiment(msg.data as SentimentResponse);
+        break;
+
+      case 'pong':
+      case 'subscribed':
+      case 'unsubscribed':
+        // Acknowledgements — no state update needed.
         break;
 
       case 'no_live_feed':

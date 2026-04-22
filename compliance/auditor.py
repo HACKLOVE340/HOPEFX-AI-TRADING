@@ -58,6 +58,7 @@ class ImmutableAuditLog:
 
     def __init__(self, log_path: str = "data/audit/"):
         self.log_path = log_path
+        Path(self.log_path).mkdir(parents=True, exist_ok=True)
         self.records: list[AuditRecord] = []
         self.sequence = 0
         self.last_hash = "0" * 64  # Genesis hash

@@ -198,9 +198,15 @@ class TOTPDisableRequest(BaseModel):
 
 
 def _get_current_user_id(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> str:
-    if not credentials:
+    # Prefer Authorization header; fall back to httpOnly access token cookie
+    # so server-side requests (curl, Postman) that carry only the cookie work.
+    token: str | None = credentials.credentials if credentials else None
+    if not token:
+        token = request.cookies.get("hopefx_access_token")
+    if not token:
         raise HTTPException(
             status_code=401,
             detail="Not authenticated",
@@ -213,7 +219,7 @@ def _get_current_user_id(
 
         secret = _get_secret()  # raises RuntimeError if unset or too short
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             secret,
             algorithms=["HS256"],
             options={"require": ["sub", "exp"]},
@@ -465,7 +471,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     new_access = tokens.get("access_token", "")
     if new_access:
         _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")) * 60
+        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=new_access,
