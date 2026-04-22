@@ -453,6 +453,24 @@ async def lifespan(_app: FastAPI):
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:
         logger.warning("Prometheus sync loop not started: %s", _prom_err)
+    # Start transactional outbox relay — publishes queued compliance events to Redis.
+    # Guarantees at-least-once delivery even if Redis was down when the event was
+    # written (kill switch, AML block, order fill).
+    try:
+        from core.outbox import get_relay as _get_outbox_relay
+
+        _outbox_task = asyncio.create_task(
+            _get_outbox_relay().run(), name="outbox-relay"
+        )
+        _outbox_task.add_done_callback(lambda _: None)
+        logger.info(
+            "✓ Outbox relay started (interval=%.1fs batch=%s)",
+            float(os.getenv("OUTBOX_RELAY_INTERVAL_SECONDS", "2.0")),
+            os.getenv("OUTBOX_BATCH_SIZE", "50"),
+        )
+    except Exception as _outbox_err:
+        logger.warning("Outbox relay not started: %s", _outbox_err)
+
     # Start live WebSocket broadcasters
     try:
         from api.ws_live import start_broadcasters

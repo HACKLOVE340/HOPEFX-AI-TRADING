@@ -612,22 +612,31 @@ async def init_broker(s: Any) -> Any:
     Broker factory — selects the active broker based on environment variables.
 
     Priority order:
-      1. BROKER_TYPE=oanda  AND  BROKER_OANDA_TOKEN set
+      1. BROKER_TYPE=mt5  (or BROKER=mt5)  AND  MT5_SERVER / MT5_LOGIN / MT5_PASSWORD set
+         → MT5Connector (any MT5-compatible broker or prop firm)
+      2. BROKER_TYPE=oanda  AND  BROKER_OANDA_TOKEN set
          → AsyncOANDAConnector (practice or live per OANDA_ENVIRONMENT)
          → 30-day paper trading clock starts on first successful connection
-      2. BROKER_TYPE=paper  (default)
+      3. BROKER_TYPE=paper  (default)
          → PaperTradingBroker (in-memory simulation)
 
+    BROKER and BROKER_TYPE are treated as aliases — either works.
     The 30-day OANDA paper trading run clock is tracked in
-    ``data/oanda_paper_start.json``.  The file is created on first
-    successful OANDA connection and read by the /api/status endpoint.
+    ``data/oanda_paper_start.json``.
     """
     from api.admin import log_activity
 
-    broker_type = os.getenv("BROKER_TYPE", "paper").lower()
+    # Accept both BROKER_TYPE and BROKER env vars (BROKER_TYPE takes precedence).
+    broker_type = (os.getenv("BROKER_TYPE") or os.getenv("BROKER") or "paper").lower()
     oanda_token = os.getenv("BROKER_OANDA_TOKEN", "") or os.getenv("OANDA_API_KEY", "")
     oanda_account = os.getenv("BROKER_OANDA_ACCOUNT", "") or os.getenv("OANDA_ACCOUNT_ID", "")
     oanda_practice = os.getenv("OANDA_ENVIRONMENT", os.getenv("BROKER_OANDA_ENVIRONMENT", "practice")) != "live"
+
+    if broker_type == "mt5":
+        mt5_broker = await _try_connect_mt5(log_activity)
+        if mt5_broker is not None:
+            return mt5_broker
+        # Fall through to paper broker so startup is not fatal if MT5 is unavailable.
 
     if broker_type == "oanda" and oanda_token and oanda_account:
         broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
@@ -635,6 +644,68 @@ async def init_broker(s: Any) -> Any:
             return broker
 
     return await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
+
+
+async def _try_connect_mt5(log_activity: Any) -> Any | None:
+    """
+    Attempt to connect to MetaTrader 5 using env vars.
+
+    Required env vars:
+        MT5_SERVER   — MT5 server address (e.g. "ICMarkets-Demo")
+        MT5_LOGIN    — MT5 account number (integer)
+        MT5_PASSWORD — MT5 account password
+
+    Optional:
+        MT5_TIMEOUT  — connection timeout ms (default 60000)
+        MT5_PATH     — path to MT5 terminal executable
+
+    Returns the connected MT5Connector, or None on any failure so the
+    caller can fall back to the paper broker without crashing startup.
+    """
+    server = os.getenv("MT5_SERVER", "")
+    login_str = os.getenv("MT5_LOGIN", "")
+    password = os.getenv("MT5_PASSWORD", "")
+
+    if not (server and login_str and password):
+        logger.warning(
+            "BROKER_TYPE=mt5 but MT5_SERVER / MT5_LOGIN / MT5_PASSWORD are not all set "
+            "— falling back to paper broker. Set all three env vars to use MT5."
+        )
+        return None
+
+    try:
+        login = int(login_str)
+    except ValueError:
+        logger.error("MT5_LOGIN must be an integer (got %r) — falling back to paper broker", login_str)
+        return None
+
+    config = {
+        "server": server,
+        "login": login,
+        "password": password,
+        "timeout": int(os.getenv("MT5_TIMEOUT", "60000")),
+        "path": os.getenv("MT5_PATH") or None,
+    }
+
+    try:
+        from brokers.mt5 import MT5Connector
+
+        broker = MT5Connector(config)
+        if broker.connect():
+            log_activity(f"MT5 broker connected (server={server} login={login})")
+            logger.info("✓ MT5 broker connected (server=%s login=%s)", server, login)
+            return broker
+        logger.warning("MT5 connection returned False — falling back to paper broker")
+        return None
+    except ImportError:
+        logger.warning(
+            "MetaTrader5 SDK not installed — falling back to paper broker. "
+            "Install with: pip install MetaTrader5"
+        )
+        return None
+    except Exception as exc:
+        logger.warning("MT5 broker init failed (%s) — falling back to paper broker", exc)
+        return None
 
 
 async def _try_connect_oanda(
