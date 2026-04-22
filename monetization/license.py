@@ -174,9 +174,6 @@ class LicenseValidator:
         # Check API access feature
         return self.has_feature_access(user_id, "api_access")
 
-        # Validate API key (would check against stored keys in production)
-        return True
-
     def generate_license_info(self, user_id: str) -> dict:
         """Generate comprehensive license information"""
         subscription = subscription_manager.get_user_subscription(user_id)
