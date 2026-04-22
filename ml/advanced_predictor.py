@@ -175,6 +175,10 @@ class AdvancedPredictor:
     Maintains an SGD adapter for online incremental updates.
     """
 
+    # Max age before a loaded model is considered stale and predictions are
+    # blocked.  Default 7 days; override with PREDICTOR_MAX_AGE_HOURS env var.
+    _MAX_AGE_HOURS: float = float(os.getenv("PREDICTOR_MAX_AGE_HOURS", "168"))
+
     def __init__(
         self,
         model_path: Path | None = None,
@@ -194,6 +198,8 @@ class AdvancedPredictor:
         # Integrity state: None = unchecked, True = passed, False = failed
         self._integrity_ok: bool | None = None
         self._integrity_msg: str = ""
+        # Staleness: timestamp when the artifact was last modified on disk
+        self._model_mtime: float | None = None
         self._load_meta()
 
     # ── Integrity check ───────────────────────────────────────────────────────
@@ -304,6 +310,44 @@ class AdvancedPredictor:
         except Exception as exc:
             logger.debug("Meta load failed (non-fatal): %s", exc)
 
+    # ── Staleness check ───────────────────────────────────────────────────────
+
+    def _is_stale(self) -> bool:
+        """
+        Return True when the model artifact is older than _MAX_AGE_HOURS.
+
+        Compares the file's mtime against now.  If the file cannot be stat-ed
+        or the max-age is 0 (disabled), returns False so inference proceeds.
+        Emits CRITICAL log and Sentry alert on first detection.
+        """
+        if self._MAX_AGE_HOURS <= 0:
+            return False
+        try:
+            mtime = self._model_path.stat().st_mtime
+        except OSError:
+            return False
+
+        age_hours = (time.time() - mtime) / 3600.0
+        if age_hours <= self._MAX_AGE_HOURS:
+            self._model_mtime = mtime
+            return False
+
+        # Only log/alert once per process (mtime won't change until retrained)
+        if self._model_mtime != mtime:
+            self._model_mtime = mtime
+            msg = (
+                f"AdvancedPredictor: model artifact is STALE "
+                f"({age_hours:.1f}h old, limit={self._MAX_AGE_HOURS:.0f}h). "
+                f"Predictions blocked until model is retrained and redeployed."
+            )
+            logger.critical(msg)
+            try:
+                import sentry_sdk
+                sentry_sdk.capture_message(msg, level="fatal")
+            except Exception:
+                pass
+        return True
+
     # ── Model loading ─────────────────────────────────────────────────────────
 
     def _load(self) -> bool:
@@ -333,6 +377,11 @@ class AdvancedPredictor:
 
                 payload = joblib.load(self._model_path)  # nosec B301 - _model_path set from saved_models
                 self._model = payload
+                # Capture mtime so staleness checks can detect subsequent retraining
+                try:
+                    self._model_mtime = self._model_path.stat().st_mtime
+                except OSError:
+                    pass
                 # Extract feature names from the pipeline
                 if hasattr(payload, "feature_names_in_"):
                     self._feature_names = list(payload.feature_names_in_)
@@ -467,6 +516,10 @@ class AdvancedPredictor:
         """
         t0 = time.perf_counter()
         self._predict_count += 1
+
+        # ── Staleness gate — block predictions from an aged artifact ─────────
+        if self._is_stale():
+            return self._neutral(ohlcv, reason="model_stale", t0=t0)
 
         # ── Unavailable / insufficient data ──────────────────────────────────
         if not self._load():
@@ -650,6 +703,10 @@ class AdvancedPredictor:
             # Integrity check result (None = not yet checked)
             "integrity_ok": self._integrity_ok,
             "integrity_msg": self._integrity_msg,
+            # Staleness
+            "model_stale": self._is_stale(),
+            "model_max_age_hours": self._MAX_AGE_HOURS,
+            "model_mtime": self._model_mtime,
         }
 
 

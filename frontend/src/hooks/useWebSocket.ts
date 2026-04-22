@@ -150,7 +150,7 @@ export function useWebSocket(enabled = true) {
 
   /** Poll REST prices when WS is unavailable so the UI shows recent data. */
   const pollRestPrices = useCallback(async () => {
-    const token = getState().token ?? localStorage.getItem('hopefx_access_token');
+    const token = getState().token;
     if (!token) return; // not authenticated — skip silently
     try {
       const res = await tradingApi.prices();

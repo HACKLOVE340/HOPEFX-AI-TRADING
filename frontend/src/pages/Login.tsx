@@ -132,11 +132,8 @@ const Login: React.FC = () => {
 
       const res = await authApi.login(payload);
 
-      localStorage.setItem('hopefx_access_token', res.data.access_token);
-      if (res.data.refresh_token) {
-        localStorage.setItem('hopefx_refresh_token', res.data.refresh_token);
-      }
-
+      // Tokens are in httpOnly cookies set by the server.
+      // Store the access token in Zustand memory only — never localStorage.
       setAuth(res.data.access_token, res.data.user);
       // Fire CSRF prefetch without awaiting — it runs in the background so
       // navigation is instant. The interceptor will retry on the first POST

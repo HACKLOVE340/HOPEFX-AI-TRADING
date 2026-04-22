@@ -101,18 +101,18 @@ class Trade(Base):
     # Idempotency key — set before broker submission; UNIQUE prevents duplicate fills
     # on network retry.  See Alembic migration b2c3d4e5f6a7.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
-    account_id = Column(Integer, nullable=True, index=True)
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="CASCADE"), nullable=True, index=True)
     # user_id links trades directly to the auth user without requiring an Account row.
     # Populated on trade creation; used by _query_trades() for per-user history.
     user_id = Column(String(100), nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
-    side = Column(String(20), nullable=True)
+    side = Column(String(20), nullable=False, server_default="unknown")
     trade_type = Column(String(20), nullable=True)
 
     # Entry
     entry_time = Column(DateTime, default=_utcnow)
-    entry_price = Column(Float, nullable=True)
-    entry_quantity = Column(Float, nullable=True)
+    entry_price = Column(Float, nullable=False, server_default="0.0")
+    entry_quantity = Column(Float, nullable=False, server_default="0.0")
     size = Column(Float, nullable=True)  # alias for entry_quantity
     timestamp = Column(DateTime, nullable=True)
 

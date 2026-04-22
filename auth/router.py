@@ -334,9 +334,10 @@ async def login(body: LoginRequest, request: Request, response: Response):
     When a username is supplied it is resolved to an email before
     the credential check so the auth service always works with emails.
 
-    On success, also sets a ``hopefx_access_token`` cookie (not HttpOnly so
-    the React SPA can read it) so that browser navigation to protected pages
-    (e.g. /superadmin) works without JS injecting the Authorization header.
+    On success, sets an HttpOnly ``hopefx_access_token`` cookie and an
+    HttpOnly ``hopefx_refresh_token`` cookie (scoped to /api/auth/refresh).
+    The SPA reads the new access token from the JSON response body and keeps
+    it in Zustand memory only — never in localStorage.
     """
     if not body.email and not body.username:
         raise HTTPException(
@@ -416,7 +417,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
             key="hopefx_access_token",
             value=access_token,
             max_age=_max_age,
-            httponly=False,   # React SPA must be able to read it
+            httponly=True,
             samesite="strict",
             secure=_secure,
             path="/",
@@ -469,7 +470,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
             key="hopefx_access_token",
             value=new_access,
             max_age=_max_age,
-            httponly=False,   # React SPA must be able to read it for Authorization header
+            httponly=True,
             samesite="strict",
             secure=_secure,
             path="/",

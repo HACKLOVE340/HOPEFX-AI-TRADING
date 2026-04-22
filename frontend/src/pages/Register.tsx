@@ -194,14 +194,10 @@ const Register: React.FC = () => {
       // {message} — it does not expose the user ID.
       try {
         const loginRes = await authApi.login({ email: email.trim().toLowerCase(), password });
-        const { access_token, refresh_token, user } = loginRes.data;
+        const { access_token, user } = loginRes.data;
 
-        // Persist tokens to localStorage before setAuth so the axios interceptor
-        // can read them on the very next request (activateFreeTier POST).
-        localStorage.setItem('hopefx_access_token', access_token);
-        if (refresh_token) {
-          localStorage.setItem('hopefx_refresh_token', refresh_token);
-        }
+        // Tokens are in httpOnly cookies set by the server.
+        // Store access token in Zustand memory — axios interceptor reads it from there.
         setAuth(access_token, user);
 
         // Activate free tier using the real UUID from the login response.

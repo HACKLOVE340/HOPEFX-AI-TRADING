@@ -142,9 +142,13 @@ const CSRF_EXEMPT_PREFIXES = [
 ];
 
 api.interceptors.request.use(async (config) => {
-  // Prefer the Zustand store token; fall back to localStorage for the window
-  // between page load and Zustand persist rehydration completing.
-  const token = useStore.getState().token ?? localStorage.getItem('hopefx_access_token');
+  // Use the in-memory Zustand token only — never localStorage.
+  // Tokens are stored in httpOnly cookies; the access token is also kept in
+  // Zustand memory so we can still send it as a Bearer header (works for
+  // both XHR and non-browser API clients).  On page refresh the token will
+  // be null until _silentRefresh() runs; the response interceptor handles
+  // the 401 that results and retries transparently.
+  const token = useStore.getState().token;
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   // Inject CSRF header on state-changing requests to non-exempt paths.
@@ -161,10 +165,11 @@ api.interceptors.request.use(async (config) => {
 });
 
 // ── Silent token refresh on 401 ───────────────────────────────────────────────
-// When any request returns 401 we attempt one silent refresh using the stored
-// refresh_token.  On success the new access token is saved and the original
-// request is retried transparently.  On failure (refresh token also expired or
-// revoked) the session is cleared and the user is sent to /login.
+// When any request returns 401 we attempt one silent refresh.
+// The httpOnly refresh-token cookie is sent automatically by the browser —
+// no token needs to be read from localStorage or the request body.
+// On success the new access token is stored in Zustand memory only.
+// On failure the session is cleared and the user is sent to /login.
 
 let _refreshPromise: Promise<string | null> | null = null;
 
@@ -173,15 +178,12 @@ async function _silentRefresh(): Promise<string | null> {
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async () => {
-    const refreshToken = localStorage.getItem('hopefx_refresh_token');
-    if (!refreshToken) return null;
     try {
-      const res = await axios.post(`${BASE_URL}/auth/refresh`, { refresh_token: refreshToken });
-      const { access_token, refresh_token: newRefresh } = res.data;
-      // Persist new tokens
-      localStorage.setItem('hopefx_access_token',  access_token);
-      localStorage.setItem('hopefx_refresh_token', newRefresh ?? refreshToken);
-      // Update Zustand store so all future requests use the new token
+      // Send with credentials so the browser includes the httpOnly
+      // hopefx_refresh_token cookie scoped to /api/auth/refresh.
+      const res = await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
+      const { access_token } = res.data;
+      // Store in Zustand memory only — never in localStorage.
       const { user } = useStore.getState();
       if (user) useStore.getState().setAuth(access_token, user);
       return access_token as string;
@@ -245,10 +247,9 @@ export interface LoginResponse {
 
 export const authApi = {
   login:    (payload: LoginPayload)  => api.post<LoginResponse>('/auth/login', payload),
-  logout:   () => {
-    const refreshToken = localStorage.getItem('hopefx_refresh_token');
-    return api.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
-  },
+  // Cookies (access + refresh) are cleared server-side via Set-Cookie: max-age=0.
+  // withCredentials ensures the browser sends the httpOnly refresh cookie.
+  logout:   () => api.post('/auth/logout', {}, { withCredentials: true }),
   me:       ()                       => api.get<import('../store').User>('/auth/me'),
   register: (payload: { email: string; username: string; password: string }) =>
     api.post('/auth/register', payload),

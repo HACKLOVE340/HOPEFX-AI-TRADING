@@ -170,12 +170,6 @@ export const useStore = create<AppStore>()(
           set({ token, user, isAuthenticated: true }, false, 'auth/setAuth'),
 
         clearAuth: () => {
-          // Remove all token keys so neither the React app nor backend HTML
-          // templates (auth.js reads hopefx_access_token) can use stale tokens.
-          try {
-            localStorage.removeItem('hopefx_access_token');
-            localStorage.removeItem('hopefx_refresh_token');
-          } catch { /* ignore */ }
           // Invalidate the in-memory CSRF cache so the next request fetches a
           // fresh token rather than sending a stale one the server has expired.
           // Dynamic import avoids a circular dependency (store ↔ useApi).
@@ -312,7 +306,10 @@ export const useStore = create<AppStore>()(
       {
         name: 'hopefx-store',
         partialize: (state) => ({
-          token:           state.token,
+          // token is NOT persisted — it lives in memory only.
+          // On page refresh the silent-refresh interceptor (useApi.ts) uses
+          // the httpOnly refresh-token cookie to obtain a new access token
+          // before the first authenticated request fires.
           user:            state.user,
           isAuthenticated: state.isAuthenticated,
           // Persist plan so SubscriptionGate doesn't flash the upgrade wall
