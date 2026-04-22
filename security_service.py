@@ -47,18 +47,9 @@ except ImportError:
     _JWT_AVAILABLE = False
     logger.warning("PyJWT not installed — JWT operations will raise ImportError")
 
-try:
-    from passlib.context import CryptContext as _CryptContext
-
-    _PASSLIB_AVAILABLE = True
-except ImportError:
-    _CryptContext = None
-    _PASSLIB_AVAILABLE = False
-    logger.warning("passlib not installed — password hashing falls back to PBKDF2-HMAC-SHA256")
-
 _SECRET_KEY: str = os.getenv("SECRET_KEY", "")
 _ALGORITHM: str = os.getenv("JWT_ALGORITHM", "HS256")
-_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
+_ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
 _REFRESH_TOKEN_EXPIRE_DAYS: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 _PBKDF2_ITERATIONS: int = 600_000
 _PBKDF2_HASH: str = "sha256"
@@ -70,7 +61,7 @@ class SecurityService:
 
     Provides:
     - JWT access and refresh token creation / verification
-    - Password hashing (bcrypt via passlib, PBKDF2-HMAC-SHA256 fallback)
+    - Password hashing (PBKDF2-HMAC-SHA256)
     - Password verification with constant-time comparison
     - Secure random token generation (email verification, password reset)
     """
@@ -87,12 +78,11 @@ class SecurityService:
             raise ValueError(
                 "SecurityService: SECRET_KEY is not set. "
                 "Set the SECRET_KEY environment variable to a cryptographically "
-                'random value: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
+                'random value: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
         self._algorithm = algorithm
         self._access_expire = timedelta(minutes=access_token_expire_minutes)
         self._refresh_expire = timedelta(days=refresh_token_expire_days)
-        self._pwd_context = _CryptContext(schemes=["bcrypt"], deprecated="auto") if _PASSLIB_AVAILABLE else None
 
     # ── Token creation ────────────────────────────────────────────────────────
 
@@ -169,11 +159,9 @@ class SecurityService:
 
     def hash_password(self, plain_password: str) -> str:
         """
-        Hash a password using bcrypt (passlib) or PBKDF2-HMAC-SHA256 fallback.
+        Hash a password using PBKDF2-HMAC-SHA256.
         Returns a self-describing hash string safe to store in the database.
         """
-        if self._pwd_context is not None:
-            return self._pwd_context.hash(plain_password)
         salt = secrets.token_hex(32)
         dk = hashlib.pbkdf2_hmac(_PBKDF2_HASH, plain_password.encode(), salt.encode(), _PBKDF2_ITERATIONS)
         return f"pbkdf2:{_PBKDF2_HASH}:{_PBKDF2_ITERATIONS}${salt}${dk.hex()}"
@@ -183,11 +171,6 @@ class SecurityService:
         Verify a plain password against a stored hash.
         Uses constant-time comparison to prevent timing attacks.
         """
-        if self._pwd_context is not None and not hashed_password.startswith("pbkdf2:"):
-            try:
-                return self._pwd_context.verify(plain_password, hashed_password)
-            except Exception:
-                return False
         try:
             _, hash_algo, rest = hashed_password.split(":", 2)
             iterations_str, salt, stored_hex = rest.split("$", 2)
