@@ -522,7 +522,7 @@ async def list_models(user: TokenPayload = Depends(get_current_user)):
 
 def _check_subscription_gate(user: Any) -> None:
     """Raise HTTP 403 if user's plan does not include ML predictions."""
-    if getattr(user, "role", "") == "admin":
+    if getattr(user, "role", "") in ("admin", "superadmin"):
         return
     try:
         from monetization.subscription import subscription_manager, plan_gate
@@ -622,8 +622,8 @@ async def predict(
     Requires: Professional plan or above (enforced via plan_gate on user subscription).
     """
     # Subscription gate — Professional plan required for ML predictions.
-    # Admin role bypasses the plan gate (internal tooling / ops access).
-    if getattr(user, "role", "") != "admin":
+    # Admin and superadmin roles bypass the plan gate (internal tooling / ops access).
+    if getattr(user, "role", "") not in ("admin", "superadmin"):
         try:
             from monetization.subscription import plan_gate, subscription_manager
 
