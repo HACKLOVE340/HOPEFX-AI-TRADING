@@ -460,11 +460,13 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
-    # Rotate the access token cookie to match the new token
+    # Rotate the access token cookie to match the new token.
+    # Use the same env var and default (60 min) as /login so the cookie
+    # lifetime is always consistent with the token TTL.
     new_access = tokens.get("access_token", "")
     if new_access:
         _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "15")) * 60
+        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=new_access,
@@ -473,6 +475,20 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
             samesite="strict",
             secure=_secure,
             path="/",
+        )
+    # Rotate the refresh token cookie as well so the new token is persisted.
+    new_refresh = tokens.get("refresh_token", "")
+    if new_refresh:
+        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _refresh_max_age = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")) * 86400
+        response.set_cookie(
+            key="hopefx_refresh_token",
+            value=new_refresh,
+            max_age=_refresh_max_age,
+            httponly=True,
+            samesite="strict",
+            secure=_secure,
+            path="/api/auth/refresh",
         )
     return tokens
 
