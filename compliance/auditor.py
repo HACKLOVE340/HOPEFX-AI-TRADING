@@ -61,6 +61,10 @@ class ImmutableAuditLog:
         self.records: list[AuditRecord] = []
         self.sequence = 0
         self.last_hash = "0" * 64  # Genesis hash
+        # Ensure the audit directory exists at construction time so that any
+        # code that reads log_path (health checks, file listing) does not fail
+        # with FileNotFoundError before the first append() call.
+        Path(self.log_path).mkdir(parents=True, exist_ok=True)
 
     def append(self, level: AuditLevel, category: str, actor: str, action: str, data: dict):
         """Append immutable audit record."""
