@@ -412,7 +412,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
     # page refresh. Secure flag is set in production/staging only.
     access_token = tokens.get("access_token", "")
     refresh_token_val = tokens.get("refresh_token", "")
-    _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+    _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
 
     if access_token:
         # Cookie max_age must match the token TTL — read the same env var the
@@ -470,7 +470,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     # Rotate the access token cookie to match the new token
     new_access = tokens.get("access_token", "")
     if new_access:
-        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
         _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
         response.set_cookie(
             key="hopefx_access_token",
@@ -691,7 +691,7 @@ async def get_csrf_token(response: Response) -> dict:
     Call this once on page load before submitting any form.
     """
     token = secrets.token_hex(_CSRF_TOKEN_BYTES)
-    secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+    secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
     response.set_cookie(
         key=_CSRF_COOKIE_NAME,
         value=token,
