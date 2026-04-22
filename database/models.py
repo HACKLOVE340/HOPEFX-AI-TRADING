@@ -218,7 +218,11 @@ class Order(Base):
     broker = Column(String(50), nullable=True)
 
     # Relationships
-    trade = relationship("Trade", back_populates="orders")
+    trade = relationship(
+        "Trade",
+        back_populates="orders",
+        foreign_keys="[Order.trade_id]",
+    )
     account = relationship(
         "Account",
         back_populates="orders",
