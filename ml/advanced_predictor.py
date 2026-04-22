@@ -487,7 +487,9 @@ class AdvancedPredictor:
         # ── Append MTF regime features ────────────────────────────────────────
         if mtf_df is not None and not mtf_df.empty:
             try:
-                mtf_last = mtf_df.reindex(X.index).ffill().fillna(0.0)
+                # Trim to as_of so future regime data never propagates backward
+                _mtf = mtf_df[mtf_df.index <= as_of] if as_of is not None else mtf_df
+                mtf_last = _mtf.reindex(X.index).ffill().fillna(0.0)
                 mtf_cols = [c for c in mtf_last.columns if c not in X.columns]
                 if mtf_cols:
                     X = pd.concat([X, mtf_last[mtf_cols]], axis=1)

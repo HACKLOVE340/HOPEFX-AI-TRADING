@@ -385,6 +385,14 @@ def _validate_cors_wildcard(errors: list[str]) -> None:
             "set ALLOWED_ORIGINS to a comma-separated list of explicit "
             "https:// origins (e.g. https://app.example.com)",
         )
+    for origin in origins:
+        if origin == "*":
+            continue
+        if origin.startswith("http://") and not origin.startswith("http://localhost") and "127.0.0.1" not in origin:
+            errors.append(
+                f"INSECURE ALLOWED_ORIGINS contains plain http:// origin '{origin}' — "
+                "all production origins must use https:// to prevent downgrade attacks.",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -403,7 +411,7 @@ def validate_environment(*, strict: bool = True) -> None:
     Raises:
         StartupValidationError: when strict=False and validation fails.
     """
-    errors: ClassVar[list[str]] = []
+    errors: list[str] = []
     dev_mode = _is_dev()
 
     _validate_jwt(errors)

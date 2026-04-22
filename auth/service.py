@@ -485,10 +485,11 @@ class AuthService:
 
         token_hash = _hash_token(raw_refresh_token)
         with self._sf() as session:
-            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash, is_revoked=False).first()
+            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash, is_revoked=False).with_for_update().first()
             if not sess_row:
                 return False, "Invalid or expired refresh token", None
-            if _now() > sess_row.expires_at.replace(tzinfo=UTC):
+            _expires = sess_row.expires_at if sess_row.expires_at.tzinfo else sess_row.expires_at.replace(tzinfo=UTC)
+            if _now() > _expires:
                 sess_row.is_revoked = True
                 session.commit()
                 return False, "Refresh token expired. Please log in again.", None
@@ -602,7 +603,10 @@ class AuthService:
             user = session.query(User).filter_by(password_reset_token=token_hash).first()
             if not user:
                 return False, "Invalid or expired reset token"
-            if user.password_reset_expires and _now() > user.password_reset_expires.replace(tzinfo=UTC):
+            _reset_expires = user.password_reset_expires
+            if _reset_expires and not _reset_expires.tzinfo:
+                _reset_expires = _reset_expires.replace(tzinfo=UTC)
+            if _reset_expires and _now() > _reset_expires:
                 return False, "Reset token expired. Request a new one."
             user.hashed_password = hash_password(new_password)
             user.password_reset_token = None

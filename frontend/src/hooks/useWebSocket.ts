@@ -216,8 +216,10 @@ export function useWebSocket(enabled = true) {
       authedRef.current = false;
       startRestPoll(); // WS closed — start REST fallback
       const delay = reconnectDelay.current;
+      // Add ±10% jitter to prevent thundering herd when many clients reconnect
+      const jitter = delay * (0.9 + Math.random() * 0.2);
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_MS);
-      reconnectTimer.current = setTimeout(connect, delay);
+      reconnectTimer.current = setTimeout(connect, jitter);
     };
   }, [handleMessage, getState, startHeartbeat, startRestPoll, stopRestPoll]);
 
