@@ -198,14 +198,30 @@ class TOTPDisableRequest(BaseModel):
 
 
 def _get_current_user_id(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> str:
-    if not credentials:
+    """Extract and validate the caller's user ID from the access token.
+
+    Token resolution order:
+      1. Authorization: Bearer <token> header  (API clients, SPA fetch)
+      2. hopefx_access_token cookie            (browser navigation, /me page load)
+
+    Raises 401 if neither is present or the token is invalid/expired.
+    """
+    token: str | None = None
+    if credentials is not None:
+        token = credentials.credentials
+    else:
+        token = request.cookies.get("hopefx_access_token")
+
+    if not token:
         raise HTTPException(
             status_code=401,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     try:
         import jwt
 
@@ -213,7 +229,7 @@ def _get_current_user_id(
 
         secret = _get_secret()  # raises RuntimeError if unset or too short
         payload = jwt.decode(
-            credentials.credentials,
+            token,
             secret,
             algorithms=["HS256"],
             options={"require": ["sub", "exp"]},
