@@ -10,7 +10,8 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import { tradingApi } from './useApi';
-import type { PriceTick, Position, Signal, AccountMetrics } from '../types';
+import type { PriceTick, Position, Signal, AccountMetrics, MicrostructureSnapshot } from '../types';
+import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem } from '../store';
 
 const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
@@ -36,11 +37,25 @@ interface WsMessage {
     | 'account_update'
     | 'heartbeat'
     | 'no_live_feed'
-    | 'error';
+    | 'error'
+    // chart-bot channel messages
+    | 'microstructure'
+    | 'volume_delta'
+    | 'sentiment_update'
+    | 'risk_update'
+    | 'equity_update'
+    | 'news_item'
+    // server acknowledgements
+    | 'subscribed'
+    | 'unsubscribed'
+    | 'pong';
   data?:          unknown;
   auth_required?: boolean;
   code?:          string;
   message?:       string;
+  channels?:      string[];
+  user_id?:       string;
+  role?:          string;
 }
 
 export function useWebSocket(enabled = true) {
@@ -64,6 +79,8 @@ export function useWebSocket(enabled = true) {
     const {
       setWsStatus, setHeartbeat, setPrice,
       upsertPosition, removePosition, addSignal, setAccount,
+      setMicrostructure, setVolumeDelta, setSentiment,
+      setRiskSnapshot, setEquitySnapshot, addNewsItem,
     } = getState();
 
     switch (msg.type) {
@@ -78,7 +95,8 @@ export function useWebSocket(enabled = true) {
           setWsStatus('connected');
           wsRef.current?.send(JSON.stringify({
             type: 'subscribe',
-            channels: ['prices', 'positions', 'signals', 'account'],
+            channels: ['prices', 'positions', 'signals', 'account', 'alerts',
+                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
           }));
         }
         break;
@@ -88,7 +106,8 @@ export function useWebSocket(enabled = true) {
         setWsStatus('connected');
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
-          channels: ['prices', 'positions', 'signals', 'account', 'alerts'],
+          channels: ['prices', 'positions', 'signals', 'account', 'alerts',
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
         }));
         break;
 
@@ -121,6 +140,54 @@ export function useWebSocket(enabled = true) {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ type: 'ping' }));
         }
+        break;
+
+      // ── chart-bot channel ─────────────────────────────────────────────────
+
+      case 'microstructure':
+        setMicrostructure(msg.data as MicrostructureSnapshot);
+        break;
+
+      case 'volume_delta':
+        setVolumeDelta(msg.data as VolumeDeltaBar);
+        break;
+
+      case 'sentiment_update': {
+        // Server sends { signal: SentimentSignal, articles: NewsArticle[] }
+        // Map to the SentimentResponse shape the store expects.
+        const rawSentiment = msg.data as { signal: unknown; articles: unknown[] };
+        setSentiment({
+          signal: rawSentiment?.signal as import('../types').SentimentSignal,
+          recent_articles: (rawSentiment?.articles ?? []) as import('../types').NewsArticle[],
+        });
+        break;
+      }
+
+      case 'risk_update':
+        setRiskSnapshot(msg.data as RiskSnapshot);
+        break;
+
+      case 'equity_update':
+        setEquitySnapshot(msg.data as EquitySnapshot);
+        break;
+
+      case 'news_item':
+        addNewsItem(msg.data as WsNewsItem);
+        break;
+
+      // ── server acknowledgements ───────────────────────────────────────────
+
+      case 'subscribed':
+        // Server confirmed channel subscription — no state change needed.
+        break;
+
+      case 'unsubscribed':
+        // Server confirmed channel unsubscription — no state change needed.
+        break;
+
+      case 'pong':
+        // Server pong in response to our ping — liveness confirmed.
+        setHeartbeat(Date.now());
         break;
 
       case 'no_live_feed':

@@ -78,6 +78,38 @@ interface AccountSlice {
   setAccount: (metrics: AccountMetrics) => void;
 }
 
+// ─── Live WS snapshot types (chart-bot channel) ───────────────────────────────
+
+export interface EquitySnapshot {
+  balance:        number;
+  equity:         number;
+  unrealized_pnl: number;
+  margin_used:    number;
+  timestamp:      string;
+}
+
+export interface RiskSnapshot {
+  daily_loss_pct?:     number;
+  max_drawdown_pct?:   number;
+  open_risk_pct?:      number;
+  kill_switch_active?: boolean;
+}
+
+export interface VolumeDeltaBar {
+  volume_delta:     number;
+  cumulative_delta: number;
+  timestamp:        string;
+}
+
+export interface WsNewsItem {
+  title:           string;
+  source:          string;
+  sentiment_score: number;
+  sentiment_label: 'bullish' | 'bearish' | 'neutral';
+  published_at:    string | null;
+  url?:            string | null;
+}
+
 // ─── Orchestrator slice ───────────────────────────────────────────────────────
 
 interface OrchestratorSlice {
@@ -88,6 +120,11 @@ interface OrchestratorSlice {
   macro:                 MacroResponse | null;
   equityCurve:           EquityPoint[];
   performanceSummary:    PerformanceSummary | null;
+  // Live WS chart-bot channel snapshots
+  equitySnapshot:        EquitySnapshot | null;
+  riskSnapshot:          RiskSnapshot | null;
+  volumeDelta:           VolumeDeltaBar | null;
+  newsItems:             WsNewsItem[];
   setOrchestratorHealth: (h: OrchestratorHealth) => void;
   setQualityReport:      (r: QualityReport) => void;
   setMicrostructure:     (s: MicrostructureSnapshot) => void;
@@ -95,6 +132,10 @@ interface OrchestratorSlice {
   setMacro:              (m: MacroResponse) => void;
   setEquityCurve:        (curve: EquityPoint[]) => void;
   setPerformanceSummary: (s: PerformanceSummary) => void;
+  setEquitySnapshot:     (s: EquitySnapshot) => void;
+  setRiskSnapshot:       (s: RiskSnapshot) => void;
+  setVolumeDelta:        (v: VolumeDeltaBar) => void;
+  addNewsItem:           (item: WsNewsItem) => void;
 }
 
 // ─── Alerts slice ─────────────────────────────────────────────────────────────
@@ -262,6 +303,10 @@ export const useStore = create<AppStore>()(
         macro:              null,
         equityCurve:        [],
         performanceSummary: null,
+        equitySnapshot:     null,
+        riskSnapshot:       null,
+        volumeDelta:        null,
+        newsItems:          [],
 
         setOrchestratorHealth: (orchestratorHealth) =>
           set({ orchestratorHealth }, false, 'orchestrator/health'),
@@ -283,6 +328,22 @@ export const useStore = create<AppStore>()(
 
         setPerformanceSummary: (performanceSummary) =>
           set({ performanceSummary }, false, 'performance/summary'),
+
+        setEquitySnapshot: (equitySnapshot) =>
+          set({ equitySnapshot }, false, 'ws/equitySnapshot'),
+
+        setRiskSnapshot: (riskSnapshot) =>
+          set({ riskSnapshot }, false, 'ws/riskSnapshot'),
+
+        setVolumeDelta: (volumeDelta) =>
+          set({ volumeDelta }, false, 'ws/volumeDelta'),
+
+        addNewsItem: (item) =>
+          set(
+            (state) => ({ newsItems: [item, ...state.newsItems].slice(0, 50) }),
+            false,
+            'ws/addNewsItem',
+          ),
 
         // ── Alerts ────────────────────────────────────────────────────────────
         triggeredAlerts: [],
@@ -351,6 +412,10 @@ export const selectEquityCurve        = (s: AppStore) => s.equityCurve;
 export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
 export const selectTriggeredAlerts    = (s: AppStore) => s.triggeredAlerts;
 export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
+export const selectEquitySnapshot     = (s: AppStore) => s.equitySnapshot;
+export const selectRiskSnapshot       = (s: AppStore) => s.riskSnapshot;
+export const selectVolumeDelta        = (s: AppStore) => s.volumeDelta;
+export const selectNewsItems          = (s: AppStore) => s.newsItems;
 export const selectDataQualityScore   = (s: AppStore) =>
   s.orchestratorHealth?.quality_score ?? null;
 export const selectPlan               = (s: AppStore) => s.plan;
