@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 try:
     from celery import Celery
     from celery.schedules import crontab
+
     _CELERY_AVAILABLE = True
 except ImportError:
     _CELERY_AVAILABLE = False
@@ -67,9 +68,9 @@ except ImportError:
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-BROKER_URL      = os.getenv("CELERY_BROKER_URL",     "redis://localhost:6379/1")
-RESULT_BACKEND  = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
-ALWAYS_EAGER    = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in ("true", "1")
+BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
+RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+ALWAYS_EAGER = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() in ("true", "1")
 
 # ── App factory ───────────────────────────────────────────────────────────────
 
@@ -107,7 +108,7 @@ if _CELERY_AVAILABLE:
             },
             "ml-daily-full-retrain": {
                 "task": "celery_app.ml_daily_full_retrain",
-                "schedule": crontab(hour=2, minute=0),   # 02:00 UTC daily
+                "schedule": crontab(hour=2, minute=0),  # 02:00 UTC daily
                 "options": {"queue": "ml"},
             },
             # ── Billing ───────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ if _CELERY_AVAILABLE:
             },
             "affiliate-commission-payout": {
                 "task": "celery_app.affiliate_commission_payout",
-                "schedule": crontab(hour=3, minute=0),   # 03:00 UTC daily
+                "schedule": crontab(hour=3, minute=0),  # 03:00 UTC daily
                 "options": {"queue": "billing"},
             },
             # ── Risk / compliance ─────────────────────────────────────────────
@@ -130,7 +131,7 @@ if _CELERY_AVAILABLE:
             # ── Infrastructure ────────────────────────────────────────────────
             "database-backup": {
                 "task": "celery_app.database_backup",
-                "schedule": crontab(hour=1, minute=0),   # 01:00 UTC daily
+                "schedule": crontab(hour=1, minute=0),  # 01:00 UTC daily
                 "options": {"queue": "infra"},
             },
             "self-healer-scan": {
@@ -146,6 +147,7 @@ else:
         def task(self, *args, **kwargs):
             def decorator(fn):
                 return fn
+
             return decorator
 
         def conf(self):
@@ -157,6 +159,7 @@ else:
 
 # ── Task decorator helper ─────────────────────────────────────────────────────
 
+
 def _task(**kwargs):
     """Return app.task decorator, or a no-op if Celery is unavailable."""
     if _CELERY_AVAILABLE:
@@ -165,6 +168,7 @@ def _task(**kwargs):
 
 
 # ── ML tasks ─────────────────────────────────────────────────────────────────
+
 
 @_task(name="celery_app.ml_hourly_online_update", queue="ml")
 def ml_hourly_online_update(self=None):
@@ -175,8 +179,10 @@ def ml_hourly_online_update(self=None):
     model). Runs in ~2 seconds per symbol.
     """
     import asyncio
+
     try:
         from ml.hourly_trainer import HourlyTrainer
+
         trainer = HourlyTrainer()
         if not trainer.enabled:
             logger.info("ML hourly trainer disabled (ML_HOURLY_ENABLED not set)")
@@ -186,7 +192,7 @@ def ml_hourly_online_update(self=None):
     except Exception as exc:
         logger.error("ml_hourly_online_update failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
@@ -200,19 +206,22 @@ def ml_daily_full_retrain(self=None):
     the new model without a restart.
     """
     import asyncio
+
     try:
         from ml.hourly_trainer import HourlyTrainer
+
         trainer = HourlyTrainer()
         asyncio.run(trainer.run_full_retrain())
         return {"status": "ok"}
     except Exception as exc:
         logger.error("ml_daily_full_retrain failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
 # ── Billing tasks ─────────────────────────────────────────────────────────────
+
 
 @_task(name="celery_app.subscription_expiry_check", queue="billing")
 def subscription_expiry_check(self=None):
@@ -224,9 +233,7 @@ def subscription_expiry_check(self=None):
     """
     try:
         from database.connection import SessionLocal
-        from database.user_models import User
         from monetization.subscription import SubscriptionManager, SubscriptionTier
-        from datetime import datetime, timezone
 
         db = SessionLocal()
         try:
@@ -250,7 +257,7 @@ def subscription_expiry_check(self=None):
     except Exception as exc:
         logger.error("subscription_expiry_check failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
@@ -264,23 +271,26 @@ def affiliate_commission_payout(self=None):
     """
     try:
         from monetization.affiliate import AffiliateManager
+
         mgr = AffiliateManager()
         result = mgr.process_pending_payouts()
         paid_count = result.get("paid_count", 0)
         total_paid = result.get("total_paid_usd", 0.0)
         logger.info(
             "affiliate_commission_payout: paid %d affiliates, total $%.2f",
-            paid_count, total_paid,
+            paid_count,
+            total_paid,
         )
         return {"status": "ok", "paid_count": paid_count, "total_paid_usd": total_paid}
     except Exception as exc:
         logger.error("affiliate_commission_payout failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
 # ── Risk / compliance tasks ───────────────────────────────────────────────────
+
 
 @_task(name="celery_app.pnl_reconciliation", queue="risk")
 def pnl_reconciliation(self=None):
@@ -292,13 +302,16 @@ def pnl_reconciliation(self=None):
     metrics. Blocks model promotion if the gate fails.
     """
     import asyncio
+
     try:
         from ml.pnl_reconciler import get_reconciler
+
         reconciler = get_reconciler()
         result = asyncio.run(reconciler.reconcile())
         logger.info(
             "pnl_reconciliation: passed=%s drift=%.4f",
-            result.passed, result.drift_pct,
+            result.passed,
+            result.drift_pct,
         )
         return {
             "status": "ok",
@@ -308,11 +321,12 @@ def pnl_reconciliation(self=None):
     except Exception as exc:
         logger.error("pnl_reconciliation failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
 # ── Infrastructure tasks ──────────────────────────────────────────────────────
+
 
 @_task(name="celery_app.database_backup", queue="infra")
 def database_backup(self=None):
@@ -323,8 +337,10 @@ def database_backup(self=None):
     upload it to the configured object store (S3 / GCS / local).
     """
     import asyncio
+
     try:
         from database.backup import DatabaseBackupManager
+
         mgr = DatabaseBackupManager()
         result = asyncio.run(mgr.create_backup())
         logger.info("database_backup: %s", result)
@@ -332,7 +348,7 @@ def database_backup(self=None):
     except Exception as exc:
         logger.error("database_backup failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
@@ -345,8 +361,10 @@ def self_healer_scan(self=None):
     actions for any that are in a degraded state.
     """
     import asyncio
+
     try:
         from core.self_healer import get_self_healer
+
         healer = get_self_healer()
         result = asyncio.run(healer.scan())
         actions = result.get("actions_taken", [])
@@ -356,11 +374,12 @@ def self_healer_scan(self=None):
     except Exception as exc:
         logger.error("self_healer_scan failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
-            raise self.retry(exc=exc)
+            raise self.retry(exc=exc)  # noqa: B904 — Celery retry idiom; chaining would alter exception type
         raise
 
 
 # ── Health-check registration ─────────────────────────────────────────────────
+
 
 def register_celery_health(redis_client) -> None:
     """

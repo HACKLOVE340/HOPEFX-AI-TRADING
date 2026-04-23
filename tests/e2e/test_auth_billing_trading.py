@@ -30,8 +30,8 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECURITY_JWT_SECRET"] = "test-only-jwt-secret-key-minimum-32-chars!!"
 os.environ["BROKER"] = "paper"
 os.environ["BROKER_TYPE"] = "paper"
-os.environ["REDIS_URL"] = ""           # disable Redis in tests
-os.environ["STRIPE_SECRET_KEY"] = ""   # disable Stripe in tests
+os.environ["REDIS_URL"] = ""  # disable Redis in tests
+os.environ["STRIPE_SECRET_KEY"] = ""  # disable Stripe in tests
 os.environ["REQUIRE_EMAIL_VERIFICATION"] = "false"
 os.environ["CSRF_PROTECTION"] = "false"  # no browser in tests — CSRF not applicable
 os.environ["AUTH_RATE_LIMIT_REQUESTS"] = "10000"  # disable rate limiting in tests
@@ -42,6 +42,7 @@ from httpx import AsyncClient, ASGITransport
 
 
 # ── App + auth-service fixture ────────────────────────────────────────────────
+
 
 def _build_test_app():
     """
@@ -78,6 +79,7 @@ def _build_test_app():
     # ── Wire AuthService ──────────────────────────────────────────────────────
     from auth.service import AuthService
     from auth.router import set_auth_service
+
     svc = AuthService(session_factory=session_factory)
     set_auth_service(svc)
 
@@ -87,9 +89,10 @@ def _build_test_app():
 
     class _MinimalState:
         """Minimal app_state stub that satisfies api.trading endpoint guards."""
+
         def __init__(self, broker):
             self.broker = broker
-            self.price_engine = None   # prices endpoint returns 503 gracefully
+            self.price_engine = None  # prices endpoint returns 503 gracefully
             self.risk_manager = None
             self.ws_manager = None
             self.compliance_manager = None
@@ -104,6 +107,7 @@ def _build_test_app():
     # to use our StaticPool engine so the whitelabel_tenants table is visible.
     try:
         import database.connection as _db_conn
+
         _db_conn.SessionLocal = session_factory  # type: ignore[attr-defined]
     except Exception:
         pass
@@ -111,6 +115,7 @@ def _build_test_app():
     # Clear the in-memory IP rate-limit window so re-runs don't hit 429
     try:
         import auth.router as _ar
+
         _ar._ip_windows.clear()
     except Exception:
         pass
@@ -151,29 +156,36 @@ async def anon_client(app):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _unique_email() -> str:
     return f"e2e_{uuid.uuid4().hex[:8]}@test.hopefx.io"
 
 
 async def _register_and_login(client: AsyncClient) -> tuple[str, str]:
     """Register a new user and return (access_token, user_id)."""
-    email    = _unique_email()
+    email = _unique_email()
     password = "TestPass123!"
     username = f"user_{uuid.uuid4().hex[:6]}"
 
-    reg = await client.post("/api/auth/register", json={
-        "email":    email,
-        "password": password,
-        "username": username,
-    })
+    reg = await client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "username": username,
+        },
+    )
     assert reg.status_code in (200, 201), f"register failed: {reg.text}"
 
-    login = await client.post("/api/auth/login", json={
-        "email":    email,
-        "password": password,
-    })
+    login = await client.post(
+        "/api/auth/login",
+        json={
+            "email": email,
+            "password": password,
+        },
+    )
     assert login.status_code == 200, f"login failed: {login.text}"
-    data  = login.json()
+    data = login.json()
     token = data.get("access_token") or data.get("token")
     assert token, f"no token in login response: {data}"
     user_id = data.get("user", {}).get("id") or data.get("user_id") or ""
@@ -188,17 +200,21 @@ def _auth(token: str) -> dict:
 # 1. AUTH FLOW
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestAuthFlow:
     """Full register → login → /me → refresh → logout cycle."""
 
     @pytest.mark.asyncio
     async def test_register_new_user(self, client: AsyncClient):
         email = _unique_email()
-        res = await client.post("/api/auth/register", json={
-            "email":    email,
-            "password": "TestPass123!",
-            "username": f"u_{uuid.uuid4().hex[:6]}",
-        })
+        res = await client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "TestPass123!",
+                "username": f"u_{uuid.uuid4().hex[:6]}",
+            },
+        )
         assert res.status_code in (200, 201)
         body = res.json()
         # Register returns a message; tokens are issued on login
@@ -221,9 +237,14 @@ class TestAuthFlow:
     @pytest.mark.asyncio
     async def test_login_wrong_password_rejected(self, client: AsyncClient):
         email = _unique_email()
-        await client.post("/api/auth/register", json={
-            "email": email, "password": "TestPass123!", "username": f"u_{uuid.uuid4().hex[:6]}",
-        })
+        await client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "TestPass123!",
+                "username": f"u_{uuid.uuid4().hex[:6]}",
+            },
+        )
         res = await client.post("/api/auth/login", json={"email": email, "password": "WrongPass!"})
         assert res.status_code in (400, 401, 403)
 
@@ -257,17 +278,21 @@ class TestAuthFlow:
 
     @pytest.mark.asyncio
     async def test_weak_password_rejected(self, client: AsyncClient):
-        res = await client.post("/api/auth/register", json={
-            "email":    _unique_email(),
-            "password": "123",
-            "username": f"u_{uuid.uuid4().hex[:6]}",
-        })
+        res = await client.post(
+            "/api/auth/register",
+            json={
+                "email": _unique_email(),
+                "password": "123",
+                "username": f"u_{uuid.uuid4().hex[:6]}",
+            },
+        )
         assert res.status_code in (400, 422)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. BILLING FLOW
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestBillingFlow:
     """Plans catalogue → subscription status → checkout → cancel."""
@@ -287,20 +312,20 @@ class TestBillingFlow:
         res = await client.get("/api/billing/plans")
         assert res.status_code == 200
         for plan in res.json()["plans"]:
-            assert "id"                 in plan
-            assert "name"               in plan
-            assert "price_usd_monthly"  in plan
-            assert "price_usd_annual"   in plan
-            assert "commission_rate"    in plan
-            assert "features"           in plan
-            assert "limits"             in plan
+            assert "id" in plan
+            assert "name" in plan
+            assert "price_usd_monthly" in plan
+            assert "price_usd_annual" in plan
+            assert "commission_rate" in plan
+            assert "features" in plan
+            assert "limits" in plan
 
     @pytest.mark.asyncio
     async def test_free_plan_has_zero_price(self, client: AsyncClient):
         res = await client.get("/api/billing/plans")
         free = next(p for p in res.json()["plans"] if p["id"] == "free")
         assert free["price_usd_monthly"] == 0
-        assert free["price_usd_annual"]  == 0
+        assert free["price_usd_annual"] == 0
 
     @pytest.mark.asyncio
     async def test_elite_has_highest_price(self, client: AsyncClient):
@@ -335,17 +360,20 @@ class TestBillingFlow:
     @pytest.mark.asyncio
     async def test_checkout_requires_auth(self, client: AsyncClient, anon_client: AsyncClient):
         # Flutterwave checkout init requires auth (Depends(get_current_user))
-        res = await anon_client.post("/api/billing/payments/flutterwave/init",
-                                     json={"plan": "professional", "interval": "monthly"})
+        res = await anon_client.post(
+            "/api/billing/payments/flutterwave/init", json={"plan": "professional", "interval": "monthly"}
+        )
         assert res.status_code in (401, 403)
 
     @pytest.mark.asyncio
     async def test_checkout_invalid_plan_rejected(self, client: AsyncClient):
         token, _ = await _register_and_login(client)
         # Flutterwave init also validates plan; use it as a checkout proxy
-        res = await client.post("/api/billing/payments/flutterwave/init",
-                                json={"plan": "nonexistent_plan", "interval": "monthly"},
-                                headers=_auth(token))
+        res = await client.post(
+            "/api/billing/payments/flutterwave/init",
+            json={"plan": "nonexistent_plan", "interval": "monthly"},
+            headers=_auth(token),
+        )
         assert res.status_code in (400, 422, 503)  # 503 when Flutterwave key absent
 
     @pytest.mark.asyncio
@@ -366,6 +394,7 @@ class TestBillingFlow:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 3. TRADING FLOW
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestTradingFlow:
     """Account → positions → place order → close position."""
@@ -400,36 +429,50 @@ class TestTradingFlow:
 
     @pytest.mark.asyncio
     async def test_place_order_requires_auth(self, client: AsyncClient, anon_client: AsyncClient):
-        res = await anon_client.post("/api/trading/orders", json={
-            "symbol": "XAUUSD", "side": "buy", "size": 0.01,
-        })
+        res = await anon_client.post(
+            "/api/trading/orders",
+            json={
+                "symbol": "XAUUSD",
+                "side": "buy",
+                "size": 0.01,
+            },
+        )
         assert res.status_code in (401, 403)
 
     @pytest.mark.asyncio
     async def test_place_market_order(self, client: AsyncClient):
         token, _ = await _register_and_login(client)
-        res = await client.post("/api/trading/orders", json={
-            "symbol":     "XAUUSD",
-            "side":       "buy",
-            "order_type": "market",
-            "size":       0.01,
-        }, headers=_auth(token))
+        res = await client.post(
+            "/api/trading/orders",
+            json={
+                "symbol": "XAUUSD",
+                "side": "buy",
+                "order_type": "market",
+                "size": 0.01,
+            },
+            headers=_auth(token),
+        )
         # Paper broker accepts the order; live broker may reject without feed
         assert res.status_code in (200, 201, 400, 422, 503)
 
     @pytest.mark.asyncio
     async def test_place_order_invalid_side_rejected(self, client: AsyncClient):
         token, _ = await _register_and_login(client)
-        res = await client.post("/api/trading/orders", json={
-            "symbol": "XAUUSD", "side": "sideways", "size": 0.01,
-        }, headers=_auth(token))
+        res = await client.post(
+            "/api/trading/orders",
+            json={
+                "symbol": "XAUUSD",
+                "side": "sideways",
+                "size": 0.01,
+            },
+            headers=_auth(token),
+        )
         assert res.status_code in (400, 422)
 
     @pytest.mark.asyncio
     async def test_close_nonexistent_position(self, client: AsyncClient):
         token, _ = await _register_and_login(client)
-        res = await client.delete("/api/trading/positions/nonexistent-id-12345",
-                                  headers=_auth(token))
+        res = await client.delete("/api/trading/positions/nonexistent-id-12345", headers=_auth(token))
         assert res.status_code in (404, 400, 422)
 
     @pytest.mark.asyncio
@@ -461,6 +504,7 @@ class TestTradingFlow:
 # 4. WHITELABEL / GDPR FLOW
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestWhitelabelFlow:
     """Tenant CRUD via the new DB-backed whitelabel API."""
 
@@ -483,12 +527,16 @@ class TestWhitelabelFlow:
     @pytest.mark.asyncio
     async def test_create_and_get_tenant(self, client: AsyncClient):
         token, _ = await _register_and_login(client)
-        create_res = await client.post("/api/whitelabel/tenants", json={
-            "name":        "Test Tenant Co",
-            "owner_email": _unique_email(),
-            "plan":        "professional",
-            "trial_days":  14,
-        }, headers=_auth(token))
+        create_res = await client.post(
+            "/api/whitelabel/tenants",
+            json={
+                "name": "Test Tenant Co",
+                "owner_email": _unique_email(),
+                "plan": "professional",
+                "trial_days": 14,
+            },
+            headers=_auth(token),
+        )
         if create_res.status_code in (403, 503):
             pytest.skip("superadmin role required or DB unavailable in test environment")
         assert create_res.status_code == 201
@@ -498,8 +546,7 @@ class TestWhitelabelFlow:
         assert tenant["status"] == "trial"
 
         # Fetch it back
-        get_res = await client.get(f"/api/whitelabel/tenants/{tenant['tenant_id']}",
-                                   headers=_auth(token))
+        get_res = await client.get(f"/api/whitelabel/tenants/{tenant['tenant_id']}", headers=_auth(token))
         assert get_res.status_code == 200
         assert get_res.json()["tenant_id"] == tenant["tenant_id"]
 
@@ -517,6 +564,7 @@ class TestWhitelabelFlow:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 5. PRICING TIER CONSISTENCY
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestPricingTierConsistency:
     """Verify the canonical 5-tier system is consistent across all endpoints."""
@@ -536,8 +584,9 @@ class TestPricingTierConsistency:
         plans = {p["id"]: p for p in res.json()["plans"]}
         ordered = ["free", "starter", "professional", "enterprise", "elite"]
         rates = [plans[t]["commission_rate"] for t in ordered]
-        assert rates == sorted(rates, reverse=True), \
-            f"commission rates should decrease with tier: {list(zip(ordered, rates))}"
+        assert rates == sorted(rates, reverse=True), (
+            f"commission rates should decrease with tier: {list(zip(ordered, rates, strict=False))}"
+        )
 
     @pytest.mark.asyncio
     async def test_prices_ascend_with_tier(self, client: AsyncClient):
@@ -545,8 +594,9 @@ class TestPricingTierConsistency:
         plans = {p["id"]: p for p in res.json()["plans"]}
         ordered = ["free", "starter", "professional", "enterprise", "elite"]
         prices = [plans[t]["price_usd_monthly"] for t in ordered]
-        assert prices == sorted(prices), \
-            f"monthly prices should increase with tier: {list(zip(ordered, prices))}"
+        assert prices == sorted(prices), (
+            f"monthly prices should increase with tier: {list(zip(ordered, prices, strict=False))}"
+        )
 
     @pytest.mark.asyncio
     async def test_free_plan_has_no_live_trading(self, client: AsyncClient):

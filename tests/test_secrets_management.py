@@ -142,7 +142,9 @@ def test_validate_passes_when_all_set(tmp_path, monkeypatch):
 
 def test_validate_fails_when_placeholder(tmp_path, monkeypatch):
     env_file = tmp_path / ".env"
-    env_file.write_text("SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n")  # pragma: allowlist secret  # healer: ignore
+    env_file.write_text(
+        "SECURITY_JWT_SECRET=CHANGE_ME_generate_a_random_48_char_secret\n"
+    )  # pragma: allowlist secret  # healer: ignore
     monkeypatch.setattr("scripts.manage_secrets.ENV_FILE", env_file)
     # Remove all required secrets from the process env so cmd_validate reads
     # only from the temp file (conftest.py sets SECURITY_JWT_SECRET globally).

@@ -331,7 +331,9 @@ class PortfolioOptimizer:
         # Optimization: maximize Sharpe with volatility constraint
         def negative_sharpe(weights):
             port_return = float(np.nan_to_num(np.dot(weights, expected_returns), nan=0.0))
-            port_vol = float(np.sqrt(max(float(np.nan_to_num(np.dot(weights.T, np.dot(cov_matrix, weights)), nan=0.0)), 0.0)))
+            port_vol = float(
+                np.sqrt(max(float(np.nan_to_num(np.dot(weights.T, np.dot(cov_matrix, weights)), nan=0.0)), 0.0))
+            )
 
             if port_vol > self.target_volatility / np.sqrt(252):
                 return 0  # Penalty

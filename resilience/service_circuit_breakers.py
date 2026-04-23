@@ -57,9 +57,10 @@ logger = logging.getLogger(__name__)
 
 # ── State ─────────────────────────────────────────────────────────────────────
 
+
 class CircuitState(Enum):
-    CLOSED    = "closed"     # Normal operation
-    OPEN      = "open"       # Failing — reject all calls
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing — reject all calls
     HALF_OPEN = "half_open"  # Probing — allow limited calls
 
 
@@ -69,20 +70,22 @@ class CircuitBreakerOpenError(RuntimeError):
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class BreakerConfig:
     """Configuration for a single circuit breaker."""
 
     name: str
-    failure_threshold: int = 5       # consecutive failures to open
-    success_threshold: int = 3       # consecutive successes to close
-    timeout_seconds: float = 60.0    # seconds before half-open probe
-    half_open_max_calls: int = 3     # max calls allowed in half-open
+    failure_threshold: int = 5  # consecutive failures to open
+    success_threshold: int = 3  # consecutive successes to close
+    timeout_seconds: float = 60.0  # seconds before half-open probe
+    half_open_max_calls: int = 3  # max calls allowed in half-open
     call_timeout_seconds: float = 10.0  # per-call timeout
     excluded_exceptions: tuple[type[Exception], ...] = ()  # never count as failures
 
 
 # ── Core circuit breaker ──────────────────────────────────────────────────────
+
 
 class ServiceCircuitBreaker:
     """
@@ -145,9 +148,7 @@ class ServiceCircuitBreaker:
             if self._state == CircuitState.HALF_OPEN:
                 if self._half_open_calls >= self.config.half_open_max_calls:
                     self._total_rejected += 1
-                    raise CircuitBreakerOpenError(
-                        f"Circuit '{self.name}' is HALF_OPEN — probe limit reached"
-                    )
+                    raise CircuitBreakerOpenError(f"Circuit '{self.name}' is HALF_OPEN — probe limit reached")
                 self._half_open_calls += 1
 
         self._total_calls += 1
@@ -214,7 +215,10 @@ class ServiceCircuitBreaker:
 
             logger.warning(
                 "CircuitBreaker [%s]: failure #%d — %s: %s",
-                self.name, self._failure_count, type(exc).__name__, exc,
+                self.name,
+                self._failure_count,
+                type(exc).__name__,
+                exc,
             )
 
     async def _set_state(self, new_state: CircuitState) -> None:
@@ -223,18 +227,23 @@ class ServiceCircuitBreaker:
             return
         self._state = new_state
         self._last_state_change = time.time()
-        self._state_history.append({
-            "from": old_state.value,
-            "to": new_state.value,
-            "ts": datetime.now(UTC).isoformat(),
-            "failure_count": self._failure_count,
-        })
+        self._state_history.append(
+            {
+                "from": old_state.value,
+                "to": new_state.value,
+                "ts": datetime.now(UTC).isoformat(),
+                "failure_count": self._failure_count,
+            }
+        )
         self._state_history = self._state_history[-50:]
 
         level = "warning" if new_state == CircuitState.OPEN else "info"
         getattr(logger, level)(
             "CircuitBreaker [%s]: %s → %s (failures=%d)",
-            self.name, old_state.value, new_state.value, self._failure_count,
+            self.name,
+            old_state.value,
+            new_state.value,
+            self._failure_count,
         )
 
         # Publish state change to Redis alerts
@@ -248,11 +257,13 @@ class ServiceCircuitBreaker:
         """Push circuit-open event to Redis alerts:critical (non-fatal, sync only)."""
         try:
             import json
+
             # Use the synchronous Redis client only — this method is called from
             # a sync context inside _set_state. Never await here.
             try:
                 import redis as _redis_sync
                 import os as _os
+
                 _rc = _redis_sync.from_url(
                     _os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     decode_responses=True,
@@ -260,13 +271,15 @@ class ServiceCircuitBreaker:
                 )
                 _rc.rpush(
                     "alerts:critical",
-                    json.dumps({
-                        "type": "circuit_breaker_open",
-                        "service": self.name,
-                        "ts": datetime.now(UTC).isoformat(),
-                        "failures": self._failure_count,
-                        "total_failures": self._total_failures,
-                    }),
+                    json.dumps(
+                        {
+                            "type": "circuit_breaker_open",
+                            "service": self.name,
+                            "ts": datetime.now(UTC).isoformat(),
+                            "failures": self._failure_count,
+                            "total_failures": self._total_failures,
+                        }
+                    ),
                 )
                 _rc.ltrim("alerts:critical", -1000, -1)
             except Exception:  # nosec B110 — Redis may be unavailable
@@ -278,6 +291,7 @@ class ServiceCircuitBreaker:
         """Update Prometheus gauge (non-fatal if prometheus_client absent)."""
         try:
             from prometheus_client import Gauge
+
             _g = Gauge(
                 f"hopefx_circuit_breaker_state_{self.name.replace('-', '_')}",
                 f"Circuit breaker state for {self.name} (0=closed,1=half_open,2=open)",
@@ -327,7 +341,9 @@ class ServiceCircuitBreaker:
                 self._last_state_change = time.time()
                 logger.warning(
                     "CircuitBreaker [%s]: HALF_OPEN → OPEN (sync) — %s: %s",
-                    self.name, type(exc).__name__, exc,
+                    self.name,
+                    type(exc).__name__,
+                    exc,
                 )
                 self._publish_open_alert()
             elif self._state == CircuitState.CLOSED:
@@ -336,15 +352,21 @@ class ServiceCircuitBreaker:
                     self._last_state_change = time.time()
                     logger.warning(
                         "CircuitBreaker [%s]: CLOSED → OPEN (sync) after %d/%d failures — %s: %s",
-                        self.name, self._failure_count, self.config.failure_threshold,
-                        type(exc).__name__, exc,
+                        self.name,
+                        self._failure_count,
+                        self.config.failure_threshold,
+                        type(exc).__name__,
+                        exc,
                     )
                     self._publish_open_alert()
                 else:
                     logger.warning(
                         "CircuitBreaker [%s]: failure #%d/%d (sync) — %s: %s",
-                        self.name, self._failure_count, self.config.failure_threshold,
-                        type(exc).__name__, exc,
+                        self.name,
+                        self._failure_count,
+                        self.config.failure_threshold,
+                        type(exc).__name__,
+                        exc,
                     )
 
     def force_close(self) -> None:
@@ -379,50 +401,61 @@ class ServiceCircuitBreaker:
 
 # ── Service-specific breakers ─────────────────────────────────────────────────
 
-redis_breaker = ServiceCircuitBreaker(BreakerConfig(
-    name="redis",
-    failure_threshold=3,       # open after 3 consecutive Redis failures
-    success_threshold=2,       # close after 2 successes in half-open
-    timeout_seconds=30.0,      # probe after 30s
-    half_open_max_calls=2,
-    call_timeout_seconds=5.0,  # Redis calls must complete in 5s
-))
+redis_breaker = ServiceCircuitBreaker(
+    BreakerConfig(
+        name="redis",
+        failure_threshold=3,  # open after 3 consecutive Redis failures
+        success_threshold=2,  # close after 2 successes in half-open
+        timeout_seconds=30.0,  # probe after 30s
+        half_open_max_calls=2,
+        call_timeout_seconds=5.0,  # Redis calls must complete in 5s
+    )
+)
 
-broker_breaker = ServiceCircuitBreaker(BreakerConfig(
-    name="broker",
-    # Threshold matches BrokerManager._MAX_CONSECUTIVE_FAILURES (5) so the
-    # breaker opens only after the manager's own failover chain is exhausted.
-    # Opening earlier would block failover attempts and prevent recovery.
-    failure_threshold=5,
-    success_threshold=3,       # require 3 successes to close (conservative)
-    timeout_seconds=60.0,      # probe after 60s
-    half_open_max_calls=1,     # only 1 probe call (real money at stake)
-    call_timeout_seconds=15.0, # broker calls may take up to 15s
-))
+broker_breaker = ServiceCircuitBreaker(
+    BreakerConfig(
+        name="broker",
+        # Threshold matches BrokerManager._MAX_CONSECUTIVE_FAILURES (5) so the
+        # breaker opens only after the manager's own failover chain is exhausted.
+        # Opening earlier would block failover attempts and prevent recovery.
+        failure_threshold=5,
+        success_threshold=3,  # require 3 successes to close (conservative)
+        timeout_seconds=60.0,  # probe after 60s
+        half_open_max_calls=1,  # only 1 probe call (real money at stake)
+        call_timeout_seconds=15.0,  # broker calls may take up to 15s
+    )
+)
 
-ml_breaker = ServiceCircuitBreaker(BreakerConfig(
-    name="ml_model",
-    failure_threshold=5,       # ML model can have transient failures
-    success_threshold=2,
-    timeout_seconds=30.0,
-    half_open_max_calls=3,
-    call_timeout_seconds=10.0,
-))
+ml_breaker = ServiceCircuitBreaker(
+    BreakerConfig(
+        name="ml_model",
+        failure_threshold=5,  # ML model can have transient failures
+        success_threshold=2,
+        timeout_seconds=30.0,
+        half_open_max_calls=3,
+        call_timeout_seconds=10.0,
+    )
+)
 
-db_breaker = ServiceCircuitBreaker(BreakerConfig(
-    name="database",
-    failure_threshold=3,
-    success_threshold=2,
-    timeout_seconds=30.0,
-    half_open_max_calls=2,
-    call_timeout_seconds=10.0,
-))
+db_breaker = ServiceCircuitBreaker(
+    BreakerConfig(
+        name="database",
+        failure_threshold=3,
+        success_threshold=2,
+        timeout_seconds=30.0,
+        half_open_max_calls=2,
+        call_timeout_seconds=10.0,
+    )
+)
 
 
 # ── Aggregate status ──────────────────────────────────────────────────────────
 
 _ALL_BREAKERS: list[ServiceCircuitBreaker] = [
-    redis_breaker, broker_breaker, ml_breaker, db_breaker,
+    redis_breaker,
+    broker_breaker,
+    ml_breaker,
+    db_breaker,
 ]
 
 

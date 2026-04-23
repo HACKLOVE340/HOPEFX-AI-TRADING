@@ -544,7 +544,8 @@ class KillSwitch:
                     except Exception as _cancel_exc:
                         logger.error(
                             "KillSwitch._broker_cancel_all: cancel_all_orders on %s failed: %s",
-                            broker_name, _cancel_exc,
+                            broker_name,
+                            _cancel_exc,
                         )
                     else:
                         logger.warning(

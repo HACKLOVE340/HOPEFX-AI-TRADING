@@ -23,7 +23,7 @@ import os
 import sys
 import warnings
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -36,7 +36,6 @@ os.environ.setdefault("APP_ENV", "test")
 
 from backtesting.enhanced_engine import (
     TransactionCostModel,
-    SlippageModel,
     generate_test_data,
 )
 
@@ -44,11 +43,11 @@ from backtesting.enhanced_engine import (
 # ── XAUUSD calibration parameters ────────────────────────────────────────────
 
 # Published empirical values (see TransactionCostModel docstring for citations)
-_XAUUSD_ETA = 0.050      # temporary impact coefficient
-_XAUUSD_GAMMA = 0.100    # permanent impact coefficient
-_XAUUSD_BETA = 0.55      # decay exponent
+_XAUUSD_ETA = 0.050  # temporary impact coefficient
+_XAUUSD_GAMMA = 0.100  # permanent impact coefficient
+_XAUUSD_BETA = 0.55  # decay exponent
 _XAUUSD_SPREAD_BPS = 0.3  # OTC spot spread
-_XAUUSD_LONG_RATE = 0.00749   # −0.749% p.a. long carry
+_XAUUSD_LONG_RATE = 0.00749  # −0.749% p.a. long carry
 _XAUUSD_SHORT_RATE = -0.00110  # +0.110% p.a. short receive
 
 
@@ -93,9 +92,7 @@ class TestCalibrateXauusd:
 
     def test_use_swap_model_is_true(self):
         model = TransactionCostModel.calibrate_xauusd()
-        assert model.use_swap_model is True, (
-            "calibrate_xauusd() must set use_swap_model=True"
-        )
+        assert model.use_swap_model is True, "calibrate_xauusd() must set use_swap_model=True"
 
     def test_equity_defaults_are_not_used(self):
         """The old equity defaults (η=0.142, γ=0.314) must not appear in XAUUSD model."""
@@ -106,9 +103,7 @@ class TestCalibrateXauusd:
         assert model.permanent_impact_coefficient != 0.314, (
             "γ=0.314 is the equity default — XAUUSD model must use 0.100"
         )
-        assert model.spread_markup_bps != 0.8, (
-            "spread=0.8 bps is the equity default — XAUUSD model must use 0.3 bps"
-        )
+        assert model.spread_markup_bps != 0.8, "spread=0.8 bps is the equity default — XAUUSD model must use 0.3 bps"
 
 
 class TestRunComprehensiveBacktestCostModel:
@@ -128,7 +123,6 @@ class TestRunComprehensiveBacktestCostModel:
         only check that the actual constructor call uses calibrate_xauusd().
         """
         import inspect
-        import ast
         import backtesting.enhanced_engine as eng
 
         src = inspect.getsource(eng.run_comprehensive_backtest)
@@ -160,6 +154,7 @@ class TestRunComprehensiveBacktestCostModel:
 
 # ── generate_test_data production guard ──────────────────────────────────────
 
+
 class TestGenerateTestDataProductionGuard:
     """generate_test_data() must be blocked in APP_ENV=production."""
 
@@ -187,6 +182,7 @@ class TestGenerateTestDataProductionGuard:
 
     def test_returns_tick_data_objects(self):
         from backtesting.enhanced_engine import TickData
+
         with patch.dict(os.environ, {"APP_ENV": "test"}):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
@@ -213,6 +209,7 @@ class TestGenerateTestDataProductionGuard:
 
 
 # ── total_cost() arithmetic ───────────────────────────────────────────────────
+
 
 class TestTotalCostArithmetic:
     """total_cost() must correctly compute all cost components."""
@@ -272,8 +269,10 @@ class TestTotalCostArithmetic:
         model = self._model()
         result_no_impact = model.total_cost(order_size=10_000, price=2000.0)
         result_with_impact = model.total_cost(
-            order_size=10_000, price=2000.0,
-            participation_rate=0.05, daily_volatility=0.015,
+            order_size=10_000,
+            price=2000.0,
+            participation_rate=0.05,
+            daily_volatility=0.015,
         )
         assert result_with_impact["market_impact"] > 0, (
             "market_impact must be positive when participation_rate is provided"
@@ -284,6 +283,7 @@ class TestTotalCostArithmetic:
 
 
 # ── calculate_market_impact() ─────────────────────────────────────────────────
+
 
 class TestCalculateMarketImpact:
     """Almgren-Chriss market impact model correctness."""
@@ -296,18 +296,14 @@ class TestCalculateMarketImpact:
         model = self._model()
         low = model.calculate_market_impact(1000, 0.01, 0.015)
         high = model.calculate_market_impact(1000, 0.10, 0.015)
-        assert high["total_bps"] > low["total_bps"], (
-            "Market impact must increase with participation rate"
-        )
+        assert high["total_bps"] > low["total_bps"], "Market impact must increase with participation rate"
 
     def test_impact_increases_with_volatility(self):
         """Higher volatility → higher market impact."""
         model = self._model()
         low_vol = model.calculate_market_impact(1000, 0.05, 0.005)
         high_vol = model.calculate_market_impact(1000, 0.05, 0.030)
-        assert high_vol["total_bps"] > low_vol["total_bps"], (
-            "Market impact must increase with daily volatility"
-        )
+        assert high_vol["total_bps"] > low_vol["total_bps"], "Market impact must increase with daily volatility"
 
     def test_temporary_impact_positive(self):
         model = self._model()
@@ -336,9 +332,7 @@ class TestCalculateMarketImpact:
         model = self._model()
         clean = model.calculate_market_impact(1000, 0.05, 0.015, order_flow_toxicity=0.0)
         toxic = model.calculate_market_impact(1000, 0.05, 0.015, order_flow_toxicity=0.9)
-        assert toxic["temporary_bps"] > clean["temporary_bps"], (
-            "Toxic flow must increase temporary market impact"
-        )
+        assert toxic["temporary_bps"] > clean["temporary_bps"], "Toxic flow must increase temporary market impact"
 
     def test_xauusd_impact_lower_than_equity(self):
         """
@@ -368,6 +362,7 @@ class TestCalculateMarketImpact:
 
 # ── calibrate_from_executions() ───────────────────────────────────────────────
 
+
 class TestCalibrateFromExecutions:
     """calibrate_from_executions() must fit Almgren-Chriss from real fill data."""
 
@@ -376,16 +371,18 @@ class TestCalibrateFromExecutions:
         rng = np.random.default_rng(42)
         records = []
         for _ in range(n):
-            x = rng.uniform(0.01, 0.20)   # participation rate
+            x = rng.uniform(0.01, 0.20)  # participation rate
             s = rng.uniform(0.005, 0.025)  # daily volatility
             # True impact + 10% noise
             true_impact = (0.05 * s * x**0.55 + 0.10 * s * x) * 10000
             observed = true_impact * rng.uniform(0.9, 1.1)
-            records.append({
-                "participation_rate": x,
-                "daily_volatility": s,
-                "observed_impact_bps": observed,
-            })
+            records.append(
+                {
+                    "participation_rate": x,
+                    "daily_volatility": s,
+                    "observed_impact_bps": observed,
+                }
+            )
         return records
 
     def test_calibration_succeeds_with_sufficient_data(self):
@@ -427,6 +424,4 @@ class TestCalibrateFromExecutions:
         executions = self._make_executions(150)
         result = model.calibrate_from_executions(executions, min_samples=50)
         if result["calibrated"]:
-            assert 0.0 <= result["r_squared"] <= 1.0, (
-                f"R²={result['r_squared']} out of [0, 1]"
-            )
+            assert 0.0 <= result["r_squared"] <= 1.0, f"R²={result['r_squared']} out of [0, 1]"

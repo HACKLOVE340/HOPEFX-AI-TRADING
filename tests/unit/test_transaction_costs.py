@@ -23,8 +23,6 @@ Covers:
   12. get_tc_model() and get_swap_model() return singletons
 """
 
-import math
-
 import pytest
 
 from backtesting.transaction_costs import (
@@ -76,9 +74,14 @@ class TestTransactionCostModel:
     def test_cost_summary_keys(self, tc):
         summary = tc.cost_summary(entry_price=2000.0, ticker="GC=F")
         for key in (
-            "ticker", "entry_price", "half_spread_bps",
-            "round_trip_spread_bps", "commission_bps",
-            "total_cost_bps", "total_cost_pct", "approx_cost_usd_per_unit",
+            "ticker",
+            "entry_price",
+            "half_spread_bps",
+            "round_trip_spread_bps",
+            "commission_bps",
+            "total_cost_bps",
+            "total_cost_pct",
+            "approx_cost_usd_per_unit",
         ):
             assert key in summary, f"Missing key: {key}"
 
@@ -150,10 +153,16 @@ class TestOvernightSwapModel:
     def test_swap_summary_keys(self, swap):
         summary = swap.swap_summary("XAUUSD", entry_price=2000.0)
         for key in (
-            "ticker", "canonical", "entry_price", "lot_size_units",
-            "notional_per_lot_usd", "long_swap_usd_per_lot_per_night",
-            "short_swap_usd_per_lot_per_night", "long_annual_rate_pct",
-            "short_annual_rate_pct", "wednesday_triple_swap",
+            "ticker",
+            "canonical",
+            "entry_price",
+            "lot_size_units",
+            "notional_per_lot_usd",
+            "long_swap_usd_per_lot_per_night",
+            "short_swap_usd_per_lot_per_night",
+            "long_annual_rate_pct",
+            "short_annual_rate_pct",
+            "wednesday_triple_swap",
         ):
             assert key in summary, f"Missing key: {key}"
 

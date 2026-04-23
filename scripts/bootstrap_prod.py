@@ -42,23 +42,16 @@ def main() -> None:
     password = os.getenv("BOOTSTRAP_SUPERADMIN_PASSWORD", "").strip()
 
     if not email:
-        logger.error(
-            "BOOTSTRAP_SUPERADMIN_EMAIL is not set. "
-            "Set it in .env before running this script."
-        )
+        logger.error("BOOTSTRAP_SUPERADMIN_EMAIL is not set. Set it in .env before running this script.")
         sys.exit(1)
 
     if not password:
-        logger.error(
-            "BOOTSTRAP_SUPERADMIN_PASSWORD is not set. "
-            "Set it in .env before running this script."
-        )
+        logger.error("BOOTSTRAP_SUPERADMIN_PASSWORD is not set. Set it in .env before running this script.")
         sys.exit(1)
 
     if len(password) < 12:
         logger.error(
-            "BOOTSTRAP_SUPERADMIN_PASSWORD is too short (%d chars). "
-            "Use at least 12 characters.",
+            "BOOTSTRAP_SUPERADMIN_PASSWORD is too short (%d chars). Use at least 12 characters.",
             len(password),
         )
         sys.exit(1)

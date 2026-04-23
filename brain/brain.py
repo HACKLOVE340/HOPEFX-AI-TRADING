@@ -703,7 +703,9 @@ class HOPEFXBrain:
                     # Await if the broker returns a coroutine.
                     if asyncio.iscoroutine(result):
                         result = await asyncio.wait_for(result, timeout=10.0)
-                    closed_count = result if isinstance(result, int) else len(result) if hasattr(result, "__len__") else 0
+                    closed_count = (
+                        result if isinstance(result, int) else len(result) if hasattr(result, "__len__") else 0
+                    )
                     logger.info("Closed %s positions", closed_count)
                     break
                 except Exception as e:
@@ -718,7 +720,13 @@ class HOPEFXBrain:
                 result = self.broker.cancel_all_orders()
                 if asyncio.iscoroutine(result):
                     result = await asyncio.wait_for(result, timeout=5.0)
-                cancelled_count = result if isinstance(result, int) else len(result) if hasattr(result, "__len__") else int(bool(result))
+                cancelled_count = (
+                    result
+                    if isinstance(result, int)
+                    else len(result)
+                    if hasattr(result, "__len__")
+                    else int(bool(result))
+                )
                 logger.info("Cancelled %s orders", cancelled_count)
             except Exception as e:
                 logger.error("Error cancelling orders: %s", e)

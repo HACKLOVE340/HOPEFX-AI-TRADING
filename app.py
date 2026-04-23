@@ -95,7 +95,10 @@ try:
     logger = logging.getLogger(__name__)
     logger.info(
         "Logging initialised: level=%s json=%s async=%s dir=%s",
-        _log_level, _log_json, _log_async, _log_dir,
+        _log_level,
+        _log_json,
+        _log_async,
+        _log_dir,
     )
 except Exception as _log_setup_err:
     # Non-fatal — basicConfig fallback remains active
@@ -427,16 +430,20 @@ async def lifespan(_app: FastAPI):
     _static_index = Path(__file__).parent / "static" / "index.html"
     if not _static_index.exists():
         import threading
+
         def _bg_build():
             try:
                 from scripts.bootstrap_dev import build_frontend
+
                 build_frontend(verbose=True)
                 # Re-mount the SPA now that static/index.html exists
                 from core.page_routes import register_page_routes as _rpr
+
                 _rpr(_app)
                 logger.info("Frontend build complete — SPA mounted at /")
             except Exception as _be:
                 logger.warning("Background frontend build failed: %s", _be)
+
         threading.Thread(target=_bg_build, daemon=True, name="frontend-build").start()
         logger.info("Frontend not built — starting background build (API available immediately)")
 
@@ -465,9 +472,11 @@ async def lifespan(_app: FastAPI):
 
         _prom_interval = float(os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
         _t = asyncio.create_task(_prom_sync_loop(_prom_interval))
+
         def _on_prom_done(task: "asyncio.Task[None]") -> None:
             if not task.cancelled() and task.exception():
                 logger.error("Prometheus sync loop died: %s", task.exception())
+
         _t.add_done_callback(_on_prom_done)
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:
@@ -478,12 +487,12 @@ async def lifespan(_app: FastAPI):
     try:
         from core.outbox import get_relay as _get_outbox_relay
 
-        _outbox_task = asyncio.create_task(
-            _get_outbox_relay().run(), name="outbox-relay"
-        )
+        _outbox_task = asyncio.create_task(_get_outbox_relay().run(), name="outbox-relay")
+
         def _on_outbox_done(task: "asyncio.Task[None]") -> None:
             if not task.cancelled() and task.exception():
                 logger.error("Outbox relay task died — compliance events may be lost: %s", task.exception())
+
         _outbox_task.add_done_callback(_on_outbox_done)
         logger.info(
             "✓ Outbox relay started (interval=%.1fs batch=%s)",
@@ -577,6 +586,7 @@ async def startup_event():
         # can report real component states instead of "not configured".
         try:
             from infrastructure.health import get_health_checker as _get_hc
+
             _get_hc(app)
             logger.info("Health checker wired to app")
         except Exception as _hc_wire_err:
@@ -619,6 +629,7 @@ async def startup_event():
         # Mark startup probe as complete so /api/health/startup returns 200
         try:
             from api.health import mark_startup_complete as _mark_startup_complete
+
             _mark_startup_complete(tasks_done=_tasks_done, tasks_failed=_tasks_failed)
         except Exception as _hc_err:
             logger.warning("Could not mark startup complete: %s", _hc_err)
@@ -830,6 +841,7 @@ _register_health_routes(app, app_state, kill_switch)
 # NOTE: GET / is registered by core/page_routes.py (serves the React SPA).
 # GET /status is registered by api/status.py (system status page).
 # Do not add duplicate registrations here.
+
 
 # Error handler
 @app.exception_handler(Exception)

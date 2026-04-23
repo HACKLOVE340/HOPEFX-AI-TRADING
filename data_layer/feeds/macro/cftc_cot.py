@@ -74,8 +74,10 @@ try:
         return ctx
 
 except ImportError:  # certifi not installed — fall back to system CAs
+
     def _ssl_context() -> ssl.SSLContext:  # type: ignore[misc]
         return ssl.create_default_context()
+
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +174,10 @@ class CFTCCOTFeed:
             except Exception as exc:
                 last_exc = exc
                 if attempt < retries:
-                    wait = 2 ** attempt  # 1s, 2s
-                    logger.debug("COT: download attempt %d failed for year %d, retrying in %ds: %s", attempt + 1, year, wait, exc)
+                    wait = 2**attempt  # 1s, 2s
+                    logger.debug(
+                        "COT: download attempt %d failed for year %d, retrying in %ds: %s", attempt + 1, year, wait, exc
+                    )
                     await asyncio.sleep(wait)
 
         logger.debug("COT: download failed for year %d after %d attempts: %s", year, retries + 1, last_exc)
@@ -285,7 +289,9 @@ class CFTCCOTFeed:
         represent a neutral (no positioning) state — the least biased default.
         """
         _now = datetime.now(UTC)
-        end = pd.Timestamp(_now).normalize().tz_localize("UTC") if _now.tzinfo is None else pd.Timestamp(_now).normalize()
+        end = (
+            pd.Timestamp(_now).normalize().tz_localize("UTC") if _now.tzinfo is None else pd.Timestamp(_now).normalize()
+        )
         start = end - timedelta(days=365 * 5)
         # Weekly Friday dates
         idx = pd.date_range(start=start, end=end, freq="W-FRI", tz="UTC")

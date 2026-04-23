@@ -29,9 +29,12 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_breaker(failure_threshold: int = 3, success_threshold: int = 2,
-                  timeout_seconds: float = 60.0, call_timeout: float = 5.0):
+
+def _make_breaker(
+    failure_threshold: int = 3, success_threshold: int = 2, timeout_seconds: float = 60.0, call_timeout: float = 5.0
+):
     from resilience.service_circuit_breakers import BreakerConfig, ServiceCircuitBreaker
+
     cfg = BreakerConfig(
         name="test",
         failure_threshold=failure_threshold,
@@ -47,11 +50,13 @@ def _make_breaker(failure_threshold: int = 3, success_threshold: int = 2,
 # State transitions
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestStateTransitions:
     @pytest.mark.asyncio
     async def test_starts_closed(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker()
         assert breaker.state == CircuitState.CLOSED
         assert breaker.is_closed
@@ -59,6 +64,7 @@ class TestStateTransitions:
     @pytest.mark.asyncio
     async def test_opens_after_failure_threshold(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=3)
 
         async def fail():
@@ -74,6 +80,7 @@ class TestStateTransitions:
     @pytest.mark.asyncio
     async def test_open_rejects_calls(self):
         from resilience.service_circuit_breakers import CircuitBreakerOpenError
+
         breaker = _make_breaker(failure_threshold=1)
 
         async def fail():
@@ -109,6 +116,7 @@ class TestStateTransitions:
     @pytest.mark.asyncio
     async def test_half_open_closes_after_success_threshold(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=1, success_threshold=2, timeout_seconds=0.01)
 
         async def fail():
@@ -130,6 +138,7 @@ class TestStateTransitions:
     @pytest.mark.asyncio
     async def test_half_open_reopens_on_failure(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=1, timeout_seconds=0.01)
 
         async def fail():
@@ -150,10 +159,12 @@ class TestStateTransitions:
 # Sync record methods
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestSyncRecordMethods:
     def test_record_failure_opens_after_threshold(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=3)
         exc = RuntimeError("err")
         breaker.record_failure(exc)
@@ -164,6 +175,7 @@ class TestSyncRecordMethods:
 
     def test_record_success_resets_failure_count(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=3)
         exc = RuntimeError("err")
         breaker.record_failure(exc)
@@ -174,6 +186,7 @@ class TestSyncRecordMethods:
 
     def test_record_success_closes_half_open(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=1, success_threshold=2)
         breaker.record_failure(RuntimeError("e"))
         assert breaker.state == CircuitState.OPEN
@@ -188,16 +201,19 @@ class TestSyncRecordMethods:
 # Admin methods
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestAdminMethods:
     def test_force_open(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker()
         breaker.force_open()
         assert breaker.state == CircuitState.OPEN
 
     def test_force_close(self):
         from resilience.service_circuit_breakers import CircuitState
+
         breaker = _make_breaker(failure_threshold=1)
         breaker.record_failure(RuntimeError("e"))
         assert breaker.is_open
@@ -210,14 +226,24 @@ class TestAdminMethods:
 # get_status
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetStatus:
     def test_status_keys(self):
         breaker = _make_breaker()
         status = breaker.get_status()
-        required_keys = {"name", "state", "failure_count", "success_count",
-                         "total_calls", "total_failures", "total_rejected",
-                         "failure_rate", "seconds_until_probe", "last_state_change"}
+        required_keys = {
+            "name",
+            "state",
+            "failure_count",
+            "success_count",
+            "total_calls",
+            "total_failures",
+            "total_rejected",
+            "failure_rate",
+            "seconds_until_probe",
+            "last_state_change",
+        }
         assert required_keys.issubset(status.keys())
 
     def test_status_state_value(self):
@@ -230,10 +256,12 @@ class TestGetStatus:
 # get_all_breaker_status
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestGetAllBreakerStatus:
     def test_returns_all_breakers(self):
         from resilience.service_circuit_breakers import get_all_breaker_status
+
         result = get_all_breaker_status()
         assert "breakers" in result
         assert "open_count" in result
@@ -248,31 +276,37 @@ class TestGetAllBreakerStatus:
 # Pre-built breakers
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestPrebuiltBreakers:
     def test_redis_breaker_config(self):
         from resilience.service_circuit_breakers import redis_breaker
+
         assert redis_breaker.name == "redis"
         assert redis_breaker.config.failure_threshold == 3
         assert redis_breaker.config.timeout_seconds == 30.0
 
     def test_broker_breaker_config(self):
         from resilience.service_circuit_breakers import broker_breaker
+
         assert broker_breaker.name == "broker"
         assert broker_breaker.config.failure_threshold == 5
 
     def test_ml_breaker_config(self):
         from resilience.service_circuit_breakers import ml_breaker
+
         assert ml_breaker.name == "ml_model"
 
     def test_db_breaker_config(self):
         from resilience.service_circuit_breakers import db_breaker
+
         assert db_breaker.name == "database"
 
 
 # ---------------------------------------------------------------------------
 # resilience/__init__.py exports
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestResilienceInit:
@@ -284,6 +318,7 @@ class TestResilienceInit:
             RetryPolicy,
             retry,
         )
+
         assert ServiceCircuitBreaker is not None
         assert ServiceCircuitBreakers is ServiceCircuitBreaker
         assert RetryPolicy is not None

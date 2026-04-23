@@ -160,14 +160,18 @@ def _build_base_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _atr(df: pd.DataFrame, period: int) -> pd.Series:
-    tr = pd.concat(
-        [
-            df["high"] - df["low"],
-            (df["high"] - df["close"].shift()).abs(),
-            (df["low"] - df["close"].shift()).abs(),
-        ],
-        axis=1,
-    ).fillna(0.0).max(axis=1)
+    tr = (
+        pd.concat(
+            [
+                df["high"] - df["low"],
+                (df["high"] - df["close"].shift()).abs(),
+                (df["low"] - df["close"].shift()).abs(),
+            ],
+            axis=1,
+        )
+        .fillna(0.0)
+        .max(axis=1)
+    )
     return tr.rolling(period).mean()
 
 

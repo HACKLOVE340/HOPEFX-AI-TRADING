@@ -25,6 +25,7 @@ import pytest
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _enforce_tls(url: str, *, app_env: str = "development", is_force: str = "", redis_force: str = "false") -> str:
     """Call _enforce_tls with controlled env vars."""
     env = {
@@ -36,6 +37,7 @@ def _enforce_tls(url: str, *, app_env: str = "development", is_force: str = "", 
         # Re-import to pick up patched env
         import importlib
         import cache.redis_client as rc
+
         importlib.reload(rc)
         return rc._enforce_tls(url)
 
@@ -44,11 +46,13 @@ def _enforce_tls(url: str, *, app_env: str = "development", is_force: str = "", 
 # _enforce_tls — basic cases
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestEnforceTLS:
     def test_already_tls_passthrough(self):
         """rediss:// URLs are returned unchanged."""
         from cache.redis_client import _enforce_tls
+
         url = "rediss://user:pass@redis:6380/0"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "false"}):
             result = _enforce_tls(url)
@@ -57,6 +61,7 @@ class TestEnforceTLS:
     def test_unix_socket_passthrough(self):
         """Unix socket URLs are returned unchanged."""
         from cache.redis_client import _enforce_tls
+
         url = "unix:///var/run/redis/redis.sock"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "false"}):
             result = _enforce_tls(url)
@@ -67,6 +72,7 @@ class TestEnforceTLS:
         import logging
         import cache.redis_client as _rc
         from cache.redis_client import _enforce_tls
+
         # Reset module-level warn-once guard so the warning fires even in full suite
         _rc._tls_warning_emitted = False
         url = "redis://localhost:6379/0"
@@ -79,6 +85,7 @@ class TestEnforceTLS:
     def test_redis_force_tls_upgrades_url(self):
         """REDIS_FORCE_TLS=true upgrades redis:// → rediss://."""
         from cache.redis_client import _enforce_tls
+
         url = "redis://:secret@redis:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "true"}):
             result = _enforce_tls(url)
@@ -87,6 +94,7 @@ class TestEnforceTLS:
     def test_is_force_tls_upgrades_url(self):
         """IS_FORCE_TLS=true upgrades redis:// → rediss://."""
         from cache.redis_client import _enforce_tls
+
         url = "redis://:secret@redis:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "true", "REDIS_FORCE_TLS": "false"}):
             result = _enforce_tls(url)
@@ -95,6 +103,7 @@ class TestEnforceTLS:
     def test_is_force_tls_takes_precedence(self):
         """IS_FORCE_TLS=true overrides REDIS_FORCE_TLS=false."""
         from cache.redis_client import _enforce_tls
+
         url = "redis://localhost:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "true", "REDIS_FORCE_TLS": "false"}):
             result = _enforce_tls(url)
@@ -103,6 +112,7 @@ class TestEnforceTLS:
     def test_production_plaintext_raises(self):
         """Plaintext redis:// in production raises RuntimeError."""
         from cache.redis_client import _enforce_tls
+
         url = "redis://localhost:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "production", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "false"}):
             with pytest.raises(RuntimeError, match="TLS required"):
@@ -111,6 +121,7 @@ class TestEnforceTLS:
     def test_production_force_tls_upgrades_not_raises(self):
         """In production, IS_FORCE_TLS=true upgrades URL instead of raising."""
         from cache.redis_client import _enforce_tls
+
         url = "redis://:secret@redis:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "production", "IS_FORCE_TLS": "true", "REDIS_FORCE_TLS": "false"}):
             result = _enforce_tls(url)
@@ -119,6 +130,7 @@ class TestEnforceTLS:
     def test_upgrade_preserves_credentials_and_path(self):
         """URL upgrade preserves user, password, host, port, and db."""
         from cache.redis_client import _enforce_tls
+
         url = "redis://user:p%40ss@myredis.internal:6380/3"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "true", "REDIS_FORCE_TLS": "false"}):
             result = _enforce_tls(url)
@@ -129,17 +141,20 @@ class TestEnforceTLS:
 # reset_redis_client
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 class TestResetRedisClient:
     def test_reset_clears_singleton(self):
         """reset_redis_client() resets all module-level singletons."""
         from cache.redis_client import reset_redis_client, get_connection_mode
+
         reset_redis_client()
         assert get_connection_mode() == "none"
 
     def test_reset_idempotent(self):
         """Calling reset twice does not raise."""
         from cache.redis_client import reset_redis_client
+
         reset_redis_client()
         reset_redis_client()  # should not raise
 
@@ -148,12 +163,14 @@ class TestResetRedisClient:
 # get_redis — no config → returns None gracefully
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestGetRedisNoConfig:
     async def test_returns_none_when_unconfigured(self):
         """get_redis() returns None when no Redis env vars are set."""
         from cache.redis_client import reset_redis_client, get_redis
+
         reset_redis_client()
         env = {
             "REDIS_CLUSTER_HOSTS": "",
@@ -168,6 +185,7 @@ class TestGetRedisNoConfig:
         """'no connection configured' warning is logged exactly once."""
         import logging
         from cache.redis_client import reset_redis_client, get_redis
+
         reset_redis_client()
         env = {
             "REDIS_CLUSTER_HOSTS": "",

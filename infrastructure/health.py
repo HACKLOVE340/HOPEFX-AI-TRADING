@@ -36,6 +36,7 @@ def _get_hostname() -> str:
     except Exception:
         return "unknown"
 
+
 try:
     from aiohttp import web
 
@@ -647,6 +648,7 @@ def _resolve_app_state(app):
     # Fallback: module-level app_state (same process, same object)
     try:
         import importlib
+
         _app_mod = importlib.import_module("app")
         return getattr(_app_mod, "app_state", None)
     except Exception:

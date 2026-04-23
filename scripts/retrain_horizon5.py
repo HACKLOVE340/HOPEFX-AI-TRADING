@@ -292,6 +292,7 @@ def dry_run(args: argparse.Namespace) -> None:
         logger.info("Feature matrix: %d rows × %d columns", *X.shape)
         logger.info("Class balance: %s", y.value_counts().to_dict())
         import numpy as np
+
         nan_count = int(np.nan_to_num(X.isna().sum().sum(), nan=0))
         logger.info("NaN count: %d", nan_count)
 
@@ -597,7 +598,7 @@ def main() -> None:
         # report always contains real OOS metrics, even in CI.
         logger.info("Smoke-test mode: overriding years=2, oos_years=1, no_macro, splits=2")
         args.years = 2
-        args.oos_years = 1.0   # was 0.0 — now enforces a real OOS split
+        args.oos_years = 1.0  # was 0.0 — now enforces a real OOS split
         args.no_macro = True
         args.splits = 2
         args.use_cached = True

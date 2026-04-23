@@ -137,9 +137,7 @@ def compute_tick_features(h1_ohlcv: pd.DataFrame) -> pd.DataFrame:
     bar_ret = df["close"] - df["open"]
     df["dl_volume_delta"] = np.sign(bar_ret) * vol
     _vd = df["dl_volume_delta"].fillna(0.0)
-    df["dl_volume_delta_z20"] = (_vd - _vd.rolling(20).mean()) / (
-        _vd.rolling(20).std() + 1e-9
-    )
+    df["dl_volume_delta_z20"] = (_vd - _vd.rolling(20).mean()) / (_vd.rolling(20).std() + 1e-9)
 
     # Tick count proxy (bar range / typical spread)
     spread_proxy = (df["high"] - df["low"]).clip(lower=1e-4)

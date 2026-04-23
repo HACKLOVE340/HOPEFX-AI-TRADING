@@ -1,4 +1,5 @@
 """e2e conftest — shared fixtures and event loop configuration."""
+
 from __future__ import annotations
 
 import asyncio

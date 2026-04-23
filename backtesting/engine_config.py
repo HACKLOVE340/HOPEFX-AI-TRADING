@@ -218,22 +218,25 @@ class HistoricalDataLoader:
             return df
         try:
             from data_layer.validation import validate_ohlcv
+
             df = validate_ohlcv(
                 df,
                 symbol=symbol,
-                strict=False,       # clean recoverable issues, don't raise
-                drop_bad_rows=True, # remove rows with invalid prices
+                strict=False,  # clean recoverable issues, don't raise
+                drop_bad_rows=True,  # remove rows with invalid prices
             )
             logger.debug(
                 "HistoricalDataLoader: validated %d bars for %s",
-                len(df), symbol,
+                len(df),
+                symbol,
             )
         except Exception as val_exc:
             # Validation failure is non-fatal for loading — log and continue.
             # The backtest engine will surface data quality issues via results.
             logger.warning(
                 "HistoricalDataLoader: validation warning for %s: %s",
-                symbol, val_exc,
+                symbol,
+                val_exc,
             )
         return df
 
@@ -292,9 +295,7 @@ class SimulatedBroker:
                     # per calendar day equals exactly one nightly charge.
                     lots = abs(qty) / 100.0  # 100 oz per standard lot for gold
                     cost_per_bar = abs(
-                        self._swap.cost_usd_per_night(
-                            ticker, lots=lots, side=side, weekday=weekday
-                        )
+                        self._swap.cost_usd_per_night(ticker, lots=lots, side=side, weekday=weekday)
                     ) / max(self._bars_per_day, 1.0)
                 else:
                     # Legacy: annualised rate on notional
@@ -574,9 +575,8 @@ class BacktestEngine:
         for sym, df in list(all_data.items()):
             try:
                 from data_layer.validation import validate_ohlcv
-                all_data[sym] = validate_ohlcv(
-                    df, symbol=sym, strict=False, drop_bad_rows=True
-                )
+
+                all_data[sym] = validate_ohlcv(df, symbol=sym, strict=False, drop_bad_rows=True)
             except Exception as _ve:
                 logger.warning("Backtest pre-run validation warning for %s: %s", sym, _ve)
 
@@ -585,6 +585,7 @@ class BacktestEngine:
         _bar_guard = None
         try:
             from risk.lookahead_guard import BacktestBarGuard
+
             # Build a flat list of (timestamp, symbol) pairs for the guard
             _all_ts = sorted({ts for df in all_data.values() for ts in df.get("timestamp", df.index)})
             _bar_guard = BacktestBarGuard(_all_ts)
@@ -975,7 +976,9 @@ class BacktestEngine:
             avg_hold_days = avg_hold_bars / self.config.bars_per_day
             trade_ann_factor = np.sqrt(252.0 / max(avg_hold_days, 0.04))
             trade_pnls_safe = np.nan_to_num(trade_pnls, nan=0.0)
-            sharpe = float(np.mean(trade_pnls_safe) / max(float(np.std(trade_pnls_safe, ddof=1)), 1e-9) * trade_ann_factor)
+            sharpe = float(
+                np.mean(trade_pnls_safe) / max(float(np.std(trade_pnls_safe, ddof=1)), 1e-9) * trade_ann_factor
+            )
             # Sharpe standard error: 1/sqrt(2*(N-1)) for iid returns
             sharpe_se = float(1.0 / np.sqrt(max(2.0 * (len(trade_pnls) - 1), 1e-9)))
 

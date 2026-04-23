@@ -28,8 +28,10 @@ UTC = timezone.utc
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_provider(config: dict | None = None):
     from news.geopolitical_risk import GeopoliticalRiskProvider
+
     return GeopoliticalRiskProvider(config or {})
 
 
@@ -39,6 +41,7 @@ def _make_event(**kwargs):
         GeopoliticalEventType,
         RiskSeverity,
     )
+
     defaults = dict(
         event_type=GeopoliticalEventType.CONFLICT,
         severity=RiskSeverity.HIGH,
@@ -54,6 +57,7 @@ def _make_event(**kwargs):
 # ---------------------------------------------------------------------------
 # Warn-once suppression
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestWarnOnce:
@@ -75,7 +79,9 @@ class TestWarnOnce:
                 await provider._fetch_events_from_source()
                 await provider._fetch_events_from_source()
 
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING and "all geopolitical" in r.message.lower()]
+        warnings = [
+            r for r in caplog.records if r.levelno == logging.WARNING and "all geopolitical" in r.message.lower()
+        ]
         debugs = [r for r in caplog.records if r.levelno == logging.DEBUG and "suppressed" in r.message.lower()]
 
         assert len(warnings) == 1, f"Expected 1 WARNING, got {len(warnings)}"
@@ -102,6 +108,7 @@ class TestWarnOnce:
 # ---------------------------------------------------------------------------
 # _parse_geojson_features — list not field()
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestParseGeoJSON:
@@ -150,6 +157,7 @@ class TestParseGeoJSON:
 # ---------------------------------------------------------------------------
 # Fallback chain
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestFallbackChain:
@@ -241,9 +249,7 @@ class TestFallbackChain:
             patch.object(provider, "_fetch_events_from_acled", new=AsyncMock(return_value=[])),
             patch.object(provider, "_fetch_events_from_reliefweb", new=AsyncMock(return_value=[])),
             patch.dict("os.environ", {"APP_ENV": "production"}, clear=False),
-            patch.object(
-                logging.getLogger("news.geopolitical_risk"), "critical"
-            ) as mock_critical,
+            patch.object(logging.getLogger("news.geopolitical_risk"), "critical") as mock_critical,
         ):
             result = await provider._fetch_events_from_source()
 
@@ -255,6 +261,7 @@ class TestFallbackChain:
 # ---------------------------------------------------------------------------
 # get_gold_trading_signal — awaitable
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestGoldTradingSignal:

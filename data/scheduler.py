@@ -107,7 +107,7 @@ _YF_INTERVAL_MAP: dict[str, str] = {
     "M15": "15m",
     "M30": "30m",
     "H1": "1h",
-    "H4": "1h",   # yfinance has no 4h interval; fetch 1h bars instead
+    "H4": "1h",  # yfinance has no 4h interval; fetch 1h bars instead
     "D": "1d",
     "W": "1wk",
     "M": "1mo",
@@ -131,7 +131,7 @@ _YF_PERIOD_MAP: dict[str, str] = {
 # Maximum lookback in calendar days that Yahoo Finance allows per interval.
 # Requests with a start date older than this are clamped to avoid API errors.
 _YF_MAX_LOOKBACK_DAYS: dict[str, int] = {
-    "1m": 7,      # Yahoo hard limit: 8 calendar days; use 7 to be safe
+    "1m": 7,  # Yahoo hard limit: 8 calendar days; use 7 to be safe
     "5m": 60,
     "15m": 60,
     "30m": 60,
@@ -356,7 +356,7 @@ async def _fetch_yfinance(
                 loop.run_in_executor(None, lambda: ticker.history(period=period, interval=interval)),
                 timeout=12.0,
             )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("yfinance fetch timed out for %s/%s after 12s", yf_symbol, interval)
         return []
     except Exception as exc:
@@ -553,13 +553,17 @@ async def _update_timeframe(
                 if _h < _l:
                     _inversion_pct = (_l - _h) / _mid
                     if _inversion_pct <= 0.005:
-                        bar = dict(bar)
+                        bar = dict(bar)  # noqa: PLW2901 — copy-on-write; intentional loop-var rebind
                         bar["high"], bar["low"] = _l, _h
                         _h, _l = _l, _h
                         logger.debug(
-                            "Swapped inverted high/low on bar %d (%s/%s): "
-                            "high=%.4f low=%.4f (%.3f%% inversion)",
-                            i, symbol, granularity, _h, _l, _inversion_pct * 100,
+                            "Swapped inverted high/low on bar %d (%s/%s): high=%.4f low=%.4f (%.3f%% inversion)",
+                            i,
+                            symbol,
+                            granularity,
+                            _h,
+                            _l,
+                            _inversion_pct * 100,
                         )
 
                 # Clamp close/open to [low, high] within 3% tolerance.
@@ -568,10 +572,10 @@ async def _update_timeframe(
                     _c = float(bar["close"])
                     _o = float(bar["open"])
                     if _l - _tol <= _c <= _h + _tol and not (_l <= _c <= _h):
-                        bar = dict(bar)
+                        bar = dict(bar)  # noqa: PLW2901 — copy-on-write; intentional loop-var rebind
                         bar["close"] = max(_l, min(_h, _c))
                     if _l - _tol <= _o <= _h + _tol and not (_l <= _o <= _h):
-                        bar = dict(bar)
+                        bar = dict(bar)  # noqa: PLW2901 — copy-on-write; intentional loop-var rebind
                         bar["open"] = max(_l, min(_h, _o))
             except (KeyError, TypeError, ValueError):
                 pass

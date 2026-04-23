@@ -89,6 +89,7 @@ try:
     # Suppress the setuptools deprecation warning that fires on import so it
     # does not pollute startup logs — the warning is from clamd's code, not ours.
     import warnings as _warnings
+
     with _warnings.catch_warnings():
         _warnings.filterwarnings("ignore", message="pkg_resources is deprecated", category=UserWarning)
         import clamd  # type: ignore[import]

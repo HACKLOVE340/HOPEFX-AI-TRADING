@@ -24,13 +24,11 @@ from __future__ import annotations
 
 import json
 import sys
-import types
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
 
@@ -39,6 +37,7 @@ sys.path.insert(0, str(ROOT))
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_xy(n: int = 400, n_features: int = 10, seed: int = 42) -> tuple[pd.DataFrame, pd.Series]:
     rng = np.random.default_rng(seed)
@@ -51,16 +50,19 @@ def _make_calibrated_mock(proba_val: float = 0.6) -> MagicMock:
     """Return a mock that behaves like a fitted CalibratedClassifierCV."""
     mock = MagicMock(spec=CalibratedClassifierCV)
     mock.predict_proba = MagicMock(
-        side_effect=lambda X: np.column_stack([
-            np.full(len(X), 1 - proba_val),
-            np.full(len(X), proba_val),
-        ])
+        side_effect=lambda X: np.column_stack(
+            [
+                np.full(len(X), 1 - proba_val),
+                np.full(len(X), proba_val),
+            ]
+        )
     )
     mock.predict = MagicMock(side_effect=lambda X: np.ones(len(X), dtype=int))
     return mock
 
 
 # ── Test: cv='prefit' is used throughout ─────────────────────────────────────
+
 
 class TestCalibrationNeverRefits:
     """
@@ -83,7 +85,6 @@ class TestCalibrationNeverRefits:
         X_test, y_test = _make_xy(50, seed=99)
 
         captured_cv_args = []
-        original_cal = CalibratedClassifierCV
 
         class _TrackingCal(CalibratedClassifierCV):
             def __init__(self, estimator, *, method="sigmoid", cv=5):
@@ -98,9 +99,7 @@ class TestCalibrationNeverRefits:
 
         # Every CalibratedClassifierCV instantiation must use cv='prefit'
         for cv_arg in captured_cv_args:
-            assert cv_arg == "prefit", (
-                f"CalibratedClassifierCV called with cv={cv_arg!r} — must be 'prefit'"
-            )
+            assert cv_arg == "prefit", f"CalibratedClassifierCV called with cv={cv_arg!r} — must be 'prefit'"
 
     def test_train_random_forest_uses_prefit(self):
         """train_random_forest must call CalibratedClassifierCV(cv='prefit')."""
@@ -121,12 +120,11 @@ class TestCalibrationNeverRefits:
                 pass
 
         for cv_arg in captured_cv_args:
-            assert cv_arg == "prefit", (
-                f"train_random_forest: CalibratedClassifierCV cv={cv_arg!r} — must be 'prefit'"
-            )
+            assert cv_arg == "prefit", f"train_random_forest: CalibratedClassifierCV cv={cv_arg!r} — must be 'prefit'"
 
 
 # ── Test: three-way split in train_stacking_ensemble ─────────────────────────
+
 
 class TestStackingThreeWaySplit:
     """
@@ -151,10 +149,6 @@ class TestStackingThreeWaySplit:
         X_cal, y_cal = _make_xy(100, seed=77)
 
         fit_sizes_seen = []
-
-        original_xgb = rma.train_xgboost
-        original_rf = rma.train_random_forest
-        original_lgb = rma.train_lightgbm
 
         def _track_xgb(X_fit, y_fit, X_oof, y_oof):
             fit_sizes_seen.append(("xgb_fit", len(X_fit)))
@@ -185,9 +179,7 @@ class TestStackingThreeWaySplit:
             )
             # Fit set must be smaller than X_train (it's a 75% split)
             if label.endswith("_fit"):
-                assert size < len(X_train), (
-                    f"{label} fit size {size} >= X_train size {len(X_train)} — no split applied"
-                )
+                assert size < len(X_train), f"{label} fit size {size} >= X_train size {len(X_train)} — no split applied"
 
     def test_meta_learner_trains_on_oof_not_cal(self):
         """
@@ -240,6 +232,7 @@ class TestStackingThreeWaySplit:
 
 # ── Test: evaluate() routes through base_learners ────────────────────────────
 
+
 class TestEvaluateRouting:
     """evaluate() must build meta_X from base_learners before calling meta-model."""
 
@@ -256,21 +249,20 @@ class TestEvaluateRouting:
         meta_inputs_seen = []
         meta_mock = MagicMock()
         meta_mock.predict_proba = MagicMock(
-            side_effect=lambda X: (meta_inputs_seen.append(X), np.column_stack([
-                np.full(len(X), 0.4), np.full(len(X), 0.6)
-            ]))[1]
+            side_effect=lambda X: (
+                meta_inputs_seen.append(X),
+                np.column_stack([np.full(len(X), 0.4), np.full(len(X), 0.6)]),
+            )[1]
         )
         meta_mock.predict = MagicMock(return_value=np.ones(100, dtype=int))
 
-        result = rma.evaluate(meta_mock, X_test, y_test, base_learners=[bl1, bl2])
+        rma.evaluate(meta_mock, X_test, y_test, base_learners=[bl1, bl2])
 
         assert meta_inputs_seen, "meta-model predict_proba was never called"
         meta_X = meta_inputs_seen[0]
 
         # meta_X must have 2 columns (one per base learner)
-        assert meta_X.shape[1] == 2, (
-            f"meta_X has {meta_X.shape[1]} columns, expected 2 (one per base learner)"
-        )
+        assert meta_X.shape[1] == 2, f"meta_X has {meta_X.shape[1]} columns, expected 2 (one per base learner)"
         # Column 0 should be bl1's proba (0.7)
         assert np.allclose(meta_X[:, 0], 0.7, atol=1e-6), "meta_X col 0 != bl1 proba"
         # Column 1 should be bl2's proba (0.4)
@@ -285,9 +277,10 @@ class TestEvaluateRouting:
 
         model_mock = MagicMock()
         model_mock.predict_proba = MagicMock(
-            side_effect=lambda X: (raw_inputs_seen.append(X), np.column_stack([
-                np.full(len(X), 0.45), np.full(len(X), 0.55)
-            ]))[1]
+            side_effect=lambda X: (
+                raw_inputs_seen.append(X),
+                np.column_stack([np.full(len(X), 0.45), np.full(len(X), 0.55)]),
+            )[1]
         )
         model_mock.predict = MagicMock(return_value=np.ones(50, dtype=int))
 
@@ -303,11 +296,7 @@ class TestEvaluateRouting:
 
         X_test, y_test = _make_xy(80)
         model_mock = MagicMock()
-        model_mock.predict_proba = MagicMock(
-            return_value=np.column_stack([
-                np.full(80, 0.4), np.full(80, 0.6)
-            ])
-        )
+        model_mock.predict_proba = MagicMock(return_value=np.column_stack([np.full(80, 0.4), np.full(80, 0.6)]))
         model_mock.predict = MagicMock(return_value=np.ones(80, dtype=int))
 
         result = rma.evaluate(model_mock, X_test, y_test)
@@ -324,19 +313,16 @@ class TestEvaluateRouting:
         model_mock = MagicMock()
         # Mix of confident and abstain predictions
         probas = np.where(np.arange(60) % 2 == 0, 0.8, 0.5)
-        model_mock.predict_proba = MagicMock(
-            return_value=np.column_stack([1 - probas, probas])
-        )
+        model_mock.predict_proba = MagicMock(return_value=np.column_stack([1 - probas, probas]))
         model_mock.predict = MagicMock(return_value=(probas > 0.5).astype(int))
 
         result = rma.evaluate(model_mock, X_test, y_test)
 
-        assert 0.0 <= result["abstain_rate"] <= 1.0, (
-            f"abstain_rate={result['abstain_rate']} out of [0, 1]"
-        )
+        assert 0.0 <= result["abstain_rate"] <= 1.0, f"abstain_rate={result['abstain_rate']} out of [0, 1]"
 
 
 # ── Test: registry records the fix ───────────────────────────────────────────
+
 
 class TestRegistryLeakageFix:
     """Verify the model registry records the leakage fix."""
@@ -349,9 +335,7 @@ class TestRegistryLeakageFix:
         reg = json.loads(reg_path.read_text())
         mtf = reg.get("versions", {}).get("mtf_ensemble_v1", {})
 
-        assert mtf.get("leakage_bug_fixed") is True, (
-            "registry.json: mtf_ensemble_v1.leakage_bug_fixed must be True"
-        )
+        assert mtf.get("leakage_bug_fixed") is True, "registry.json: mtf_ensemble_v1.leakage_bug_fixed must be True"
 
     def test_registry_records_fix_date(self):
         """registry.json must record the leakage fix date."""
@@ -359,9 +343,7 @@ class TestRegistryLeakageFix:
         reg = json.loads(reg_path.read_text())
         mtf = reg.get("versions", {}).get("mtf_ensemble_v1", {})
 
-        assert "leakage_fix_date" in mtf, (
-            "registry.json: mtf_ensemble_v1 missing leakage_fix_date"
-        )
+        assert "leakage_fix_date" in mtf, "registry.json: mtf_ensemble_v1 missing leakage_fix_date"
         assert mtf["leakage_fix_date"], "leakage_fix_date must not be empty"
 
     def test_registry_records_fix_description(self):

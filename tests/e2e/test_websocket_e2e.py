@@ -39,6 +39,7 @@ from httpx import AsyncClient, ASGITransport
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def _fresh_event_loop():
     """Ensure a clean event loop for each test so TestClient (anyio) works
@@ -52,6 +53,7 @@ def _fresh_event_loop():
 @pytest.fixture(scope="module")
 def app():
     from app import app as _app
+
     return _app
 
 
@@ -59,6 +61,7 @@ def app():
 def sync_client(app):
     """Module-scoped sync TestClient — keeps the ASGI lifespan alive for all tests."""
     from starlette.testclient import TestClient
+
     with TestClient(app, raise_server_exceptions=False) as tc:
         yield tc
 
@@ -77,18 +80,23 @@ def _unique_email() -> str:
 
 
 async def _get_token(client: AsyncClient) -> str:
-    email    = _unique_email()
+    email = _unique_email()
     password = "TestPass123!"
-    await client.post("/api/auth/register", json={
-        "email": email, "password": password,
-        "username": f"ws_{uuid.uuid4().hex[:6]}",
-    })
+    await client.post(
+        "/api/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "username": f"ws_{uuid.uuid4().hex[:6]}",
+        },
+    )
     login = await client.post("/api/auth/login", json={"email": email, "password": password})
-    data  = login.json()
+    data = login.json()
     return data.get("access_token") or data.get("token") or ""
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 class TestWebSocketHandshake:
     """Connection-level WebSocket behaviour."""
@@ -109,9 +117,7 @@ class TestWebSocketHandshake:
             # Either the first message is auth_required, or it's connected
             # with auth_required=True
             is_auth_required = (
-                msg.get("type") == "auth_required"
-                or msg.get("auth_required") is True
-                or msg.get("type") == "connected"
+                msg.get("type") == "auth_required" or msg.get("auth_required") is True or msg.get("type") == "connected"
             )
             assert is_auth_required
 
@@ -123,9 +129,8 @@ class TestWebSocketHandshake:
             pytest.skip("Could not obtain auth token")
 
         with sync_client.websocket_connect("/ws/live") as ws:
-            # Receive initial message
-            raw = ws.receive_text()
-            msg = json.loads(raw)
+            # Receive initial message (discard — just drain the welcome frame)
+            json.loads(ws.receive_text())
 
             # Send auth
             ws.send_text(json.dumps({"type": "auth", "token": f"Bearer {token}"}))
@@ -152,8 +157,7 @@ class TestWebSocketHandshake:
             # Should receive an error, not auth_ok
             try:
                 resp = json.loads(ws.receive_text())
-                assert resp.get("type") != "auth_ok", \
-                    "Server must not accept invalid tokens"
+                assert resp.get("type") != "auth_ok", "Server must not accept invalid tokens"
             except Exception:
                 pass  # disconnect is also acceptable
 
@@ -178,10 +182,14 @@ class TestWebSocketHandshake:
                     break
 
             # Send subscribe
-            ws.send_text(json.dumps({
-                "type": "subscribe",
-                "channels": ["prices", "positions", "signals", "account"],
-            }))
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "subscribe",
+                        "channels": ["prices", "positions", "signals", "account"],
+                    }
+                )
+            )
             # No exception = subscribe was accepted
 
     @pytest.mark.asyncio
@@ -207,20 +215,15 @@ class TestWebSocketHandshake:
             # Send ping
             ws.send_text(json.dumps({"type": "ping"}))
 
-            # Collect messages looking for pong/heartbeat
-            pong_received = False
+            # Drain up to 5 messages looking for pong/heartbeat.
+            # Pong is optional — server may not implement it.
+            # The assertion is that we reach here without crashing.
             for _ in range(5):
                 try:
-                    resp = json.loads(ws.receive_text())
-                    if resp.get("type") in ("pong", "heartbeat"):
-                        pong_received = True
+                    if json.loads(ws.receive_text()).get("type") in ("pong", "heartbeat"):
                         break
                 except Exception:
                     break
-
-            # Pong is optional — server may not implement it
-            # but must not crash
-            assert True  # reaching here means no crash
 
 
 class TestWebSocketRateLimiting:
@@ -230,6 +233,7 @@ class TestWebSocketRateLimiting:
     async def test_multiple_connections_from_same_ip(self, app):
         """Multiple connections from the same IP should be accepted up to the limit."""
         from starlette.testclient import TestClient
+
         connections = []
         try:
             with TestClient(app) as tc:

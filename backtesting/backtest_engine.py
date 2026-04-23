@@ -47,7 +47,7 @@ from backtesting.transaction_costs import OvernightSwapModel, TransactionCostMod
 @dataclass
 class BacktestResult:
     total_return: float
-    sharpe_ratio: float       # trade-level (corrected)
+    sharpe_ratio: float  # trade-level (corrected)
     max_drawdown: float
     win_rate: float
     total_trades: int
@@ -55,7 +55,7 @@ class BacktestResult:
     trades: list[dict] = field(default_factory=list)
     total_commission: float = 0.0
     total_overnight_cost: float = 0.0
-    sharpe_se: float = 0.0    # 1/sqrt(2*(N-1)) — credibility indicator
+    sharpe_se: float = 0.0  # 1/sqrt(2*(N-1)) — credibility indicator
     ticker: str = "XAUUSD"
 
 
@@ -151,10 +151,10 @@ class BacktestEngine:
         total_commission = 0.0
         total_overnight = 0.0
 
-        position = 0.0        # current position size in base units (oz for gold)
+        position = 0.0  # current position size in base units (oz for gold)
         entry_price = 0.0
         entry_signal = 0
-        entry_bar = 0         # bar index at entry — used for hold-period tracking
+        entry_bar = 0  # bar index at entry — used for hold-period tracking
 
         for i in range(1, len(data)):
             prev_sig = signals.iloc[i - 1]
@@ -205,9 +205,7 @@ class BacktestEngine:
                 # We distribute it evenly across bars_per_day bars so the
                 # total per calendar day equals exactly one nightly charge.
                 cost_per_bar = abs(
-                    self._swap.cost_usd_per_night(
-                        self.ticker, lots=lots, side=side, weekday=weekday
-                    )
+                    self._swap.cost_usd_per_night(self.ticker, lots=lots, side=side, weekday=weekday)
                 ) / max(self.bars_per_day, 1)
 
                 self.balance -= cost_per_bar

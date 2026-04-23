@@ -54,6 +54,7 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
 
 class _FakeRequest:
     """Minimal Request stub — no cookie fallback needed for these tests."""
+
     cookies: dict = {}
 
 

@@ -278,7 +278,9 @@ class TestExtractFeatureImportance:
         try:
             df = _make_ohlcv(n=200)
             X, y = build_advanced_features(df, macro_df=None)
-            y = y.copy(); y.iloc[::2] = 0; y.iloc[1::2] = 1
+            y = y.copy()
+            y.iloc[::2] = 0
+            y.iloc[1::2] = 1
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
             assert isinstance(imp, dict)
@@ -296,7 +298,9 @@ class TestExtractFeatureImportance:
         try:
             df = _make_ohlcv(n=200)
             X, y = build_advanced_features(df, macro_df=None)
-            y = y.copy(); y.iloc[::2] = 0; y.iloc[1::2] = 1
+            y = y.copy()
+            y.iloc[::2] = 0
+            y.iloc[1::2] = 1
             model, _ = train_final_model(X, y, use_stacking=False)
             imp = extract_feature_importance(model, list(X.columns))
             for k, v in imp.items():

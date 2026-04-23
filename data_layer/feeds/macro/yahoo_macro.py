@@ -97,6 +97,7 @@ class YahooMacroFeed:
         # CL=F roll-window noise doesn't pollute the log at ERROR level.
         try:
             from utils.yfinance_compat import suppress_yfinance_warnings
+
             suppress_yfinance_warnings()
         except ImportError:
             logger.debug("utils.yfinance_compat not available — yfinance warnings unsuppressed")

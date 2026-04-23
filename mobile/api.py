@@ -249,6 +249,7 @@ class MobileAPIServer:
             if jti:
                 try:
                     from auth.service import is_access_token_revoked
+
                     if is_access_token_revoked(jti):
                         raise HTTPException(
                             status_code=status.HTTP_401_UNAUTHORIZED,

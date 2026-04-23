@@ -50,18 +50,20 @@ def create_replay_router(engine: "ChartReplayEngine"):
         """List all active replay sessions."""
         sessions = []
         for session in engine.sessions.values():
-            sessions.append({
-                "session_id": session.session_id,
-                "symbol": session.symbol,
-                "timeframe": session.timeframe,
-                "status": session.state.value,
-                "current_bar": getattr(session, "current_bar_index", 0),
-                "total_bars": len(engine.data_cache.get(f"{session.symbol}_{session.timeframe}", [])),
-                "current_price": getattr(session, "current_price", 0.0),
-                "equity": session.current_balance,
-                "pnl": session.current_balance - session.initial_balance,
-                "created_at": session.created_at.isoformat(),
-            })
+            sessions.append(
+                {
+                    "session_id": session.session_id,
+                    "symbol": session.symbol,
+                    "timeframe": session.timeframe,
+                    "status": session.state.value,
+                    "current_bar": getattr(session, "current_bar_index", 0),
+                    "total_bars": len(engine.data_cache.get(f"{session.symbol}_{session.timeframe}", [])),
+                    "current_price": getattr(session, "current_price", 0.0),
+                    "equity": session.current_balance,
+                    "pnl": session.current_balance - session.initial_balance,
+                    "created_at": session.created_at.isoformat(),
+                }
+            )
         return sessions
 
     @router.post("/sessions")
@@ -149,7 +151,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         bars_raw = engine.data_cache.get(data_key, [])
         bar_idx = getattr(session, "current_bar_index", 0)
         # Return bars up to current position so the frontend can render the chart
-        visible_bars = bars_raw[:bar_idx + 1] if bars_raw else []
+        visible_bars = bars_raw[: bar_idx + 1] if bars_raw else []
         return {
             "session_id": session.session_id,
             "symbol": session.symbol,
@@ -188,6 +190,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         bar_idx = getattr(session, "current_bar_index", 0)
         if bar_idx >= len(bars) - 1:
             from replay.models import ReplayState
+
             session.state = ReplayState.FINISHED
             return {"session_id": session_id, "status": "completed", "current_bar": bar_idx}
         bar_idx += 1
@@ -221,6 +224,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         session.current_bar_index = new_idx  # type: ignore[attr-defined]
         if new_idx >= len(all_bars) - 1:
             from replay.models import ReplayState
+
             session.state = ReplayState.FINISHED
         advanced = new_idx - bar_idx
         return {

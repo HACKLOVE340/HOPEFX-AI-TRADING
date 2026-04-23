@@ -602,6 +602,7 @@ class MockProvider(DataProvider):  # healer: ignore — assert_not_production() 
         tick_interval_ms: float = 100,
     ):
         from utils.production_guard import assert_not_production
+
         assert_not_production(
             "MockProvider",
             replacement="PolygonProvider, OandaProvider, or BinanceProvider",

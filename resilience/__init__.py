@@ -19,6 +19,7 @@ Public API
 
 from __future__ import annotations
 import logging
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -43,6 +44,7 @@ try:
         ml_breaker,
         db_breaker,
     )
+
     # Alias for backwards-compat with any code that imported ServiceCircuitBreakers
     ServiceCircuitBreakers = ServiceCircuitBreaker  # type: ignore[assignment]
 except Exception as _exc:

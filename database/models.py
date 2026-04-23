@@ -1261,6 +1261,7 @@ if SQLALCHEMY_AVAILABLE:
 
         def to_dict(self) -> dict:
             import json as _json
+
             features: list = []
             try:
                 features = _json.loads(self.features_json or "[]")

@@ -759,6 +759,7 @@ class MockL2Feed:  # healer: ignore — assert_not_production() guard in __init_
 
     def __init__(self) -> None:
         from utils.production_guard import assert_not_production
+
         assert_not_production(
             "MockL2Feed",
             replacement="MultiSourceL2Feed with L2_PROVIDER=multi",

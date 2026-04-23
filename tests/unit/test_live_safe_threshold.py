@@ -565,15 +565,11 @@ class TestCalibrationLeakageFix:
 
         # No raw CalibratedClassifierCV calls with integer cv — all must go via _calibrate_prefit
         # The _calibrate_prefit helper uses IsotonicRegression directly (sklearn 1.4+ compatible).
-        bad = re.findall(r'CalibratedClassifierCV\([^)]*cv\s*=\s*\d+', source)
-        assert not bad, (
-            f"Found CalibratedClassifierCV with integer cv — use _calibrate_prefit() instead: {bad}"
-        )
+        bad = re.findall(r"CalibratedClassifierCV\([^)]*cv\s*=\s*\d+", source)
+        assert not bad, f"Found CalibratedClassifierCV with integer cv — use _calibrate_prefit() instead: {bad}"
 
         # Verify _calibrate_prefit is defined and actually called
-        assert "_calibrate_prefit" in source, (
-            "_calibrate_prefit helper not found in retrain_mtf_accuracy.py"
-        )
+        assert "_calibrate_prefit" in source, "_calibrate_prefit helper not found in retrain_mtf_accuracy.py"
         assert source.count("_calibrate_prefit(") >= 4, (
             "Expected at least 4 _calibrate_prefit() calls (XGB, RF, LGB, meta, fold)"
         )
@@ -586,7 +582,7 @@ class TestCalibrationLeakageFix:
         source = pathlib.Path("scripts/retrain_mtf_accuracy.py").read_text()
 
         # All CalibratedClassifierCV calls must not use integer cv (data leakage risk)
-        integer_cv_calls = re.findall(r'CalibratedClassifierCV\([^)]*cv\s*=\s*\d+', source)
+        integer_cv_calls = re.findall(r"CalibratedClassifierCV\([^)]*cv\s*=\s*\d+", source)
         assert not integer_cv_calls, (
             f"Found integer cv in CalibratedClassifierCV — use _calibrate_prefit(): {integer_cv_calls}"
         )

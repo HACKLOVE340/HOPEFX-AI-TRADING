@@ -453,10 +453,7 @@ def _analyze_file_regex(path: Path) -> list[CodeIssue]:
                 r"""(?:future_ret|future_move|future_return|labels?\s*=|y\s*=|_target\s*=|target_col)""",
                 re.IGNORECASE,
             )
-            in_label_context = bool(
-                _LABEL_FN_RE.search(preceding)
-                or _LABEL_VAR_RE.search(line)
-            )
+            in_label_context = bool(_LABEL_FN_RE.search(preceding) or _LABEL_VAR_RE.search(line))
             if not in_label_context:
                 issues.append(
                     CodeIssue(
@@ -959,24 +956,26 @@ def check_spa_routing(py_file: Path) -> list[CodeIssue]:
     source = "\n".join(lines)
 
     has_static_mount = bool(re.search(r"StaticFiles|mount.*static", source, re.IGNORECASE))
-    has_spa_fallback = bool(re.search(r'index\.html|FileResponse.*index', source, re.IGNORECASE))
+    has_spa_fallback = bool(re.search(r"index\.html|FileResponse.*index", source, re.IGNORECASE))
 
     if not has_static_mount and not has_spa_fallback:
-        issues.append(CodeIssue(
-            file=rel,
-            line=1,
-            category="spa_routing",
-            severity=SEVERITY_HIGH,
-            description=(
-                f"{py_file.name} has no StaticFiles mount or SPA fallback route. "
-                "Frontend routes like /dashboard will return 404."
-            ),
-            snippet="",
-            suggestion=(
-                "Add: app.mount('/static', StaticFiles(directory='static'), name='static') "
-                "and a catch-all GET route that returns FileResponse('static/index.html')"
-            ),
-        ))
+        issues.append(
+            CodeIssue(
+                file=rel,
+                line=1,
+                category="spa_routing",
+                severity=SEVERITY_HIGH,
+                description=(
+                    f"{py_file.name} has no StaticFiles mount or SPA fallback route. "
+                    "Frontend routes like /dashboard will return 404."
+                ),
+                snippet="",
+                suggestion=(
+                    "Add: app.mount('/static', StaticFiles(directory='static'), name='static') "
+                    "and a catch-all GET route that returns FileResponse('static/index.html')"
+                ),
+            )
+        )
 
     return issues
 
@@ -1014,49 +1013,66 @@ def check_cookie_auth_security(py_file: Path) -> list[CodeIssue]:
                 block_text = "\n".join(cookie_block)
                 # httponly=False with an explicit comment is intentional — skip
                 has_httponly_false = bool(re.search(r"httponly\s*=\s*False", block_text, re.IGNORECASE))
-                has_intentional_comment = bool(re.search(
-                    r"httponly\s*=\s*False.*#.*(?:must|need|js|javascript|spa|react|read)",
-                    block_text, re.IGNORECASE,
-                ))
+                has_intentional_comment = bool(
+                    re.search(
+                        r"httponly\s*=\s*False.*#.*(?:must|need|js|javascript|spa|react|read)",
+                        block_text,
+                        re.IGNORECASE,
+                    )
+                )
                 has_httponly = bool(re.search(r"httponly\s*=", block_text, re.IGNORECASE))
                 has_samesite = bool(re.search(r"samesite\s*=", block_text, re.IGNORECASE))
 
                 if not has_httponly:
-                    issues.append(CodeIssue(
-                        file=rel, line=cookie_start_line,
-                        category="cookie_security", severity=SEVERITY_HIGH,
-                        description="set_cookie called without httponly parameter — cookie accessible via JavaScript (XSS risk)",
-                        snippet=cookie_block[0].strip(),
-                        suggestion="Add httponly=True to set_cookie() call",
-                    ))
+                    issues.append(
+                        CodeIssue(
+                            file=rel,
+                            line=cookie_start_line,
+                            category="cookie_security",
+                            severity=SEVERITY_HIGH,
+                            description="set_cookie called without httponly parameter — cookie accessible via JavaScript (XSS risk)",
+                            snippet=cookie_block[0].strip(),
+                            suggestion="Add httponly=True to set_cookie() call",
+                        )
+                    )
                 elif has_httponly_false and not has_intentional_comment:
-                    issues.append(CodeIssue(
-                        file=rel, line=cookie_start_line,
-                        category="cookie_security", severity=SEVERITY_HIGH,
-                        description="set_cookie with httponly=False — cookie accessible via JavaScript (XSS risk). Add a comment if intentional.",
-                        snippet=cookie_block[0].strip(),
-                        suggestion="Use httponly=True, or add a comment explaining why JS access is required",
-                    ))
+                    issues.append(
+                        CodeIssue(
+                            file=rel,
+                            line=cookie_start_line,
+                            category="cookie_security",
+                            severity=SEVERITY_HIGH,
+                            description="set_cookie with httponly=False — cookie accessible via JavaScript (XSS risk). Add a comment if intentional.",
+                            snippet=cookie_block[0].strip(),
+                            suggestion="Use httponly=True, or add a comment explaining why JS access is required",
+                        )
+                    )
                 if not has_samesite:
-                    issues.append(CodeIssue(
-                        file=rel, line=cookie_start_line,
-                        category="cookie_security", severity=SEVERITY_MEDIUM,
-                        description="set_cookie called without samesite parameter — CSRF risk",
-                        snippet=cookie_block[0].strip(),
-                        suggestion="Add samesite='lax' or samesite='strict' to set_cookie() call",
-                    ))
+                    issues.append(
+                        CodeIssue(
+                            file=rel,
+                            line=cookie_start_line,
+                            category="cookie_security",
+                            severity=SEVERITY_MEDIUM,
+                            description="set_cookie called without samesite parameter — CSRF risk",
+                            snippet=cookie_block[0].strip(),
+                            suggestion="Add samesite='lax' or samesite='strict' to set_cookie() call",
+                        )
+                    )
 
         # localStorage JWT storage (in JS/TS files embedded in Python templates)
         if "localStorage" in line and ("token" in line.lower() or "jwt" in line.lower()):
-            issues.append(CodeIssue(
-                file=rel,
-                line=i,
-                category="cookie_security",
-                severity=SEVERITY_HIGH,
-                description="JWT stored in localStorage — vulnerable to XSS attacks",
-                snippet=line.strip(),
-                suggestion="Store JWT in httpOnly cookie instead of localStorage",
-            ))
+            issues.append(
+                CodeIssue(
+                    file=rel,
+                    line=i,
+                    category="cookie_security",
+                    severity=SEVERITY_HIGH,
+                    description="JWT stored in localStorage — vulnerable to XSS attacks",
+                    snippet=line.strip(),
+                    suggestion="Store JWT in httpOnly cookie instead of localStorage",
+                )
+            )
 
     return issues
 
@@ -1078,13 +1094,22 @@ def check_env_var_access(py_file: Path) -> list[CodeIssue]:
     # Only flag vars where a hardcoded fallback is genuinely dangerous.
     # Connection strings (REDIS_URL, DATABASE_URL) with localhost defaults are
     # safe for development — exclude them to avoid false positives.
-    _sensitive_vars = frozenset({
-        "SECRET_KEY", "JWT_SECRET", "SECURITY_JWT_SECRET",
-        "API_KEY", "PRIVATE_KEY", "OANDA_API_KEY",
-        "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
-        "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
-        "ENCRYPTION_KEY", "CONFIG_ENCRYPTION_KEY",
-    })
+    _sensitive_vars = frozenset(
+        {
+            "SECRET_KEY",
+            "JWT_SECRET",
+            "SECURITY_JWT_SECRET",
+            "API_KEY",
+            "PRIVATE_KEY",
+            "OANDA_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "STRIPE_SECRET_KEY",
+            "STRIPE_WEBHOOK_SECRET",
+            "ENCRYPTION_KEY",
+            "CONFIG_ENCRYPTION_KEY",
+        }
+    )
 
     # Detect module-level docstring boundaries to skip lines inside them
     in_docstring = False
@@ -1098,7 +1123,7 @@ def check_env_var_access(py_file: Path) -> list[CodeIssue]:
                     in_docstring = True
                     docstring_quote = q
                     # Single-line docstring: closes on same line after the opening
-                    rest = stripped[len(q):]
+                    rest = stripped[len(q) :]
                     if q in rest:
                         in_docstring = False
                     break
@@ -1120,20 +1145,22 @@ def check_env_var_access(py_file: Path) -> list[CodeIssue]:
             if in_docstring:
                 continue
             # Check if it's inside a try block (look back 5 lines)
-            context = "\n".join(lines[max(0, i - 6):i])
+            context = "\n".join(lines[max(0, i - 6) : i])
             if "try:" not in context:
-                issues.append(CodeIssue(
-                    file=rel,
-                    line=i,
-                    category="env_var_unsafe",
-                    severity=SEVERITY_HIGH,
-                    description=(
-                        f"os.environ['{var_name}'] will raise KeyError if the variable is not set. "
-                        "Use os.getenv() with a default or wrap in try/except."
-                    ),
-                    snippet=line.strip(),
-                    suggestion=f"Replace with: os.getenv('{var_name}') or raise a clear RuntimeError",
-                ))
+                issues.append(
+                    CodeIssue(
+                        file=rel,
+                        line=i,
+                        category="env_var_unsafe",
+                        severity=SEVERITY_HIGH,
+                        description=(
+                            f"os.environ['{var_name}'] will raise KeyError if the variable is not set. "
+                            "Use os.getenv() with a default or wrap in try/except."
+                        ),
+                        snippet=line.strip(),
+                        suggestion=f"Replace with: os.getenv('{var_name}') or raise a clear RuntimeError",
+                    )
+                )
 
         # Hardcoded fallback for sensitive vars
         m2 = re.search(
@@ -1144,18 +1171,20 @@ def check_env_var_access(py_file: Path) -> list[CodeIssue]:
             var_name = m2.group(1)
             fallback = m2.group(2)
             if var_name in _sensitive_vars and not fallback.startswith("$"):
-                issues.append(CodeIssue(
-                    file=rel,
-                    line=i,
-                    category="env_var_hardcoded_secret",
-                    severity=SEVERITY_CRITICAL,
-                    description=(
-                        f"Hardcoded fallback value for sensitive env var '{var_name}'. "
-                        "This will silently use the hardcoded value in production if the var is unset."
-                    ),
-                    snippet=line.strip(),
-                    suggestion=f"Remove the hardcoded default; raise RuntimeError if '{var_name}' is not set",
-                ))
+                issues.append(
+                    CodeIssue(
+                        file=rel,
+                        line=i,
+                        category="env_var_hardcoded_secret",
+                        severity=SEVERITY_CRITICAL,
+                        description=(
+                            f"Hardcoded fallback value for sensitive env var '{var_name}'. "
+                            "This will silently use the hardcoded value in production if the var is unset."
+                        ),
+                        snippet=line.strip(),
+                        suggestion=f"Remove the hardcoded default; raise RuntimeError if '{var_name}' is not set",
+                    )
+                )
 
     return issues
 
@@ -1182,21 +1211,22 @@ def check_startup_validators(py_file: Path) -> list[CodeIssue]:
     source = "\n".join(lines)
 
     if not _STARTUP_VALIDATOR_RE.search(source):
-        issues.append(CodeIssue(
-            file=rel,
-            line=1,
-            category="missing_startup_validation",
-            severity=SEVERITY_HIGH,
-            description=(
-                f"{py_file.name} does not call validate_environment() at startup. "
-                "Misconfigured environment variables will only be discovered at runtime."
-            ),
-            snippet="",
-            suggestion=(
-                "Add: from config.startup_validator import validate_environment; "
-                "validate_environment(strict=True)"
-            ),
-        ))
+        issues.append(
+            CodeIssue(
+                file=rel,
+                line=1,
+                category="missing_startup_validation",
+                severity=SEVERITY_HIGH,
+                description=(
+                    f"{py_file.name} does not call validate_environment() at startup. "
+                    "Misconfigured environment variables will only be discovered at runtime."
+                ),
+                snippet="",
+                suggestion=(
+                    "Add: from config.startup_validator import validate_environment; validate_environment(strict=True)"
+                ),
+            )
+        )
 
     return issues
 
@@ -1242,22 +1272,24 @@ def check_router_registration(py_file: Path) -> list[CodeIssue]:
                 break
 
     if not registered:
-        issues.append(CodeIssue(
-            file=rel,
-            line=1,
-            category="unregistered_router",
-            severity=SEVERITY_HIGH,
-            description=(
-                f"{rel} defines an APIRouter but it does not appear to be registered "
-                "in core/router_registry.py, app.py, or its parent __init__.py. "
-                "All its endpoints will return 404."
-            ),
-            snippet="router = APIRouter(...)",
-            suggestion=(
-                "Register the router: add it to core/router_registry.py using "
-                "_include_router_deduped(app, router, prefix='/api/...')"
-            ),
-        ))
+        issues.append(
+            CodeIssue(
+                file=rel,
+                line=1,
+                category="unregistered_router",
+                severity=SEVERITY_HIGH,
+                description=(
+                    f"{rel} defines an APIRouter but it does not appear to be registered "
+                    "in core/router_registry.py, app.py, or its parent __init__.py. "
+                    "All its endpoints will return 404."
+                ),
+                snippet="router = APIRouter(...)",
+                suggestion=(
+                    "Register the router: add it to core/router_registry.py using "
+                    "_include_router_deduped(app, router, prefix='/api/...')"
+                ),
+            )
+        )
 
     return issues
 
@@ -1296,9 +1328,7 @@ def scan_codebase_extended(
         if scanned >= max_files:
             break
         rel = _rel(py_file)
-        if not include_tests and any(
-            rel.startswith(p) or f"/{p}" in rel for p in _TEST_PREFIXES_EXT
-        ):
+        if not include_tests and any(rel.startswith(p) or f"/{p}" in rel for p in _TEST_PREFIXES_EXT):
             continue
         ext_issues.extend(scan_extended(py_file))
         scanned += 1

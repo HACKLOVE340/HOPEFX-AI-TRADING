@@ -279,7 +279,8 @@ def backtest_symbol(
         subsample=0.8,
         colsample_bytree=0.8,
         min_child_weight=3,
-        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+        / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
         eval_metric="logloss",
         random_state=42,
         n_jobs=1,

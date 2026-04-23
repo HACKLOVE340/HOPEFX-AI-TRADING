@@ -367,8 +367,12 @@ def _reset_circuit_breakers():
     """
     try:
         from resilience.service_circuit_breakers import (
-            redis_breaker, broker_breaker, ml_breaker, db_breaker,
+            redis_breaker,
+            broker_breaker,
+            ml_breaker,
+            db_breaker,
         )
+
         for breaker in (redis_breaker, broker_breaker, ml_breaker, db_breaker):
             breaker.force_close()
     except Exception:  # nosec B110 — non-fatal if module unavailable

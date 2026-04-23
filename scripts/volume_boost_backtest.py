@@ -270,7 +270,11 @@ def run_backtest(
     # Sharpe on daily P&L
     try:
         daily_pnl = trades_df.set_index("exit_time")["pnl_usd"].resample("D").sum().fillna(0.0)
-        sharpe = float(np.nan_to_num(daily_pnl.mean() / daily_pnl.std() * (252**0.5), nan=0.0)) if daily_pnl.std() > 0 else 0.0
+        sharpe = (
+            float(np.nan_to_num(daily_pnl.mean() / daily_pnl.std() * (252**0.5), nan=0.0))
+            if daily_pnl.std() > 0
+            else 0.0
+        )
     except Exception:
         sharpe = 0.0
 

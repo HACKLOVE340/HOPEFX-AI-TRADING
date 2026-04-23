@@ -83,7 +83,7 @@ def _ljung_box_p(pnls: np.ndarray, lags: int = 5) -> float:
     q_stat = 0.0
     for k in range(1, lags + 1):
         rho_k = float(np.dot(demeaned[k:], demeaned[:-k])) / var
-        q_stat += rho_k ** 2 / (n - k)
+        q_stat += rho_k**2 / (n - k)
     q_stat *= n * (n + 2)
 
     # Chi-squared CDF via regularised incomplete gamma (pure Python)
@@ -195,9 +195,12 @@ def choose_bootstrap_method(
     method = "block" if p < autocorr_p_threshold else "iid"
     logger.debug(
         "choose_bootstrap_method: Ljung-Box p=%.4f (threshold=%.2f) -> %s",
-        p, autocorr_p_threshold, method,
+        p,
+        autocorr_p_threshold,
+        method,
     )
     return method
+
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 MC_N_PATHS: int = int(os.getenv("MC_N_PATHS", "5000"))
@@ -344,10 +347,7 @@ class MonteCarloEngine:
         n_trades = len(pnls)
 
         # ── Resolve method ────────────────────────────────────────────────────
-        if method == "auto":
-            resolved_method = choose_bootstrap_method(pnls)
-        else:
-            resolved_method = method
+        resolved_method = choose_bootstrap_method(pnls) if method == "auto" else method
 
         # ── Resolve block size ────────────────────────────────────────────────
         # When avg_hold_bars is provided, use it as the block size so the
@@ -369,7 +369,10 @@ class MonteCarloEngine:
 
         logger.info(
             "MonteCarloEngine.run: method=%s (resolved=%s) block_size=%d n_trades=%d",
-            method, resolved_method, effective_block_size, n_trades,
+            method,
+            resolved_method,
+            effective_block_size,
+            n_trades,
         )
 
         # ── Bootstrap paths ───────────────────────────────────────────────────

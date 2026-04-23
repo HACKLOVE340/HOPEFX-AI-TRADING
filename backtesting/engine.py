@@ -388,6 +388,7 @@ class BacktestEngine:
         # Initialise look-ahead bias guard for this backtest run
         try:
             from risk.lookahead_guard import FeatureTimestampGuard
+
             _feat_guard = FeatureTimestampGuard(strict=True)
         except ImportError:
             _feat_guard = None
@@ -412,9 +413,11 @@ class BacktestEngine:
             # inside feature computation called by the strategy
             try:
                 from risk.lookahead_guard import no_lookahead_context
+
                 _ctx = no_lookahead_context(f"backtest:{symbol}")
             except ImportError:
                 from contextlib import nullcontext
+
                 _ctx = nullcontext()
 
             with _ctx:
@@ -695,7 +698,9 @@ class BacktestEngine:
 
         # Sortino (downside deviation only)
         downside_returns = equity_df["daily_return"][equity_df["daily_return"] < 0]
-        downside_dev = float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 0 else 0
+        downside_dev = (
+            float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 0 else 0
+        )
         sortino_ratio = excess_return / downside_dev if downside_dev > 0 else 0
 
         # Calmar (return / max drawdown)

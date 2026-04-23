@@ -791,6 +791,7 @@ class MobileAPIServer:
         if jti:
             try:
                 from auth.service import is_access_token_revoked
+
                 if is_access_token_revoked(jti):
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -847,11 +848,12 @@ def _build_router_from_app(built_app: "FastAPI") -> "_APIRouter":
     r = _APIRouter(prefix="/mobile", tags=["Mobile"])
     try:
         from fastapi.routing import APIRoute as _APIRoute
+
         for _route in built_app.routes:
             if isinstance(_route, _APIRoute):
                 _path = _route.path
                 if _path.startswith("/mobile"):
-                    _path = _path[len("/mobile"):]
+                    _path = _path[len("/mobile") :]
                 r.add_api_route(
                     path=_path,
                     endpoint=_route.endpoint,
@@ -865,8 +867,8 @@ def _build_router_from_app(built_app: "FastAPI") -> "_APIRouter":
                 )
     except Exception as _err:
         _logger_v2.warning(
-            "mobile.api_v2: could not copy routes onto APIRouter — "
-            "mobile v2 endpoints may be unavailable: %s", _err,
+            "mobile.api_v2: could not copy routes onto APIRouter — mobile v2 endpoints may be unavailable: %s",
+            _err,
         )
     return r
 

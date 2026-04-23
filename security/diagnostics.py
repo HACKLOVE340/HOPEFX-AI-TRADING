@@ -336,26 +336,36 @@ class DiagnosticsEngine:
         dur = (time.monotonic() - t0) * 1000
         results: list[DiagnosticResult] = []
         if missing_req:
-            results.append(DiagnosticResult(
-                check_name="env_vars_required", status="critical",
-                message=f"Missing {len(missing_req)} required env var(s)",
-                details={"missing": missing_req},
-                remediation="Set the missing environment variables before starting the app",
-                duration_ms=dur,
-            ))
+            results.append(
+                DiagnosticResult(
+                    check_name="env_vars_required",
+                    status="critical",
+                    message=f"Missing {len(missing_req)} required env var(s)",
+                    details={"missing": missing_req},
+                    remediation="Set the missing environment variables before starting the app",
+                    duration_ms=dur,
+                )
+            )
         else:
-            results.append(DiagnosticResult(
-                check_name="env_vars_required", status="ok",
-                message="All required environment variables are set", duration_ms=dur,
-            ))
+            results.append(
+                DiagnosticResult(
+                    check_name="env_vars_required",
+                    status="ok",
+                    message="All required environment variables are set",
+                    duration_ms=dur,
+                )
+            )
         if missing_opt:
-            results.append(DiagnosticResult(
-                check_name="env_vars_optional", status="warning",
-                message=f"Missing {len(missing_opt)} optional env var(s)",
-                details={"missing": missing_opt},
-                remediation="Set optional env vars to enable full functionality",
-                duration_ms=dur,
-            ))
+            results.append(
+                DiagnosticResult(
+                    check_name="env_vars_optional",
+                    status="warning",
+                    message=f"Missing {len(missing_opt)} optional env var(s)",
+                    details={"missing": missing_opt},
+                    remediation="Set optional env vars to enable full functionality",
+                    duration_ms=dur,
+                )
+            )
         return results
 
     # ------------------------------------------------------------------
@@ -370,7 +380,9 @@ class DiagnosticsEngine:
         async def _test_import(pkg: str) -> tuple[str, bool, str]:
             try:
                 proc = await asyncio.create_subprocess_exec(
-                    sys.executable, "-c", f"import {pkg}",
+                    sys.executable,
+                    "-c",
+                    f"import {pkg}",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=str(PROJECT_ROOT),
@@ -395,18 +407,24 @@ class DiagnosticsEngine:
 
         dur = (time.monotonic() - t0) * 1000
         if broken:
-            return [DiagnosticResult(
-                check_name="import_chain", status="critical",
-                message=f"{len(broken)} package(s) fail to import",
-                details={"broken": broken, "ok_count": ok_count},
-                remediation="Fix import errors; run: pip install -r requirements.txt",
+            return [
+                DiagnosticResult(
+                    check_name="import_chain",
+                    status="critical",
+                    message=f"{len(broken)} package(s) fail to import",
+                    details={"broken": broken, "ok_count": ok_count},
+                    remediation="Fix import errors; run: pip install -r requirements.txt",
+                    duration_ms=dur,
+                )
+            ]
+        return [
+            DiagnosticResult(
+                check_name="import_chain",
+                status="ok",
+                message=f"All {ok_count} core packages import cleanly",
                 duration_ms=dur,
-            )]
-        return [DiagnosticResult(
-            check_name="import_chain", status="ok",
-            message=f"All {ok_count} core packages import cleanly",
-            duration_ms=dur,
-        )]
+            )
+        ]
 
     # ------------------------------------------------------------------
     # Check 3: Database connectivity
@@ -421,6 +439,7 @@ class DiagnosticsEngine:
                 try:
                     from database.connection import get_db as _gdb
                     import sqlalchemy
+
                     db = next(_gdb())
                     if db is None:
                         return False, "get_db returned None"
@@ -432,16 +451,23 @@ class DiagnosticsEngine:
             ok, err = await loop.run_in_executor(None, _probe)
             dur = (time.monotonic() - t0) * 1000
             if ok:
-                return DiagnosticResult(check_name="database", status="ok",
-                    message="Database connection healthy", duration_ms=dur)
-            return DiagnosticResult(check_name="database", status="critical",
+                return DiagnosticResult(
+                    check_name="database", status="ok", message="Database connection healthy", duration_ms=dur
+                )
+            return DiagnosticResult(
+                check_name="database",
+                status="critical",
                 message=f"Database unreachable: {err}",
                 remediation="Check DATABASE_URL; ensure DB service is running",
-                duration_ms=dur)
+                duration_ms=dur,
+            )
         except Exception as exc:
-            return DiagnosticResult(check_name="database", status="error",
+            return DiagnosticResult(
+                check_name="database",
+                status="error",
                 message=f"Database check failed: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000)
+                duration_ms=(time.monotonic() - t0) * 1000,
+            )
 
     # ------------------------------------------------------------------
     # Check 4: Redis connectivity
@@ -451,6 +477,7 @@ class DiagnosticsEngine:
         t0 = time.monotonic()
         try:
             import redis.asyncio as aioredis
+
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             client = aioredis.from_url(url, decode_responses=True, socket_connect_timeout=5)
             try:
@@ -463,18 +490,26 @@ class DiagnosticsEngine:
                             ns_status[ns] = bool(await client.exists(ns))
                         except Exception:
                             ns_status[ns] = False
-                    return DiagnosticResult(check_name="redis", status="ok",
+                    return DiagnosticResult(
+                        check_name="redis",
+                        status="ok",
                         message="Redis connection healthy",
-                        details={"namespace_exists": ns_status}, duration_ms=dur)
-                return DiagnosticResult(check_name="redis", status="error",
-                    message="Redis PING returned falsy", duration_ms=dur)
+                        details={"namespace_exists": ns_status},
+                        duration_ms=dur,
+                    )
+                return DiagnosticResult(
+                    check_name="redis", status="error", message="Redis PING returned falsy", duration_ms=dur
+                )
             finally:
                 await client.aclose()
         except Exception as exc:
-            return DiagnosticResult(check_name="redis", status="critical",
+            return DiagnosticResult(
+                check_name="redis",
+                status="critical",
                 message=f"Redis unreachable: {exc}",
                 remediation="Check REDIS_URL; ensure Redis service is running",
-                duration_ms=(time.monotonic() - t0) * 1000)
+                duration_ms=(time.monotonic() - t0) * 1000,
+            )
 
     # ------------------------------------------------------------------
     # Check 5: Frontend build freshness
@@ -491,19 +526,31 @@ class DiagnosticsEngine:
         found: Path | None = next((p for p in candidates if p.exists()), None)
         dur = (time.monotonic() - t0) * 1000
         if found is None:
-            return DiagnosticResult(check_name="frontend_build", status="warning",
+            return DiagnosticResult(
+                check_name="frontend_build",
+                status="warning",
                 message="No frontend build artifact found (index.html missing)",
                 details={"searched": [str(p) for p in candidates]},
-                remediation="Run: cd frontend && npm run build", duration_ms=dur)
+                remediation="Run: cd frontend && npm run build",
+                duration_ms=dur,
+            )
         age_hours = (time.time() - found.stat().st_mtime) / 3600
         if age_hours > _FRONTEND_MAX_AGE_HOURS:
-            return DiagnosticResult(check_name="frontend_build", status="warning",
+            return DiagnosticResult(
+                check_name="frontend_build",
+                status="warning",
                 message=f"Frontend build is {age_hours:.1f}h old (threshold: {_FRONTEND_MAX_AGE_HOURS}h)",
                 details={"path": str(found), "age_hours": round(age_hours, 1)},
-                remediation="Rebuild frontend: cd frontend && npm run build", duration_ms=dur)
-        return DiagnosticResult(check_name="frontend_build", status="ok",
+                remediation="Rebuild frontend: cd frontend && npm run build",
+                duration_ms=dur,
+            )
+        return DiagnosticResult(
+            check_name="frontend_build",
+            status="ok",
             message=f"Frontend build found and fresh ({age_hours:.1f}h old)",
-            details={"path": str(found)}, duration_ms=dur)
+            details={"path": str(found)},
+            duration_ms=dur,
+        )
 
     # ------------------------------------------------------------------
     # Check 6: Runtime route health
@@ -540,6 +587,7 @@ class DiagnosticsEngine:
         ]
         try:
             from app import app as _app
+
             for route in _app.routes:
                 path = getattr(route, "path", None)
                 methods = getattr(route, "methods", None)
@@ -547,21 +595,22 @@ class DiagnosticsEngine:
                     for m in methods:
                         if m == "GET":
                             routes_to_test.append(("GET", path))
-                        elif m == "POST" and not any(
-                            path.startswith(p) for p in _PROBE_GET_ONLY_PREFIXES
-                        ):
+                        elif m == "POST" and not any(path.startswith(p) for p in _PROBE_GET_ONLY_PREFIXES):
                             routes_to_test.append(("POST", path))
         except Exception:  # nosec B110 — app not initialised yet; route list stays empty
             pass
         routes_to_test = list(dict.fromkeys(routes_to_test))[:50]
         try:
             import httpx
+
             unhealthy: list[dict[str, Any]] = []
             ok_count = 0
             # Internal health-check header allows loopback probes to bypass CSRF
             # validation on POST/PUT/PATCH/DELETE endpoints without a browser session.
             _internal_headers = {"X-Internal-Health-Check": "1"}
-            async with httpx.AsyncClient(base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True
+            ) as client:
                 for method, path in routes_to_test:
                     if "{" in path:
                         continue
@@ -580,21 +629,43 @@ class DiagnosticsEngine:
                         unhealthy.append({"method": method, "path": path, "error": str(exc)[:100]})
             dur = (time.monotonic() - t0) * 1000
             if unhealthy:
-                return [DiagnosticResult(check_name="route_health", status="error",
-                    message=f"{len(unhealthy)} route(s) returning 5xx errors",
-                    details={"unhealthy": unhealthy, "ok_count": ok_count},
-                    remediation="Check application logs for 500 errors", duration_ms=dur)]
-            return [DiagnosticResult(check_name="route_health", status="ok",
-                message=f"All {ok_count} tested routes are alive", duration_ms=dur)]
+                return [
+                    DiagnosticResult(
+                        check_name="route_health",
+                        status="error",
+                        message=f"{len(unhealthy)} route(s) returning 5xx errors",
+                        details={"unhealthy": unhealthy, "ok_count": ok_count},
+                        remediation="Check application logs for 500 errors",
+                        duration_ms=dur,
+                    )
+                ]
+            return [
+                DiagnosticResult(
+                    check_name="route_health",
+                    status="ok",
+                    message=f"All {ok_count} tested routes are alive",
+                    duration_ms=dur,
+                )
+            ]
         except ImportError:
-            return [DiagnosticResult(check_name="route_health", status="warning",
-                message="httpx not available — route health check skipped",
-                remediation="pip install httpx",
-                duration_ms=(time.monotonic() - t0) * 1000)]
+            return [
+                DiagnosticResult(
+                    check_name="route_health",
+                    status="warning",
+                    message="httpx not available — route health check skipped",
+                    remediation="pip install httpx",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
         except Exception as exc:
-            return [DiagnosticResult(check_name="route_health", status="error",
-                message=f"Route health check failed: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000)]
+            return [
+                DiagnosticResult(
+                    check_name="route_health",
+                    status="error",
+                    message=f"Route health check failed: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
 
     # ------------------------------------------------------------------
     # Check 7: SPA routing
@@ -604,9 +675,12 @@ class DiagnosticsEngine:
         t0 = time.monotonic()
         try:
             import httpx
+
             broken: list[dict[str, Any]] = []
             ok_count = 0
-            async with httpx.AsyncClient(base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True) as client:
+            async with httpx.AsyncClient(
+                base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True
+            ) as client:
                 for route in _SPA_ROUTES:
                     try:
                         resp = await client.get(route)
@@ -625,21 +699,42 @@ class DiagnosticsEngine:
                         broken.append({"route": route, "error": str(exc)[:100]})
             dur = (time.monotonic() - t0) * 1000
             if broken:
-                return [DiagnosticResult(check_name="spa_routing", status="error",
-                    message=f"{len(broken)} SPA route(s) not serving HTML",
-                    details={"broken": broken},
-                    remediation="Add catch-all route in app.py that serves index.html",
-                    duration_ms=dur)]
-            return [DiagnosticResult(check_name="spa_routing", status="ok",
-                message=f"All {ok_count} SPA routes serve HTML correctly", duration_ms=dur)]
+                return [
+                    DiagnosticResult(
+                        check_name="spa_routing",
+                        status="error",
+                        message=f"{len(broken)} SPA route(s) not serving HTML",
+                        details={"broken": broken},
+                        remediation="Add catch-all route in app.py that serves index.html",
+                        duration_ms=dur,
+                    )
+                ]
+            return [
+                DiagnosticResult(
+                    check_name="spa_routing",
+                    status="ok",
+                    message=f"All {ok_count} SPA routes serve HTML correctly",
+                    duration_ms=dur,
+                )
+            ]
         except ImportError:
-            return [DiagnosticResult(check_name="spa_routing", status="warning",
-                message="httpx not available — SPA routing check skipped",
-                duration_ms=(time.monotonic() - t0) * 1000)]
+            return [
+                DiagnosticResult(
+                    check_name="spa_routing",
+                    status="warning",
+                    message="httpx not available — SPA routing check skipped",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
         except Exception as exc:
-            return [DiagnosticResult(check_name="spa_routing", status="error",
-                message=f"SPA routing check failed: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000)]
+            return [
+                DiagnosticResult(
+                    check_name="spa_routing",
+                    status="error",
+                    message=f"SPA routing check failed: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
 
     # ------------------------------------------------------------------
     # Check 8: Auth flow
@@ -650,44 +745,66 @@ class DiagnosticsEngine:
         test_email = os.getenv("DIAG_TEST_EMAIL", "")
         test_password = os.getenv("DIAG_TEST_PASSWORD", "")
         if not test_email or not test_password:
-            return DiagnosticResult(check_name="auth_flow", status="warning",
+            return DiagnosticResult(
+                check_name="auth_flow",
+                status="warning",
                 message="Auth flow test skipped — set DIAG_TEST_EMAIL and DIAG_TEST_PASSWORD",
-                duration_ms=(time.monotonic() - t0) * 1000)
+                duration_ms=(time.monotonic() - t0) * 1000,
+            )
         try:
             import httpx
-            async with httpx.AsyncClient(base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True) as client:
-                login_resp = await client.post("/api/auth/login",
-                    json={"email": test_email, "password": test_password})
+
+            async with httpx.AsyncClient(
+                base_url=_APP_BASE_URL, timeout=_DIAG_HTTP_TIMEOUT, follow_redirects=True
+            ) as client:
+                login_resp = await client.post("/api/auth/login", json={"email": test_email, "password": test_password})
                 if login_resp.status_code != 200:
-                    return DiagnosticResult(check_name="auth_flow", status="error",
+                    return DiagnosticResult(
+                        check_name="auth_flow",
+                        status="error",
                         message=f"Login returned {login_resp.status_code}",
                         remediation="Check auth endpoint and test credentials",
-                        duration_ms=(time.monotonic() - t0) * 1000)
+                        duration_ms=(time.monotonic() - t0) * 1000,
+                    )
                 data = login_resp.json()
                 token = data.get("access_token") or data.get("token", "")
                 if not token:
-                    return DiagnosticResult(check_name="auth_flow", status="error",
+                    return DiagnosticResult(
+                        check_name="auth_flow",
+                        status="error",
                         message="Login succeeded but no access_token in response",
-                        duration_ms=(time.monotonic() - t0) * 1000)
-                me_resp = await client.get("/api/auth/me",
-                    headers={"Authorization": f"Bearer {token}"})
+                        duration_ms=(time.monotonic() - t0) * 1000,
+                    )
+                me_resp = await client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
                 dur = (time.monotonic() - t0) * 1000
                 if me_resp.status_code == 200:
-                    return DiagnosticResult(check_name="auth_flow", status="ok",
+                    return DiagnosticResult(
+                        check_name="auth_flow",
+                        status="ok",
                         message="Auth flow (login → protected route) works correctly",
-                        duration_ms=dur)
-                return DiagnosticResult(check_name="auth_flow", status="error",
+                        duration_ms=dur,
+                    )
+                return DiagnosticResult(
+                    check_name="auth_flow",
+                    status="error",
                     message=f"/api/auth/me returned {me_resp.status_code} with valid token",
                     remediation="Check JWT validation middleware",
-                    duration_ms=dur)
+                    duration_ms=dur,
+                )
         except ImportError:
-            return DiagnosticResult(check_name="auth_flow", status="warning",
+            return DiagnosticResult(
+                check_name="auth_flow",
+                status="warning",
                 message="httpx not available — auth flow check skipped",
-                duration_ms=(time.monotonic() - t0) * 1000)
+                duration_ms=(time.monotonic() - t0) * 1000,
+            )
         except Exception as exc:
-            return DiagnosticResult(check_name="auth_flow", status="error",
+            return DiagnosticResult(
+                check_name="auth_flow",
+                status="error",
                 message=f"Auth flow check failed: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000)
+                duration_ms=(time.monotonic() - t0) * 1000,
+            )
 
     # ------------------------------------------------------------------
     # Check 9: Data feeds
@@ -698,6 +815,7 @@ class DiagnosticsEngine:
         results: list[DiagnosticResult] = []
         try:
             import redis.asyncio as aioredis
+
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             client = aioredis.from_url(url, decode_responses=True, socket_connect_timeout=3)
             try:
@@ -713,20 +831,36 @@ class DiagnosticsEngine:
                         pass
                 dur = (time.monotonic() - t0) * 1000
                 if stale_feeds:
-                    results.append(DiagnosticResult(check_name="data_feeds_redis", status="warning",
-                        message=f"{len(stale_feeds)} Redis feed key(s) are stale/expired",
-                        details={"stale": stale_feeds[:10], "active": found_feeds[:10]},
-                        remediation="Check data feed connectors", duration_ms=dur))
+                    results.append(
+                        DiagnosticResult(
+                            check_name="data_feeds_redis",
+                            status="warning",
+                            message=f"{len(stale_feeds)} Redis feed key(s) are stale/expired",
+                            details={"stale": stale_feeds[:10], "active": found_feeds[:10]},
+                            remediation="Check data feed connectors",
+                            duration_ms=dur,
+                        )
+                    )
                 else:
-                    results.append(DiagnosticResult(check_name="data_feeds_redis", status="ok",
-                        message=f"Redis data feeds healthy ({len(found_feeds)} active keys)",
-                        duration_ms=dur))
+                    results.append(
+                        DiagnosticResult(
+                            check_name="data_feeds_redis",
+                            status="ok",
+                            message=f"Redis data feeds healthy ({len(found_feeds)} active keys)",
+                            duration_ms=dur,
+                        )
+                    )
             finally:
                 await client.aclose()
         except Exception as exc:
-            results.append(DiagnosticResult(check_name="data_feeds_redis", status="warning",
-                message=f"Redis feed check skipped: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000))
+            results.append(
+                DiagnosticResult(
+                    check_name="data_feeds_redis",
+                    status="warning",
+                    message=f"Redis feed check skipped: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            )
 
         try:
             loop = asyncio.get_running_loop()
@@ -734,6 +868,7 @@ class DiagnosticsEngine:
             def _probe_feed() -> tuple[bool, str]:
                 try:
                     from data_feed import get_feed_status
+
                     status = get_feed_status()
                     return status.get("healthy", False), status.get("message", "")
                 except ImportError:
@@ -742,14 +877,23 @@ class DiagnosticsEngine:
                     return False, str(exc2)[:200]
 
             ok, msg = await loop.run_in_executor(None, _probe_feed)
-            results.append(DiagnosticResult(check_name="data_feeds_module",
-                status="ok" if ok else "warning",
-                message=msg or ("Data feed module healthy" if ok else "Data feed module unhealthy"),
-                duration_ms=(time.monotonic() - t0) * 1000))
+            results.append(
+                DiagnosticResult(
+                    check_name="data_feeds_module",
+                    status="ok" if ok else "warning",
+                    message=msg or ("Data feed module healthy" if ok else "Data feed module unhealthy"),
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            )
         except Exception as exc:
-            results.append(DiagnosticResult(check_name="data_feeds_module", status="warning",
-                message=f"Data feed module check failed: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000))
+            results.append(
+                DiagnosticResult(
+                    check_name="data_feeds_module",
+                    status="warning",
+                    message=f"Data feed module check failed: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            )
         return results
 
     # ------------------------------------------------------------------
@@ -760,10 +904,15 @@ class DiagnosticsEngine:
         t0 = time.monotonic()
         log_file = PROJECT_ROOT / "logs" / "app.log"
         if not log_file.exists():
-            return [DiagnosticResult(check_name="log_patterns", status="warning",
-                message="Log file not found — cannot scan for patterns",
-                details={"searched": str(log_file)},
-                duration_ms=(time.monotonic() - t0) * 1000)]
+            return [
+                DiagnosticResult(
+                    check_name="log_patterns",
+                    status="warning",
+                    message="Log file not found — cannot scan for patterns",
+                    details={"searched": str(log_file)},
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
         try:
             loop = asyncio.get_running_loop()
 
@@ -783,10 +932,12 @@ class DiagnosticsEngine:
                         if pd["pattern"].search(line):
                             if cat not in findings:
                                 findings[cat] = {
-                                    "category": cat, "severity": pd["severity"],
+                                    "category": cat,
+                                    "severity": pd["severity"],
                                     "root_cause": pd["root_cause"],
                                     "remediation": pd["remediation"],
-                                    "count": 0, "sample": line.strip()[:200],
+                                    "count": 0,
+                                    "sample": line.strip()[:200],
                                 }
                             findings[cat]["count"] += 1
                 return list(findings.values())
@@ -794,22 +945,38 @@ class DiagnosticsEngine:
             hits = await loop.run_in_executor(None, _scan_logs)
             dur = (time.monotonic() - t0) * 1000
             if not hits:
-                return [DiagnosticResult(check_name="log_patterns", status="ok",
-                    message="No known error patterns detected in recent logs", duration_ms=dur)]
+                return [
+                    DiagnosticResult(
+                        check_name="log_patterns",
+                        status="ok",
+                        message="No known error patterns detected in recent logs",
+                        duration_ms=dur,
+                    )
+                ]
             results: list[DiagnosticResult] = []
             for hit in hits:
                 sev = hit["severity"]
                 status = "critical" if sev == "critical" else "error" if sev == "high" else "warning"
-                results.append(DiagnosticResult(
-                    check_name=f"log_pattern_{hit['category']}", status=status,
-                    message=f"[{hit['count']}x] {hit['root_cause']}",
-                    details={"count": hit["count"], "sample": hit["sample"]},
-                    remediation=hit["remediation"], duration_ms=dur))
+                results.append(
+                    DiagnosticResult(
+                        check_name=f"log_pattern_{hit['category']}",
+                        status=status,
+                        message=f"[{hit['count']}x] {hit['root_cause']}",
+                        details={"count": hit["count"], "sample": hit["sample"]},
+                        remediation=hit["remediation"],
+                        duration_ms=dur,
+                    )
+                )
             return results
         except Exception as exc:
-            return [DiagnosticResult(check_name="log_patterns", status="error",
-                message=f"Log pattern scan failed: {exc}",
-                duration_ms=(time.monotonic() - t0) * 1000)]
+            return [
+                DiagnosticResult(
+                    check_name="log_patterns",
+                    status="error",
+                    message=f"Log pattern scan failed: {exc}",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            ]
 
     # ------------------------------------------------------------------
     # Auto-remediation
@@ -818,17 +985,24 @@ class DiagnosticsEngine:
     async def _remediate_result(self, result: DiagnosticResult) -> dict[str, Any] | None:
         check = result.check_name
         action: dict[str, Any] = {
-            "check": check, "status": result.status,
+            "check": check,
+            "status": result.status,
             "attempted_at": datetime.now(UTC).isoformat(),
-            "action": None, "success": False,
+            "action": None,
+            "success": False,
         }
         try:
             if check == "frontend_build":
                 frontend_dir = PROJECT_ROOT / "frontend"
                 if frontend_dir.exists() and (frontend_dir / "package.json").exists():
                     proc = await asyncio.create_subprocess_exec(
-                        "npm", "run", "build", cwd=str(frontend_dir),
-                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        "npm",
+                        "run",
+                        "build",
+                        cwd=str(frontend_dir),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                    )
                     try:
                         _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
                         action["action"] = "npm run build"
@@ -843,8 +1017,14 @@ class DiagnosticsEngine:
                     pkg = item.get("package", "").split(".")[0]
                     if pkg and re.match(r"^[a-zA-Z0-9_\-]+$", pkg):
                         proc = await asyncio.create_subprocess_exec(
-                            sys.executable, "-m", "pip", "install", pkg,
-                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                            sys.executable,
+                            "-m",
+                            "pip",
+                            "install",
+                            pkg,
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )
                         try:
                             await asyncio.wait_for(proc.communicate(), timeout=60)
                             action["action"] = f"pip install {pkg}"
@@ -854,14 +1034,18 @@ class DiagnosticsEngine:
             elif check.startswith("log_pattern_"):
                 try:
                     from security.self_healer import get_healer
-                    await get_healer()._enqueue_claude_fix({
-                        "category": check.replace("log_pattern_", ""),
-                        "severity": result.status,
-                        "description": result.message,
-                        "file": "logs/app.log", "line": 0,
-                        "snippet": result.details.get("sample", ""),
-                        "suggestion": result.remediation,
-                    })
+
+                    await get_healer()._enqueue_claude_fix(
+                        {
+                            "category": check.replace("log_pattern_", ""),
+                            "severity": result.status,
+                            "description": result.message,
+                            "file": "logs/app.log",
+                            "line": 0,
+                            "snippet": result.details.get("sample", ""),
+                            "suggestion": result.remediation,
+                        }
+                    )
                     action["action"] = "enqueued_claude_fix"
                     action["success"] = True
                 except Exception as exc:
@@ -870,8 +1054,9 @@ class DiagnosticsEngine:
             action["error"] = str(exc)
             logger.warning("DiagnosticsEngine: remediation failed for %s: %s", check, exc)
         if action["action"]:
-            logger.info("DiagnosticsEngine: remediation %s — action=%s success=%s",
-                check, action["action"], action["success"])
+            logger.info(
+                "DiagnosticsEngine: remediation %s — action=%s success=%s", check, action["action"], action["success"]
+            )
             return action
         return None
 
@@ -889,4 +1074,3 @@ def get_diagnostics_engine() -> DiagnosticsEngine:
     if _engine_instance is None:
         _engine_instance = DiagnosticsEngine()
     return _engine_instance
-

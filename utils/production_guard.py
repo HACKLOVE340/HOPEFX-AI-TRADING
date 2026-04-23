@@ -76,10 +76,7 @@ def assert_not_production(
     """
     env = current_env()
     if env in _BLOCKED_ENVS:
-        msg = (
-            f"{class_or_func_name} cannot be used in {env} (APP_ENV={env}). "
-            f"Use {replacement} instead."
-        )
+        msg = f"{class_or_func_name} cannot be used in {env} (APP_ENV={env}). Use {replacement} instead."
         if extra:
             msg = f"{msg} {extra}"
         raise RuntimeError(msg)
@@ -101,10 +98,13 @@ def production_blocked(
         def generate_synthetic_ohlcv(n: int) -> pd.DataFrame:
             ...
     """
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             assert_not_production(name, replacement=replacement, extra=extra)
             return func(*args, **kwargs)
+
         return wrapper  # type: ignore[return-value]
+
     return decorator

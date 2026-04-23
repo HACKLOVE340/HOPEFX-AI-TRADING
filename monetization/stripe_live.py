@@ -532,8 +532,7 @@ class StripeProductionClient:
         if not self._stripe_available:
             if is_production:
                 raise RuntimeError(
-                    "stripe package is not installed but APP_ENV=production. "
-                    "Install stripe: pip install stripe"
+                    "stripe package is not installed but APP_ENV=production. Install stripe: pip install stripe"
                 )
             import json
 
@@ -654,6 +653,7 @@ class StripeProductionClient:
         # Fast path: subscription manager cache
         try:
             from monetization.subscription import subscription_manager as _sub_mgr
+
             for sub in getattr(_sub_mgr, "_subscriptions", {}).values():
                 if getattr(sub, "stripe_customer_id", None) == customer_id:
                     return sub.user_id
@@ -665,6 +665,7 @@ class StripeProductionClient:
             return None
         try:
             import stripe as _s
+
             customer = _s.Customer.retrieve(customer_id)
             return (customer.get("metadata") or {}).get("user_id")
         except Exception as exc:
@@ -699,7 +700,9 @@ class StripeProductionClient:
                 session.commit()
                 logger.info(
                     "User plan updated: user_id=%s %s → %s",
-                    user_id, old_plan, plan,
+                    user_id,
+                    old_plan,
+                    plan,
                 )
                 return True
             except Exception:
@@ -893,6 +896,7 @@ class StripeProductionClient:
         # Check subscription manager first
         try:
             from monetization.subscription import subscription_manager as _sub_mgr
+
             sub = _sub_mgr.get_user_subscription(user_id)
             if sub and getattr(sub, "stripe_customer_id", None):
                 return sub.stripe_customer_id

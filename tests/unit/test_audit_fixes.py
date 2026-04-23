@@ -54,14 +54,10 @@ class TestEnvExample:
         )
 
     def test_bootstrap_admin_password_key_present(self, env_example_content):
-        assert "BOOTSTRAP_ADMIN_PASSWORD" in env_example_content, (
-            "BOOTSTRAP_ADMIN_PASSWORD missing from .env.example"
-        )
+        assert "BOOTSTRAP_ADMIN_PASSWORD" in env_example_content, "BOOTSTRAP_ADMIN_PASSWORD missing from .env.example"
 
     def test_bootstrap_trader_password_key_present(self, env_example_content):
-        assert "BOOTSTRAP_TRADER_PASSWORD" in env_example_content, (
-            "BOOTSTRAP_TRADER_PASSWORD missing from .env.example"
-        )
+        assert "BOOTSTRAP_TRADER_PASSWORD" in env_example_content, "BOOTSTRAP_TRADER_PASSWORD missing from .env.example"
 
     def test_bootstrap_keys_have_change_me_placeholder(self, env_example_content):
         """Keys must have CHANGE_ME placeholders so operators know to replace them."""
@@ -75,9 +71,7 @@ class TestEnvExample:
                 None,
             )
             assert line is not None, f"{key} line not found in .env.example"
-            assert "CHANGE_ME" in line, (
-                f"{key} in .env.example does not have a CHANGE_ME placeholder"
-            )
+            assert "CHANGE_ME" in line, f"{key} in .env.example does not have a CHANGE_ME placeholder"
 
 
 # ---------------------------------------------------------------------------
@@ -123,18 +117,13 @@ class TestAuthJsRoleRedirect:
                 continue
             brace_depth += line.count("{") - line.count("}")
             if "role === 'admin'" in line and "/dashboard" in line:
-                pytest.fail(
-                    f"admin redirect in roleRedirect still points to /dashboard: {line.strip()!r}"
-                )
+                pytest.fail(f"admin redirect in roleRedirect still points to /dashboard: {line.strip()!r}")
             if in_func and brace_depth <= 0 and "{" in auth_js_content.split("function roleRedirect")[1][:10]:
                 break
 
     def test_superadmin_redirects_to_superadmin(self, auth_js_content):
         """superadmin redirect must remain /superadmin."""
-        found = any(
-            "role === 'superadmin'" in line and "/superadmin" in line
-            for line in auth_js_content.splitlines()
-        )
+        found = any("role === 'superadmin'" in line and "/superadmin" in line for line in auth_js_content.splitlines())
         assert found, "superadmin redirect to /superadmin not found in auth.js"
 
     def test_require_role_admin_fallback_is_audit(self, auth_js_content):
@@ -146,9 +135,7 @@ class TestAuthJsRoleRedirect:
                 in_require_role = True
             if in_require_role and "role === 'admin'" in line:
                 context = "\n".join(lines[i : i + 3])
-                assert "/audit" in context, (
-                    f"requireRole admin fallback does not redirect to /audit:\n{context}"
-                )
+                assert "/audit" in context, f"requireRole admin fallback does not redirect to /audit:\n{context}"
                 return
         # No admin-specific branch in requireRole is also acceptable
 
@@ -168,8 +155,6 @@ class TestImpersonateToken:
         pytest.importorskip("jwt", reason="PyJWT not installed")
 
     def _call_impersonate(self, target_user_id: str, secret: str = "a" * 32):
-        import time
-
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -218,13 +203,10 @@ class TestImpersonateToken:
         resp = self._call_impersonate("user-abc", secret=secret)
         assert resp.status_code == 200
         payload = jwt.decode(resp.json()["access_token"], secret, algorithms=["HS256"])
-        assert payload.get("jti"), (
-            "impersonation token missing 'jti' — token cannot be revoked via blacklist"
-        )
+        assert payload.get("jti"), "impersonation token missing 'jti' — token cannot be revoked via blacklist"
 
     def test_impersonate_token_accepted_by_decode_access_token(self):
         """decode_access_token() must accept the impersonation token without raising."""
-        import jwt
 
         secret = "d" * 32
         resp = self._call_impersonate("user-abc", secret=secret)
@@ -270,9 +252,7 @@ class TestImpersonateToken:
             patch("api.superadmin.users.SessionLocal", return_value=mock_db),
             patch.dict(os.environ, {"SECURITY_JWT_SECRET": "f" * 32}),
         ):
-            resp = TestClient(app, raise_server_exceptions=False).post(
-                "/superadmin/users/sa-002/impersonate"
-            )
+            resp = TestClient(app, raise_server_exceptions=False).post("/superadmin/users/sa-002/impersonate")
 
         assert resp.status_code == 403
 
@@ -311,9 +291,7 @@ class TestResetUserPassword:
         mock_db.query.return_value.filter_by.return_value.first.return_value = mock_user
 
         with patch("api.superadmin.users.SessionLocal", return_value=mock_db):
-            resp = TestClient(app, raise_server_exceptions=True).post(
-                f"/superadmin/users/{user_id}/reset-password"
-            )
+            resp = TestClient(app, raise_server_exceptions=True).post(f"/superadmin/users/{user_id}/reset-password")
 
         return resp, mock_user
 
@@ -352,9 +330,7 @@ class TestResetUserPassword:
         resp, mock_user = self._call_reset()
         assert resp.status_code == 200
         stored = mock_user.hashed_password
-        assert stored.startswith(("$2b$", "$2a$")), (
-            f"Expected bcrypt hash, got: {stored[:20]}..."
-        )
+        assert stored.startswith(("$2b$", "$2a$")), f"Expected bcrypt hash, got: {stored[:20]}..."
 
 
 # ---------------------------------------------------------------------------
@@ -417,9 +393,7 @@ class TestSuperadminUserStats:
         assert data["plan"] == "enterprise", (
             f"Expected plan='enterprise' from DB, got '{data['plan']}' — stub not replaced"
         )
-        assert data["country"] == "US", (
-            f"Expected country='US' from DB, got '{data['country']}' — stub not replaced"
-        )
+        assert data["country"] == "US", f"Expected country='US' from DB, got '{data['country']}' — stub not replaced"
 
     def test_get_user_plan_not_hardcoded_free(self):
         from fastapi.testclient import TestClient
@@ -437,9 +411,7 @@ class TestSuperadminUserStats:
         with patch("api.superadmin.users.SessionLocal", return_value=self._make_mock_db(mock_user)):
             resp = TestClient(self._make_app()).get("/superadmin/users/user-001")
 
-        assert resp.json()["country"] == "DE", (
-            "country is still hardcoded None — stub not replaced with real DB value"
-        )
+        assert resp.json()["country"] == "DE", "country is still hardcoded None — stub not replaced with real DB value"
 
     def test_set_user_plan_persists_to_db(self):
         from fastapi.testclient import TestClient
@@ -456,9 +428,7 @@ class TestSuperadminUserStats:
 
         assert resp.status_code == 200
         assert resp.json()["plan"] == "professional"
-        assert mock_user.plan == "professional", (
-            "set_user_plan() did not persist the plan change to the User row"
-        )
+        assert mock_user.plan == "professional", "set_user_plan() did not persist the plan change to the User row"
         mock_db.commit.assert_called_once()
 
     def test_set_user_plan_rejects_invalid_plan(self):

@@ -15,16 +15,15 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
 import tempfile
 import textwrap
 from pathlib import Path
 
-import pytest
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run(coro):
     """Run a coroutine in a fresh event loop (pytest-asyncio not required)."""
@@ -39,16 +38,19 @@ def _run(coro):
 class TestDiagnosticResult:
     def test_is_healthy_ok(self):
         from security.diagnostics import DiagnosticResult
+
         r = DiagnosticResult(check_name="test", status="ok", message="all good")
         assert r.is_healthy() is True
 
     def test_is_healthy_error(self):
         from security.diagnostics import DiagnosticResult
+
         r = DiagnosticResult(check_name="test", status="error", message="broken")
         assert r.is_healthy() is False
 
     def test_to_dict_contains_required_keys(self):
         from security.diagnostics import DiagnosticResult
+
         r = DiagnosticResult(
             check_name="env_vars_required",
             status="critical",
@@ -70,6 +72,7 @@ class TestDiagnosticResult:
 class TestDiagnosticReport:
     def _make_report(self):
         from security.diagnostics import DiagnosticReport, DiagnosticResult
+
         report = DiagnosticReport()
         report.results = [
             DiagnosticResult(check_name="a", status="ok", message="ok"),
@@ -89,6 +92,7 @@ class TestDiagnosticReport:
 
     def test_no_critical_when_all_ok(self):
         from security.diagnostics import DiagnosticReport, DiagnosticResult
+
         report = DiagnosticReport()
         report.results = [DiagnosticResult(check_name="x", status="ok", message="fine")]
         assert report.has_critical() is False
@@ -130,6 +134,7 @@ class TestDiagnosticReport:
 class TestEnvVarCheck:
     def test_missing_required_vars_reported_as_critical(self):
         from security.diagnostics import DiagnosticsEngine
+
         engine = DiagnosticsEngine()
 
         # Temporarily remove a required var
@@ -146,6 +151,7 @@ class TestEnvVarCheck:
 
     def test_all_required_vars_present_returns_ok(self, monkeypatch):
         from security.diagnostics import DiagnosticsEngine, _REQUIRED_ENV_VARS
+
         engine = DiagnosticsEngine()
 
         # Set all required vars
@@ -159,6 +165,7 @@ class TestEnvVarCheck:
 
     def test_missing_optional_vars_returns_warning(self, monkeypatch):
         from security.diagnostics import DiagnosticsEngine, _OPTIONAL_ENV_VARS
+
         engine = DiagnosticsEngine()
 
         # Remove all optional vars
@@ -180,9 +187,11 @@ class TestEnvVarCheck:
 class TestImportChainCheck:
     def test_valid_package_passes(self):
         from security.diagnostics import DiagnosticsEngine
+
         engine = DiagnosticsEngine()
         # Temporarily override the package list to only test 'os' (always available)
         import security.diagnostics as _diag_mod
+
         original = _diag_mod._CORE_PACKAGES
         _diag_mod._CORE_PACKAGES = ["os", "sys", "json"]
         try:
@@ -195,8 +204,10 @@ class TestImportChainCheck:
 
     def test_broken_package_reported_as_critical(self):
         from security.diagnostics import DiagnosticsEngine
+
         engine = DiagnosticsEngine()
         import security.diagnostics as _diag_mod
+
         original = _diag_mod._CORE_PACKAGES
         _diag_mod._CORE_PACKAGES = ["this_package_does_not_exist_xyz_abc_123"]
         try:
@@ -215,7 +226,6 @@ class TestImportChainCheck:
 
 class TestFrontendBuildCheck:
     def test_missing_index_html_returns_warning(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -231,7 +241,6 @@ class TestFrontendBuildCheck:
         assert "index.html" in result.message.lower() or "no frontend" in result.message.lower()
 
     def test_fresh_index_html_returns_ok(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -250,7 +259,6 @@ class TestFrontendBuildCheck:
         assert "fresh" in result.message.lower() or "found" in result.message.lower()
 
     def test_stale_index_html_returns_warning(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -278,7 +286,6 @@ class TestFrontendBuildCheck:
 
 class TestLogPatternCheck:
     def test_no_log_file_returns_warning(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -295,7 +302,6 @@ class TestLogPatternCheck:
         assert "not found" in results[0].message.lower()
 
     def test_clean_log_returns_ok(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -314,7 +320,6 @@ class TestLogPatternCheck:
         assert results[0].status == "ok"
 
     def test_db_error_pattern_detected(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -336,7 +341,6 @@ class TestLogPatternCheck:
         assert any("db_connection" in c for c in categories)
 
     def test_import_error_pattern_detected(self):
-        import tempfile
         from security.diagnostics import DiagnosticsEngine
         import security.diagnostics as _diag_mod
 
@@ -345,9 +349,7 @@ class TestLogPatternCheck:
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             root = Path(d)
             (root / "logs").mkdir()
-            (root / "logs" / "app.log").write_text(
-                "2025-01-01 ERROR ImportError: No module named 'missing_pkg'\n"
-            )
+            (root / "logs" / "app.log").write_text("2025-01-01 ERROR ImportError: No module named 'missing_pkg'\n")
             _diag_mod.PROJECT_ROOT = root
             try:
                 results = _run(engine._check_log_patterns())
@@ -365,6 +367,7 @@ class TestLogPatternCheck:
 class TestFullDiagnosticRun:
     def test_run_full_diagnostic_returns_report(self):
         from security.diagnostics import DiagnosticsEngine, DiagnosticReport
+
         engine = DiagnosticsEngine()
         report = _run(engine.run_full_diagnostic(parallel=True))
         assert isinstance(report, DiagnosticReport)
@@ -374,6 +377,7 @@ class TestFullDiagnosticRun:
 
     def test_run_full_diagnostic_sequential(self):
         from security.diagnostics import DiagnosticsEngine, DiagnosticReport
+
         engine = DiagnosticsEngine()
         report = _run(engine.run_full_diagnostic(parallel=False))
         assert isinstance(report, DiagnosticReport)
@@ -381,12 +385,14 @@ class TestFullDiagnosticRun:
 
     def test_singleton_returns_same_instance(self):
         from security.diagnostics import get_diagnostics_engine
+
         e1 = get_diagnostics_engine()
         e2 = get_diagnostics_engine()
         assert e1 is e2
 
     def test_last_report_stored_after_run(self):
         from security.diagnostics import DiagnosticsEngine
+
         engine = DiagnosticsEngine()
         assert engine.get_last_report() is None
         _run(engine.run_full_diagnostic())
@@ -395,6 +401,7 @@ class TestFullDiagnosticRun:
     def test_report_to_dict_is_serialisable(self):
         import json
         from security.diagnostics import DiagnosticsEngine
+
         engine = DiagnosticsEngine()
         report = _run(engine.run_full_diagnostic())
         d = report.to_dict()
@@ -415,26 +422,30 @@ class TestCodeAnalyzerExtended:
         return p
 
     def test_check_spa_routing_detects_missing_static_mount(self):
-        import tempfile
         from security.code_analyzer import check_spa_routing
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "app.py"
-            f.write_text("from fastapi import FastAPI\napp = FastAPI()\n@app.get('/api/health')\ndef health(): return {'ok': True}\n")
+            f.write_text(
+                "from fastapi import FastAPI\napp = FastAPI()\n@app.get('/api/health')\ndef health(): return {'ok': True}\n"
+            )
             issues = check_spa_routing(f)
         assert any(i.category == "spa_routing" for i in issues)
 
     def test_check_spa_routing_ok_with_static_mount(self):
-        import tempfile
         from security.code_analyzer import check_spa_routing
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "app.py"
-            f.write_text("from fastapi.staticfiles import StaticFiles\napp.mount('/static', StaticFiles(directory='static'), name='static')\n")
+            f.write_text(
+                "from fastapi.staticfiles import StaticFiles\napp.mount('/static', StaticFiles(directory='static'), name='static')\n"
+            )
             issues = check_spa_routing(f)
         assert not any(i.category == "spa_routing" for i in issues)
 
     def test_check_cookie_security_detects_missing_httponly(self):
-        import tempfile
         from security.code_analyzer import check_cookie_auth_security
+
         content = (
             "def login(response):\n"
             "    response.set_cookie(\n"
@@ -450,8 +461,8 @@ class TestCodeAnalyzerExtended:
         assert any(i.category == "cookie_security" for i in issues)
 
     def test_check_cookie_security_ok_with_httponly(self):
-        import tempfile
         from security.code_analyzer import check_cookie_auth_security
+
         content = (
             "def login(response):\n"
             "    response.set_cookie(\n"
@@ -468,8 +479,8 @@ class TestCodeAnalyzerExtended:
         assert not any(i.category == "cookie_security" for i in issues)
 
     def test_check_env_var_access_detects_keyerror_risk(self):
-        import tempfile
         from security.code_analyzer import check_env_var_access
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "config.py"
             f.write_text("import os\nSECRET = os.environ['SECRET_KEY']\n")
@@ -477,8 +488,8 @@ class TestCodeAnalyzerExtended:
         assert any(i.category == "env_var_unsafe" for i in issues)
 
     def test_check_env_var_access_ok_with_getenv(self):
-        import tempfile
         from security.code_analyzer import check_env_var_access
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "config.py"
             f.write_text("import os\nSECRET = os.getenv('SECRET_KEY')\n")
@@ -486,8 +497,8 @@ class TestCodeAnalyzerExtended:
         assert not any(i.category == "env_var_unsafe" for i in issues)
 
     def test_check_env_var_hardcoded_secret_detected(self):
-        import tempfile
         from security.code_analyzer import check_env_var_access
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "config.py"
             f.write_text("import os\nKEY = os.getenv('SECRET_KEY', 'hardcoded-secret-value-here')\n")
@@ -495,8 +506,8 @@ class TestCodeAnalyzerExtended:
         assert any(i.category == "env_var_hardcoded_secret" for i in issues)
 
     def test_check_startup_validators_detects_missing_call(self):
-        import tempfile
         from security.code_analyzer import check_startup_validators
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "app.py"
             f.write_text("from fastapi import FastAPI\napp = FastAPI()\n")
@@ -504,17 +515,19 @@ class TestCodeAnalyzerExtended:
         assert any(i.category == "missing_startup_validation" for i in issues)
 
     def test_check_startup_validators_ok_when_present(self):
-        import tempfile
         from security.code_analyzer import check_startup_validators
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "app.py"
-            f.write_text("from config.startup_validator import validate_environment\nvalidate_environment(strict=True)\n")
+            f.write_text(
+                "from config.startup_validator import validate_environment\nvalidate_environment(strict=True)\n"
+            )
             issues = check_startup_validators(f)
         assert not any(i.category == "missing_startup_validation" for i in issues)
 
     def test_scan_extended_returns_list(self):
-        import tempfile
         from security.code_analyzer import scan_extended
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "app.py"
             f.write_text("from fastapi import FastAPI\napp = FastAPI()\n")
@@ -522,8 +535,8 @@ class TestCodeAnalyzerExtended:
         assert isinstance(issues, list)
 
     def test_check_router_registration_skips_non_api_files(self):
-        import tempfile
         from security.code_analyzer import check_router_registration
+
         with tempfile.TemporaryDirectory(prefix="hopefx_diag_") as d:
             f = Path(d) / "utils.py"
             f.write_text("from fastapi import APIRouter\nrouter = APIRouter()\n")
@@ -539,10 +552,12 @@ class TestCodeAnalyzerExtended:
 class TestSuperadminDiagnosticsRouter:
     def test_router_importable(self):
         from api.superadmin.diagnostics import router
+
         assert router is not None
 
     def test_router_has_expected_routes(self):
         from api.superadmin.diagnostics import router
+
         paths = {r.path for r in router.routes}
         assert "/diagnostics/run" in paths
         assert "/diagnostics/report" in paths
@@ -554,16 +569,26 @@ class TestSuperadminDiagnosticsRouter:
 
     def test_check_descriptions_covers_all_known_checks(self):
         from api.superadmin.diagnostics import _CHECK_DESCRIPTIONS
+
         expected = {
-            "env_vars_required", "env_vars_optional", "import_chain",
-            "database", "redis", "frontend_build", "route_health",
-            "spa_routing", "auth_flow", "data_feeds_redis",
-            "data_feeds_module", "log_patterns",
+            "env_vars_required",
+            "env_vars_optional",
+            "import_chain",
+            "database",
+            "redis",
+            "frontend_build",
+            "route_health",
+            "spa_routing",
+            "auth_flow",
+            "data_feeds_redis",
+            "data_feeds_module",
+            "log_patterns",
         }
         assert expected.issubset(set(_CHECK_DESCRIPTIONS.keys()))
 
     def test_router_registered_in_superadmin_init(self):
         from api.superadmin import router as superadmin_router
+
         # The diagnostics router must be included — check that at least one
         # diagnostics path is reachable from the parent router
         all_paths = set()
@@ -571,6 +596,7 @@ class TestSuperadminDiagnosticsRouter:
             all_paths.add(getattr(route, "path", ""))
         # The parent router includes sub-routers; check the include happened
         from api.superadmin import _diagnostics_router
+
         assert _diagnostics_router is not None
 
 
@@ -582,6 +608,7 @@ class TestSuperadminDiagnosticsRouter:
 class TestSelfHealerDiagnosticsIntegration:
     def test_healer_has_diagnostics_state(self):
         from security.self_healer import SelfHealer
+
         h = SelfHealer()
         assert hasattr(h, "_diag_interval")
         assert hasattr(h, "_last_diag_ts")
@@ -590,18 +617,21 @@ class TestSelfHealerDiagnosticsIntegration:
 
     def test_get_last_diagnostic_report_returns_dict(self):
         from security.self_healer import SelfHealer
+
         h = SelfHealer()
         report = h.get_last_diagnostic_report()
         assert isinstance(report, dict)
 
     def test_get_diagnostics_remediation_log_returns_list(self):
         from security.self_healer import SelfHealer
+
         h = SelfHealer()
         log = h.get_diagnostics_remediation_log()
         assert isinstance(log, list)
 
     def test_get_full_status_includes_diag_fields(self):
         from security.self_healer import SelfHealer
+
         h = SelfHealer()
         status = h.get_full_status()
         assert "last_diag_ts" in status
@@ -612,6 +642,7 @@ class TestSelfHealerDiagnosticsIntegration:
 
     def test_run_diagnostics_now_returns_dict(self):
         from security.self_healer import SelfHealer
+
         h = SelfHealer()
         result = _run(h.run_diagnostics_now())
         assert isinstance(result, dict)
