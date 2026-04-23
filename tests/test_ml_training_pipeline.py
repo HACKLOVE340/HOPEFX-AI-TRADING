@@ -92,7 +92,8 @@ def test_fetch_gold_ohlcv_uses_cache(tmp_path):
 
 def test_fetch_gold_ohlcv_cache_missing_falls_back(tmp_path, monkeypatch):
     """fetch_gold_ohlcv falls back to download when cache file missing."""
-    import yfinance as yf
+    yf = pytest.importorskip("yfinance", reason="yfinance not installed")
+    import yfinance as yf  # noqa: F811
 
     from ml.train_advanced import fetch_gold_ohlcv
 

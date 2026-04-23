@@ -26,8 +26,9 @@ try:
 except ImportError:
     keyring = None  # type: ignore[assignment]
     _KEYRING_AVAILABLE = False
+from argon2 import PasswordHasher as _PasswordHasher
+from argon2.exceptions import VerifyMismatchError as _VerifyMismatchError
 from cryptography.fernet import Fernet, InvalidToken
-from passlib.context import CryptContext
 
 from core.exceptions import AuthenticationError, VaultError
 import contextlib
@@ -38,16 +39,12 @@ class SecureVault:
 
     _instance: SecureVault | None = None
     _initialized: bool = False  # declared here so pylint sees it before __new__ sets it
-    # passlib uses "argon2" as the scheme name (wraps argon2-cffi which
-    # defaults to Argon2id internally).
-    _pwd_context = CryptContext(
-        schemes=["argon2"],
-        deprecated="auto",
-        argon2__time_cost=3,
-        argon2__memory_cost=65536,
-        argon2__parallelism=4,
-        argon2__hash_len=32,
-        argon2__salt_len=16,
+    _pwd_hasher = _PasswordHasher(
+        time_cost=3,
+        memory_cost=65536,
+        parallelism=4,
+        hash_len=32,
+        salt_len=16,
     )
 
     def __new__(cls) -> Self:
@@ -134,11 +131,14 @@ class SecureVault:
 
     def hash_password(self, password: str) -> str:
         """Hash password with Argon2id."""
-        return self._pwd_context.hash(password)
+        return self._pwd_hasher.hash(password)
 
     def verify_password(self, password: str, password_hash: str) -> bool:
         """Verify password against Argon2id hash."""
-        return self._pwd_context.verify(password, password_hash)
+        try:
+            return self._pwd_hasher.verify(password_hash, password)
+        except _VerifyMismatchError:
+            return False
 
     def rotate_key(self, new_password: str) -> None:
         """Rotate the master encryption key.

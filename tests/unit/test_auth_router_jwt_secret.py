@@ -52,6 +52,11 @@ def _credentials(token: str) -> HTTPAuthorizationCredentials:
     return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
+class _FakeRequest:
+    """Minimal Request stub — no cookie fallback needed for these tests."""
+    cookies: dict = {}
+
+
 def _call(token: str):
     """
     Import and call _get_current_user_id directly.
@@ -64,7 +69,7 @@ def _call(token: str):
 
     import auth.router as router_mod
 
-    return router_mod._get_current_user_id(_credentials(token))
+    return router_mod._get_current_user_id(_FakeRequest(), _credentials(token))
 
 
 # ── Tests: server misconfiguration → 503 ─────────────────────────────────────

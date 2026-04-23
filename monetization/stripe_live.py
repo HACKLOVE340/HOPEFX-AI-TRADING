@@ -657,8 +657,8 @@ class StripeProductionClient:
             for sub in getattr(_sub_mgr, "_subscriptions", {}).values():
                 if getattr(sub, "stripe_customer_id", None) == customer_id:
                     return sub.user_id
-        except Exception:
-            pass
+        except Exception as _exc:  # nosec B110
+            logger.debug("subscription_manager cache lookup failed (non-fatal): %s", _exc)
 
         # Slow path: Stripe API
         if not self._stripe_available:

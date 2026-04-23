@@ -130,6 +130,8 @@ def resolve_oanda_environment() -> str:
 
 
 class BrokerSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_ignore_empty=True)
+
     # OANDA — resolved via resolve_oanda_token() to handle all legacy aliases.
     # Do not add new OANDA_* aliases here; update resolve_oanda_token() instead.
     oanda_token: SecretStr | None = None

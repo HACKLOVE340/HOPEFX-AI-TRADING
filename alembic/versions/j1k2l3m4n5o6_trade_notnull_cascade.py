@@ -71,8 +71,8 @@ def upgrade() -> None:
         # automatically; MySQL may have named it differently).
         try:
             op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
-        except Exception:
-            pass  # constraint didn't exist yet — safe to ignore
+        except Exception as _exc:  # nosec B110
+            import logging as _log; _log.getLogger(__name__).debug("drop_constraint skipped (did not exist): %s", _exc)  # noqa: E702
         op.create_foreign_key(
             "fk_trades_account_id",
             "trades",

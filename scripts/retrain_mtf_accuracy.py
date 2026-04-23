@@ -64,6 +64,38 @@ ABSTAIN_THRESHOLD = 0.55  # only trade when confidence > this
 DATASET_YEARS_APPROX = 58
 
 
+# ── Calibration helper (replaces cv='prefit' removed in sklearn 1.4) ─────────
+
+class _IsoCalibratedEstimator:
+    """Wraps a pre-fitted estimator with an isotonic calibration layer."""
+
+    def __init__(self, estimator, iso_calibrator):
+        self.estimator = estimator
+        self._iso = iso_calibrator
+
+    def predict_proba(self, X):
+        raw = self.estimator.predict_proba(X)[:, 1]
+        pos = np.clip(self._iso.predict(raw), 0.0, 1.0)
+        return np.column_stack([1.0 - pos, pos])
+
+    def predict(self, X):
+        return (self.predict_proba(X)[:, 1] >= 0.5).astype(int)
+
+
+def _calibrate_prefit(estimator, X_val, y_val):
+    """Calibrate a pre-fitted estimator on (X_val, y_val) using isotonic regression.
+
+    Replaces CalibratedClassifierCV(estimator, method='isotonic', cv='prefit')
+    which was removed in scikit-learn 1.4.
+    """
+    from sklearn.isotonic import IsotonicRegression
+
+    raw_proba = estimator.predict_proba(X_val)[:, 1]
+    iso = IsotonicRegression(out_of_bounds="clip")
+    iso.fit(raw_proba, y_val)
+    return _IsoCalibratedEstimator(estimator, iso)
+
+
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 
@@ -296,12 +328,10 @@ def train_xgboost(X_train, y_train, X_test, y_test):
         eval_set=[(X_test, y_test)],
         verbose=False,
     )
-    # Use cv='prefit': model is already trained; calibrator is fitted on X_test/y_test
+    # _calibrate_prefit: model is already trained; calibrator is fitted on X_test/y_test
     # without re-training the base model.  cv=3 caused the XGBoost to be re-fitted
     # on sub-splits of the test fold, producing spuriously high CV accuracy (data leakage).
-    cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
-    cal.fit(X_test, y_test)
-    return cal
+    return _calibrate_prefit(model, X_test, y_test)
 
 
 def train_random_forest(X_train, y_train):
@@ -321,10 +351,8 @@ def train_random_forest(X_train, y_train):
     # the calibrator on the same data used to train the base model.
     cal_split = max(1, int(len(X_train) * 0.80))
     model.fit(X_train.iloc[:cal_split], y_train.iloc[:cal_split])
-    # cv='prefit': model is already fitted; no re-training during calibration.
-    cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
-    cal.fit(X_train.iloc[cal_split:], y_train.iloc[cal_split:])
-    return cal
+    # _calibrate_prefit: model is already fitted; no re-training during calibration.
+    return _calibrate_prefit(model, X_train.iloc[cal_split:], y_train.iloc[cal_split:])
 
 
 def train_lightgbm(X_train, y_train, X_test, y_test):
@@ -353,10 +381,8 @@ def train_lightgbm(X_train, y_train, X_test, y_test):
             eval_set=[(X_test, y_test)],
             callbacks=[lgb.early_stopping(50, verbose=False), lgb.log_evaluation(-1)],
         )
-        # cv='prefit': model is already fitted; prevents data leakage via re-training.
-        cal = CalibratedClassifierCV(model, method="isotonic", cv="prefit")
-        cal.fit(X_test, y_test)
-        return cal
+        # _calibrate_prefit: model is already fitted; prevents data leakage via re-training.
+        return _calibrate_prefit(model, X_test, y_test)
     except ImportError:
         logger.warning("LightGBM not available — skipping")
         return None
@@ -420,10 +446,9 @@ def train_stacking_ensemble(X_train, y_train, X_cal, y_cal):
 
     # Calibrate meta-learner on X_cal (held out from both base and meta training)
     meta_X_cal = np.column_stack([m.predict_proba(X_cal)[:, 1] for m in base_learners])
-    # cv='prefit': meta is already fitted; calibrator runs on meta_X_cal/y_cal
+    # _calibrate_prefit: meta is already fitted; calibrator runs on meta_X_cal/y_cal
     # without re-training the logistic regression.
-    cal_meta = CalibratedClassifierCV(meta, method="isotonic", cv="prefit")
-    cal_meta.fit(meta_X_cal, y_cal)
+    cal_meta = _calibrate_prefit(meta, meta_X_cal, y_cal)
 
     logger.info(
         "Stacking ensemble trained: %d base learners + calibrated meta-LR",
@@ -607,10 +632,9 @@ def main() -> int:
         )
         fold_xgb.fit(Xtr_fit, ytr_fit, verbose=False)
         # Calibrate on the held-out 20% of training data (no leakage from test fold).
-        # cv='prefit': fold_xgb is already fitted; calibrator runs on Xtr_cal/ytr_cal
+        # _calibrate_prefit: fold_xgb is already fitted; calibrator runs on Xtr_cal/ytr_cal
         # without re-training the base model (cv=3 caused spurious ~99% walk-forward CV).
-        fold_cal = CalibratedClassifierCV(fold_xgb, method="isotonic", cv="prefit")
-        fold_cal.fit(Xtr_cal, ytr_cal)
+        fold_cal = _calibrate_prefit(fold_xgb, Xtr_cal, ytr_cal)
 
         proba = fold_cal.predict_proba(Xte)[:, 1]
         pred = (proba > 0.5).astype(int)

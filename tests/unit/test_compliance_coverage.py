@@ -162,9 +162,7 @@ class TestTradeReporting:
     def _make_reporter(self, tmp_path):
         from compliance.auditor import TradeReporting
 
-        tr = TradeReporting(jurisdiction="US")
-        tr.audit_log.log_path = str(tmp_path) + "/"
-        return tr
+        return TradeReporting(jurisdiction="US", log_path=str(tmp_path) + "/")
 
     def test_report_trade_logs_to_audit(self, tmp_path):
         tr = self._make_reporter(tmp_path)

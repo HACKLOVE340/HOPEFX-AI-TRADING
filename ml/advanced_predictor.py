@@ -344,8 +344,8 @@ class AdvancedPredictor:
             try:
                 import sentry_sdk
                 sentry_sdk.capture_message(msg, level="fatal")
-            except Exception:
-                pass
+            except Exception as _sentry_exc:  # nosec B110
+                logger.debug("Sentry capture failed (non-fatal): %s", _sentry_exc)
         return True
 
     # ── Model loading ─────────────────────────────────────────────────────────
@@ -380,7 +380,7 @@ class AdvancedPredictor:
                 # Capture mtime so staleness checks can detect subsequent retraining
                 try:
                     self._model_mtime = self._model_path.stat().st_mtime
-                except OSError:
+                except OSError:  # nosec B110 — mtime is best-effort; missing it is non-fatal
                     pass
                 # Extract feature names from the pipeline
                 if hasattr(payload, "feature_names_in_"):

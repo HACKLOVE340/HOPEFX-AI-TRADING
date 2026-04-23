@@ -253,9 +253,9 @@ class TradeReporting:
     Automated trade reporting to regulators.
     """
 
-    def __init__(self, jurisdiction: str = "US"):
+    def __init__(self, jurisdiction: str = "US", log_path: str | None = None):
         self.jurisdiction = jurisdiction
-        self.audit_log = ImmutableAuditLog()
+        self.audit_log = ImmutableAuditLog(log_path=log_path) if log_path else ImmutableAuditLog()
         self.reporting_obligations = self._load_obligations()
 
     def _load_obligations(self) -> dict:

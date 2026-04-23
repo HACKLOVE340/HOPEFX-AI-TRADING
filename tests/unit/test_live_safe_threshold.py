@@ -556,63 +556,39 @@ class TestKillSwitchEscalation:
 
 class TestCalibrationLeakageFix:
     def test_train_stacking_ensemble_uses_prefit(self):
-        """train_stacking_ensemble in retrain_mtf_accuracy uses cv='prefit'."""
-        import ast
+        """train_stacking_ensemble in retrain_mtf_accuracy uses _calibrate_prefit helper
+        (replaced cv='prefit' which was removed in sklearn 1.4)."""
         import pathlib
+        import re
 
         source = pathlib.Path("scripts/retrain_mtf_accuracy.py").read_text()
-        tree = ast.parse(source)
 
-        # Find all calls to CalibratedClassifierCV and check cv argument
-        cv_values = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                func = node.func
-                func_name = ""
-                if isinstance(func, ast.Attribute):
-                    func_name = func.attr
-                elif isinstance(func, ast.Name):
-                    func_name = func.id
-                if func_name == "CalibratedClassifierCV":
-                    for kw in node.keywords:
-                        if kw.arg == "cv" and isinstance(kw.value, ast.Constant):
-                            cv_values.append(kw.value.value)
+        # No raw CalibratedClassifierCV calls with integer cv — all must go via _calibrate_prefit
+        # The _calibrate_prefit helper uses IsotonicRegression directly (sklearn 1.4+ compatible).
+        bad = re.findall(r'CalibratedClassifierCV\([^)]*cv\s*=\s*\d+', source)
+        assert not bad, (
+            f"Found CalibratedClassifierCV with integer cv — use _calibrate_prefit() instead: {bad}"
+        )
 
-        # All cv values in retrain_mtf_accuracy.py must be 'prefit' (not integers)
-        assert cv_values, "No CalibratedClassifierCV calls found"
-        for cv in cv_values:
-            assert cv == "prefit", (
-                f"Found cv={cv!r} in scripts/retrain_mtf_accuracy.py — "
-                f"all base-model calibration must use cv='prefit' to prevent leakage"
-            )
+        # Verify _calibrate_prefit is defined and actually called
+        assert "_calibrate_prefit" in source, (
+            "_calibrate_prefit helper not found in retrain_mtf_accuracy.py"
+        )
+        assert source.count("_calibrate_prefit(") >= 4, (
+            "Expected at least 4 _calibrate_prefit() calls (XGB, RF, LGB, meta, fold)"
+        )
 
     def test_walk_forward_loop_uses_prefit(self):
-        """The CalibratedClassifierCV calls in retrain_mtf_accuracy all use cv='prefit'."""
-        import ast
+        """No integer cv= in any CalibratedClassifierCV call — prevents train-on-test leakage."""
         import pathlib
+        import re
 
         source = pathlib.Path("scripts/retrain_mtf_accuracy.py").read_text()
-        tree = ast.parse(source)
 
-        cv_values = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                func = node.func
-                func_name = ""
-                if isinstance(func, ast.Attribute):
-                    func_name = func.attr
-                elif isinstance(func, ast.Name):
-                    func_name = func.id
-                if func_name == "CalibratedClassifierCV":
-                    for kw in node.keywords:
-                        if kw.arg == "cv" and isinstance(kw.value, ast.Constant):
-                            cv_values.append(kw.value.value)
-
-        # All cv arguments must be 'prefit' — no integer cv values allowed
-        integer_cvs = [v for v in cv_values if isinstance(v, int)]
-        assert not integer_cvs, (
-            f"Found integer cv={integer_cvs} in CalibratedClassifierCV calls — "
-            f"all already-fitted model calibration must use cv='prefit' to prevent leakage"
+        # All CalibratedClassifierCV calls must not use integer cv (data leakage risk)
+        integer_cv_calls = re.findall(r'CalibratedClassifierCV\([^)]*cv\s*=\s*\d+', source)
+        assert not integer_cv_calls, (
+            f"Found integer cv in CalibratedClassifierCV — use _calibrate_prefit(): {integer_cv_calls}"
         )
 
 
