@@ -489,7 +489,12 @@ class AuthService:
 
         token_hash = _hash_token(raw_refresh_token)
         with self._sf() as session:
-            sess_row = session.query(UserSession).filter_by(refresh_token_hash=token_hash, is_revoked=False).with_for_update().first()
+            sess_row = (
+                session.query(UserSession)
+                .filter_by(refresh_token_hash=token_hash, is_revoked=False)
+                .with_for_update()
+                .first()
+            )
             if not sess_row:
                 return False, "Invalid or expired refresh token", None
             _expires = sess_row.expires_at if sess_row.expires_at.tzinfo else sess_row.expires_at.replace(tzinfo=UTC)

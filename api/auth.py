@@ -68,12 +68,12 @@ class TokenPayload(BaseModel):
     existing tokens.
     """
 
-    sub: str                    # user_id (UUID string)
+    sub: str  # user_id (UUID string)
     role: str = "user"
     exp: int | None = None
     iat: int | None = None
-    jti: str | None = None      # JWT ID — used for blacklist revocation on logout
-    type: str | None = None     # "access" discriminator checked by _decode_token
+    jti: str | None = None  # JWT ID — used for blacklist revocation on logout
+    type: str | None = None  # "access" discriminator checked by _decode_token
     email: str | None = None
     username: str | None = None
 
@@ -175,7 +175,9 @@ def get_current_user(
 
     Raises 401 if neither is present or the token is invalid.
     """
-    token: str | None = credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    token: str | None = (
+        credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    )
 
     if not token:
         raise HTTPException(

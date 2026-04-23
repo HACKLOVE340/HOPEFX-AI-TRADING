@@ -637,7 +637,9 @@ async def init_broker(s: Any) -> Any:
         if mt5_broker is not None:
             return mt5_broker
         # Fall through to paper broker so startup is not fatal if MT5 is unavailable.
-        log_activity("MT5 broker unavailable — falling back to paper trading (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD)")
+        log_activity(
+            "MT5 broker unavailable — falling back to paper trading (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD)"
+        )
 
     if broker_type == "oanda" and oanda_token and oanda_account:
         broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
@@ -700,8 +702,7 @@ async def _try_connect_mt5(log_activity: Any) -> Any | None:
         return None
     except ImportError:
         logger.warning(
-            "MetaTrader5 SDK not installed — falling back to paper broker. "
-            "Install with: pip install MetaTrader5"
+            "MetaTrader5 SDK not installed — falling back to paper broker. Install with: pip install MetaTrader5"
         )
         return None
     except Exception as exc:

@@ -23,6 +23,7 @@ from pathlib import Path
 try:
     import lz4.frame
     import msgpack
+
     _COMPRESSION_AVAILABLE = True
 except ImportError:
     lz4 = None  # type: ignore[assignment]
@@ -60,6 +61,7 @@ class DomainEvent:
             payload = lz4.frame.compress(packed)
         else:
             import json as _json
+
             payload = _json.dumps(data).encode()
         return cls(
             timestamp=int(datetime.now(UTC).timestamp() * 1e9),
@@ -73,6 +75,7 @@ class DomainEvent:
         if _COMPRESSION_AVAILABLE:
             return msgpack.unpackb(lz4.frame.decompress(self.payload), raw=False)
         import json as _json
+
         return _json.loads(self.payload.decode())
 
 

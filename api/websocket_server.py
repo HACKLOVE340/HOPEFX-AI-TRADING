@@ -729,6 +729,7 @@ def create_websocket_router(manager: WebSocketManager):
         token = token.removeprefix("Bearer ").strip()
         try:
             from auth.jwt import decode_access_token  # type: ignore[import]
+
             return decode_access_token(token)
         except Exception as exc:
             logger.debug("/ws JWT validation failed: %s", exc)
@@ -788,15 +789,11 @@ def create_websocket_router(manager: WebSocketManager):
                 return
 
             try:
-                raw = await _asyncio.wait_for(
-                    websocket.receive_text(), timeout=_WS_AUTH_TIMEOUT
-                )
+                raw = await _asyncio.wait_for(websocket.receive_text(), timeout=_WS_AUTH_TIMEOUT)
             except TimeoutError:
                 logger.warning("/ws auth timeout for %s — closing", client_ip)
                 try:
-                    await websocket.send_text(
-                        json.dumps({"type": "auth_failed", "reason": "auth_timeout"})
-                    )
+                    await websocket.send_text(json.dumps({"type": "auth_failed", "reason": "auth_timeout"}))
                     await websocket.close(code=4001)
                 except Exception as _exc:
                     logger.debug("/ws auth_timeout teardown error (socket already closed): %s", _exc)
@@ -814,9 +811,7 @@ def create_websocket_router(manager: WebSocketManager):
             if payload is None:
                 logger.warning("/ws auth failed for %s — invalid token", client_ip)
                 try:
-                    await websocket.send_text(
-                        json.dumps({"type": "auth_failed", "reason": "invalid_token"})
-                    )
+                    await websocket.send_text(json.dumps({"type": "auth_failed", "reason": "invalid_token"}))
                     await websocket.close(code=4001)
                 except Exception as _exc:
                     logger.debug("/ws invalid_token teardown error (socket already closed): %s", _exc)
@@ -825,9 +820,7 @@ def create_websocket_router(manager: WebSocketManager):
 
             user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
             try:
-                await websocket.send_text(
-                    json.dumps({"type": "auth_ok", "user_id": user_id})
-                )
+                await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
             except Exception:
                 await limiter.release(client_ip)
                 return

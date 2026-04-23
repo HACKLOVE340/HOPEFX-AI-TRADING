@@ -194,7 +194,9 @@ def register_routers(
     logger.info("Tracing router registered (/api/tracing)")
     logger.info("ML anomaly router registered (/api/ml/anomaly)")
     logger.info("Portfolio allocator router registered (/api/portfolio/allocator)")
-    logger.info("Pages router registered (/login, /register, /about, /privacy, /terms, /security, /marketplace, /affiliate, /docs/*)")
+    logger.info(
+        "Pages router registered (/login, /register, /about, /privacy, /terms, /security, /marketplace, /affiliate, /docs/*)"
+    )
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
     if feature_flags.TWO_FACTOR_AUTH:

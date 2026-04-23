@@ -1068,6 +1068,7 @@ def _wl_db_session():
     """Return a DB session or None."""
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception:
         return None
@@ -1077,6 +1078,7 @@ def _wl_model():
     """Return the WhitelabelTenant ORM class or None."""
     try:
         from database.models import WhitelabelTenant
+
         return WhitelabelTenant
     except Exception:
         return None
@@ -1098,6 +1100,7 @@ def _get_tenant_store() -> dict:
     try:
         from cache.redis_client import get_redis_client
         import json as _json
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("whitelabel:tenants")
@@ -1113,6 +1116,7 @@ def _save_tenant_store(store: dict) -> None:
     try:
         from cache.redis_client import get_redis_client
         import json as _json
+
         rc = get_redis_client()
         if rc:
             rc.set("whitelabel:tenants", _json.dumps(store), ex=3600)
@@ -1155,6 +1159,7 @@ async def list_tenants(
     # Redis / in-memory fallback
     try:
         from api.whitelabel_admin import _get_tenants
+
         tenants = _get_tenants()
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
@@ -1165,7 +1170,7 @@ async def list_tenants(
         tenants = [t for t in tenants if t.get("status") == status]
     total = len(tenants)
     offset = (page - 1) * limit
-    return {"tenants": tenants[offset: offset + limit], "total": total, "page": page, "limit": limit}
+    return {"tenants": tenants[offset : offset + limit], "total": total, "page": page, "limit": limit}
 
 
 @router.get("/whitelabel/tenants/{tenant_id}")
@@ -1191,6 +1196,7 @@ async def get_tenant(
     if not tenant:
         try:
             from api.whitelabel_admin import _get_tenant_by_id
+
             tenant = _get_tenant_by_id(tenant_id)
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
@@ -1269,6 +1275,7 @@ async def create_tenant(
 
     try:
         from api.whitelabel_admin import _create_tenant
+
         _create_tenant(tenant_dict)
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
@@ -1482,6 +1489,7 @@ def _gdpr_db_session():
     """Return a DB session or None."""
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception:
         return None
@@ -1491,6 +1499,7 @@ def _gdpr_model():
     """Return the GDPRRequest ORM class or None."""
     try:
         from database.models import GDPRRequest
+
         return GDPRRequest
     except Exception:
         return None
@@ -1512,6 +1521,7 @@ def _gdpr_store() -> dict:
     try:
         from cache.redis_client import get_redis_client
         import json as _json
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("gdpr:requests")
@@ -1529,6 +1539,7 @@ def _gdpr_save(store: dict) -> None:
     try:
         from cache.redis_client import get_redis_client
         import json as _json
+
         rc = get_redis_client()
         if rc:
             rc.set("gdpr:requests", _json.dumps(store), ex=86400)
@@ -1577,7 +1588,7 @@ async def get_gdpr_requests(
     requests.sort(key=lambda r: r.get("submitted_at", ""), reverse=True)
     total = len(requests)
     offset = (page - 1) * limit
-    return {"requests": requests[offset: offset + limit], "total": total, "page": page, "limit": limit}
+    return {"requests": requests[offset : offset + limit], "total": total, "page": page, "limit": limit}
 
 
 @router.post("/gdpr/requests")
@@ -3058,6 +3069,7 @@ async def _check_celery_service() -> dict:
             # Also try the Celery inspect API for a live count
             try:
                 from celery_app import app as _celery_app
+
                 inspect = _celery_app.control.inspect(timeout=1.0)
                 active = inspect.active()
                 if active is not None:

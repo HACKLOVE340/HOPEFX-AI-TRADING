@@ -22,6 +22,7 @@ except ImportError:
 
 try:
     import keyring
+
     _KEYRING_AVAILABLE = True
 except ImportError:
     keyring = None  # type: ignore[assignment]

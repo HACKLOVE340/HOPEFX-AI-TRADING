@@ -101,6 +101,7 @@ class RemediateResponse(BaseModel):
 def _get_engine():
     """Return the DiagnosticsEngine singleton."""
     from security.diagnostics import get_diagnostics_engine
+
     return get_diagnostics_engine()
 
 
@@ -108,6 +109,7 @@ def _get_healer():
     """Return the SelfHealer singleton (may be None if not started)."""
     try:
         from security.self_healer import get_healer
+
         return get_healer()
     except Exception:
         return None
@@ -117,6 +119,7 @@ async def _load_report_from_redis() -> dict[str, Any] | None:
     """Load the last diagnostics report from Redis as a fallback."""
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get(_REDIS_REPORT_KEY)
@@ -131,6 +134,7 @@ async def _load_remediation_log_from_redis() -> list[dict[str, Any]]:
     """Load the remediation log from Redis as a fallback."""
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get(_REDIS_REMEDIATION_KEY)
@@ -165,7 +169,8 @@ async def run_diagnostics(
             report = await engine.run_full_diagnostic(parallel=True)
             logger.info(
                 "diagnostics: background run complete — %s (job=%s)",
-                report.summary(), job_id,
+                report.summary(),
+                job_id,
             )
             # Also push to healer state if available
             healer = _get_healer()
@@ -316,10 +321,7 @@ async def list_checks(
 ) -> dict:
     """List all available diagnostic check names with descriptions."""
     return {
-        "checks": [
-            {"name": name, "description": desc}
-            for name, desc in _CHECK_DESCRIPTIONS.items()
-        ],
+        "checks": [{"name": name, "description": desc} for name, desc in _CHECK_DESCRIPTIONS.items()],
         "total": len(_CHECK_DESCRIPTIONS),
     }
 
@@ -417,10 +419,7 @@ async def get_diagnostics_summary(
     health_pct = round((ok_checks / total_checks * 100) if total_checks else 0, 1)
 
     # Collect top issues
-    top_issues = [
-        r for r in diag_report.get("results", [])
-        if r.get("status") in ("critical", "error")
-    ][:5]
+    top_issues = [r for r in diag_report.get("results", []) if r.get("status") in ("critical", "error")][:5]
 
     return {
         "health_score": health_pct,

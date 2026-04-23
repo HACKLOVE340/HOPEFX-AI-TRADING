@@ -256,9 +256,11 @@ async def _check_database() -> ComponentStatus:
             sync_engine = getattr(_app_state, "db_engine", None)
             if sync_engine is not None:
                 loop = asyncio.get_event_loop()
+
                 def _ping() -> None:
                     with sync_engine.connect() as conn:
                         conn.execute(_text("SELECT 1"))
+
                 await asyncio.wait_for(
                     loop.run_in_executor(None, _ping),
                     timeout=_CHECK_TIMEOUT_SEC,
@@ -561,6 +563,7 @@ async def health_root() -> dict[str, Any]:
     so that generic health-check tools hitting /api/health get a useful response.
     """
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(url="/api/health/ready", status_code=302)
 
 

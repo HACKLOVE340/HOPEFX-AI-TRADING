@@ -14,16 +14,20 @@ from typing import Any
 
 import joblib
 import numpy as np
+
 try:
     import structlog
+
     logger = structlog.get_logger()
 except ImportError:
     import logging as _logging
+
     logger = _logging.getLogger(__name__)  # type: ignore[assignment]
     structlog = None  # type: ignore[assignment]
 
 try:
     from hmmlearn.hmm import GaussianHMM
+
     _HMMLEARN_AVAILABLE = True
 except ImportError:
     GaussianHMM = None  # type: ignore[assignment,misc]
@@ -70,9 +74,7 @@ class RegimeDetector:
 
         # HMM for sequence modeling
         if not _HMMLEARN_AVAILABLE:
-            raise ImportError(
-                "hmmlearn is required for RegimeDetector. Install with: pip install hmmlearn"
-            )
+            raise ImportError("hmmlearn is required for RegimeDetector. Install with: pip install hmmlearn")
         self.hmm = GaussianHMM(
             n_components=n_regimes,
             covariance_type="full",

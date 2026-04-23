@@ -23,11 +23,11 @@ class TokenPayload(BaseModel):
     existing tokens.
     """
 
-    sub: str                    # user_id (UUID string)
+    sub: str  # user_id (UUID string)
     role: str = "user"
     exp: int | None = None
     iat: int | None = None
-    jti: str | None = None      # JWT ID — used for blacklist revocation on logout
-    type: str | None = None     # "access" discriminator
+    jti: str | None = None  # JWT ID — used for blacklist revocation on logout
+    type: str | None = None  # "access" discriminator
     email: str | None = None
     username: str | None = None

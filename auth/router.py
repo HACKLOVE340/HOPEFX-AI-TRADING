@@ -209,7 +209,9 @@ def _get_current_user_id(
 
     Raises 401 if neither is present or the token is invalid/expired.
     """
-    token: str | None = credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    token: str | None = (
+        credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    )
 
     if not token:
         raise HTTPException(
@@ -718,7 +720,7 @@ async def get_csrf_token(response: Response) -> dict:
         key=_CSRF_COOKIE_NAME,
         value=token,
         max_age=_CSRF_COOKIE_MAX_AGE,
-        httponly=False,   # JS must be able to read it to set the header
+        httponly=False,  # JS must be able to read it to set the header
         samesite="strict",
         secure=secure,
         path="/",

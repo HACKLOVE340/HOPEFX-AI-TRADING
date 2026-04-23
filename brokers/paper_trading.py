@@ -442,7 +442,8 @@ class PaperTradingBroker(BrokerConnector):
             logger.warning(
                 "ORDER on %s using hardcoded fallback price %.5f — no live feed has connected. "
                 "Set PAPER_PRICE_STALE_SECONDS=0 to suppress this warning in offline demo mode.",
-                symbol, current_price,
+                symbol,
+                current_price,
             )
 
         # Create order

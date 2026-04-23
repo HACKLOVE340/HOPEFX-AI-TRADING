@@ -240,14 +240,16 @@ class OHLCVBuffer:
 
         # Check if the bar period has elapsed
         if ts - self._bar_start_ts >= _BAR_PERIOD_S:
-            self._bars.append((
-                self._bar_open,
-                self._bar_high,
-                self._bar_low,
-                self._bar_close,
-                self._bar_volume,
-                self._bar_start_ts,
-            ))
+            self._bars.append(
+                (
+                    self._bar_open,
+                    self._bar_high,
+                    self._bar_low,
+                    self._bar_close,
+                    self._bar_volume,
+                    self._bar_start_ts,
+                )
+            )
             # Cap buffer length
             if len(self._bars) > _OHLCV_MAX_BARS:
                 self._bars = self._bars[-_OHLCV_MAX_BARS:]
@@ -326,9 +328,7 @@ class InferenceSignalAdapter:
                 from ml.inference_engine import get_inference_engine
 
                 self._engine = get_inference_engine()
-                logger.info(
-                    "InferenceSignalAdapter: InferenceEngine loaded for %s", self._symbol
-                )
+                logger.info("InferenceSignalAdapter: InferenceEngine loaded for %s", self._symbol)
             except Exception as exc:
                 logger.warning(
                     "InferenceSignalAdapter: InferenceEngine unavailable (%s) — "
@@ -669,9 +669,7 @@ class PaperRunner:
         self._tasks.append(router_task)
 
         # Start FillRecorder in background
-        recorder_task = asyncio.create_task(
-            self._fill_recorder.run(self._stop_event), name="fill_recorder"
-        )
+        recorder_task = asyncio.create_task(self._fill_recorder.run(self._stop_event), name="fill_recorder")
         self._tasks.append(recorder_task)
 
         # Main tick → signal → order loop
@@ -754,9 +752,7 @@ class PaperRunner:
 
                 # Check fill cap
                 if _MAX_FILLS > 0 and self._fill_recorder.fill_count >= _MAX_FILLS:
-                    logger.info(
-                        "PaperRunner: reached MAX_FILLS=%d — stopping.", _MAX_FILLS
-                    )
+                    logger.info("PaperRunner: reached MAX_FILLS=%d — stopping.", _MAX_FILLS)
                     self._stop_event.set()
                     break
 
@@ -833,10 +829,7 @@ class PaperRunner:
     def _enforce_paper_mode() -> None:
         """Abort if PAPER_TRADING is not set — prevents accidental live execution."""
         if os.environ.get("PAPER_TRADING", "").lower() != "true":
-            logger.critical(
-                "PaperRunner requires PAPER_TRADING=true. "
-                "Set the environment variable and retry."
-            )
+            logger.critical("PaperRunner requires PAPER_TRADING=true. Set the environment variable and retry.")
             sys.exit(1)
 
     @staticmethod

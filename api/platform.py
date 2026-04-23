@@ -756,15 +756,12 @@ def setup_rate_limiting(app):
         # Development: log at CRITICAL so it is impossible to miss, but do not
         # crash so engineers can still run the server without a full install.
         logger.critical(
-            "RATE LIMITING DISABLED — %s  "
-            "All endpoints are unprotected against brute-force and DoS attacks.",
+            "RATE LIMITING DISABLED — %s  All endpoints are unprotected against brute-force and DoS attacks.",
             msg,
         )
         return None
 
-    redis_url = (
-        f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
-    )
+    redis_url = f"redis://{os.getenv('REDIS_HOST', 'localhost')}:{os.getenv('REDIS_PORT', '6379')}"
     try:
         limiter = Limiter(key_func=get_remote_address, storage_uri=redis_url)
         logger.info("Rate limiter: Redis backend at %s", redis_url)

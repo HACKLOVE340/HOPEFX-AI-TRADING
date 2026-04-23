@@ -36,8 +36,8 @@ _REGISTRY = _SAVED / "registry.json"
 _SYMLINK = _SAVED / "current.pkl"
 _META = _SAVED / "advanced_oos_meta.json"
 
-_REQUIRED_SHARPE = 1.0   # minimum credible Sharpe for production
-_REQUIRED_N = 600        # minimum OOS trades for credible Sharpe
+_REQUIRED_SHARPE = 1.0  # minimum credible Sharpe for production
+_REQUIRED_N = 600  # minimum OOS trades for credible Sharpe
 
 
 def _sha256(path: Path) -> str:
@@ -67,9 +67,7 @@ def verify() -> list[str]:
 
     versions = reg.get("versions", {})
     if active_key not in versions:
-        failures.append(
-            f"active_version '{active_key}' not found in registry versions"
-        )
+        failures.append(f"active_version '{active_key}' not found in registry versions")
         return failures
 
     entry = versions[active_key]
@@ -96,14 +94,10 @@ def verify() -> list[str]:
             actual_sha = _sha256(resolved)
             expected_sha = entry.get("sha256", "")
             if not expected_sha:
-                failures.append(
-                    f"registry entry '{active_key}' has no sha256 — cannot verify integrity"
-                )
+                failures.append(f"registry entry '{active_key}' has no sha256 — cannot verify integrity")
             elif actual_sha != expected_sha:
                 failures.append(
-                    f"SHA-256 mismatch for {resolved.name}:\n"
-                    f"  actual:   {actual_sha}\n"
-                    f"  registry: {expected_sha}"
+                    f"SHA-256 mismatch for {resolved.name}:\n  actual:   {actual_sha}\n  registry: {expected_sha}"
                 )
 
     # ── Check 4: Sharpe gate ──────────────────────────────────────────────────
@@ -113,25 +107,19 @@ def verify() -> list[str]:
 
     if not gate_passed:
         failures.append(
-            f"active model '{active_key}' has sharpe_gate_passed=False "
-            f"(sharpe={sharpe}, n_trades={n_trades})"
+            f"active model '{active_key}' has sharpe_gate_passed=False (sharpe={sharpe}, n_trades={n_trades})"
         )
     if sharpe < _REQUIRED_SHARPE:
-        failures.append(
-            f"active model '{active_key}' Sharpe={sharpe} < required {_REQUIRED_SHARPE}"
-        )
+        failures.append(f"active model '{active_key}' Sharpe={sharpe} < required {_REQUIRED_SHARPE}")
     if n_trades < _REQUIRED_N:
         failures.append(
-            f"active model '{active_key}' n_trades={n_trades} < required {_REQUIRED_N} "
-            f"(Sharpe not credible)"
+            f"active model '{active_key}' n_trades={n_trades} < required {_REQUIRED_N} (Sharpe not credible)"
         )
 
     # ── Check 5: state == "active" ────────────────────────────────────────────
     state = entry.get("state", "unknown")
     if state != "active":
-        failures.append(
-            f"active_version '{active_key}' has state='{state}', expected 'active'"
-        )
+        failures.append(f"active_version '{active_key}' has state='{state}', expected 'active'")
 
     # ── Check 6: meta consistency ─────────────────────────────────────────────
     if _META.exists():
@@ -145,18 +133,13 @@ def verify() -> list[str]:
         meta_horizon = meta.get("horizon")
         reg_horizon = entry.get("horizon")
         if meta_horizon is not None and reg_horizon is not None and meta_horizon != reg_horizon:
-            failures.append(
-                f"horizon mismatch: meta={meta_horizon}, registry={reg_horizon}"
-            )
+            failures.append(f"horizon mismatch: meta={meta_horizon}, registry={reg_horizon}")
 
         # sha256 in meta must match registry
         meta_sha = meta.get("sha256")
         reg_sha = entry.get("sha256")
         if meta_sha and reg_sha and meta_sha != reg_sha:
-            failures.append(
-                f"sha256 mismatch between meta ({meta_sha[:12]}…) "
-                f"and registry ({reg_sha[:12]}…)"
-            )
+            failures.append(f"sha256 mismatch between meta ({meta_sha[:12]}…) and registry ({reg_sha[:12]}…)")
 
         # oos_accuracy must not be null for the active production model
         if meta.get("oos_accuracy") is None:

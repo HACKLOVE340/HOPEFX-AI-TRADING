@@ -39,6 +39,7 @@ except Exception:  # pragma: no cover — database package absent in unit-test v
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _user_stats(db, user_id: str) -> dict:
     """Return real trade count and revenue for a user.
 
@@ -60,17 +61,9 @@ def _user_stats(db, user_id: str) -> dict:
 
     if uid_int is not None:
         # Count all trades across all accounts owned by this user
-        account_ids = [
-            row[0]
-            for row in db.query(Account.id).filter(Account.user_id == uid_int).all()
-        ]
+        account_ids = [row[0] for row in db.query(Account.id).filter(Account.user_id == uid_int).all()]
         if account_ids:
-            total_trades = (
-                db.query(func.count(Trade.id))
-                .filter(Trade.account_id.in_(account_ids))
-                .scalar()
-                or 0
-            )
+            total_trades = db.query(func.count(Trade.id)).filter(Trade.account_id.in_(account_ids)).scalar() or 0
             revenue_generated = (
                 db.query(func.coalesce(func.sum(Trade.total_pnl), 0.0))
                 .filter(Trade.account_id.in_(account_ids))
@@ -96,6 +89,7 @@ def _user_stats(db, user_id: str) -> dict:
         "revenue_generated": round(float(revenue_generated) + float(wallet_deposits), 2),
     }
 
+
 router = APIRouter()
 
 # ── Users ─────────────────────────────────────────────────────────────────────
@@ -112,7 +106,6 @@ async def list_users(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict[str, Any]:
     try:
-
         db = SessionLocal()
         try:
             q = db.query(User)
@@ -157,7 +150,6 @@ async def list_users(
 @router.get("/users/{user_id}")
 async def get_user(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -191,7 +183,6 @@ async def update_user(
     user_id: str, body: UpdateUserBody, user: TokenPayload = Depends(_require_superadmin)
 ) -> dict[str, Any]:
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -219,7 +210,6 @@ async def delete_user(user_id: str, user: TokenPayload = Depends(_require_supera
     if user_id == user.sub:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -247,7 +237,6 @@ async def set_user_role(
     if body.role not in valid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -283,7 +272,6 @@ async def set_user_plan(
             detail=f"Invalid plan. Must be one of: {sorted(valid_plans)}",
         )
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -307,7 +295,6 @@ async def ban_user(
     user_id: str, body: BanUserBody, user: TokenPayload = Depends(_require_superadmin)
 ) -> dict[str, Any]:
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -330,7 +317,6 @@ async def ban_user(
 @router.post("/users/{user_id}/unban")
 async def unban_user(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
     try:
-
         db = SessionLocal()
         try:
             u = db.query(User).filter_by(id=user_id).first()
@@ -445,7 +431,6 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
 @router.get("/users/{user_id}/activity")
 async def get_user_activity(user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
     try:
-
         db = SessionLocal()
         try:
             rows = (
@@ -536,7 +521,6 @@ async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_re
     import csv
     import io
 
-
     db = SessionLocal()
     try:
         q = db.query(User)
@@ -545,11 +529,22 @@ async def bulk_export_users(body: BulkUserBody, user: TokenPayload = Depends(_re
         rows = q.order_by(User.created_at.desc()).all()
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow([
-            "user_id", "username", "email", "role", "plan", "status",
-            "country", "totp_enabled", "total_trades", "revenue_generated",
-            "created_at", "last_login",
-        ])
+        writer.writerow(
+            [
+                "user_id",
+                "username",
+                "email",
+                "role",
+                "plan",
+                "status",
+                "country",
+                "totp_enabled",
+                "total_trades",
+                "revenue_generated",
+                "created_at",
+                "last_login",
+            ]
+        )
         for u in rows:
             stats = _user_stats(db, u.id)
             writer.writerow(

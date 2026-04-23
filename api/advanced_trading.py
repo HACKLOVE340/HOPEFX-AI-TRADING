@@ -731,9 +731,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                         for bar in ohlcv
                     ]
                     returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1]
-                        for i in range(1, len(closes))
-                        if closes[i - 1] > 0
+                        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
                     if returns:
                         series[sym] = returns
@@ -772,11 +770,9 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                         if val is not None:
                             with contextlib.suppress(ValueError):  # skip non-numeric rows
                                 closes.append(float(val))
-                closes = closes[-(window + 5):]
+                closes = closes[-(window + 5) :]
                 returns = [
-                    (closes[i] - closes[i - 1]) / closes[i - 1]
-                    for i in range(1, len(closes))
-                    if closes[i - 1] > 0
+                    (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                 ]
                 if len(returns) >= 5:
                     series[sym] = returns
@@ -818,7 +814,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                     df = _yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
                     if df is not None and not df.empty and "Close" in df.columns:
                         closes = df["Close"].dropna().tolist()
-                        closes = closes[-(window + 5):]
+                        closes = closes[-(window + 5) :]
                         returns = [
                             (closes[i] - closes[i - 1]) / closes[i - 1]
                             for i in range(1, len(closes))
@@ -828,7 +824,9 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                             series[sym] = returns
                             logger.debug(
                                 "correlation: yfinance loaded %s (%s) — %d bars",
-                                sym, ticker, len(returns),
+                                sym,
+                                ticker,
+                                len(returns),
                             )
                 except Exception as exc:
                     logger.debug("correlation: yfinance miss for %s (%s): %s", sym, ticker, exc)
@@ -914,6 +912,7 @@ async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
     publication cadence).  When the API is unreachable the last cached response
     is returned with a ``stale=true`` flag rather than a 503.
     """
+
     def _build_result(rec: dict, stale: bool = False) -> dict:
         net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
             rec.get("noncomm_positions_short_all", 0),

@@ -85,6 +85,7 @@ async def superadmin_dashboard(user: TokenPayload = Depends(_require_superadmin)
         return HTMLResponse(content=path.read_text(encoding="utf-8"))
     # Fallback: redirect to the React SPA which renders SuperAdminDashboard
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(url="/superadmin", status_code=302)  # type: ignore[return-value]
 
 

@@ -68,7 +68,7 @@ class EncryptionManager:
             if _app_env == "production":
                 raise RuntimeError(
                     "CONFIG_ENCRYPTION_KEY must be set in production. "
-                    "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                    'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(48))"'
                 )
             # Dev/staging only — auto-generate an ephemeral key persisted locally.
             key_file = Path(".encryption_key")
@@ -108,18 +108,12 @@ class EncryptionManager:
     def encrypt(self, data: str) -> str:
         if self._fernet:
             return self._fernet.encrypt(data.encode()).decode()
-        raise RuntimeError(
-            "cryptography package is required for encryption. "
-            "Install it with: pip install cryptography"
-        )
+        raise RuntimeError("cryptography package is required for encryption. Install it with: pip install cryptography")
 
     def decrypt(self, token: str) -> str:
         if self._fernet:
             return self._fernet.decrypt(token.encode()).decode()
-        raise RuntimeError(
-            "cryptography package is required for decryption. "
-            "Install it with: pip install cryptography"
-        )
+        raise RuntimeError("cryptography package is required for decryption. Install it with: pip install cryptography")
 
     def hash_password(self, password: str, salt: bytes | None = None) -> str:
         if salt is None:

@@ -38,12 +38,14 @@ _HISTORY_MAX = 50
 
 def _get_engine():
     from infrastructure.health_engine import get_health_engine
+
     return get_health_engine()
 
 
 def _redis():
     try:
         from cache.redis_client import get_redis_client
+
         return get_redis_client()
     except Exception:
         return None

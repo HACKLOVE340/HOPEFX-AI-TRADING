@@ -228,26 +228,27 @@ _CSRF_HEADER = "X-CSRF-Token"
 
 # Paths exempt from CSRF validation (public endpoints, token issuance, webhooks)
 _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
-    "/api/auth/csrf-token",              # token issuance — no token yet
-    "/api/auth/login",                   # pre-auth — no session cookie yet
-    "/api/auth/register",                # pre-auth
-    "/api/auth/activate-free-tier",      # post-registration setup, called before session cookie exists
+    "/api/auth/csrf-token",  # token issuance — no token yet
+    "/api/auth/login",  # pre-auth — no session cookie yet
+    "/api/auth/register",  # pre-auth
+    "/api/auth/activate-free-tier",  # post-registration setup, called before session cookie exists
     "/api/billing/auth/activate-free-tier",  # billing router alias — same semantics
-    "/api/auth/refresh",                 # uses refresh token, not session
+    "/api/auth/refresh",  # uses refresh token, not session
     "/api/auth/forgot-password",
     "/api/auth/reset-password",
     "/api/auth/verify-email",
     "/api/auth/resend-verification",
-    "/api/email/webhook",                # SendGrid webhook — uses HMAC signature
-    "/api/billing/webhook/stripe",       # Stripe webhook — uses HMAC-SHA256 signature, no CSRF token
+    "/api/email/webhook",  # SendGrid webhook — uses HMAC signature
+    "/api/billing/webhook/stripe",  # Stripe webhook — uses HMAC-SHA256 signature, no CSRF token
     "/api/monetization/webhook/stripe",  # Stripe webhook (monetization router alias)
-    "/api/health",                       # health checks
-    "/ws",                               # WebSocket — uses JWT auth
-    "/metrics",                          # Prometheus scrape
+    "/api/health",  # health checks
+    "/ws",  # WebSocket — uses JWT auth
+    "/metrics",  # Prometheus scrape
 )
 
 # Methods that mutate state and require CSRF validation
 _CSRF_PROTECTED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
 
 # Disable CSRF in test/CI environments where no browser is involved.
 # Evaluated at request time (not module import time) so that test modules
@@ -298,10 +299,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # endpoints without a browser session while keeping the protection intact
         # for all external requests.
         client_ip = request.client.host if request.client else ""
-        if (
-            client_ip in self._LOOPBACK_ADDRS
-            and request.headers.get(self._INTERNAL_HEADER) == "1"
-        ):
+        if client_ip in self._LOOPBACK_ADDRS and request.headers.get(self._INTERNAL_HEADER) == "1":
             return await call_next(request)
 
         cookie_token = request.cookies.get(_CSRF_COOKIE, "")
@@ -312,8 +310,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             # API clients, and server-side callers that don't carry a browser
             # session.  Token *mismatch* (below) is the real attack signal.
             logger.debug(
-                "CSRF validation failed — missing token: path=%s method=%s "
-                "cookie_present=%s header_present=%s",
+                "CSRF validation failed — missing token: path=%s method=%s cookie_present=%s header_present=%s",
                 path,
                 request.method,
                 bool(cookie_token),
@@ -326,6 +323,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         # Constant-time comparison to prevent timing attacks
         import hmac as _hmac
+
         if not _hmac.compare_digest(cookie_token, header_token):
             # Token mismatch IS a warning — it indicates a forged or replayed token.
             logger.warning(
@@ -358,7 +356,7 @@ def register_all(app: FastAPI) -> None:
     (last registered = outermost = first to process the request).
     We want: CSRF → metrics → security headers → CORS (outermost).
     """
-    setup_csrf_middleware(app)   # innermost — validates before routing
+    setup_csrf_middleware(app)  # innermost — validates before routing
     setup_metrics_middleware(app)
     setup_security_headers(app)
     setup_cors(app)  # outermost — handles preflight first

@@ -469,6 +469,7 @@ async def status_page():
 
 
 import os as _os
+
 _STATUS_CHECK_TIMEOUT_SEC: float = float(_os.getenv("HEALTH_CHECK_TIMEOUT_SEC", "15.0"))
 # Each individual probe has a 3s timeout (infrastructure/health.py).
 # 6 probes × 3s = 18s worst-case sequential, but they run concurrently so

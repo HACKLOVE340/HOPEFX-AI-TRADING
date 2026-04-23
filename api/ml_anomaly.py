@@ -43,9 +43,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ml/anomaly", tags=["Anomaly Detection"])
 
 # Persisted model path — shared between the API and the signal engine
-_ANOMALY_MODEL_PATH = Path(
-    os.getenv("ANOMALY_MODEL_PATH", "ml/saved_models/anomaly_weighter.pkl")
-)
+_ANOMALY_MODEL_PATH = Path(os.getenv("ANOMALY_MODEL_PATH", "ml/saved_models/anomaly_weighter.pkl"))
 
 # ── Singleton live store ──────────────────────────────────────────────────────
 # One AnomalyWeightStore per process, shared across requests.
@@ -273,6 +271,7 @@ async def fit_anomaly_detector(
             raise ValueError(f"Insufficient OHLCV data for {body.symbol} (need ≥50 bars)")
 
         import pandas as pd
+
         feat_df = pd.DataFrame(feat)
 
         aw = AnomalyWeighter(
@@ -518,16 +517,18 @@ async def anomaly_report(
 
         rows = []
         for idx, row in top.iterrows():
-            rows.append({
-                "index": str(idx),
-                "anomaly_score": round(float(row.get("anomaly_score", 0)), 6),
-                "is_anomaly": bool(row.get("is_anomaly", False)),
-                "anomaly_weight": round(float(row.get("anomaly_weight", 1.0)), 6),
-                "close": round(float(row.get("close", 0)), 5),
-                "high": round(float(row.get("high", 0)), 5),
-                "low": round(float(row.get("low", 0)), 5),
-                "volume": float(row.get("volume", 0)),
-            })
+            rows.append(
+                {
+                    "index": str(idx),
+                    "anomaly_score": round(float(row.get("anomaly_score", 0)), 6),
+                    "is_anomaly": bool(row.get("is_anomaly", False)),
+                    "anomaly_weight": round(float(row.get("anomaly_weight", 1.0)), 6),
+                    "close": round(float(row.get("close", 0)), 5),
+                    "high": round(float(row.get("high", 0)), 5),
+                    "low": round(float(row.get("low", 0)), 5),
+                    "volume": float(row.get("volume", 0)),
+                }
+            )
 
         return {
             "symbol": symbol.upper(),
@@ -568,9 +569,7 @@ async def retrain_anomaly_detector(
     The refit runs in a background thread so the response is immediate.
     """
     target_symbols: list[str] = symbols or [
-        s.strip()
-        for s in os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",")
-        if s.strip()
+        s.strip() for s in os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",") if s.strip()
     ]
 
     def _background_refit() -> None:

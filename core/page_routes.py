@@ -149,41 +149,72 @@ def register_page_routes(app: FastAPI) -> None:
         _SPA_ROUTES = [
             # ── Public / auth ──────────────────────────────────────────────
             "/",
-            "/login", "/register", "/forgot-password", "/reset-password",
-            "/onboarding", "/pricing", "/terms", "/risk-disclosure",
-            "/privacy", "/status",
-
+            "/login",
+            "/register",
+            "/forgot-password",
+            "/reset-password",
+            "/onboarding",
+            "/pricing",
+            "/terms",
+            "/risk-disclosure",
+            "/privacy",
+            "/status",
             # ── Core trading ───────────────────────────────────────────────
-            "/dashboard", "/home",
-            "/trade", "/trading", "/terminal",
-            "/portfolio", "/performance",
-            "/watchlist", "/alerts", "/calendar",
-
+            "/dashboard",
+            "/home",
+            "/trade",
+            "/trading",
+            "/terminal",
+            "/portfolio",
+            "/performance",
+            "/watchlist",
+            "/alerts",
+            "/calendar",
             # ── Analysis & research ────────────────────────────────────────
-            "/nuclear", "/geopolitical", "/correlation", "/tca",
-            "/ai-strategy", "/indicators", "/walk-forward",
-            "/ab-testing", "/replay", "/research",
+            "/nuclear",
+            "/geopolitical",
+            "/correlation",
+            "/tca",
+            "/ai-strategy",
+            "/indicators",
+            "/walk-forward",
+            "/ab-testing",
+            "/replay",
+            "/research",
             "/backtest",
-
             # ── Tools ──────────────────────────────────────────────────────
-            "/journal", "/prop-firm", "/copy-trading", "/risk-calc",
+            "/journal",
+            "/prop-firm",
+            "/copy-trading",
+            "/risk-calc",
             "/risk-calculator",
-
             # ── Community / social ─────────────────────────────────────────
-            "/leaderboard", "/feed", "/social",
-            "/marketplace", "/affiliate", "/teams",
-
+            "/leaderboard",
+            "/feed",
+            "/social",
+            "/marketplace",
+            "/affiliate",
+            "/teams",
             # ── Account ────────────────────────────────────────────────────
-            "/profile", "/wallet", "/sub-accounts", "/elite",
-            "/checkout", "/crypto-checkout", "/settings", "/2fa-setup",
-
+            "/profile",
+            "/wallet",
+            "/sub-accounts",
+            "/elite",
+            "/checkout",
+            "/crypto-checkout",
+            "/settings",
+            "/2fa-setup",
             # ── Admin ──────────────────────────────────────────────────────
-            "/admin", "/audit", "/audit-log",
-            "/security", "/security-dashboard",
-            "/auto-heal", "/whitelabel",
-
+            "/admin",
+            "/audit",
+            "/audit-log",
+            "/security",
+            "/security-dashboard",
+            "/auto-heal",
+            "/whitelabel",
             # ── Super admin ────────────────────────────────────────────────
-            "/superadmin", "/system-reliability",
+            "/superadmin",
+            "/system-reliability",
         ]
 
         async def _spa_index(_req: Request) -> FileResponse:
@@ -206,18 +237,29 @@ def register_page_routes(app: FastAPI) -> None:
             # Note: StaticFiles mount is registered AFTER this route, so assets
             # under /assets/ are served by the StaticFiles handler, not here.
             _passthrough_prefixes = (
-                "api/", "ws/", "godmode/", "godmode",
-                "docs", "redoc",
-                "health", "health/",
+                "api/",
+                "ws/",
+                "godmode/",
+                "godmode",
+                "docs",
+                "redoc",
+                "health",
+                "health/",
                 "metrics",
-                "kyc", "kyc/",
-                "decision", "decision/",
-                "replay", "replay/",
-                "mobile", "mobile/",
+                "kyc",
+                "kyc/",
+                "decision",
+                "decision/",
+                "replay",
+                "replay/",
+                "mobile",
+                "mobile/",
                 "favicon.ico",
             )
-            if any(full_path == p or full_path.startswith(p + "/") or full_path.startswith(p)
-                   for p in _passthrough_prefixes):
+            if any(
+                full_path == p or full_path.startswith(p + "/") or full_path.startswith(p)
+                for p in _passthrough_prefixes
+            ):
                 return Response(status_code=404)
             # Serve real static assets (JS/CSS/images) from the build output
             _asset = _frontend_dist / full_path

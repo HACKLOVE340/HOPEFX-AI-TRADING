@@ -1152,6 +1152,7 @@ def _register_signal_alias_routes(router) -> None:
         """
         try:
             from api.news import get_sentiment_for_symbol
+
             result = await get_sentiment_for_symbol(symbol)
             return {
                 "score": float(result.get("sentiment_score", 0)),
@@ -1168,12 +1169,14 @@ def _register_signal_alias_routes(router) -> None:
 
         try:
             from data_layer.sentiment import get_sentiment
+
             result = await get_sentiment(symbol)
             return result
         except Exception:  # nosec B110 — fallback sentiment source unavailable; return neutral default
             pass
 
         from datetime import datetime, timezone
+
         return {
             "score": 0.0,
             "label": "neutral",
@@ -1199,6 +1202,7 @@ def _register_signal_alias_routes(router) -> None:
         """
         try:
             from api.news import get_news_for_symbol
+
             items = await get_news_for_symbol(symbol, limit=limit)
             return {"items": items, "count": len(items)}
         except Exception:  # nosec B110 — primary news source unavailable; try fallback below
@@ -1206,6 +1210,7 @@ def _register_signal_alias_routes(router) -> None:
 
         try:
             from news.news_aggregator import get_latest_news
+
             raw = get_latest_news(symbol=symbol, limit=limit)
             items = [
                 {
