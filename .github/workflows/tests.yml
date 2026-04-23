@@ -129,6 +129,8 @@ jobs:
         retention-days: 7
 
     - name: Upload coverage to Codecov
+      # continue-on-error: CODECOV_TOKEN is optional; upload is best-effort.
+      continue-on-error: true
       uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24
       with:
         files: ./coverage.xml
@@ -137,6 +139,8 @@ jobs:
 
     - name: Upload coverage to Qlty
       if: matrix.python-version == '3.11'
+      # continue-on-error: QLTY_COVERAGE_TOKEN is optional; upload is best-effort.
+      continue-on-error: true
       uses: qltysh/qlty-action/coverage@a19242102d17e497f437d7466aa01b528537e899  # v2
       with:
         token: ${{ secrets.QLTY_COVERAGE_TOKEN }}

@@ -470,9 +470,9 @@ def run_backtest(
             lots = POSITION_SIZE  # 1 lot = 100 oz for gold
             # Extract weekday for Wednesday triple-swap when index is datetime
             weekday: int | None = None
-            try:  # noqa: SIM105 — nosec B110: non-fatal; contextlib.suppress would drop the nosec annotation
+            try:  # noqa: SIM105
                 weekday = int(_ts.weekday())
-            except Exception:
+            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
                 pass
             overnight_cost = (
                 abs(_swap.cost_usd_per_night(_swap_ticker, lots=lots, side=side, weekday=weekday)) / _BARS_PER_DAY_H1
