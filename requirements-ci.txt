@@ -88,7 +88,7 @@ matplotlib>=3.8.0
 seaborn>=0.13.0
 
 # ── Config & utilities ────────────────────────────────────────────────────────
-python-dotenv>=1.0.0
+python-dotenv>=1.2.2  # CVE: SNYK-PYTHON-PYTHONDOTENV-16115271 fixed in 1.2.2+
 pyyaml>=6.0.1
 keyring>=24.0.0
 msgpack>=1.0.0
