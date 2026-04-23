@@ -359,3 +359,31 @@ async def explain_by_id(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Explanation unavailable — check server logs",
         ) from None
+
+
+@router.post(
+    "/{signal_id}",
+    response_model=SignalExplanation,
+    summary="Explain a signal by ID or symbol (POST alias)",
+)
+async def explain_by_id_post(
+    request: Request,
+    signal_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    POST alias for ``GET /api/explain/{signal_id}``.
+
+    The frontend's ``explainabilityApi.explain(symbol)`` sends a POST;
+    any extra body parameters are accepted but ignored — the explanation
+    is driven solely by the path parameter.
+    """
+    _enforce_rate_limit(request, _EXPLAIN_LIMIT)
+    try:
+        return _build_explanation(signal_id)
+    except (RuntimeError, ValueError, KeyError, AttributeError) as exc:
+        logger.warning("Explanation unavailable for %s: %s", signal_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Explanation unavailable — check server logs",
+        ) from None
