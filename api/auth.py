@@ -175,14 +175,7 @@ def get_current_user(
 
     Raises 401 if neither is present or the token is invalid.
     """
-    token: str | None = None
-
-    if credentials is not None:
-        token = credentials.credentials
-    else:
-        # Cookie fallback — allows browser navigation to protected pages
-        # without requiring JS to inject the Authorization header.
-        token = request.cookies.get("hopefx_access_token")
+    token: str | None = credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
 
     if not token:
         raise HTTPException(

@@ -862,7 +862,7 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
             if v is not None:
                 try:
                     return float(v)
-                except (TypeError, ValueError):  # noqa: swallowed-exception — try next key on cast failure
+                except (TypeError, ValueError):  # try next key on cast failure
                     pass
         return default
 
@@ -1128,11 +1128,11 @@ async def get_ohlcv(
             app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
             timeout=25.0,  # yfinance fallback can be slow; 25s < frontend 30s timeout
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="OHLCV data fetch timed out — market data source is slow",
-        )
+        ) from None
 
     return [
         {
@@ -1279,7 +1279,6 @@ def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> 
                 .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
                 .filter(Trade.user_id.is_(None))
             )
-            from sqlalchemy import union_all
             combined = q_direct.union(q_via_account)
             if symbol:
                 combined = combined.filter(Trade.symbol == symbol.upper())

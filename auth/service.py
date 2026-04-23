@@ -470,7 +470,6 @@ class AuthService:
                         "plan": getattr(user, "plan", "free"),
                         "kyc_status": user.kyc_status,
                         "totp_enabled": user.totp_enabled,
-                        "plan": getattr(user, "plan", "free"),
                         "is_email_verified": getattr(user, "is_email_verified", False),
                     },
                 },
