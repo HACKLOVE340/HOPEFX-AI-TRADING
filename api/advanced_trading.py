@@ -34,6 +34,7 @@ Task 47 — Monte Carlo Simulation
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import pathlib
@@ -769,10 +770,8 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                     for row in reader:
                         val = row.get("close") or row.get("Close")
                         if val is not None:
-                            try:
+                            with contextlib.suppress(ValueError):  # skip non-numeric rows
                                 closes.append(float(val))
-                            except ValueError:  # noqa: swallowed-exception — skip non-numeric rows
-                                pass
                 closes = closes[-(window + 5):]
                 returns = [
                     (closes[i] - closes[i - 1]) / closes[i - 1]
@@ -915,8 +914,6 @@ async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
     publication cadence).  When the API is unreachable the last cached response
     is returned with a ``stale=true`` flag rather than a 503.
     """
-    global _cot_cache
-
     def _build_result(rec: dict, stale: bool = False) -> dict:
         net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
             rec.get("noncomm_positions_short_all", 0),

@@ -34,6 +34,7 @@ Monte Carlo (corrected):
 
 from __future__ import annotations
 
+import contextlib
 import math
 from dataclasses import dataclass, field
 
@@ -197,10 +198,8 @@ class BacktestEngine:
                 # Extract weekday for Wednesday triple-swap when available
                 weekday: int | None = None
                 if has_datetime_index:
-                    try:
+                    with contextlib.suppress(Exception):  # nosec B110 — non-fatal; fall back to no triple-swap
                         weekday = int(data.index[i].weekday())
-                    except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
-                        pass
 
                 # cost_usd_per_night gives the full nightly charge.
                 # We distribute it evenly across bars_per_day bars so the

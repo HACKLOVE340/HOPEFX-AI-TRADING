@@ -709,7 +709,6 @@ async def test_smtp_config(
 ) -> dict:
     """Test SMTP connectivity using the current platform config or a provided override."""
     import smtplib
-    import socket
 
     body: dict = {}
     try:
@@ -738,7 +737,7 @@ async def test_smtp_config(
         server.quit()
         _log_superadmin_action(user, "smtp_test", f"host={host}:{port} ok")
         return {"ok": True, "host": host, "port": port}
-    except (smtplib.SMTPException, socket.error, OSError) as exc:
+    except (smtplib.SMTPException, OSError) as exc:
         _log_superadmin_action(user, "smtp_test_failed", f"host={host}:{port} err={exc}")
         return {"ok": False, "error": str(exc)}
 

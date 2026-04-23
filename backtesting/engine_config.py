@@ -26,6 +26,7 @@ Imports
 The legacy shim at backtest/engine.py re-exports from here.
 """
 
+import contextlib
 import json
 import logging
 import os
@@ -274,10 +275,8 @@ class SimulatedBroker:
         # Overnight financing: charged every bar on open positions.
         if self.positions:
             weekday: int | None = None
-            try:
+            with contextlib.suppress(Exception):  # nosec B110 — non-fatal; fall back to no triple-swap
                 weekday = int(timestamp.weekday())
-            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
-                pass
 
             for symbol, pos in self.positions.items():
                 price = pos.get("current_price", pos.get("avg_price", 0.0))

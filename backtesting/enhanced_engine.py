@@ -39,6 +39,7 @@ _ATR_FALLBACK_VOL = 0.001  # fallback volatility when realized variance is zero
 # ── Risk check severity constants ─────────────────────────────────────────────
 _CIRCUIT_BREAKER_HALT_LEVEL = 2  # circuit_breaker_level at which trading halts
 
+import contextlib
 import gzip
 import json
 import logging
@@ -1770,10 +1771,8 @@ class EnhancedBacktestEngine:
         # Extract weekday for Wednesday triple-swap
         weekday: int | None = None
         if use_swap and tick.timestamp is not None:
-            try:
+            with contextlib.suppress(Exception):  # nosec B110 — non-fatal; fall back to no triple-swap
                 weekday = int(tick.timestamp.weekday())
-            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
-                pass
 
         total_financing = 0.0
         for symbol, position in self.positions.items():

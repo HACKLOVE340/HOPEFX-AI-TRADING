@@ -25,12 +25,11 @@ POST /superadmin/reliability/history/record      — manually push current snaps
 from __future__ import annotations
 
 import asyncio
-import importlib
 import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -392,7 +391,6 @@ async def _probe_decision_engine() -> dict[str, Any]:
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     try:
-        from core.decision.HOPEFXDecisionEngine import HOPEFXDecisionEngine
         return {
             "status": "ok",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -556,7 +554,7 @@ async def get_reliability_status(
     for name, task in tasks.items():
         try:
             results_raw[name] = await asyncio.wait_for(task, timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results_raw[name] = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
         except Exception as exc:
             results_raw[name] = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -631,7 +629,7 @@ async def run_probe(
         }
     try:
         result = await asyncio.wait_for(fn(), timeout=10.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         result = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
     except Exception as exc:
         result = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -664,7 +662,7 @@ async def emit_test_trace(
 ) -> dict:
     """Emit a full end-to-end test trace: frontend→API→DB→Redis→broker."""
     try:
-        from api.tracing import get_tracer, _hex_trace_id, _hex_span_id, _SPAN_BUFFER
+        from api.tracing import get_tracer, _hex_trace_id, _hex_span_id
         tracer = get_tracer("hopefx.reliability")
         trace_id = _hex_trace_id()
         span_id = _hex_span_id()
@@ -687,7 +685,6 @@ async def emit_test_trace(
                 broker_result = await _probe_broker()
 
             try:
-                from opentelemetry import trace as _trace
                 ctx = root.get_span_context()
                 if ctx and ctx.is_valid:
                     trace_id = format(ctx.trace_id, "032x")
@@ -821,7 +818,7 @@ async def run_self_test(
                 "detail": result.get("detail", ""),
                 "duration_ms": round((time.perf_counter() - t) * 1000, 2),
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"test": name, "passed": False, "status": "error", "detail": "Timeout", "duration_ms": 10000}
         except Exception as exc:
             return {"test": name, "passed": False, "status": "error", "detail": str(exc), "duration_ms": round((time.perf_counter() - t) * 1000, 2)}
@@ -856,7 +853,6 @@ async def validate_toggle_persisted(
     Returns a per-layer validation result so the UI can show exactly
     where a discrepancy exists.
     """
-    from fastapi import Request as _Request
     body: dict[str, Any] = {}
     try:
         body = await request.json()

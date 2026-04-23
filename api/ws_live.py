@@ -929,7 +929,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {

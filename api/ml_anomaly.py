@@ -26,7 +26,6 @@ DELETE /api/ml/anomaly/reset         — reset the live store (admin)
 from __future__ import annotations
 
 import asyncio
-import functools
 import logging
 import os
 from datetime import datetime, timezone
@@ -82,7 +81,6 @@ def _get_live_store() -> Any:
 
 def _load_ohlcv(symbol: str, lookback: int = 500) -> Any:
     """Load OHLCV data for a symbol from the market data layer."""
-    import pandas as pd
 
     # Try the inference engine's data loader first (uses the same pipeline as live trading)
     try:
@@ -263,7 +261,6 @@ async def fit_anomaly_detector(
 
     Requires admin role — fitting is CPU-intensive and modifies the shared model.
     """
-    import numpy as np
 
     loop = asyncio.get_running_loop()
 
@@ -339,7 +336,6 @@ async def score_bars(
     Uses the persisted AnomalyWeighter if available; falls back to the live
     AnomalyWeightStore's internal weighter.
     """
-    import numpy as np
 
     loop = asyncio.get_running_loop()
 
@@ -417,7 +413,6 @@ async def flag_anomalies(
     Return the indices of anomalous bars in the most recent ``lookback`` OHLCV
     bars for the given symbol.
     """
-    import numpy as np
 
     loop = asyncio.get_running_loop()
 

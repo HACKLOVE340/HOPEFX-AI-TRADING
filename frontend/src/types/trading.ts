@@ -276,6 +276,7 @@ export interface User {
   readonly username:         string;
   readonly role:             UserRole;
   // Fields returned by /api/auth/login and /api/auth/me
+  readonly plan?:            string;
   readonly kyc_status?:      string;
   readonly totp_enabled?:    boolean;
   readonly status?:          string;

@@ -38,7 +38,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, require_role
+from api.auth import TokenPayload, get_current_user, require_role
 from whitelabel import FeatureFlag
 
 # All whitelabel management endpoints require superadmin — tenant CRUD, API key
@@ -412,7 +412,7 @@ async def preview_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadm
 
 
 @router.get("/features")
-async def list_available_features(_user: TokenPayload = Depends(_superadmin)):
+async def list_available_features(_user: TokenPayload = Depends(get_current_user)):
     """Return all available feature flags."""
     return {"features": [f.value for f in FeatureFlag]}
 

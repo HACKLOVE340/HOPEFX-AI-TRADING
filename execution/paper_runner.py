@@ -272,7 +272,7 @@ class OHLCVBuffer:
         """Total ticks ingested."""
         return self._tick_count
 
-    def dataframe(self) -> "Any":
+    def dataframe(self) -> Any:
         """
         Return a pandas DataFrame of completed bars with columns:
         open, high, low, close, volume, timestamp.

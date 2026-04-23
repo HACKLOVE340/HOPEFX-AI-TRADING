@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request

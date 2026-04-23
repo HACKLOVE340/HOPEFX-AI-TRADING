@@ -439,13 +439,13 @@ def run_stability_analysis(
     print(f"  Marginal         : {len(stability['marginal_features'])}")
     print(f"  Unstable (drop)  : {len(stability['unstable_features'])}")
     print(f"  Mean fold acc    : {np.mean(fold_accs):.4f} ± {np.std(fold_accs):.4f}")
-    print(f"\n  Top 15 stable features:")
+    print("\n  Top 15 stable features:")
     for feat in stability["stable_features"][:15]:
         score = stability["stability_scores"][feat]
         mean_imp = stability["mean_importance"][feat]
         print(f"    {feat:<40s}  stability={score:.2f}  mean_gain={mean_imp:.6f}")
     if stability["unstable_features"]:
-        print(f"\n  Top 10 unstable features (recommend dropping):")
+        print("\n  Top 10 unstable features (recommend dropping):")
         for feat in stability["unstable_features"][:10]:
             score = stability["stability_scores"][feat]
             cv = stability["cv_importance"].get(feat, float("inf"))

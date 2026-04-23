@@ -959,7 +959,6 @@ def check_spa_routing(py_file: Path) -> list[CodeIssue]:
     source = "\n".join(lines)
 
     has_static_mount = bool(re.search(r"StaticFiles|mount.*static", source, re.IGNORECASE))
-    has_catchall = bool(re.search(r'@app\.get\s*\(\s*["\']/{path[^}]*}["\']|catch.?all', source, re.IGNORECASE))
     has_spa_fallback = bool(re.search(r'index\.html|FileResponse.*index', source, re.IGNORECASE))
 
     if not has_static_mount and not has_spa_fallback:

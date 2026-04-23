@@ -161,7 +161,7 @@ class HealthEngine:
             extra = {k: v for k, v in raw.items() if k not in ("status", "detail")}
             return ProbeResult(name=name, label=label, status=status,
                                latency_ms=latency_ms, detail=detail, extra=extra)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ProbeResult(
                 name=name, label=label, status="error",
                 latency_ms=round(self.PROBE_TIMEOUT_S * 1000, 2),
@@ -228,7 +228,6 @@ def _register_default_probes(engine: HealthEngine) -> None:
             return {"status": "error", "detail": str(exc)}
 
     async def _probe_redis() -> dict[str, Any]:
-        t0 = time.perf_counter()
         try:
             from cache.redis_client import get_redis_client
             rc = get_redis_client()
@@ -247,7 +246,6 @@ def _register_default_probes(engine: HealthEngine) -> None:
             return {"status": "error", "detail": str(exc)}
 
     async def _probe_broker() -> dict[str, Any]:
-        t0 = time.perf_counter()
         try:
             from cache.redis_client import get_redis_client
             rc = get_redis_client()
@@ -323,7 +321,6 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
     async def _probe_decision_engine() -> dict[str, Any]:
         try:
-            from core.decision.HOPEFXDecisionEngine import HOPEFXDecisionEngine
             return {"status": "ok", "detail": "DecisionEngine module importable"}
         except Exception as exc:
             return {"status": "warning", "detail": str(exc)}

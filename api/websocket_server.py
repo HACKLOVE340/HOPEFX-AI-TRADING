@@ -791,7 +791,7 @@ def create_websocket_router(manager: WebSocketManager):
                 raw = await _asyncio.wait_for(
                     websocket.receive_text(), timeout=_WS_AUTH_TIMEOUT
                 )
-            except _asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning("/ws auth timeout for %s — closing", client_ip)
                 try:
                     await websocket.send_text(

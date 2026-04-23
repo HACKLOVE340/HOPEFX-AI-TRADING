@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import cast, func, Integer as SAInteger
+from sqlalchemy import func
 
 from api.auth import TokenPayload
 
