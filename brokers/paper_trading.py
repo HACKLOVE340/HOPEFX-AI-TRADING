@@ -249,6 +249,14 @@ class PaperTradingBroker(BrokerConnector):
         self._equity_history: deque = deque(maxlen=10_000)
         self._equity_history.append((time.time(), self.initial_balance))
 
+        # Tracks when each symbol's price was last updated by a LIVE feed.
+        # Symbols absent from this dict are using hardcoded fallback prices.
+        # If a symbol was once live but hasn't been updated in
+        # PAPER_PRICE_STALE_SECONDS (default 120s), orders are rejected
+        # to prevent trading on stale prices with real P&L consequences.
+        self._price_timestamps: dict[str, float] = {}
+        self._price_stale_secs = float(os.getenv("PAPER_PRICE_STALE_SECONDS", "120"))
+
         # Simulated market prices - Multi-asset support
         # Last updated: 2025-Q2. These are fallback prices used only when
         # no live feed is available. Update periodically or wire a live feed.
@@ -411,12 +419,31 @@ class PaperTradingBroker(BrokerConnector):
         # Generate order ID
         order_id = str(uuid.uuid4())
 
-        # Get current market price
+        # Get current market price — check for staleness before filling
         current_price = self.market_prices.get(symbol, 0.0)
         if current_price == 0.0:
             logger.warning("Unknown symbol %s, using default price 1000.0", symbol)
-
             current_price = 1000.0
+
+        # Staleness guard: if this symbol was once live-fed but hasn't been
+        # updated in PAPER_PRICE_STALE_SECONDS, reject the order.
+        # Symbols that were NEVER live-fed (hardcoded defaults) get a loud
+        # warning but are allowed through — prevents blocking pure paper demo.
+        last_update = self._price_timestamps.get(symbol)
+        if last_update is not None:
+            age = time.time() - last_update
+            if age > self._price_stale_secs:
+                raise ConnectionError(
+                    f"Price feed stale for {symbol}: last update was {age:.0f}s ago "
+                    f"(threshold={self._price_stale_secs:.0f}s). "
+                    "Live feed appears disconnected — order rejected to prevent mispriced fills."
+                )
+        else:
+            logger.warning(
+                "ORDER on %s using hardcoded fallback price %.5f — no live feed has connected. "
+                "Set PAPER_PRICE_STALE_SECONDS=0 to suppress this warning in offline demo mode.",
+                symbol, current_price,
+            )
 
         # Create order
         order = Order(
@@ -803,6 +830,7 @@ class PaperTradingBroker(BrokerConnector):
             price: New price
         """
         self.market_prices[symbol] = price
+        self._price_timestamps[symbol] = time.time()
         logger.debug("Updated %s price to $%s", symbol, price)
 
     def _update_position(
