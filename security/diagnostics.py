@@ -43,12 +43,9 @@ Usage (from self-healer)::
 from __future__ import annotations
 
 import asyncio
-import importlib
-import json
 import logging
 import os
 import re
-import subprocess  # nosec B404 — used only with fixed command lists
 import sys
 import time
 from dataclasses import dataclass, field
@@ -226,7 +223,7 @@ class DiagnosticReport:
         return out
 
     def summary(self) -> str:
-        counts = {s: 0 for s in ("ok", "warning", "error", "critical")}
+        counts = dict.fromkeys(("ok", "warning", "error", "critical"), 0)
         for r in self.results:
             counts[r.status] = counts.get(r.status, 0) + 1
         parts = [f"{v} {k}" for k, v in counts.items() if v]
@@ -383,7 +380,7 @@ class DiagnosticsEngine:
                     if proc.returncode == 0:
                         return pkg, True, ""
                     return pkg, False, stderr.decode(errors="replace").strip()[:300]
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     proc.kill()
                     return pkg, False, "import timed out"
             except Exception as exc:
@@ -712,7 +709,7 @@ class DiagnosticsEngine:
                         for key in keys[:5]:
                             ttl = await client.ttl(key)
                             (found_feeds if ttl != 0 else stale_feeds).append(key)
-                    except asyncio.TimeoutError:  # nosec B110 — Redis key scan timed out; skip this pattern
+                    except TimeoutError:  # nosec B110 — Redis key scan timed out; skip this pattern
                         pass
                 dur = (time.monotonic() - t0) * 1000
                 if stale_feeds:
@@ -838,7 +835,7 @@ class DiagnosticsEngine:
                         action["success"] = proc.returncode == 0
                         if not action["success"]:
                             action["error"] = stderr.decode(errors="replace")[:300]
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         proc.kill()
                         action["action"] = "npm run build (timed out)"
             elif check == "import_chain":
@@ -852,7 +849,7 @@ class DiagnosticsEngine:
                             await asyncio.wait_for(proc.communicate(), timeout=60)
                             action["action"] = f"pip install {pkg}"
                             action["success"] = proc.returncode == 0
-                        except asyncio.TimeoutError:
+                        except TimeoutError:
                             proc.kill()
             elif check.startswith("log_pattern_"):
                 try:

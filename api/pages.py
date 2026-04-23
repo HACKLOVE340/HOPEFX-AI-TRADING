@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import FileResponse, HTMLResponse
 
 logger = logging.getLogger(__name__)

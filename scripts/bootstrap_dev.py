@@ -541,7 +541,7 @@ def bootstrap(verbose: bool = True) -> None:
         else:
             logger.info(f"  .env already exists  ->  {ENV_PATH}")
 
-    for seed_fn, label, email, username, redirect in [
+    for seed_fn, label, email, _username, redirect in [
         (_seed_superadmin, "Superadmin", DEFAULT_SUPERADMIN_EMAIL, DEFAULT_SUPERADMIN_USERNAME, "/superadmin"),
         (_seed_admin,      "Admin",      DEFAULT_ADMIN_EMAIL,      DEFAULT_ADMIN_USERNAME,      "/admin"),
         (_seed_trader,     "Trader",     DEFAULT_TRADER_EMAIL,     DEFAULT_TRADER_USERNAME,     "/dashboard"),

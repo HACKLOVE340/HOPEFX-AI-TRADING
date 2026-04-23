@@ -10,7 +10,6 @@ Comprehensive health monitoring with dependency checks
 
 import asyncio
 import logging
-import os
 import socket
 import time
 from collections.abc import Callable
@@ -83,7 +82,7 @@ class SystemHealth:
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     version: str = "2.1.0"
     uptime_seconds: float = 0.0
-    hostname: str = field(default_factory=lambda: _get_hostname())
+    hostname: str = field(default_factory=_get_hostname)
 
     def to_dict(self) -> dict:
         return {
@@ -153,7 +152,7 @@ class HealthChecker:
             self._last_results[name] = result
             return result
 
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             result = HealthCheck(
                 name=name,
                 status=HealthStatus.DEGRADED,
@@ -333,7 +332,7 @@ class HealthChecker:
                 message="Cache unhealthy — using in-memory fallback",
                 details={"using_fallback": True},
             )
-        except (asyncio.TimeoutError, TimeoutError):
+        except TimeoutError:
             return HealthCheck(
                 name="cache",
                 status=HealthStatus.DEGRADED,
