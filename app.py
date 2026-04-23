@@ -76,7 +76,10 @@ try:
     _log_json = os.getenv("LOG_JSON", "true" if _app_env_for_log == "production" else "false").lower() == "true"
     _log_async = os.getenv("LOG_ASYNC", "true").lower() == "true"
     _graylog_host = os.getenv("LOG_GRAYLOG_HOST") or None
-    _graylog_port = int(os.getenv("LOG_GRAYLOG_PORT", "12201"))
+    try:
+        _graylog_port = int(os.getenv("LOG_GRAYLOG_PORT", "12201"))
+    except ValueError:
+        _graylog_port = 12201
 
     _HOPEFXLogger().setup(
         level=_log_level,
@@ -836,7 +839,10 @@ def run_server():
     """Run the API server."""
     # Default to localhost for security; set API_HOST=0.0.0.0 in production.
     host = os.getenv("API_HOST", "127.0.0.1")
-    port = int(os.getenv("API_PORT", "8000"))
+    try:
+        port = int(os.getenv("API_PORT", "8000"))
+    except ValueError:
+        port = 8000
     reload = os.getenv("ENVIRONMENT", "development") == "development"
 
     # On Windows, uvicorn must use a single worker with SelectorEventLoop.
