@@ -524,7 +524,7 @@ async def list_sessions(user_id: str = Depends(_get_current_user_id)):
                 db.query(UserSession)
                 .filter(
                     UserSession.user_id == user_id,
-                    UserSession.is_revoked == False,  # noqa: E712
+                    UserSession.is_revoked == False,
                     UserSession.expires_at > now,
                 )
                 .order_by(UserSession.created_at.desc())

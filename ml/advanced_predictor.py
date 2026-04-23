@@ -58,6 +58,7 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -378,10 +379,8 @@ class AdvancedPredictor:
                 payload = joblib.load(self._model_path)  # nosec B301 - _model_path set from saved_models
                 self._model = payload
                 # Capture mtime so staleness checks can detect subsequent retraining
-                try:
+                with contextlib.suppress(OSError):  # mtime is best-effort; missing it is non-fatal
                     self._model_mtime = self._model_path.stat().st_mtime
-                except OSError:  # nosec B110 — mtime is best-effort; missing it is non-fatal
-                    pass
                 # Extract feature names from the pipeline
                 if hasattr(payload, "feature_names_in_"):
                     self._feature_names = list(payload.feature_names_in_)

@@ -304,7 +304,6 @@ def purged_walk_forward_cv(
 
 
 def train_xgboost(X_train, y_train, X_test, y_test):
-    from sklearn.calibration import CalibratedClassifierCV
     from xgboost import XGBClassifier
 
     model = XGBClassifier(
@@ -335,7 +334,6 @@ def train_xgboost(X_train, y_train, X_test, y_test):
 
 
 def train_random_forest(X_train, y_train):
-    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.ensemble import RandomForestClassifier
 
     model = RandomForestClassifier(
@@ -358,7 +356,6 @@ def train_random_forest(X_train, y_train):
 def train_lightgbm(X_train, y_train, X_test, y_test):
     try:
         import lightgbm as lgb
-        from sklearn.calibration import CalibratedClassifierCV
 
         model = lgb.LGBMClassifier(
             n_estimators=500,
@@ -411,7 +408,6 @@ def train_stacking_ensemble(X_train, y_train, X_cal, y_cal):
 
     This eliminates the leakage that inflated walk-forward CV accuracy to ~99%.
     """
-    from sklearn.calibration import CalibratedClassifierCV
     from sklearn.linear_model import LogisticRegression
 
     # Split training data into fit (60%) and OOF (20%) portions.
@@ -610,7 +606,6 @@ def main() -> int:
         Xte = X_train_sel.iloc[te_idx]
         yte = y_train.iloc[te_idx]
 
-        from sklearn.calibration import CalibratedClassifierCV
         from sklearn.metrics import accuracy_score, roc_auc_score
         from xgboost import XGBClassifier
 
