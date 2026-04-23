@@ -65,7 +65,10 @@ class TestEnforceTLS:
     def test_plaintext_dev_logs_warning(self, caplog):
         """Plaintext redis:// in development logs a WARNING (no exception)."""
         import logging
+        import cache.redis_client as _rc
         from cache.redis_client import _enforce_tls
+        # Reset module-level warn-once guard so the warning fires even in full suite
+        _rc._tls_warning_emitted = False
         url = "redis://localhost:6379/0"
         with patch.dict(os.environ, {"APP_ENV": "development", "IS_FORCE_TLS": "", "REDIS_FORCE_TLS": "false"}):
             with caplog.at_level(logging.WARNING, logger="cache.redis_client"):

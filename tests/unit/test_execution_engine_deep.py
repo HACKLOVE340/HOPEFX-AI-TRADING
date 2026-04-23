@@ -576,6 +576,8 @@ class TestWarnOnLatencyBreach:
         assert any("latency" in r.message.lower() for r in caplog.records)
 
     def test_no_warning_when_within_target(self, caplog):
+        import logging
+
         eng = _make_engine(max_latency_ms=500.0)
         req = _buy_request()
         report = ExecutionReport(
@@ -583,8 +585,7 @@ class TestWarnOnLatencyBreach:
             status=ExecutionStatus.FILLED,
             latency_ms=5.0,
         )
-        import logging
-
+        caplog.clear()  # discard INFO init messages (contain "latency" in "max_latency=500ms")
         with caplog.at_level(logging.WARNING, logger="execution.engine"):
             eng._warn_on_latency_breach(req, report)
         assert not any("latency" in r.message.lower() for r in caplog.records)

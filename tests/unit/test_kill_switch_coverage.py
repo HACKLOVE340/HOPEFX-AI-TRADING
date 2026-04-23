@@ -217,7 +217,8 @@ class TestKillSwitchStatus:
         assert s["deactivation_token_configured"] is True
         ks.reset_for_testing()
 
-    def test_status_no_token_flag(self):
+    def test_status_no_token_flag(self, monkeypatch):
+        monkeypatch.delenv("HOPEFX_KILL_SWITCH_TOKEN", raising=False)
         ks = _fresh_ks()
         s = ks.status()
         assert s["deactivation_token_configured"] is False
