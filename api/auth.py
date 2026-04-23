@@ -266,6 +266,9 @@ def require_kyc(
     """
     Dependency: require the caller to have passed KYC verification.
 
+    Admin and superadmin roles are exempt — platform operators are not
+    required to submit identity documents to trade on their own platform.
+
     Checks app_state.compliance_manager if available on the request's app state.
     If compliance_manager is not wired (tests / paper trading), passes through.
 
@@ -274,6 +277,10 @@ def require_kyc(
         async def place_order(user: TokenPayload = Depends(require_kyc)):
             ...
     """
+    # Platform operators are exempt from KYC.
+    if user.role in ("admin", "superadmin"):
+        return user
+
     try:
         # Resolve compliance_manager from the request's app state so that
         # test apps (which have no compliance_manager) bypass the check.

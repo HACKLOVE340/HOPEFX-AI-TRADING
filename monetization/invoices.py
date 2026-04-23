@@ -26,6 +26,7 @@ UTC = timezone.utc
 from decimal import Decimal
 
 from .pricing import SubscriptionTier, pricing_manager
+from .subscription import subscription_manager
 
 logger = logging.getLogger(__name__)
 
@@ -196,12 +197,15 @@ class InvoiceGenerator:
         invoice_id = f"INV-{uuid.uuid4().hex[:12].upper()}"
         invoice_number = self._generate_invoice_number()
 
+        sub = subscription_manager.get_user_subscription(user_id)
+        user_tier = sub.tier if sub else SubscriptionTier.FREE
+
         invoice = Invoice(
             invoice_id=invoice_id,
             invoice_number=invoice_number,
             user_id=user_id,
-            subscription_id="COMMISSION",
-            tier=SubscriptionTier.PROFESSIONAL,  # Default tier
+            subscription_id=sub.subscription_id if sub else "COMMISSION",
+            tier=user_tier,
             amount=commission_amount,
             currency="USD",
             status=InvoiceStatus.PENDING,

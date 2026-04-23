@@ -335,7 +335,7 @@ class ServiceCircuitBreaker:
                     self._state = CircuitState.OPEN
                     self._last_state_change = time.time()
                     logger.warning(
-                        "CircuitBreaker [%s]: CLOSED → OPEN (sync) after %d/%d failures — %s: %s",
+                        "CircuitBreaker [%s]: CLOSED → OPEN (sync) after %d failures — %s: %s",
                         self.name, self._failure_count, self.config.failure_threshold,
                         type(exc).__name__, exc,
                     )

@@ -24,10 +24,21 @@ Mnemonics are loaded from environment variables:
 In production these must be stored in a secrets manager and injected at
 runtime.  In non-production environments an ephemeral mnemonic is generated
 with a loud warning.
+
+Derivation index persistence:
+  HOPEFX_CRYPTO_COUNTER_PATH — path to the JSON counter file
+  (default: data/crypto_counters.json relative to the project root)
+
+  The counter file is written atomically after every index increment so
+  that a process restart never reuses a derivation index and therefore
+  never reuses a deposit address.
 """
 
+import json
 import logging
 import os
+import threading
+from pathlib import Path
 
 try:
     from hdwallet import HDWallet as _HDWallet
@@ -70,6 +81,12 @@ def HDWallet(*args, **kwargs):  # type: ignore[misc]
 
 
 logger = logging.getLogger(__name__)
+
+# ── Counter persistence ───────────────────────────────────────────────────────
+# Default path is relative to the project root.  Override via env var in
+# production so the file lands on a durable volume, not the container FS.
+_DEFAULT_COUNTER_PATH = Path(__file__).resolve().parents[2] / "data" / "crypto_counters.json"
+_COUNTER_PATH = Path(os.getenv("HOPEFX_CRYPTO_COUNTER_PATH", str(_DEFAULT_COUNTER_PATH)))
 
 # ── Derivation path constants ─────────────────────────────────────────────────
 
@@ -131,9 +148,13 @@ class AddressGenerator:
     """
     Generates unique crypto deposit addresses via BIP32/BIP44/BIP84 derivation.
 
-    Each (user_id, currency) pair gets a fresh address per call, advancing the
-    derivation index.  The same mnemonic + index always produces the same
-    address, so addresses are recoverable as long as the mnemonic is stable.
+    Each call advances a per-currency derivation index that is persisted to
+    disk (JSON) so restarts never reuse an index.  The same mnemonic + index
+    always produces the same address, so the full address history is
+    recoverable from the mnemonic alone.
+
+    Counter file location: HOPEFX_CRYPTO_COUNTER_PATH env var (default:
+    data/crypto_counters.json relative to the project root).
 
     Requires the optional 'hdwallet' package.  Raises RuntimeError on first
     use (not at import time) when the package is absent.
@@ -142,9 +163,33 @@ class AddressGenerator:
     def __init__(self) -> None:
         # currency -> mnemonic (loaded lazily on first use)
         self._mnemonics: dict[str, str] = {}
-        # (currency, index) counter — shared across all users per currency
-        # In production, persist this counter in the database.
-        self._counters: dict[str, int] = {}
+        # Per-currency derivation index — loaded from disk, written back after
+        # every increment so a restart never reuses an index.
+        self._counters: dict[str, int] = self._load_counters()
+        self._lock = threading.Lock()
+
+    def _load_counters(self) -> dict[str, int]:
+        """Read persisted counters from disk; return empty dict on first run."""
+        try:
+            if _COUNTER_PATH.exists():
+                data = json.loads(_COUNTER_PATH.read_text())
+                if isinstance(data, dict):
+                    return {k: int(v) for k, v in data.items()}
+        except Exception as exc:
+            logger.error("Failed to load crypto counters from %s: %s", _COUNTER_PATH, exc)
+        return {}
+
+    def _save_counters(self) -> None:
+        """Atomically write counters to disk using a temp-file + rename."""
+        try:
+            _COUNTER_PATH.parent.mkdir(parents=True, exist_ok=True)
+            tmp = _COUNTER_PATH.with_suffix(".tmp")
+            tmp.write_text(json.dumps(self._counters, indent=2))
+            os.replace(tmp, _COUNTER_PATH)
+        except Exception as exc:
+            # Log but do not raise — a failed write is recoverable on the next
+            # call; raising here would break address generation entirely.
+            logger.error("Failed to persist crypto counters to %s: %s", _COUNTER_PATH, exc)
 
     def _get_mnemonic(self, currency: str) -> str:
         if currency not in self._mnemonics:
@@ -152,8 +197,10 @@ class AddressGenerator:
         return self._mnemonics[currency]
 
     def _next_index(self, currency: str) -> int:
-        idx = self._counters.get(currency, 0)
-        self._counters[currency] = idx + 1
+        with self._lock:
+            idx = self._counters.get(currency, 0)
+            self._counters[currency] = idx + 1
+            self._save_counters()
         return idx
 
     def generate_address(self, user_id: str, currency: str) -> str:

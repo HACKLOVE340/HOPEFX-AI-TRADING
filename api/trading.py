@@ -656,14 +656,21 @@ async def _record_fill(
     }
 
 
-def _check_subscription_gate(user_id: str) -> None:
+def _check_subscription_gate(user_id: str, role: str = "user") -> None:
     """
     Enforce Starter-plan requirement for live trading.
+
+    Skipped for admin and superadmin roles — platform operators are not
+    required to hold a paid subscription on their own platform.
 
     Skipped in test/CI environments, paper-trading mode, and when the
     monetization module is unavailable.  Raises HTTP 403 when the user's
     active plan is below 'starter'.
     """
+    # Platform operators are exempt from the subscription gate.
+    if role in ("admin", "superadmin"):
+        return
+
     app_env = os.getenv("APP_ENV", "test").lower()
     broker_type = os.getenv("BROKER_TYPE", "paper").lower()
 
@@ -722,7 +729,7 @@ async def place_order(
       _route_to_broker()  — broker submission
       _record_fill()      — WebSocket/FCM/email/Prometheus + response
     """
-    _check_subscription_gate(user.sub)
+    _check_subscription_gate(user.sub, user.role)
     _check_kill_switch()  # hard block — must be first
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
     _check_order_rate_limit(user.sub)
