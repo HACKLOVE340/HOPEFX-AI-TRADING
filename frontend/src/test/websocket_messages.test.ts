@@ -1,11 +1,12 @@
 /**
  * WebSocket message parsing and routing tests.
- * ~80 tests
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useStore } from '../store';
 import type { PriceTick, Position, Signal, AccountMetrics } from '../store';
+import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem } from '../store';
+import type { MicrostructureSnapshot, SentimentSignal, NewsArticle } from '../types';
 
 // Simulate the message handler logic from useWebSocket
 function handleMessage(raw: string) {
@@ -38,6 +39,35 @@ function handleMessage(raw: string) {
     case 'heartbeat':
       store.setHeartbeat(Date.now());
       break;
+    case 'microstructure':
+      store.setMicrostructure(msg.data as MicrostructureSnapshot);
+      break;
+    case 'volume_delta':
+      store.setVolumeDelta(msg.data as VolumeDeltaBar);
+      break;
+    case 'sentiment_update': {
+      const raw = msg.data as { signal: unknown; articles: unknown[] };
+      store.setSentiment({
+        signal: raw?.signal as SentimentSignal,
+        recent_articles: (raw?.articles ?? []) as NewsArticle[],
+      });
+      break;
+    }
+    case 'risk_update':
+      store.setRiskSnapshot(msg.data as RiskSnapshot);
+      break;
+    case 'equity_update':
+      store.setEquitySnapshot(msg.data as EquitySnapshot);
+      break;
+    case 'news_item':
+      store.addNewsItem(msg.data as WsNewsItem);
+      break;
+    case 'pong':
+      store.setHeartbeat(Date.now());
+      break;
+    case 'subscribed':
+    case 'unsubscribed':
+      break;
     default:
       break;
   }
@@ -46,6 +76,33 @@ function handleMessage(raw: string) {
 const makeTick = (): PriceTick => ({
   symbol: 'XAU/USD', bid: 2339.9, ask: 2340.1, mid: 2340.0,
   spread: 0.2, timestamp: Date.now(), change_pct: 0.5,
+});
+
+const makeMicro = (): MicrostructureSnapshot => ({
+  timestamp: new Date().toISOString(), bid: 2339.9, ask: 2340.1,
+  spread: 0.2, spread_pct: 0.0086, volume_delta: 150, cumulative_delta: 3200,
+  buy_pressure: 0.62, sell_pressure: 0.38, order_flow_imbalance: 0.24,
+  trade_pressure: 0.58, vwap: 2340.05, tick_count: 42,
+});
+
+const makeEquitySnap = (): EquitySnapshot => ({
+  balance: 100_000, equity: 102_500, unrealized_pnl: 2_500,
+  margin_used: 4_000, timestamp: new Date().toISOString(),
+});
+
+const makeRiskSnap = (): RiskSnapshot => ({
+  daily_loss_pct: 0.012, max_drawdown_pct: 0.035,
+  open_risk_pct: 0.02, kill_switch_active: false,
+});
+
+const makeVolDelta = (): VolumeDeltaBar => ({
+  volume_delta: 250, cumulative_delta: 3450, timestamp: new Date().toISOString(),
+});
+
+const makeNewsItem = (): WsNewsItem => ({
+  title: 'Gold surges on safe-haven demand', source: 'Reuters',
+  sentiment_score: 0.72, sentiment_label: 'bullish',
+  published_at: new Date().toISOString(), url: 'https://reuters.com/gold',
 });
 
 const makePos = (): Position => ({
@@ -318,5 +375,172 @@ describe('message sequences', () => {
     handleMessage(JSON.stringify({ type: 'position_update', data: makePos() }));
     expect(useStore.getState().priceHistory['XAU/USD']).toHaveLength(20);
     expect(useStore.getState().positions).toHaveLength(1);
+  });
+});
+
+// ─── microstructure ───────────────────────────────────────────────────────────
+
+describe('microstructure messages', () => {
+  it('sets microstructure in store', () => {
+    handleMessage(JSON.stringify({ type: 'microstructure', data: makeMicro() }));
+    expect(useStore.getState().microstructure?.volume_delta).toBe(150);
+  });
+
+  it('overwrites previous microstructure', () => {
+    handleMessage(JSON.stringify({ type: 'microstructure', data: makeMicro() }));
+    handleMessage(JSON.stringify({ type: 'microstructure', data: { ...makeMicro(), volume_delta: 999 } }));
+    expect(useStore.getState().microstructure?.volume_delta).toBe(999);
+  });
+
+  it('buy_pressure stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'microstructure', data: makeMicro() }));
+    expect(useStore.getState().microstructure?.buy_pressure).toBe(0.62);
+  });
+
+  it('order_flow_imbalance stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'microstructure', data: makeMicro() }));
+    expect(useStore.getState().microstructure?.order_flow_imbalance).toBe(0.24);
+  });
+});
+
+// ─── volume_delta ─────────────────────────────────────────────────────────────
+
+describe('volume_delta messages', () => {
+  it('sets volumeDelta in store', () => {
+    handleMessage(JSON.stringify({ type: 'volume_delta', data: makeVolDelta() }));
+    expect(useStore.getState().volumeDelta?.volume_delta).toBe(250);
+  });
+
+  it('cumulative_delta stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'volume_delta', data: makeVolDelta() }));
+    expect(useStore.getState().volumeDelta?.cumulative_delta).toBe(3450);
+  });
+
+  it('overwrites previous volumeDelta', () => {
+    handleMessage(JSON.stringify({ type: 'volume_delta', data: makeVolDelta() }));
+    handleMessage(JSON.stringify({ type: 'volume_delta', data: { ...makeVolDelta(), volume_delta: -100 } }));
+    expect(useStore.getState().volumeDelta?.volume_delta).toBe(-100);
+  });
+});
+
+// ─── sentiment_update ─────────────────────────────────────────────────────────
+
+describe('sentiment_update messages', () => {
+  it('sets sentiment in store', () => {
+    const signal = { news_sentiment_score: 0.6, news_sentiment_momentum: 0.1,
+                     news_article_count_1h: 5, news_bullish_ratio: 0.7 };
+    handleMessage(JSON.stringify({ type: 'sentiment_update', data: { signal, articles: [] } }));
+    expect(useStore.getState().sentiment?.signal.news_sentiment_score).toBe(0.6);
+  });
+
+  it('articles stored in recent_articles', () => {
+    const signal = { news_sentiment_score: 0.5, news_sentiment_momentum: 0,
+                     news_article_count_1h: 1, news_bullish_ratio: 0.5 };
+    const articles = [{ headline: 'Gold up', source: 'Reuters', published_at: new Date().toISOString(),
+                        sentiment_score: 0.8, sentiment_label: 'bullish', gold_relevance: 0.9, impact_score: 0.7 }];
+    handleMessage(JSON.stringify({ type: 'sentiment_update', data: { signal, articles } }));
+    expect(useStore.getState().sentiment?.recent_articles).toHaveLength(1);
+  });
+
+  it('empty articles array is safe', () => {
+    const signal = { news_sentiment_score: 0, news_sentiment_momentum: 0,
+                     news_article_count_1h: 0, news_bullish_ratio: 0 };
+    handleMessage(JSON.stringify({ type: 'sentiment_update', data: { signal, articles: [] } }));
+    expect(useStore.getState().sentiment?.recent_articles).toHaveLength(0);
+  });
+});
+
+// ─── risk_update ──────────────────────────────────────────────────────────────
+
+describe('risk_update messages', () => {
+  it('sets riskSnapshot in store', () => {
+    handleMessage(JSON.stringify({ type: 'risk_update', data: makeRiskSnap() }));
+    expect(useStore.getState().riskSnapshot?.daily_loss_pct).toBe(0.012);
+  });
+
+  it('kill_switch_active stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'risk_update', data: { ...makeRiskSnap(), kill_switch_active: true } }));
+    expect(useStore.getState().riskSnapshot?.kill_switch_active).toBe(true);
+  });
+
+  it('overwrites previous riskSnapshot', () => {
+    handleMessage(JSON.stringify({ type: 'risk_update', data: makeRiskSnap() }));
+    handleMessage(JSON.stringify({ type: 'risk_update', data: { ...makeRiskSnap(), daily_loss_pct: 0.05 } }));
+    expect(useStore.getState().riskSnapshot?.daily_loss_pct).toBe(0.05);
+  });
+
+  it('partial risk data is safe', () => {
+    handleMessage(JSON.stringify({ type: 'risk_update', data: { kill_switch_active: false } }));
+    expect(useStore.getState().riskSnapshot?.kill_switch_active).toBe(false);
+  });
+});
+
+// ─── equity_update ────────────────────────────────────────────────────────────
+
+describe('equity_update messages', () => {
+  it('sets equitySnapshot in store', () => {
+    handleMessage(JSON.stringify({ type: 'equity_update', data: makeEquitySnap() }));
+    expect(useStore.getState().equitySnapshot?.equity).toBe(102_500);
+  });
+
+  it('balance stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'equity_update', data: makeEquitySnap() }));
+    expect(useStore.getState().equitySnapshot?.balance).toBe(100_000);
+  });
+
+  it('unrealized_pnl stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'equity_update', data: makeEquitySnap() }));
+    expect(useStore.getState().equitySnapshot?.unrealized_pnl).toBe(2_500);
+  });
+
+  it('overwrites previous equitySnapshot', () => {
+    handleMessage(JSON.stringify({ type: 'equity_update', data: makeEquitySnap() }));
+    handleMessage(JSON.stringify({ type: 'equity_update', data: { ...makeEquitySnap(), equity: 105_000 } }));
+    expect(useStore.getState().equitySnapshot?.equity).toBe(105_000);
+  });
+});
+
+// ─── news_item ────────────────────────────────────────────────────────────────
+
+describe('news_item messages', () => {
+  it('adds news item to store', () => {
+    handleMessage(JSON.stringify({ type: 'news_item', data: makeNewsItem() }));
+    expect(useStore.getState().newsItems).toHaveLength(1);
+  });
+
+  it('news items are prepended (newest first)', () => {
+    handleMessage(JSON.stringify({ type: 'news_item', data: { ...makeNewsItem(), title: 'first' } }));
+    handleMessage(JSON.stringify({ type: 'news_item', data: { ...makeNewsItem(), title: 'second' } }));
+    expect(useStore.getState().newsItems[0].title).toBe('second');
+  });
+
+  it('sentiment_label stored correctly', () => {
+    handleMessage(JSON.stringify({ type: 'news_item', data: makeNewsItem() }));
+    expect(useStore.getState().newsItems[0].sentiment_label).toBe('bullish');
+  });
+
+  it('capped at 50 items', () => {
+    for (let i = 0; i < 55; i++) {
+      handleMessage(JSON.stringify({ type: 'news_item', data: { ...makeNewsItem(), title: `item ${i}` } }));
+    }
+    expect(useStore.getState().newsItems).toHaveLength(50);
+  });
+});
+
+// ─── pong / subscribed / unsubscribed ─────────────────────────────────────────
+
+describe('server acknowledgement messages', () => {
+  it('pong updates lastHeartbeat', () => {
+    const before = Date.now();
+    handleMessage(JSON.stringify({ type: 'pong' }));
+    expect(useStore.getState().lastHeartbeat).toBeGreaterThanOrEqual(before);
+  });
+
+  it('subscribed does not throw', () => {
+    expect(() => handleMessage(JSON.stringify({ type: 'subscribed', channels: ['prices'] }))).not.toThrow();
+  });
+
+  it('unsubscribed does not throw', () => {
+    expect(() => handleMessage(JSON.stringify({ type: 'unsubscribed', channels: ['prices'] }))).not.toThrow();
   });
 });

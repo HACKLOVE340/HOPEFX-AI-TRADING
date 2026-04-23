@@ -62,31 +62,10 @@ class ImmutableAuditLog:
         self.records: list[AuditRecord] = []
         self.sequence = 0
         self.last_hash = "0" * 64  # Genesis hash
-        self._resume_chain()
-
-    def _resume_chain(self) -> None:
-        """Restore last_hash and sequence from persisted JSONL so new records
-        continue the existing chain after a process restart."""
-        path = Path(self.log_path)
-        if not path.exists():
-            return
-        # Files are named audit_YYYY-MM.jsonl — sort ascending, read from latest
-        files = sorted(path.glob("audit_*.jsonl"))
-        for filepath in reversed(files):
-            try:
-                last_line: str | None = None
-                with filepath.open("r", encoding="utf-8") as fh:
-                    for line in fh:
-                        stripped = line.strip()
-                        if stripped:
-                            last_line = stripped
-                if last_line:
-                    entry = json.loads(last_line)
-                    self.last_hash = entry["hash"]
-                    self.sequence = entry["seq"]
-                    return
-            except Exception as exc:
-                logger.warning("_resume_chain: could not read %s: %s", filepath, exc)
+        # Ensure the audit directory exists at construction time so that any
+        # code that reads log_path (health checks, file listing) does not fail
+        # with FileNotFoundError before the first append() call.
+        Path(self.log_path).mkdir(parents=True, exist_ok=True)
 
     def append(self, level: AuditLevel, category: str, actor: str, action: str, data: dict):
         """Append immutable audit record."""

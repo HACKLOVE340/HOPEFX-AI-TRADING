@@ -497,9 +497,13 @@ if SQLALCHEMY_AVAILABLE:
         """
         FastAPI dependency that yields a SQLAlchemy session.
 
-        The database circuit breaker is checked before opening a session.
-        When the DB has been failing repeatedly, the breaker opens and
-        raises immediately rather than blocking on a connection timeout.
+        Uses DatabaseManager.session() so the session is always committed on
+        success and rolled back on exception before being closed — preventing
+        connections from being returned to the pool in a dirty state.
+
+        The resilience circuit breaker is checked before opening a session.
+        When the DB has been failing repeatedly the breaker opens and raises
+        immediately rather than blocking on a connection timeout.
 
         Usage::
 
@@ -507,7 +511,7 @@ if SQLALCHEMY_AVAILABLE:
             def list_items(db: Session = Depends(get_db)):
                 ...
         """
-        # Check DB circuit breaker before attempting a connection
+        # Check resilience circuit breaker before attempting a connection.
         try:
             from resilience.service_circuit_breakers import db_breaker
 
@@ -519,21 +523,20 @@ if SQLALCHEMY_AVAILABLE:
         except ImportError:  # nosec B110 — circuit breaker is optional; proceed without it
             pass
 
+        # Use the manager's context manager so commit/rollback/close are
+        # handled correctly even when the request handler raises.
         try:
-            db = _get_or_init_manager()._session_factory()
-            # Record success with the DB circuit breaker (sync-safe)
-            try:
-                from resilience.service_circuit_breakers import db_breaker as _db_cb
+            with _get_or_init_manager().session() as db:
+                # Record success with the resilience circuit breaker.
+                try:
+                    from resilience.service_circuit_breakers import db_breaker as _db_cb
 
-                _db_cb.record_success()
-            except Exception:  # nosec B110 — circuit breaker is non-fatal
-                pass
-            try:
+                    _db_cb.record_success()
+                except Exception:  # nosec B110 — circuit breaker is non-fatal
+                    pass
                 yield db
-            finally:
-                db.close()
         except Exception as _db_exc:
-            # Record failure with the DB circuit breaker (sync-safe)
+            # Record failure with the resilience circuit breaker.
             try:
                 from resilience.service_circuit_breakers import db_breaker as _db_cb
 

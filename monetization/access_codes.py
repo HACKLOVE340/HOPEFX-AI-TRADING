@@ -65,12 +65,16 @@ class AccessCode:
         self.activated_at: datetime | None = None
         self.used_at: datetime | None = None
 
+    def is_expired(self) -> bool:
+        """Return True if the code's expiry timestamp has passed."""
+        return datetime.now(UTC) > self.expires_at
+
     def is_valid(self) -> bool:
         """Check if access code is valid"""
         if self.status != AccessCodeStatus.ACTIVE:
             return False
 
-        if datetime.now(UTC) > self.expires_at:
+        if self.is_expired():
             self.status = AccessCodeStatus.EXPIRED
             return False
 

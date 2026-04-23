@@ -199,19 +199,29 @@ class TOTPDisableRequest(BaseModel):
 
 def _get_current_user_id(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> str:
-    # Prefer Authorization header; fall back to httpOnly access token cookie
-    # so server-side requests (curl, Postman) that carry only the cookie work.
-    token: str | None = credentials.credentials if credentials else None
-    if not token:
+    """Extract and validate the caller's user ID from the access token.
+
+    Token resolution order:
+      1. Authorization: Bearer <token> header  (API clients, SPA fetch)
+      2. hopefx_access_token cookie            (browser navigation, /me page load)
+
+    Raises 401 if neither is present or the token is invalid/expired.
+    """
+    token: str | None = None
+    if credentials is not None:
+        token = credentials.credentials
+    else:
         token = request.cookies.get("hopefx_access_token")
+
     if not token:
         raise HTTPException(
             status_code=401,
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     try:
         import jwt
 
@@ -467,10 +477,12 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
-    # Rotate the access token cookie to match the new token
+    # Rotate the access token cookie to match the new token.
+    # Use the same env var and default (60 min) as /login so the cookie
+    # lifetime is always consistent with the token TTL.
     new_access = tokens.get("access_token", "")
     if new_access:
-        _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
+        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
         _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
         response.set_cookie(
             key="hopefx_access_token",
@@ -480,6 +492,20 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
             samesite="strict",
             secure=_secure,
             path="/",
+        )
+    # Rotate the refresh token cookie as well so the new token is persisted.
+    new_refresh = tokens.get("refresh_token", "")
+    if new_refresh:
+        _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
+        _refresh_max_age = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")) * 86400
+        response.set_cookie(
+            key="hopefx_refresh_token",
+            value=new_refresh,
+            max_age=_refresh_max_age,
+            httponly=True,
+            samesite="strict",
+            secure=_secure,
+            path="/api/auth/refresh",
         )
     return tokens
 

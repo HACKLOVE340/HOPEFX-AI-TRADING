@@ -195,6 +195,8 @@ def decrypt_totp_secret(stored: str) -> str:
 
 # ── Password hashing ─────────────────────────────────────────────────────────
 # Delegate to auth.jwt which uses bcrypt (BLAKE2b pre-hash, cost 12).
+# BLAKE2b normalises the input to ≤72 bytes before bcrypt to avoid bcrypt's
+# silent 72-byte truncation for long passwords.
 # A single implementation ensures the hash written at registration is always
 # the same scheme verified at login — previously this module used pbkdf2_sha256
 # while auth.jwt used bcrypt, causing "hash could not be identified" on login.
@@ -465,6 +467,7 @@ class AuthService:
                         "email": user.email,
                         "username": user.username,
                         "role": user.role,
+                        "plan": getattr(user, "plan", "free"),
                         "kyc_status": user.kyc_status,
                         "totp_enabled": user.totp_enabled,
                         "plan": getattr(user, "plan", "free"),
