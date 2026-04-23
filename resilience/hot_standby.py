@@ -118,11 +118,26 @@ logger = logging.getLogger(__name__)
 # ── Configuration ─────────────────────────────────────────────────────────────
 _HEARTBEAT_INTERVAL_S = float(os.getenv("STANDBY_HEARTBEAT_INTERVAL_S", "5.0"))
 _HEARTBEAT_MISS_THRESHOLD = int(os.getenv("STANDBY_HEARTBEAT_MISS_THRESHOLD", "3"))
-_LEADER_TTL_S = float(os.getenv("STANDBY_LEADER_TTL_S", "15.0"))
+_LEADER_TTL_S = float(os.getenv("STANDBY_LEADER_TTL_S", "60.0"))  # default 60s — safe for single-pod dev
 _STATE_INTERVAL_S = float(os.getenv("STANDBY_STATE_INTERVAL_S", "1.0"))
 _FILLS_RING_SIZE = int(os.getenv("STANDBY_FILLS_RING_SIZE", "500"))
 _POD_ID = os.getenv("STANDBY_POD_ID", socket.gethostname())
-_ROLE_ENV = os.getenv("STANDBY_ROLE", "auto").lower()
+_ROLE_ENV = os.getenv("STANDBY_ROLE", "auto").lower()  # may be "auto" if .env not yet loaded
+
+
+def _role_env() -> str:
+    """Read STANDBY_ROLE at call time so .env values loaded after import are respected."""
+    return os.getenv("STANDBY_ROLE", _ROLE_ENV).lower()
+
+
+def _decode(value: str | bytes | None) -> str | None:
+    """Return a str from a Redis value regardless of decode_responses setting."""
+    if value is None:
+        return None
+    if isinstance(value, bytes):
+        return value.decode()
+    return value  # already str when decode_responses=True
+
 
 # ── Redis key constants ───────────────────────────────────────────────────────
 _KEY_LEADER = "hopefx:leader"
@@ -205,9 +220,9 @@ class HotStandbyReplicator:
         # Determine initial role
         if role is not None:
             self._role = role
-        elif _ROLE_ENV == "primary":
+        elif _role_env() == "primary":
             self._role = Role.PRIMARY
-        elif _ROLE_ENV == "standby":
+        elif _role_env() == "standby":
             self._role = Role.STANDBY
         else:
             # Auto: try to acquire leader key; if acquired → primary
@@ -238,7 +253,7 @@ class HotStandbyReplicator:
 
         self._running = True
 
-        if _ROLE_ENV == "auto":
+        if _role_env() == "auto":
             acquired = await self._try_acquire_leader(initial=True)
             self._role = Role.PRIMARY if acquired else Role.STANDBY
             self._stats.role = self._role
@@ -345,19 +360,23 @@ class HotStandbyReplicator:
 
     async def _leader_refresh_loop(self) -> None:
         """Refresh the leader key TTL every HEARTBEAT_INTERVAL_S."""
+        _forced_primary = _role_env() == "primary"
         while self._running:
             try:
                 # GETSET pattern: only refresh if we still own the key
                 current = await self._redis.get(_KEY_LEADER)
-                # decode_responses=True returns str; bytes clients return bytes
-                current_str = current.decode() if isinstance(current, bytes) else current
-                if current_str and current_str == self._pod_id:
+                if current and _decode(current) == self._pod_id:
                     await self._redis.pexpire(_KEY_LEADER, int(_LEADER_TTL_S * 1000))
+                elif _forced_primary:
+                    # STANDBY_ROLE=primary: re-acquire the key rather than demoting.
+                    # In single-pod dev the key may have expired between refreshes.
+                    await self._redis.set(_KEY_LEADER, self._pod_id, px=int(_LEADER_TTL_S * 1000))
+                    logger.debug("HotStandbyReplicator: re-acquired leader key (forced primary)")
                 else:
                     # Lost the leader key — demote
                     logger.critical(
                         "HotStandbyReplicator: lost leader key! current=%s pod=%s — demoting",
-                        current_str,
+                        _decode(current),
                         self._pod_id,
                     )
                     await self._demote()
@@ -389,9 +408,7 @@ class HotStandbyReplicator:
                     self._stats.missed_heartbeats += 1
                     age_s = _HEARTBEAT_INTERVAL_S * self._stats.missed_heartbeats
                 else:
-                    # decode_responses=True returns str; bytes clients return bytes
-                    raw_str = raw.decode() if isinstance(raw, bytes) else raw
-                    last_ts = float(raw_str)
+                    last_ts = float(_decode(raw))
                     age_s = time.time() - last_ts
                     if age_s < _HEARTBEAT_INTERVAL_S * 1.5:
                         self._stats.missed_heartbeats = 0
@@ -450,8 +467,7 @@ class HotStandbyReplicator:
             if initial:
                 # Key exists — check if it's ours (restart scenario)
                 current = await self._redis.get(_KEY_LEADER)
-                current_str = current.decode() if isinstance(current, bytes) else current
-                if current_str and current_str == self._pod_id:
+                if current and _decode(current) == self._pod_id:
                     # We already own it (e.g. pod restart with same hostname)
                     await self._redis.pexpire(_KEY_LEADER, ttl_ms)
                     return True
@@ -556,16 +572,10 @@ class HotStandbyReplicator:
                 logger.warning("HotStandbyReplicator: no state snapshot in Redis — starting with empty state")
                 return None
 
-            # decode_responses=True returns str; bytes clients return bytes — handle both
-            def _to_str(v: bytes | str | None) -> str | None:
-                if v is None:
-                    return None
-                return v.decode() if isinstance(v, bytes) else v
-
-            positions = json.loads(_to_str(pos_raw))
-            equity_data = json.loads(_to_str(equity_raw))
-            fills = json.loads(_to_str(fills_raw)) if fills_raw else []
-            version = int(_to_str(ver_raw)) if ver_raw else 0
+            positions = json.loads(_decode(pos_raw))
+            equity_data = json.loads(_decode(equity_raw))
+            fills = json.loads(_decode(fills_raw)) if fills_raw else []
+            version = int(_decode(ver_raw)) if ver_raw else 0
 
             snapshot = StateSnapshot(
                 positions=positions,

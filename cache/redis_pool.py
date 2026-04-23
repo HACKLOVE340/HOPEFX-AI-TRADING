@@ -67,6 +67,7 @@ except ImportError:  # pragma: no cover
 # Configuration
 # ---------------------------------------------------------------------------
 
+
 def _resolve_redis_url() -> str:
     """
     Resolve the Redis URL, applying TLS enforcement when IS_FORCE_TLS or
@@ -77,7 +78,7 @@ def _resolve_redis_url() -> str:
     _redis_force = os.getenv("REDIS_FORCE_TLS", "false").lower()
     force_tls = (_is_force == "true") or (_redis_force == "true")
     if force_tls and url.startswith("redis://"):
-        url = "rediss://" + url[len("redis://"):]
+        url = "rediss://" + url[len("redis://") :]
         logger.info("Redis pool: IS_FORCE_TLS/REDIS_FORCE_TLS=true — upgraded URL to rediss://")
     return url
 

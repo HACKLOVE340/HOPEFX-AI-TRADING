@@ -1,8 +1,8 @@
 services:
   redis:
     name: "Redis"
-    description: "Redis 7 — EventBus pub/sub and session cache"
-    command: redis-server --daemonize no --loglevel warning
+    description: "Redis — EventBus pub/sub and session cache"
+    command: redis-server --daemonize no --loglevel warning --bind 127.0.0.1
 
   backend:
     name: "FastAPI Backend"
@@ -10,11 +10,11 @@ services:
     command: >
       cd /workspaces/HOPEFX-AI-TRADING &&
       [ -f .env ] || python3 scripts/bootstrap_dev.py &&
-      OTEL_ENABLED=false APP_ENV=development
-      python3 -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+      OTEL_ENABLED=false APP_ENV=development REDIS_URL=redis://127.0.0.1:6379/0 REDIS_FORCE_TLS=false
+      python3 run.py --mode api
     ready-on:
       http-request:
-        url: http://localhost:8000/health
+        url: http://localhost:8000/api/health
         timeout-seconds: 90
 
   frontend:

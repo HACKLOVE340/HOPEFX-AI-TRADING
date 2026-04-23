@@ -201,11 +201,10 @@ def _enforce_tls(redis_url: str) -> str:
             "to auto-upgrade. This check prevents credentials from being sent in plaintext."
         )
 
-    # Warn once per process — repeated per-connection warnings flood the log
-    # in development where many connections are created on startup.
+    # Log once per process at DEBUG in dev — it's expected and not actionable.
     global _tls_warning_emitted
     if not _tls_warning_emitted:
-        logger.warning(
+        logger.debug(
             "Redis: plaintext redis:// connection in %s environment. "
             "Use rediss:// in production or set REDIS_FORCE_TLS=true.",
             app_env,
@@ -328,10 +327,10 @@ async def get_redis(
     # Fast-fail when the circuit breaker is open — don't attempt reconnect
     try:
         from resilience.service_circuit_breakers import redis_breaker as _rb
+
         if _rb.is_open:
             logger.debug(
-                "get_redis: Redis circuit breaker OPEN — returning None. "
-                "Retry in %.0fs.", _rb._seconds_until_probe()
+                "get_redis: Redis circuit breaker OPEN — returning None. Retry in %.0fs.", _rb._seconds_until_probe()
             )
             return None
     except Exception:  # nosec B110 — circuit breaker is non-fatal
@@ -399,6 +398,7 @@ async def _ping_or_reset() -> None:
         # Record success so the breaker can transition HALF_OPEN → CLOSED
         try:
             from resilience.service_circuit_breakers import redis_breaker as _rb
+
             _rb.record_success()
         except Exception:  # nosec B110
             pass
@@ -410,6 +410,7 @@ async def _ping_or_reset() -> None:
         # Record failure in circuit breaker
         try:
             from resilience.service_circuit_breakers import redis_breaker as _rb
+
             _rb.record_failure(exc)
         except Exception:  # nosec B110
             pass

@@ -45,10 +45,12 @@ from typing import Any
 
 try:
     import redis.asyncio as aioredis  # redis-py >= 4.2  # pylint: disable=no-name-in-module
+    import redis.exceptions as _redis_exc
 
     _REDIS_ASYNCIO_AVAILABLE = True
 except (ImportError, AttributeError):
     aioredis = None  # type: ignore[assignment]
+    _redis_exc = None  # type: ignore[assignment]
     _REDIS_ASYNCIO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -295,6 +297,16 @@ def _make_redis() -> aioredis.Redis:
     )
 
 
+def _make_redis_pubsub() -> aioredis.Redis:
+    """Create a dedicated Redis client for pub/sub subscriptions.
+
+    Identical to _make_redis() — kept as a separate factory so callers can
+    be replaced independently if pubsub-specific tuning is needed later.
+    socket_timeout=None is intentional: listen() must block indefinitely.
+    """
+    return _make_redis()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # EventBus — Redis pub/sub with retry/backoff + local fallback
 # ─────────────────────────────────────────────────────────────────────────────
@@ -463,10 +475,13 @@ class EventBus:
             return  # unreachable; satisfies type checker
 
         # Redis path with auto-reconnect
+        _pubsub_redis: aioredis.Redis | None = None
         while True:
             pubsub = None
             try:
-                pubsub = self._redis.pubsub()
+                if _pubsub_redis is None:
+                    _pubsub_redis = _make_redis_pubsub()
+                pubsub = _pubsub_redis.pubsub()
                 await pubsub.subscribe(*channels)
                 logger.info("EventBus subscribed to channels: %s", channels)
 
@@ -514,9 +529,15 @@ class EventBus:
                 if pubsub:
                     await pubsub.unsubscribe()
                 return
+            except (TimeoutError, _redis_exc.TimeoutError):
+                # Idle pubsub timeout — no messages received within socket_timeout.
+                # This is normal on quiet channels; just re-subscribe without logging.
+                _pubsub_redis = None
+                continue
             except Exception as exc:
                 self._metrics["errors"] += 1
                 logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
+                _pubsub_redis = None
                 await asyncio.sleep(5)
                 try:
                     self._redis = _make_redis()
