@@ -452,7 +452,10 @@ async def lifespan(_app: FastAPI):
 
         _prom_interval = float(os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
         _t = asyncio.create_task(_prom_sync_loop(_prom_interval))
-        _t.add_done_callback(lambda _: None)
+        def _on_prom_done(task: "asyncio.Task[None]") -> None:
+            if not task.cancelled() and task.exception():
+                logger.error("Prometheus sync loop died: %s", task.exception())
+        _t.add_done_callback(_on_prom_done)
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:
         logger.warning("Prometheus sync loop not started: %s", _prom_err)
@@ -465,7 +468,10 @@ async def lifespan(_app: FastAPI):
         _outbox_task = asyncio.create_task(
             _get_outbox_relay().run(), name="outbox-relay"
         )
-        _outbox_task.add_done_callback(lambda _: None)
+        def _on_outbox_done(task: "asyncio.Task[None]") -> None:
+            if not task.cancelled() and task.exception():
+                logger.error("Outbox relay task died — compliance events may be lost: %s", task.exception())
+        _outbox_task.add_done_callback(_on_outbox_done)
         logger.info(
             "✓ Outbox relay started (interval=%.1fs batch=%s)",
             float(os.getenv("OUTBOX_RELAY_INTERVAL_SECONDS", "2.0")),

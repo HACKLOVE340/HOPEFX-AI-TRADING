@@ -75,7 +75,7 @@ async def init_env(s: Any) -> bool:
         if is_production:
             logger.critical(
                 "STARTUP ABORTED: SECURITY_JWT_SECRET is missing in production. "
-                'Generate a secret: python3 -c "import secrets; logger.info(secrets.token_hex(32))"'
+                'Generate a secret: python3 -c "import secrets; print(secrets.token_hex(32))"'
             )
             sys.exit(1)
         # Generate a cryptographically-random ephemeral secret for dev.
@@ -94,7 +94,7 @@ async def init_env(s: Any) -> bool:
         if is_production:
             logger.critical(
                 "STARTUP ABORTED: CONFIG_ENCRYPTION_KEY is missing in production. "
-                'Generate a key: python3 -c "import secrets; logger.info(secrets.token_urlsafe(48))"'
+                'Generate a key: python3 -c "import secrets; print(secrets.token_urlsafe(48))"'
             )
             sys.exit(1)
         # Generate a cryptographically-random ephemeral key for dev.
@@ -637,6 +637,7 @@ async def init_broker(s: Any) -> Any:
         if mt5_broker is not None:
             return mt5_broker
         # Fall through to paper broker so startup is not fatal if MT5 is unavailable.
+        log_activity("MT5 broker unavailable — falling back to paper trading (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD)")
 
     if broker_type == "oanda" and oanda_token and oanda_account:
         broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
