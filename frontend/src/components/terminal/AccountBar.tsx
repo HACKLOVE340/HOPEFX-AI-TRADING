@@ -72,6 +72,13 @@ export function AccountBar() {
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
+        label="Max DD"
+        value={`${(account.max_drawdown * 100).toFixed(1)}%`}
+        valueColor="#ff3b5c"
+        compact
+      />
+      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <MetricTile
         label="Sharpe"
         value={fmtRatio(account.sharpe_ratio)}
         valueColor="#00d4ff"
