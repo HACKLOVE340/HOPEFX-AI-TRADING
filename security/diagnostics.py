@@ -322,14 +322,17 @@ class DiagnosticsEngine:
             "SECURITY_JWT_SECRET": ["JWT_SECRET_KEY", "SECRET_KEY"],
         }
 
-        for name, desc, _ in _REQUIRED_ENV_VARS:
+        for name, desc, required in _REQUIRED_ENV_VARS:
             val = os.getenv(name, "")
             if not val:
                 # Check known aliases before reporting missing
                 aliases = _ALIASES.get(name, [])
                 val = next((os.getenv(a, "") for a in aliases if os.getenv(a, "")), "")
             if not val:
-                missing_req.append(f"{name} ({desc})")
+                if required:
+                    missing_req.append(f"{name} ({desc})")
+                else:
+                    missing_opt.append(f"{name} ({desc})")
         for name, desc in _OPTIONAL_ENV_VARS:
             if not os.getenv(name, ""):
                 missing_opt.append(f"{name} ({desc})")
@@ -478,7 +481,16 @@ class DiagnosticsEngine:
         try:
             import redis.asyncio as aioredis
 
-            url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            url = os.getenv("REDIS_URL", "")
+            if not url:
+                return DiagnosticResult(
+                    check_name="redis",
+                    status="warning",
+                    message="REDIS_URL not configured — Redis features disabled",
+                    remediation="Set REDIS_URL=redis://localhost:6379/0 to enable caching and pub/sub",
+                    duration_ms=(time.monotonic() - t0) * 1000,
+                )
+            url = url or "redis://localhost:6379/0"
             client = aioredis.from_url(url, decode_responses=True, socket_connect_timeout=5)
             try:
                 pong = await asyncio.wait_for(client.ping(), timeout=5)
