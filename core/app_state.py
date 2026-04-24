@@ -69,6 +69,10 @@ class AppState:
         # Feature engineer — sklearn-compatible OHLCV feature pipeline
         # Populated by init_feature_engineer() in startup_factories.py
         self.feature_engineer = None
+        # Signal engine — asyncio task handle returned by init_signal_engine()
+        self.signal_engine = None
+        # Master Control Centre — strategy orchestration and lifecycle management
+        self.mcc = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 
