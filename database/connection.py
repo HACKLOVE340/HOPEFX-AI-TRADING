@@ -115,6 +115,8 @@ class DatabaseManager:
                     "options": "-c statement_timeout=30000",  # 30s PostgreSQL
                 }
                 if "postgresql" in self.connection_string
+                else {"check_same_thread": False}  # SQLite: allow cross-thread reuse (tests & dev)
+                if "sqlite" in self.connection_string
                 else {},
             )
 
