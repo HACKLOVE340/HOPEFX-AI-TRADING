@@ -54,18 +54,25 @@ if not exist "venv\Scripts\activate.bat" (
 :: ── 3. Activate venv ──────────────────────────────────────────────────────────
 call venv\Scripts\activate.bat
 
-:: ── 4. Always sync dependencies ───────────────────────────────────────────────
+:: ── 4. Clear pip cache (prevents [Errno 13] Permission denied on cached wheels) ─
+:: Windows locks .whl files in the pip cache after a failed or interrupted install.
+:: Purging before every install guarantees pip always downloads fresh — no lock conflicts.
+echo [INFO] Clearing pip cache...
+pip cache purge >nul 2>&1
+echo [OK] Pip cache cleared
+
+:: ── 5. Always sync dependencies ───────────────────────────────────────────────
 :: Runs on every start so new packages added after git pull are always installed.
 :: pip skips packages already up to date — fast after first run.
 echo [INFO] Syncing dependencies...
-pip install --no-cache-dir -q -r requirements-windows.txt
+pip install --no-cache-dir -r requirements-windows.txt
 if errorlevel 1 (
     echo [ERROR] Dependency install failed. See output above.
     pause & exit /b 1
 )
 echo [OK] Dependencies synced
 
-:: ── 5. MetaTrader5 (Windows only, non-fatal) ──────────────────────────────────
+:: ── 6. MetaTrader5 (Windows only, non-fatal) ──────────────────────────────────
 python -c "import MetaTrader5" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installing MetaTrader5 SDK...
@@ -79,7 +86,7 @@ if errorlevel 1 (
     echo [OK] MetaTrader5 present
 )
 
-:: ── 6. Generate .env if missing ───────────────────────────────────────────────
+:: ── 7. Generate .env if missing ───────────────────────────────────────────────
 if not exist ".env" (
     echo [INFO] Generating .env via dev bootstrap...
     python scripts\bootstrap_dev.py
@@ -92,7 +99,7 @@ if not exist ".env" (
     echo [OK] .env found
 )
 
-:: ── 7. Build frontend if not built ────────────────────────────────────────────
+:: ── 8. Build frontend if not built ────────────────────────────────────────────
 if not exist "static\index.html" (
     echo [INFO] Building React frontend...
     where npm >nul 2>&1
@@ -114,7 +121,7 @@ if not exist "static\index.html" (
     echo [OK] Frontend already built
 )
 
-:: ── 8. Set defaults and start ─────────────────────────────────────────────────
+:: ── 9. Set defaults and start ─────────────────────────────────────────────────
 if not defined APP_ENV  set APP_ENV=development
 if not defined API_HOST set API_HOST=127.0.0.1
 if not defined API_PORT set API_PORT=8000

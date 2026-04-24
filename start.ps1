@@ -54,18 +54,25 @@ if (-not (Test-Path "venv\Scripts\Activate.ps1")) {
 # ── 3. Activate venv ──────────────────────────────────────────────────────────
 & "venv\Scripts\Activate.ps1"
 
-# ── 4. Always sync dependencies ───────────────────────────────────────────────
+# ── 4. Clear pip cache (prevents [Errno 13] Permission denied on cached wheels) ─
+# Windows locks .whl files in the pip cache after a failed or interrupted install.
+# Purging before every install guarantees pip always downloads fresh — no lock conflicts.
+Write-Host "[INFO] Clearing pip cache..." -ForegroundColor Cyan
+pip cache purge 2>$null
+Write-Host "[OK] Pip cache cleared" -ForegroundColor Green
+
+# ── 5. Always sync dependencies ───────────────────────────────────────────────
 # Runs on every start so new packages added after git pull are always installed.
 # pip skips packages already up to date — fast after first run.
 Write-Host "[INFO] Syncing dependencies..." -ForegroundColor Cyan
-pip install --no-cache-dir -q -r requirements-windows.txt
+pip install --no-cache-dir -r requirements-windows.txt
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] Dependency install failed. See output above." -ForegroundColor Red
     exit 1
 }
 Write-Host "[OK] Dependencies synced" -ForegroundColor Green
 
-# ── 5. MetaTrader5 (Windows only, non-fatal) ──────────────────────────────────
+# ── 6. MetaTrader5 (Windows only, non-fatal) ──────────────────────────────────
 python -c "import MetaTrader5" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[INFO] Installing MetaTrader5 SDK..." -ForegroundColor Cyan
@@ -79,7 +86,7 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "[OK] MetaTrader5 present" -ForegroundColor Green
 }
 
-# ── 6. Generate .env if missing ───────────────────────────────────────────────
+# ── 7. Generate .env if missing ───────────────────────────────────────────────
 if (-not (Test-Path ".env")) {
     Write-Host "[INFO] Generating .env via dev bootstrap..." -ForegroundColor Cyan
     python scripts\bootstrap_dev.py
@@ -92,13 +99,13 @@ if (-not (Test-Path ".env")) {
     Write-Host "[OK] .env found" -ForegroundColor Green
 }
 
-# ── 7. Load .env into process environment ─────────────────────────────────────
+# ── 8. Load .env into process environment ─────────────────────────────────────
 Get-Content ".env" | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "=" } | ForEach-Object {
     $kv = $_ -split "=", 2
     [System.Environment]::SetEnvironmentVariable($kv[0].Trim(), $kv[1].Trim(), "Process")
 }
 
-# ── 8. Build frontend if not built ────────────────────────────────────────────
+# ── 9. Build frontend if not built ────────────────────────────────────────────
 if (-not (Test-Path "static\index.html")) {
     Write-Host "[INFO] Building React frontend..." -ForegroundColor Cyan
     if ((Get-Command npm -ErrorAction SilentlyContinue) -and (Test-Path "frontend\package.json")) {
@@ -118,7 +125,7 @@ if (-not (Test-Path "static\index.html")) {
     Write-Host "[OK] Frontend already built" -ForegroundColor Green
 }
 
-# ── 9. Set defaults and start ─────────────────────────────────────────────────
+# ── 10. Set defaults and start ────────────────────────────────────────────────
 $apiHost = if ($env:API_HOST) { $env:API_HOST } else { "127.0.0.1" }
 $apiPort = if ($Port) { $Port } elseif ($env:API_PORT) { $env:API_PORT } else { "8000" }
 
