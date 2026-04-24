@@ -32,9 +32,11 @@
 # vectorbt>=0.26.0
 
 # ── MetaTrader5 ───────────────────────────────────────────────────────────────
-# Windows-only broker SDK. Not available on Linux/macOS.
-# On Windows: pip install MetaTrader5>=5.0.45
-# MetaTrader5>=5.0.45
+# Windows-only broker SDK. The MT5 terminal must be installed on the same machine.
+# Not available on Linux/macOS — the package will fail to import on those platforms.
+# start.bat and start.ps1 install this automatically on Windows.
+# Manual install: pip install --no-cache-dir "MetaTrader5>=5.0.45"
+MetaTrader5>=5.0.45
 
 # ── Zipline ───────────────────────────────────────────────────────────────────
 # Has strict Python version constraints; check compatibility before installing.

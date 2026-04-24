@@ -40,11 +40,23 @@ if not exist ".env" (
 python -c "import uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installing dependencies from requirements.txt...
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
     if errorlevel 1 (
         echo [ERROR] pip install failed. See output above.
         pause
         exit /b 1
+    )
+)
+
+:: ── Install MetaTrader5 if not present (Windows only) ─────────────────────────
+python -c "import MetaTrader5" >nul 2>&1
+if errorlevel 1 (
+    echo [INFO] Installing MetaTrader5 SDK...
+    pip install --no-cache-dir "MetaTrader5>=5.0.45"
+    if errorlevel 1 (
+        echo [WARN] MetaTrader5 install failed. MT5 broker will be unavailable.
+    ) else (
+        echo [INFO] MetaTrader5 installed successfully.
     )
 )
 

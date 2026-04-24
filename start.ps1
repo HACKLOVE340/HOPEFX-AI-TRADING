@@ -40,10 +40,22 @@ Get-Content ".env" | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "=" } | 
 python -c "import uvicorn" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[INFO] Installing dependencies from requirements.txt..." -ForegroundColor Cyan
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
     if ($LASTEXITCODE -ne 0) {
         Write-Error "pip install failed. See output above."
         exit 1
+    }
+}
+
+# ── Install MetaTrader5 if not present (Windows only) ─────────────────────────
+python -c "import MetaTrader5" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[INFO] Installing MetaTrader5 SDK..." -ForegroundColor Cyan
+    pip install --no-cache-dir "MetaTrader5>=5.0.45"
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[WARN] MetaTrader5 install failed. MT5 broker will be unavailable." -ForegroundColor Yellow
+    } else {
+        Write-Host "[INFO] MetaTrader5 installed successfully." -ForegroundColor Green
     }
 }
 
