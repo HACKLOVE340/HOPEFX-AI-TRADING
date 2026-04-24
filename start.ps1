@@ -52,17 +52,19 @@ Get-Content ".env" | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "=" } | 
 }
 
 # ── Install / update dependencies ─────────────────────────────────────────────
+# requirements-windows.txt excludes Linux-only packages (uvloop, triton,
+# nvidia-*, cuda-*) that have no Windows wheels and would cause install failures.
 python -c "import uvicorn" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[INFO] Installing dependencies..." -ForegroundColor Cyan
-    pip install --no-cache-dir -r requirements.txt
+    Write-Host "[INFO] Installing dependencies from requirements-windows.txt..." -ForegroundColor Cyan
+    pip install --no-cache-dir -r requirements-windows.txt
     if ($LASTEXITCODE -ne 0) {
         Write-Error "pip install failed. See output above."
         exit 1
     }
 }
 
-# ── Install MetaTrader5 if not present (Windows only) ─────────────────────────
+# ── Install MetaTrader5 if not present (Windows only, non-fatal) ──────────────
 python -c "import MetaTrader5" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[INFO] Installing MetaTrader5 SDK..." -ForegroundColor Cyan

@@ -46,10 +46,12 @@ if not exist ".env" (
 )
 
 :: ── Install / update dependencies ─────────────────────────────────────────────
+:: requirements-windows.txt excludes Linux-only packages (uvloop, triton,
+:: nvidia-*, cuda-*) that have no Windows wheels and would cause install failures.
 python -c "import uvicorn" >nul 2>&1
 if errorlevel 1 (
-    echo [INFO] Installing dependencies...
-    pip install --no-cache-dir -r requirements.txt
+    echo [INFO] Installing dependencies from requirements-windows.txt...
+    pip install --no-cache-dir -r requirements-windows.txt
     if errorlevel 1 (
         echo [ERROR] pip install failed. See output above.
         pause
@@ -57,7 +59,7 @@ if errorlevel 1 (
     )
 )
 
-:: ── Install MetaTrader5 if not present (Windows only) ─────────────────────────
+:: ── Install MetaTrader5 if not present (Windows only, non-fatal) ──────────────
 python -c "import MetaTrader5" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installing MetaTrader5 SDK...
