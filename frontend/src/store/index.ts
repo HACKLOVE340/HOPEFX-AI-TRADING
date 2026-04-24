@@ -14,6 +14,10 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+// Static import avoids the Rolldown INEFFECTIVE_DYNAMIC_IMPORT warning.
+// resetCsrfCache is a pure synchronous function with no circular-dependency
+// risk at module evaluation time — the store is initialised after useApi.
+import { resetCsrfCache } from '../hooks/useApi';
 import type {
   User,
   PriceTick,
@@ -213,10 +217,7 @@ export const useStore = create<AppStore>()(
         clearAuth: () => {
           // Invalidate the in-memory CSRF cache so the next request fetches a
           // fresh token rather than sending a stale one the server has expired.
-          // Dynamic import avoids a circular dependency (store ↔ useApi).
-          import('../hooks/useApi').then(({ resetCsrfCache }) => {
-            resetCsrfCache();
-          }).catch(() => { /* ignore — safe to skip in test/SSR contexts */ });
+          resetCsrfCache();
           set({ token: null, user: null, isAuthenticated: false, plan: 'free' }, false, 'auth/clearAuth');
         },
 

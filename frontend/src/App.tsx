@@ -31,6 +31,7 @@ import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
 import { useBootstrapData } from './hooks/useOrchestratorData';
+import { getCsrfToken } from './hooks/useApi';
 
 // ── Public / auth pages ───────────────────────────────────────────────────────
 const LandingPage             = React.lazy(() => import('./pages/LandingPage'));
@@ -67,6 +68,7 @@ const RiskCalculator   = React.lazy(() => import('./pages/RiskCalculator'));
 
 // ── Analytics ─────────────────────────────────────────────────────────────────
 const Performance          = React.lazy(() => import('./pages/Performance'));
+const PnLDashboard         = React.lazy(() => import('./pages/PnLDashboard'));
 const AIStrategyGenerator  = React.lazy(() => import('./pages/AIStrategyGenerator'));
 const CorrelationDashboard = React.lazy(() => import('./pages/CorrelationDashboard'));
 const CustomIndicators     = React.lazy(() => import('./pages/CustomIndicators'));
@@ -244,14 +246,24 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 
 // ── No-live-feed banner ───────────────────────────────────────────────────────
 const NoLiveFeedBanner: React.FC = () => {
-  const status = useStore((s) => s.wsStatus);
-  const [dismissed, setDismissed] = React.useState(false);
+  const status    = useStore((s) => s.wsStatus);
+  const isAuth    = useStore(selectIsAuth);
+  const [dismissed, setDismissed]   = React.useState(false);
+  // Only show the banner after the WS has had at least one connection attempt.
+  // This prevents a flash of "No live feed" on initial page load before the
+  // WebSocket has had a chance to connect.
+  const [attempted, setAttempted]   = React.useState(false);
+
+  React.useEffect(() => {
+    if (status === 'connecting' || status === 'connected') setAttempted(true);
+  }, [status]);
 
   React.useEffect(() => {
     if (status === 'connected') setDismissed(false);
   }, [status]);
 
-  if (status === 'connected' || dismissed) return null;
+  // Don't show until: authenticated, at least one attempt made, not connected, not dismissed
+  if (!isAuth || !attempted || status === 'connected' || dismissed) return null;
 
   const label =
     status === 'connecting' ? 'Connecting to live feed…' :
@@ -324,9 +336,7 @@ const AppShell: React.FC = () => {
 
   // Prefetch CSRF token on mount so it's ready before any POST/PUT/DELETE fires.
   React.useEffect(() => {
-    import('./hooks/useApi').then(({ getCsrfToken }) => {
-      getCsrfToken().catch(() => {/* non-fatal — middleware will retry */});
-    });
+    getCsrfToken().catch(() => {/* non-fatal — middleware will retry */});
   }, []);
 
   useWebSocket(isAuth && hydrated);
@@ -379,6 +389,7 @@ const AppShell: React.FC = () => {
 
             {/* Analytics */}
             <Route path="/performance"  element={wrap(gated('performance',  <Performance />))} />
+            <Route path="/pnl"          element={wrap(gated('performance',  <PnLDashboard />))} />
             <Route path="/ai-strategy"  element={wrap(gated('ai-strategy',  <AIStrategyGenerator />))} />
             <Route path="/correlation"  element={wrap(gated('correlation',  <CorrelationDashboard />))} />
             <Route path="/indicators"   element={wrap(gated('indicators',   <CustomIndicators />))} />

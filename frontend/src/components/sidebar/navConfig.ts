@@ -53,7 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Trading ───────────────────────────────────────────────────────────────
   { path: '/trading',      label: 'AI Chart Bot',   icon: '🧠', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
-  { path: '/terminal',     label: 'Terminal',       icon: '🖥️', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
+  { path: '/terminal',     label: 'Terminal',       icon: '🖥️', group: 'trading',   plan: 'professional', featureKey: 'terminal'     },
   { path: '/nuclear',      label: 'Nuclear AI',     icon: '☢️', group: 'trading',   plan: 'professional', featureKey: 'nuclear'      },
   { path: '/journal',      label: 'Trade Journal',  icon: '📓', group: 'trading',   plan: 'starter',      featureKey: 'journal'      },
   { path: '/prop-firm',    label: 'Prop Firm',      icon: '🛡️', group: 'trading',   plan: 'professional', featureKey: 'prop-firm'    },
@@ -62,6 +62,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Analytics ─────────────────────────────────────────────────────────────
   { path: '/performance',  label: 'Performance',    icon: '🏆', group: 'analytics', plan: 'starter',      featureKey: 'performance'  },
+  { path: '/pnl',          label: 'P&L Dashboard',  icon: '💹', group: 'analytics', plan: 'starter',      featureKey: 'performance'  },
   { path: '/ai-strategy',  label: 'AI Strategy',    icon: '🤖', group: 'analytics', plan: 'professional', featureKey: 'ai-strategy'  },
   { path: '/correlation',  label: 'Correlation',    icon: '🔗', group: 'analytics', plan: 'professional', featureKey: 'correlation'  },
   { path: '/indicators',   label: 'Indicators',     icon: '📐', group: 'analytics', plan: 'professional', featureKey: 'indicators'   },

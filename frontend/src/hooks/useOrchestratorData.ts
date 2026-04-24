@@ -250,14 +250,10 @@ export function useAccount() {
 
 export function usePositions() {
   const setPositions = useStore((s) => s.setPositions);
-  const positions    = useStore((s) => s.positions);
   const wsStatus     = useStore((s) => s.wsStatus);
   const isAuth       = useStore(selectIsAuth);
   const hydrated     = useHasHydrated();
 
-  // Track whether we've done the initial fetch this session.
-  // positions.length === 0 is ambiguous (could be genuinely empty), so we
-  // use a separate flag via initialFetched query state instead.
   const query = useQuery<Position[]>({
     queryKey: ['positions'],
     queryFn:  async () => {
@@ -268,8 +264,9 @@ export function usePositions() {
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
-    // staleTime=0 on first load forces an immediate fetch even when WS is up.
-    staleTime:       query => query.state.dataUpdatedAt === 0 ? 0 : 5_000,
+    // staleTime=0 ensures an immediate fetch on mount even when WS is up,
+    // since WS only pushes changes — not the initial snapshot.
+    staleTime: 0,
   });
 
   useEffect(() => {
@@ -300,8 +297,9 @@ export function useSignals() {
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 15_000,
-    // staleTime=0 on first load forces an immediate fetch even when WS is up.
-    staleTime:       query => query.state.dataUpdatedAt === 0 ? 0 : 7_500,
+    // staleTime=0 ensures an immediate fetch on mount even when WS is up,
+    // since WS only pushes new signals — not the existing backlog.
+    staleTime: 0,
   });
 
   useEffect(() => {
