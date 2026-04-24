@@ -171,7 +171,7 @@ strawberry-graphql[fastapi]>=0.314.3
 slowapi>=0.1.9
 
 # ── Dev SMTP server [RUNTIME] ─────────────────────────────────────────────────
-aiosmtpd>=1.4.4
+aiosmtpd>=1.4.6
 
 # ── OpenTelemetry distributed tracing [RUNTIME] ───────────────────────────────
 opentelemetry-sdk>=1.24.0,<2.0.0
@@ -188,3 +188,6 @@ opentelemetry-propagator-b3>=1.24.0,<2.0.0
 hypothesis>=6.100.0
 pytest>=7.4.3
 
+anyio>=4.4.0 # not directly required, pinned by Snyk to avoid a vulnerability
+h11>=0.16.0 # not directly required, pinned by Snyk to avoid a vulnerability
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
