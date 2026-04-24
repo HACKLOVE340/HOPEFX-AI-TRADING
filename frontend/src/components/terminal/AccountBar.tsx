@@ -7,7 +7,7 @@
 import React from 'react';
 import { useStore } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
-import { fmtPrice, fmtPct, fmtRatio, pnlColor, cn } from '../../lib/utils';
+import { fmtPct, fmtRatio, pnlColor } from '../../lib/utils';
 
 export function AccountBar() {
   const account = useStore((s) => s.account);
@@ -84,6 +84,17 @@ export function AccountBar() {
         valueColor="#00d4ff"
         compact
       />
+      {account.sortino_ratio != null && (
+        <>
+          <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+          <MetricTile
+            label="Sortino"
+            value={fmtRatio(account.sortino_ratio)}
+            valueColor="#a78bfa"
+            compact
+          />
+        </>
+      )}
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Open Trades"
