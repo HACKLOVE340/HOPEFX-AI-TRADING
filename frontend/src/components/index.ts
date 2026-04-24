@@ -32,6 +32,17 @@ export { MetricTile } from './ui/MetricTile';
 export { Sparkline } from './ui/Sparkline';
 export { StatusDot } from './ui/StatusDot';
 
+// ── Terminal components ───────────────────────────────────────────────────────
+export { AccountBar } from './terminal/AccountBar';
+
+// ── Chart components ──────────────────────────────────────────────────────────
+export { EquityCurveChart } from './charts/EquityCurveChart';
+
+// ── Auth / access guards ──────────────────────────────────────────────────────
+export { default as AdminGuard } from './AdminGuard';
+export { default as SuperAdminGuard } from './SuperAdminGuard';
+export { default as SubscriptionGate } from './SubscriptionGate';
+
 // ── Guarded panel exports ─────────────────────────────────────────────────────
 export { LivePriceTicker, LivePriceTickerGuarded } from './panels/LivePriceTicker';
 export { LiveSignalFeed, LiveSignalFeedGuarded } from './panels/LiveSignalFeed';
