@@ -1248,6 +1248,28 @@ async def start_paper_trading(
     return {"status": "activated", "account": account}
 
 
+@router.post("/paper/stop", status_code=200)
+async def stop_paper_trading(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Deactivate paper trading mode for the authenticated user.
+
+    Removes the paper account session key so a fresh session can be
+    started via /paper/start. Does not delete trade history.
+    """
+    from api.db_store import db_delete, db_get
+
+    paper_key = f"paper:account:{user.sub}"
+    existing = db_get(paper_key)
+    if not existing:
+        return {"status": "not_active"}
+
+    db_delete(paper_key)
+    logger.info("Paper trading deactivated for user=%s", user.sub)
+    return {"status": "deactivated"}
+
+
 @router.post("/emergency-stop")
 async def emergency_stop(
     user: TokenPayload = Depends(require_role("admin")),

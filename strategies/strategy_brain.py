@@ -487,6 +487,81 @@ class StrategyBrain:
 
         return correlations
 
+    async def generate_signals(self, market_regime: dict, price_engine=None) -> list[dict]:
+        """
+        Bridge method called each HOPEFXBrain cycle.
+
+        Iterates over symbols in *market_regime*, runs analyze_joint for each,
+        and converts consensus Signal objects into the action-dict format that
+        _execute_signal expects (keys: action, symbol, size, confidence, …).
+        """
+        import asyncio
+        import inspect
+
+        if not self.strategies:
+            return []
+
+        result_signals: list[dict] = []
+
+        for symbol, regime in (market_regime or {}).items():
+            try:
+                current_price = 0.0
+                ohlcv: list = []
+
+                if price_engine is not None:
+                    try:
+                        raw = price_engine.get_ohlcv(symbol, "1h", limit=50)
+                        if inspect.iscoroutine(raw):
+                            raw = await raw
+                        ohlcv = raw or []
+                        if ohlcv:
+                            current_price = float(ohlcv[-1].close)
+                    except Exception:
+                        pass
+
+                    if current_price == 0.0:
+                        try:
+                            tick = price_engine.get_last_price(symbol)
+                            if tick is not None:
+                                current_price = (tick.bid + tick.ask) / 2.0
+                        except Exception:
+                            pass
+
+                if current_price == 0.0:
+                    continue
+
+                regime_str = regime.value if hasattr(regime, "value") else str(regime)
+                data = {
+                    "symbol": symbol,
+                    "price": current_price,
+                    "prices": ohlcv,
+                    "regime": regime_str,
+                    "timestamp": __import__("time").time(),
+                }
+
+                consensus = self.analyze_joint(data)
+
+                if consensus.get("consensus_reached") and consensus.get("consensus_signal"):
+                    sig = consensus["consensus_signal"]
+                    action = "buy" if sig.signal_type == __import__("strategies.base", fromlist=["SignalType"]).SignalType.BUY else "sell"
+                    meta = sig.metadata or {}
+                    agreeing = meta.get("agreeing_strategies") or ["strategy_brain"]
+                    result_signals.append({
+                        "action": action,
+                        "symbol": symbol,
+                        "size": float(meta.get("size", 0.01)),
+                        "confidence": float(sig.confidence),
+                        "price": float(sig.price),
+                        "entry_price": float(sig.price),
+                        "strategy": agreeing[0] if agreeing else "strategy_brain",
+                        "regime": regime_str,
+                    })
+
+            except Exception as e:
+                logger.error("generate_signals error for %s: %s", symbol, e)
+
+        return result_signals
+
     def __repr__(self) -> str:
         return (
             f"StrategyBrain("

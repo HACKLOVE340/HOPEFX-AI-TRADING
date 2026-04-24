@@ -540,7 +540,7 @@ class HOPEFXBrain:
             return MarketRegime.UNKNOWN
 
         try:
-            ohlcv = self.price_engine.get_ohlcv(symbol, "1h", limit=24)
+            ohlcv = await self.price_engine.get_ohlcv(symbol, "1h", limit=24)
         except Exception as e:
             logger.warning("Failed to get OHLCV for %s: %s", symbol, e)
 
