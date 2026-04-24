@@ -120,6 +120,7 @@ backtest/results/
 data/paper_trading_gate.json
 data/oanda_paper_start.json
 data/heal_manifest.json
+data/rollback_history.json
 data/regulatory_dlq/
 # registry.json is tracked in git as the seed manifest; updated by ModelRegistry at runtime
 *.h5
