@@ -28,6 +28,8 @@ import logging
 import os
 from typing import Any
 
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -70,7 +72,7 @@ TRADE_ACTION_REMOVE = 8  # Delete pending order
 TRADE_ACTION_CLOSE_BY = 10  # Close by opposite position
 
 
-class MT5Broker:
+class MT5Broker(BrokerConnector):
     """
     Async MT5 broker backed by ``config/brokers.yaml`` credentials.
 
@@ -82,8 +84,8 @@ class MT5Broker:
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
+        super().__init__(config)
         self._config = config
-        self.connected: bool = False
         self._login: int | None = None
         self._server: str | None = None
 
@@ -101,13 +103,14 @@ class MT5Broker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_connect)
 
-    async def disconnect(self) -> None:
+    async def disconnect(self) -> bool:
         """Shut down the MT5 terminal connection."""
         if self.connected and _MT5_AVAILABLE:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _mt5.shutdown)
             self.connected = False
             logger.info("MT5Broker disconnected (login=%s)", self._login)
+        return True
 
     # ── Account ───────────────────────────────────────────────────────────────
 
@@ -535,6 +538,82 @@ class MT5Broker:
             "mid": (tick.bid + tick.ask) / 2.0,
             "time": tick.time,
         }
+
+    # ── BrokerConnector ABC implementations ───────────────────────────────────
+
+    async def get_order(self, order_id: str) -> Order | None:
+        """Fetch a single pending order by ticket ID."""
+        if not self._assert_connected("get_order"):
+            return None
+        loop = asyncio.get_running_loop()
+        orders = await loop.run_in_executor(None, self._sync_orders)
+        ticket = int(order_id) if order_id.isdigit() else None
+        for o in orders:
+            if o.get("ticket") == ticket:
+                return Order(
+                    id=str(o["ticket"]),
+                    symbol=o.get("symbol", ""),
+                    side=OrderSide.BUY if o.get("type", 0) in (0, 2, 4) else OrderSide.SELL,
+                    order_type=OrderType.MARKET,
+                    quantity=float(o.get("volume", 0)),
+                    status="PENDING",
+                )
+        return None
+
+    async def close_position(self, symbol: str) -> bool:  # type: ignore[override]
+        """Close all open positions for *symbol* by ticket."""
+        if not self._assert_connected("close_position"):
+            return False
+        loop = asyncio.get_running_loop()
+        positions = await loop.run_in_executor(None, self._sync_positions)
+        success = True
+        for pos in positions:
+            if pos.get("symbol", "").upper() == symbol.upper():
+                result = await self.close_position_by_ticket(pos["ticket"])
+                if not result.get("success"):
+                    success = False
+        return success
+
+    async def close_position_by_ticket(self, ticket: int, volume: float | None = None) -> dict[str, Any]:
+        """Close a position by MT5 ticket number (internal helper)."""
+        if not self._assert_connected("close_position_by_ticket"):
+            return {"success": False, "comment": "Not connected"}
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
+
+    async def get_market_data(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return OHLCV bars from MT5 copy_rates_from_pos."""
+        if not self._assert_connected("get_market_data") or not _MT5_AVAILABLE:
+            return []
+        _tf_map = {
+            "1m": 1, "5m": 5, "15m": 15, "30m": 30,
+            "1h": 16385, "4h": 16388, "1d": 16408,
+        }
+        tf_const = _tf_map.get(timeframe, 16385)  # default H1
+        loop = asyncio.get_running_loop()
+
+        def _fetch() -> list[dict[str, Any]]:
+            rates = _mt5.copy_rates_from_pos(symbol, tf_const, 0, limit)
+            if rates is None:
+                return []
+            return [
+                {
+                    "timestamp": int(r["time"]),
+                    "open": float(r["open"]),
+                    "high": float(r["high"]),
+                    "low": float(r["low"]),
+                    "close": float(r["close"]),
+                    "volume": int(r["tick_volume"]),
+                }
+                for r in rates
+            ]
+
+        return await loop.run_in_executor(None, _fetch)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

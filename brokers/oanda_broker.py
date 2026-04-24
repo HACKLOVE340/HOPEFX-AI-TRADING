@@ -35,6 +35,8 @@ from typing import Any
 
 import aiohttp
 
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+
 logger = logging.getLogger(__name__)
 
 _PRACTICE_BASE = "https://api-fxpractice.oanda.com"
@@ -70,7 +72,7 @@ def _mask_account(account_id: str | None) -> str:
     return ("..." + account_id[-4:]) if len(account_id) > 4 else "****"
 
 
-class OandaBroker:
+class OandaBroker(BrokerConnector):
     """
     Async OANDA v20 REST broker.
 
@@ -83,8 +85,8 @@ class OandaBroker:
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
+        super().__init__(config)
         self._config = config
-        self.connected: bool = False
         self._session: aiohttp.ClientSession | None = None
         self._account_id: str | None = None
         self._token: str | None = None
@@ -151,12 +153,13 @@ class OandaBroker:
             await self._session.close()
             return False
 
-    async def disconnect(self) -> None:
+    async def disconnect(self) -> bool:
         """Close the aiohttp session."""
         if self._session and not self._session.closed:
             await self._session.close()
         self.connected = False
         logger.info("OandaBroker disconnected (account=%s)", _mask_account(self._account_id))
+        return True
 
     # ── Account ───────────────────────────────────────────────────────────────
 
@@ -714,6 +717,78 @@ class OandaBroker:
             except (KeyError, ValueError, TypeError) as exc:
                 logger.debug("OandaBroker.get_ohlcv_candles: skipping malformed candle: %s", exc)
         return candles
+
+    # ── BrokerConnector ABC implementations ───────────────────────────────────
+
+    async def get_order(self, order_id: str) -> Order | None:
+        """Fetch a single pending order by ID from OANDA."""
+        if not self._assert_connected("get_order") or self._session is None:
+            return None
+        url = f"{self._base_url}/v3/accounts/{self._account_id}/orders/{order_id}"
+        try:
+            async with self._session.get(url) as resp:
+                if resp.status == 404:
+                    return None
+                if resp.status != 200:
+                    logger.warning("OandaBroker.get_order: status=%s", resp.status)
+                    return None
+                data = await resp.json()
+                o = data.get("order", {})
+                return Order(
+                    id=str(o.get("id", order_id)),
+                    symbol=o.get("instrument", ""),
+                    side=OrderSide.BUY if float(o.get("units", 0)) > 0 else OrderSide.SELL,
+                    order_type=OrderType.MARKET,
+                    quantity=abs(float(o.get("units", 0))),
+                    status=o.get("state", "PENDING"),
+                )
+        except aiohttp.ClientError as exc:
+            logger.error("OandaBroker.get_order error: %s", exc)
+            return None
+
+    async def close_position(self, symbol: str) -> bool:
+        """Close the full open position for *symbol* (instrument name)."""
+        if not self._assert_connected("close_position") or self._session is None:
+            return False
+        # OANDA uses underscore-separated instrument names (e.g. XAU_USD)
+        instrument = symbol.replace("/", "_").upper()
+        url = f"{self._base_url}/v3/accounts/{self._account_id}/positions/{instrument}/close"
+        body: dict[str, Any] = {"longUnits": "ALL", "shortUnits": "ALL"}
+        try:
+            async with self._session.put(url, json=body) as resp:
+                if resp.status == 200:
+                    logger.info("OandaBroker.close_position: closed %s", instrument)
+                    return True
+                data = await resp.json()
+                logger.warning(
+                    "OandaBroker.close_position: %s failed (%s): %s",
+                    instrument, resp.status, data.get("errorMessage", ""),
+                )
+                return False
+        except aiohttp.ClientError as exc:
+            logger.error("OandaBroker.close_position error: %s", exc)
+            return False
+
+    async def get_market_data(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return OHLCV bars from OANDA instruments endpoint."""
+        _tf_map = {
+            "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
+            "1h": "H1", "4h": "H4", "1d": "D", "1w": "W", "1M": "M",
+        }
+        granularity = _tf_map.get(timeframe, "H1")
+        instrument = symbol.replace("/", "_").upper()
+        return await self.get_ohlcv_candles(
+            instrument=instrument,
+            granularity=granularity,
+            count=limit,
+        )
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _assert_connected(self, method: str) -> bool:
         if not self.connected or self._session is None or self._session.closed:

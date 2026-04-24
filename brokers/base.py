@@ -222,23 +222,23 @@ class AccountInfo:
 
 class BrokerConnector(ABC):
     """
-    Abstract base class for broker connectors.
+    Abstract base class for all broker connectors.
 
-    All broker integrations must implement:
+    All lifecycle methods are declared as async to match the real network I/O
+    contract of live broker integrations (OANDA REST, MT5 SDK, IBKR TWS).
+    Sync brokers (e.g. PaperTradingBroker) may implement sync bodies — Python
+    allows a concrete class to override an async abstract method with a sync
+    method as long as the caller awaits the result only when it is a coroutine.
+
+    Required implementations:
     - connect() / disconnect()
-    - place_order() / cancel_order()
+    - place_order() / cancel_order() / get_order()
     - get_positions() / close_position()
     - get_account_info()
     - get_market_data()
     """
 
     def __init__(self, config: dict[str, Any]):
-        """
-        Initialize broker connector.
-
-        Args:
-            config: Broker configuration dictionary
-        """
         self.config = config
         self.connected = False
         self.name = self.__class__.__name__
@@ -246,29 +246,18 @@ class BrokerConnector(ABC):
         self.rate_limiter = RateLimiter(
             calls_per_second=float(config.get("rate_limit_rps", 10.0)),
         )
-
         logger.info("Initialized %s broker connector", self.name)
 
     @abstractmethod
-    def connect(self) -> bool:
-        """
-        Connect to broker.
-
-        Returns:
-            True if connection successful
-        """
+    async def connect(self) -> bool:
+        """Open connection to the broker. Returns True on success."""
 
     @abstractmethod
-    def disconnect(self) -> bool:
-        """
-        Disconnect from broker.
-
-        Returns:
-            True if disconnection successful
-        """
+    async def disconnect(self) -> bool:
+        """Close connection to the broker. Returns True on success."""
 
     @abstractmethod
-    def place_order(
+    async def place_order(
         self,
         symbol: str,
         side: OrderSide,
@@ -284,87 +273,53 @@ class BrokerConnector(ABC):
         Args:
             symbol: Trading symbol
             side: Buy or sell
-            order_type: Market, limit, etc.
-            quantity: Order quantity
-            price: Limit price (for limit orders)
-            stop_price: Stop price (for stop orders)
-            **kwargs: Additional broker-specific parameters
+            order_type: Market, limit, stop, etc.
+            quantity: Order quantity in units
+            price: Limit price (limit orders only)
+            stop_price: Stop trigger price (stop orders only)
+            **kwargs: Broker-specific parameters
 
         Returns:
-            Order object
+            Filled or pending Order object
         """
 
     @abstractmethod
-    def cancel_order(self, order_id: str) -> bool:
-        """
-        Cancel an order.
-
-        Args:
-            order_id: Order identifier
-
-        Returns:
-            True if cancellation successful
-        """
+    async def cancel_order(self, order_id: str) -> bool:
+        """Cancel an open order. Returns True if successfully cancelled."""
 
     @abstractmethod
-    def get_order(self, order_id: str) -> Order | None:
-        """
-        Get order by ID.
-
-        Args:
-            order_id: Order identifier
-
-        Returns:
-            Order object or None
-        """
+    async def get_order(self, order_id: str) -> Order | None:
+        """Fetch a single order by ID. Returns None if not found."""
 
     @abstractmethod
-    def get_positions(self) -> list[Position]:
-        """
-        Get all open positions.
-
-        Returns:
-            List of Position objects
-        """
+    async def get_positions(self) -> list[Position]:
+        """Return all currently open positions."""
 
     @abstractmethod
-    def close_position(self, symbol: str) -> bool:
-        """
-        Close a position.
-
-        Args:
-            symbol: Trading symbol
-
-        Returns:
-            True if closure successful
-        """
+    async def close_position(self, symbol: str) -> bool:
+        """Close the open position for *symbol*. Returns True on success."""
 
     @abstractmethod
-    def get_account_info(self) -> AccountInfo:
-        """
-        Get account information.
-
-        Returns:
-            AccountInfo object
-        """
+    async def get_account_info(self) -> AccountInfo:
+        """Return current account balance, equity, and margin details."""
 
     @abstractmethod
-    def get_market_data(
+    async def get_market_data(
         self,
         symbol: str,
         timeframe: str = "1h",
         limit: int = 100,
     ) -> list[dict[str, Any]]:
         """
-        Get market data (OHLCV).
+        Return OHLCV bars for *symbol*.
 
         Args:
-            symbol: Trading symbol
-            timeframe: Timeframe (e.g., "1h", "1d")
-            limit: Number of candles
+            symbol: Trading symbol (e.g. "XAU_USD")
+            timeframe: Bar timeframe string (e.g. "1h", "4h", "1d")
+            limit: Number of bars to return
 
         Returns:
-            List of OHLCV dictionaries
+            List of dicts with keys: timestamp, open, high, low, close, volume
         """
 
     async def cancel_all_orders(self) -> list[str]:
