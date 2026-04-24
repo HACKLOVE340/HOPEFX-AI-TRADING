@@ -24,7 +24,8 @@ import React, { Suspense } from 'react';
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
 // polling and duplicate WebSocket connections on page navigation.
-import { useStore } from '../store';
+// useStore is intentionally not imported here — all data flows through
+// AppShell (WebSocket, bootstrap queries) into Zustand; panels read directly.
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
 import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
 
@@ -44,8 +45,8 @@ const LiveSignalFeed      = React.lazy(() => import('../components/panels/LiveSi
 // ── Dashboard inner ───────────────────────────────────────────────────────────
 
 function DashboardInner() {
-  // Data is bootstrapped globally in AppShell — read from store directly.
-  const wsStatus = useStore((s) => s.wsStatus);
+  // wsStatus is consumed by LivePriceTicker (StatusDot) via the store directly.
+  // No local read needed here — AppShell manages the WebSocket lifecycle.
 
   return (
     <div
@@ -81,7 +82,7 @@ function DashboardInner() {
           </PanelErrorBoundary>
         </div>
 
-        {/* Risk dashboard — top right */}
+        {/* Risk dashboard — cols 9-10, row 1 */}
         <div className="col-span-2 row-span-1 min-h-0">
           <PanelErrorBoundary title="Risk Dashboard">
             <Suspense fallback={<PanelSkeleton rows={4} />}>
@@ -90,16 +91,7 @@ function DashboardInner() {
           </PanelErrorBoundary>
         </div>
 
-        {/* Sentiment gauge — bottom right */}
-        <div className="col-span-2 row-span-1 min-h-0">
-          <PanelErrorBoundary title="Sentiment">
-            <Suspense fallback={<PanelSkeleton rows={3} />}>
-              <SentimentGauge />
-            </Suspense>
-          </PanelErrorBoundary>
-        </div>
-
-        {/* Order book — far right top */}
+        {/* Order book — cols 11-12, row 1 */}
         <div className="col-span-2 row-span-1 min-h-0">
           <PanelErrorBoundary title="Order Book">
             <Suspense fallback={<PanelSkeleton rows={8} />}>
@@ -108,7 +100,16 @@ function DashboardInner() {
           </PanelErrorBoundary>
         </div>
 
-        {/* Microstructure — far right bottom */}
+        {/* Sentiment gauge — cols 9-10, row 2 */}
+        <div className="col-span-2 row-span-1 min-h-0">
+          <PanelErrorBoundary title="Sentiment">
+            <Suspense fallback={<PanelSkeleton rows={3} />}>
+              <SentimentGauge />
+            </Suspense>
+          </PanelErrorBoundary>
+        </div>
+
+        {/* Microstructure — cols 11-12, row 2 */}
         <div className="col-span-2 row-span-1 min-h-0">
           <PanelErrorBoundary title="Microstructure">
             <Suspense fallback={<PanelSkeleton rows={5} />}>
