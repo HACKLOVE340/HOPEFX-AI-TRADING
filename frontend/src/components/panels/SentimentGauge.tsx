@@ -179,7 +179,9 @@ export function SentimentGauge() {
               No recent articles
             </div>
           ) : (
-            articles.map((a, i) => <ArticleRow key={i} article={a} />)
+            articles.map((a) => (
+            <ArticleRow key={`${a.published_at}-${a.source}`} article={a} />
+          ))
           )}
         </div>
       </div>
