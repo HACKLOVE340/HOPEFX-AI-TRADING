@@ -615,11 +615,15 @@ async def _price_broadcaster_live_only() -> None:
     a broker is connected (e.g. paper broker with market_prices populated).
     Sends no_live_feed when no live price is available for a symbol.
     """
-    _no_feed_warned: ClassVar[set[str]] = set()
+    global _prices_seeded
+    _no_feed_warned: set[str] = set()
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
             continue
+        # Re-seed from broker on every cycle until we have prices
+        if not _prices_seeded:
+            _seed_from_broker()
         any_live = False
         for symbol in _SYMBOLS:
             tick = _make_tick(symbol)
@@ -674,7 +678,7 @@ async def _heartbeat_broadcaster() -> None:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
         if _manager.connection_count == 0:
             continue
-        dead: ClassVar[list[str]] = []
+        dead: list[str] = []
         for cid in list(_manager._connections.keys()):
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
@@ -826,6 +830,72 @@ async def _chartbot_broadcaster() -> None:
             logger.debug("chartbot_broadcaster: outer error: %s", exc)
 
 
+async def _account_update_broadcaster() -> None:
+    """
+    Push account_update messages to clients subscribed to the 'account' channel.
+
+    Polls the broker every 5 seconds and broadcasts the full AccountMetrics
+    shape that the frontend store expects. Falls back gracefully when the
+    broker is not yet initialised.
+    """
+    _POLL_INTERVAL = 5  # seconds
+    while True:
+        await asyncio.sleep(_POLL_INTERVAL)
+        if _manager.connection_count == 0:
+            continue
+        try:
+            from core.app_state import app_state as _app_state  # type: ignore[import]
+
+            broker = getattr(_app_state, "broker", None) if _app_state else None
+            if broker is None:
+                continue
+
+            acct_raw = broker.get_account_info()
+            if not acct_raw:
+                continue
+
+            # Normalise to the AccountMetrics shape the frontend store expects
+            balance = float(acct_raw.get("balance", 0.0))
+            equity = float(acct_raw.get("equity", balance))
+            margin_used = float(acct_raw.get("margin_used", 0.0))
+            margin_free = float(acct_raw.get("margin_free", equity - margin_used))
+            margin_level = (equity / margin_used * 100) if margin_used > 0 else 0.0
+            daily_pnl = float(acct_raw.get("daily_pnl", acct_raw.get("unrealized_pnl", 0.0)))
+            daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
+            total_pnl = float(acct_raw.get("total_pnl", acct_raw.get("realized_pnl", 0.0)))
+
+            # Risk manager stats (optional)
+            rm = getattr(_app_state, "risk_manager", None) if _app_state else None
+            win_rate = float(getattr(rm, "win_rate", 0.0) or 0.0)
+            sharpe = float(getattr(rm, "sharpe_ratio", 0.0) or 0.0)
+            max_dd = float(getattr(rm, "max_drawdown_pct", 0.0) or 0.0)
+
+            # Open trade count from positions
+            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+            open_trades = len(positions) if positions else int(acct_raw.get("open_trades", 0))
+
+            account_msg = {
+                "type": "account_update",
+                "data": {
+                    "balance": balance,
+                    "equity": equity,
+                    "margin_used": margin_used,
+                    "margin_free": margin_free,
+                    "margin_level": round(margin_level, 2),
+                    "daily_pnl": round(daily_pnl, 2),
+                    "daily_pnl_pct": round(daily_pnl_pct, 4),
+                    "total_pnl": round(total_pnl, 2),
+                    "win_rate": round(win_rate, 2),
+                    "sharpe_ratio": round(sharpe, 4),
+                    "max_drawdown": round(max_dd, 4),
+                    "open_trades": open_trades,
+                },
+            }
+            await _manager.broadcast("account", account_msg)
+        except Exception as exc:
+            logger.debug("account_update_broadcaster: %s", exc)
+
+
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
     loop = asyncio.get_running_loop()
@@ -837,7 +907,9 @@ def start_broadcasters() -> None:
     _t.add_done_callback(lambda _: None)
     _t = loop.create_task(_chartbot_broadcaster())
     _t.add_done_callback(lambda _: None)
-    logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed → chart-bot)")
+    _t = loop.create_task(_account_update_broadcaster())
+    _t.add_done_callback(lambda _: None)
+    logger.info("WS live broadcasters started (price → account → signal → heartbeat → chart-bot)")
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
