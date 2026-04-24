@@ -196,18 +196,29 @@ def mock_brain_config():
     }
 
 
-class AsyncMock:
-    """Helper for creating async mocks"""
+class _AsyncCallable:
+    """
+    Real async callable for tests that need to inject an awaitable function.
+
+    Tracks call count and arguments without using unittest.mock.
+    Use this only when you need to inject a coroutine function into a component
+    under test — prefer real implementations (PaperTradingBroker, etc.) instead.
+    """
 
     def __init__(self, return_value=None):
         self.return_value = return_value
         self.call_count = 0
-        self.calls = []
+        self.calls: list = []
 
     async def __call__(self, *args, **kwargs):
         self.call_count += 1
         self.calls.append((args, kwargs))
         return self.return_value
+
+
+# Backward-compatible alias — existing tests that reference AsyncMock from
+# conftest get the real async callable, not unittest.mock.AsyncMock.
+AsyncMock = _AsyncCallable
 
 
 # Test data generators
@@ -322,31 +333,16 @@ def test_config():
 
 
 @pytest.fixture
-def mock_broker():
-    """Lightweight synchronous mock broker for unit tests."""
-    from unittest.mock import AsyncMock as _AsyncMock
-    from unittest.mock import MagicMock
+async def mock_broker():
+    """Real PaperTradingBroker used as the shared broker fixture in unit tests.
 
-    broker = MagicMock()
-    broker.get_account_info = _AsyncMock(
-        return_value={
-            "balance": 100_000.0,
-            "equity": 100_000.0,
-            "margin_used": 0.0,
-            "free_margin": 100_000.0,
-        }
-    )
-    broker.place_market_order = _AsyncMock(
-        return_value=MagicMock(
-            id="mock_order_1",
-            status=MagicMock(value="filled"),
-            filled_quantity=10_000,
-            average_fill_price=1.0851,
-        )
-    )
-    broker.get_positions = _AsyncMock(return_value=[])
-    broker.close_position = _AsyncMock(return_value=True)
-    return broker
+    Uses PaperTradingBroker so tests exercise real order-placement, position
+    tracking, and account-info logic without requiring live broker credentials.
+    """
+    broker = PaperTradingBroker(initial_balance=100_000.0, commission_per_lot=3.5)
+    await broker.connect()
+    yield broker
+    await broker.disconnect()
 
 
 @pytest.fixture

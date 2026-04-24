@@ -21,7 +21,6 @@ import os
 import pathlib
 import sys
 import time
-from unittest.mock import AsyncMock, MagicMock
 
 import jwt
 import pytest
@@ -113,28 +112,60 @@ def _auth(role: str = "trader") -> dict[str, str]:
 
 
 @pytest.fixture()
-def mock_broker():
-    broker = MagicMock()
+async def mock_broker():
+    """Real PaperTradingBroker — exercises actual order placement and account logic."""
+    from brokers import PaperTradingBroker
 
-    order_result = MagicMock()
-    order_result.id = "ORD-001"
-    order_result.average_fill_price = 1950.0
-    order_result.filled_quantity = 1.0
+    broker = PaperTradingBroker(initial_balance=10_000.0, commission_per_lot=3.5)
+    # Seed a price so place_market_order can fill at a real price
+    broker.market_prices["XAUUSD"] = 1950.0
+    await broker.connect()
+    yield broker
+    await broker.disconnect()
 
-    broker.place_market_order = AsyncMock(return_value=order_result)
-    broker.get_positions = AsyncMock(return_value=[])
-    broker.close_position = AsyncMock(return_value=True)
-    broker.close_all_positions = AsyncMock(return_value=2)
-    broker.get_account_info = AsyncMock(return_value={"balance": 10000.0, "equity": 10050.0})
-    return broker
+
+class _EmergencyStopTracker:
+    """Real callable that records whether emergency_stop was invoked."""
+
+    def __init__(self):
+        self.called = False
+        self.call_count = 0
+
+    def __call__(self, *args, **kwargs):
+        self.called = True
+        self.call_count += 1
+
+
+class _BrainState:
+    def to_dict(self):
+        return {"regime": "trending", "confidence": 0.8}
+
+
+class _RealBrainStub:
+    """
+    Minimal real brain stand-in for HTTP-layer auth tests.
+
+    These tests verify authentication and RBAC — not brain logic.
+    The brain is injected into app_state; only emergency_stop() is called
+    by the endpoint under test.
+    """
+
+    def __init__(self):
+        self.state = _BrainState()
+        self._stop_tracker = _EmergencyStopTracker()
+
+    def emergency_stop(self, *args, **kwargs):
+        self._stop_tracker()
+
+    @property
+    def stop_was_called(self) -> bool:
+        return self._stop_tracker.called
 
 
 @pytest.fixture()
 def mock_brain():
-    brain = MagicMock()
-    brain.state.to_dict.return_value = {"regime": "trending", "confidence": 0.8}
-    brain.emergency_stop = MagicMock()
-    return brain
+    """Real brain stub — no MagicMock, tracks emergency_stop invocations."""
+    return _RealBrainStub()
 
 
 @pytest.fixture()
@@ -144,14 +175,18 @@ def app(mock_broker, mock_brain, tmp_path, monkeypatch):
     # collection and execution.
     os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
-    state = MagicMock()
-    state.broker = mock_broker
-    state.brain = mock_brain
-    state.price_engine = None
-    # Disable risk/compliance/prop-firm gates so they don't interfere with auth tests
-    state.risk_manager = None
-    state.compliance_manager = None
-    state.prop_firm_manager = None
+    import types
+    state = types.SimpleNamespace(
+        broker=mock_broker,
+        brain=mock_brain,
+        price_engine=None,
+        # Disable risk/compliance/prop-firm gates so they don't interfere with auth tests
+        risk_manager=None,
+        compliance_manager=None,
+        prop_firm_manager=None,
+        ws_manager=None,
+        db_session_factory=None,
+    )
     trading_module.set_state(state)
 
     # Inject a fresh, inactive KillSwitch so that any kill switch activated by
@@ -261,7 +296,7 @@ class TestRoleEnforcement:
     def test_emergency_stop_admin_allowed(self, client, mock_brain):
         resp = client.post("/api/trading/emergency-stop", headers=_auth("admin"))
         assert resp.status_code == 200
-        mock_brain.emergency_stop.assert_called_once()
+        assert mock_brain.stop_was_called, "emergency_stop() was not called on the brain"
         assert resp.json()["triggered_by"] == "user-123"
 
     def test_get_positions_user_role_allowed(self, client):
@@ -280,8 +315,9 @@ class TestRoleEnforcement:
             headers=_auth("trader"),
         )
         assert resp.status_code == 201
-        assert resp.json()["order_id"] == "ORD-001"
-        mock_broker.place_market_order.assert_called_once()
+        # Verify the order was actually placed — real broker records it
+        order_id = resp.json().get("order_id")
+        assert order_id is not None and order_id != ""
 
     def test_admin_can_place_order(self, client):
         """Admin inherits trader privileges."""
