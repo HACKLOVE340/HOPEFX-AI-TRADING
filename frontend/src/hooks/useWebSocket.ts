@@ -222,22 +222,26 @@ export function useWebSocket(enabled = true) {
    * slash format used by the WebSocket price_tick messages (e.g. "XAU/USD").
    *
    * The REST endpoint may return:
-   *   "XAUUSD"  (broker path — no separator)
-   *   "XAU/USD" (price-engine path — already correct)
-   *   "XAU_USD" (legacy — underscore)
+   *   "XAUUSD"   (broker path — no separator, 6 chars)
+   *   "XAU/USD"  (price-engine path — already correct)
+   *   "XAU_USD"  (legacy — underscore)
+   *   "BTCUSDT"  (7-char crypto: BTC/USDT)
+   *   "BTCUSD"   (6-char crypto: BTC/USD)
    *
-   * We convert all forms to "XAU/USD" so store keys are consistent.
+   * We convert all forms to "BASE/QUOTE" so store keys are consistent.
+   * Standard FX and metals use 3-char codes on each side (6 total).
+   * Crypto pairs with USDT/BUSD quote use 3+4 = 7 chars.
    */
   const normaliseSymbol = useCallback((raw: string): string => {
-    // Already slash format
+    // Already slash format — return as-is
     if (raw.includes('/')) return raw;
-    // Underscore → slash
+    // Underscore separator → slash
     if (raw.includes('_')) return raw.replace('_', '/');
-    // No-separator 6-char codes: XAUUSD → XAU/USD, EURUSD → EUR/USD, etc.
-    // Currency codes are always 3 chars each.
-    if (raw.length === 6) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
-    // 7-char: BTCUSD → BTC/USD
+    // 7-char: 3-char base + 4-char quote (e.g. BTCUSDT → BTC/USDT)
     if (raw.length === 7) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+    // 6-char: 3-char base + 3-char quote (e.g. XAUUSD → XAU/USD, EURUSD → EUR/USD)
+    if (raw.length === 6) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+    // Fallback — return unchanged; server may already use a non-standard format
     return raw;
   }, []);
 

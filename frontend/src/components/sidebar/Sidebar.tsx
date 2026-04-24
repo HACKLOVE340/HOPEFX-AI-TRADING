@@ -288,56 +288,99 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       </nav>
 
       {/* Footer */}
-      {!collapsed && (
-        <div style={{
-          borderTop: '1px solid var(--border, #334155)',
-          padding: '12px 14px',
-          display: 'flex', flexDirection: 'column', gap: 8,
-        }}>
-          {isAuth && user ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <WsDot />
-                <span style={{
-                  fontSize: 12, color: '#94a3b8',
-                  overflow: 'hidden', textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap', flex: 1,
-                }}>
-                  {user.username}
-                </span>
-                <PlanBadge plan={plan} role={user.role} />
-              </div>
+      <div style={{
+        borderTop: '1px solid var(--border, #334155)',
+        padding: collapsed ? '10px 0' : '12px 14px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: collapsed ? 'center' : 'stretch',
+        gap: 8,
+        flexShrink: 0,
+      }}>
+        {collapsed ? (
+          /* ── Collapsed: icon-only footer ─────────────────────────────── */
+          <>
+            {/* WS status dot */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0' }}>
+              <WsDot />
+            </div>
+            {/* Sign out / sign in icon */}
+            {isAuth ? (
               <button
                 onClick={handleSignOut}
+                title="Sign out"
                 style={{
-                  background: 'transparent', border: '1px solid #334155',
-                  borderRadius: 6, color: '#64748b', fontSize: 12,
-                  cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: '#475569', fontSize: 16, lineHeight: 1,
+                  padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 6,
                 }}
               >
-                Sign out
+                ⏻
               </button>
-            </>
-          ) : (
-            <button
-              onClick={() => navigate('/login')}
-              style={{
-                background: '#1e3a5f', border: 'none', borderRadius: 6,
-                color: '#60a5fa', fontSize: 12, cursor: 'pointer',
-                padding: '6px 10px', fontWeight: 600,
-              }}
-            >
-              Sign in →
-            </button>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <a href="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
-              ← Landing
-            </a>
-            <ThemeToggle />
-          </div>
-        </div>
-      )}
+            ) : (
+              <button
+                onClick={() => navigate('/login')}
+                title="Sign in"
+                style={{
+                  background: 'transparent', border: 'none', cursor: 'pointer',
+                  color: '#60a5fa', fontSize: 16, lineHeight: 1,
+                  padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 6,
+                }}
+              >
+                →
+              </button>
+            )}
+          </>
+        ) : (
+          /* ── Expanded: full footer ───────────────────────────────────── */
+          <>
+            {isAuth && user ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <WsDot />
+                  <span style={{
+                    fontSize: 12, color: '#94a3b8',
+                    overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap', flex: 1,
+                  }}>
+                    {user.username}
+                  </span>
+                  <PlanBadge plan={plan} role={user.role} />
+                </div>
+                <button
+                  onClick={handleSignOut}
+                  style={{
+                    background: 'transparent', border: '1px solid #334155',
+                    borderRadius: 6, color: '#64748b', fontSize: 12,
+                    cursor: 'pointer', padding: '4px 8px', textAlign: 'left',
+                  }}
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => navigate('/login')}
+                style={{
+                  background: '#1e3a5f', border: 'none', borderRadius: 6,
+                  color: '#60a5fa', fontSize: 12, cursor: 'pointer',
+                  padding: '6px 10px', fontWeight: 600,
+                }}
+              >
+                Sign in →
+              </button>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <a href="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
+                ← Landing
+              </a>
+              <ThemeToggle />
+            </div>
+          </>
+        )}
+      </div>
     </aside>
   );
 };

@@ -76,7 +76,7 @@ const SubscriptionGate: React.FC<Props> = ({ featureKey, children }) => {
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
           <button
-            onClick={() => navigate('/checkout')}
+            onClick={() => navigate('/pricing')}
             style={{
               background: neededColor, border: 'none', borderRadius: 8,
               color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600,

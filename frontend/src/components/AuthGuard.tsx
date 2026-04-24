@@ -54,11 +54,16 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
   // syncing=true for any authenticated session until the server confirms the
   // user profile.  Covers both first-load (token already in memory) and
   // page-refresh (token=null, silent refresh running in interceptor).
-  const synced  = useRef(false);
+  //
+  // synced tracks the token value that was last verified so re-login within
+  // the same session (new token) always triggers a fresh /me fetch.
+  const syncedToken = useRef<string | null | undefined>(undefined);
   const [syncing, setSyncing] = useState(isAuth);
 
   useEffect(() => {
     if (!isAuth) {
+      // Reset so the next login triggers a fresh /me fetch.
+      syncedToken.current = undefined;
       setSyncing(false);
       return;
     }
@@ -72,12 +77,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
       return;
     }
 
-    // Fetch fresh user profile on every mount.
-    // If token is null the request returns 401; the response interceptor in
-    // useApi.ts silently refreshes via the httpOnly cookie, updates Zustand,
-    // and retries the request — all transparently inside this .then() chain.
-    if (!synced.current) {
-      synced.current = true;
+    // Fetch fresh user profile whenever the token changes (covers login,
+    // silent refresh, and re-login within the same session).
+    // undefined means "never synced"; null means "token not yet restored".
+    if (syncedToken.current !== token) {
+      syncedToken.current = token;
       setSyncing(true);
       authApi.me()
         .then((res) => {

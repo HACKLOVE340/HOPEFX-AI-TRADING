@@ -53,7 +53,7 @@ function DashboardInner() {
 
   return (
     <div
-      className="flex flex-col h-screen bg-[#080c14] overflow-hidden"
+      className="flex flex-col h-full bg-[#080c14] overflow-hidden"
       style={{ fontFamily: "'Inter', system-ui, sans-serif" }}
     >
       {/* ── Top: price ticker + account bar ─────────────────────────────── */}
