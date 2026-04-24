@@ -1028,15 +1028,6 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     return payload
 
 
-@router.get(
-    "/engine-health",
-    response_model=MLEngineHealthResponse,
-    summary="InferenceEngine detailed health (admin)",
-    responses={
-        200: {"description": "Engine healthy"},
-        503: {"description": "Engine unavailable or model not loaded"},
-    },
-)
 def _engine_macro_status() -> dict:
     """Return MacroStore availability dict."""
     try:
@@ -1093,6 +1084,15 @@ def _engine_model_files(saved_dir: Any) -> dict:
     return model_files
 
 
+@router.get(
+    "/engine-health",
+    response_model=MLEngineHealthResponse,
+    summary="InferenceEngine detailed health (admin)",
+    responses={
+        200: {"description": "Engine healthy"},
+        503: {"description": "Engine unavailable or model not loaded"},
+    },
+)
 async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     """
     Return detailed InferenceEngine diagnostics (admin only).

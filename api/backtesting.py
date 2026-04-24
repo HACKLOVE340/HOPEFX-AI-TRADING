@@ -815,7 +815,21 @@ async def get_latest_multi_symbol_report(
         logger.error("Could not read report: %s", exc)
         raise HTTPException(status_code=500, detail="Could not read report — check server logs") from None
 
-    return report
+    # Sanitise non-finite floats (NaN/±Inf) that are invalid in strict JSON.
+    # These can appear in pooled statistics when there are zero trades.
+    import math
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    def _sanitise(obj):
+        if isinstance(obj, float) and not math.isfinite(obj):
+            return None
+        if isinstance(obj, dict):
+            return {k: _sanitise(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_sanitise(v) for v in obj]
+        return obj
+
+    return _JSONResponse(content=_sanitise(report))
 
 
 @router.get(
