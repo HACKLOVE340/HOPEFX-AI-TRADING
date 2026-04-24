@@ -166,6 +166,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const plan      = useStore(selectPlan);
   const clearAuth = useStore((s) => s.clearAuth);
 
+  const handleSignOut = () => {
+    clearAuth();
+    navigate('/login', { replace: true });
+  };
+
   const admin      = user ? isAdmin(user.role) : false;
   const superAdmin = user ? isSuperAdmin(user.role) : false;
 
@@ -303,7 +308,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                 <PlanBadge plan={plan} role={user.role} />
               </div>
               <button
-                onClick={clearAuth}
+                onClick={handleSignOut}
                 style={{
                   background: 'transparent', border: '1px solid #334155',
                   borderRadius: 6, color: '#64748b', fontSize: 12,
