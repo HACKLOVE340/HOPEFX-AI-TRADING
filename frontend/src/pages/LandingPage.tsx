@@ -2,8 +2,8 @@
  * LandingPage.tsx
  * Public marketing page — no auth required.
  * Features: animated hero, live price ticker (WebSocket), smooth-scroll nav,
- * interactive pricing toggle, animated counters, scroll-reveal sections,
- * SEO meta tags, live signal strip, platform stats bar.
+ * interactive pricing toggle (wired to /api/pricing/plans), animated counters,
+ * scroll-reveal sections, SEO meta tags, live signal strip, platform stats bar.
  */
 
 import React, {
@@ -40,15 +40,24 @@ interface Feature {
   accent: string;
 }
 
-interface Plan {
+/** Shape returned by GET /api/pricing/plans */
+interface ApiPlan {
+  id: string;
   name: string;
-  monthly: number;
-  annual: number;
-  features: string[];
-  featured?: boolean;
+  tagline: string;
+  /** Flat monthly price in USD (e.g. 1800 = $1,800/mo) */
+  price_usd_monthly: number;
+  /** Total annual price in USD (e.g. 18000 = $18,000/yr = $1,500/mo) */
+  price_usd_annual: number;
+  annual_savings_pct: number;
+  commission_rate: number;
+  commission_label: string;
+  badge: string | null;
   cta: string;
-  href: string;
-  badge?: string;
+  cta_href: string;
+  highlights: string[];
+  features: Record<string, boolean>;
+  limits: Record<string, number>;
 }
 
 interface Step {
@@ -116,34 +125,7 @@ const FEATURES: Feature[] = [
   },
 ];
 
-const PLANS: Plan[] = [
-  {
-    name: 'Free', monthly: 0, annual: 0,
-    features: ['Paper trading', '3 symbols', '1 strategy', 'Basic backtesting', 'Email alerts'],
-    cta: 'Get started', href: '/register?plan=free',
-  },
-  {
-    name: 'Starter', monthly: 1800, annual: 1260,
-    features: ['Live trading', '10 symbols', '3 strategies', 'Full backtesting', 'Email + Telegram alerts'],
-    cta: 'Get started', href: '/register?plan=starter',
-  },
-  {
-    name: 'Professional', monthly: 4500, annual: 3150, featured: true, badge: 'Most popular',
-    features: ['20 symbols', '10 strategies', 'AI strategy generator', 'Marketplace access', 'Prop firm rules', 'Crypto payments', 'Discord / Slack / Telegram'],
-    cta: 'Start free trial', href: '/register?plan=professional',
-  },
-  {
-    name: 'Enterprise', monthly: 7500, annual: 5250,
-    features: ['All symbols', 'Unlimited strategies', 'Research tools', 'Team accounts', 'Trade replay', 'Priority support', 'API access'],
-    cta: 'Contact sales', href: '/register?plan=enterprise',
-  },
-  {
-    name: 'Elite', monthly: 10000, annual: 7000,
-    features: ['Everything in Enterprise', 'Sub-accounts', 'White-label option', 'Affiliate program', 'Custom integrations', 'Dedicated support', '0.1% commission'],
-    cta: 'Contact sales', href: '/register?plan=elite',
-    badge: 'Best value',
-  },
-];
+// PLANS is loaded from /api/pricing/plans — see usePricingPlans() below.
 
 const STEPS: Step[] = [
   { n: 1, icon: <Lock size={18} />, title: 'Connect your broker', desc: 'Link your OANDA practice or live account. Start with paper trading — no real money at risk.' },
@@ -277,6 +259,44 @@ function useLiveTicker() {
   return ticks;
 }
 
+// ── Pricing plans hook ────────────────────────────────────────────────────────
+// Fetches the canonical plan catalogue from /api/pricing/plans (public, no auth).
+// The API returns price_usd_monthly (flat monthly fee) and price_usd_annual
+// (total annual cost). Per-month equivalent when billed annually = annual / 10
+// (2 months free ≈ 17% off, so 10 months paid).
+
+function usePricingPlans(annual: boolean) {
+  const [plans, setPlans] = useState<ApiPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+
+    const load = async () => {
+      try {
+        const cycle = annual ? 'annual' : 'monthly';
+        const res = await fetch(`/api/pricing/plans?billing_cycle=${cycle}`);
+        if (!res.ok || cancelled) { setError(true); setLoading(false); return; }
+        const data = await res.json() as { plans: ApiPlan[] };
+        if (!cancelled) {
+          setPlans(data.plans ?? []);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) { setError(true); setLoading(false); }
+      }
+    };
+
+    load();
+    return () => { cancelled = true; };
+  }, [annual]);
+
+  return { plans, loading, error };
+}
+
 // ── Animated counter ──────────────────────────────────────────────────────────
 
 function AnimatedCounter({
@@ -348,7 +368,26 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
     return [...base, ...base];
   }, [ticks]);
 
-  if (items.length === 0) return null;
+  // Show placeholder slots while waiting for first tick data
+  if (items.length === 0) {
+    return (
+      <div className="w-full overflow-hidden border-b border-terminal-border bg-terminal-surface/60 backdrop-blur-sm">
+        <div className="flex gap-0 whitespace-nowrap">
+          {PUBLIC_SYMBOLS.map(sym => (
+            <div
+              key={sym}
+              className="inline-flex items-center gap-2 px-6 py-2 border-r border-terminal-border/40 shrink-0"
+            >
+              <span className="text-xs font-mono font-semibold text-slate-500 tracking-wide">
+                {sym.replace('_', '/')}
+              </span>
+              <span className="w-14 h-3 rounded bg-terminal-border/60 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full overflow-hidden border-b border-terminal-border bg-terminal-surface/60 backdrop-blur-sm">
@@ -711,6 +750,24 @@ function HowItWorksSection() {
 
 function PricingSection() {
   const [annual, setAnnual] = useState(false);
+  const { plans, loading, error } = usePricingPlans(annual);
+
+  /**
+   * Display price per month.
+   * Monthly billing: price_usd_monthly (e.g. 1800 → "$1,800")
+   * Annual billing:  price_usd_annual / 10 — 2 months free means 10 months paid
+   *                  (e.g. 18000 / 10 = 1800 → "$1,800/mo, billed $18,000/yr")
+   * Free tier:       always $0 → "Free"
+   */
+  const displayPrice = (plan: ApiPlan): string => {
+    if (plan.price_usd_monthly === 0) return 'Free';
+    const perMonth = annual
+      ? Math.round(plan.price_usd_annual / 10)
+      : plan.price_usd_monthly;
+    return `$${perMonth.toLocaleString()}`;
+  };
+
+  const savingsPct = plans[1]?.annual_savings_pct ?? 17;
 
   return (
     <section id="pricing" className="py-24 px-4">
@@ -743,79 +800,114 @@ function PricingSection() {
             <span className={`text-sm font-medium ${annual ? 'text-slate-100' : 'text-slate-500'}`}>
               Annual
               <span className="ml-2 text-2xs font-bold text-neon-green bg-neon-green/10 border border-neon-green/30 px-2 py-0.5 rounded-full">
-                Save 30%
+                Save {savingsPct}%
               </span>
             </span>
           </div>
         </Reveal>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-          {PLANS.map((plan, i) => (
-            <Reveal key={plan.name} delay={i * 0.15}>
-              <motion.div
-                className={`relative rounded-2xl p-7 flex flex-col h-full ${
-                  plan.featured
-                    ? 'bg-gradient-to-b from-neon-blue/10 to-terminal-surface border-2 border-neon-blue/50 shadow-neon-blue'
-                    : 'bg-terminal-surface border border-terminal-border'
-                }`}
-                whileHover={{ y: -4 }}
-                transition={{ duration: 0.2 }}
-              >
-                {plan.badge && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-neon-blue text-terminal-bg text-2xs font-extrabold px-4 py-1 rounded-full whitespace-nowrap tracking-wide">
-                    {plan.badge}
-                  </div>
-                )}
+        {/* Error state */}
+        {error && !loading && plans.length === 0 && (
+          <div className="text-center py-12 text-slate-500 text-sm">
+            Unable to load pricing. <a href="/pricing" className="text-neon-blue underline">View full pricing page</a>
+          </div>
+        )}
 
-                <div className="mb-6">
-                  <h3 className="text-base font-bold text-slate-100 mb-3">{plan.name}</h3>
-                  <div className="flex items-end gap-1">
-                    <AnimatePresence mode="wait">
-                      <motion.span
-                        key={annual ? 'annual' : 'monthly'}
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 8 }}
-                        transition={{ duration: 0.18 }}
-                        className="text-4xl font-extrabold text-slate-100 font-mono tabular-nums"
-                      >
-                        {(annual ? plan.annual : plan.monthly) === 0
-                          ? 'Free'
-                          : `$${(annual ? plan.annual : plan.monthly).toLocaleString()}`}
-                      </motion.span>
-                    </AnimatePresence>
-                    {(annual ? plan.annual : plan.monthly) > 0 && (
-                      <span className="text-sm text-slate-500 mb-1.5">/mo</span>
-                    )}
-                  </div>
-                  {annual && plan.annual > 0 && (
-                    <p className="text-2xs text-slate-500 mt-1">Billed annually — save 30%</p>
-                  )}
-                </div>
-
-                <ul className="flex-1 space-y-2.5 mb-7">
-                  {plan.features.map(f => (
-                    <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
-                      <Check size={14} className="text-neon-green mt-0.5 shrink-0" />
-                      {f}
-                    </li>
+        {/* Skeleton while loading */}
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="rounded-2xl bg-terminal-surface border border-terminal-border p-7 animate-pulse">
+                <div className="h-4 w-24 bg-terminal-border rounded mb-4" />
+                <div className="h-10 w-20 bg-terminal-border rounded mb-6" />
+                <div className="space-y-2.5 mb-7">
+                  {Array.from({ length: 5 }).map((_, j) => (
+                    <div key={j} className="h-3 bg-terminal-border/60 rounded w-full" />
                   ))}
-                </ul>
+                </div>
+                <div className="h-10 bg-terminal-border rounded-xl" />
+              </div>
+            ))}
+          </div>
+        )}
 
-                <a
-                  href={plan.href}
-                  className={`w-full text-center text-sm font-bold py-3 rounded-xl transition-all duration-150 ${
-                    plan.featured
-                      ? 'bg-neon-blue text-terminal-bg hover:bg-neon-blue/90 shadow-neon-blue'
-                      : 'border border-terminal-border text-slate-300 hover:border-slate-500 hover:text-white'
-                  }`}
-                >
-                  {plan.cta}
-                </a>
-              </motion.div>
-            </Reveal>
-          ))}
-        </div>
+        {/* Plan cards */}
+        {!loading && plans.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {plans.map((plan, i) => {
+              const featured = plan.badge === 'Most popular';
+              return (
+                <Reveal key={plan.id} delay={i * 0.15}>
+                  <motion.div
+                    className={`relative rounded-2xl p-7 flex flex-col h-full ${
+                      featured
+                        ? 'bg-gradient-to-b from-neon-blue/10 to-terminal-surface border-2 border-neon-blue/50 shadow-neon-blue'
+                        : 'bg-terminal-surface border border-terminal-border'
+                    }`}
+                    whileHover={{ y: -4 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {plan.badge && (
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-neon-blue text-terminal-bg text-2xs font-extrabold px-4 py-1 rounded-full whitespace-nowrap tracking-wide">
+                        {plan.badge}
+                      </div>
+                    )}
+
+                    <div className="mb-6">
+                      <h3 className="text-base font-bold text-slate-100 mb-1">{plan.name}</h3>
+                      <p className="text-xs text-slate-500 mb-3 leading-snug">{plan.tagline}</p>
+                      <div className="flex items-end gap-1">
+                        <AnimatePresence mode="wait">
+                          <motion.span
+                            key={annual ? 'annual' : 'monthly'}
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 8 }}
+                            transition={{ duration: 0.18 }}
+                            className="text-4xl font-extrabold text-slate-100 font-mono tabular-nums"
+                          >
+                            {displayPrice(plan)}
+                          </motion.span>
+                        </AnimatePresence>
+                        {plan.price_usd_monthly > 0 && (
+                          <span className="text-sm text-slate-500 mb-1.5">/mo</span>
+                        )}
+                      </div>
+                      {annual && plan.price_usd_annual > 0 && (
+                        <p className="text-2xs text-slate-500 mt-1">
+                          Billed ${plan.price_usd_annual.toLocaleString()}/yr — save {plan.annual_savings_pct}%
+                        </p>
+                      )}
+                      {plan.commission_label && (
+                        <p className="text-2xs text-slate-600 mt-1">{plan.commission_label}</p>
+                      )}
+                    </div>
+
+                    <ul className="flex-1 space-y-2.5 mb-7">
+                      {plan.highlights.map(f => (
+                        <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
+                          <Check size={14} className="text-neon-green mt-0.5 shrink-0" />
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+
+                    <a
+                      href={plan.cta_href}
+                      className={`w-full text-center text-sm font-bold py-3 rounded-xl transition-all duration-150 ${
+                        featured
+                          ? 'bg-neon-blue text-terminal-bg hover:bg-neon-blue/90 shadow-neon-blue'
+                          : 'border border-terminal-border text-slate-300 hover:border-slate-500 hover:text-white'
+                      }`}
+                    >
+                      {plan.cta}
+                    </a>
+                  </motion.div>
+                </Reveal>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -975,8 +1067,10 @@ function Footer() {
           <div>
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Company</p>
             {([
+              ['/pricing',    'Pricing'],
               ['/affiliate',  'Affiliate program'],
               ['/status',     'System status'],
+              ['/docs',       'Documentation'],
               ['/terms',      'Terms of service'],
               ['/privacy',    'Privacy policy'],
             ] as [string, string][]).map(([h, l]) => (
@@ -989,6 +1083,7 @@ function Footer() {
             <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mb-4">Support</p>
             {([
               ['mailto:support@hopefx.io', 'Contact support'],
+              ['/docs',                    'Documentation'],
               ['/journal',                 'Trade journal'],
               ['/risk-calc',               'Risk calculator'],
               ['/onboarding',              'Getting started'],
@@ -1008,6 +1103,8 @@ function Footer() {
           <div className="flex gap-4">
             {([
               ['/terms',   'Terms'],
+              ['/privacy', 'Privacy'],
+              ['/docs',    'Docs'],
               ['/status',  'Status'],
             ] as [string, string][]).map(([h, l]) => (
               <a key={l} href={h} className="text-xs text-slate-600 hover:text-slate-400 transition-colors">{l}</a>
@@ -1062,7 +1159,23 @@ function useLatestSignals() {
 
 function SignalStrip() {
   const signals = useLatestSignals();
-  if (signals.length === 0) return null;
+
+  // Show a muted placeholder strip while signals are loading or unavailable
+  if (signals.length === 0) {
+    return (
+      <div className="w-full overflow-hidden bg-terminal-raised border-y border-terminal-border py-2">
+        <div className="flex gap-0 whitespace-nowrap">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="inline-flex items-center gap-2 px-5 border-r border-terminal-border/30 shrink-0">
+              <span className="w-14 h-2.5 rounded bg-terminal-border/50 animate-pulse" />
+              <span className="w-8 h-2.5 rounded bg-terminal-border/40 animate-pulse" />
+              <span className="w-8 h-2.5 rounded bg-terminal-border/30 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full overflow-hidden bg-terminal-raised border-y border-terminal-border py-2">
@@ -1126,7 +1239,25 @@ function usePlatformStats() {
 }
 
 function PlatformStatsBar() {
-  const { stats } = usePlatformStats();
+  const { stats, error } = usePlatformStats();
+
+  // Skeleton while loading
+  if (!stats && !error) {
+    return (
+      <div className="w-full bg-terminal-surface/60 border-b border-terminal-border">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-8">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="w-16 h-2.5 rounded bg-terminal-border/50 animate-pulse" />
+              <span className="w-10 h-2.5 rounded bg-terminal-border/40 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Hide bar entirely if the API is unavailable (don't show stale/empty data)
   if (!stats) return null;
 
   // win_rate from backend is already a percentage (e.g. 62.5), not 0–1
