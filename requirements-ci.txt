@@ -157,8 +157,8 @@ opentelemetry-propagator-b3>=1.24.0,<2.0.0
 # ── Property-based testing ────────────────────────────────────────────────────
 hypothesis>=6.100.0
 
-# ── OANDA (legacy REST client — used by some tests) ──────────────────────────
-oandapyV20>=0.6.3
+# ── OANDA (legacy REST client — disabled; no code imports oandapyV20 directly) ──
+# oandapyV20>=0.6.3
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 # These were previously installed via a separate pip install step in ci.yml and
