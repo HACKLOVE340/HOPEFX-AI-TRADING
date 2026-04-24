@@ -4,8 +4,9 @@
 ::   start.bat              (development mode, port 8000)
 ::   start.bat --port 8080  (custom port)
 ::
-:: Requirements: Python 3.10+, pip
-:: First run installs dependencies and generates .env automatically.
+:: Requirements: Python 3.10+
+:: First run creates a venv, installs all dependencies, and generates .env.
+:: Using a venv avoids pip cache permission errors (Errno 13) on Windows.
 
 setlocal EnableDelayedExpansion
 
@@ -19,6 +20,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: ── Create virtual environment if missing ─────────────────────────────────────
+if not exist "venv\Scripts\activate.bat" (
+    echo [INFO] Creating virtual environment...
+    python -m venv venv
+    if errorlevel 1 (
+        echo [ERROR] Failed to create venv. Check Python installation.
+        pause
+        exit /b 1
+    )
+)
+
+:: ── Activate venv ─────────────────────────────────────────────────────────────
+call venv\Scripts\activate.bat
+
 :: ── Bootstrap: generate .env and seed users if not present ───────────────────
 if not exist ".env" (
     echo [INFO] .env not found -- running dev bootstrap...
@@ -30,16 +45,10 @@ if not exist ".env" (
     )
 )
 
-:: ── Environment defaults (do NOT parse .env here — security risk) ────────────
-:: Secrets in .env are loaded by python-dotenv inside the application at startup.
-:: Parsing .env in a batch loop exposes all secrets as process environment variables
-:: visible to every child process and in process listings.
-:: Only set non-secret defaults that are safe to expose at the OS level.
-
-:: ── Install dependencies if uvicorn is missing ────────────────────────────────
+:: ── Install / update dependencies ─────────────────────────────────────────────
 python -c "import uvicorn" >nul 2>&1
 if errorlevel 1 (
-    echo [INFO] Installing dependencies from requirements.txt...
+    echo [INFO] Installing dependencies...
     pip install --no-cache-dir -r requirements.txt
     if errorlevel 1 (
         echo [ERROR] pip install failed. See output above.

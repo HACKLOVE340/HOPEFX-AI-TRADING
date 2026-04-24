@@ -32,6 +32,9 @@ mkdocs>=1.6.0,<2.0.0
 mkdocs-material>=9.6.0,<10.0.0
 mike>=2.1.0,<3.0.0
 
+# Dev SMTP server (scripts/dev_smtp_server.py)
+aiosmtpd>=1.4.6,<2.0.0
+
 # Jupyter
 jupyter>=1.1.0,<2.0.0
 ipywidgets>=8.1.0,<9.0.0

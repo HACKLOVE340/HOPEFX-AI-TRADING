@@ -1,4 +1,6 @@
 aiofiles==25.1.0
+argon2-cffi==25.1.0
+keyring==25.7.0
 aiohappyeyeballs==2.6.1
 aiohttp==3.13.5
 aioredis==2.0.1

@@ -5,6 +5,8 @@
 #
 # If blocked by execution policy, run once:
 #   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+#
+# Uses a venv to avoid pip cache permission errors (Errno 13) on Windows.
 
 param(
     [string]$Port = "",
@@ -19,6 +21,19 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     Write-Error "Python not found. Install from https://python.org and add to PATH."
     exit 1
 }
+
+# ── Create virtual environment if missing ─────────────────────────────────────
+if (-not (Test-Path "venv\Scripts\Activate.ps1")) {
+    Write-Host "[INFO] Creating virtual environment..." -ForegroundColor Cyan
+    python -m venv venv
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to create venv. Check Python installation."
+        exit 1
+    }
+}
+
+# ── Activate venv ─────────────────────────────────────────────────────────────
+& "venv\Scripts\Activate.ps1"
 
 # ── Bootstrap: generate .env and seed users if not present ───────────────────
 if (-not (Test-Path ".env")) {
@@ -36,10 +51,10 @@ Get-Content ".env" | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "=" } | 
     [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim(), "Process")
 }
 
-# ── Install dependencies if uvicorn is missing ────────────────────────────────
+# ── Install / update dependencies ─────────────────────────────────────────────
 python -c "import uvicorn" 2>$null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[INFO] Installing dependencies from requirements.txt..." -ForegroundColor Cyan
+    Write-Host "[INFO] Installing dependencies..." -ForegroundColor Cyan
     pip install --no-cache-dir -r requirements.txt
     if ($LASTEXITCODE -ne 0) {
         Write-Error "pip install failed. See output above."
