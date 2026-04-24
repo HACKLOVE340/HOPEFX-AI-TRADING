@@ -27,34 +27,30 @@ const REST_POLL_INTERVAL_MS  = 30_000;
 
 interface WsMessage {
   type:
+    // Connection lifecycle
     | 'connected'
     | 'auth_ok'
-    | 'price_tick'
-    | 'position_update'
-    | 'position_close'
-    | 'signal'
-    | 'alert_triggered'
-    | 'account_update'
-    | 'equity_update'
-    | 'microstructure'
-    | 'sentiment_update'
     | 'heartbeat'
     | 'pong'
     | 'subscribed'
     | 'unsubscribed'
     | 'no_live_feed'
     | 'error'
-    // chart-bot channel messages
+    // Market data
+    | 'price_tick'
     | 'microstructure'
     | 'volume_delta'
+    | 'equity_update'
+    // Trading
+    | 'position_update'
+    | 'position_close'
+    | 'signal'
+    | 'alert_triggered'
+    | 'account_update'
+    // Intelligence
     | 'sentiment_update'
     | 'risk_update'
-    | 'equity_update'
-    | 'news_item'
-    // server acknowledgements
-    | 'subscribed'
-    | 'unsubscribed'
-    | 'pong';
+    | 'news_item';
   data?:          unknown;
   auth_required?: boolean;
   code?:          string;
