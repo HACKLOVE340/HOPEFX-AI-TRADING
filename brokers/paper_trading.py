@@ -353,10 +353,10 @@ class PaperTradingBroker(BrokerConnector):
                         qty,
                     )
                     continue
-                # Normalise legacy "LONG"/"SHORT" stored values to enum values "buy"/"sell"
-                _raw_side = pos_dict.get("side", "buy")
+                # Normalise legacy "LONG"/"SHORT" stored values to enum values "BUY"/"SELL"
+                _raw_side = pos_dict.get("side", "BUY")
                 if isinstance(_raw_side, str):
-                    _raw_side = "buy" if _raw_side.upper() in ("LONG", "BUY") else "sell"
+                    _raw_side = "BUY" if _raw_side.upper() in ("LONG", "BUY") else "SELL"
                 self.positions[sym] = Position(
                     id=pos_dict.get("id", str(uuid.uuid4())),
                     symbol=sym,

@@ -1224,6 +1224,8 @@ async def init_hopefx_brain(s: Any) -> Any:
         position_tracker=s.position_tracker,
         trade_executor=s.trade_executor,
     )
+    await b.start()
+    asyncio.create_task(b.dominate(), name="hopefx-brain")
     return b
 
 
