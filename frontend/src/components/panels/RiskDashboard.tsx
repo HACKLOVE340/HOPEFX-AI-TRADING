@@ -10,7 +10,7 @@ import { Panel } from '../ui/Panel';
 import { MetricTile } from '../ui/MetricTile';
 import { StatusDot } from '../ui/StatusDot';
 import { ConfidenceBar } from '../ui/ConfidenceBar';
-import { fmtPrice, fmtPct, fmtRatio, cn } from '../../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtRatio, cn } from '../../lib/utils';
 
 // ── Kill switch indicator ─────────────────────────────────────────────────────
 
@@ -102,7 +102,7 @@ export function RiskDashboard() {
             },
             {
               label: 'Daily P&L',
-              value: account ? fmtPct(account.daily_pnl_pct / 100) : '—',
+              value: account ? fmtPctRaw(account.daily_pnl_pct) : '—',
               color: account ? (account.daily_pnl >= 0 ? '#00e676' : '#ff1744') : '#475569',
             },
             {

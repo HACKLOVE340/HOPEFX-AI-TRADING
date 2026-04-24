@@ -385,7 +385,7 @@ const Dashboard: React.FC = () => {
       <div style={s.statsGrid}>
         <StatCard label="Balance"      value={acc ? '$' + fmt(acc.balance)                    : '—'} />
         <StatCard label="Equity"       value={acc ? '$' + fmt(acc.equity)                     : '—'} highlight />
-        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct / 100) : undefined} />
+        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct) : undefined} />
         <StatCard label="Total P&L"    value={acc ? fmtUSD(acc.total_pnl)                     : '—'} positive={acc ? acc.total_pnl >= 0 : null} />
         <StatCard label="Win Rate"     value={acc ? (acc.win_rate * 100).toFixed(1) + '%'     : '—'} positive={acc ? acc.win_rate >= 0.55 : null} />
         <StatCard label="Sharpe"       value={acc ? acc.sharpe_ratio.toFixed(2)               : '—'} positive={acc ? acc.sharpe_ratio >= 1.5 : null} />

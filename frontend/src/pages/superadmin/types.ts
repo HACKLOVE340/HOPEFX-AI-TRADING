@@ -187,12 +187,15 @@ export interface VaRMetrics {
 }
 
 export interface StressTestResult {
-  scenario: string;
-  pnl_impact: number;
-  pnl_pct: number;
-  max_loss: number;
-  probability: number;
-  run_at: string;
+  scenario:    string;
+  name?:       string;        // backend uses 'name' not 'scenario' in results array
+  pnl_impact?: number;        // alias for pnl_usd
+  pnl_usd?:    number;
+  pnl_pct:     number;        // already a percentage (e.g. -12.5)
+  max_loss?:   number;
+  probability?: number;       // optional — not always returned by backend
+  breaches_gate?: boolean;
+  run_at?:     string;
 }
 
 // ── Broker Management ─────────────────────────────────────────────────────────

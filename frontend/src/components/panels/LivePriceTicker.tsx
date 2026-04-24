@@ -7,7 +7,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
-import { fmtPrice, fmtPct, fmtSpread, cn } from '../../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtSpread, cn } from '../../lib/utils';
 import { StatusDot } from '../ui/StatusDot';
 import { Sparkline } from '../ui/Sparkline';
 import type { PriceTick } from '../../types';
@@ -96,7 +96,7 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
             isUp ? 'text-[#00e676]' : 'text-[#ff1744]',
           )}
         >
-          {tick ? fmtPct(change / 100) : '—'}
+          {tick ? fmtPctRaw(change) : '—'}
         </span>
       </div>
 

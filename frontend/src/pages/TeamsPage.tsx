@@ -41,12 +41,12 @@ interface Team {
 }
 
 interface TeamPerformance {
-  total_pnl: number;
-  win_rate: number;
-  total_trades: number;
-  sharpe: number;
-  max_drawdown_pct: number;
-  period: string;
+  total_pnl:        number;
+  win_rate:         number;   // fraction 0–1 (e.g. 0.62 = 62%) — multiply by 100 to display
+  total_trades:     number;
+  sharpe:           number;
+  max_drawdown_pct: number;   // already a percentage (e.g. 8.3)
+  period:           string;
 }
 
 // teamsApi is imported from hooks/useApi
