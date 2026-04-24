@@ -7,12 +7,13 @@
  * │  LivePriceTicker (full width)                                   │
  * │  AccountBar (full width)                                        │
  * ├──────────────────────────┬──────────────────┬───────────────────┤
- * │  EquityCurveChart        │  LiveSignalFeed  │  RiskDashboard    │
- * │  (col-span-2, row-span-2)│                  │                   │
+ * │  EquityCurveChart (5)    │  LiveSignalFeed  │  RiskDashboard    │
+ * │  (row-span-2)            │  (3, row-span-2) │  (2)              │
  * ├──────────────────────────┤                  ├───────────────────┤
- * │  OrderBookDepth          │                  │  SentimentGauge   │
+ * │  OrderBookDepth (5)      │                  │  SentimentGauge   │
+ * │                          │                  │  + Microstructure │
  * ├──────────────────────────┴──────────────────┴───────────────────┤
- * │  MicrostructurePanel     │  MacroCalendar                       │
+ * │  MacroCalendar (5)  │  OrchestratorHealth (4)  │  MLModel (3)   │
  * └─────────────────────────────────────────────────────────────────┘
  *
  * Data wiring:
@@ -34,13 +35,15 @@ import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
 
 // ── Lazily loaded (heavy Recharts panels — split into separate chunks) ─────────
-const EquityCurveChart    = React.lazy(() => import('../components/charts/EquityCurveChart').then(m => ({ default: m.EquityCurveChart })));
-const RiskDashboard       = React.lazy(() => import('../components/panels/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
-const SentimentGauge      = React.lazy(() => import('../components/panels/SentimentGauge').then(m => ({ default: m.SentimentGauge })));
-const MicrostructurePanel = React.lazy(() => import('../components/panels/MicrostructurePanel').then(m => ({ default: m.MicrostructurePanel })));
-const MacroCalendar       = React.lazy(() => import('../components/panels/MacroCalendar').then(m => ({ default: m.MacroCalendar })));
-const OrderBookDepth      = React.lazy(() => import('../components/panels/OrderBookDepth').then(m => ({ default: m.OrderBookDepth })));
-const LiveSignalFeed      = React.lazy(() => import('../components/panels/LiveSignalFeed').then(m => ({ default: m.LiveSignalFeed })));
+const EquityCurveChart       = React.lazy(() => import('../components/charts/EquityCurveChart').then(m => ({ default: m.EquityCurveChart })));
+const RiskDashboard          = React.lazy(() => import('../components/panels/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
+const SentimentGauge         = React.lazy(() => import('../components/panels/SentimentGauge').then(m => ({ default: m.SentimentGauge })));
+const MicrostructurePanel    = React.lazy(() => import('../components/panels/MicrostructurePanel').then(m => ({ default: m.MicrostructurePanel })));
+const MacroCalendar          = React.lazy(() => import('../components/panels/MacroCalendar').then(m => ({ default: m.MacroCalendar })));
+const OrderBookDepth         = React.lazy(() => import('../components/panels/OrderBookDepth').then(m => ({ default: m.OrderBookDepth })));
+const LiveSignalFeed         = React.lazy(() => import('../components/panels/LiveSignalFeed').then(m => ({ default: m.LiveSignalFeed })));
+const OrchestratorHealthGrid = React.lazy(() => import('../components/panels/OrchestratorHealthGrid').then(m => ({ default: m.OrchestratorHealthGrid })));
+const MLModelPanel           = React.lazy(() => import('../components/panels/MLModelPanel').then(m => ({ default: m.MLModelPanel })));
 
 // ── Dashboard inner ───────────────────────────────────────────────────────────
 
@@ -119,13 +122,34 @@ function DashboardInner() {
         </div>
       </div>
 
-      {/* ── Bottom row: macro calendar ───────────────────────────────────── */}
-      <div className="h-48 shrink-0 px-2 pb-2">
-        <PanelErrorBoundary title="Macro Calendar">
-          <Suspense fallback={<PanelSkeleton rows={3} />}>
-            <MacroCalendar />
-          </Suspense>
-        </PanelErrorBoundary>
+      {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
+      <div className="h-52 shrink-0 grid grid-cols-12 gap-2 px-2 pb-2">
+        {/* Macro calendar — left 5 cols */}
+        <div className="col-span-5 min-h-0">
+          <PanelErrorBoundary title="Macro Calendar">
+            <Suspense fallback={<PanelSkeleton rows={3} />}>
+              <MacroCalendar />
+            </Suspense>
+          </PanelErrorBoundary>
+        </div>
+
+        {/* Orchestrator health — center 4 cols */}
+        <div className="col-span-4 min-h-0">
+          <PanelErrorBoundary title="Orchestrator Health">
+            <Suspense fallback={<PanelSkeleton rows={4} />}>
+              <OrchestratorHealthGrid />
+            </Suspense>
+          </PanelErrorBoundary>
+        </div>
+
+        {/* ML model panel — right 3 cols */}
+        <div className="col-span-3 min-h-0">
+          <PanelErrorBoundary title="ML Model">
+            <Suspense fallback={<PanelSkeleton rows={4} />}>
+              <MLModelPanel />
+            </Suspense>
+          </PanelErrorBoundary>
+        </div>
       </div>
     </div>
   );
