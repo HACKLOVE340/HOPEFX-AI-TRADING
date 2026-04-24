@@ -53,6 +53,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Trading ───────────────────────────────────────────────────────────────
   { path: '/trading',      label: 'AI Chart Bot',   icon: '🧠', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
+  { path: '/terminal',     label: 'Terminal',       icon: '🖥️', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
   { path: '/nuclear',      label: 'Nuclear AI',     icon: '☢️', group: 'trading',   plan: 'professional', featureKey: 'nuclear'      },
   { path: '/journal',      label: 'Trade Journal',  icon: '📓', group: 'trading',   plan: 'starter',      featureKey: 'journal'      },
   { path: '/prop-firm',    label: 'Prop Firm',      icon: '🛡️', group: 'trading',   plan: 'professional', featureKey: 'prop-firm'    },
@@ -67,6 +68,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/walk-forward', label: 'Walk-Forward',   icon: '📈', group: 'analytics', plan: 'professional', featureKey: 'walk-forward' },
   { path: '/ab-testing',   label: 'A/B Testing',    icon: '⚗️', group: 'analytics', plan: 'professional', featureKey: 'ab-testing'   },
   { path: '/tca',          label: 'TCA',            icon: '📊', group: 'analytics', plan: 'professional', featureKey: 'tca'          },
+  { path: '/geopolitical', label: 'Geopolitical',   icon: '🌍', group: 'analytics', plan: 'professional', featureKey: 'geopolitical' },
   { path: '/research',     label: 'Research',       icon: '🔬', group: 'analytics', plan: 'enterprise',   featureKey: 'research'     },
   { path: '/replay',       label: 'Market Replay',  icon: '⏪', group: 'analytics', plan: 'enterprise',   featureKey: 'replay'       },
 
@@ -89,9 +91,11 @@ export const NAV_ITEMS: NavItem[] = [
   // These routes are guarded by AdminGuard (role >= admin).
   // /superadmin is intentionally NOT listed here — SuperAdminGuard blocks
   // admin-role users from that route.
+  { path: '/admin',        label: 'Admin Panel',    icon: '🔧', group: 'admin',      adminOnly: true },
   { path: '/audit',        label: 'Audit Log',      icon: '🔍', group: 'admin',      adminOnly: true },
   { path: '/security',     label: 'Security Ops',   icon: '🛡️', group: 'admin',      adminOnly: true },
   { path: '/auto-heal',    label: 'Auto-Heal',      icon: '🩺', group: 'admin',      adminOnly: true },
+  { path: '/whitelabel',   label: 'Whitelabel',     icon: '🏷️', group: 'admin',      adminOnly: true },
 
   // ── Super Admin (superadmin only) ─────────────────────────────────────────
   { path: '/superadmin',          label: 'Master Control', icon: '⚡', group: 'superadmin', superAdminOnly: true },
