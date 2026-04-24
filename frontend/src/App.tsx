@@ -42,6 +42,7 @@ const PrivacyPolicy           = React.lazy(() => import('./pages/PrivacyPolicy')
 const Onboarding              = React.lazy(() => import('./pages/Onboarding'));
 const NotFound                = React.lazy(() => import('./pages/NotFound'));
 const TermsAndRiskDisclosure  = React.lazy(() => import('./pages/TermsAndRiskDisclosure'));
+const DocsPage                = React.lazy(() => import('./pages/DocsPage'));
 
 // ── Core ──────────────────────────────────────────────────────────────────────
 const Dashboard        = React.lazy(() => import('./pages/Dashboard'));
@@ -449,6 +450,7 @@ const App: React.FC = () => (
             <Route path="/onboarding"      element={<Onboarding />} />
             {/* Public pages — no auth required */}
             <Route path="/pricing"         element={<PricingPage />} />
+            <Route path="/docs"            element={<DocsPage />} />
             <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
             <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
             <Route path="/privacy"         element={<PrivacyPolicy />} />
