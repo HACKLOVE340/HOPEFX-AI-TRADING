@@ -113,7 +113,9 @@ export function OrderBookDepth() {
   const micro = useStore((s) => s.microstructure);
   const tick  = useStore((s) => s.prices['XAU_USD'] as PriceTick | undefined);
 
-  const mid    = tick?.mid ?? micro ? (micro!.bid + micro!.ask) / 2 : 0;
+  // Explicit parentheses: ?? has lower precedence than ?: so without them
+  // `tick?.mid ?? micro ? ... : 0` would parse as `(tick?.mid ?? micro) ? ... : 0`.
+  const mid    = tick?.mid ?? (micro ? (micro.bid + micro.ask) / 2 : 0);
   const spread = tick?.spread ?? micro?.spread ?? 0;
   const bid    = tick?.bid ?? micro?.bid ?? 0;
   const ask    = tick?.ask ?? micro?.ask ?? 0;
