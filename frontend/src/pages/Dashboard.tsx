@@ -3,8 +3,7 @@
  *
  * Data sources (in priority order):
  *   1. Live WebSocket feed → Zustand store
- *   2. REST API polling (30 s) for positions / signals / account
- *   3. Price simulator (demo mode when WS is disconnected)
+ *   2. REST API polling (30 s) for positions / signals / account (via AppShell useBootstrapData)
  *
  * Sections:
  *   - Live price ticker (5 symbols)
@@ -23,8 +22,10 @@ import {
   selectPositions,
   selectSignals,
   selectWsStatus,
+  selectEquityCurve,
 } from '../store';
-import { mlApi, performanceApi } from '../hooks/useApi';
+import { mlApi } from '../hooks/useApi';
+import type { EquityPoint } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -65,8 +66,16 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highli
 );
 
 // ─── Price ticker ─────────────────────────────────────────────────────────────
-
-const WATCHED_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+// Symbol keys must match the backend WebSocket format (underscore separator).
+const WATCHED_SYMBOLS = ['XAU_USD', 'EUR_USD', 'GBP_USD', 'USD_JPY', 'BTC_USD'];
+// Display labels for each symbol
+const SYMBOL_LABELS: Record<string, string> = {
+  XAU_USD: 'XAU/USD',
+  EUR_USD: 'EUR/USD',
+  GBP_USD: 'GBP/USD',
+  USD_JPY: 'USD/JPY',
+  BTC_USD: 'BTC/USD',
+};
 
 const PriceTicker: React.FC = () => {
   const prices = useStore((s) => s.prices);
@@ -74,15 +83,16 @@ const PriceTicker: React.FC = () => {
   return (
     <div style={s.ticker}>
       {WATCHED_SYMBOLS.map((sym) => {
-        const tick = prices[sym];
-        const up   = tick ? tick.change_pct >= 0 : null;
+        const tick  = prices[sym];
+        const up    = tick ? tick.change_pct >= 0 : null;
+        const label = SYMBOL_LABELS[sym] ?? sym;
         const decimals =
           sym.includes('JPY') ? 3 :
           sym.includes('BTC') ? 0 :
           sym.includes('XAU') ? 2 : 5;
         return (
           <div key={sym} style={s.tickerItem}>
-            <span style={s.tickerSymbol}>{sym}</span>
+            <span style={s.tickerSymbol}>{label}</span>
             <span style={s.tickerPrice}>
               {tick ? fmt(tick.mid, decimals) : '—'}
             </span>
@@ -98,12 +108,31 @@ const PriceTicker: React.FC = () => {
 
 // ─── Equity chart (lightweight-charts) ───────────────────────────────────────
 
-interface EquityPoint { time: string; value: number }
+// lightweight-charts v5 requires { time: UTCTimestamp | string, value: number }
+interface ChartPoint { time: string; value: number }
+
+function toChartPoints(curve: EquityPoint[]): ChartPoint[] {
+  return curve
+    .filter((pt) => pt.timestamp && isFinite(pt.equity))
+    .map((pt) => ({
+      // lightweight-charts accepts ISO date strings (YYYY-MM-DD) or unix seconds
+      time:  pt.timestamp.slice(0, 10),
+      value: pt.equity,
+    }))
+    // Deduplicate by time key (keep last) — duplicate timestamps crash the chart
+    .reduce<ChartPoint[]>((acc, pt) => {
+      if (acc.length > 0 && acc[acc.length - 1]!.time === pt.time) {
+        acc[acc.length - 1] = pt;
+      } else {
+        acc.push(pt);
+      }
+      return acc;
+    }, []);
+}
 
 const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
-  // v5 ISeriesApi generic is SeriesType string
   const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
 
   useEffect(() => {
@@ -125,7 +154,6 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
       height: 240,
     });
 
-    // lightweight-charts v5: addSeries(definition, options)
     seriesRef.current = chartRef.current.addSeries(AreaSeries, {
       lineColor:   '#3b82f6',
       topColor:    'rgba(59,130,246,0.25)',
@@ -133,8 +161,9 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
       lineWidth:   2,
     });
 
-    if (data.length > 0) {
-      seriesRef.current.setData(data);
+    const points = toChartPoints(data);
+    if (points.length > 0) {
+      seriesRef.current.setData(points);
       chartRef.current.timeScale().fitContent();
     }
 
@@ -152,8 +181,10 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (seriesRef.current && data.length > 0) {
-      seriesRef.current.setData(data);
+    if (!seriesRef.current) return;
+    const points = toChartPoints(data);
+    if (points.length > 0) {
+      seriesRef.current.setData(points);
       chartRef.current?.timeScale().fitContent();
     }
   }, [data]);
@@ -339,30 +370,12 @@ const WsBadge: React.FC = () => {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
-  // Positions, signals, and account are populated by AppShell's useBootstrapData
-  // (TanStack Query, 30 s refetch) and the global WebSocket feed. Reading from
-  // the store here avoids a duplicate polling loop that would fire the same three
-  // endpoints on every render cycle.
-  const account  = useStore(selectAccount);
-  const wsStatus = useStore(selectWsStatus);
-  const [equityHistory, setEquityHistory] = useState<EquityPoint[]>([]);
-
-  // Equity curve is not part of useBootstrapData — fetch it once on mount.
-  useEffect(() => {
-    performanceApi.equityCurve()
-      .then((r) => {
-        type EquityResp = { equity_curve?: EquityPoint[]; points?: EquityPoint[] };
-        const data = r.data as EquityResp;
-        const points = data?.equity_curve ?? data?.points ?? [];
-        if (Array.isArray(points) && points.length > 0) {
-          setEquityHistory(points);
-        }
-      })
-      .catch(() => {
-        // No equity history yet — chart stays empty until trades are made
-        setEquityHistory([]);
-      });
-  }, []);
+  // All data is populated by AppShell's useBootstrapData (TanStack Query + WebSocket).
+  // Reading directly from the store avoids duplicate polling loops.
+  const account      = useStore(selectAccount);
+  const wsStatus     = useStore(selectWsStatus);
+  // Equity curve is fetched by useEquityCurve() inside useBootstrapData — read from store.
+  const equityHistory = useStore(selectEquityCurve);
 
   const acc = account;
 
@@ -381,7 +394,7 @@ const Dashboard: React.FC = () => {
       <div style={s.statsGrid}>
         <StatCard label="Balance"      value={acc ? '$' + fmt(acc.balance)                    : '—'} />
         <StatCard label="Equity"       value={acc ? '$' + fmt(acc.equity)                     : '—'} highlight />
-        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct) : undefined} />
+        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct / 100) : undefined} />
         <StatCard label="Total P&L"    value={acc ? fmtUSD(acc.total_pnl)                     : '—'} positive={acc ? acc.total_pnl >= 0 : null} />
         <StatCard label="Win Rate"     value={acc ? (acc.win_rate * 100).toFixed(1) + '%'     : '—'} positive={acc ? acc.win_rate >= 0.55 : null} />
         <StatCard label="Sharpe"       value={acc ? acc.sharpe_ratio.toFixed(2)               : '—'} positive={acc ? acc.sharpe_ratio >= 1.5 : null} />
@@ -391,7 +404,7 @@ const Dashboard: React.FC = () => {
 
       <div style={s.card}>
         <div style={s.cardHeader}>
-          <span style={s.cardTitle}>Equity Curve — 90 days</span>
+          <span style={s.cardTitle}>Equity Curve</span>
           {acc && (
             <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
               {fmtUSD(acc.total_pnl)}
