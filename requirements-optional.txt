@@ -59,7 +59,7 @@
 # subscription expiry, affiliate payouts, DB backups, self-healer scans).
 # Required only when running dedicated Celery worker + Beat processes.
 # The FastAPI app falls back to asyncio tasks when Celery is absent.
-celery[redis]>=5.4.0
+# celery[redis]>=5.4.0
 
 # ── asyncio-mqtt ──────────────────────────────────────────────────────────────
 # MQTT async client. Required only for IoT/signal integrations.
