@@ -162,13 +162,8 @@ interface OrderEntryFormProps {
   onOrderPlaced?: () => void;
 }
 
-// Fallback symbol list — must use underscore format to match WebSocket store keys.
-const FALLBACK_SYMBOLS = ['XAU_USD', 'EUR_USD', 'GBP_USD', 'USD_JPY', 'BTC_USD'];
-// Display labels for the symbol selector
-const SYMBOL_DISPLAY: Record<string, string> = {
-  XAU_USD: 'XAU/USD', EUR_USD: 'EUR/USD', GBP_USD: 'GBP/USD',
-  USD_JPY: 'USD/JPY', BTC_USD: 'BTC/USD', ETH_USD: 'ETH/USD',
-};
+// Fallback symbol list — slash format matches WebSocket price_tick symbol keys.
+const FALLBACK_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: 'market', label: 'Market' },
   { value: 'limit',  label: 'Limit'  },
@@ -187,7 +182,7 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
   const liveSymbols = Object.keys(prices);
   const symbols = liveSymbols.length > 0 ? liveSymbols : FALLBACK_SYMBOLS;
 
-  const [symbol,    setSymbol]    = useState(symbolProp ?? symbols[0] ?? 'XAU_USD');
+  const [symbol,    setSymbol]    = useState(symbolProp ?? symbols[0] ?? 'XAU/USD');
   const [side,      setSide]      = useState<Side>('buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [qty,       setQty]       = useState('0.01');
@@ -272,7 +267,7 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
               className="w-full bg-[#0d1421] border border-[#1e2d3d] rounded px-2.5 py-1.5 text-[12px] text-slate-200 focus:outline-none focus:border-[#3b82f6]"
             >
               {symbols.map((s) => (
-                <option key={s} value={s}>{SYMBOL_DISPLAY[s] ?? s}</option>
+                <option key={s} value={s}>{s}</option>
               ))}
             </select>
           </Field>
@@ -409,7 +404,7 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
         >
           {submitting
             ? 'Placing…'
-            : `${side === 'buy' ? '▲ Buy' : '▼ Sell'} ${qty || '0'} ${SYMBOL_DISPLAY[symbol] ?? symbol}`}
+            : `${side === 'buy' ? '▲ Buy' : '▼ Sell'} ${qty || '0'} ${symbol}`}
         </button>
 
         {/* Result message */}

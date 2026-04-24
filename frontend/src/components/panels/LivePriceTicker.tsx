@@ -182,7 +182,8 @@ function MicroStrip() {
 
 // ── Main ticker bar ───────────────────────────────────────────────────────────
 
-const SYMBOLS = ['XAU_USD', 'XAG_USD', 'EUR_USD', 'GBP_USD', 'USD_JPY'];
+// Slash format matches the WebSocket price_tick symbol keys sent by ws_live.py.
+const SYMBOLS = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY'];
 
 export function LivePriceTicker() {
   const prices    = useStore((s) => s.prices);
@@ -200,7 +201,7 @@ export function LivePriceTicker() {
             symbol={sym}
             tick={prices[sym]}
             history={histories[sym] ?? []}
-            active={sym === 'XAU_USD'}
+            active={sym === 'XAU/USD'}
           />
         ))}
 

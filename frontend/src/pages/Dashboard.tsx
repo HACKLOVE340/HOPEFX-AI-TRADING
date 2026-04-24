@@ -66,16 +66,8 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highli
 );
 
 // ─── Price ticker ─────────────────────────────────────────────────────────────
-// Symbol keys must match the backend WebSocket format (underscore separator).
-const WATCHED_SYMBOLS = ['XAU_USD', 'EUR_USD', 'GBP_USD', 'USD_JPY', 'BTC_USD'];
-// Display labels for each symbol
-const SYMBOL_LABELS: Record<string, string> = {
-  XAU_USD: 'XAU/USD',
-  EUR_USD: 'EUR/USD',
-  GBP_USD: 'GBP/USD',
-  USD_JPY: 'USD/JPY',
-  BTC_USD: 'BTC/USD',
-};
+// Symbol keys must match the WebSocket price_tick format (slash separator).
+const WATCHED_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 
 const PriceTicker: React.FC = () => {
   const prices = useStore((s) => s.prices);
@@ -85,14 +77,13 @@ const PriceTicker: React.FC = () => {
       {WATCHED_SYMBOLS.map((sym) => {
         const tick  = prices[sym];
         const up    = tick ? tick.change_pct >= 0 : null;
-        const label = SYMBOL_LABELS[sym] ?? sym;
         const decimals =
           sym.includes('JPY') ? 3 :
           sym.includes('BTC') ? 0 :
           sym.includes('XAU') ? 2 : 5;
         return (
           <div key={sym} style={s.tickerItem}>
-            <span style={s.tickerSymbol}>{label}</span>
+            <span style={s.tickerSymbol}>{sym}</span>
             <span style={s.tickerPrice}>
               {tick ? fmt(tick.mid, decimals) : '—'}
             </span>

@@ -217,6 +217,30 @@ export function useWebSocket(enabled = true) {
     }, HEARTBEAT_INTERVAL_MS);
   }, []);
 
+  /**
+   * Normalise a symbol key from the REST /trading/prices response to the
+   * slash format used by the WebSocket price_tick messages (e.g. "XAU/USD").
+   *
+   * The REST endpoint may return:
+   *   "XAUUSD"  (broker path — no separator)
+   *   "XAU/USD" (price-engine path — already correct)
+   *   "XAU_USD" (legacy — underscore)
+   *
+   * We convert all forms to "XAU/USD" so store keys are consistent.
+   */
+  const normaliseSymbol = useCallback((raw: string): string => {
+    // Already slash format
+    if (raw.includes('/')) return raw;
+    // Underscore → slash
+    if (raw.includes('_')) return raw.replace('_', '/');
+    // No-separator 6-char codes: XAUUSD → XAU/USD, EURUSD → EUR/USD, etc.
+    // Currency codes are always 3 chars each.
+    if (raw.length === 6) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+    // 7-char: BTCUSD → BTC/USD
+    if (raw.length === 7) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+    return raw;
+  }, []);
+
   /** Poll REST prices when WS is unavailable so the UI shows recent data. */
   const pollRestPrices = useCallback(async () => {
     const token = getState().token;
@@ -225,7 +249,8 @@ export function useWebSocket(enabled = true) {
       const res = await tradingApi.prices();
       const { setPrice } = getState();
       const now = Date.now();
-      for (const [symbol, raw] of Object.entries(res.data)) {
+      for (const [rawSymbol, raw] of Object.entries(res.data)) {
+        const symbol = normaliseSymbol(rawSymbol);
         const mid = (raw.bid + raw.ask) / 2;
         setPrice({
           symbol,
@@ -240,7 +265,7 @@ export function useWebSocket(enabled = true) {
     } catch {
       // Non-fatal — WS reconnect will restore live data
     }
-  }, [getState]);
+  }, [getState, normaliseSymbol]);
 
   const startRestPoll = useCallback(() => {
     if (restPollTimer.current) return; // already running
