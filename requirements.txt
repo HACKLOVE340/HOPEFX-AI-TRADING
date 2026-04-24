@@ -1,220 +1,190 @@
 # HOPEFX AI Trading Framework — Python dependencies
 # Python 3.10+
 #
-# Install: pip install -r requirements.txt
+# Install (Linux/VPS/Docker):  pip install -r requirements.txt
+# Install (Windows testing):   run install.bat  (handles Windows-only exclusions)
+#
+# Legend:
+#   [CORE]     — required for app startup; missing = crash
+#   [RUNTIME]  — required at runtime by specific features; guarded with try/except
+#   [OPTIONAL] — heavy/platform-specific; see requirements-optional.txt
 
-# ── Build toolchain (CVE-2023-5752, CVE-2025-8869, CVE-2026-1703, CVE-2026-24049) ──
-pip>=26.0.1  # CVE-2026-1703 fixed in 26.0+
+# ── Build toolchain ───────────────────────────────────────────────────────────
+# CVE-2023-5752 (pip), CVE-2025-8869 (pip), CVE-2026-1703 (pip), CVE-2026-24049 (wheel)
+pip>=26.0.1
 wheel>=0.46.2
 
-# ── Web framework ─────────────────────────────────────────────────────────────
-# (pinned with upper bounds in the Auth & security section below)
+# ── Web framework [CORE] ──────────────────────────────────────────────────────
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+starlette>=0.40.0,<1.0.0          # CVE-2024-47874 fixed in 0.40.0
 websockets>=12.0,<14.0
 python-multipart>=0.0.18,<1.0.0
 
-# ── Database ──────────────────────────────────────────────────────────────────
+# ── Database [CORE] ───────────────────────────────────────────────────────────
 sqlalchemy>=2.0.0
 alembic>=1.13.0
 aiosqlite>=0.19.0
 asyncpg>=0.29.0
 psycopg2-binary>=2.9.0
 
-# ── Caching ───────────────────────────────────────────────────────────────────
+# ── Caching [CORE] ────────────────────────────────────────────────────────────
 redis>=5.0.0
-kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
-kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
 
-# ── Auth & security (pinned exactly — CVE surface is non-negotiable) ──────────
-# To upgrade: audit CVE list, run full test suite, update checksums.
+# ── Auth & security [CORE] ────────────────────────────────────────────────────
 PyJWT==2.12.0
+passlib>=1.7.4
 argon2-cffi>=23.1.0,<24.0.0
 bcrypt>=4.1.3,<6.0.0
 cryptography==46.0.7
 pyotp>=2.9.0,<3.0.0
-# python-ecdsa removed: package abandoned at 0.18.0, no 0.19.x release exists.
-# CVE-2024-49298 (Minerva timing attack) is mitigated by the `cryptography`
-# package already listed above, which uses OpenSSL's constant-time ECDSA.
 hdwallet>=3.6.1,<4.0.0
 pydantic[email]>=2.5.0,<3.0.0
+pydantic-settings>=2.0.0
 email-validator>=2.1.0,<3.0.0
-# Web framework — pin minor to avoid breaking middleware changes
-fastapi>=0.110.0,<1.0.0
-uvicorn[standard]>=0.27.0,<1.0.0
-starlette>=0.40.0,<1.0.0  # CVE-2024-47874 fixed in 0.40.0
 
-# ── Data & numerics ───────────────────────────────────────────────────────────
+# ── Data & numerics [CORE] ────────────────────────────────────────────────────
 pandas>=2.1.0
 numpy>=1.26.0
-requests>=2.33.1  # CVE-2026-25645 fixed in 2.33.0+
-aiohttp>=3.13.5  # CVE-2025-69223..69230, CVE-2026-22815..34520 fixed in 3.13.x
-certifi>=2026.2.25  # CVE-2024-39689 fixed in 2024.7.4+; use latest CA bundle
-vaderSentiment>=3.3.2
-textblob>=0.18.0,<1.0.0          # secondary sentiment scorer (news/sentiment.py)
-openai>=1.0.0
-chromadb>=0.4.0
-# stable-baselines3 2.3+ supports gymnasium 1.x (API-stable since gym 0.26).
-# Pin gymnasium to <2.0 to avoid breaking the SB3 VecEnv wrappers until SB3
-# explicitly declares gymnasium 2.x support.
-stable-baselines3>=2.3.0,<3.0.0
-gymnasium>=0.29.0,<2.0.0
-tensorboard>=2.14.0
-tqdm>=4.67.0  # CVE-2024-34062 fixed in 4.66.4+
-rich>=13.0.0
+requests>=2.33.1
+aiohttp>=3.13.5
+certifi>=2026.2.25
+curl-cffi>=0.15.0
 httpx>=0.26.0
 yfinance>=0.2.36
-curl-cffi>=0.15.0  # CVE-2026-33752: SSRF via redirect — transitive dep of yfinance; pin to patched version
+tqdm>=4.67.0
+rich>=13.0.0
 
-# ── Machine learning ──────────────────────────────────────────────────────────
-scikit-learn>=1.6.0  # CVE-2024-5206 fixed in 1.5.1+
-hmmlearn>=0.3.0
-# tensorflow>=2.15.0         # optional — uncomment for LSTM models
-lightgbm>=4.6.0  # CVE-2024-43598: fixed in 4.6.0+
+# ── Sentiment & NLP [RUNTIME] ─────────────────────────────────────────────────
+vaderSentiment>=3.3.2
+textblob>=0.18.0,<1.0.0
+
+# ── AI / LLM [RUNTIME] ────────────────────────────────────────────────────────
+openai>=1.0.0
+anthropic>=0.20.0
+
+# ── Machine learning [CORE] ───────────────────────────────────────────────────
+scikit-learn>=1.6.0
+joblib>=1.3.0
+lightgbm>=4.6.0
 xgboost>=2.0.0
 shap>=0.44.0
+statsmodels>=0.14.0
+scipy>=1.12.0
+optuna>=3.4.0
+hmmlearn>=0.3.0
+numba>=0.59.0
 
-# ── Semantic embeddings (HOPEFXBrain attack intent classification) ─────────────
-# sentence-transformers pulls torch; pin to avoid accidental GPU builds on CPU nodes.
-# On GPU nodes: pip install torch --index-url https://download.pytorch.org/whl/cu121
-# then pip install sentence-transformers
+# ── Reinforcement learning [RUNTIME] ──────────────────────────────────────────
+stable-baselines3>=2.3.0,<3.0.0
+gymnasium>=0.29.0,<2.0.0
+
+# ── Semantic embeddings [RUNTIME] ─────────────────────────────────────────────
 sentence-transformers>=5.0.0,<6.0.0
 
-# ── Observability ─────────────────────────────────────────────────────────────
+# ── Observability [CORE] ──────────────────────────────────────────────────────
 prometheus-client>=0.19.0
 structlog>=24.0.0
+sentry-sdk[fastapi]>=2.20.0
+graypy>=2.1.0
 
-# ── Payments ──────────────────────────────────────────────────────────────────
+# ── Scheduling [RUNTIME] ──────────────────────────────────────────────────────
+APScheduler>=3.10.0
+
+# ── Task queue [RUNTIME] ──────────────────────────────────────────────────────
+celery[redis]>=5.4.0
+
+# ── Experiment tracking [RUNTIME] ─────────────────────────────────────────────
+mlflow>=2.13.0
+
+# ── Payments [CORE] ───────────────────────────────────────────────────────────
 stripe>=7.0.0
 
-# ── Visualisation ─────────────────────────────────────────────────────────────
+# ── Visualisation [RUNTIME] ───────────────────────────────────────────────────
 plotly>=5.18.0
 matplotlib>=3.8.0
+seaborn>=0.13.0
 
-# ── Config & utilities ────────────────────────────────────────────────────────
+# ── Config & utilities [CORE] ─────────────────────────────────────────────────
 python-dotenv>=1.2.2
 pyyaml>=6.0.1
 keyring>=24.0.0
 msgpack>=1.0.0
 lz4>=4.0.0
-numba>=0.59.0
-fernet>=1.0.1
-pillow>=12.2.0  # CVE-2026-25990, CVE-2026-40192 fixed in 12.x
-pydantic-settings>=2.0.0
+pillow>=12.2.0
+aiofiles>=23.0.0
+psutil>=5.9.0
+tenacity>=8.2.3
+nbformat>=5.9.0
 
-# ── Multi-exchange trading ────────────────────────────────────────────────────
+# ── Multi-exchange trading [CORE] ─────────────────────────────────────────────
 ccxt>=4.1.0
 
-# ── Interactive Brokers ───────────────────────────────────────────────────────
+# ── Interactive Brokers [RUNTIME] ─────────────────────────────────────────────
 ib_insync==0.9.86
-# quickfix-ng for FIX 4.4/5.0 low-latency path (install separately if needed)
-# quickfix-ng>=1.0.0
 
-# ── MetaTrader 5 (Windows only — install manually on Windows hosts) ───────────
-# Used by data_feed/mt5_backup.py and brokers/mt5_broker.py.
-# Not available on Linux/macOS; both modules degrade gracefully when absent.
-# On Windows: pip install MetaTrader5
-# MetaTrader5>=5.0.45
+# ── Kubernetes kill-switch propagation [RUNTIME] ──────────────────────────────
+kubernetes>=29.0.0
+kubernetes-asyncio>=29.0.0
 
-# ── Statistical tests (ADF/KPSS stationarity) ────────────────────────────────
-statsmodels>=0.14.0
-
-# ── OANDA broker (legacy — disabled; kept for reference only) ─────────────────
-# oandapyV20>=0.6.3
-
-# ── Telegram bot ─────────────────────────────────────────────────────────────
+# ── Telegram bot [RUNTIME] ────────────────────────────────────────────────────
 python-telegram-bot>=20.0
 
-# ── Hyperparameter optimisation ───────────────────────────────────────────────
-optuna>=3.4.0
-
-# ── News / RSS ────────────────────────────────────────────────────────────────
+# ── News / RSS [CORE] ─────────────────────────────────────────────────────────
 feedparser>=6.0.11
 
-# ── Market data WebSocket providers (NuclearStreamer) ─────────────────────────
-# Twelve Data Python SDK — wraps the WebSocket and REST APIs.
+# ── Market data [CORE] ────────────────────────────────────────────────────────
 twelvedata>=1.2.0,<2.0.0
 
-# ── Async utilities ───────────────────────────────────────────────────────────
-aiofiles>=23.0.0
-
-# ── Technical analysis ────────────────────────────────────────────────────────
+# ── Technical analysis [CORE] ─────────────────────────────────────────────────
 ta>=0.11.0
-# pandas_ta requires Python >=3.12; ml_model_trainer.py falls back to `ta` on 3.10.
 pandas_ta>=0.3.14b0; python_version >= "3.12"
 
-# ── Circuit breaker ───────────────────────────────────────────────────────────
+# ── Circuit breaker [CORE] ────────────────────────────────────────────────────
 circuitbreaker>=2.0.0
 
-# ── FIX protocol ─────────────────────────────────────────────────────────────
-# quickfix is a C-extension and the preferred backend for production.
-# pyfixmsg is a pure-Python fallback used when quickfix cannot be compiled
-# (e.g. CI environments without a C compiler).
-# execution/fix_adapter.py tries quickfix first, then pyfixmsg.
-#
-# quickfix requires a C compiler and the quickfix C++ library headers.
-# On Ubuntu/Debian: sudo apt-get install libquickfix-dev
-# On macOS:         brew install quickfix
+# ── FIX protocol [RUNTIME] ────────────────────────────────────────────────────
+# quickfix: C-extension, excluded on Windows (no wheel). simplefix is the fallback.
 quickfix==1.15.1; sys_platform != "win32"
-# pyfixmsg/simplefix removed — not available on PyPI for Python 3.12; FIX adapter uses quickfix or stub
 simplefix>=1.0.1
 
-# ── System / process monitoring ───────────────────────────────────────────────
-psutil>=5.9.0
-
-# ── Antivirus / malware detection (security/antivirus.py) ─────────────────────
-# yara-python: YARA rule engine for pattern-based malware detection.
-#   Requires libyara: apt-get install libyara-dev (Ubuntu) / brew install yara (macOS)
-# clamd: Python bindings for ClamAV daemon.
-#   Requires ClamAV: apt-get install clamav clamav-daemon
-# Both degrade gracefully when absent — entropy + regex layers always run.
+# ── Security scanning [RUNTIME] ───────────────────────────────────────────────
+# Both guarded with try/except in security/antivirus.py.
+# yara-python requires libyara (apt: libyara-dev). clamd requires ClamAV daemon.
+# yara-python now has Windows wheels. clamd is pure Python (socket client only).
 yara-python>=4.3.0
 clamd>=1.0.2
 
-# ── JWT / auth ────────────────────────────────────────────────────────────────
-# python-jose removed: replaced by PyJWT (CVE-2024-33663 and algorithm confusion vulns)
-
-# ── Deep learning (optional – install manually for GPU nodes) ─────────────────
-# torch>=2.1.0  # Uncomment and install separately: pip install torch --index-url https://download.pytorch.org/whl/cpu
-
-# ── Visualization ──────────────────────────────────────────────────────────────
-seaborn>=0.13.0
-
-# ── PDF generation ────────────────────────────────────────────────────────────
-reportlab>=4.0.0
-
-# ── GraphQL ───────────────────────────────────────────────────────────────────
-strawberry-graphql[fastapi]>=0.314.3  # CVE-2026-35523, CVE-2026-35526 fixed in 0.314.x
-
-# ── Rate limiting ─────────────────────────────────────────────────────────────
-slowapi>=0.1.9
-
-# ── Error tracking ────────────────────────────────────────────────────────────
-# Full FastAPI + SQLAlchemy + Redis + aiohttp integrations
-sentry-sdk[fastapi]>=2.20.0  # CVE-2024-40647 fixed in 2.8.0+; use latest
-
-
-# ── Email deliverability ──────────────────────────────────────────────────────
+# ── Email [CORE] ──────────────────────────────────────────────────────────────
 sendgrid>=6.11.0
 
-# ── Templating ────────────────────────────────────────────────────────────────
-jinja2>=3.1.6  # CVE-2024-56201, CVE-2024-22195, CVE-2025-27516 fixed in 3.1.6+
+# ── Templating [CORE] ─────────────────────────────────────────────────────────
+jinja2>=3.1.6
 
-# ── Statistical testing ───────────────────────────────────────────────────────
-scipy>=1.12.0
+# ── PDF generation [RUNTIME] ──────────────────────────────────────────────────
+reportlab>=4.0.0
 
-# ── Property-based testing ────────────────────────────────────────────────────
+# ── GraphQL [CORE] ────────────────────────────────────────────────────────────
+strawberry-graphql[fastapi]>=0.314.3
+
+# ── Rate limiting [CORE] ──────────────────────────────────────────────────────
+slowapi>=0.1.9
+
+# ── Dev SMTP server [RUNTIME] ─────────────────────────────────────────────────
+aiosmtpd>=1.4.4
+
+# ── OpenTelemetry distributed tracing [RUNTIME] ───────────────────────────────
+opentelemetry-sdk>=1.24.0,<2.0.0
+opentelemetry-api>=1.24.0,<2.0.0
+opentelemetry-exporter-otlp-proto-grpc>=1.24.0,<2.0.0
+opentelemetry-exporter-otlp-proto-http>=1.24.0,<2.0.0
+opentelemetry-instrumentation-fastapi>=0.45b0,<1.0.0
+opentelemetry-instrumentation-sqlalchemy>=0.45b0,<1.0.0
+opentelemetry-instrumentation-redis>=0.45b0,<1.0.0
+opentelemetry-instrumentation-aiohttp-client>=0.45b0,<1.0.0
+opentelemetry-propagator-b3>=1.24.0,<2.0.0
+
+# ── Property-based testing [RUNTIME] ──────────────────────────────────────────
 hypothesis>=6.100.0
+pytest>=7.4.3
 
-# ── OpenTelemetry distributed tracing ─────────────────────────────────────────
-# Core SDK
-opentelemetry-sdk>=1.24.0
-opentelemetry-api>=1.24.0
-# OTLP exporters (gRPC primary, HTTP fallback)
-opentelemetry-exporter-otlp-proto-grpc>=1.24.0
-opentelemetry-exporter-otlp-proto-http>=1.24.0
-# Auto-instrumentation
-opentelemetry-instrumentation-fastapi>=0.45b0
-opentelemetry-instrumentation-sqlalchemy>=0.45b0
-opentelemetry-instrumentation-redis>=0.45b0
-opentelemetry-instrumentation-aiohttp-client>=0.45b0
-# W3C trace context propagation
-opentelemetry-propagator-b3>=1.24.0

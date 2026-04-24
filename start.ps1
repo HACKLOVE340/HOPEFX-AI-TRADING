@@ -1,22 +1,23 @@
-# HOPEFX AI Trading — Windows test launcher (PowerShell)
+# HOPEFX AI Trading — Windows launcher (PowerShell)
 # ============================================================
 # Usage:
 #   .\start.ps1              (port 8000)
 #   .\start.ps1 -Port 8080   (custom port)
 #   .\start.ps1 -NoReload    (disable hot-reload)
 #
-# Requirements: Python 3.12, Node.js (for frontend build)
-#
-# If blocked by execution policy, run once:
+# If blocked by execution policy, run once in PowerShell as Administrator:
 #   Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 #
 # What this does on every run:
-#   1. Creates a venv on first run (avoids pip cache permission errors)
-#   2. Syncs ALL dependencies from requirements.txt
-#   3. Installs MetaTrader5 SDK if not present
-#   4. Builds the React frontend if not already built
-#   5. Generates .env if not present
-#   6. Starts the API server with hot-reload
+#   1. Verifies Python 3.10+
+#   2. Creates venv on first run
+#   3. Upgrades pip (inside venv only)
+#   4. Installs / syncs all dependencies with --no-cache-dir
+#      (eliminates [Errno 13] Permission denied on Windows pip cache)
+#   5. Installs MetaTrader5 SDK if not present (non-fatal)
+#   6. Generates .env on first run
+#   7. Builds React frontend if not already built
+#   8. Starts the API server
 # ============================================================
 
 param(
@@ -27,15 +28,17 @@ param(
 Set-Location $PSScriptRoot
 $ErrorActionPreference = "Stop"
 
-# ── 1. Check Python 3.12 ──────────────────────────────────────────────────────
+# ── 1. Verify Python 3.10+ ────────────────────────────────────────────────────
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Host "[ERROR] Python not found. Install Python 3.12 from https://python.org" -ForegroundColor Red
+    Write-Host "[ERROR] Python not found." -ForegroundColor Red
+    Write-Host "        Install Python 3.10+ from https://python.org" -ForegroundColor Red
+    Write-Host "        Tick 'Add Python to PATH' during installation." -ForegroundColor Red
     exit 1
 }
 $pyVer = (python --version 2>&1) -replace "Python ", ""
 $parts = $pyVer -split "\."
-if ([int]$parts[0] -lt 3 -or ([int]$parts[0] -eq 3 -and [int]$parts[1] -lt 12)) {
-    Write-Host "[ERROR] Python 3.12+ required. Found $pyVer." -ForegroundColor Red
+if ([int]$parts[0] -lt 3 -or ([int]$parts[0] -eq 3 -and [int]$parts[1] -lt 10)) {
+    Write-Host "[ERROR] Python 3.10+ required. Found $pyVer." -ForegroundColor Red
     exit 1
 }
 Write-Host "[OK] Python $pyVer" -ForegroundColor Green
@@ -45,7 +48,8 @@ if (-not (Test-Path "venv\Scripts\Activate.ps1")) {
     Write-Host "[INFO] Creating virtual environment..." -ForegroundColor Cyan
     python -m venv venv
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "[ERROR] Failed to create venv." -ForegroundColor Red
+        Write-Host "[ERROR] Failed to create virtual environment." -ForegroundColor Red
+        Write-Host "        Try running as Administrator." -ForegroundColor Red
         exit 1
     }
     Write-Host "[OK] Virtual environment created" -ForegroundColor Green
@@ -54,20 +58,27 @@ if (-not (Test-Path "venv\Scripts\Activate.ps1")) {
 # ── 3. Activate venv ──────────────────────────────────────────────────────────
 & "venv\Scripts\Activate.ps1"
 
-# ── 4. Clear pip cache (prevents [Errno 13] Permission denied on cached wheels) ─
-# Windows locks .whl files in the pip cache after a failed or interrupted install.
-# Purging before every install guarantees pip always downloads fresh — no lock conflicts.
-Write-Host "[INFO] Clearing pip cache..." -ForegroundColor Cyan
-pip cache purge 2>$null
-Write-Host "[OK] Pip cache cleared" -ForegroundColor Green
+# ── 4. Upgrade pip (inside venv only) ─────────────────────────────────────────
+Write-Host "[INFO] Upgrading pip..." -ForegroundColor Cyan
+python -m pip install --no-cache-dir --quiet --upgrade pip
+Write-Host "[OK] pip ready" -ForegroundColor Green
 
-# ── 5. Always sync dependencies ───────────────────────────────────────────────
-# Runs on every start so new packages added after git pull are always installed.
-# pip skips packages already up to date — fast after first run.
+# ── 5. Install / sync all dependencies ────────────────────────────────────────
+# --no-cache-dir: bypasses the Windows pip cache entirely.
+# This is the definitive fix for [Errno 13] Permission denied on cached .whl files.
+# pip skips packages already at the correct version — fast after first run.
 Write-Host "[INFO] Syncing dependencies..." -ForegroundColor Cyan
 pip install --no-cache-dir -r requirements.txt
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Dependency install failed. See output above." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "[ERROR] Dependency install failed." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Fixes to try:" -ForegroundColor Yellow
+    Write-Host "  1. Run as Administrator" -ForegroundColor Yellow
+    Write-Host "  2. Temporarily disable antivirus / Windows Defender real-time protection" -ForegroundColor Yellow
+    Write-Host "  3. Delete venv\ and run start.ps1 again" -ForegroundColor Yellow
+    Write-Host "  4. Check your internet connection" -ForegroundColor Yellow
+    Write-Host ""
     exit 1
 }
 Write-Host "[OK] Dependencies synced" -ForegroundColor Green
@@ -88,7 +99,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # ── 7. Generate .env if missing ───────────────────────────────────────────────
 if (-not (Test-Path ".env")) {
-    Write-Host "[INFO] Generating .env via dev bootstrap..." -ForegroundColor Cyan
+    Write-Host "[INFO] Generating .env with random secrets..." -ForegroundColor Cyan
     python scripts\bootstrap_dev.py
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Bootstrap failed. See output above." -ForegroundColor Red
@@ -107,8 +118,8 @@ Get-Content ".env" | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "=" } | 
 
 # ── 9. Build frontend if not built ────────────────────────────────────────────
 if (-not (Test-Path "static\index.html")) {
-    Write-Host "[INFO] Building React frontend..." -ForegroundColor Cyan
     if ((Get-Command npm -ErrorAction SilentlyContinue) -and (Test-Path "frontend\package.json")) {
+        Write-Host "[INFO] Building React frontend..." -ForegroundColor Cyan
         Push-Location frontend
         npm install --silent
         npm run build
@@ -125,7 +136,7 @@ if (-not (Test-Path "static\index.html")) {
     Write-Host "[OK] Frontend already built" -ForegroundColor Green
 }
 
-# ── 10. Set defaults and start ────────────────────────────────────────────────
+# ── 10. Start server ──────────────────────────────────────────────────────────
 $apiHost = if ($env:API_HOST) { $env:API_HOST } else { "127.0.0.1" }
 $apiPort = if ($Port) { $Port } elseif ($env:API_PORT) { $env:API_PORT } else { "8000" }
 

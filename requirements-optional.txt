@@ -1,49 +1,52 @@
 # HOPEFX AI Trading Platform — Optional Dependencies
 #
 # These packages require system libraries, have platform restrictions, or are
-# heavy GPU/ML deps that are NOT installed in CI. Install manually after
-# satisfying the system prerequisites listed for each group.
+# heavy GPU/ML deps NOT installed by default. Install manually after satisfying
+# the system prerequisites listed for each group.
 #
-# DO NOT pin exact versions here — use minimum bounds so Dependabot can
-# propose security upgrades. Exact pins belong in requirements.txt for
-# packages that are always installed.
-
-# ── TA-Lib ────────────────────────────────────────────────────────────────────
-# Requires the libta-lib C library.
-# Ubuntu/Debian: sudo apt-get install libta-lib-dev
-# macOS:         brew install ta-lib
-# Then:          pip install ta-lib>=0.4.28
-# ta-lib>=0.4.28
-
-# ── TensorFlow ────────────────────────────────────────────────────────────────
-# Large GPU/CPU deep-learning framework. Install separately on GPU nodes.
-# pip install tensorflow>=2.16.0
-# tensorflow>=2.16.0
+# DO NOT add these to requirements.txt — they are intentionally optional.
+# All code that uses these packages is guarded with try/except ImportError.
 
 # ── PyTorch ───────────────────────────────────────────────────────────────────
+# Required by: sentence-transformers, stable-baselines3, ml/models/lstm.py
 # Install via the official index for the correct CUDA version:
-# CPU:  pip install torch --index-url https://download.pytorch.org/whl/cpu
-# CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu121
+#   CPU:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   CUDA: pip install torch --index-url https://download.pytorch.org/whl/cu121
 # torch>=2.1.0
+
+# ── TensorFlow ────────────────────────────────────────────────────────────────
+# Required by: ml/models/lstm.py, enhanced_ml_predictor.py (guarded)
+# Large GPU/CPU deep-learning framework. Install separately on GPU nodes.
+#   pip install tensorflow>=2.16.0
+# tensorflow>=2.16.0
+
+# ── TA-Lib ────────────────────────────────────────────────────────────────────
+# C-extension technical analysis library. Faster than the pure-Python `ta` package.
+# Ubuntu/Debian: sudo apt-get install libta-lib-dev && pip install ta-lib>=0.4.28
+# macOS:         brew install ta-lib && pip install ta-lib>=0.4.28
+# ta-lib>=0.4.28
+
+# ── MetaTrader5 ───────────────────────────────────────────────────────────────
+# Windows-only broker SDK. The MT5 terminal must be installed on the same machine.
+# Not available on Linux/macOS — the package will fail to import on those platforms.
+# install.bat installs this automatically on Windows.
+# Manual install: pip install --no-cache-dir "MetaTrader5>=5.0.45"
+# MetaTrader5>=5.0.45
 
 # ── vectorbt ──────────────────────────────────────────────────────────────────
 # Backtesting library with optional Numba JIT acceleration.
 # pip install vectorbt>=0.26.0
 # vectorbt>=0.26.0
 
-# ── MetaTrader5 ───────────────────────────────────────────────────────────────
-# Windows-only broker SDK. Not available on Linux/macOS.
-# On Windows: pip install MetaTrader5>=5.0.45
-# MetaTrader5>=5.0.45
-
 # ── Zipline ───────────────────────────────────────────────────────────────────
 # Has strict Python version constraints; check compatibility before installing.
 # zipline-reloaded>=3.0.0
 
-# ── MLflow ────────────────────────────────────────────────────────────────────
-# Experiment tracking server. Optional for production deployments.
-# pip install mlflow>=2.13.0
-# mlflow>=2.13.0
+# ── MLflow tracking server ────────────────────────────────────────────────────
+# mlflow is in requirements.txt (lightweight client). This entry is for the
+# full tracking server with UI — only needed on dedicated MLflow server nodes.
+# pip install mlflow[extras]>=2.13.0
+# mlflow[extras]>=2.13.0
 
 # ── Alpaca Trade API ──────────────────────────────────────────────────────────
 # US equities broker SDK.
@@ -53,13 +56,6 @@
 # ── Binance Connector ─────────────────────────────────────────────────────────
 # pip install binance-connector>=3.8.0
 # binance-connector>=3.8.0
-
-# ── Celery ────────────────────────────────────────────────────────────────────
-# Distributed task queue for periodic background jobs (ML retraining,
-# subscription expiry, affiliate payouts, DB backups, self-healer scans).
-# Required only when running dedicated Celery worker + Beat processes.
-# The FastAPI app falls back to asyncio tasks when Celery is absent.
-celery[redis]>=5.4.0
 
 # ── asyncio-mqtt ──────────────────────────────────────────────────────────────
 # MQTT async client. Required only for IoT/signal integrations.
@@ -71,18 +67,8 @@ celery[redis]>=5.4.0
 # pip install kaleido>=0.2.1
 # kaleido>=0.2.1
 
-# ── pandas-ta ─────────────────────────────────────────────────────────────────
-# Pure-Python technical analysis library (alternative to TA-Lib).
-# pip install pandas-ta>=0.3.14b0
-# pandas-ta>=0.3.14b0
-
-# ── fastapi-offline ───────────────────────────────────────────────────────────
-# Service worker / PWA generation helper.
-# pip install fastapi-offline>=1.0.0
-# fastapi-offline>=1.0.0
-
 # ── hiredis ───────────────────────────────────────────────────────────────────
-# C-extension parser for redis-py (performance). Falls back gracefully.
+# C-extension parser for redis-py (performance). Falls back gracefully without it.
 # pip install hiredis>=2.3.0
 # hiredis>=2.3.0
 
@@ -90,3 +76,22 @@ celery[redis]>=5.4.0
 # Fast DataFrame library. Optional alternative to pandas for heavy ETL.
 # pip install polars>=0.20.3
 # polars>=0.20.3
+
+# ── faiss-cpu ─────────────────────────────────────────────────────────────────
+# Facebook AI Similarity Search — used by ml/advanced_ai.py (guarded).
+# pip install faiss-cpu>=1.7.4
+# faiss-cpu>=1.7.4
+
+# ── cupy ──────────────────────────────────────────────────────────────────────
+# GPU array library (CUDA). Used by backtesting/enhanced_engine.py (guarded).
+# Requires CUDA toolkit. Install matching your CUDA version:
+#   pip install cupy-cuda12x>=13.0.0
+# cupy-cuda12x>=13.0.0
+
+# ── ChromaDB vector store ─────────────────────────────────────────────────────
+# Used by research/vector_store.py (guarded with try/except — non-fatal if absent).
+# Requires sqlite3 >= 3.35.0. Ubuntu 20.04 ships 3.31 — upgrade before installing:
+#   Ubuntu 20.04: pip install pysqlite3-binary && set CHROMA_SQLITE_IMPL=pysqlite3
+#   Ubuntu 22.04+: sqlite3 3.37+ ships by default — install directly.
+# pip install chromadb>=0.4.0
+# chromadb>=0.4.0

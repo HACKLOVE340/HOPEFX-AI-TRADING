@@ -1,46 +1,50 @@
+# HOPEFX AI Trading — Developer dependencies
+#
+# Installs everything in requirements.txt plus dev/test/lint tooling.
+# Use this on local dev machines and in dev containers.
+#
+# Install: pip install -r requirements-dev.txt
+
 -r requirements.txt
 
-# Testing
-pytest>=7.4.0
-pytest-asyncio>=0.23.0
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=7.4.3
+pytest-asyncio>=0.23.6
 pytest-cov>=4.1.0
 pytest-timeout>=2.2.0
-pytest-xdist>=3.5.0
-hypothesis>=6.0.0
+pytest-xdist>=3.5.0          # parallel test execution
 
-# Linting & Formatting
+# ── Linting & formatting ──────────────────────────────────────────────────────
 ruff>=0.9.0,<0.10.0
 mypy>=1.14.0,<2.0.0
 pre-commit>=4.1.0,<5.0.0
 
-# Type Stubs
+# ── Type stubs ────────────────────────────────────────────────────────────────
 types-redis>=4.6.0,<5.0.0
 types-pyyaml>=6.0.0,<7.0.0
-# types-python-jose removed: python-jose replaced by PyJWT
 pandas-stubs>=2.2.0,<3.0.0
 
-# Mutation testing
+# ── Mutation testing ──────────────────────────────────────────────────────────
 mutmut>=2.4.0,<3.0.0
 
-# Security Scanning
+# ── Security scanning ─────────────────────────────────────────────────────────
 bandit>=1.8.0,<2.0.0
 safety>=3.3.0,<4.0.0
 pip-audit>=2.7.0,<3.0.0
 
-# Documentation
+# ── Documentation ─────────────────────────────────────────────────────────────
 mkdocs>=1.6.0,<2.0.0
 mkdocs-material>=9.6.0,<10.0.0
 mike>=2.1.0,<3.0.0
 
-# Dev SMTP server (scripts/dev_smtp_server.py)
-aiosmtpd>=1.4.6,<2.0.0
-
-# Jupyter
+# ── Jupyter ───────────────────────────────────────────────────────────────────
 jupyter>=1.1.0,<2.0.0
 ipywidgets>=8.1.0,<9.0.0
 
-# Profiling
+# ── Profiling ─────────────────────────────────────────────────────────────────
 py-spy>=0.4.0,<0.5.0
 memray>=1.15.0,<2.0.0; sys_platform != "win32"
 scalene>=1.5.0,<2.0.0
-zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+
+# ── Pinned transitive (security) ──────────────────────────────────────────────
+zipp>=3.19.1
