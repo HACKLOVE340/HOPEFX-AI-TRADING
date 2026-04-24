@@ -209,9 +209,14 @@ export function usePerformanceSummary() {
 }
 
 // ── Account (every 10s — fallback when WS is down) ────────────────────────────
+// Always fetches once on mount so the account bar is populated immediately.
+// The WS account_update message only fires on state *changes*, not on initial
+// subscription — so without this initial fetch, account stays null until the
+// first trade event arrives.
 
 export function useAccount() {
   const setAccount = useStore((s) => s.setAccount);
+  const account    = useStore((s) => s.account);
   const wsStatus   = useStore((s) => s.wsStatus);
   const isAuth     = useStore(selectIsAuth);
   const hydrated   = useHasHydrated();
@@ -222,10 +227,13 @@ export function useAccount() {
       const res = await tradingApi.account();
       return res.data as AccountMetrics;
     },
-    enabled:         hydrated && isAuth,
-    // Only poll when WS is not connected
+    enabled: hydrated && isAuth,
+    // When WS is connected: suppress interval polling (WS pushes changes),
+    // but still allow the initial fetch (staleTime=0 when account is null).
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
-    staleTime:       5_000,
+    // If account is already populated from WS, treat cached data as fresh for
+    // 30s. If account is null (first load), staleTime=0 forces an immediate fetch.
+    staleTime: account !== null ? 30_000 : 0,
   });
 
   useEffect(() => {
@@ -236,13 +244,20 @@ export function useAccount() {
 }
 
 // ── Positions (every 10s — fallback when WS is down) ─────────────────────────
+// Always fetches once on mount. WS position_update only fires on changes,
+// not on initial subscription — without this, positions shows empty until
+// the first trade event.
 
 export function usePositions() {
   const setPositions = useStore((s) => s.setPositions);
+  const positions    = useStore((s) => s.positions);
   const wsStatus     = useStore((s) => s.wsStatus);
   const isAuth       = useStore(selectIsAuth);
   const hydrated     = useHasHydrated();
 
+  // Track whether we've done the initial fetch this session.
+  // positions.length === 0 is ambiguous (could be genuinely empty), so we
+  // use a separate flag via initialFetched query state instead.
   const query = useQuery<Position[]>({
     queryKey: ['positions'],
     queryFn:  async () => {
@@ -253,7 +268,8 @@ export function usePositions() {
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
-    staleTime:       5_000,
+    // staleTime=0 on first load forces an immediate fetch even when WS is up.
+    staleTime:       query => query.state.dataUpdatedAt === 0 ? 0 : 5_000,
   });
 
   useEffect(() => {
@@ -265,6 +281,8 @@ export function usePositions() {
 
 // ── Signals (every 15s — fallback when WS is down) ───────────────────────────
 // Backend returns { signals: Signal[], count: number } — unwrap here.
+// Always fetches once on mount so the signal feed is populated immediately
+// even when WS is connected (WS only pushes new signals, not the backlog).
 
 export function useSignals() {
   const setSignals = useStore((s) => s.setSignals);
@@ -282,7 +300,8 @@ export function useSignals() {
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 15_000,
-    staleTime:       7_500,
+    // staleTime=0 on first load forces an immediate fetch even when WS is up.
+    staleTime:       query => query.state.dataUpdatedAt === 0 ? 0 : 7_500,
   });
 
   useEffect(() => {
