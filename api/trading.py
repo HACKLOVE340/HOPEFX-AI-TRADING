@@ -1082,24 +1082,47 @@ async def get_prices(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Get current bid/ask prices. Requires: any authenticated user."""
-    if not app_state or not app_state.price_engine:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Price engine not available",
-        )
-
     prices: dict = {}
-    for symbol in app_state.price_engine.symbols:
-        tick = app_state.price_engine.get_last_price(symbol)
-        if tick:
-            prices[symbol] = {
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "last": getattr(tick, "last_price", None) or tick.mid,
-                "timestamp": tick.timestamp,
-            }
 
-    return prices
+    # Path 1: price engine available (preferred — has yfinance + broker fallback)
+    if app_state and app_state.price_engine:
+        for symbol in app_state.price_engine.symbols:
+            tick = app_state.price_engine.get_last_price(symbol)
+            if tick:
+                prices[symbol] = {
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "last": getattr(tick, "last_price", None) or tick.mid,
+                    "timestamp": tick.timestamp,
+                }
+        if prices:
+            return prices
+
+    # Path 2: broker market_prices direct (price engine not yet started)
+    broker = getattr(app_state, "broker", None) if app_state else None
+    market_prices = getattr(broker, "market_prices", {}) if broker else {}
+    if market_prices:
+        import time as _time
+        _spread_map = {
+            "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
+            "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+        }
+        now = _time.time()
+        for sym, price in market_prices.items():
+            if price and price > 0:
+                spread = _spread_map.get(sym, price * 0.0002)
+                prices[sym] = {
+                    "bid": round(price - spread / 2, 5),
+                    "ask": round(price + spread / 2, 5),
+                    "last": round(price, 5),
+                    "timestamp": now,
+                }
+        return prices
+
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Price engine not available",
+    )
 
 
 @router.get(
