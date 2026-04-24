@@ -5,12 +5,11 @@
 ::   start.bat              (port 8000)
 ::   start.bat --port 8080  (custom port)
 ::
-:: What this does on every run:
+:: What this does:
 ::   1. Verifies Python 3.10+
 ::   2. Creates venv on first run
 ::   3. Upgrades pip (inside venv only — never touches system Python)
-::   4. Installs / syncs all dependencies with --no-cache-dir
-::      (eliminates [Errno 13] Permission denied on Windows pip cache)
+::   4. Installs dependencies ONLY on first run or when requirements.txt changes
 ::   5. Installs MetaTrader5 SDK if not present (non-fatal)
 ::   6. Generates .env on first run
 ::   7. Builds React frontend if not already built
@@ -72,25 +71,31 @@ echo [INFO] Upgrading pip...
 python -m pip install --no-cache-dir --quiet --upgrade pip
 echo [OK] pip ready
 
-:: ── 5. Install / sync all dependencies ───────────────────────────────────────
-:: --no-cache-dir: bypasses the Windows pip cache entirely.
-:: This is the definitive fix for [Errno 13] Permission denied on cached .whl files.
-:: pip skips packages already at the correct version — fast after first run.
-echo [INFO] Syncing dependencies...
-pip install --no-cache-dir -r requirements.txt
+:: ── 5. Install / sync dependencies (only when requirements.txt changes) ──────
+:: Hash-check: MD5 of requirements.txt is stored in venv\.req_hash.
+:: pip only runs on first launch or after requirements.txt is modified.
+:: --no-cache-dir bypasses the Windows pip cache ([Errno 13] fix).
+python -c "import hashlib,os,sys; f='venv\\.req_hash'; h=hashlib.md5(open('requirements.txt','rb').read()).hexdigest(); sys.exit(0 if os.path.exists(f) and open(f).read().strip()==h else 1)" >nul 2>&1
 if errorlevel 1 (
-    echo.
-    echo [ERROR] Dependency install failed.
-    echo.
-    echo   Fixes to try:
-    echo   1. Run as Administrator (right-click -> Run as administrator)
-    echo   2. Temporarily disable antivirus / Windows Defender real-time protection
-    echo   3. Delete venv\ and run start.bat again
-    echo   4. Check your internet connection
-    echo.
-    pause & exit /b 1
+    echo [INFO] Syncing dependencies...
+    pip install --no-cache-dir -r requirements.txt
+    if errorlevel 1 (
+        echo.
+        echo [ERROR] Dependency install failed.
+        echo.
+        echo   Fixes to try:
+        echo   1. Run as Administrator (right-click -^> Run as administrator)
+        echo   2. Temporarily disable antivirus / Windows Defender real-time protection
+        echo   3. Delete venv\ and run start.bat again
+        echo   4. Check your internet connection
+        echo.
+        pause & exit /b 1
+    )
+    python -c "import hashlib; open('venv\\.req_hash','w').write(hashlib.md5(open('requirements.txt','rb').read()).hexdigest())"
+    echo [OK] Dependencies synced
+) else (
+    echo [OK] Dependencies up to date
 )
-echo [OK] Dependencies synced
 
 :: ── 6. MetaTrader5 (Windows only, non-fatal) ──────────────────────────────────
 python -c "import MetaTrader5" >nul 2>&1
