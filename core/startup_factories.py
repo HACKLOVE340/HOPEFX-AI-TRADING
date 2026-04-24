@@ -1585,6 +1585,8 @@ async def init_signal_engine(s: Any) -> Any:
 
     t = asyncio.create_task(run_signal_engine(s))
     s.background_tasks.append(t)
+    # Expose the task handle on app_state so health checks and MCC can reference it
+    s.signal_engine = t
     log_activity("Signal engine started")
 
     # Post a startup alert to Discord so the community knows the engine is live.
@@ -2137,6 +2139,15 @@ def build_component_registry(app, feature_flags):
             deps=["hourly_trainer"],
         )
         .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
+        # Master Control Centre — strategy orchestration, regime detection,
+        # signal aggregation, and broker execution routing.
+        # Depends on broker + signal_engine so it starts after both are live.
+        .register(
+            "mcc",
+            F.init_mcc,
+            required=False,
+            deps=["broker", "signal_engine"],
+        )
         .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
         .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
@@ -2204,6 +2215,99 @@ def build_component_registry(app, feature_flags):
     )
 
     return registry
+
+
+async def init_mcc(s: Any) -> Any | None:
+    """
+    Initialise the Master Control Centre and wire it to all live components.
+
+    Connects:
+      - config_manager  → s.config
+      - cache           → s.cache
+      - broker          → s.broker  (price updates routed via on_price_update)
+      - risk_manager    → s.risk_manager  (daily P&L / kill-switch sync)
+      - brain           → s.brain / s.strategy_brain
+      - signal_engine   → s.signal_engine  (task handle)
+      - db_session      → s.db_session_factory
+
+    The MCC instance is stored on app_state.mcc so health checks and the
+    /api/health/components endpoint can report its status.
+    """
+    try:
+        from core.mcc.master_control import MasterControlCore, MCCConfig
+        from cache.market_data_cache import MarketDataCache
+
+        cfg = MCCConfig(
+            max_strategies_active=int(os.getenv("MCC_MAX_STRATEGIES", "5")),
+            emergency_drawdown_pct=float(os.getenv("MCC_EMERGENCY_DD_PCT", "0.10")),
+        )
+        mcc = MasterControlCore(cfg)
+
+        # Wire config + cache
+        config_mgr = getattr(s, "config", None)
+        cache = getattr(s, "cache", None)
+        db_session = None
+        if s.db_session_factory is not None:
+            try:
+                db_session = s.db_session_factory()
+            except Exception:
+                pass
+
+        if config_mgr is not None or cache is not None:
+            mcc.initialize(
+                config_manager=config_mgr,
+                cache=cache,
+                db_session=db_session,
+            )
+
+        # Seed current prices from broker market_prices
+        broker = getattr(s, "broker", None)
+        if broker is not None:
+            market_prices = getattr(broker, "market_prices", {})
+            from decimal import Decimal as _D
+            for sym, price in market_prices.items():
+                if price and price > 0:
+                    mcc.current_prices[sym] = _D(str(price))
+
+        # Register price-update callback on the price engine so MCC receives
+        # every tick and can route it to registered strategies.
+        pe = getattr(s, "price_engine", None)
+        if pe is not None:
+            from decimal import Decimal as _D
+
+            def _mcc_price_cb(tick: Any) -> None:
+                try:
+                    mcc.on_price_update(
+                        symbol=tick.symbol,
+                        price=_D(str(tick.mid)),
+                        bid=_D(str(tick.bid)),
+                        ask=_D(str(tick.ask)),
+                    )
+                except Exception as _cb_exc:
+                    logger.debug("MCC price callback error: %s", _cb_exc)
+
+            pe.register_price_callback(_mcc_price_cb) if hasattr(pe, "register_price_callback") else None
+
+        # Sync kill-switch state with risk manager
+        rm = getattr(s, "risk_manager", None)
+        if rm is not None and getattr(rm, "kill_switch_active", False):
+            mcc.trigger_kill_switch("risk_manager kill switch active at startup")
+
+        mcc.is_running = True
+        s.mcc = mcc
+        logger.info(
+            "MCC initialised — broker=%s price_engine=%s brain=%s signal_engine=%s",
+            type(broker).__name__ if broker else "None",
+            type(pe).__name__ if pe else "None",
+            type(getattr(s, "brain", None) or getattr(s, "strategy_brain", None)).__name__
+            if (getattr(s, "brain", None) or getattr(s, "strategy_brain", None))
+            else "None",
+            "running" if getattr(s, "signal_engine", None) else "None",
+        )
+        return mcc
+    except Exception as exc:
+        logger.warning("MCC init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_security_brain(s: Any, app: Any) -> Any | None:
