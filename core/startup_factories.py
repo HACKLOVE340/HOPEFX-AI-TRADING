@@ -1207,64 +1207,37 @@ async def init_trade_executor(s: Any) -> Any:
 
 async def init_hopefx_brain(s: Any) -> Any:
     """
-    Initialise the canonical HOPEFXBrain (ML-integrated, regime-aware).
+    Initialise the canonical HOPEFXBrain (async loop, regime-aware).
 
-    The brain is constructed immediately so it is available in app_state.
-    Its dominate() loop is deferred until both broker and price_engine are
-    confirmed available — running the loop without them produces no signals
-    and wastes CPU on empty cycles.
+    Uses brain.brain.HOPEFXBrain which has start() + dominate() for the
+    continuous async decision loop. brain.hopefx_brain.HOPEFXBrain is a
+    per-bar synchronous helper used by the MCC and should not be used here.
     """
-    from brain.hopefx_brain import HOPEFXBrain
+    from brain.brain import HOPEFXBrain
 
-    b = HOPEFXBrain(config=s._config if hasattr(s, "_config") else {})
+    b = HOPEFXBrain(config={"max_decision_history": 1000, "regime_check_interval": 60, "circuit_breaker_threshold": 5})
 
     broker = getattr(s, "broker", None)
     price_engine = getattr(s, "price_engine", None)
     risk_manager = getattr(s, "risk_manager", None)
     strategy_manager = getattr(s, "strategy_brain", None)
+    alert_engine = getattr(s, "alert_engine", None)
+    position_tracker = getattr(s, "position_tracker", None)
+    trade_executor = getattr(s, "trade_executor", None)
 
-    b.inject(
+    b.inject_components(
+        price_engine=price_engine,
         risk_manager=risk_manager,
         broker=broker,
         strategy_manager=strategy_manager,
+        notification_manager=alert_engine,
+        position_tracker=position_tracker,
+        trade_executor=trade_executor,
     )
 
-    missing = []
-    if broker is None:
-        missing.append("broker")
-    if price_engine is None:
-        missing.append("price_engine")
-
-    if missing:
-        logger.warning(
-            "HOPEFXBrain: dominate() loop deferred — waiting for: %s. "
-            "Brain will start automatically once all dependencies are available.",
-            ", ".join(missing),
-        )
-
-        async def _deferred_start() -> None:
-            """Poll until broker and price_engine are both available, then start."""
-            for _attempt in range(120):  # up to 120 × 5 s = 10 min
-                _broker = getattr(s, "broker", None)
-                _pe = getattr(s, "price_engine", None)
-                if _broker is not None and _pe is not None:
-                    b.inject(broker=_broker)
-                    logger.info(
-                        "HOPEFXBrain: broker + price_engine now available — starting dominate() loop"
-                    )
-                    await b.dominate()
-                    return
-                await asyncio.sleep(5)
-            logger.error(
-                "HOPEFXBrain: timed out waiting for broker + price_engine after 10 min. "
-                "Brain dominate() loop will NOT start. Check broker credentials and price feed."
-            )
-
-        asyncio.create_task(_deferred_start(), name="hopefx-brain-deferred")
-    else:
-        logger.info("HOPEFXBrain: broker + price_engine available — starting dominate() loop immediately")
-        asyncio.create_task(b.dominate(), name="hopefx-brain")
-
+    await b.start()
+    asyncio.create_task(b.dominate(), name="hopefx-brain")
+    logger.info("HOPEFXBrain: started — dominate() loop running")
     return b
 
 

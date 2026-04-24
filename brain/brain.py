@@ -834,8 +834,8 @@ class HOPEFXBrain:
                 timeout=10.0,
             )
 
-            # Filter signals through risk manager
-            if self.risk_manager:
+            # Filter signals through risk manager (only if it supports filter_signals)
+            if self.risk_manager and hasattr(self.risk_manager, "filter_signals"):
                 signals = await asyncio.wait_for(self.risk_manager.filter_signals(signals, self.state), timeout=5.0)
 
             # Publish signals to RealTimeSignalService so /api/signals/active
