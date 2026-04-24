@@ -10,7 +10,7 @@
  *   { symbol, side: "buy"|"sell", quantity, order_type: "market"|"limit"|"stop", price? }
  */
 
-import React, { useState, useCallback, useId } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useStore } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
@@ -162,7 +162,8 @@ interface OrderEntryFormProps {
   onOrderPlaced?: () => void;
 }
 
-const SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+// Fallback symbol list used when the store has no live prices yet.
+const FALLBACK_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: 'market', label: 'Market' },
   { value: 'limit',  label: 'Limit'  },
@@ -175,7 +176,13 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
   const account   = useStore((s) => s.account);
   const qc        = useQueryClient();
 
-  const [symbol,    setSymbol]    = useState(symbolProp ?? 'XAU/USD');
+  // Derive available symbols from live price keys so the selector always
+  // matches what the backend is actually sending. Fall back to the static
+  // list until the first tick arrives.
+  const liveSymbols = Object.keys(prices);
+  const symbols = liveSymbols.length > 0 ? liveSymbols : FALLBACK_SYMBOLS;
+
+  const [symbol,    setSymbol]    = useState(symbolProp ?? symbols[0] ?? 'XAU/USD');
   const [side,      setSide]      = useState<Side>('buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [qty,       setQty]       = useState('0.01');
@@ -184,6 +191,17 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
   const [tp,        setTp]        = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [result,    setResult]    = useState<{ ok: boolean; msg: string } | null>(null);
+  const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-clear the result banner after 4 seconds so it doesn't linger.
+  useEffect(() => {
+    if (!result) return;
+    if (resultTimer.current) clearTimeout(resultTimer.current);
+    resultTimer.current = setTimeout(() => setResult(null), 4_000);
+    return () => {
+      if (resultTimer.current) clearTimeout(resultTimer.current);
+    };
+  }, [result]);
 
   const tick       = prices[symbol];
   const entryPrice = orderType === 'market'
@@ -248,7 +266,7 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
               onChange={(e) => setSymbol(e.target.value)}
               className="w-full bg-[#0d1421] border border-[#1e2d3d] rounded px-2.5 py-1.5 text-[12px] text-slate-200 focus:outline-none focus:border-[#3b82f6]"
             >
-              {SYMBOLS.map((s) => <option key={s} value={s}>{s}</option>)}
+              {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </Field>
         )}
