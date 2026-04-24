@@ -1,241 +1,220 @@
-aiofiles==25.1.0
-argon2-cffi==25.1.0
-keyring==25.7.0
-oandapyV20==0.7.2
-aiohappyeyeballs==2.6.1
-aiohttp==3.13.5
-aioredis==2.0.1
-aiosignal==1.4.0
-aiosqlite==0.22.1
-alembic==1.18.4
-amqp==5.3.1
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anthropic==0.97.0
-anyio==4.13.0
-APScheduler==3.11.2
-asgiref==3.11.1
-async-timeout==5.0.1
-asyncpg==0.31.0
-attrs==26.1.0
-backports.asyncio.runner==1.2.0
-bcrypt==5.0.0
-beautifulsoup4==4.14.3
-billiard==4.2.4
-blinker==1.9.0
-cachetools==7.0.6
-celery==5.6.3
-certifi==2026.4.22
-cffi==2.0.0
-charset-normalizer==3.4.7
-click==8.3.3
-click-didyoumean==0.3.1
-click-plugins==1.1.1.2
-click-repl==0.3.0
-cloudpickle==3.1.2
-coloredlogs==15.0.1
-colorlog==6.10.1
-contourpy==1.3.2
-cross-web==0.6.0
+# HOPEFX AI Trading Framework — Python dependencies
+# Python 3.10+
+#
+# Install: pip install -r requirements.txt
+
+# ── Build toolchain (CVE-2023-5752, CVE-2025-8869, CVE-2026-1703, CVE-2026-24049) ──
+pip>=26.0.1  # CVE-2026-1703 fixed in 26.0+
+wheel>=0.46.2
+
+# ── Web framework ─────────────────────────────────────────────────────────────
+# (pinned with upper bounds in the Auth & security section below)
+websockets>=12.0,<14.0
+python-multipart>=0.0.18,<1.0.0
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy>=2.0.0
+alembic>=1.13.0
+aiosqlite>=0.19.0
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.0
+
+# ── Caching ───────────────────────────────────────────────────────────────────
+redis>=5.0.0
+kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
+kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
+
+# ── Auth & security (pinned exactly — CVE surface is non-negotiable) ──────────
+# To upgrade: audit CVE list, run full test suite, update checksums.
+PyJWT==2.12.0
+argon2-cffi>=23.1.0,<24.0.0
+bcrypt>=4.1.3,<6.0.0
 cryptography==46.0.7
-cuda-bindings==13.2.0
-cuda-pathfinder==1.5.3
-cuda-toolkit==13.0.2
-curl_cffi==0.15.0
-cycler==0.12.1
-databricks-sdk==0.105.0
-Deprecated==1.3.1
-distro==1.9.0
-dnspython==2.8.0
-docker==7.1.0
-docstring_parser==0.18.0
-email-validator==2.3.0
-exceptiongroup==1.3.1
-fakeredis==2.35.1
-Farama-Notifications==0.0.6
-fastapi==0.136.1
-fastjsonschema==2.21.2
-feedparser==6.0.12
-filelock==3.29.0
-Flask==3.1.3
-flask-cors==6.0.2
-flatbuffers==25.12.19
-fonttools==4.62.1
-frozendict==2.4.7
-frozenlist==1.8.0
-fsspec==2026.3.0
-gitdb==4.0.12
-GitPython==3.1.41
-google-auth==2.49.2
-googleapis-common-protos==1.74.0
-graphene==3.4.3
-graphql-core==3.2.8
-graphql-relay==3.2.0
-graypy==2.1.0
-greenlet==3.4.0
-grpcio==1.80.0
-gunicorn==25.3.0
-gymnasium==1.2.3
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-huey==2.6.0
-humanfriendly==10.0
-hypothesis==6.152.2
-idna==3.13
-importlib_metadata==8.7.1
-iniconfig==2.3.0
-itsdangerous==2.2.0
-Jinja2==3.1.6
-jiter==0.14.0
-joblib==1.5.3
-jsonschema==4.26.0
-jsonschema-specifications==2025.9.1
-jupyter_core==5.9.1
-kiwisolver==1.5.0
-kombu==5.6.2
-lightgbm==4.6.0
-limits==5.8.0
-llvmlite==0.47.0
-lz4==4.4.5
-Mako==1.3.11
-markdown-it-py==4.0.0
-MarkupSafe==3.0.3
-matplotlib==3.10.9
-mdurl==0.1.2
-mlflow==3.11.1
-mlflow-skinny==3.11.1
-mlflow-tracing==3.11.1
-mpmath==1.3.0
-msgpack==1.1.2
-multidict==6.7.1
-multitasking==0.0.13
-narwhals==2.20.0
-nbformat==5.10.4
-networkx==3.4.2
-nltk==3.9.4
-numba==0.65.1
-numpy==2.2.6
-nvidia-cublas==13.1.0.3
-nvidia-cuda-cupti==13.0.85
-nvidia-cuda-nvrtc==13.0.88
-nvidia-cuda-runtime==13.0.96
-nvidia-cudnn-cu13==9.19.0.56
-nvidia-cufft==12.0.0.61
-nvidia-cufile==1.15.1.6
-nvidia-curand==10.4.0.35
-nvidia-cusolver==12.0.4.66
-nvidia-cusparse==12.6.3.3
-nvidia-cusparselt-cu13==0.8.0
-nvidia-nccl-cu12==2.30.4
-nvidia-nccl-cu13==2.28.9
-nvidia-nvjitlink==13.0.88
-nvidia-nvshmem-cu13==3.4.5
-nvidia-nvtx==13.0.85
-onnxruntime==1.23.2
-openai==2.32.0
-opentelemetry-api==1.41.0
-opentelemetry-exporter-otlp-proto-common==1.41.0
-opentelemetry-exporter-otlp-proto-grpc==1.41.0
-opentelemetry-instrumentation==0.62b0
-opentelemetry-instrumentation-aiohttp-client==0.62b0
-opentelemetry-instrumentation-asgi==0.62b0
-opentelemetry-instrumentation-fastapi==0.62b0
-opentelemetry-instrumentation-redis==0.62b0
-opentelemetry-instrumentation-sqlalchemy==0.62b0
-opentelemetry-proto==1.41.0
-opentelemetry-sdk==1.41.0
-opentelemetry-semantic-conventions==0.62b0
-opentelemetry-util-http==0.62b0
-optuna==4.8.0
-packaging==26.1
-pandas==2.3.3
-passlib==1.7.4
-patsy==1.0.2
-peewee==4.0.5
-pillow==12.2.0
-platformdirs==4.9.6
-plotly==6.7.0
-pluggy==1.6.0
-prettytable==3.17.0
-prometheus_client==0.25.0
-prompt_toolkit==3.0.52
-propcache==0.4.1
-protobuf==6.33.6
-psutil==7.2.2
-psycopg2-binary==2.9.12
-pyarrow==23.0.1
-pyasn1==0.6.3
-pyasn1_modules==0.4.2
-pycparser==3.0
-pydantic==2.13.3
-pydantic-settings==2.14.0
-pydantic_core==2.46.3
-Pygments==2.20.0
-PyJWT==2.12.1
-pyotp==2.9.0
-pyparsing==3.3.2
-pytest==9.0.3
-pytest-asyncio==1.3.0
-python-dateutil==2.9.0.post0
-python-dotenv==1.2.2
-python-http-client==3.3.7
-python-telegram-bot==22.7
-pytimeparse==1.1.8
-pytz==2026.1.post1
-PyYAML==6.0.3
-redis==6.4.0
-referencing==0.37.0
-regex==2026.4.4
-requests==2.33.1
-rich==15.0.0
-rpds-py==0.30.0
-scikit-learn==1.7.2
-scipy==1.15.3
-seaborn==0.13.2
-sendgrid==6.12.5
-sentry-sdk==2.58.0
-sgmllib3k==1.0.0
-shap==0.49.1
-six==1.17.0
-skops==0.14.0
-slicer==0.0.8
-slowapi==0.1.9
-smmap==5.0.2
-sniffio==1.3.1
-sortedcontainers==2.4.0
-soupsieve==2.8.3
-SQLAlchemy==2.0.49
-sqlparse==0.5.5
-starlette==1.0.0
-statsmodels==0.14.6
-strawberry-graphql==0.315.0
-stripe==15.1.0
-structlog==25.5.0
-sympy==1.14.0
-ta==0.11.0
-telegram==0.0.1
-textblob==0.20.0
-threadpoolctl==3.6.0
-tomli==2.4.1
-tqdm==4.67.3
-traitlets==5.14.3
-triton==3.6.0
-twelvedata==1.3.0
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-tzdata==2026.1
-tzlocal==5.3.1
-urllib3==2.6.3
-uvicorn==0.46.0
-uvloop==0.22.1
-vaderSentiment==3.3.2
-vine==5.1.0
-wcwidth==0.6.0
-websockets==16.0
-Werkzeug==3.1.8
-wrapt==2.1.2
-xgboost==3.2.0
-yarl==1.23.0
-yfinance==1.3.0
-zipp==3.23.1
+pyotp>=2.9.0,<3.0.0
+# python-ecdsa removed: package abandoned at 0.18.0, no 0.19.x release exists.
+# CVE-2024-49298 (Minerva timing attack) is mitigated by the `cryptography`
+# package already listed above, which uses OpenSSL's constant-time ECDSA.
+hdwallet>=3.6.1,<4.0.0
+pydantic[email]>=2.5.0,<3.0.0
+email-validator>=2.1.0,<3.0.0
+# Web framework — pin minor to avoid breaking middleware changes
+fastapi>=0.110.0,<1.0.0
+uvicorn[standard]>=0.27.0,<1.0.0
+starlette>=0.40.0,<1.0.0  # CVE-2024-47874 fixed in 0.40.0
+
+# ── Data & numerics ───────────────────────────────────────────────────────────
+pandas>=2.1.0
+numpy>=1.26.0
+requests>=2.33.1  # CVE-2026-25645 fixed in 2.33.0+
+aiohttp>=3.13.5  # CVE-2025-69223..69230, CVE-2026-22815..34520 fixed in 3.13.x
+certifi>=2026.2.25  # CVE-2024-39689 fixed in 2024.7.4+; use latest CA bundle
+vaderSentiment>=3.3.2
+textblob>=0.18.0,<1.0.0          # secondary sentiment scorer (news/sentiment.py)
+openai>=1.0.0
+chromadb>=0.4.0
+# stable-baselines3 2.3+ supports gymnasium 1.x (API-stable since gym 0.26).
+# Pin gymnasium to <2.0 to avoid breaking the SB3 VecEnv wrappers until SB3
+# explicitly declares gymnasium 2.x support.
+stable-baselines3>=2.3.0,<3.0.0
+gymnasium>=0.29.0,<2.0.0
+tensorboard>=2.14.0
+tqdm>=4.67.0  # CVE-2024-34062 fixed in 4.66.4+
+rich>=13.0.0
+httpx>=0.26.0
+yfinance>=0.2.36
+curl-cffi>=0.15.0  # CVE-2026-33752: SSRF via redirect — transitive dep of yfinance; pin to patched version
+
+# ── Machine learning ──────────────────────────────────────────────────────────
+scikit-learn>=1.6.0  # CVE-2024-5206 fixed in 1.5.1+
+hmmlearn>=0.3.0
+# tensorflow>=2.15.0         # optional — uncomment for LSTM models
+lightgbm>=4.6.0  # CVE-2024-43598: fixed in 4.6.0+
+xgboost>=2.0.0
+shap>=0.44.0
+
+# ── Semantic embeddings (HOPEFXBrain attack intent classification) ─────────────
+# sentence-transformers pulls torch; pin to avoid accidental GPU builds on CPU nodes.
+# On GPU nodes: pip install torch --index-url https://download.pytorch.org/whl/cu121
+# then pip install sentence-transformers
+sentence-transformers>=5.0.0,<6.0.0
+
+# ── Observability ─────────────────────────────────────────────────────────────
+prometheus-client>=0.19.0
+structlog>=24.0.0
+
+# ── Payments ──────────────────────────────────────────────────────────────────
+stripe>=7.0.0
+
+# ── Visualisation ─────────────────────────────────────────────────────────────
+plotly>=5.18.0
+matplotlib>=3.8.0
+
+# ── Config & utilities ────────────────────────────────────────────────────────
+python-dotenv>=1.2.2
+pyyaml>=6.0.1
+keyring>=24.0.0
+msgpack>=1.0.0
+lz4>=4.0.0
+numba>=0.59.0
+fernet>=1.0.1
+pillow>=12.2.0  # CVE-2026-25990, CVE-2026-40192 fixed in 12.x
+pydantic-settings>=2.0.0
+
+# ── Multi-exchange trading ────────────────────────────────────────────────────
+ccxt>=4.1.0
+
+# ── Interactive Brokers ───────────────────────────────────────────────────────
+ib_insync==0.9.86
+# quickfix-ng for FIX 4.4/5.0 low-latency path (install separately if needed)
+# quickfix-ng>=1.0.0
+
+# ── MetaTrader 5 (Windows only — install manually on Windows hosts) ───────────
+# Used by data_feed/mt5_backup.py and brokers/mt5_broker.py.
+# Not available on Linux/macOS; both modules degrade gracefully when absent.
+# On Windows: pip install MetaTrader5
+# MetaTrader5>=5.0.45
+
+# ── Statistical tests (ADF/KPSS stationarity) ────────────────────────────────
+statsmodels>=0.14.0
+
+# ── OANDA broker (legacy — disabled; kept for reference only) ─────────────────
+# oandapyV20>=0.6.3
+
+# ── Telegram bot ─────────────────────────────────────────────────────────────
+python-telegram-bot>=20.0
+
+# ── Hyperparameter optimisation ───────────────────────────────────────────────
+optuna>=3.4.0
+
+# ── News / RSS ────────────────────────────────────────────────────────────────
+feedparser>=6.0.11
+
+# ── Market data WebSocket providers (NuclearStreamer) ─────────────────────────
+# Twelve Data Python SDK — wraps the WebSocket and REST APIs.
+twelvedata>=1.2.0,<2.0.0
+
+# ── Async utilities ───────────────────────────────────────────────────────────
+aiofiles>=23.0.0
+
+# ── Technical analysis ────────────────────────────────────────────────────────
+ta>=0.11.0
+# pandas_ta requires Python >=3.12; ml_model_trainer.py falls back to `ta` on 3.10.
+pandas_ta>=0.3.14b0; python_version >= "3.12"
+
+# ── Circuit breaker ───────────────────────────────────────────────────────────
+circuitbreaker>=2.0.0
+
+# ── FIX protocol ─────────────────────────────────────────────────────────────
+# quickfix is a C-extension and the preferred backend for production.
+# pyfixmsg is a pure-Python fallback used when quickfix cannot be compiled
+# (e.g. CI environments without a C compiler).
+# execution/fix_adapter.py tries quickfix first, then pyfixmsg.
+#
+# quickfix requires a C compiler and the quickfix C++ library headers.
+# On Ubuntu/Debian: sudo apt-get install libquickfix-dev
+# On macOS:         brew install quickfix
+quickfix==1.15.1; sys_platform != "win32"
+# pyfixmsg/simplefix removed — not available on PyPI for Python 3.12; FIX adapter uses quickfix or stub
+simplefix>=1.0.1
+
+# ── System / process monitoring ───────────────────────────────────────────────
+psutil>=5.9.0
+
+# ── Antivirus / malware detection (security/antivirus.py) ─────────────────────
+# yara-python: YARA rule engine for pattern-based malware detection.
+#   Requires libyara: apt-get install libyara-dev (Ubuntu) / brew install yara (macOS)
+# clamd: Python bindings for ClamAV daemon.
+#   Requires ClamAV: apt-get install clamav clamav-daemon
+# Both degrade gracefully when absent — entropy + regex layers always run.
+yara-python>=4.3.0
+clamd>=1.0.2
+
+# ── JWT / auth ────────────────────────────────────────────────────────────────
+# python-jose removed: replaced by PyJWT (CVE-2024-33663 and algorithm confusion vulns)
+
+# ── Deep learning (optional – install manually for GPU nodes) ─────────────────
+# torch>=2.1.0  # Uncomment and install separately: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# ── Visualization ──────────────────────────────────────────────────────────────
+seaborn>=0.13.0
+
+# ── PDF generation ────────────────────────────────────────────────────────────
+reportlab>=4.0.0
+
+# ── GraphQL ───────────────────────────────────────────────────────────────────
+strawberry-graphql[fastapi]>=0.314.3  # CVE-2026-35523, CVE-2026-35526 fixed in 0.314.x
+
+# ── Rate limiting ─────────────────────────────────────────────────────────────
+slowapi>=0.1.9
+
+# ── Error tracking ────────────────────────────────────────────────────────────
+# Full FastAPI + SQLAlchemy + Redis + aiohttp integrations
+sentry-sdk[fastapi]>=2.20.0  # CVE-2024-40647 fixed in 2.8.0+; use latest
+
+
+# ── Email deliverability ──────────────────────────────────────────────────────
+sendgrid>=6.11.0
+
+# ── Templating ────────────────────────────────────────────────────────────────
+jinja2>=3.1.6  # CVE-2024-56201, CVE-2024-22195, CVE-2025-27516 fixed in 3.1.6+
+
+# ── Statistical testing ───────────────────────────────────────────────────────
+scipy>=1.12.0
+
+# ── Property-based testing ────────────────────────────────────────────────────
+hypothesis>=6.100.0
+
+# ── OpenTelemetry distributed tracing ─────────────────────────────────────────
+# Core SDK
+opentelemetry-sdk>=1.24.0
+opentelemetry-api>=1.24.0
+# OTLP exporters (gRPC primary, HTTP fallback)
+opentelemetry-exporter-otlp-proto-grpc>=1.24.0
+opentelemetry-exporter-otlp-proto-http>=1.24.0
+# Auto-instrumentation
+opentelemetry-instrumentation-fastapi>=0.45b0
+opentelemetry-instrumentation-sqlalchemy>=0.45b0
+opentelemetry-instrumentation-redis>=0.45b0
+opentelemetry-instrumentation-aiohttp-client>=0.45b0
+# W3C trace context propagation
+opentelemetry-propagator-b3>=1.24.0

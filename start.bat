@@ -9,7 +9,7 @@
 ::
 :: What this does on every run:
 ::   1. Creates a venv on first run (avoids pip cache permission errors)
-::   2. Syncs ALL dependencies from requirements-windows.txt
+::   2. Syncs ALL dependencies from requirements.txt
 ::   3. Installs MetaTrader5 SDK if not present
 ::   4. Builds the React frontend if not already built
 ::   5. Generates .env if not present
@@ -65,7 +65,7 @@ echo [OK] Pip cache cleared
 :: Runs on every start so new packages added after git pull are always installed.
 :: pip skips packages already up to date — fast after first run.
 echo [INFO] Syncing dependencies...
-pip install --no-cache-dir -r requirements-windows.txt
+pip install --no-cache-dir -r requirements.txt
 if errorlevel 1 (
     echo [ERROR] Dependency install failed. See output above.
     pause & exit /b 1
