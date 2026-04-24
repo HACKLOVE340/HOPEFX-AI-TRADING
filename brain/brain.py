@@ -225,12 +225,20 @@ class HOPEFXBrain:
         logger.info("HOPEFXBrain initialized (Production Version)")
 
     def inject_components(self, **components):
-        """Inject required components with validation"""
+        """Inject required components with validation.
+
+        Accepted keys:
+            price_engine, risk_manager, broker, strategy_manager,
+            notification_manager, position_tracker, trade_executor
+        """
         self.price_engine = components.get("price_engine")
         self.risk_manager = components.get("risk_manager")
         self.broker = components.get("broker")
         self.strategy_manager = components.get("strategy_manager")
         self.notification_manager = components.get("notification_manager")
+        # Optional execution components
+        self.position_tracker = components.get("position_tracker")
+        self.trade_executor = components.get("trade_executor")
 
         # Validate critical components
         missing = []
@@ -240,10 +248,19 @@ class HOPEFXBrain:
             missing.append("price_engine")
 
         if missing:
-            logger.error("CRITICAL: Missing components: %s", ", ".join(missing))
-
+            logger.warning(
+                "HOPEFXBrain: missing components %s — brain will run in degraded mode "
+                "(no live prices/account data until components are available)",
+                missing,
+            )
         else:
-            logger.info("All critical components injected into Brain")
+            logger.info(
+                "HOPEFXBrain: all critical components injected "
+                "(broker=%s price_engine=%s strategy_manager=%s)",
+                type(self.broker).__name__,
+                type(self.price_engine).__name__,
+                type(self.strategy_manager).__name__ if self.strategy_manager else "None",
+            )
 
     async def dominate(self):
         """
