@@ -267,11 +267,10 @@ const NoLiveFeedBanner: React.FC = () => {
       role="alert"
       aria-live="polite"
       style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999,
         background: bg, borderBottom: `1px solid ${border}`,
         color, fontSize: 12, fontWeight: 600,
         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        padding: '6px 16px',
+        padding: '6px 16px', flexShrink: 0,
       }}
     >
       <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
@@ -343,16 +342,18 @@ const AppShell: React.FC = () => {
 
   return (
     <div style={{
-      display: 'flex', height: '100vh', overflow: 'hidden',
+      display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
       background: 'var(--bg, #0f172a)',
       color: 'var(--text, #f1f5f9)',
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     }}>
+      {/* Banner is in normal flow — pushes content down instead of overlapping it */}
       <NoLiveFeedBanner />
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
       <main style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
-        background: 'var(--bg, #0f172a)', height: '100vh',
+        background: 'var(--bg, #0f172a)',
       }}>
         <Suspense fallback={<PageFallback />}>
           <Routes>
@@ -430,6 +431,7 @@ const AppShell: React.FC = () => {
           </Routes>
         </Suspense>
       </main>
+      </div>
     </div>
   );
 };
