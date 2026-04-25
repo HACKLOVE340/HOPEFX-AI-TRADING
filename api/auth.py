@@ -279,8 +279,14 @@ def require_role(minimum_role: str):
 
 
 def validate_order_symbol(symbol: str) -> str:
-    """Validate symbol is in the allowed set (prevents injection via symbol field)."""
-    upper = symbol.upper().strip()
+    """Validate symbol is in the allowed set (prevents injection via symbol field).
+
+    Normalises common alternate formats before checking:
+      XAU/USD  -> XAUUSD
+      XAU_USD  -> XAUUSD
+      xauusd   -> XAUUSD
+    """
+    upper = symbol.upper().strip().replace("/", "").replace("_", "").replace("-", "")
     if upper not in ALLOWED_SYMBOLS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
