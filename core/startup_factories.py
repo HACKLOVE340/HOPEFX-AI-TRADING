@@ -333,8 +333,8 @@ def _enforce_redis_maxmemory(host: str, port: int) -> None:
         r = _redis_sync.Redis(
             host=host,
             port=port,
-            socket_connect_timeout=2,
-            socket_timeout=2,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
         )
         maxmemory = int(r.config_get("maxmemory").get("maxmemory", 0))
         if maxmemory == 0:

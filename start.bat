@@ -68,10 +68,15 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 
-:: -- 4. Upgrade pip ----------------------------------------------------------
-echo [INFO] Upgrading pip...
-python -m pip install --no-cache-dir --quiet --upgrade pip
-echo [OK] pip ready
+:: -- 4. Upgrade pip (only on first run or after venv recreation) -------------
+if not exist "venv\.pip_upgraded" (
+    echo [INFO] Upgrading pip...
+    python -m pip install --no-cache-dir --quiet --upgrade pip
+    echo. > venv\.pip_upgraded
+    echo [OK] pip upgraded
+) else (
+    echo [OK] pip ready
+)
 
 :: -- 5. Install / sync dependencies ------------------------------------------
 :: Hash-check: MD5 of requirements.txt stored in venv\.req_hash
@@ -136,15 +141,21 @@ if errorlevel 1 (
 )
 echo [OK] .env valid
 
-:: -- 8. Apply database migrations --------------------------------------------
+:: -- 8. Apply database migrations (skipped when already at head) -------------
 python -c "import alembic" >nul 2>&1
 if not errorlevel 1 (
-    echo [INFO] Applying database migrations...
-    alembic upgrade head
+    for /f "delims=" %%r in ('alembic current 2^>nul') do set ALEMBIC_CURRENT=%%r
+    echo !ALEMBIC_CURRENT! | findstr /c:"(head)" >nul 2>&1
     if errorlevel 1 (
-        echo [WARN] Alembic migration failed. The app will attempt a fallback at startup.
+        echo [INFO] Applying database migrations...
+        alembic upgrade head
+        if errorlevel 1 (
+            echo [WARN] Alembic migration failed. The app will attempt a fallback at startup.
+        ) else (
+            echo [OK] Database schema up to date
+        )
     ) else (
-        echo [OK] Database schema up to date
+        echo [OK] Database already at head
     )
 ) else (
     echo [WARN] Alembic not installed - skipping migration step
