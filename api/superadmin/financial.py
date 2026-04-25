@@ -103,38 +103,106 @@ async def get_revenue_stats(
 
 @router.get("/financial/subscriptions")
 async def get_subscription_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Return subscription KPIs matching the frontend SubscriptionStats interface.
+
+    Fields returned:
+      total_active    — subscriptions with status ACTIVE or TRIAL
+      by_plan         — count per tier name (free/starter/professional/enterprise/elite)
+      trial_count     — subscriptions with status TRIAL
+      expiring_soon   — active subscriptions whose end_date is within 7 days
+      cancelled_count — subscriptions with status CANCELLED
+    """
     import asyncio as _aio
+    from datetime import timedelta
 
-    stats: dict = {"free": 0, "starter": 0, "professional": 0, "enterprise": 0, "elite": 0, "total": 0}
+    # Initialise with the exact shape the frontend SubscriptionStats interface expects.
+    result: dict = {
+        "total_active": 0,
+        "by_plan": {
+            "free": 0,
+            "starter": 0,
+            "professional": 0,
+            "enterprise": 0,
+            "elite": 0,
+        },
+        "trial_count": 0,
+        "expiring_soon": 0,
+        "cancelled_count": 0,
+    }
+
     try:
-        from database.connection import SessionLocal
-        from database.user_models import User
-
-        def _count_users():
-            db = SessionLocal()
-            try:
-                return db.query(User).count()
-            finally:
-                db.close()
-
-        stats["total"] = await _aio.to_thread(_count_users)
-    except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
-    try:
-        from monetization.subscription import subscription_manager
+        from monetization.subscription import SubscriptionStatus, subscription_manager
 
         all_subs = (
             subscription_manager.get_all_subscriptions()
             if hasattr(subscription_manager, "get_all_subscriptions")
             else []
         )
+
+        from datetime import datetime, timezone as _tz
+
+        now = datetime.now(_tz.utc)
+        soon_threshold = now + timedelta(days=7)
+
         for sub in all_subs:
             tier = sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier)
-            if tier in stats:
-                stats[tier] += 1
+            status = sub.status if isinstance(sub.status, str) else sub.status.value
+
+            # Count per plan
+            if tier in result["by_plan"]:
+                result["by_plan"][tier] += 1
+
+            if status in ("active", "trial"):
+                result["total_active"] += 1
+
+            if status == "trial":
+                result["trial_count"] += 1
+
+            if status == "cancelled":
+                result["cancelled_count"] += 1
+
+            # Expiring soon: active/trial and end_date within 7 days
+            if status in ("active", "trial") and hasattr(sub, "end_date") and sub.end_date:
+                end = sub.end_date
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=_tz.utc)
+                if now < end <= soon_threshold:
+                    result["expiring_soon"] += 1
+
     except Exception as exc:
         logger.debug("get_subscription_stats: subscription_manager unavailable: %s", exc)
-    return stats
+
+    # Fallback: if subscription_manager is unavailable, derive counts from the
+    # User.plan column so the dashboard shows real data instead of all zeros.
+    if result["total_active"] == 0:
+        try:
+            from database.connection import SessionLocal
+            from database.user_models import User
+            from sqlalchemy import func
+
+            def _plan_counts() -> dict:
+                db = SessionLocal()
+                try:
+                    rows = (
+                        db.query(User.plan, func.count(User.id))
+                        .group_by(User.plan)
+                        .all()
+                    )
+                    return {plan or "free": count for plan, count in rows}
+                finally:
+                    db.close()
+
+            plan_counts = await _aio.to_thread(_plan_counts)
+            for plan, count in plan_counts.items():
+                if plan in result["by_plan"]:
+                    result["by_plan"][plan] = count
+                # Every non-free plan user is counted as active
+                if plan != "free":
+                    result["total_active"] += count
+        except Exception as exc:
+            logger.debug("get_subscription_stats: DB fallback unavailable: %s", exc)
+
+    return result
 
 
 @router.get("/financial/payments")

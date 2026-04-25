@@ -34,6 +34,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import text as _sa_text
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow
@@ -55,7 +56,7 @@ async def _probe_database() -> dict[str, Any]:
 
         db = SessionLocal()
         try:
-            db.execute(__import__("sqlalchemy").text("SELECT 1"))
+            db.execute(_sa_text("SELECT 1"))
             db.close()
         except Exception:
             db.close()
