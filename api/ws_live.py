@@ -61,7 +61,7 @@ import os
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, ClassVar
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -178,7 +178,7 @@ class LiveConnectionManager:
         Send to all connections subscribed to channel.
         Empty subscription set = subscribed to all channels.
         """
-        dead: ClassVar[list[str]] = []
+        dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
@@ -196,7 +196,7 @@ class LiveConnectionManager:
         Send a message only to connections belonging to a specific user.
         Used for per-user channels: account updates, position fills, alerts.
         """
-        dead: ClassVar[list[str]] = []
+        dead: list[str] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
                 continue
