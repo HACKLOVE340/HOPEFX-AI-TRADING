@@ -312,10 +312,22 @@ class PaperTradingBroker(BrokerConnector):
             from execution.redis_state import RedisStateStore
 
             redis_url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
-            r = _redis_lib.from_url(redis_url, decode_responses=False)
+            password = _os.getenv("REDIS_PASSWORD", "") or None
+
+            # Inject REDIS_PASSWORD when not already embedded in the URL.
+            if password and "@" not in redis_url.split("://", 1)[-1]:
+                scheme, rest = redis_url.split("://", 1)
+                redis_url = f"{scheme}://:{password}@{rest}"
+
+            r = _redis_lib.from_url(
+                redis_url,
+                decode_responses=False,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
             r.ping()
             self._redis_state = RedisStateStore(r)
-            logger.info("PaperTradingBroker: Redis state persistence connected (%s)", redis_url)
+            logger.info("PaperTradingBroker: Redis state persistence connected")
         except Exception as exc:
             self._redis_state = None
             logger.warning(
