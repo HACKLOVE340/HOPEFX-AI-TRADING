@@ -12,7 +12,7 @@
  *   GET /api/pnl/open-positions  — current open positions
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, Activity, Shield,
@@ -144,6 +144,12 @@ function MiniChart({
   color: string;
   label: string;
 }) {
+  // useId produces a document-unique ID so multiple MiniChart instances with
+  // the same label prop do not share an SVG gradient (which would cause one
+  // chart to render with the other's colour).
+  const uid = useId();
+  const gradId = `grad-${uid}`;
+
   if (data.length < 2) {
     return (
       <div className="flex items-center justify-center h-32 text-slate-600 text-sm">
@@ -173,12 +179,12 @@ function MiniChart({
       <div className="text-xs text-slate-500 mb-2">{label}</div>
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32" preserveAspectRatio="none">
         <defs>
-          <linearGradient id={`grad-${label}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.3" />
             <stop offset="100%" stopColor={color} stopOpacity="0.02" />
           </linearGradient>
         </defs>
-        <polygon points={area} fill={`url(#grad-${label})`} />
+        <polygon points={area} fill={`url(#${gradId})`} />
         <polyline points={polyline} fill="none" stroke={color} strokeWidth="1.5" />
       </svg>
     </div>
