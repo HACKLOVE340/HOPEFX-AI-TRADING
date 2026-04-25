@@ -258,7 +258,15 @@ class HOPEFXLogger:
             root_logger.removeHandler(handler)
 
         # Console handler
+        # On Windows the default stdout encoding is CP1252 which cannot encode
+        # Unicode symbols used in log messages (e.g. checkmarks, box-drawing).
+        # Reconfigure stdout to UTF-8 when possible (Python 3.7+).
         if enable_console:
+            try:
+                if hasattr(sys.stdout, "reconfigure"):
+                    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
             console_handler = logging.StreamHandler(sys.stdout)
             if json_format:
                 console_handler.setFormatter(StructuredLogFormatter())

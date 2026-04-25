@@ -777,7 +777,7 @@ async def _try_connect_mt5(log_activity: Any) -> Any | None:
         broker = MT5Connector(config)
         if broker.connect():
             log_activity(f"MT5 broker connected (server={server} login={login})")
-            logger.info("✓ MT5 broker connected (server=%s login=%s)", server, login)
+            logger.info("[OK] MT5 broker connected (server=%s login=%s)", server, login)
             return broker
         logger.warning("MT5 connection returned False — falling back to paper broker")
         return None

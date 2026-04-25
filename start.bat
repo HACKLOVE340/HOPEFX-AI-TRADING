@@ -200,6 +200,8 @@ if not exist "static\index.html" (
 if not defined APP_ENV  set APP_ENV=development
 if not defined API_HOST set API_HOST=127.0.0.1
 if not defined API_PORT set API_PORT=8000
+:: Force UTF-8 for all Python I/O so Unicode log symbols don't crash on CP1252
+set PYTHONUTF8=1
 
 echo.
 echo   ============================================================

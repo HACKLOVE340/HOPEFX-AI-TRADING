@@ -463,7 +463,7 @@ async def lifespan(_app: FastAPI):
         _scb_task.add_done_callback(lambda _: None)
         if hasattr(app_state, "background_tasks"):
             app_state.background_tasks.append(_scb_task)
-        logger.info("✓ Sharpe circuit breaker task started (lifespan)")
+        logger.info("[OK] Sharpe circuit breaker task started (lifespan)")
     except Exception as _scb_err:
         logger.warning("Sharpe circuit breaker not started (non-fatal): %s", _scb_err)
     # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
@@ -507,7 +507,7 @@ async def lifespan(_app: FastAPI):
         from api.ws_live import start_broadcasters
 
         start_broadcasters()
-        logger.info("✓ Live WebSocket broadcasters started (/ws/live)")
+        logger.info("[OK] Live WebSocket broadcasters started (/ws/live)")
     except Exception as _ws_err:
         logger.warning("Live WS broadcasters not started: %s", _ws_err)
 
@@ -522,7 +522,7 @@ async def lifespan(_app: FastAPI):
         mount_nuclear_routes(app, _nuclear_engine)
         _t = asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
         _t.add_done_callback(lambda _: None)
-        logger.info("✓ Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
+        logger.info("[OK] Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
     except Exception as _nuclear_err:
         logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
 
@@ -532,7 +532,7 @@ async def lifespan(_app: FastAPI):
         from api.social_feed import refresh_leaderboard_cache as _refresh_lb
 
         _refresh_lb()
-        logger.info("✓ Leaderboard cache warmed up")
+        logger.info("[OK] Leaderboard cache warmed up")
     except Exception as _lb_err:
         logger.debug("Leaderboard warm-up skipped (non-fatal): %s", _lb_err)
 
@@ -543,7 +543,7 @@ async def lifespan(_app: FastAPI):
 
         if _db_get("signals:active") is None:
             _db_set("signals:active", [], changed_by="startup")
-            logger.info("✓ signals:active key seeded in db_store")
+            logger.info("[OK] signals:active key seeded in db_store")
     except Exception as _sig_err:
         logger.debug("signals:active seed skipped (non-fatal): %s", _sig_err)
 
@@ -655,7 +655,7 @@ def _push_state_to_api_modules(state) -> None:
             _fn = getattr(_mod, _fn_name, None)
             if _fn is not None:
                 _fn(state)
-                logger.info("State pushed → %s", _mod_name)
+                logger.info("State pushed _> %s", _mod_name)
         except ImportError:
             ...  # nosec B110
         except Exception as _e:
@@ -791,12 +791,12 @@ async def shutdown_event():
             if not task.done():
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info("✓ Background tasks cancelled")
+        logger.info("[OK] Background tasks cancelled")
 
     if app_state.event_store:
         try:
             await app_state.event_store.stop()
-            logger.info("✓ Event store stopped")
+            logger.info("[OK] Event store stopped")
         except Exception as e:
             logger.warning("Event store stop error: %s", e)
 
@@ -805,17 +805,17 @@ async def shutdown_event():
     if price_engine is not None and hasattr(price_engine, "stop"):
         try:
             await price_engine.stop()
-            logger.info("✓ Price engine stopped")
+            logger.info("[OK] Price engine stopped")
         except Exception as _pe_err:
             logger.warning("Price engine stop error: %s", _pe_err)
 
     if app_state.db_engine:
         app_state.db_engine.dispose()
-        logger.info("✓ Database engine disposed")
+        logger.info("[OK] Database engine disposed")
 
     if app_state.cache:
         app_state.cache.close()
-        logger.info("✓ Cache connection closed")
+        logger.info("[OK] Cache connection closed")
 
     # Stop data layer orchestrator
     try:
@@ -823,7 +823,7 @@ async def shutdown_event():
 
         if orchestrator._started:
             await orchestrator.stop()
-            logger.info("✓ Data layer orchestrator stopped")
+            logger.info("[OK] Data layer orchestrator stopped")
     except Exception as _dl_stop_exc:
         logger.warning("Data layer orchestrator stop error: %s", _dl_stop_exc)
 

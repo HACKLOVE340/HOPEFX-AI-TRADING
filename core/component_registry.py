@@ -134,7 +134,7 @@ class ComponentRegistry:
             if failed_dep:
                 comp.status = "skipped"
                 comp.error = f"dependency '{failed_dep}' failed/skipped"
-                logger.warning("⊘ %-30s skipped (dep: %s)", name, failed_dep)
+                logger.warning("- %-30s skipped (dep: %s)", name, failed_dep)
                 setattr(app_state, name, None)
                 continue
 
@@ -148,7 +148,7 @@ class ComponentRegistry:
                 comp.status = "ok"
                 comp.elapsed_ms = (time.monotonic() - t0) * 1000
                 setattr(app_state, name, instance)
-                logger.info("✓ %-30s %.0f ms", name, comp.elapsed_ms)
+                logger.info("[OK] %-30s %.0f ms", name, comp.elapsed_ms)
             except Exception as exc:
                 comp.status = "failed"
                 comp.error = str(exc)
@@ -157,14 +157,14 @@ class ComponentRegistry:
 
                 if comp.required:
                     logger.critical(
-                        "✗ %-30s REQUIRED — aborting startup: %s",
+                        "[FAIL] %-30s REQUIRED -- aborting startup: %s",
                         name,
                         exc,
                     )
                     raise RuntimeError(
                         f"Required component '{name}' failed: {exc}",
                     ) from exc
-                logger.warning("⚠ %-30s %.0f ms — %s", name, comp.elapsed_ms, exc)
+                logger.warning("[WARN] %-30s %.0f ms -- %s", name, comp.elapsed_ms, exc)
 
         return self._components
 
@@ -172,16 +172,16 @@ class ComponentRegistry:
 
     def print_table(self) -> None:
         """Log a single aligned startup summary table."""
-        lines = ["", "┌─ Startup Summary " + "─" * 52 + "┐"]
+        lines = ["", "+-- Startup Summary " + "-" * 51 + "+"]
         for comp in self._components.values():
-            icon = {"ok": "✓", "failed": "✗", "skipped": "⊘", "pending": "?"}.get(
+            icon = {"ok": "[OK]  ", "failed": "[FAIL]", "skipped": "[SKIP]", "pending": "[?]   "}.get(
                 comp.status,
-                "?",
+                "[?]   ",
             )
             req = "REQ" if comp.required else "opt"
             detail = comp.error or f"{comp.elapsed_ms:.0f} ms"
-            lines.append(f"│ {icon} {req} {comp.name:<30} {detail:<25}│")
-        lines.append("└" + "─" * 70 + "┘")
+            lines.append(f"| {icon} {req} {comp.name:<30} {detail:<25}|")
+        lines.append("+" + "-" * 70 + "+")
         logger.info("\n".join(lines))
 
     # ── Dependency sort ───────────────────────────────────────────────────────
