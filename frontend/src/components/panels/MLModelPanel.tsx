@@ -20,6 +20,26 @@ import { cn } from '../../lib/utils';
 
 // ── Types (mirror backend Pydantic models) ────────────────────────────────────
 
+interface AccuracyThresholds {
+  accuracy_good: number;
+  accuracy_warn: number;
+  win_rate_good: number;
+  sharpe_good:   number;
+  sharpe_warn:   number;
+  f1_good:       number;
+}
+
+// Default thresholds used when the API response does not include them
+// (e.g. older backend versions).  These match the backend defaults.
+const DEFAULT_THRESHOLDS: AccuracyThresholds = {
+  accuracy_good: 0.60,
+  accuracy_warn: 0.50,
+  win_rate_good: 0.55,
+  sharpe_good:   1.50,
+  sharpe_warn:   0.50,
+  f1_good:       0.60,
+};
+
 interface AccuracyResponse {
   model_id:      string;
   accuracy:      number;
@@ -31,6 +51,7 @@ interface AccuracyResponse {
   total_signals: number;
   evaluated_at:  string;
   note:          string;
+  thresholds?:   AccuracyThresholds;
 }
 
 interface ModelInfo {
@@ -208,6 +229,9 @@ function MLModelPanelInner() {
 
   const acc    = accuracyQ.data;
   const health = healthQ.data;
+  // Merge API-supplied thresholds with defaults so the UI colour-coding can be
+  // tuned server-side (via env vars on the backend) without a frontend deploy.
+  const t = { ...DEFAULT_THRESHOLDS, ...(acc?.thresholds ?? {}) };
 
   const headerRight = health ? (
     <HealthBadge status={health.status} loaded={health.model_loaded} />
@@ -233,22 +257,22 @@ function MLModelPanelInner() {
                   <MetricTile
                     label="Accuracy"
                     value={`${(acc.accuracy * 100).toFixed(1)}%`}
-                    color={acc.accuracy >= 0.6 ? 'text-[#00e676]' : acc.accuracy >= 0.5 ? 'text-[#ffb800]' : 'text-[#ff1744]'}
+                    color={acc.accuracy >= t.accuracy_good ? 'text-[#00e676]' : acc.accuracy >= t.accuracy_warn ? 'text-[#ffb800]' : 'text-[#ff1744]'}
                   />
                   <MetricTile
                     label="Win Rate"
                     value={`${(acc.win_rate * 100).toFixed(1)}%`}
-                    color={acc.win_rate >= 0.55 ? 'text-[#00e676]' : 'text-[#ffb800]'}
+                    color={acc.win_rate >= t.win_rate_good ? 'text-[#00e676]' : 'text-[#ffb800]'}
                   />
                   <MetricTile
                     label="Sharpe"
                     value={acc.sharpe.toFixed(2)}
-                    color={acc.sharpe >= 1.5 ? 'text-[#00e676]' : acc.sharpe >= 0.5 ? 'text-[#ffb800]' : 'text-[#ff1744]'}
+                    color={acc.sharpe >= t.sharpe_good ? 'text-[#00e676]' : acc.sharpe >= t.sharpe_warn ? 'text-[#ffb800]' : 'text-[#ff1744]'}
                   />
                   <MetricTile
                     label="F1 Score"
                     value={acc.f1.toFixed(3)}
-                    color={acc.f1 >= 0.6 ? 'text-[#00e676]' : 'text-[#ffb800]'}
+                    color={acc.f1 >= t.f1_good ? 'text-[#00e676]' : 'text-[#ffb800]'}
                   />
                   <MetricTile
                     label="Precision"

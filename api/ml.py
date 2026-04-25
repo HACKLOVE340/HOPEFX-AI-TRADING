@@ -303,6 +303,24 @@ class PredictResponse(BaseModel):
     generated_at: str
 
 
+class AccuracyThresholds(BaseModel):
+    """Configurable pass/warn/fail thresholds for accuracy metrics.
+
+    Returned alongside the metrics so the frontend can colour-code values
+    without hardcoding thresholds in the UI.  Defaults match the production
+    signal-filter configuration and can be overridden via environment variables
+    ML_THRESHOLD_ACCURACY, ML_THRESHOLD_WIN_RATE, ML_THRESHOLD_SHARPE,
+    ML_THRESHOLD_F1.
+    """
+
+    accuracy_good: float = float(os.getenv("ML_THRESHOLD_ACCURACY_GOOD", "0.60"))
+    accuracy_warn: float = float(os.getenv("ML_THRESHOLD_ACCURACY_WARN", "0.50"))
+    win_rate_good: float = float(os.getenv("ML_THRESHOLD_WIN_RATE_GOOD", "0.55"))
+    sharpe_good:   float = float(os.getenv("ML_THRESHOLD_SHARPE_GOOD",   "1.50"))
+    sharpe_warn:   float = float(os.getenv("ML_THRESHOLD_SHARPE_WARN",   "0.50"))
+    f1_good:       float = float(os.getenv("ML_THRESHOLD_F1_GOOD",       "0.60"))
+
+
 class AccuracyResponse(BaseModel):
     model_id: str
     accuracy: float
@@ -314,6 +332,7 @@ class AccuracyResponse(BaseModel):
     total_signals: int
     evaluated_at: str
     note: str = ""
+    thresholds: AccuracyThresholds = Field(default_factory=AccuracyThresholds)
 
 
 class ModelInfo(BaseModel):
