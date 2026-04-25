@@ -12,7 +12,7 @@
 
 import React, { useState, useCallback, useEffect, useRef, useId } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useStore } from '../../store';
+import { useStore, selectIsBlackout } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
@@ -171,10 +171,11 @@ const ORDER_TYPES: { value: OrderType; label: string }[] = [
 ];
 
 function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFormProps) {
-  const uid       = useId();
-  const prices    = useStore((s) => s.prices);
-  const account   = useStore((s) => s.account);
-  const qc        = useQueryClient();
+  const uid        = useId();
+  const prices     = useStore((s) => s.prices);
+  const account    = useStore((s) => s.account);
+  const isBlackout = useStore(selectIsBlackout);
+  const qc         = useQueryClient();
 
   // Derive available symbols from live price keys so the selector always
   // matches what the backend is actually sending. Fall back to the static
@@ -222,6 +223,31 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
       return;
     }
 
+    // Client-side SL direction validation — catches obvious mistakes before
+    // the round-trip to the backend. The backend PreTradeGate also validates.
+    const slNum = parseFloat(sl);
+    if (slNum > 0 && entryPrice > 0) {
+      if (side === 'buy' && slNum >= entryPrice) {
+        setResult({ ok: false, msg: 'Stop loss must be below entry price for a buy order' });
+        return;
+      }
+      if (side === 'sell' && slNum <= entryPrice) {
+        setResult({ ok: false, msg: 'Stop loss must be above entry price for a sell order' });
+        return;
+      }
+    }
+    const tpNum = parseFloat(tp);
+    if (tpNum > 0 && entryPrice > 0) {
+      if (side === 'buy' && tpNum <= entryPrice) {
+        setResult({ ok: false, msg: 'Take profit must be above entry price for a buy order' });
+        return;
+      }
+      if (side === 'sell' && tpNum >= entryPrice) {
+        setResult({ ok: false, msg: 'Take profit must be below entry price for a sell order' });
+        return;
+      }
+    }
+
     const payload: OrderPayload = {
       symbol,
       side,
@@ -255,6 +281,17 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
 
   return (
     <Panel title="Order Entry">
+      {/* Blackout banner — shown when a high-impact macro event is imminent.
+          The backend PreTradeGate will also block the order, but we disable
+          the form here so the trader gets immediate feedback before submitting. */}
+      {isBlackout && (
+        <div className="flex items-center gap-2 px-3 py-2 mb-2 rounded bg-[#ff3b5c]/10 border border-[#ff3b5c]/30">
+          <span className="text-[#ff3b5c] text-sm font-bold">⚠</span>
+          <span className="text-[11px] text-[#ff3b5c] font-semibold">
+            Trading paused — high-impact event blackout active
+          </span>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
 
         {/* Symbol selector (only shown when no symbol prop) */}
@@ -390,10 +427,11 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
         {/* Risk preview */}
         <RiskPreview side={side} entry={entryPrice} sl={sl} tp={tp} qty={qty} />
 
-        {/* Submit */}
+        {/* Submit — also disabled during macro blackout windows */}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || isBlackout}
+          title={isBlackout ? 'Trading paused — blackout window active' : undefined}
           className={cn(
             'w-full py-2.5 rounded font-bold text-[13px] border-none transition-colors',
             'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -402,7 +440,9 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
               : 'bg-[#ff1744] text-white hover:bg-[#d50000]',
           )}
         >
-          {submitting
+          {isBlackout
+            ? '⚠ Blackout — trading paused'
+            : submitting
             ? 'Placing…'
             : `${side === 'buy' ? '▲ Buy' : '▼ Sell'} ${qty || '0'} ${symbol}`}
         </button>

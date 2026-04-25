@@ -410,6 +410,9 @@ export const selectEquityCurve        = (s: AppStore) => s.equityCurve;
 export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
 export const selectTriggeredAlerts    = (s: AppStore) => s.triggeredAlerts;
 export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
+// Derived from the macro slice — true when a high-impact event blackout is active.
+// Used by OrderEntryForm to disable order submission with a clear UI message.
+export const selectIsBlackout         = (s: AppStore) => s.macro?.is_blackout ?? false;
 export const selectEquitySnapshot     = (s: AppStore) => s.equitySnapshot;
 export const selectRiskSnapshot       = (s: AppStore) => s.riskSnapshot;
 export const selectVolumeDelta        = (s: AppStore) => s.volumeDelta;
