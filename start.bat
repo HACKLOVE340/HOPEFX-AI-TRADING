@@ -141,7 +141,13 @@ if errorlevel 1 (
 )
 echo [OK] .env valid
 
-:: -- 8. Apply database migrations (skipped when already at head) -------------
+:: -- 8. Fix database schema (add missing columns, backup+recreate if broken) --
+python scripts\fix_db.py
+if errorlevel 1 (
+    echo [WARN] fix_db.py reported an issue - check output above
+)
+
+:: -- 8c. Apply database migrations (skipped when already at head) ------------
 python -c "import alembic" >nul 2>&1
 if not errorlevel 1 (
     for /f "delims=" %%r in ('alembic current 2^>nul') do set ALEMBIC_CURRENT=%%r
