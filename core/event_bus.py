@@ -287,6 +287,17 @@ def _make_redis() -> aioredis.Redis:
             logger.warning("EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc)
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+    # Inject REDIS_PASSWORD into the URL when it is not already embedded.
+    # from_url() only picks up credentials that are part of the URL string;
+    # a standalone REDIS_PASSWORD env var is ignored on the standard path
+    # (unlike the Sentinel path above which passes password= explicitly).
+    # We only inject when the URL has no userinfo component to avoid
+    # overwriting credentials that were intentionally embedded in REDIS_URL.
+    if password and "@" not in url.split("://", 1)[-1]:
+        scheme, rest = url.split("://", 1)
+        url = f"{scheme}://:{password}@{rest}"
+
     # socket_timeout=None: pub/sub connections must not time out on idle channels.
     # socket_connect_timeout=5: fail fast if Redis is unreachable at connect time.
     return aioredis.from_url(
