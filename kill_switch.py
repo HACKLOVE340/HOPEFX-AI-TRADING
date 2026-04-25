@@ -384,8 +384,20 @@ class KillSwitch:
             import redis as _redis_lib
 
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            password = os.getenv("REDIS_PASSWORD", "") or None
+
+            # Inject REDIS_PASSWORD when not already embedded in the URL.
+            if password and "@" not in redis_url.split("://", 1)[-1]:
+                scheme, rest = redis_url.split("://", 1)
+                redis_url = f"{scheme}://:{password}@{rest}"
+
             # socket_connect_timeout prevents indefinite blocking when Redis is down.
-            return _redis_lib.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+            return _redis_lib.from_url(
+                redis_url,
+                decode_responses=True,
+                socket_connect_timeout=2,
+                socket_timeout=2,
+            )
         except Exception:
             return None
 
