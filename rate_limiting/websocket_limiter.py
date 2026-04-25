@@ -100,6 +100,14 @@ class WebSocketConnectionLimiter:
         self._open_conns: dict[str, int] = defaultdict(int)
         self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
+        # Track which backend registered each connection so release() always
+        # mirrors check_and_register().  Key: (ip, connection_token) where
+        # connection_token is a monotonic counter unique per registration.
+        # Without this, a Redis reconnect mid-session causes release() to
+        # decrement Redis while check_and_register() had incremented the local
+        # counter, leaking the local count upward until the cap is hit.
+        self._conn_backend: dict[str, str] = {}  # ip → "redis" | "local"
+        self._conn_counter: int = 0
 
     # ── Redis connection ──────────────────────────────────────────────────────
 
@@ -110,13 +118,24 @@ class WebSocketConnectionLimiter:
         try:
             import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
-            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            # Build a default URL from the same env vars used by the rest of
+            # the app (REDIS_HOST / REDIS_PORT / REDIS_PASSWORD) so that the
+            # limiter connects to the same broker as nuclear_streamer and the
+            # MacroStoreBridge.  REDIS_URL takes precedence when set explicitly.
+            _host = os.getenv("REDIS_HOST", "localhost")
+            _port = os.getenv("REDIS_PORT", "6379")
+            _pw = os.getenv("REDIS_PASSWORD", "")
+            _auth = f":{_pw}@" if _pw else ""
+            _default_url = f"redis://{_auth}{_host}:{_port}/0"
+            redis_url = os.getenv("REDIS_URL", _default_url)
+
             self._redis = aioredis.from_url(
                 redis_url,
                 socket_connect_timeout=0.5,
+                socket_timeout=1.0,
                 decode_responses=True,
             )
-            logger.debug("WebSocketConnectionLimiter: Redis connected")
+            logger.debug("WebSocketConnectionLimiter: Redis client created (%s:%s)", _host, _port)
         except Exception as exc:
             logger.warning(
                 "WebSocketConnectionLimiter: Redis unavailable (%s) — "
@@ -227,6 +246,10 @@ class WebSocketConnectionLimiter:
             if allowed is not None:  # None = Redis error, fall through
                 if not allowed:
                     logger.warning("WS connection rejected for %s: %s", client_ip, reason)
+                else:
+                    # Record that this slot was registered in Redis so release()
+                    # always decrements the same backend.
+                    self._conn_backend[client_ip] = "redis"
                 return allowed, reason
 
         # In-process fallback
@@ -237,6 +260,8 @@ class WebSocketConnectionLimiter:
                 client_ip,
                 reason,
             )
+        else:
+            self._conn_backend[client_ip] = "local"
         return allowed, reason
 
     async def release(self, client_ip: str) -> None:
@@ -244,11 +269,15 @@ class WebSocketConnectionLimiter:
         Decrement the open connection count for this IP.
 
         Must be called in the finally block of every WebSocket handler.
+        Releases against whichever backend registered the connection so the
+        local counter never leaks when Redis availability changes mid-session.
         """
-        if self._redis is not None:
+        backend = self._conn_backend.pop(client_ip, None)
+        if backend == "redis" and self._redis is not None:
             with contextlib.suppress(Exception):
                 await self._redis_release(client_ip)
-                return
+            return
+        # Fall back to local release for "local" backend or unknown (safety net)
         await self._local_release(client_ip)
 
     def stats(self) -> dict:
