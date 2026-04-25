@@ -643,11 +643,22 @@ def _ensure_bootstrap_users(session_factory) -> None:
                 continue  # skip if password not configured
             existing = session.query(User).filter_by(email=email).first()
             if existing:
+                changed = False
                 # Ensure role is correct (may have been downgraded accidentally)
                 if existing.role != role:
                     existing.role = role
+                    changed = True
+                    logger.info("Bootstrap user role corrected: %s -> %s", email, role)
+                # Sync password — if .env was regenerated the hash will be stale
+                from auth.service import verify_password as _vp
+                if not _vp(password, existing.hashed_password):
+                    existing.hashed_password = hash_password(password)
+                    existing.status = UserStatus.ACTIVE.value
+                    existing.is_email_verified = True
+                    changed = True
+                    logger.info("Bootstrap user password resynced: %s", email)
+                if changed:
                     session.commit()
-                    logger.info("Bootstrap user role corrected: %s → %s", email, role)
                 continue
             user = User(
                 id=str(_uuid.uuid4()),
