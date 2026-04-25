@@ -126,13 +126,7 @@ if not exist ".env" (
 
 :: ── 7b. Validate critical .env values ────────────────────────────────────────
 :: AUTH_RATE_LIMIT_REQUESTS must be a plain integer, not a duration like "1h".
-python -c ^
-    "import os, re; ^
-     from dotenv import dotenv_values; ^
-     v = dotenv_values('.env').get('AUTH_RATE_LIMIT_REQUESTS','10'); ^
-     assert re.fullmatch(r'[0-9]+', v.strip()), ^
-     f'AUTH_RATE_LIMIT_REQUESTS={v!r} must be a plain integer (e.g. 10), not a duration string. Fix your .env file.'" ^
-    2>&1
+python scripts\validate_env.py
 if errorlevel 1 (
     echo.
     echo [ERROR] .env validation failed — see message above.
