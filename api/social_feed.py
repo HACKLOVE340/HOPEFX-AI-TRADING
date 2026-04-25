@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from monetization.subscription import require_plan
 from api.db_store import db_get, db_set
 
 logger = logging.getLogger(__name__)
@@ -494,7 +495,7 @@ class StartCopyBody(BaseModel):
 async def start_copy_trading(
     trader_id: str,
     body: StartCopyBody,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Begin copying all trades from *trader_id* with the given allocation.
@@ -549,7 +550,7 @@ async def start_copy_trading(
     "/copy/active",
     summary="List active copy relationships",
 )
-async def list_active_copies(user: TokenPayload = Depends(get_current_user)):
+async def list_active_copies(user: TokenPayload = Depends(require_plan("professional"))):
     """Return all active copy-trading relationships for the authenticated user."""
     copies = _user_copies(user.sub)
     return [c for c in copies if c.get("status") == "active"]
@@ -561,7 +562,7 @@ async def list_active_copies(user: TokenPayload = Depends(get_current_user)):
 )
 async def stop_copy_trading(
     copy_id: str,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Stop an active copy-trading relationship by its *copy_id*.
@@ -691,7 +692,7 @@ class CopyTradeRequest(BaseModel):
 async def copy_trader(
     trader_id: str,
     req: CopyTradeRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Start copy-trading a specific trader.

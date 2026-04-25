@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
 from api.db_store import db_get, db_keys_prefix, db_set
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/backtesting", tags=["Backtesting"])
@@ -402,7 +403,7 @@ async def list_strategies(_user: TokenPayload = Depends(get_current_user)):
 @router.post("/run", response_model=BacktestResult, status_code=status.HTTP_201_CREATED)
 async def run_backtest(
     req: BacktestRequest,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Run a backtest for the given strategy and symbol.
@@ -509,7 +510,7 @@ class WalkForwardRequest(BaseModel):
 async def run_walk_forward(
     req: WalkForwardRequest,
     background_tasks: BackgroundTasks,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ):
     """Trigger a walk-forward backtest. Returns run_id immediately; poll GET /walk-forward/{run_id}."""
     run_id = str(uuid.uuid4())
@@ -716,7 +717,7 @@ class MultiSymbolBacktestResponse(BaseModel):
 )
 async def run_multi_symbol_backtest(
     req: MultiSymbolBacktestRequest,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Run the multi-symbol backtest engine and return pooled results.
@@ -786,7 +787,7 @@ async def run_multi_symbol_backtest(
 )
 async def get_latest_multi_symbol_report(
     extended: bool = False,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Return the most recent saved multi-symbol backtest report.
@@ -837,7 +838,7 @@ async def get_latest_multi_symbol_report(
     summary="Reconciled backtest root cause investigation results",
 )
 async def get_reconciled_investigation(
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Return the root cause investigation for the -4.18 Sharpe reconciled backtest.
@@ -885,7 +886,7 @@ async def get_reconciled_investigation(
 )
 async def refresh_reconciled_investigation(
     background_tasks: BackgroundTasks,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Trigger a fresh root cause investigation run in the background.
@@ -942,7 +943,7 @@ class RegimeStressRequest(BaseModel):
 async def run_replay_backtest(
     req: ReplayBacktestRequest,
     background_tasks: BackgroundTasks,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict[str, Any]:
     """
     Run a tick-level backtest using real Dukascopy historical data.
@@ -1012,7 +1013,7 @@ async def run_replay_backtest(
 async def run_regime_stress_test(
     req: RegimeStressRequest,
     background_tasks: BackgroundTasks,
-    _user: TokenPayload = Depends(get_current_user),
+    _user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict[str, Any]:
     """
     Run the strategy across all built-in stress regimes using real tick data.
@@ -1395,7 +1396,7 @@ _compat_router = APIRouter(prefix="/api/backtesting", tags=["Backtesting"])
 @_compat_router.post("/run", status_code=status.HTTP_201_CREATED, include_in_schema=False)
 async def _compat_run_backtest(
     body: BacktestRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict[str, Any]:
     """Alias: POST /api/backtesting/run → run_backtest."""
     return await run_backtest(body, user)
@@ -1449,7 +1450,7 @@ async def _compat_wf_get(
 @_compat_router.post("/walk-forward/run", include_in_schema=False)
 async def _compat_wf_run(
     body: BacktestRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict[str, Any]:
     """Alias: POST /api/backtesting/walk-forward/run → run_backtest (walk-forward mode)."""
     # Delegate to the primary run endpoint; callers may set body.walk_forward = True

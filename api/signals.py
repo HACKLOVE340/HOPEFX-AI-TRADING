@@ -814,6 +814,7 @@ def _register_signal_read_routes(router: Any) -> None:
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
+    from monetization.subscription import require_plan as _require_plan
 
     @router.get(
         "",
@@ -943,11 +944,12 @@ def _register_signal_write_routes(router: Any) -> None:
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
+    from monetization.subscription import require_plan as _require_plan
 
     @router.post("/generate")
     async def generate_signal(
         req: _GenerateSignalRequest,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         try:
             svc = _get_signal_service()
@@ -1058,11 +1060,12 @@ def _register_distribution_routes(
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
+    from monetization.subscription import require_plan as _require_plan
 
     @router.post("/distribution/oos-reference")
     async def set_oos_reference(
         body: SetOOSReferenceRequest,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         from ml.signal_validator import SignalRecord, get_validator
 
@@ -1076,7 +1079,7 @@ def _register_distribution_routes(
     @router.post("/distribution/validate")
     async def validate_signal_distribution(
         body: ValidateSignalsRequest,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         from ml.signal_validator import SignalRecord, get_validator
 
@@ -1094,7 +1097,7 @@ def _register_distribution_routes(
     @router.post("/distribution/add-live")
     async def add_live_signal(
         body: LiveSignalItem,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         from ml.signal_validator import SignalRecord, get_validator
 
