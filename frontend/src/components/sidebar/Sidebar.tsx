@@ -15,6 +15,7 @@ import { useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan } from '
 import { ThemeToggle } from '../ThemeToggle';
 import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
 import { NAV_ITEMS, NAV_GROUPS } from './navConfig';
+import { authApi } from '../../hooks/useApi';
 import type { Plan } from '../../lib/subscription';
 
 // ── WS status dot ─────────────────────────────────────────────────────────────
@@ -166,7 +167,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const plan      = useStore(selectPlan);
   const clearAuth = useStore((s) => s.clearAuth);
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    // Tell the server to clear the httpOnly refresh-token cookie.
+    // Fire-and-forget: even if the request fails we still clear local state
+    // so the user is logged out from the browser's perspective.
+    try { await authApi.logout(); } catch { /* ignore network errors on logout */ }
     clearAuth();
     navigate('/login', { replace: true });
   };
