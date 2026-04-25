@@ -206,6 +206,26 @@ class _ConfigNamespace:
             self.api_configs: dict = {}
 
 
+async def init_event_bus(s: Any) -> Any:
+    """
+    Connect the module-level EventBus singleton to Redis at startup.
+
+    Previously, bus.connect() was only called lazily from individual
+    subsystems (ws_live, paper_runner, market_ingest, main_loop), meaning
+    the bus was in an unconnected state during the entire startup sequence.
+    Connecting here ensures the bus is ready before any component publishes
+    its first event, and that the degraded-mode warning fires exactly once
+    at a predictable point in the startup log rather than mid-operation.
+
+    Non-fatal: if Redis is unavailable the bus activates its in-process
+    _LocalBus fallback and startup continues normally.
+    """
+    from core.event_bus import bus
+
+    await bus.connect()
+    return bus
+
+
 async def init_config(s: Any) -> Any:
     from config import initialize_config
 
@@ -316,7 +336,7 @@ _REDIS_MAXMEMORY_DEFAULT = "512mb"
 _REDIS_MAXMEMORY_POLICY_DEFAULT = "allkeys-lru"
 
 
-def _enforce_redis_maxmemory(host: str, port: int) -> None:
+def _enforce_redis_maxmemory(host: str, port: int, password: str | None = None) -> None:
     """
     Check Redis maxmemory and set a safe default if it is unlimited (0).
 
@@ -334,6 +354,7 @@ def _enforce_redis_maxmemory(host: str, port: int) -> None:
         r = _redis_sync.Redis(
             host=host,
             port=port,
+            password=password,
             socket_connect_timeout=0.5,
             socket_timeout=0.5,
         )
@@ -371,17 +392,19 @@ def _enforce_redis_maxmemory(host: str, port: int) -> None:
 async def init_cache(s: Any) -> Any:
     host = os.getenv("REDIS_HOST", "localhost")
     port = int(os.getenv("REDIS_PORT", "6379"))
+    password = os.getenv("REDIS_PASSWORD") or None
 
     # Enforce maxmemory before the cache starts writing tick data.
     # Runs in executor so the sync Redis client doesn't block the event loop.
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _enforce_redis_maxmemory, host, port)
+    await loop.run_in_executor(None, _enforce_redis_maxmemory, host, port, password)
 
     from cache import MarketDataCache
 
     return MarketDataCache(
         host=host,
         port=port,
+        password=password,
         max_retries=1,
         socket_connect_timeout=1,
         enable_fallback=True,
@@ -2079,6 +2102,10 @@ def build_component_registry(app, feature_flags):
         .register("config", F.init_config, required=True, deps=["env_check"])
         .register("secrets", F.init_secrets_manager, required=False, deps=["config"])
         .register("database", F.init_database, required=True, deps=["config"])
+        # event_bus must connect before cache and broker so the degraded-mode
+        # warning fires once at startup rather than mid-operation, and so that
+        # components can publish events as soon as they initialise.
+        .register("event_bus", F.init_event_bus, required=False, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
         .register("hot_standby", F.init_hot_standby, required=False, deps=["cache", "broker"])
         .register("chaos_controller", F.init_chaos_controller, required=False, deps=["config"])
