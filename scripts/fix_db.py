@@ -46,7 +46,7 @@ import sqlite3
 
 conn = sqlite3.connect(str(db_path))
 
-# Required columns per table
+# Required columns per table — derived from database/user_models.py ORM definitions
 REQUIRED = {
     "users": [
         "id", "email", "username", "hashed_password", "role", "status",
@@ -59,8 +59,8 @@ REQUIRED = {
         "created_at", "updated_at", "last_login_at", "last_login_ip",
     ],
     "user_sessions": [
-        "id", "user_id", "refresh_token_hash", "created_at", "expires_at",
-        "ip_address", "device_info", "is_active", "last_active_at",
+        "id", "user_id", "refresh_token_hash", "device_info", "ip_address",
+        "created_at", "expires_at", "revoked_at", "is_revoked", "last_active_at",
     ],
     "login_attempts": [
         "id", "user_id", "email", "ip_address", "success",
@@ -70,28 +70,32 @@ REQUIRED = {
 
 # Column definitions for ADD COLUMN statements
 COL_DEFS = {
-    "kyc_submitted_at":    "DATETIME",
-    "kyc_reviewed_at":     "DATETIME",
-    "kyc_reviewer_id":     "VARCHAR(100)",
-    "kyc_rejection_reason":"TEXT",
-    "kyc_document_type":   "VARCHAR(50)",
-    "plan":                "VARCHAR(30) NOT NULL DEFAULT 'free'",
-    "country":             "VARCHAR(2)",
-    "last_login_at":       "DATETIME",
-    "last_login_ip":       "VARCHAR(45)",
-    "last_active_at":      "DATETIME",
-    "totp_secret":         "VARCHAR(64)",
-    "totp_enabled":        "BOOLEAN DEFAULT 0",
-    "kyc_status":          "VARCHAR(20) DEFAULT 'unverified'",
-    "is_email_verified":   "BOOLEAN NOT NULL DEFAULT 0",
-    "email_verify_token":  "VARCHAR(255)",
-    "email_verify_expires":"DATETIME",
-    "password_reset_token":"VARCHAR(255)",
+    # users
+    "kyc_submitted_at":      "DATETIME",
+    "kyc_reviewed_at":       "DATETIME",
+    "kyc_reviewer_id":       "VARCHAR(100)",
+    "kyc_rejection_reason":  "TEXT",
+    "kyc_document_type":     "VARCHAR(50)",
+    "plan":                  "VARCHAR(30) NOT NULL DEFAULT 'free'",
+    "country":               "VARCHAR(2)",
+    "last_login_at":         "DATETIME",
+    "last_login_ip":         "VARCHAR(45)",
+    "totp_secret":           "VARCHAR(64)",
+    "totp_enabled":          "BOOLEAN DEFAULT 0",
+    "kyc_status":            "VARCHAR(20) DEFAULT 'unverified'",
+    "is_email_verified":     "BOOLEAN NOT NULL DEFAULT 0",
+    "email_verify_token":    "VARCHAR(255)",
+    "email_verify_expires":  "DATETIME",
+    "password_reset_token":  "VARCHAR(255)",
     "password_reset_expires":"DATETIME",
-    "updated_at":          "DATETIME",
-    "device_info":         "TEXT",
-    "is_active":           "BOOLEAN DEFAULT 1",
-    "failure_reason":      "VARCHAR(100)",
+    "updated_at":            "DATETIME",
+    # user_sessions
+    "device_info":           "VARCHAR(255)",
+    "revoked_at":            "DATETIME",
+    "is_revoked":            "BOOLEAN DEFAULT 0",
+    "last_active_at":        "DATETIME",
+    # login_attempts
+    "failure_reason":        "VARCHAR(100)",
 }
 
 fixed = []
