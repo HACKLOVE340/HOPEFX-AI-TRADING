@@ -178,6 +178,11 @@ class NuclearStreamer:
         self._redis_host: str = os.getenv("REDIS_HOST", redis_host or "localhost")
         self._redis_port: int = int(os.getenv("REDIS_PORT", str(redis_port or 6379)))
         self._redis_db: int = int(os.getenv("REDIS_DB", str(redis_db or 0)))
+        self._redis_password: str | None = os.getenv("REDIS_PASSWORD") or None
+
+        # Suppress repeated Redis publish errors after the first — log once,
+        # then demote to DEBUG so the log is not flooded on every tick.
+        self._redis_publish_errors: int = 0
 
         # Shared state — protected by an asyncio lock.
         self._price_lock: asyncio.Lock = asyncio.Lock()
@@ -234,6 +239,7 @@ class NuclearStreamer:
                 host=self._redis_host,
                 port=self._redis_port,
                 db=self._redis_db,
+                password=self._redis_password,
                 decode_responses=False,
             )
             logger.info(
@@ -410,8 +416,17 @@ class NuclearStreamer:
         if self._redis:
             try:
                 await self._redis.rpush(_REDIS_QUEUE, json.dumps(payload))
+                # Reset error counter on success so a reconnect is logged again.
+                self._redis_publish_errors = 0
             except Exception as exc:
-                logger.error("Redis publish error: %s", exc)
+                self._redis_publish_errors += 1
+                if self._redis_publish_errors == 1:
+                    # Log the first failure at ERROR so operators are alerted.
+                    logger.error("Redis publish error: %s", exc)
+                else:
+                    # Demote subsequent failures to DEBUG to avoid log flooding
+                    # on every tick while Redis is down.
+                    logger.debug("Redis publish error (repeated #%d): %s", self._redis_publish_errors, exc)
 
         logger.debug(
             "%s: %.4f @ %.0f ms [%s]",
