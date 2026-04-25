@@ -388,7 +388,9 @@ interface ConfirmDialogProps {
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   title, message, confirmLabel = 'Confirm', variant, danger, onConfirm, onCancel,
 }) => {
-  const resolvedVariant: 'danger' | 'warning' = variant ?? 'danger';
+  // variant takes precedence; danger=false downgrades to 'warning' for backwards compat
+  const resolvedVariant: 'danger' | 'warning' =
+    variant ?? (danger === false ? 'warning' : 'danger');
   return (
   <div style={{
     position: 'fixed', inset: 0, zIndex: 9999,
