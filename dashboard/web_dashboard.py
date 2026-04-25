@@ -67,7 +67,7 @@ class DashboardWebSocketManager:
         async with self._lock:
             for ws in self.clients:
                 try:
-                    ws.send_str(message_str)
+                    await ws.send_str(message_str)
                 except Exception:  # nosec B110 — track disconnected WebSocket client
                     disconnected.append(ws)
 
