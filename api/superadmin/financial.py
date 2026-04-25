@@ -103,16 +103,21 @@ async def get_revenue_stats(
 
 @router.get("/financial/subscriptions")
 async def get_subscription_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    import asyncio as _aio
+
     stats: dict = {"free": 0, "starter": 0, "professional": 0, "enterprise": 0, "elite": 0, "total": 0}
     try:
         from database.connection import SessionLocal
         from database.user_models import User
 
-        db = SessionLocal()
-        try:
-            stats["total"] = db.query(User).count()
-        finally:
-            db.close()
+        def _count_users():
+            db = SessionLocal()
+            try:
+                return db.query(User).count()
+            finally:
+                db.close()
+
+        stats["total"] = await _aio.to_thread(_count_users)
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
     try:
@@ -173,22 +178,31 @@ async def list_chargebacks(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Return chargeback records from the database."""
+    import asyncio as _aio
+
     chargebacks: list[dict] = []
     total = 0
     try:
         from database.connection import SessionLocal
         from database.models import Chargeback
 
-        db = SessionLocal()
-        try:
-            q = db.query(Chargeback)
-            if status:
-                q = q.filter(Chargeback.status == status)
-            total = q.count()
-            rows = q.order_by(Chargeback.opened_at.desc()).offset(offset).limit(limit).all()
-            chargebacks = [r.to_dict() for r in rows]
-        finally:
-            db.close()
+        _status = status
+        _offset = offset
+        _limit = limit
+
+        def _fetch():
+            db = SessionLocal()
+            try:
+                q = db.query(Chargeback)
+                if _status:
+                    q = q.filter(Chargeback.status == _status)
+                _total = q.count()
+                rows = q.order_by(Chargeback.opened_at.desc()).offset(_offset).limit(_limit).all()
+                return [r.to_dict() for r in rows], _total
+            finally:
+                db.close()
+
+        chargebacks, total = await _aio.to_thread(_fetch)
     except Exception as exc:
         logger.warning("list_chargebacks DB error: %s", exc)
     return {"chargebacks": chargebacks, "total": total, "limit": limit, "offset": offset}
@@ -201,6 +215,8 @@ async def update_chargeback(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Update chargeback status (e.g. mark as won/lost after submitting evidence)."""
+    import asyncio as _aio
+
     _log_superadmin_action(user, "chargeback_update", f"id={chargeback_id} body={body}")
     allowed_statuses = {"open", "won", "lost", "pending_evidence"}
     new_status = body.get("status")
@@ -210,19 +226,28 @@ async def update_chargeback(
         from database.connection import SessionLocal
         from database.models import Chargeback
 
-        db = SessionLocal()
-        try:
-            row = db.query(Chargeback).filter(Chargeback.chargeback_id == chargeback_id).first()
-            if not row:
-                raise HTTPException(status_code=404, detail="Chargeback not found")
-            if new_status:
-                row.status = new_status
-                if new_status in ("won", "lost"):
-                    row.resolved_at = datetime.now(timezone.utc)
-            db.commit()
-            return row.to_dict()
-        finally:
-            db.close()
+        _cid = chargeback_id
+        _ns = new_status
+
+        def _update():
+            db = SessionLocal()
+            try:
+                row = db.query(Chargeback).filter(Chargeback.chargeback_id == _cid).first()
+                if not row:
+                    return None
+                if _ns:
+                    row.status = _ns
+                    if _ns in ("won", "lost"):
+                        row.resolved_at = datetime.now(timezone.utc)
+                db.commit()
+                return row.to_dict()
+            finally:
+                db.close()
+
+        result = await _aio.to_thread(_update)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Chargeback not found")
+        return result
     except HTTPException:
         raise
     except Exception as exc:
@@ -241,22 +266,31 @@ async def list_tax_reports(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Return tax report records from the database."""
+    import asyncio as _aio
+
     reports: list[dict] = []
     total = 0
     try:
         from database.connection import SessionLocal
         from database.models import TaxReport
 
-        db = SessionLocal()
-        try:
-            q = db.query(TaxReport)
-            if status:
-                q = q.filter(TaxReport.status == status)
-            total = q.count()
-            rows = q.order_by(TaxReport.created_at.desc()).offset(offset).limit(limit).all()
-            reports = [r.to_dict() for r in rows]
-        finally:
-            db.close()
+        _status = status
+        _offset = offset
+        _limit = limit
+
+        def _fetch():
+            db = SessionLocal()
+            try:
+                q = db.query(TaxReport)
+                if _status:
+                    q = q.filter(TaxReport.status == _status)
+                _total = q.count()
+                rows = q.order_by(TaxReport.created_at.desc()).offset(_offset).limit(_limit).all()
+                return [r.to_dict() for r in rows], _total
+            finally:
+                db.close()
+
+        reports, total = await _aio.to_thread(_fetch)
     except Exception as exc:
         logger.warning("list_tax_reports DB error: %s", exc)
     return {"reports": reports, "total": total, "limit": limit, "offset": offset}
@@ -276,41 +310,52 @@ async def create_tax_report(
     if not period or not jurisdiction:
         raise HTTPException(status_code=400, detail="period and jurisdiction are required")
 
+    import asyncio as _aio
+
     try:
         from database.connection import SessionLocal
         from database.models import TaxReport
 
-        db = SessionLocal()
-        try:
-            existing = (
-                db.query(TaxReport).filter(TaxReport.period == period, TaxReport.jurisdiction == jurisdiction).first()
-            )
-            if existing:
-                existing.status = body.get("status", existing.status)
-                existing.total_revenue = body.get("total_revenue", existing.total_revenue)
-                existing.taxable_amount = body.get("taxable_amount", existing.taxable_amount)
-                existing.tax_rate_pct = body.get("tax_rate_pct", existing.tax_rate_pct)
-                existing.tax_owed = body.get("tax_owed", existing.tax_owed)
-                db.commit()
-                return existing.to_dict()
+        _period = period
+        _jurisdiction = jurisdiction
+        _body = body
 
-            report = TaxReport(
-                report_id=f"TAX-{_uuid.uuid4().hex[:12].upper()}",
-                period=period,
-                jurisdiction=jurisdiction,
-                total_revenue=float(body.get("total_revenue", 0)),
-                taxable_amount=float(body.get("taxable_amount", 0)),
-                tax_rate_pct=float(body.get("tax_rate_pct", 0)),
-                tax_owed=float(body.get("tax_owed", 0)),
-                currency=body.get("currency", "USD"),
-                status=body.get("status", "draft"),
-            )
-            db.add(report)
-            db.commit()
-            db.refresh(report)
-            return report.to_dict()
-        finally:
-            db.close()
+        def _upsert():
+            db = SessionLocal()
+            try:
+                existing = (
+                    db.query(TaxReport)
+                    .filter(TaxReport.period == _period, TaxReport.jurisdiction == _jurisdiction)
+                    .first()
+                )
+                if existing:
+                    existing.status = _body.get("status", existing.status)
+                    existing.total_revenue = _body.get("total_revenue", existing.total_revenue)
+                    existing.taxable_amount = _body.get("taxable_amount", existing.taxable_amount)
+                    existing.tax_rate_pct = _body.get("tax_rate_pct", existing.tax_rate_pct)
+                    existing.tax_owed = _body.get("tax_owed", existing.tax_owed)
+                    db.commit()
+                    return existing.to_dict()
+
+                report = TaxReport(
+                    report_id=f"TAX-{_uuid.uuid4().hex[:12].upper()}",
+                    period=_period,
+                    jurisdiction=_jurisdiction,
+                    total_revenue=float(_body.get("total_revenue", 0)),
+                    taxable_amount=float(_body.get("taxable_amount", 0)),
+                    tax_rate_pct=float(_body.get("tax_rate_pct", 0)),
+                    tax_owed=float(_body.get("tax_owed", 0)),
+                    currency=_body.get("currency", "USD"),
+                    status=_body.get("status", "draft"),
+                )
+                db.add(report)
+                db.commit()
+                db.refresh(report)
+                return report.to_dict()
+            finally:
+                db.close()
+
+        return await _aio.to_thread(_upsert)
     except HTTPException:
         raise
     except Exception as exc:
@@ -330,23 +375,34 @@ async def update_tax_report(
     new_status = body.get("status")
     if new_status and new_status not in allowed_statuses:
         raise HTTPException(status_code=400, detail=f"status must be one of {allowed_statuses}")
+    import asyncio as _aio
+
     try:
         from database.connection import SessionLocal
         from database.models import TaxReport
 
-        db = SessionLocal()
-        try:
-            row = db.query(TaxReport).filter(TaxReport.report_id == report_id).first()
-            if not row:
-                raise HTTPException(status_code=404, detail="Tax report not found")
-            if new_status:
-                row.status = new_status
-                if new_status == "filed":
-                    row.filed_at = datetime.now(timezone.utc)
-            db.commit()
-            return row.to_dict()
-        finally:
-            db.close()
+        _rid = report_id
+        _ns = new_status
+
+        def _update():
+            db = SessionLocal()
+            try:
+                row = db.query(TaxReport).filter(TaxReport.report_id == _rid).first()
+                if not row:
+                    return None
+                if _ns:
+                    row.status = _ns
+                    if _ns == "filed":
+                        row.filed_at = datetime.now(timezone.utc)
+                db.commit()
+                return row.to_dict()
+            finally:
+                db.close()
+
+        result = await _aio.to_thread(_update)
+        if result is None:
+            raise HTTPException(status_code=404, detail="Tax report not found")
+        return result
     except HTTPException:
         raise
     except Exception as exc:
@@ -366,24 +422,34 @@ async def list_reconciliation(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Return reconciliation records from the database."""
+    import asyncio as _aio
+
     records: list[dict] = []
     total = 0
     try:
         from database.connection import SessionLocal
         from database.models import ReconciliationRecord
 
-        db = SessionLocal()
-        try:
-            q = db.query(ReconciliationRecord)
-            if status:
-                q = q.filter(ReconciliationRecord.status == status)
-            if provider:
-                q = q.filter(ReconciliationRecord.provider == provider)
-            total = q.count()
-            rows = q.order_by(ReconciliationRecord.created_at.desc()).offset(offset).limit(limit).all()
-            records = [r.to_dict() for r in rows]
-        finally:
-            db.close()
+        _status = status
+        _provider = provider
+        _offset = offset
+        _limit = limit
+
+        def _fetch():
+            db = SessionLocal()
+            try:
+                q = db.query(ReconciliationRecord)
+                if _status:
+                    q = q.filter(ReconciliationRecord.status == _status)
+                if _provider:
+                    q = q.filter(ReconciliationRecord.provider == _provider)
+                _total = q.count()
+                rows = q.order_by(ReconciliationRecord.created_at.desc()).offset(_offset).limit(_limit).all()
+                return [r.to_dict() for r in rows], _total
+            finally:
+                db.close()
+
+        records, total = await _aio.to_thread(_fetch)
     except Exception as exc:
         logger.warning("list_reconciliation DB error: %s", exc)
     return {"records": records, "total": total, "limit": limit, "offset": offset}
