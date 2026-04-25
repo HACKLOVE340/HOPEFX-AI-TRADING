@@ -76,8 +76,17 @@ _last_mid: dict[str, float] = {}
 AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "10"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
-# Set to "false" to allow unauthenticated connections (dev/demo mode)
+# Set to "false" to allow unauthenticated connections (dev/demo mode only).
+# In production this MUST be true — all WS data (prices, signals, account
+# updates) would otherwise be broadcast to unauthenticated connections.
 WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+
+_APP_ENV: str = os.getenv("APP_ENV", "development").lower()
+if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
+    raise RuntimeError(
+        "WS_AUTH_REQUIRED=false is not permitted in production (APP_ENV=production). "
+        "Set WS_AUTH_REQUIRED=true or remove the override."
+    )
 
 
 def _validate_ws_token(token: str) -> dict | None:
