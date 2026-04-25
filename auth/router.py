@@ -411,7 +411,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
             )
         )
     except Exception as _login_exc:
-        logger.error("Login service error for %s: %s", resolved_email, _login_exc)
+        logger.error("Login service error for %s: %s", resolved_email, _login_exc, exc_info=True)
         raise HTTPException(status_code=503, detail="Authentication service temporarily unavailable") from _login_exc
 
     if not ok:

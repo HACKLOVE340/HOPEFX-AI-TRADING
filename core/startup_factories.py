@@ -291,16 +291,17 @@ async def init_database(s: Any) -> Any:
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
     except Exception as exc:
-        # Alembic is installed but the upgrade failed (e.g. locked DB, bad
-        # migration, or the alembic_version table is missing on a DB that was
-        # bootstrapped via create_all before Alembic was introduced).
-        # Log at WARNING — this is not a normal path and the operator should fix it.
-        logger.warning(
-            "Alembic upgrade failed (%s). "
-            "Run 'alembic upgrade head' manually to apply pending migrations. "
-            "Falling back to create_all for new tables only — existing columns will NOT be added.",
-            exc,
-        )
+        # Alembic is installed but upgrade failed. Most common cause on dev
+        # machines: the DB was created via create_all before Alembic was
+        # introduced, so alembic_version table is missing.
+        # Fix: stamp the DB at head so future runs apply only new migrations,
+        # then run _ensure_user_columns() to add any missing columns directly.
+        logger.warning("Alembic upgrade failed (%s) — attempting auto-stamp and column sync.", exc)
+        try:
+            alembic_command.stamp(alembic_cfg, "head")
+            logger.info("DB stamped at alembic head — future migrations will apply incrementally")
+        except Exception as stamp_exc:
+            logger.warning("Alembic stamp failed: %s", stamp_exc)
         try:
             Base.metadata.create_all(engine, checkfirst=True)
             logger.info("Database schema partially ensured via create_all (checkfirst=True)")
@@ -517,46 +518,50 @@ async def init_news_router(s: Any, app: Any) -> Any:
 
 
 def _ensure_user_columns(engine: Any) -> None:
-    """Add columns to the users table that exist in the ORM model but are absent
-    from the live database.
+    """Add columns missing from auth-related tables (users, user_sessions, login_attempts).
 
-    Covers databases that were created before a migration was applied (e.g. the
-    KYC columns added in migration k1l2m3n4o5p6).  Each ADD COLUMN is wrapped in
-    its own try/except so a single missing column never blocks the others.
+    Covers databases created before a migration was applied. Each ADD COLUMN is
+    wrapped in its own try/except so one failure never blocks the others.
     """
     import sqlalchemy as _sa
-    from database.user_models import User
+    from database.user_models import LoginAttempt, User, UserSession
 
-    with engine.connect() as conn:
-        inspector = _sa.inspect(engine)
-        existing = {col["name"] for col in inspector.get_columns("users")}
+    inspector = _sa.inspect(engine)
 
-    missing = [col for col in User.__table__.columns if col.name not in existing]
-    if not missing:
-        return
+    for model in (User, UserSession, LoginAttempt):
+        table_name = model.__tablename__
+        try:
+            existing = {col["name"] for col in inspector.get_columns(table_name)}
+        except Exception as exc:
+            logger.warning("Could not inspect table '%s': %s", table_name, exc)
+            continue
 
-    with engine.begin() as conn:
-        for col in missing:
-            try:
-                col_type = col.type.compile(engine.dialect)
-                nullable = "NULL" if col.nullable else "NOT NULL"
-                default_clause = ""
-                if col.default is not None and col.default.is_scalar:
-                    val = col.default.arg
-                    if isinstance(val, str):
-                        default_clause = f" DEFAULT '{val}'"
-                    elif isinstance(val, bool):
-                        default_clause = f" DEFAULT {int(val)}"
-                    elif val is not None:
-                        default_clause = f" DEFAULT {val}"
-                conn.execute(
-                    _sa.text(
-                        f'ALTER TABLE users ADD COLUMN "{col.name}" {col_type}{default_clause} {nullable}'
+        missing = [col for col in model.__table__.columns if col.name not in existing]
+        if not missing:
+            continue
+
+        with engine.begin() as conn:
+            for col in missing:
+                try:
+                    col_type = col.type.compile(engine.dialect)
+                    nullable = "NULL" if col.nullable else "NOT NULL"
+                    default_clause = ""
+                    if col.default is not None and col.default.is_scalar:
+                        val = col.default.arg
+                        if isinstance(val, str):
+                            default_clause = f" DEFAULT '{val}'"
+                        elif isinstance(val, bool):
+                            default_clause = f" DEFAULT {int(val)}"
+                        elif val is not None:
+                            default_clause = f" DEFAULT {val}"
+                    conn.execute(
+                        _sa.text(
+                            f'ALTER TABLE "{table_name}" ADD COLUMN "{col.name}" {col_type}{default_clause} {nullable}'
+                        )
                     )
-                )
-                logger.info("users table: added missing column '%s'", col.name)
-            except Exception as exc:  # pragma: no cover
-                logger.warning("Could not add column '%s' to users: %s", col.name, exc)
+                    logger.info("%s table: added missing column '%s'", table_name, col.name)
+                except Exception as exc:
+                    logger.warning("Could not add column '%s.%s': %s", table_name, col.name, exc)
 
 
 async def init_auth(s: Any) -> Any:
