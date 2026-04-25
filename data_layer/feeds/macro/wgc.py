@@ -46,8 +46,8 @@ returns usable data wins.
     4. Local cache
 
   wgc_central_bank  (additional proxy when WGC is unavailable)
-    World Bank API  (indicator NY.GDP.MKTP.CD used as CB-demand proxy via
-    official gold reserve data — indicator FI.RES.TOTL.CD)
+    World Bank API  (indicator FI.RES.TOTL.CD — total reserves including
+    gold, annual first-difference used as CB accumulation proxy)
 
 Environment variables
 ---------------------
@@ -641,6 +641,7 @@ class WGCFeed:
             logger.warning("WGC: cache write failed for %s: %s", filename, exc)
 
     def _read_cache(self, filename: str) -> str | None:
+        """Return cached content only if it is within _REFRESH_INTERVAL."""
         try:
             path = self._cache_path(filename)
             if path.exists():
@@ -650,6 +651,16 @@ class WGCFeed:
                 logger.debug("WGC: cache stale for %s (age=%.0fs)", filename, age_s)
         except Exception as exc:
             logger.debug("WGC: cache read failed for %s: %s", filename, exc)
+        return None
+
+    def _read_cache_any_age(self, filename: str) -> str | None:
+        """Return cached content regardless of age — used as last-resort fallback."""
+        try:
+            path = self._cache_path(filename)
+            if path.exists():
+                return path.read_text(encoding="utf-8")
+        except Exception as exc:
+            logger.debug("WGC: stale cache read failed for %s: %s", filename, exc)
         return None
 
     # ── Fetch ─────────────────────────────────────────────────────────────────
@@ -675,10 +686,11 @@ class WGCFeed:
                 return json_series
             if not self._warned_json_api_offline:
                 logger.debug("WGC JSON API returned no demand data — trying CSV download")
+                self._warned_json_api_offline = True
         except Exception as exc:
             if not self._warned_json_api_offline:
                 logger.debug("WGC JSON API demand fetch failed (%s) — trying CSV download", exc)
-            self._warned_json_api_offline = True
+                self._warned_json_api_offline = True
 
         # ── 2. WGC CSV download ───────────────────────────────────────────────
         text = await self._fetch_url(_WGC_DEMAND_CSV_URL)
@@ -703,7 +715,7 @@ class WGCFeed:
             self._warned_demand_offline = True
 
         # ── 3. Stale local cache ──────────────────────────────────────────────
-        cached = self._read_cache(_DEMAND_CACHE_FILE)
+        cached = self._read_cache_any_age(_DEMAND_CACHE_FILE)
         if cached:
             logger.info("WGC demand: using stale local cache (all live sources failed)")
             return _csv_to_series(cached, _DEMAND_COL_VARIANTS)
@@ -760,19 +772,25 @@ class WGCFeed:
         try:
             yf_series = await _etf_proxy_yfinance()
             if yf_series:
+                # Log once: first time we fall back to the proxy
                 if not self._warned_yfinance_offline:
                     logger.info(
                         "WGC ETF flow: using yfinance %s proxy (WGC sources unavailable)",
                         _YFINANCE_ETF_TICKER,
                     )
+                    self._warned_yfinance_offline = True
                 return yf_series
+            # yfinance returned empty — fall through to stale cache
+            if not self._warned_yfinance_offline:
+                logger.debug("yfinance ETF proxy returned no data — trying stale cache")
+                self._warned_yfinance_offline = True
         except Exception as exc:
             if not self._warned_yfinance_offline:
                 logger.debug("yfinance ETF proxy failed (%s) — trying stale cache", exc)
-            self._warned_yfinance_offline = True
+                self._warned_yfinance_offline = True
 
         # ── 4. Stale local cache ──────────────────────────────────────────────
-        cached = self._read_cache(_ETF_CACHE_FILE)
+        cached = self._read_cache_any_age(_ETF_CACHE_FILE)
         if cached:
             logger.info("WGC ETF flow: using stale local cache (all live sources failed)")
             return _csv_to_series(cached, _ETF_COL_VARIANTS)
