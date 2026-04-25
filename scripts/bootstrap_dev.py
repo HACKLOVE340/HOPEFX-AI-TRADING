@@ -413,7 +413,7 @@ def _seed_user(email: str, username: str, password: str, role_value: str) -> Non
     from database.user_models import User, UserStatus
 
     engine = _make_engine()
-    Base.metadata.create_all(engine)
+    Base.metadata.create_all(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
     session = Session()
     try:

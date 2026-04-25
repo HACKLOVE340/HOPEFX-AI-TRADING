@@ -124,14 +124,52 @@ if not exist ".env" (
     echo [OK] .env found
 )
 
-:: ── 8. Build frontend if not built ────────────────────────────────────────────
+:: ── 7b. Validate critical .env values ────────────────────────────────────────
+:: AUTH_RATE_LIMIT_REQUESTS must be a plain integer, not a duration like "1h".
+python -c ^
+    "import os, re; ^
+     from dotenv import dotenv_values; ^
+     v = dotenv_values('.env').get('AUTH_RATE_LIMIT_REQUESTS','10'); ^
+     assert re.fullmatch(r'[0-9]+', v.strip()), ^
+     f'AUTH_RATE_LIMIT_REQUESTS={v!r} must be a plain integer (e.g. 10), not a duration string. Fix your .env file.'" ^
+    2>&1
+if errorlevel 1 (
+    echo.
+    echo [ERROR] .env validation failed — see message above.
+    echo         Open .env and set AUTH_RATE_LIMIT_REQUESTS to a plain integer, e.g.:
+    echo           AUTH_RATE_LIMIT_REQUESTS=10
+    echo.
+    pause & exit /b 1
+)
+
+:: ── 8. Apply database migrations ─────────────────────────────────────────────
+python -c "import alembic" >nul 2>&1
+if not errorlevel 1 (
+    echo [INFO] Applying database migrations...
+    alembic upgrade head
+    if errorlevel 1 (
+        echo [WARN] Alembic migration failed. The app will attempt a fallback at startup.
+    ) else (
+        echo [OK] Database schema up to date
+    )
+) else (
+    echo [WARN] Alembic not installed — skipping migration step
+)
+
+:: ── 9. Build frontend if not built ────────────────────────────────────────────
 if not exist "static\index.html" (
     where npm >nul 2>&1
     if not errorlevel 1 (
         if exist "frontend\package.json" (
             echo [INFO] Building React frontend...
             cd frontend
-            npm install --silent && npm run build
+            npm install --silent
+            if errorlevel 1 (
+                echo [WARN] npm install failed. API will still start without UI.
+                cd ..
+                goto :start_server
+            )
+            npm run build
             if errorlevel 1 (
                 echo [WARN] Frontend build failed. API will still start without UI.
             ) else (
@@ -146,7 +184,8 @@ if not exist "static\index.html" (
     echo [OK] Frontend already built
 )
 
-:: ── 9. Start server ───────────────────────────────────────────────────────────
+:: ── 10. Start server ──────────────────────────────────────────────────────────
+:start_server
 if not defined APP_ENV  set APP_ENV=development
 if not defined API_HOST set API_HOST=127.0.0.1
 if not defined API_PORT set API_PORT=8000

@@ -50,8 +50,26 @@ _auth_service = None
 # Sliding-window counter: max N requests per window_seconds per IP.
 # Uses Redis when available, falls back to in-memory (single-process only).
 
-_AUTH_RATE_LIMIT = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))  # max attempts
-_AUTH_RATE_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))  # per minute
+def _parse_int_env(name: str, default: int) -> int:
+    """Parse an integer env var, raising a clear error if the value is not a plain integer.
+
+    Values like '1h' or '60s' are rejected — these variables expect a bare number.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(
+            f"Environment variable {name}={raw!r} must be a plain integer "
+            f"(e.g. {default}), not a duration string. "
+            f"Check your .env file or shell environment."
+        )
+
+
+_AUTH_RATE_LIMIT = _parse_int_env("AUTH_RATE_LIMIT_REQUESTS", 10)   # max attempts
+_AUTH_RATE_WINDOW = _parse_int_env("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)  # seconds
 
 # Trusted reverse-proxy IPs — only these may set X-Forwarded-For.
 # Comma-separated list; defaults to loopback only.

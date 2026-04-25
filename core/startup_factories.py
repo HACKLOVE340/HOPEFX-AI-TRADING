@@ -265,6 +265,7 @@ async def init_database(s: Any) -> Any:
         from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
         from alembic.runtime.migration import MigrationContext
+        from alembic.util.exc import CommandError as AlembicCommandError
 
         alembic_cfg = AlembicConfig("alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
@@ -280,15 +281,29 @@ async def init_database(s: Any) -> Any:
             "Database migrations applied (alembic upgrade head, was=%s)",
             _current_rev or "none",
         )
-    except Exception as exc:
-        # Schema may already exist (e.g. created by a previous create_all run
-        # before Alembic was introduced, or a fresh SQLite dev database).
-        # Fall back to create_all with checkfirst=True so existing tables are
-        # left untouched.  Log at INFO — this is a normal first-run path.
-        logger.info("Alembic migration skipped (%s) — falling back to create_all", exc)
+    except ImportError:
+        # Alembic not installed — first-run path for minimal/dev installs.
+        # create_all is safe here because there is no existing schema to drift from.
+        logger.info("Alembic not installed — using create_all for schema setup")
         try:
             Base.metadata.create_all(engine, checkfirst=True)
             logger.info("Database schema ensured via create_all (checkfirst=True)")
+        except Exception as exc2:
+            logger.warning("create_all also failed: %s", exc2)
+    except Exception as exc:
+        # Alembic is installed but the upgrade failed (e.g. locked DB, bad
+        # migration, or the alembic_version table is missing on a DB that was
+        # bootstrapped via create_all before Alembic was introduced).
+        # Log at WARNING — this is not a normal path and the operator should fix it.
+        logger.warning(
+            "Alembic upgrade failed (%s). "
+            "Run 'alembic upgrade head' manually to apply pending migrations. "
+            "Falling back to create_all for new tables only — existing columns will NOT be added.",
+            exc,
+        )
+        try:
+            Base.metadata.create_all(engine, checkfirst=True)
+            logger.info("Database schema partially ensured via create_all (checkfirst=True)")
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
     s.db_engine = engine
@@ -501,6 +516,49 @@ async def init_news_router(s: Any, app: Any) -> Any:
     return r
 
 
+def _ensure_user_columns(engine: Any) -> None:
+    """Add columns to the users table that exist in the ORM model but are absent
+    from the live database.
+
+    Covers databases that were created before a migration was applied (e.g. the
+    KYC columns added in migration k1l2m3n4o5p6).  Each ADD COLUMN is wrapped in
+    its own try/except so a single missing column never blocks the others.
+    """
+    import sqlalchemy as _sa
+    from database.user_models import User
+
+    with engine.connect() as conn:
+        inspector = _sa.inspect(engine)
+        existing = {col["name"] for col in inspector.get_columns("users")}
+
+    missing = [col for col in User.__table__.columns if col.name not in existing]
+    if not missing:
+        return
+
+    with engine.begin() as conn:
+        for col in missing:
+            try:
+                col_type = col.type.compile(engine.dialect)
+                nullable = "NULL" if col.nullable else "NOT NULL"
+                default_clause = ""
+                if col.default is not None and col.default.is_scalar:
+                    val = col.default.arg
+                    if isinstance(val, str):
+                        default_clause = f" DEFAULT '{val}'"
+                    elif isinstance(val, bool):
+                        default_clause = f" DEFAULT {int(val)}"
+                    elif val is not None:
+                        default_clause = f" DEFAULT {val}"
+                conn.execute(
+                    _sa.text(
+                        f'ALTER TABLE users ADD COLUMN "{col.name}" {col_type}{default_clause} {nullable}'
+                    )
+                )
+                logger.info("users table: added missing column '%s'", col.name)
+            except Exception as exc:  # pragma: no cover
+                logger.warning("Could not add column '%s' to users: %s", col.name, exc)
+
+
 async def init_auth(s: Any) -> Any:
     from api.admin import log_activity
     from auth.jwt import _get_secret as _jwt_get_secret
@@ -521,6 +579,13 @@ async def init_auth(s: Any) -> Any:
     User.__table__.create(s.db_engine, checkfirst=True)
     UserSession.__table__.create(s.db_engine, checkfirst=True)
     LoginAttempt.__table__.create(s.db_engine, checkfirst=True)
+
+    # Add any columns present in the ORM model but missing from the live DB.
+    # This handles databases created before a migration was applied (e.g. the
+    # KYC columns added in migration k1l2m3n4o5p6).  Safe to run on every
+    # startup — existing columns are left untouched.
+    _ensure_user_columns(s.db_engine)
+
     svc = AuthService(session_factory=s.db_session_factory)
     set_auth_service(svc)
     log_activity("Auth Service initialized")
