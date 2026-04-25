@@ -57,12 +57,30 @@ class ConfigStore:
     # ── Redis helpers ─────────────────────────────────────────────────────────
 
     def _redis(self):
-        """Return a synchronous Redis client, or None if unavailable."""
+        """
+        Return a synchronous Redis client, or None if unavailable.
+
+        Injects REDIS_PASSWORD when it is not already embedded in REDIS_URL,
+        matching the same logic used by EventBus and MarketDataCache so all
+        components authenticate consistently.
+        """
         try:
             import redis as _redis
 
             url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-            return _redis.from_url(url, decode_responses=True, socket_timeout=2)
+            password = os.getenv("REDIS_PASSWORD", "") or None
+
+            # Inject password into URL when not already embedded.
+            if password and "@" not in url.split("://", 1)[-1]:
+                scheme, rest = url.split("://", 1)
+                url = f"{scheme}://:{password}@{rest}"
+
+            return _redis.from_url(
+                url,
+                decode_responses=True,
+                socket_timeout=2,
+                socket_connect_timeout=2,
+            )
         except Exception as exc:
             logger.debug("ConfigStore: Redis unavailable: %s", exc)
             return None
