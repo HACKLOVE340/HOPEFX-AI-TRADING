@@ -42,12 +42,11 @@ Usage
 
     @app.websocket("/ws/live")
     async def live_ws(ws: WebSocket):
-        client_ip = _get_client_ip(ws)
+        client_ip = get_client_ip(ws)
         allowed, reason = await limiter.check_and_register(ws, client_ip)
         if not allowed:
-            await ws.close(code=1008, reason=reason)
+            return  # socket already closed by check_and_register()
 
-Return
         await ws.accept()
         try:
             ...
@@ -311,14 +310,14 @@ class WebSocketConnectionLimiter:
                     await self._redis_release(client_ip)
             else:
                 # Redis died after this connection was registered there.
-                # The Redis key will expire via its TTL safety net; decrement
-                # the local counter as a best-effort guard against the cap.
+                # The local counter was never incremented for this connection
+                # so decrementing it would corrupt the count.  The Redis key
+                # expires via its TTL safety net (_RATE_WINDOW_S * 10).
                 logger.debug(
                     "WS release: Redis gone after registration for %s — "
-                    "decrementing local counter as safety net",
+                    "skipping local decrement (counter was never incremented locally)",
                     client_ip,
                 )
-                await self._local_release(client_ip)
             return
 
         # "local" backend or unknown (safety net for unmatched release calls)
