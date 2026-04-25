@@ -45,11 +45,17 @@ _STARTUP_MAX_RETRIES = int(os.getenv("MACRO_BRIDGE_STARTUP_RETRIES", "3"))
 _STARTUP_RETRY_DELAY = float(os.getenv("MACRO_BRIDGE_STARTUP_RETRY_S", "5.0"))
 
 # Local cache file for last-known-good FRED data.
-# Default is relative to the repository root; override via env var with an absolute path.
+# Must point to a .json FILE, not a directory.
+# Default resolves to <repo_root>/data/macro/fred_cache.json.
+# Override via FRED_CACHE_PATH env var — ensure the value ends in .json.
 _FRED_CACHE_PATH = os.getenv(
     "FRED_CACHE_PATH",
     str(Path(__file__).resolve().parents[4] / "data" / "macro" / "fred_cache.json"),
 )
+# Guard: if the env var was set to a directory (e.g. "data/fred_cache/"),
+# append the filename so open() doesn't raise IsADirectoryError.
+if _FRED_CACHE_PATH and not _FRED_CACHE_PATH.endswith(".json"):
+    _FRED_CACHE_PATH = str(Path(_FRED_CACHE_PATH) / "fred_cache.json")
 
 
 class MacroStoreBridge:
