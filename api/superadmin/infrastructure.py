@@ -58,8 +58,10 @@ async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) ->
     try:
         from database.connection import SessionLocal
 
+        from sqlalchemy import text as _text
+
         db = SessionLocal()
-        db.execute("SELECT 1")  # type: ignore[arg-type]
+        db.execute(_text("SELECT 1"))
         db.close()
         health["db"] = "healthy"
     except Exception:
