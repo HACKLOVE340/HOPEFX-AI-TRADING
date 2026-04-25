@@ -14,13 +14,19 @@ import type { NewsArticle } from '../../types';
 // ── SVG arc gauge ─────────────────────────────────────────────────────────────
 
 function ArcGauge({ score }: { score: number }) {
-  // score: -1 (full bear) to +1 (full bull)
+  // Guard: clamp to [-1, 1] and treat NaN/Infinity as 0 (neutral).
+  // A backend bug returning null or a non-finite value must not produce
+  // NaN SVG coordinates that silently blank the gauge.
+  const safeScore = Number.isFinite(score) ? Math.max(-1, Math.min(1, score)) : 0;
+
   const cx = 80, cy = 80, r = 60;
   const startAngle = 210; // degrees
   const sweepAngle = 120; // total arc = 120° each side
 
   // Needle angle: -1 → 210°, 0 → 270°, +1 → 330°
-  const needleAngle = 270 + score * sweepAngle;
+  const needleAngle = 270 + safeScore * sweepAngle;
+  // Use safeScore for all downstream calculations
+  const score = safeScore; // shadow param with validated value
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
@@ -97,13 +103,16 @@ function ArticleRow({ article }: { article: NewsArticle }) {
           className="font-mono tabular-nums text-[11px] font-semibold shrink-0"
           style={{ color: scoreColor }}
         >
-          {article.sentiment_score >= 0 ? '+' : ''}{article.sentiment_score.toFixed(2)}
+          {Number.isFinite(article.sentiment_score)
+            ? `${article.sentiment_score >= 0 ? '+' : ''}${article.sentiment_score.toFixed(2)}`
+            : '—'}
         </span>
       </div>
       <div className="flex items-center gap-2">
         <Badge variant={variant} dot>{article.sentiment_label}</Badge>
         <span className="text-[9px] text-slate-600 font-mono">{article.source}</span>
         <span className="text-[9px] text-slate-600 ml-auto">{fmtRelative(article.published_at)}</span>
+        {/* sentiment_score guard: backend may return null/NaN for unscored articles */}
       </div>
     </div>
   );
