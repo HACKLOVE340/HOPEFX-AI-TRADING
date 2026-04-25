@@ -1,5 +1,6 @@
 // SystemReliabilitySection.tsx — Super Admin only
 import React, { useState, useEffect, useCallback } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
 import { Card, SectionHeader, Button, StatusBadge } from '../settings/ui';
 
@@ -812,14 +813,15 @@ const SystemReliabilitySection: React.FC = () => {
     fetchMetrics();
     fetchEnv();
     fetchHistory();
-    const interval = setInterval(() => {
-      fetchStatus();
-      fetchTraces();
-      fetchMetrics();
-      fetchHistory();
-    }, 30000);
-    return () => clearInterval(interval);
   }, [fetchStatus, fetchTraces, fetchMetrics, fetchEnv, fetchHistory]);
+
+  // Refresh live data every 30s — pauses when tab is hidden
+  usePolling(() => {
+    fetchStatus();
+    fetchTraces();
+    fetchMetrics();
+    fetchHistory();
+  }, 30_000);
 
   const handleProbe = async (component: string) => {
     setProbingComp(component);

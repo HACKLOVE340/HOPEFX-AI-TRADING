@@ -1,6 +1,7 @@
 // superadmin/OverviewSection.tsx — platform-wide KPI overview
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   KpiTile, SectionCard, StatusBadge, ActionBtn,
   Spinner, ErrorState, LoadingRows, SAStyles,
@@ -160,11 +161,8 @@ const OverviewSection: React.FC = () => {
 
   useEffect(() => { load(); loadInfra(); }, [load, loadInfra]);
 
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const id = setInterval(() => { load(true); loadInfra(); }, 30_000);
-    return () => clearInterval(id);
-  }, [load, loadInfra]);
+  // Auto-refresh every 30s — pauses when tab is hidden
+  usePolling(() => { load(true); loadInfra(); }, 30_000);
 
   if (loading) return (
     <div>
