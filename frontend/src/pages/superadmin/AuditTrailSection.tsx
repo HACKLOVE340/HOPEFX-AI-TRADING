@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 
 import {
   SectionCard, ActionBtn, Select, Input,
-  KpiTile, ErrorState, LoadingRows, SAStyles,
+  KpiTile, ErrorState, LoadingRows,
 } from './ui';
 
 const fmtDate = (iso: string | null) =>
@@ -148,7 +148,7 @@ const AuditTrailSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
 
       {msg && (
         <div style={{

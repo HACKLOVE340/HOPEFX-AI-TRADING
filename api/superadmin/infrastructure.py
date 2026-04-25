@@ -359,13 +359,13 @@ async def get_kyc_queue(
                         "user_id": str(u.id),
                         "username": u.username,
                         "email": u.email,
-                        "kyc_status": getattr(u, "kyc_status", "unverified"),
-                        "submitted_at": _iso(getattr(u, "kyc_submitted_at", None)),
-                        "reviewed_at": _iso(getattr(u, "kyc_reviewed_at", None)),
-                        "reviewer_id": getattr(u, "kyc_reviewer_id", None),
-                        "rejection_reason": getattr(u, "kyc_rejection_reason", None),
-                        "country": getattr(u, "country", None),
-                        "document_type": getattr(u, "kyc_document_type", None),
+                        "kyc_status": u.kyc_status or "unverified",
+                        "submitted_at": _iso(u.kyc_submitted_at),
+                        "reviewed_at": _iso(u.kyc_reviewed_at),
+                        "reviewer_id": u.kyc_reviewer_id,
+                        "rejection_reason": u.kyc_rejection_reason,
+                        "country": u.country,
+                        "document_type": u.kyc_document_type,
                     }
                 )
     except Exception as exc:
@@ -3140,7 +3140,8 @@ async def _check_db_service() -> dict:
     try:
         db = next(_get_db())
         if db:
-            db.execute(_sa_text("SELECT 1"))
+            # SQLAlchemy 2.x requires the result cursor to be consumed.
+            db.execute(_sa_text("SELECT 1")).scalar()
             return {
                 "status": "healthy",
                 "latency_ms": round((time.time() - start) * 1000),

@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
-  ConfirmDialog, Input, SAStyles,
+  ConfirmDialog, Input,
 } from './ui';
 
 const fmtDate = (iso: string | null) =>
@@ -99,7 +99,7 @@ const NuclearControlsSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
       {confirm && (
         <ConfirmDialog
           title={confirm.label}

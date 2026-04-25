@@ -4,7 +4,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Select, Input,
-  ErrorState, SAStyles,
+  ErrorState,
 } from './ui';
 import type { LogEntry } from './types';
 
@@ -90,7 +90,7 @@ const LogsSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {/* Log level controls */}
       {Object.keys(logLevels).length > 0 && (

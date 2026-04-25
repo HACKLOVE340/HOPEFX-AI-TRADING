@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type {
   CircuitBreakerState, VaRMetrics, StressTestResult,
@@ -105,8 +105,8 @@ const RiskManagementSection: React.FC = () => {
     ? propBreaches.filter(b => b.status === breachFilter || b.severity === breachFilter || b.breach_type === breachFilter)
     : propBreaches;
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   const TABS: { id: RiskTab; label: string; icon: string }[] = [
     { id: 'overview',        label: 'Overview',       icon: '📊' },
@@ -118,7 +118,7 @@ const RiskManagementSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       {confirm && (
         <ConfirmDialog
           title={`Reset Circuit Breaker: ${confirm.name}`}

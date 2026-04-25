@@ -507,9 +507,11 @@ class AuthService:
             if not user or user.status != "active":
                 return False, "User account inactive", None
 
-            # Revoke old session
+            # Revoke old session, recording its last activity time.
+            now = _now()
             sess_row.is_revoked = True
-            sess_row.revoked_at = _now()
+            sess_row.revoked_at = now
+            sess_row.last_active_at = now
 
             # Issue new pair
             access_token = self._create_access_token(user)
@@ -699,6 +701,7 @@ class AuthService:
     ) -> tuple[str, object]:
         from database.user_models import UserSession
 
+        now = _now()
         raw_token = secrets.token_urlsafe(48)
         sess_row = UserSession(
             id=str(uuid.uuid4()),
@@ -706,7 +709,8 @@ class AuthService:
             refresh_token_hash=_hash_token(raw_token),
             device_info=device_info[:255] if device_info else None,
             ip_address=ip_address,
-            expires_at=_now() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+            expires_at=now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+            last_active_at=now,
         )
         session.add(sess_row)
         return raw_token, sess_row

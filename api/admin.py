@@ -447,21 +447,21 @@ async def decide_kyc(
             target = await _aio.to_thread(_fetch_email)
             if target:
                 subject_map = {
-                        "approve": "Your KYC has been approved",
-                        "reject": "Your KYC submission was not approved",
-                        "request_more_info": "Additional information required for KYC",
-                    }
-                    msg_map = {
-                        "approve": "Your identity verification has been approved. You can now trade without restrictions.",
-                        "reject": f"Your KYC submission was not approved. {body.notes or ''}",
-                        "request_more_info": f"We need additional information to complete your verification. {body.notes or ''}",
-                    }
-                    _send(
-                        to=target.email,
-                        subject=subject_map[body.action],
-                        html=f"<p>{msg_map[body.action]}</p>",
-                        text=msg_map[body.action],
-                    )
+                    "approve": "Your KYC has been approved",
+                    "reject": "Your KYC submission was not approved",
+                    "request_more_info": "Additional information required for KYC",
+                }
+                msg_map = {
+                    "approve": "Your identity verification has been approved. You can now trade without restrictions.",
+                    "reject": f"Your KYC submission was not approved. {body.notes or ''}",
+                    "request_more_info": f"We need additional information to complete your verification. {body.notes or ''}",
+                }
+                _send(
+                    to=target.email,
+                    subject=subject_map[body.action],
+                    html=f"<p>{msg_map[body.action]}</p>",
+                    text=msg_map[body.action],
+                )
         except Exception as email_exc:
             logger.warning("KYC notification email failed (non-fatal): %s", email_exc)
 

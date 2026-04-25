@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Select, Input,
-  KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { DataSubjectRequest } from './types';
 
@@ -133,7 +133,7 @@ const GDPRSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
       {confirm && (
         <ConfirmDialog
           title={confirm.label}

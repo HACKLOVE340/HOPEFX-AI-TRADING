@@ -698,9 +698,6 @@ export const superadminApi = {
   // ── Diagnostics remediation log ───────────────────────────────────────────
   diagnosticsRemediationLog: (limit?: number)  => api.get('/superadmin/diagnostics/remediation-log', { params: limit ? { limit } : {} }),
 
-  // ── Auto-healing audit log ────────────────────────────────────────────────
-  autoHealAuditLog:    (limit?: number)        => api.get('/superadmin/auto-healing/audit-log', { params: limit ? { limit } : {} }),
-
   // ── Infrastructure extended ───────────────────────────────────────────────
   infraScheduledJobs:  ()                      => api.get('/superadmin/system/scheduled-jobs'),
   infraBackups:        ()                      => api.get('/superadmin/system/backups'),

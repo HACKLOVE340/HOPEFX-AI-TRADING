@@ -4,7 +4,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Input, Toggle,
-  ErrorState, LoadingRows, SAStyles,
+  ErrorState, LoadingRows,
 } from './ui';
 import type { FeatureFlag } from './types';
 
@@ -72,15 +72,15 @@ const FeatureFlagsSection: React.FC = () => {
     } finally { setBusy(null); }
   };
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   const enabledCount  = flags.filter(f => f.enabled).length;
   const disabledCount = flags.length - enabledCount;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {/* Summary */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20 }}>

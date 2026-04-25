@@ -6,7 +6,7 @@ import { superadminApi } from '../../hooks/useApi';
 import {
   SectionCard, ActionBtn, KpiTile, StatusBadge,
   Toggle, Input, Select, Divider,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles, Spinner,
+  ErrorState, LoadingRows, ConfirmDialog, Spinner,
 } from './ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1166,12 +1166,12 @@ const AutoHealingSection: React.FC = () => {
   // Pending approval badge count
   const approvalCount = useMemo(() => pendingApproval.length, [pendingApproval]);
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       <style>{`
         @keyframes heal-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }

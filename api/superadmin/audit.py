@@ -47,11 +47,13 @@ async def get_audit_log(
                 "events": [
                     {
                         "event_id": str(r.id),
-                        "user_id": getattr(r, "user_id", None),
+                        "user_id": r.user_id,
                         "event_type": r.event_type,
-                        "detail": getattr(r, "detail", ""),
-                        "ip_address": getattr(r, "ip_address", ""),
-                        "created_at": _iso(r.created_at),
+                        "detail": r.detail or "",
+                        "ip_address": r.ip_address or "",
+                        # created_at is the canonical timestamp; fall back to
+                        # timestamp for rows written before the migration.
+                        "created_at": _iso(r.created_at or r.timestamp),
                     }
                     for r in rows
                 ],
@@ -73,7 +75,10 @@ async def export_audit_log(user: TokenPayload = Depends(_require_superadmin)):
 
     result = await get_audit_log(page=1, limit=500, user=user)
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"])
+    writer = csv.DictWriter(
+        buf,
+        fieldnames=["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"],
+    )
     writer.writeheader()
     writer.writerows(result["events"])
     buf.seek(0)

@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
-  ErrorState, LoadingRows, SAStyles,
+  ErrorState, LoadingRows,
 } from './ui';
 import type { BrokerHealth, TCAMetric } from './types';
 
@@ -114,12 +114,12 @@ const BrokerManagementSection: React.FC = () => {
   const disconnectedCount = brokers.filter(b => b.status === 'disconnected').length;
   const avgLatency        = brokers.length ? Math.round(brokers.reduce((s, b) => s + b.latency_ms, 0) / brokers.length) : 0;
 
-  if (loading) return <><SAStyles /><LoadingRows rows={6} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={6} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>

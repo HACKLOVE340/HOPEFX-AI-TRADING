@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
-  ConfirmDialog, SAStyles,
+  ConfirmDialog,
 } from './ui';
 
 const fmtDate = (iso: string | null) =>
@@ -135,7 +135,7 @@ const SecurityInfraSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
       {rotateConfirm && (
         <ConfirmDialog
           title="Rotate HSM Key"

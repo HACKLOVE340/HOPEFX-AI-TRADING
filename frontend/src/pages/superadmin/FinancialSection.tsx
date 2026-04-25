@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Select, Input, StatusBadge,
-  KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { RevenueStats, SubscriptionStats, Chargeback, TaxReport, ReconciliationRecord, AffiliateStats } from './types';
 import { PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
@@ -579,7 +579,7 @@ const FinancialSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {/* ── Confirm refund dialog ── */}
       {refundTarget && (
