@@ -103,7 +103,7 @@ interface TCAStats {
 // ── API ───────────────────────────────────────────────────────────────────────
 // Uses the shared axios instance — JWT injected automatically via interceptor.
 
-const api = {
+const tcaApi = {
   reports: (lastN = 500) =>
     sharedApi.get<TCAReport[]>('/tca/report', { params: { last_n: lastN } })
       .then(r => r.data ?? []),
@@ -266,28 +266,28 @@ const TCADashboard: React.FC = () => {
   // ── Queries ───────────────────────────────────────────────────────────────
   const { data: reports = [], isLoading: loadingReports } = useQuery({
     queryKey: QK.reports,
-    queryFn:  () => api.reports(500),
+    queryFn:  () => tcaApi.reports(500),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
 
   const { data: records = [], isLoading: loadingRecords } = useQuery({
     queryKey: QK.records,
-    queryFn:  () => api.records(200),
+    queryFn:  () => tcaApi.records(200),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
 
   const { data: alerts = [], isLoading: loadingAlerts } = useQuery({
     queryKey: QK.alerts,
-    queryFn:  api.alerts,
+    queryFn:  tcaApi.alerts,
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
 
   const { data: stats, isLoading: loadingStats } = useQuery({
     queryKey: QK.stats,
-    queryFn:  () => api.stats(500),
+    queryFn:  () => tcaApi.stats(500),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
@@ -296,7 +296,7 @@ const TCADashboard: React.FC = () => {
 
   // ── Flush mutation (admin only) ───────────────────────────────────────────
   const flushMutation = useMutation({
-    mutationFn: api.flush,
+    mutationFn: tcaApi.flush,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['tca'] });
       setFlushConfirm(false);
