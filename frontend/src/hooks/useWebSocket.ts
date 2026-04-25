@@ -88,10 +88,29 @@ export function useWebSocket(enabled = true) {
     switch (msg.type) {
       case 'connected':
         if (msg.auth_required) {
-          const token = getState().token;
-          if (token && wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }));
-          }
+          // Async: refresh token if it's null (happens after page reload because
+          // the JWT lives in memory only and isn't persisted to localStorage).
+          const sendAuth = async () => {
+            let token = getState().token;
+            if (!token) {
+              try {
+                const res = await fetch('/api/auth/refresh', {
+                  method: 'POST', credentials: 'include',
+                });
+                if (res.ok) {
+                  const data = await res.json() as { access_token?: string; user?: import('../types').User };
+                  if (data.access_token && data.user) {
+                    getState().setAuth(data.access_token, data.user);
+                    token = data.access_token;
+                  }
+                }
+              } catch { /* refresh failed — WS will retry */ }
+            }
+            if (token && wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }));
+            }
+          };
+          void sendAuth();
         } else {
           authedRef.current = true;
           setWsStatus('connected');

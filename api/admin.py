@@ -357,11 +357,13 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:  # pylint: disable=not-callable
-            pending = session.query(User).filter(User.kyc_status.in_(["pending", "submitted", "under_review"])).all()
-            return {
-                "count": len(pending),
-                "users": [
+
+        def _query():
+            with _state.db_session_factory() as session:  # pylint: disable=not-callable
+                rows = session.query(User).filter(
+                    User.kyc_status.in_(["pending", "submitted", "under_review"])
+                ).all()
+                return [
                     {
                         "user_id": u.id,
                         "email": u.email,
@@ -369,9 +371,12 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
                         "kyc_status": u.kyc_status,
                         "created_at": str(u.created_at),
                     }
-                    for u in pending
-                ],
-            }
+                    for u in rows
+                ]
+
+        import asyncio as _aio
+        users = await _aio.to_thread(_query)
+        return {"count": len(users), "users": users}
     except HTTPException:
         raise
     except Exception as exc:
@@ -403,18 +408,26 @@ async def decide_kyc(
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
 
-        with _state.db_session_factory() as session:  # pylint: disable=not-callable
-            target = session.query(User).filter_by(id=body.user_id).first()
-            if not target:
-                raise HTTPException(status_code=404, detail="User not found")
+        import asyncio as _aio
 
-            status_map = {
-                "approve": "approved",
-                "reject": "rejected",
-                "request_more_info": "more_info_required",
-            }
-            target.kyc_status = status_map[body.action]
-            session.commit()
+        status_map = {
+            "approve": "approved",
+            "reject": "rejected",
+            "request_more_info": "more_info_required",
+        }
+
+        def _update_kyc():
+            with _state.db_session_factory() as session:  # pylint: disable=not-callable
+                t = session.query(User).filter_by(id=body.user_id).first()
+                if not t:
+                    return None
+                t.kyc_status = status_map[body.action]
+                session.commit()
+                return True
+
+        found = await _aio.to_thread(_update_kyc)
+        if found is None:
+            raise HTTPException(status_code=404, detail="User not found")
 
         # Audit log
         log_activity(
@@ -427,10 +440,13 @@ async def decide_kyc(
             from core.email_service import _send
             from database.user_models import User as _User
 
-            with _state.db_session_factory() as session:  # pylint: disable=not-callable
-                target = session.query(_User).filter_by(id=body.user_id).first()
-                if target:
-                    subject_map = {
+            def _fetch_email():
+                with _state.db_session_factory() as session:  # pylint: disable=not-callable
+                    return session.query(_User).filter_by(id=body.user_id).first()
+
+            target = await _aio.to_thread(_fetch_email)
+            if target:
+                subject_map = {
                         "approve": "Your KYC has been approved",
                         "reject": "Your KYC submission was not approved",
                         "request_more_info": "Additional information required for KYC",
@@ -473,18 +489,27 @@ async def get_kyc_status(
 
         if not _state or not _state.db_session_factory:
             raise HTTPException(status_code=503, detail="Database not available")
-        with _state.db_session_factory() as session:  # pylint: disable=not-callable
-            target = session.query(User).filter_by(id=user_id).first()
-            if not target:
-                raise HTTPException(status_code=404, detail="User not found")
-            return {
-                "user_id": target.id,
-                "email": target.email,
-                "kyc_status": target.kyc_status,
-                "is_email_verified": target.is_email_verified,
-                "role": target.role,
-                "status": target.status,
-            }
+
+        import asyncio as _aio
+
+        def _fetch():
+            with _state.db_session_factory() as session:  # pylint: disable=not-callable
+                t = session.query(User).filter_by(id=user_id).first()
+                if not t:
+                    return None
+                return {
+                    "user_id": t.id,
+                    "email": t.email,
+                    "kyc_status": t.kyc_status,
+                    "is_email_verified": t.is_email_verified,
+                    "role": t.role,
+                    "status": t.status,
+                }
+
+        result = await _aio.to_thread(_fetch)
+        if result is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        return result
     except HTTPException:
         raise
     except Exception as exc:

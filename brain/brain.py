@@ -246,6 +246,8 @@ class HOPEFXBrain:
             missing.append("broker")
         if not self.price_engine:
             missing.append("price_engine")
+        if not self.strategy_manager:
+            missing.append("strategy_manager")
 
         if missing:
             logger.warning(
@@ -825,6 +827,8 @@ class HOPEFXBrain:
     async def _make_strategy_decisions(self):
         """Execute strategy logic - WITH TIMEOUTS AND CONCURRENCY CONTROL"""
         if not self.strategy_manager:
+            logger.warning("HOPEFXBrain: strategy_manager is None — no signals will be generated. "
+                           "Check that init_strategy_brain completed successfully at startup.")
             return
 
         try:
