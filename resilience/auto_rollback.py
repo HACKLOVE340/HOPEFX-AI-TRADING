@@ -540,8 +540,15 @@ class AutoRollbackManager:
         import re as _re
 
         for rel_path in target_files:
-            # Validate path is a safe relative file path before passing to subprocess
-            if not _re.fullmatch(r"[A-Za-z0-9_./ \-]+", str(rel_path)):
+            # Normalise Windows-style backslashes to forward slashes before
+            # validation.  The self-healer stores paths using os.sep which is
+            # '\\' on Windows; git always accepts forward slashes on all
+            # platforms, so we normalise unconditionally.
+            rel_path = str(rel_path).replace("\\", "/")
+
+            # Validate path is a safe relative file path before passing to subprocess.
+            # Allowed: letters, digits, dot, underscore, forward-slash, hyphen, space.
+            if not _re.fullmatch(r"[A-Za-z0-9_./ \-]+", rel_path):
                 result.errors.append(f"Unsafe path rejected for git checkout: {rel_path!r}")
                 continue
             try:
