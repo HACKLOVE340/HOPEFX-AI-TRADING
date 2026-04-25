@@ -491,7 +491,12 @@ def get_sync_redis() -> Any | None:
     Return a synchronous Redis client using the same env-var configuration as
     get_redis().  Falls back gracefully to None when Redis is unavailable.
 
-    Used by components that cannot run in an async context (e.g. TCA recorder).
+    Used by components that cannot run in an async context (e.g. superadmin
+    endpoints, TCA recorder, Celery tasks).
+
+    Password injection: if REDIS_PASSWORD is set and not already embedded in
+    REDIS_URL, it is injected into the URL before connecting — matching the
+    same logic used by EventBus, MarketDataCache, and ConfigStore.
     """
     try:
         import redis as _redis_sync
@@ -500,8 +505,20 @@ def get_sync_redis() -> Any | None:
         return None
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    password = os.getenv("REDIS_PASSWORD", "") or None
+
+    # Inject password when not already embedded in the URL.
+    if password and "@" not in redis_url.split("://", 1)[-1]:
+        scheme, rest = redis_url.split("://", 1)
+        redis_url = f"{scheme}://:{password}@{rest}"
+
     try:
-        client = _redis_sync.Redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+        client = _redis_sync.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
         client.ping()
         return client
     except Exception as exc:
@@ -509,5 +526,13 @@ def get_sync_redis() -> Any | None:
         return None
 
 
-# Convenience alias used by many modules that call `get_redis_client()`
+# ── Aliases ───────────────────────────────────────────────────────────────────
+# get_redis_client is the ASYNC client factory (aliased to get_redis).
+# Always await it: `rc = await get_redis_client()`.
+# For synchronous contexts use get_sync_redis() or get_sync_redis_client().
 get_redis_client = get_redis
+
+# Explicit sync alias for callers that need a synchronous client.
+# Prefer this over get_redis_client in non-async code to avoid the
+# "coroutine object has no attribute" error from forgetting await.
+get_sync_redis_client = get_sync_redis
