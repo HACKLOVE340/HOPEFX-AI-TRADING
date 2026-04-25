@@ -3,6 +3,7 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """SuperAdmin infrastructure, compliance, risk, brokers, whitelabel, GDPR, nuclear, alerting, and system sub-router."""
 
+import asyncio
 import logging
 import time
 import uuid
@@ -54,51 +55,90 @@ router = APIRouter()
 
 @router.get("/infra/health")
 async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) -> dict:
-    health: dict = {"db": "unknown", "redis": "unknown", "api": "healthy"}
-    try:
-        from database.connection import SessionLocal
+    """
+    Real system metrics: CPU, memory, disk, network I/O, load averages.
+    Matches the frontend InfraHealth interface exactly.
+    """
+    import psutil
 
-        from sqlalchemy import text as _text
+    cpu_pct = psutil.cpu_percent(interval=0.2)
+    mem = psutil.virtual_memory()
+    disk = psutil.disk_usage("/")
 
-        db = SessionLocal()
-        db.execute(_text("SELECT 1"))
-        db.close()
-        health["db"] = "healthy"
-    except Exception:
-        health["db"] = "error"
-    try:
-        from cache.redis_client import get_redis_client
+    # Network I/O — delta over 1 second for a per-second rate
+    net1 = psutil.net_io_counters()
+    await asyncio.sleep(1)
+    net2 = psutil.net_io_counters()
+    bytes_in  = max(0, net2.bytes_recv - net1.bytes_recv)
+    bytes_out = max(0, net2.bytes_sent - net1.bytes_sent)
 
-        rc = get_redis_client()
-        if rc and rc.ping():
-            health["redis"] = "healthy"
-        else:
-            health["redis"] = "error"
-    except Exception:
-        health["redis"] = "error"
-    return health
+    load_avg = psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0.0, 0.0, 0.0)
+
+    return {
+        "cpu_pct":          round(cpu_pct, 1),
+        "mem_pct":          round(mem.percent, 1),
+        "mem_used_mb":      round(mem.used / 1_048_576, 1),
+        "mem_total_mb":     round(mem.total / 1_048_576, 1),
+        "disk_pct":         round(disk.percent, 1),
+        "disk_used_gb":     round(disk.used / 1_073_741_824, 2),
+        "disk_total_gb":    round(disk.total / 1_073_741_824, 2),
+        "network_in_mbps":  round(bytes_in  / 1_048_576, 3),
+        "network_out_mbps": round(bytes_out / 1_048_576, 3),
+        "load_avg_1m":      round(load_avg[0], 2),
+        "load_avg_5m":      round(load_avg[1], 2),
+        "load_avg_15m":     round(load_avg[2], 2),
+    }
 
 
 @router.get("/infra/cache")
 async def get_cache_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """
+    Redis cache statistics matching the frontend CacheStats interface:
+    hit_rate_pct, total_keys, memory_used_mb, evictions, connected_clients, ops_per_sec.
+    """
     try:
         from cache.redis_client import get_redis_client
 
         rc = get_redis_client()
         if not rc:
-            return {"available": False}
+            return {
+                "hit_rate_pct": 0.0, "total_keys": 0, "memory_used_mb": 0.0,
+                "evictions": 0, "connected_clients": 0, "ops_per_sec": 0.0,
+                "available": False,
+            }
         info = rc.info()
+        hits   = info.get("keyspace_hits", 0)
+        misses = info.get("keyspace_misses", 0)
+        total_ops = hits + misses
+        hit_rate  = round((hits / total_ops * 100) if total_ops > 0 else 0.0, 2)
+
+        # total_keys: sum across all keyspace dbs
+        total_keys = 0
+        keyspace = rc.info("keyspace")
+        for db_info in keyspace.values():
+            if isinstance(db_info, dict):
+                total_keys += db_info.get("keys", 0)
+
+        # ops_per_sec from instantaneous_ops_per_sec
+        ops_per_sec = float(info.get("instantaneous_ops_per_sec", 0))
+
         return {
-            "available": True,
-            "used_memory_mb": round(info.get("used_memory", 0) / 1_048_576, 2),
+            "available":         True,
+            "hit_rate_pct":      hit_rate,
+            "total_keys":        total_keys,
+            "memory_used_mb":    round(info.get("used_memory", 0) / 1_048_576, 2),
+            "evictions":         info.get("evicted_keys", 0),
             "connected_clients": info.get("connected_clients", 0),
-            "total_commands": info.get("total_commands_processed", 0),
-            "keyspace_hits": info.get("keyspace_hits", 0),
-            "keyspace_misses": info.get("keyspace_misses", 0),
-            "uptime_seconds": info.get("uptime_in_seconds", 0),
+            "ops_per_sec":       ops_per_sec,
+            "uptime_seconds":    info.get("uptime_in_seconds", 0),
         }
     except Exception as exc:
-        return {"available": False, "error": type(exc).__name__}
+        logger.warning("cache_stats error: %s", exc)
+        return {
+            "hit_rate_pct": 0.0, "total_keys": 0, "memory_used_mb": 0.0,
+            "evictions": 0, "connected_clients": 0, "ops_per_sec": 0.0,
+            "available": False, "error": type(exc).__name__,
+        }
 
 
 @router.post("/infra/cache/flush")
@@ -129,33 +169,162 @@ async def flush_cache(
 
 @router.get("/infra/db")
 async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """
+    Real PostgreSQL statistics matching the frontend DbStats interface:
+    active_connections, max_connections, query_time_avg_ms, size_mb, slow_queries, deadlocks.
+    Falls back to SQLite-compatible queries when pg_stat_* views are unavailable.
+    """
     try:
         from database.connection import SessionLocal
         from sqlalchemy import text
 
         db = SessionLocal()
         try:
-            result = db.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"))
-            table_count = result.scalar() or 0
-            return {"available": True, "table_count": table_count}
+            stats: dict = {
+                "active_connections": 0,
+                "max_connections": 0,
+                "query_time_avg_ms": 0.0,
+                "size_mb": 0.0,
+                "slow_queries": 0,
+                "deadlocks": 0,
+                "available": True,
+            }
+
+            # PostgreSQL-specific stats
+            try:
+                row = db.execute(text(
+                    "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
+                )).scalar()
+                stats["active_connections"] = int(row or 0)
+
+                row = db.execute(text(
+                    "SELECT setting::int FROM pg_settings WHERE name = 'max_connections'"
+                )).scalar()
+                stats["max_connections"] = int(row or 0)
+
+                row = db.execute(text(
+                    "SELECT round(avg(extract(epoch from now() - query_start)) * 1000)::bigint "
+                    "FROM pg_stat_activity WHERE state = 'active' AND query_start IS NOT NULL"
+                )).scalar()
+                stats["query_time_avg_ms"] = float(row or 0)
+
+                row = db.execute(text(
+                    "SELECT round(pg_database_size(current_database()) / 1048576.0, 2)"
+                )).scalar()
+                stats["size_mb"] = float(row or 0)
+
+                row = db.execute(text(
+                    "SELECT count(*) FROM pg_stat_activity "
+                    "WHERE state = 'active' AND extract(epoch from now() - query_start) > 1"
+                )).scalar()
+                stats["slow_queries"] = int(row or 0)
+
+                row = db.execute(text(
+                    "SELECT sum(deadlocks) FROM pg_stat_database"
+                )).scalar()
+                stats["deadlocks"] = int(row or 0)
+
+            except Exception:
+                # SQLite / non-PG fallback: basic connectivity + table count
+                row = db.execute(text(
+                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"
+                )).scalar()
+                stats["active_connections"] = 1
+                stats["size_mb"] = 0.0
+
+            return stats
         finally:
             db.close()
     except Exception as exc:
-        return {"available": False, "error": type(exc).__name__}
+        logger.warning("db_stats error: %s", exc)
+        return {
+            "active_connections": 0, "max_connections": 0, "query_time_avg_ms": 0.0,
+            "size_mb": 0.0, "slow_queries": 0, "deadlocks": 0, "available": False,
+            "error": type(exc).__name__,
+        }
 
 
 @router.get("/infra/queues")
 async def get_queue_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
-    queues: dict = {}
+    """
+    Queue statistics matching the frontend QueueEntry[] interface:
+    [{ name, pending, processing, failed, workers }]
+    Reads from Celery inspect + Redis list lengths.
+    """
+    QUEUE_NAMES = [
+        "app:logs",
+        "platform:broadcasts",
+        "ml:retrain_queue",
+        "signals:queue",
+        "celery",
+        "celery:priority",
+    ]
+
+    # Build base entries from Redis list lengths
+    queue_map: dict[str, dict] = {}
     try:
         from cache.redis_client import get_redis_client
-
         rc = get_redis_client()
         if rc:
-            for q in ["app:logs", "platform:broadcasts", "ml:retrain_queue", "signals:queue"]:
-                queues[q] = rc.llen(q)
+            for q in QUEUE_NAMES:
+                queue_map[q] = {
+                    "name":       q,
+                    "pending":    rc.llen(q),
+                    "processing": 0,
+                    "failed":     0,
+                    "workers":    0,
+                }
+    except Exception as exc:
+        logger.warning("queue_stats redis error: %s", exc)
+
+    # Enrich with Celery inspect data when available
+    try:
+        from celery import current_app as celery_app
+        inspect = celery_app.control.inspect(timeout=1.0)
+
+        active  = inspect.active()   or {}
+        reserved = inspect.reserved() or {}
+        stats_c  = inspect.stats()   or {}
+
+        # Count active (processing) tasks per queue
+        for worker_tasks in active.values():
+            for task in worker_tasks:
+                q = task.get("delivery_info", {}).get("routing_key", "celery")
+                if q not in queue_map:
+                    queue_map[q] = {"name": q, "pending": 0, "processing": 0, "failed": 0, "workers": 0}
+                queue_map[q]["processing"] += 1
+
+        # Count reserved (pending in Celery) tasks per queue
+        for worker_tasks in reserved.values():
+            for task in worker_tasks:
+                q = task.get("delivery_info", {}).get("routing_key", "celery")
+                if q not in queue_map:
+                    queue_map[q] = {"name": q, "pending": 0, "processing": 0, "failed": 0, "workers": 0}
+                queue_map[q]["pending"] += 1
+
+        # Count workers per queue
+        worker_count = len(stats_c)
+        for entry in queue_map.values():
+            entry["workers"] = worker_count
+
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        logger.debug("Celery inspect unavailable — using Redis lengths only")
+
+    # Read failed task counts from Redis dead-letter keys
+    try:
+        from cache.redis_client import get_redis_client
+        rc = get_redis_client()
+        if rc:
+            for q in list(queue_map.keys()):
+                failed_key = f"{q}:failed"
+                queue_map[q]["failed"] = rc.llen(failed_key)
+    except Exception:
+        pass
+
+    queues = list(queue_map.values()) if queue_map else [
+        {"name": q, "pending": 0, "processing": 0, "failed": 0, "workers": 0}
+        for q in QUEUE_NAMES
+    ]
     return {"queues": queues}
 
 
@@ -2965,12 +3134,13 @@ async def get_service_statuses(user: TokenPayload = Depends(_require_superadmin)
 
 
 async def _check_db_service() -> dict:
+    from sqlalchemy import text as _sa_text
     start = time.time()
     db = None
     try:
         db = next(_get_db())
         if db:
-            db.execute("SELECT 1")
+            db.execute(_sa_text("SELECT 1"))
             return {
                 "status": "healthy",
                 "latency_ms": round((time.time() - start) * 1000),
