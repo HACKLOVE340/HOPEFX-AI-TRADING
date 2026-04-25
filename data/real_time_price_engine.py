@@ -392,8 +392,28 @@ class RESTPriceFeed(PriceFeedBase):
                 return await response.json()
             raise ValueError(f"HTTP {response.status}: {await response.text()}")
 
+    # Coinbase only lists crypto products.  Forex and commodity symbols are
+    # never available on this endpoint — skip them immediately so the caller
+    # falls through to yfinance without an ERROR log on every poll cycle.
+    _COINBASE_SYMBOL_PREFIXES = ("BTC", "ETH", "SOL", "LTC", "BCH", "XRP", "DOGE", "ADA", "MATIC", "AVAX")
+
+    def _is_coinbase_symbol(self, symbol: str) -> bool:
+        """Return True only for symbols Coinbase Exchange actually carries."""
+        s = symbol.upper().replace("-", "").replace("/", "")
+        return any(s.startswith(p) for p in self._COINBASE_SYMBOL_PREFIXES)
+
     async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> list[OHLCV]:
-        """Get OHLCV from REST API"""
+        """Get OHLCV from Coinbase REST API.
+
+        Returns an empty list immediately for non-crypto symbols (forex, gold,
+        commodities) so the caller falls through to yfinance without making a
+        doomed HTTP request or logging a spurious ERROR.
+        """
+        # Fast-path: Coinbase does not carry forex or commodity symbols.
+        if not self._is_coinbase_symbol(symbol):
+            logger.debug("REST feed: skipping %s (not a Coinbase product)", symbol)
+            return []
+
         cache_key = f"{symbol}_{timeframe}_{limit}"
 
         # Check cache
@@ -466,8 +486,9 @@ class RESTPriceFeed(PriceFeedBase):
             return ohlcv_list
 
         except Exception as e:
-            logger.error("REST API error for %s: %s", symbol, e)
-
+            # Demote to WARNING — yfinance is the intended fallback for crypto
+            # too, so a transient Coinbase outage is not an ERROR condition.
+            logger.warning("REST feed error for %s: %s", symbol, e)
             return []
 
 
