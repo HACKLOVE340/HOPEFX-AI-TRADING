@@ -124,6 +124,14 @@ export interface RevenueStats {
   cancelled_mtd: number;
 }
 
+export interface SubscriptionStats {
+  total_active: number;
+  by_plan: Record<string, number>;
+  trial_count: number;
+  expiring_soon: number;
+  cancelled_count: number;
+}
+
 // ── Compliance ────────────────────────────────────────────────────────────────
 
 export interface KYCRecord {

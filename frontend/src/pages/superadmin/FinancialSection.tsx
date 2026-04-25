@@ -7,7 +7,7 @@ import {
   SectionCard, ActionBtn, Select, Input, StatusBadge,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
 } from './ui';
-import type { RevenueStats, Chargeback, TaxReport, ReconciliationRecord, AffiliateStats } from './types';
+import type { RevenueStats, SubscriptionStats, Chargeback, TaxReport, ReconciliationRecord, AffiliateStats } from './types';
 import { PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { Plan } from '../../lib/subscription';
 
@@ -536,8 +536,9 @@ const FIN_TABS: { id: FinTab; label: string; icon: string }[] = [
 
 const FinancialSection: React.FC = () => {
   const [activeTab, setActiveTab] = useState<FinTab>('overview');
-  const [revenue, setRevenue]   = useState<RevenueStats | null>(null);
-  const [payments, setPayments] = useState<Payment[]>([]);
+  const [revenue, setRevenue]         = useState<RevenueStats | null>(null);
+  const [subStats, setSubStats]       = useState<SubscriptionStats | null>(null);
+  const [payments, setPayments]       = useState<Payment[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [period, setPeriod]     = useState('mtd');
@@ -549,12 +550,14 @@ const FinancialSection: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [revRes, payRes] = await Promise.all([
+      const [revRes, payRes, subRes] = await Promise.all([
         superadminApi.revenueStats(period),
         superadminApi.paymentHistory({ period }),
+        superadminApi.subscriptionStats(),
       ]);
       setRevenue(revRes.data);
       setPayments(payRes.data.payments ?? payRes.data);
+      setSubStats(subRes.data);
     } catch (e) {
       setError(apiErr(e, 'Failed to load financial data'));
     } finally { setLoading(false); }
@@ -650,6 +653,16 @@ const FinancialSection: React.FC = () => {
                     <KpiTile label="Churn Rate"    value={`${revenue.churn_rate_pct.toFixed(2)}%`}           icon="📉" accent="#f87171" />
                     <KpiTile label="Avg LTV"       value={fmtMoney(revenue.ltv_avg, revenue.currency)}       icon="⭐" accent="#fbbf24" />
                   </div>
+
+                  {/* Subscription KPIs */}
+                  {subStats && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
+                      <KpiTile label="Active Subscriptions" value={subStats.total_active}    icon="✅" accent="#22c55e" />
+                      <KpiTile label="Trials"               value={subStats.trial_count}     icon="🧪" accent="#06b6d4" />
+                      <KpiTile label="Expiring Soon"        value={subStats.expiring_soon}   icon="⏳" accent="#f59e0b" />
+                      <KpiTile label="Cancelled"            value={subStats.cancelled_count} icon="❌" accent="#ef4444" />
+                    </div>
+                  )}
 
                   <SectionCard title="Revenue by Plan" icon="💳" accent="#8b5cf6">
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>

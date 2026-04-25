@@ -695,10 +695,6 @@ export const superadminApi = {
   mlDriftStatus:           ()                  => api.get('/ml/drift/status'),
   mlSharpeCircuitBreaker:  ()                  => api.get('/ml/sharpe-circuit-breaker/status'),
 
-  // ── Additional GDPR endpoints ─────────────────────────────────────────────
-  gdprSubmitRequest:    (body: object)         => api.post('/superadmin/gdpr/requests', body),
-  gdprProcessRequest:   (id: string, body: object) => api.post(`/superadmin/gdpr/requests/${id}/process`, body),
-
   // ── Diagnostics remediation log ───────────────────────────────────────────
   diagnosticsRemediationLog: (limit?: number)  => api.get('/superadmin/diagnostics/remediation-log', { params: limit ? { limit } : {} }),
 
