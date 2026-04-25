@@ -1,5 +1,5 @@
 @echo off
-:: HOPEFX AI Trading — Windows launcher
+:: HOPEFX AI Trading - Windows launcher
 :: ============================================================
 :: Usage:
 ::   start.bat              (port 8000)
@@ -8,18 +8,20 @@
 :: What this does:
 ::   1. Verifies Python 3.10+
 ::   2. Creates venv on first run
-::   3. Upgrades pip (inside venv only — never touches system Python)
-::   4. Installs dependencies ONLY on first run or when requirements.txt changes
+::   3. Upgrades pip (inside venv only)
+::   4. Installs dependencies only when requirements.txt changes
 ::   5. Installs MetaTrader5 SDK if not present (non-fatal)
 ::   6. Generates .env on first run
-::   7. Builds React frontend if not already built
-::   8. Starts the API server
+::   7. Validates .env values
+::   8. Applies database migrations
+::   9. Builds React frontend if not already built
+::  10. Starts the API server
 :: ============================================================
 
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-:: ── 1. Verify Python 3.10+ ───────────────────────────────────────────────────
+:: -- 1. Verify Python 3.10+ --------------------------------------------------
 python --version >nul 2>&1
 if errorlevel 1 (
     echo.
@@ -44,21 +46,21 @@ if %PY_MINOR% LSS 10 (
 )
 echo [OK] Python %PY_VER%
 
-:: ── 2. Create venv if missing ─────────────────────────────────────────────────
+:: -- 2. Create venv if missing -----------------------------------------------
 if not exist "venv\Scripts\activate.bat" (
     echo [INFO] Creating virtual environment...
     python -m venv venv
     if errorlevel 1 (
         echo.
         echo [ERROR] Failed to create virtual environment.
-        echo         Try running as Administrator (right-click -> Run as administrator).
+        echo         Try running as Administrator.
         echo.
         pause & exit /b 1
     )
     echo [OK] Virtual environment created
 )
 
-:: ── 3. Activate venv ──────────────────────────────────────────────────────────
+:: -- 3. Activate venv --------------------------------------------------------
 call venv\Scripts\activate.bat
 if errorlevel 1 (
     echo [ERROR] Failed to activate virtual environment.
@@ -66,15 +68,14 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 
-:: ── 4. Upgrade pip (inside venv only) ────────────────────────────────────────
+:: -- 4. Upgrade pip ----------------------------------------------------------
 echo [INFO] Upgrading pip...
 python -m pip install --no-cache-dir --quiet --upgrade pip
 echo [OK] pip ready
 
-:: ── 5. Install / sync dependencies (only when requirements.txt changes) ──────
-:: Hash-check: MD5 of requirements.txt is stored in venv\.req_hash.
-:: pip only runs on first launch or after requirements.txt is modified.
-:: --no-cache-dir bypasses the Windows pip cache ([Errno 13] fix).
+:: -- 5. Install / sync dependencies ------------------------------------------
+:: Hash-check: MD5 of requirements.txt stored in venv\.req_hash
+:: pip only runs on first launch or when requirements.txt changes.
 python -c "import hashlib,os,sys; f='venv\\.req_hash'; h=hashlib.md5(open('requirements.txt','rb').read()).hexdigest(); sys.exit(0 if os.path.exists(f) and open(f).read().strip()==h else 1)" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Syncing dependencies...
@@ -84,8 +85,8 @@ if errorlevel 1 (
         echo [ERROR] Dependency install failed.
         echo.
         echo   Fixes to try:
-        echo   1. Run as Administrator (right-click -^> Run as administrator)
-        echo   2. Temporarily disable antivirus / Windows Defender real-time protection
+        echo   1. Run as Administrator
+        echo   2. Temporarily disable antivirus / Windows Defender
         echo   3. Delete venv\ and run start.bat again
         echo   4. Check your internet connection
         echo.
@@ -97,7 +98,7 @@ if errorlevel 1 (
     echo [OK] Dependencies up to date
 )
 
-:: ── 6. MetaTrader5 (Windows only, non-fatal) ──────────────────────────────────
+:: -- 6. MetaTrader5 (Windows only, non-fatal) --------------------------------
 python -c "import MetaTrader5" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installing MetaTrader5 SDK...
@@ -111,7 +112,7 @@ if errorlevel 1 (
     echo [OK] MetaTrader5 present
 )
 
-:: ── 7. Generate .env if missing ───────────────────────────────────────────────
+:: -- 7. Generate .env if missing ---------------------------------------------
 if not exist ".env" (
     echo [INFO] Generating .env with random secrets...
     python scripts\bootstrap_dev.py
@@ -124,19 +125,18 @@ if not exist ".env" (
     echo [OK] .env found
 )
 
-:: ── 7b. Validate critical .env values ────────────────────────────────────────
-:: AUTH_RATE_LIMIT_REQUESTS must be a plain integer, not a duration like "1h".
+:: -- 7b. Validate .env values ------------------------------------------------
 python scripts\validate_env.py
 if errorlevel 1 (
     echo.
-    echo [ERROR] .env validation failed — see message above.
-    echo         Open .env and set AUTH_RATE_LIMIT_REQUESTS to a plain integer, e.g.:
-    echo           AUTH_RATE_LIMIT_REQUESTS=10
+    echo [ERROR] .env validation failed - see message above.
+    echo         Open .env and fix the reported value, then run start.bat again.
     echo.
     pause & exit /b 1
 )
+echo [OK] .env valid
 
-:: ── 8. Apply database migrations ─────────────────────────────────────────────
+:: -- 8. Apply database migrations --------------------------------------------
 python -c "import alembic" >nul 2>&1
 if not errorlevel 1 (
     echo [INFO] Applying database migrations...
@@ -147,10 +147,10 @@ if not errorlevel 1 (
         echo [OK] Database schema up to date
     )
 ) else (
-    echo [WARN] Alembic not installed — skipping migration step
+    echo [WARN] Alembic not installed - skipping migration step
 )
 
-:: ── 9. Build frontend if not built ────────────────────────────────────────────
+:: -- 9. Build frontend if not built ------------------------------------------
 if not exist "static\index.html" (
     where npm >nul 2>&1
     if not errorlevel 1 (
@@ -178,7 +178,7 @@ if not exist "static\index.html" (
     echo [OK] Frontend already built
 )
 
-:: ── 10. Start server ──────────────────────────────────────────────────────────
+:: -- 10. Start server --------------------------------------------------------
 :start_server
 if not defined APP_ENV  set APP_ENV=development
 if not defined API_HOST set API_HOST=127.0.0.1
