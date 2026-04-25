@@ -732,7 +732,7 @@ async def _chartbot_broadcaster() -> None:
 
             # ── microstructure + volume_delta ─────────────────────────────────
             try:
-                snap = _orch._micro.get_snapshot() if hasattr(_orch, "_micro") else None
+                snap = _orch.get_microstructure_snapshot()
                 if snap is not None:
                     micro_data = {
                         "timestamp": snap.timestamp.isoformat(),
@@ -766,32 +766,14 @@ async def _chartbot_broadcaster() -> None:
 
             # ── sentiment ─────────────────────────────────────────────────────
             try:
-                if hasattr(_orch, "_sentiment") and _orch._sentiment is not None:
-                    features = _orch.get_ml_features()
-                    sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
-                    articles: list[dict] = []
-                    try:
-                        raw_articles = _orch._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
-                        articles = [
-                            {
-                                "title": a.title,
-                                "source": a.source,
-                                "sentiment_score": a.sentiment_score,
-                                "sentiment_label": a.sentiment_label,
-                                "published_at": a.published_at.isoformat() if a.published_at else None,
-                                "url": getattr(a, "url", None),
-                            }
-                            for a in (raw_articles or [])[:5]
-                        ]
-                    except Exception as _fmt_exc:  # nosec B110 — article formatting is non-fatal
-                        logger.debug("ws_live: article serialisation skipped: %s", _fmt_exc)
+                sentiment_snap = _orch.get_sentiment_snapshot()
+                if sentiment_snap is not None:
                     await _manager.broadcast(
                         "sentiment",
-                        {"type": "sentiment_update", "data": {"signal": sentiment_features, "articles": articles}},
+                        {"type": "sentiment_update", "data": sentiment_snap},
                     )
-                    if articles:
-                        for article in articles[:3]:
-                            await _manager.broadcast("news", {"type": "news_item", "data": article})
+                    for article in (sentiment_snap.get("recent_articles") or [])[:3]:
+                        await _manager.broadcast("news", {"type": "news_item", "data": article})
             except Exception as _exc:
                 logger.debug("chartbot_broadcaster: sentiment error: %s", _exc)
 
@@ -908,19 +890,50 @@ async def _account_update_broadcaster() -> None:
             logger.debug("account_update_broadcaster: %s", exc)
 
 
+def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+    """Log unexpected broadcaster task completion so crashes are not silently swallowed."""
+    exc = task.exception() if not task.cancelled() else None
+    if exc is not None:
+        logger.error(
+            "WS broadcaster task %r exited with exception: %s",
+            task.get_name(),
+            exc,
+            exc_info=exc,
+        )
+    elif task.cancelled():
+        logger.debug("WS broadcaster task %r was cancelled", task.get_name())
+    else:
+        logger.warning(
+            "WS broadcaster task %r exited cleanly — this is unexpected and may indicate a bug",
+            task.get_name(),
+        )
+
+
+# Strong references to broadcaster tasks so they are not garbage-collected.
+# Assigning each task to the same local variable `_t` would drop the reference
+# to all but the last task, allowing the GC to cancel them silently.
+_broadcaster_tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
+
+
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
+    global _broadcaster_tasks
     loop = asyncio.get_running_loop()
-    _t = loop.create_task(_price_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_heartbeat_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_eventbus_signal_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_chartbot_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_account_update_broadcaster())
-    _t.add_done_callback(lambda _: None)
+
+    _specs = [
+        ("price_broadcaster",          _price_broadcaster),
+        ("heartbeat_broadcaster",       _heartbeat_broadcaster),
+        ("signal_broadcaster",          _eventbus_signal_broadcaster),
+        ("chartbot_broadcaster",        _chartbot_broadcaster),
+        ("account_update_broadcaster",  _account_update_broadcaster),
+    ]
+
+    _broadcaster_tasks = []
+    for name, coro_fn in _specs:
+        task = loop.create_task(coro_fn(), name=name)
+        task.add_done_callback(_broadcaster_done_callback)
+        _broadcaster_tasks.append(task)
+
     logger.info("WS live broadcasters started (price → account → signal → heartbeat → chart-bot)")
 
 
