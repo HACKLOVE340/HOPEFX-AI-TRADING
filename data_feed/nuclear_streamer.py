@@ -241,9 +241,14 @@ class NuclearStreamer:
                 db=self._redis_db,
                 password=self._redis_password,
                 decode_responses=False,
+                # Fail fast when Redis is unreachable so a down broker does not
+                # stall the tick-processing loop for the OS TCP timeout (~2 min).
+                socket_connect_timeout=2.0,
+                socket_timeout=2.0,
+                retry_on_timeout=False,
             )
             logger.info(
-                "Redis connected: %s:%d db=%d",
+                "Redis client created: %s:%d db=%d (connect_timeout=2s)",
                 self._redis_host,
                 self._redis_port,
                 self._redis_db,
