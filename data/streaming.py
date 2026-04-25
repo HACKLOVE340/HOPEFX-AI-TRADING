@@ -532,7 +532,6 @@ def create_streaming_router(service: StreamingService):
         client_ip = get_client_ip(websocket)
         allowed, reason = await limiter.check_and_register(websocket, client_ip)
         if not allowed:
-            await websocket.close(code=1008, reason=reason)
             return
 
         await websocket.accept()

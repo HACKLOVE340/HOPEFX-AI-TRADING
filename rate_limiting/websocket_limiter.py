@@ -95,26 +95,34 @@ class WebSocketConnectionLimiter:
 
     def __init__(self) -> None:
         self._redis = None
-        self._connected = False
+        self._redis_connect_failed: bool = False  # True after first failed attempt
         # In-process fallback state
         self._open_conns: dict[str, int] = defaultdict(int)
         self._rate_window: dict[str, deque] = defaultdict(deque)
         self._lock = asyncio.Lock()
-        # Track which backend registered each connection so release() always
-        # mirrors check_and_register().  Key: (ip, connection_token) where
-        # connection_token is a monotonic counter unique per registration.
-        # Without this, a Redis reconnect mid-session causes release() to
-        # decrement Redis while check_and_register() had incremented the local
-        # counter, leaking the local count upward until the cap is hit.
-        self._conn_backend: dict[str, str] = {}  # ip → "redis" | "local"
-        self._conn_counter: int = 0
+        # Per-IP stack of backends used by open connections.
+        # A stack (list) is required because multiple connections from the same
+        # IP can be open simultaneously — each push on check_and_register() is
+        # matched by a pop on release(), preserving LIFO symmetry regardless of
+        # how many concurrent connections exist from one IP.
+        self._conn_backend: dict[str, list] = defaultdict(list)  # ip → ["redis"|"local", ...]
 
     # ── Redis connection ──────────────────────────────────────────────────────
 
     def _try_connect_redis(self) -> None:
-        if self._connected:
-            return
-        self._connected = True
+        """
+        Create the Redis client if not already done.
+
+        Called on every check_and_register() so that if Redis was unavailable
+        at startup but comes up later, the limiter will start using it.
+        Once a client object is successfully created (even if the broker is
+        temporarily unreachable) we do not recreate it — the redis.asyncio
+        client handles reconnection internally.
+        """
+        if self._redis is not None:
+            return  # Already have a live client object
+        if self._redis_connect_failed:
+            return  # Import failed — redis package not installed; don't retry
         try:
             import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
@@ -136,10 +144,18 @@ class WebSocketConnectionLimiter:
                 decode_responses=True,
             )
             logger.debug("WebSocketConnectionLimiter: Redis client created (%s:%s)", _host, _port)
-        except Exception as exc:
+        except ImportError:
+            # redis package not installed — stay on in-process forever
+            self._redis_connect_failed = True
             logger.warning(
-                "WebSocketConnectionLimiter: Redis unavailable (%s) — "
-                "using in-process fallback (not shared across pods)",
+                "WebSocketConnectionLimiter: redis package not installed — "
+                "using in-process fallback (not shared across pods)"
+            )
+        except Exception as exc:
+            # Unexpected error building the client object; log and retry next call
+            logger.warning(
+                "WebSocketConnectionLimiter: could not create Redis client (%s) — "
+                "will retry on next connection; using in-process fallback for now",
                 exc,
             )
             self._redis = None
@@ -230,29 +246,38 @@ class WebSocketConnectionLimiter:
 
         Must be called BEFORE websocket.accept().
 
+        When the connection is rejected (allowed=False) this method closes the
+        WebSocket with code 1008 before returning, suppressing any exception
+        that arises if the client already disconnected.  Callers only need to
+        check the return value and return early — they must NOT call
+        websocket.close() themselves on rejection.
+
         Parameters
         ----------
-        websocket  : FastAPI WebSocket object (used only for type annotation).
+        websocket  : FastAPI WebSocket object.
         client_ip  : Client IP address string.
 
         Returns
         -------
-        (allowed, reason) — if allowed=False, close the socket with reason.
+        (allowed, reason) — if allowed=False the socket is already closed.
         """
         self._try_connect_redis()
 
         if self._redis is not None:
             allowed, reason = await self._redis_check_and_register(client_ip)
-            if allowed is not None:  # None = Redis error, fall through
+            if allowed is not None:  # None = Redis error, fall through to local
                 if not allowed:
                     logger.warning("WS connection rejected for %s: %s", client_ip, reason)
+                    with contextlib.suppress(Exception):
+                        await websocket.close(code=1008, reason=reason)
                 else:
-                    # Record that this slot was registered in Redis so release()
-                    # always decrements the same backend.
-                    self._conn_backend[client_ip] = "redis"
+                    # Push "redis" onto this IP's backend stack so release()
+                    # always decrements the same backend that was incremented,
+                    # even when multiple connections from the same IP are open.
+                    self._conn_backend[client_ip].append("redis")
                 return allowed, reason
 
-        # In-process fallback
+        # In-process fallback (Redis unavailable or returned error)
         allowed, reason = await self._local_check_and_register(client_ip)
         if not allowed:
             logger.warning(
@@ -260,8 +285,10 @@ class WebSocketConnectionLimiter:
                 client_ip,
                 reason,
             )
+            with contextlib.suppress(Exception):
+                await websocket.close(code=1008, reason=reason)
         else:
-            self._conn_backend[client_ip] = "local"
+            self._conn_backend[client_ip].append("local")
         return allowed, reason
 
     async def release(self, client_ip: str) -> None:
@@ -269,15 +296,32 @@ class WebSocketConnectionLimiter:
         Decrement the open connection count for this IP.
 
         Must be called in the finally block of every WebSocket handler.
-        Releases against whichever backend registered the connection so the
-        local counter never leaks when Redis availability changes mid-session.
+
+        Pops the most-recently-pushed backend for this IP and releases against
+        it, guaranteeing symmetry with check_and_register() regardless of:
+          - multiple concurrent connections from the same IP
+          - Redis availability changes between registration and release
         """
-        backend = self._conn_backend.pop(client_ip, None)
-        if backend == "redis" and self._redis is not None:
-            with contextlib.suppress(Exception):
-                await self._redis_release(client_ip)
+        stack = self._conn_backend.get(client_ip)
+        backend = stack.pop() if stack else None
+
+        if backend == "redis":
+            if self._redis is not None:
+                with contextlib.suppress(Exception):
+                    await self._redis_release(client_ip)
+            else:
+                # Redis died after this connection was registered there.
+                # The Redis key will expire via its TTL safety net; decrement
+                # the local counter as a best-effort guard against the cap.
+                logger.debug(
+                    "WS release: Redis gone after registration for %s — "
+                    "decrementing local counter as safety net",
+                    client_ip,
+                )
+                await self._local_release(client_ip)
             return
-        # Fall back to local release for "local" backend or unknown (safety net)
+
+        # "local" backend or unknown (safety net for unmatched release calls)
         await self._local_release(client_ip)
 
     def stats(self) -> dict:

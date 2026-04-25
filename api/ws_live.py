@@ -944,7 +944,6 @@ async def ws_live(websocket: WebSocket) -> None:
 
     allowed, reason = await limiter.check_and_register(websocket, client_ip)
     if not allowed:
-        await websocket.close(code=1008, reason=reason)
         return
 
     cid = await _manager.connect(websocket)

@@ -773,7 +773,6 @@ def create_websocket_router(manager: WebSocketManager):
 
         allowed, reason = await limiter.check_and_register(websocket, client_ip)
         if not allowed:
-            await websocket.close(code=1008, reason=reason)
             return
 
         await websocket.accept()
