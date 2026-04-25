@@ -280,8 +280,8 @@ const PropFirmBreachPanel: React.FC = () => {
     setLoading(true);
     try {
       const [b, d] = await Promise.allSettled([
-        superadminApi.propBreaches ? superadminApi.propBreaches() : Promise.reject('no method'),
-        superadminApi.drawdownStats ? superadminApi.drawdownStats() : Promise.reject('no method'),
+        superadminApi.propBreaches(),
+        superadminApi.drawdownStats(),
       ]);
       if (b.status === 'fulfilled') setBreaches(b.value.data.breaches ?? b.value.data ?? []);
       if (d.status === 'fulfilled') setDrawdown(d.value.data);
