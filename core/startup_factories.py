@@ -1392,6 +1392,11 @@ async def init_macro_store(s: Any) -> Any:
       2. If FRED is unavailable (no network, rate-limited, key missing), the
          bridge falls back to the CSV files in data/macro/ via the original
          ml.macro_bootstrap.load_into_store() path.
+      3. WGC gold demand series are fetched via wgc_feed.fetch_and_inject()
+         and merged into the store.  WGCFeed uses its own three/four-source
+         fallback chain (JSON API → CSV download → yfinance proxy / World Bank
+         CB proxy → stale cache) so this step is always attempted regardless
+         of FRED availability.
 
     The bridge also starts a daily refresh loop at 18:00 UTC so the store
     always has fresh values before the London session.
@@ -1441,6 +1446,26 @@ async def init_macro_store(s: Any) -> Any:
         except Exception as exc:
             logger.warning("MacroStore CSV fallback also failed: %s", exc)
 
+    # ── WGC gold demand series ───────────────────────────────────────────────
+    # Fetched independently of FRED — WGCFeed has its own fallback chain
+    # (JSON API → CSV download → yfinance ETF proxy / World Bank CB proxy →
+    # stale local cache) so this block is resilient to network failures.
+    # Series injected: wgc_total_demand, wgc_investment, wgc_central_bank,
+    #                  wgc_jewellery, wgc_etf_flow (and proxy variants).
+    wgc_injected = 0
+    try:
+        from data_layer.feeds.macro.wgc import wgc_feed
+
+        wgc_status = await wgc_feed.fetch_and_inject()
+        wgc_injected = wgc_status.get("series_injected", 0)
+        logger.info(
+            "WGC: %d series injected into MacroStore (fetched: %s)",
+            wgc_injected,
+            wgc_status.get("series_fetched", []),
+        )
+    except Exception as exc:
+        logger.warning("WGC startup download failed (%s) — gold demand series unavailable", exc)
+
     # Attach to app_state
     s.macro_store = macro_store
 
@@ -1448,6 +1473,7 @@ async def init_macro_store(s: Any) -> Any:
     log_activity(
         f"MacroStore initialised — {n_in_store} series loaded "
         f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "
+        f"WGC gold demand: {wgc_injected} series, "
         "daily refresh scheduled at 18:00 UTC",
     )
     return macro_store
