@@ -34,7 +34,7 @@ MT5Backup             : MT5 price source (ProductionDataEngine internal use)
 
 from .engine import ProductionDataEngine
 from .mt5_backup import MT5Backup
-from .multi_source_feed import MultiSourceTickFeed, get_multi_source_feed
+from .multi_source_feed import MultiSourceTickFeed, get_multi_source_feed, get_feed_status
 from .nuclear_streamer import NuclearStreamer
 
 __all__ = [
@@ -43,4 +43,5 @@ __all__ = [
     "ProductionDataEngine",
     "MultiSourceTickFeed",
     "get_multi_source_feed",
+    "get_feed_status",
 ]

@@ -2890,23 +2890,36 @@ async def init_multi_source_feed(s: Any) -> Any:
         price_engine_ref = getattr(s, "price_engine", None)
 
         class _MultiSourceBridge:
-            async def on_new_price(self, price: float) -> None:
-                # Update broker price table (paper broker + live broker)
+            async def on_new_price(self, symbol: str, price: float) -> None:
+                # Update broker price table (paper broker + live broker) for any symbol.
                 if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
                     try:
-                        broker_ref.update_market_price("XAUUSD", price)
+                        broker_ref.update_market_price(symbol, price)
                     except Exception as _exc:
                         logger.debug("multi_source_feed broker bridge error: %s", _exc)
-                # Update execution engine last-tick cache
+                # Update execution engine last-tick cache for any symbol.
                 if execution_engine_ref is not None and hasattr(execution_engine_ref, "update_last_tick"):
                     try:
-                        execution_engine_ref.update_last_tick("XAUUSD", price)
+                        execution_engine_ref.update_last_tick(symbol, price)
                     except Exception as _exc:
                         logger.debug("multi_source_feed exec engine bridge error: %s", _exc)
-                # Update price engine current price
+                # Update price engine current price (symbol-aware when supported).
                 if price_engine_ref is not None and hasattr(price_engine_ref, "on_new_price"):
                     try:
-                        await price_engine_ref.on_new_price(price)
+                        import inspect as _inspect
+                        _sig = _inspect.signature(price_engine_ref.on_new_price)
+                        _nparams = sum(
+                            1 for p in _sig.parameters.values()
+                            if p.default is _inspect.Parameter.empty
+                            and p.kind not in (
+                                _inspect.Parameter.VAR_POSITIONAL,
+                                _inspect.Parameter.VAR_KEYWORD,
+                            )
+                        )
+                        if _nparams >= 2:
+                            await price_engine_ref.on_new_price(symbol, price)
+                        else:
+                            await price_engine_ref.on_new_price(price)
                     except Exception as _exc:
                         logger.debug("multi_source_feed price engine bridge error: %s", _exc)
 
