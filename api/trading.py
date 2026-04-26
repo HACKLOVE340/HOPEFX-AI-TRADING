@@ -1796,14 +1796,28 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     regime = "ranging"
     regime_confidence = 0.5
     try:
-        from strategies.manager import StrategyManager as _SM
-        from strategies.regime_router import RegimeRouter as _RR
+        from strategies.regime_router import detect_regime as _detect_regime
 
-        rr = _RR(strategy_manager=_SM())
-        detected = rr.detect_regime()
-        if detected:
-            regime = str(detected.get("regime", "ranging"))
-            regime_confidence = float(detected.get("confidence", 0.5))
+        # Fetch recent OHLCV from the live broker or app_state price engine
+        _ohlcv_df = None
+        try:
+            import pandas as _pd
+
+            if app_state is not None and hasattr(app_state, "broker") and app_state.broker is not None:
+                import asyncio as _asyncio
+
+                _raw = app_state.broker.get_market_data(symbol, timeframe="1h", limit=100)
+                if _asyncio.iscoroutine(_raw):
+                    _raw = await _raw
+                if _raw:
+                    _ohlcv_df = _pd.DataFrame(_raw)
+        except Exception:
+            pass
+
+        if _ohlcv_df is not None and len(_ohlcv_df) >= 50:
+            _regime_label, _regime_conf = _detect_regime(_ohlcv_df)
+            regime = str(_regime_label)
+            regime_confidence = float(_regime_conf)
     except Exception as exc:
         logger.debug("ai-analysis: regime detection failed: %s", exc)
 
