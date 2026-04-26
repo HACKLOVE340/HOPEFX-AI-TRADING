@@ -57,6 +57,7 @@ const StatusPage       = React.lazy(() => import('./pages/StatusPage'));
 // ── Trading ───────────────────────────────────────────────────────────────────
 const ChartDashboard   = React.lazy(() =>
   import('./features/chart-bot').then(m => ({ default: m.ChartDashboard })));
+const AIChartDashboard = React.lazy(() => import('./pages/AIChartDashboard'));
 const NuclearDashboard      = React.lazy(() => import('./pages/NuclearDashboardPage'));
 const GeopoliticalRiskPage  = React.lazy(() => import('./pages/GeopoliticalRiskPage'));
 const TradeJournal     = React.lazy(() => import('./pages/TradeJournal'));
@@ -469,6 +470,7 @@ const AppShell: React.FC = () => {
             {/* Trading */}
             <Route path="/trading"      element={wrap(gated('trading',      <ChartDashboard />))} />
             <Route path="/terminal"     element={wrap(gated('trading',      <TradingTerminal />))} />
+            <Route path="/ai-charts"    element={wrap(gated('ai-charts',    <AIChartDashboard />))} />
             <Route path="/nuclear"      element={wrap(gated('nuclear',      <NuclearDashboard />))} />
             <Route path="/geopolitical" element={wrap(gated('geopolitical', <GeopoliticalRiskPage />))} />
             <Route path="/journal"      element={wrap(gated('journal',      <TradeJournal />))} />

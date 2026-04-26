@@ -52,6 +52,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/status',       label: 'System Status',  icon: '🟢', group: 'core',      plan: 'free',    featureKey: 'status'       },
 
   // ── Trading ───────────────────────────────────────────────────────────────
+  { path: '/terminal',     label: 'Terminal',       icon: '🖥️', group: 'trading',   plan: 'starter',      featureKey: 'trading'      },
+  { path: '/ai-charts',    label: 'AI Charts',      icon: '🤖', group: 'trading',   plan: 'professional', featureKey: 'ai-charts'    },
   { path: '/trading',      label: 'AI Chart Bot',   icon: '🧠', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
   { path: '/nuclear',      label: 'Nuclear AI',     icon: '☢️', group: 'trading',   plan: 'professional', featureKey: 'nuclear'      },
   { path: '/journal',      label: 'Trade Journal',  icon: '📓', group: 'trading',   plan: 'starter',      featureKey: 'journal'      },
