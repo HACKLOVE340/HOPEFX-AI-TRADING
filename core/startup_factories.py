@@ -458,14 +458,14 @@ async def init_hourly_trainer(s: Any) -> Any:
 
 async def init_websocket(s: Any, app: Any) -> Any:
     from api.admin import log_activity
-    from api.websocket_server import WebSocketManager, create_websocket_router
+    from api.ws_live import get_live_manager, router as ws_live_router
 
-    ws = WebSocketManager()
-    app.include_router(create_websocket_router(ws))
-    s.ws_manager = ws
-    log_activity("WebSocket router registered")
-    # Price stream and OANDA poller are started in lifespan, not here
-    return ws
+    app.include_router(ws_live_router)
+    mgr = get_live_manager()
+    s.ws_manager = mgr
+    log_activity("WebSocket router registered (/ws/live)")
+    # Broadcasters are started in lifespan via start_broadcasters()
+    return mgr
 
 
 async def init_alert_engine(s: Any, app: Any) -> Any:

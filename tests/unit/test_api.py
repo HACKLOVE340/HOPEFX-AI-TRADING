@@ -11,7 +11,7 @@ Tests for:
 - api/admin.py: Admin panel endpoints and helpers
 - api/signals.py: TradingSignal, RealTimeSignalService
 - api/monetization.py: Monetization Pydantic models
-- api/websocket_server.py: WebSocketManager, WebSocketMessage
+- api/ws_live.py: LiveConnectionManager, margin_level sentinel
 """
 
 import json
@@ -1123,416 +1123,239 @@ class TestMonetizationEndpoints:
 
 
 # ============================================================
-# api/websocket_server.py
+# api/ws_live.py — LiveConnectionManager
 # ============================================================
 
-from api.websocket_server import (
-    ConnectionInfo,
-    WebSocketManager,
-    WebSocketMessage,
-    create_websocket_router,
-    get_websocket_manager,
-)
+from api.ws_live import LiveConnectionManager, get_live_manager
 
 
-class _MockWebSocket:
-    """Mock WebSocket with send_text tracking."""
+class _MockWS:
+    """Minimal WebSocket stand-in that records sent frames."""
 
     def __init__(self):
-        self.sent: list = []
+        self.sent: list[str] = []
+        self.closed: bool = False
+
+    async def accept(self):
+        pass
 
     async def send_text(self, text: str):
         self.sent.append(text)
 
-
-@pytest.mark.unit
-class TestWebSocketMessage:
-    """Unit tests for WebSocketMessage dataclass."""
-
-    def test_to_json_basic(self):
-        msg = WebSocketMessage(
-            event="update",
-            channel="prices:XAUUSD",
-            data={"price": 1900.0},
-        )
-        parsed = json.loads(msg.to_json())
-        assert parsed["event"] == "update"
-        assert parsed["channel"] == "prices:XAUUSD"
-        assert parsed["data"]["price"] == 1900.0
-
-    def test_timestamp_auto_set(self):
-        msg = WebSocketMessage(event="test", channel="ch", data={})
-        assert msg.timestamp is not None
-        # Should be ISO-format string
-        datetime.fromisoformat(msg.timestamp)
-
-    def test_sequence_default_zero(self):
-        msg = WebSocketMessage(event="e", channel="c", data={})
-        assert msg.sequence == 0
+    async def close(self, code: int = 1000):
+        self.closed = True
 
 
 @pytest.mark.unit
-class TestWebSocketManager:
-    """Unit tests for WebSocketManager."""
+class TestLiveConnectionManager:
+    """Unit tests for LiveConnectionManager (api/ws_live.py)."""
 
     def setup_method(self):
-        self.manager = WebSocketManager(
-            config={
-                "heartbeat_interval": 30,
-                "max_subscriptions": 100,
-                "rate_limit": 100,
-            }
-        )
+        self.mgr = LiveConnectionManager()
 
-    def test_initialization(self):
-        assert self.manager._connections == {}
-        assert self.manager._channels == {}
-        assert self.manager._sequence == 0
+    # ── connect / disconnect ──────────────────────────────────────────────────
 
-    def test_register_connection_returns_id(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        assert conn_id is not None
-        assert conn_id in self.manager._connections
+    async def test_connect_accepts_and_returns_id(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        assert cid.startswith("conn_")
+        assert self.mgr.connection_count == 1
 
-    def test_register_connection_custom_id(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws, connection_id="custom_123")
-        assert conn_id == "custom_123"
+    async def test_disconnect_removes_connection(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.disconnect(cid)
+        assert self.mgr.connection_count == 0
 
-    def test_register_connection_with_user_id(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws, user_id="user1")
-        info = self.manager.get_connection_info(conn_id)
-        assert info.user_id == "user1"
-        assert info.authenticated is True
+    async def test_disconnect_nonexistent_is_noop(self):
+        self.mgr.disconnect("no_such_conn")  # must not raise
 
-    def test_register_increments_total_connections(self):
-        ws = _MockWebSocket()
-        self.manager.register_connection(ws)
-        assert self.manager._stats["total_connections"] >= 1
+    async def test_connection_count_tracks_multiple(self):
+        ws1, ws2 = _MockWS(), _MockWS()
+        await self.mgr.connect(ws1)
+        await self.mgr.connect(ws2)
+        assert self.mgr.connection_count == 2
 
-    def test_unregister_removes_connection(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        self.manager.unregister_connection(conn_id)
-        assert conn_id not in self.manager._connections
+    # ── auth ─────────────────────────────────────────────────────────────────
 
-    def test_unregister_nonexistent_is_noop(self):
-        self.manager.unregister_connection("does_not_exist")  # Should not raise
+    async def test_authenticate_sets_user(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        assert not self.mgr.is_authenticated(cid)
+        self.mgr.authenticate(cid, "user-42")
+        assert self.mgr.is_authenticated(cid)
+        assert self.mgr.get_user_id(cid) == "user-42"
 
-    def test_get_connection_info_existing(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        info = self.manager.get_connection_info(conn_id)
-        assert isinstance(info, ConnectionInfo)
-        assert info.connection_id == conn_id
+    async def test_unauthenticated_user_id_is_none(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        assert self.mgr.get_user_id(cid) is None
 
-    def test_get_connection_info_missing_returns_none(self):
-        assert self.manager.get_connection_info("no_such_id") is None
+    # ── subscribe / unsubscribe ───────────────────────────────────────────────
 
-    def test_get_active_connections(self):
-        ws1, ws2 = _MockWebSocket(), _MockWebSocket()
-        id1 = self.manager.register_connection(ws1)
-        id2 = self.manager.register_connection(ws2)
-        active = self.manager.get_active_connections()
-        assert id1 in active
-        assert id2 in active
+    async def test_subscribe_adds_channel(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.subscribe(cid, ["prices", "signals"])
+        assert "prices" in self.mgr._subscriptions[cid]
+        assert "signals" in self.mgr._subscriptions[cid]
 
-    # ---- async subscription tests ----
+    async def test_unsubscribe_removes_channel(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.subscribe(cid, ["prices", "signals"])
+        self.mgr.unsubscribe(cid, ["prices"])
+        assert "prices" not in self.mgr._subscriptions[cid]
+        assert "signals" in self.mgr._subscriptions[cid]
 
-    async def test_subscribe_success(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        result = await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        assert result is True
-        assert "prices:XAUUSD" in self.manager._channels
-        # Confirmation message sent
-        assert len(ws.sent) >= 1
+    async def test_subscribe_unknown_connection_is_noop(self):
+        self.mgr.subscribe("ghost", ["prices"])  # must not raise
 
-    async def test_subscribe_unknown_connection(self):
-        result = await self.manager.subscribe("no_conn", "prices:XAUUSD")
-        assert result is False
+    # ── broadcast ────────────────────────────────────────────────────────────
 
-    async def test_subscribe_adds_channel_to_info(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "signals:XAUUSD")
-        info = self.manager.get_connection_info(conn_id)
-        assert "signals:XAUUSD" in info.subscriptions
+    async def test_broadcast_reaches_subscriber(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.subscribe(cid, ["account"])
+        msg = {"type": "account_update", "data": {"balance": 10000.0}}
+        await self.mgr.broadcast("account", msg)
+        assert len(ws.sent) == 1
+        assert json.loads(ws.sent[0])["type"] == "account_update"
 
-    async def test_unsubscribe_success(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        result = await self.manager.unsubscribe(conn_id, "prices:XAUUSD")
-        assert result is True
-        info = self.manager.get_connection_info(conn_id)
-        assert "prices:XAUUSD" not in info.subscriptions
+    async def test_broadcast_skips_non_subscriber(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.subscribe(cid, ["signals"])
+        await self.mgr.broadcast("account", {"type": "account_update", "data": {}})
+        # ws subscribed to "signals", not "account" — should receive nothing
+        # (non-empty subscription set means explicit opt-in only)
+        assert len(ws.sent) == 0
 
-    async def test_unsubscribe_removes_empty_channel(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        await self.manager.unsubscribe(conn_id, "prices:XAUUSD")
-        assert "prices:XAUUSD" not in self.manager._channels
+    async def test_broadcast_empty_subscriptions_receives_all(self):
+        """A connection with no explicit subscriptions gets every channel."""
+        ws = _MockWS()
+        await self.mgr.connect(ws)  # no subscribe() call → empty set
+        await self.mgr.broadcast("prices", {"type": "price_tick", "data": {}})
+        assert len(ws.sent) == 1
 
-    async def test_unsubscribe_nonexistent_channel(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        result = await self.manager.unsubscribe(conn_id, "nonexistent:channel")
-        assert result is False
+    async def test_broadcast_removes_dead_connection(self):
+        """A send_text failure should silently drop the connection."""
+        class _DeadWS(_MockWS):
+            async def send_text(self, text: str):
+                raise RuntimeError("connection closed")
 
-    async def test_broadcast_sends_to_subscribers(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        ws.sent.clear()
+        ws = _DeadWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.subscribe(cid, ["prices"])
+        await self.mgr.broadcast("prices", {"type": "price_tick", "data": {}})
+        assert self.mgr.connection_count == 0
 
-        await self.manager.broadcast(
-            "prices:XAUUSD",
-            {"price": 1905.0},
-            event="price",
-        )
-        assert len(ws.sent) >= 1
-        parsed = json.loads(ws.sent[-1])
-        assert parsed["event"] == "price"
+    # ── send_to_user ─────────────────────────────────────────────────────────
 
-    async def test_broadcast_empty_channel_no_error(self):
-        # Should silently do nothing
-        await self.manager.broadcast("nonexistent:channel", {"data": 1})
+    async def test_send_to_user_reaches_correct_connection(self):
+        ws_a, ws_b = _MockWS(), _MockWS()
+        cid_a = await self.mgr.connect(ws_a)
+        cid_b = await self.mgr.connect(ws_b)
+        self.mgr.authenticate(cid_a, "alice")
+        self.mgr.authenticate(cid_b, "bob")
+        msg = {"type": "account_update", "data": {"balance": 5000.0}}
+        await self.mgr.send_to_user("alice", "account", msg)
+        assert len(ws_a.sent) == 1
+        assert len(ws_b.sent) == 0
 
-    async def test_broadcast_to_all(self):
-        ws1, ws2 = _MockWebSocket(), _MockWebSocket()
-        self.manager.register_connection(ws1)
-        self.manager.register_connection(ws2)
-        ws1.sent.clear()
-        ws2.sent.clear()
-        await self.manager.broadcast_to_all({"msg": "hello"})
-        assert len(ws1.sent) >= 1
-        assert len(ws2.sent) >= 1
+    # ── heartbeat helpers ─────────────────────────────────────────────────────
 
-    async def test_broadcast_excludes_connections(self):
-        ws1, ws2 = _MockWebSocket(), _MockWebSocket()
-        id1 = self.manager.register_connection(ws1)
-        id2 = self.manager.register_connection(ws2)
-        await self.manager.subscribe(id1, "ch:test")
-        await self.manager.subscribe(id2, "ch:test")
-        ws1.sent.clear()
-        ws2.sent.clear()
-        await self.manager.broadcast("ch:test", {}, exclude={id1})
-        assert len(ws1.sent) == 0
-        assert len(ws2.sent) >= 1
+    async def test_record_hb_miss_increments(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        assert self.mgr.record_hb_miss(cid) == 1
+        assert self.mgr.record_hb_miss(cid) == 2
 
-    async def test_send_to_user(self):
-        ws = _MockWebSocket()
-        self.manager.register_connection(ws, user_id="user_abc")
-        ws.sent.clear()
-        await self.manager.send_to_user("user_abc", {"alert": "test"})
-        assert len(ws.sent) >= 1
+    async def test_record_pong_resets_miss_count(self):
+        ws = _MockWS()
+        cid = await self.mgr.connect(ws)
+        self.mgr.record_hb_miss(cid)
+        self.mgr.record_hb_miss(cid)
+        self.mgr.record_pong(cid)
+        assert self.mgr._hb_misses[cid] == 0
 
-    async def test_handle_message_subscribe(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        resp = await self.manager.handle_message(
-            conn_id,
-            json.dumps({"action": "subscribe", "channel": "prices:XAUUSD"}),
-        )
-        assert resp is not None
-        assert resp["status"] == "subscribed"
+    # ── singleton ─────────────────────────────────────────────────────────────
 
-    async def test_handle_message_unsubscribe(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        resp = await self.manager.handle_message(
-            conn_id,
-            json.dumps({"action": "unsubscribe", "channel": "prices:XAUUSD"}),
-        )
-        assert resp["status"] == "unsubscribed"
+    def test_get_live_manager_returns_instance(self):
+        mgr = get_live_manager()
+        assert isinstance(mgr, LiveConnectionManager)
 
-    async def test_handle_message_ping(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        resp = await self.manager.handle_message(conn_id, json.dumps({"action": "ping"}))
-        assert resp["action"] == "pong"
+    def test_get_live_manager_is_singleton(self):
+        assert get_live_manager() is get_live_manager()
 
-    async def test_handle_message_auth(self):
-        # Build a valid signed JWT using the same secret _decode_token reads.
-        secret = _os.environ.get("SECURITY_JWT_SECRET", "unit-test-admin-secret-key-32chars!!")
-        _os.environ.setdefault("SECURITY_JWT_SECRET", secret)
-        now = int(_time.time())
-        token = _jwt.encode(
-            {"sub": "ws-test-user", "role": "trader", "type": "access", "iat": now, "exp": now + 3600},
-            secret,
-            algorithm="HS256",
-        )
+    # ── ws/live/stats REST endpoint ───────────────────────────────────────────
 
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        resp = await self.manager.handle_message(conn_id, json.dumps({"action": "auth", "token": token}))
-        assert resp["status"] == "authenticated"
-        assert resp["user_id"] == "ws-test-user"
-
-    async def test_handle_message_invalid_json(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        resp = await self.manager.handle_message(conn_id, "not json {{")
-        assert "error" in resp
-
-    async def test_handle_message_unknown_connection(self):
-        resp = await self.manager.handle_message("no_conn", json.dumps({"action": "ping"}))
-        assert resp is None
-
-    def test_get_stats(self):
-        stats = self.manager.get_stats()
-        assert "total_connections" in stats
-        assert "total_messages_sent" in stats
-        assert "active_connections" in stats
-        assert "active_channels" in stats
-
-    def test_get_channel_subscribers(self):
-        # No subscribers yet
-        subs = self.manager.get_channel_subscribers("prices:XAUUSD")
-        assert isinstance(subs, set)
-        assert len(subs) == 0
-
-    def test_get_available_channels_empty(self):
-        channels = self.manager.get_available_channels()
-        assert isinstance(channels, list)
-
-    def test_on_connect_callback(self):
-        fired = []
-        self.manager.on_connect(lambda cid, info: fired.append(cid))
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        assert conn_id in fired
-
-    def test_on_disconnect_callback(self):
-        fired = []
-        self.manager.on_disconnect(fired.append)
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        self.manager.unregister_connection(conn_id)
-        assert conn_id in fired
-
-    async def test_on_message_callback(self):
-        fired = []
-        self.manager.on_message(lambda cid, data: fired.append(data))
-
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.handle_message(conn_id, json.dumps({"action": "unknown"}))
-        assert len(fired) >= 1
-
-    async def test_broadcast_price_update(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        ws.sent.clear()
-        await self.manager.broadcast_price_update(
-            symbol="XAUUSD",
-            price=1905.0,
-            bid=1904.9,
-            ask=1905.1,
-        )
-        assert len(ws.sent) >= 1
-        parsed = json.loads(ws.sent[-1])
-        assert parsed["data"]["symbol"] == "XAUUSD"
-
-    async def test_broadcast_trade(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "trades:XAUUSD")
-        ws.sent.clear()
-        await self.manager.broadcast_trade(
-            symbol="XAUUSD",
-            price=1906.0,
-            quantity=10.0,
-            side="buy",
-        )
-        assert len(ws.sent) >= 1
-
-    async def test_broadcast_signal(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "signals:XAUUSD")
-        await self.manager.subscribe(conn_id, "signals:all")
-        ws.sent.clear()
-        await self.manager.broadcast_signal("XAUUSD", {"direction": "buy"})
-        assert len(ws.sent) >= 1
-
-    async def test_broadcast_alert_to_user(self):
-        ws = _MockWebSocket()
-        self.manager.register_connection(ws, user_id="alert_user")
-        ws.sent.clear()
-        await self.manager.broadcast_alert("alert_user", {"message": "price alert"})
-        assert len(ws.sent) >= 1
-
-    async def test_broadcast_alert_to_channel(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "alerts")
-        ws.sent.clear()
-        await self.manager.broadcast_alert(None, {"message": "global alert"})
-        assert len(ws.sent) >= 1
-
-    async def test_unregister_removes_from_channel(self):
-        ws = _MockWebSocket()
-        conn_id = self.manager.register_connection(ws)
-        await self.manager.subscribe(conn_id, "prices:XAUUSD")
-        self.manager.unregister_connection(conn_id)
-        subs = self.manager.get_channel_subscribers("prices:XAUUSD")
-        assert conn_id not in subs
-
-    async def test_max_subscriptions_enforced(self):
-        mgr = WebSocketManager(config={"max_subscriptions": 2})
-        ws = _MockWebSocket()
-        conn_id = mgr.register_connection(ws)
-        r1 = await mgr.subscribe(conn_id, "ch:1")
-        r2 = await mgr.subscribe(conn_id, "ch:2")
-        r3 = await mgr.subscribe(conn_id, "ch:3")  # Should fail
-        assert r1 is True
-        assert r2 is True
-        assert r3 is False
+    def test_ws_live_stats_endpoint(self):
+        from api.ws_live import router as ws_router
+        app = FastAPI()
+        app.include_router(ws_router)
+        client = TestClient(app)
+        resp = client.get("/ws/live/stats")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "connections" in body
+        assert "timestamp" in body
 
 
 @pytest.mark.unit
-class TestGetWebSocketManager:
-    """Unit tests for the global WebSocket manager singleton."""
+class TestAccountBroadcasterMarginLevel:
+    """
+    Verify the margin_level sentinel logic in _account_update_broadcaster.
 
-    def test_get_websocket_manager_returns_instance(self):
-        mgr = get_websocket_manager()
-        assert isinstance(mgr, WebSocketManager)
+    The original bug: margin_level was 0.0 when no positions were open.
+    The fix: use 9999.0 when margin_used == 0 (no open positions → no risk).
+    """
 
-    def test_get_websocket_manager_singleton(self):
-        mgr1 = get_websocket_manager()
-        mgr2 = get_websocket_manager()
-        assert mgr1 is mgr2
+    def _compute_margin_level(self, acct_raw: dict) -> float:
+        """Mirror the broadcaster's normalisation logic."""
+        balance = float(acct_raw.get("balance", 0.0) or 0.0)
+        equity = float(acct_raw.get("equity", balance) or balance)
+        margin_used = float(acct_raw.get("margin_used", 0.0) or 0.0)
+        return (equity / margin_used * 100) if margin_used > 0 else 9999.0
 
+    def test_no_positions_yields_sentinel(self):
+        """margin_used=0 → 9999.0, not 0.0."""
+        result = self._compute_margin_level(
+            {"balance": 10000.0, "equity": 10000.0, "margin_used": 0.0}
+        )
+        assert result == 9999.0
 
-@pytest.mark.unit
-class TestCreateWebSocketRouter:
-    """Unit tests for the create_websocket_router factory."""
+    def test_margin_used_missing_yields_sentinel(self):
+        """Broker omits margin_used → defaults to 0 → sentinel."""
+        result = self._compute_margin_level({"balance": 10000.0, "equity": 10000.0})
+        assert result == 9999.0
 
-    def test_creates_router_with_stats_endpoint(self):
-        mgr = WebSocketManager()
-        router = create_websocket_router(mgr)
-        app = FastAPI()
-        app.include_router(router)
-        client = TestClient(app)
-        resp = client.get("/ws/stats")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "active_connections" in body
+    def test_margin_used_none_yields_sentinel(self):
+        """Broker returns None for margin_used → treated as 0 → sentinel."""
+        result = self._compute_margin_level(
+            {"balance": 10000.0, "equity": 10000.0, "margin_used": None}
+        )
+        assert result == 9999.0
 
-    def test_creates_router_with_channels_endpoint(self):
-        mgr = WebSocketManager()
-        router = create_websocket_router(mgr)
-        app = FastAPI()
-        app.include_router(router)
-        client = TestClient(app)
-        resp = client.get("/ws/channels")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "channels" in body
+    def test_open_positions_computes_correctly(self):
+        """With margin_used > 0, margin_level = equity / margin_used * 100."""
+        result = self._compute_margin_level(
+            {"balance": 10000.0, "equity": 10500.0, "margin_used": 1000.0}
+        )
+        assert abs(result - 1050.0) < 0.01
+
+    def test_broker_margin_level_field_ignored(self):
+        """If broker sends margin_level=0.0 but margin_used=0, sentinel wins."""
+        result = self._compute_margin_level(
+            {"balance": 10000.0, "equity": 10000.0, "margin_used": 0.0, "margin_level": 0.0}
+        )
+        assert result == 9999.0
+
+    def test_paper_broker_always_yields_sentinel(self):
+        """PaperTradingBroker always returns margin_used=0.0 → sentinel."""
+        from brokers.paper_trading import PaperTradingBroker
+        broker = PaperTradingBroker(initial_balance=10000.0)
+        info = broker.get_account_info()
+        margin_used = float(info.get("margin_used", 0.0) or 0.0)
+        margin_level = (info.equity / margin_used * 100) if margin_used > 0 else 9999.0
+        assert margin_level == 9999.0

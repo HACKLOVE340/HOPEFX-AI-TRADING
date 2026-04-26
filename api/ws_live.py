@@ -846,13 +846,14 @@ async def _account_update_broadcaster() -> None:
                 continue
 
             # Normalise to the AccountMetrics shape the frontend store expects
-            balance = float(acct_raw.get("balance", 0.0))
-            equity = float(acct_raw.get("equity", balance))
-            margin_used = float(acct_raw.get("margin_used", 0.0))
-            margin_free = float(acct_raw.get("margin_free", equity - margin_used))
+            balance = float(acct_raw.get("balance", 0.0) or 0.0)
+            equity = float(acct_raw.get("equity", balance) or balance)
+            margin_used = float(acct_raw.get("margin_used", 0.0) or 0.0)
+            margin_free = float(acct_raw.get("margin_free", equity - margin_used) or 0.0)
             # When margin_used == 0 there are no open positions, so margin level
             # is effectively infinite (no risk). Use 9999.0 as a sentinel so the
             # frontend RiskDashboard does not interpret 0.0 as a margin call.
+            # This is the canonical fix for the original bug report (margin_level=0.0).
             margin_level = (equity / margin_used * 100) if margin_used > 0 else 9999.0
             daily_pnl = float(acct_raw.get("daily_pnl", acct_raw.get("unrealized_pnl", 0.0)))
             daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0

@@ -12,7 +12,7 @@
  * they do not all race the API at the same time as the critical ones.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { dataLayerApi, performanceApi, tradingApi, signalsApi, mlExtendedApi, calendarApi } from '../lib/api';
@@ -28,13 +28,10 @@ const BOOTSTRAP_DELAY_MS = 3_000;
  */
 function useDelayedEnabled(delayMs: number): boolean {
   const [ready, setReady] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    timerRef.current = setTimeout(() => setReady(true), delayMs);
-    return () => {
-      if (timerRef.current !== null) clearTimeout(timerRef.current);
-    };
+    const id = setTimeout(() => setReady(true), delayMs);
+    return () => clearTimeout(id);
   }, [delayMs]);
 
   return ready;

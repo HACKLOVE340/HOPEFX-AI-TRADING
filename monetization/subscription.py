@@ -917,74 +917,59 @@ def require_plan(minimum_plan: str):
     The user's current plan is read from their active subscription record.
     Falls back to "free" when no subscription exists.
     """
-
+    # Resolve auth dependency at factory time so FastAPI can inspect the
+    # signature of _dependency and wire up get_current_user correctly.
+    # Using Security(get_current_user) here means FastAPI handles Bearer token
+    # extraction via its standard HTTPBearer scheme — no manual header parsing.
     try:
-        from fastapi import Request
-    except ImportError:
-        Request = object  # type: ignore[assignment,misc]
+        from fastapi import Depends as _Depends
+        from fastapi.security import HTTPBearer as _HTTPBearer
+        from api.auth import get_current_user as _get_current_user
 
-    async def _dependency(request: "Request", user=None):  # type: ignore[name-defined]
-        # Import here to avoid circular imports
-        try:
-            from fastapi.security import HTTPBearer as _HTTPBearer  # noqa: F401
-            from fastapi.security.http import HTTPAuthorizationCredentials as _Creds
+        _bearer_scheme = _HTTPBearer(auto_error=False)
 
-            from api.auth import get_current_user
-        except ImportError:
-            # auth module not available (e.g. unit tests) — allow through
+        async def _dependency(
+            user=_Depends(_get_current_user),
+        ):
+            _resolve_plan_and_raise(user, minimum_plan)
             return user
 
-        # Resolve the current user from the Bearer token when not already injected
-        if user is None:
-            try:
-                auth_header = request.headers.get("Authorization", "")
-                if auth_header.lower().startswith("bearer "):
-                    token = auth_header[7:].strip()
-                    creds = _Creds(scheme="bearer", credentials=token)
-                    user = get_current_user(credentials=creds)
-            except Exception as _exc:
-                # Propagate HTTP exceptions (401/403) from token validation;
-                # swallow only unexpected errors and fall through to plan check.
-                from fastapi import HTTPException as _HTTPExc
+    except ImportError:
+        # auth module unavailable (unit-test environments without full stack)
+        async def _dependency(user=None):  # type: ignore[misc]
+            _resolve_plan_and_raise(user, minimum_plan)
+            return user
 
-                if isinstance(_exc, _HTTPExc):
-                    raise
-                logger.debug("Could not resolve user from request: %s", _exc)
-
-        # Get user's current plan from subscription manager
-        user_id = getattr(user, "sub", "") if user else ""
-        current_plan = "free"
-        if user_id:
-            sub = subscription_manager.get_user_subscription(user_id)
-            if sub and sub.is_active():
-                tier = sub.tier
-                current_plan = tier.value if hasattr(tier, "value") else str(tier)
-
-        if _plan_rank(current_plan) < _plan_rank(minimum_plan):
-            from fastapi import HTTPException
-            from fastapi import status as _status
-
-            raise HTTPException(
-                status_code=_status.HTTP_403_FORBIDDEN,
-                detail={
-                    "error": "PLAN_LIMIT_EXCEEDED",
-                    "required_plan": minimum_plan,
-                    "current_plan": current_plan,
-                    "message": (
-                        f"This feature requires a {minimum_plan.title()} subscription or above. "
-                        f"Your current plan is {current_plan.title()}. "
-                        f"Upgrade at hopefx.com/pricing"
-                    ),
-                },
-            )
-        return user
-
-    # Return a FastAPI Depends-compatible callable
-    # The actual dependency injection is handled by FastAPI when used as:
-    #   Depends(require_plan("professional"))
-    # which calls require_plan("professional") to get _dependency, then
-    # FastAPI calls _dependency with the resolved user.
     return _dependency
+
+
+def _resolve_plan_and_raise(user: Any, minimum_plan: str) -> None:
+    """Check the user's active subscription tier and raise 403 if insufficient."""
+    user_id = getattr(user, "sub", "") if user else ""
+    current_plan = "free"
+    if user_id:
+        sub = subscription_manager.get_user_subscription(user_id)
+        if sub and sub.is_active():
+            tier = sub.tier
+            current_plan = tier.value if hasattr(tier, "value") else str(tier)
+
+    if _plan_rank(current_plan) < _plan_rank(minimum_plan):
+        from fastapi import HTTPException
+        from fastapi import status as _status
+
+        raise HTTPException(
+            status_code=_status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "PLAN_LIMIT_EXCEEDED",
+                "required_plan": minimum_plan,
+                "current_plan": current_plan,
+                "message": (
+                    f"This feature requires a {minimum_plan.title()} subscription or above. "
+                    f"Your current plan is {current_plan.title()}. "
+                    f"Upgrade at hopefx.com/pricing"
+                ),
+            },
+        )
 
 
 def plan_gate(minimum_plan: str, user_plan: str) -> bool:
