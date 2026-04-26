@@ -73,7 +73,7 @@ router = APIRouter(tags=["WebSocket Live"])
 _last_mid: dict[str, float] = {}
 
 # ── Auth / heartbeat config ───────────────────────────────────────────────────
-AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "10"))
+AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "30"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
 # Set to "false" to allow unauthenticated connections (dev/demo mode only).
@@ -359,45 +359,53 @@ async def _eventbus_tick_broadcaster() -> None:
     Subscribe to hopefx:tick on the EventBus and forward every validated
     tick to all WebSocket clients subscribed to the 'prices' channel.
 
-    Falls back to the GBM simulator when the EventBus is in degraded mode
-    (Redis unavailable) so the dashboard always shows something.
+    Reconnects automatically with exponential backoff so a Redis blip does
+    not leave the feed permanently dead until the process is restarted.
     """
-    try:
-        from core.event_bus import CH_TICK, bus
+    _retry_delays = [5, 10, 20, 30, 60]
+    attempt = 0
+    while True:
+        try:
+            from core.event_bus import CH_TICK, bus
 
-        await bus.connect()
-        logger.info("WS live: connected to EventBus — streaming real ticks.")
-        async for msg in bus.subscribe(CH_TICK):
-            if _manager.connection_count == 0:
-                continue
-            # Normalise to frontend PriceTick schema:
-            # { type: "price_tick", data: PriceTick }
-            symbol = msg.get("symbol", "XAU/USD")
-            mid = float(msg.get("mid") or 0)
-            # Track previous mid for change_pct calculation
-            prev = _last_mid.get(symbol, mid)
-            change = ((mid - prev) / prev * 100) if prev else 0.0
-            _last_mid[symbol] = mid
+            await bus.connect()
+            logger.info("WS live: connected to EventBus — streaming real ticks.")
+            attempt = 0  # successful connect resets backoff counter
+            async for msg in bus.subscribe(CH_TICK):
+                if _manager.connection_count == 0:
+                    continue
+                # Normalise to frontend PriceTick schema:
+                # { type: "price_tick", data: PriceTick }
+                symbol = msg.get("symbol", "XAU/USD")
+                mid = float(msg.get("mid") or 0)
+                # Track previous mid for change_pct calculation
+                prev = _last_mid.get(symbol, mid)
+                change = ((mid - prev) / prev * 100) if prev else 0.0
+                _last_mid[symbol] = mid
 
-            tick = {
-                "type": "price_tick",
-                "data": {
-                    "symbol": symbol,
-                    "bid": msg.get("bid"),
-                    "ask": msg.get("ask"),
-                    "mid": mid,
-                    "spread": msg.get("spread"),
-                    "timestamp": msg.get("timestamp"),
-                    "change_pct": round(change, 4),
-                },
-            }
-            await _manager.broadcast("prices", tick)
-    except Exception as exc:
-        logger.warning(
-            "WS live: EventBus tick stream failed (%s) — broadcasting no_live_feed.",
-            exc,
-        )
-        await _broadcast_no_live_feed()
+                tick = {
+                    "type": "price_tick",
+                    "data": {
+                        "symbol": symbol,
+                        "bid": msg.get("bid"),
+                        "ask": msg.get("ask"),
+                        "mid": mid,
+                        "spread": msg.get("spread"),
+                        "timestamp": msg.get("timestamp"),
+                        "change_pct": round(change, 4),
+                    },
+                }
+                await _manager.broadcast("prices", tick)
+        except Exception as exc:
+            delay = _retry_delays[min(attempt, len(_retry_delays) - 1)]
+            logger.warning(
+                "WS live: EventBus tick stream failed (%s) — retrying in %ds (attempt %d).",
+                exc,
+                delay,
+                attempt + 1,
+            )
+            attempt += 1
+            await asyncio.sleep(delay)
 
 
 def _atr_from_buffer(symbol: str) -> float | None:
@@ -689,12 +697,14 @@ async def _heartbeat_broadcaster() -> None:
             continue
         dead: list[str] = []
         for cid in list(_manager._connections.keys()):
+            await _manager.send(cid, {"type": "heartbeat"})
+            if cid not in _manager._connections:
+                # send() already called disconnect() on failure — skip
+                continue
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
                 logger.info("WS closing stale connection %s (missed %d heartbeats)", cid, misses)
                 dead.append(cid)
-            else:
-                await _manager.send(cid, {"type": "heartbeat"})
         for cid in dead:
             ws = _manager._connections.get(cid)
             if ws:
@@ -897,37 +907,46 @@ async def _account_update_broadcaster() -> None:
             logger.debug("account_update_broadcaster: %s", exc)
 
 
-def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type-arg]
-    """Log unexpected broadcaster task completion so crashes are not silently swallowed."""
-    exc = task.exception() if not task.cancelled() else None
-    if exc is not None:
-        logger.error(
-            "WS broadcaster task %r exited with exception: %s",
-            task.get_name(),
-            exc,
-            exc_info=exc,
-        )
-    elif task.cancelled():
-        logger.debug("WS broadcaster task %r was cancelled", task.get_name())
-    else:
-        logger.warning(
-            "WS broadcaster task %r exited cleanly — this is unexpected and may indicate a bug",
-            task.get_name(),
-        )
-
+# Broadcaster specs at module level so the restart callback can look them up.
+_BROADCASTER_SPECS: list[tuple[str, Any]] = []
 
 # Strong references to broadcaster tasks so they are not garbage-collected.
-# Assigning each task to the same local variable `_t` would drop the reference
-# to all but the last task, allowing the GC to cancel them silently.
 _broadcaster_tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
+
+
+def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+    """Restart any broadcaster that exits unexpectedly."""
+    name = task.get_name()
+    if task.cancelled():
+        logger.debug("WS broadcaster task %r was cancelled", name)
+        return
+
+    exc = task.exception() if not task.cancelled() else None
+    if exc is not None:
+        logger.error("WS broadcaster task %r crashed: %s — restarting", name, exc, exc_info=exc)
+    else:
+        logger.warning("WS broadcaster task %r exited cleanly — restarting", name)
+
+    for spec_name, coro_fn in _BROADCASTER_SPECS:
+        if spec_name == name:
+            try:
+                loop = asyncio.get_running_loop()
+                new_task = loop.create_task(coro_fn(), name=spec_name)
+                new_task.add_done_callback(_broadcaster_done_callback)
+                _broadcaster_tasks[:] = [t for t in _broadcaster_tasks if t.get_name() != spec_name]
+                _broadcaster_tasks.append(new_task)
+                logger.info("WS broadcaster %r restarted successfully", spec_name)
+            except Exception as restart_exc:
+                logger.error("WS broadcaster %r restart failed: %s", spec_name, restart_exc)
+            break
 
 
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
-    global _broadcaster_tasks
+    global _broadcaster_tasks, _BROADCASTER_SPECS
     loop = asyncio.get_running_loop()
 
-    _specs = [
+    _BROADCASTER_SPECS = [
         ("price_broadcaster",          _price_broadcaster),
         ("heartbeat_broadcaster",       _heartbeat_broadcaster),
         ("signal_broadcaster",          _eventbus_signal_broadcaster),
@@ -936,7 +955,7 @@ def start_broadcasters() -> None:
     ]
 
     _broadcaster_tasks = []
-    for name, coro_fn in _specs:
+    for name, coro_fn in _BROADCASTER_SPECS:
         task = loop.create_task(coro_fn(), name=name)
         task.add_done_callback(_broadcaster_done_callback)
         _broadcaster_tasks.append(task)
@@ -1138,10 +1157,6 @@ async def _ws_message_loop(cid: str, websocket: Any) -> None:
     except Exception as exc:
         logger.error("WS live error [%s]: %s", cid, exc)
         _manager.disconnect(cid)
-    finally:
-        from rate_limiting.websocket_limiter import get_client_ip, get_ws_limiter
-
-        await get_ws_limiter().release(get_client_ip(websocket))
 
 
 # ─── REST helpers ─────────────────────────────────────────────────────────────
