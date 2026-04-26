@@ -67,7 +67,7 @@ class OHLCVData:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "OHLCVData":
+    def from_dict(cls, data: dict) -> OHLCVData:
         return cls(**data)
 
 
@@ -87,7 +87,7 @@ class TickData:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TickData":
+    def from_dict(cls, data: dict) -> TickData:
         return cls(**data)
 
 
@@ -318,11 +318,12 @@ class MarketDataCache:
         # Fast-fail when the circuit breaker is open
         try:
             from resilience.service_circuit_breakers import redis_breaker as _rb
+
             if _rb.is_open:
                 self._using_fallback = True
                 logger.debug(
-                    "MarketDataCache: Redis circuit breaker OPEN — using in-memory fallback. "
-                    "Retry in %.0fs.", _rb._seconds_until_probe()
+                    "MarketDataCache: Redis circuit breaker OPEN — using in-memory fallback. Retry in %.0fs.",
+                    _rb._seconds_until_probe(),
                 )
                 return None
         except Exception:  # nosec B110 — circuit breaker is non-fatal
@@ -338,6 +339,7 @@ class MarketDataCache:
                 # Record success so the breaker can transition HALF_OPEN → CLOSED
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_success()
                 except Exception:  # nosec B110
                     pass
@@ -347,6 +349,7 @@ class MarketDataCache:
                 # Record failure in circuit breaker
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_failure(_exc)
                 except Exception:  # nosec B110
                     pass
@@ -377,6 +380,7 @@ class MarketDataCache:
                 # Record successful reconnect
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_success()
                 except Exception:  # nosec B110
                     pass
@@ -388,6 +392,7 @@ class MarketDataCache:
                 # Record each failed attempt in the circuit breaker
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_failure(e)
                 except Exception:  # nosec B110
                     pass

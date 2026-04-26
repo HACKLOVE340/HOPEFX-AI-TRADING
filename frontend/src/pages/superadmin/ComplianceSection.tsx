@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, SeverityBadge, ActionBtn, Select, Input,
-  KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
 
@@ -132,12 +132,12 @@ const ComplianceSection: React.FC = () => {
   const openAml       = aml.filter(a => a.status === 'open').length;
   const pendingSanc   = sanctions.filter(s => s.status === 'pending').length;
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       {confirm && (
         <ConfirmDialog
           title={confirm.label}

@@ -369,10 +369,10 @@ class PricingEngine:
         # Tier-based discount
         tier_discounts = {
             SubscriptionTier.FREE: 0.0,
-            SubscriptionTier.STARTER: 0.05,       # 5% off
+            SubscriptionTier.STARTER: 0.05,  # 5% off
             SubscriptionTier.PROFESSIONAL: 0.10,  # 10% off
-            SubscriptionTier.ENTERPRISE: 0.20,    # 20% off
-            SubscriptionTier.ELITE: 0.30,         # 30% off
+            SubscriptionTier.ENTERPRISE: 0.20,  # 20% off
+            SubscriptionTier.ELITE: 0.30,  # 30% off
         }
         discount += base_price * tier_discounts.get(tier, 0.0)
 

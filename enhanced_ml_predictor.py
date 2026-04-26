@@ -1695,8 +1695,7 @@ class EnhancedMLPredictor:
         if use_walk_forward:
             # gap must cover the prediction horizon to prevent target leakage
             # at train/val fold boundaries
-            if gap < self.horizon:
-                gap = self.horizon
+            gap = max(gap, self.horizon)
             self._walk_forward_fit(X, y, n_splits=n_splits, gap=gap)
         else:
             logger.info("Fitting on %d samples (single 80/20 split)...", len(X))

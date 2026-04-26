@@ -200,7 +200,6 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
 
         allowed, reason = await limiter.check_and_register(ws, client_ip)
         if not allowed:
-            await ws.close(code=1008, reason=reason)
             return
 
         await _manager.connect(ws)

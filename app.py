@@ -95,7 +95,10 @@ try:
     logger = logging.getLogger(__name__)
     logger.info(
         "Logging initialised: level=%s json=%s async=%s dir=%s",
-        _log_level, _log_json, _log_async, _log_dir,
+        _log_level,
+        _log_json,
+        _log_async,
+        _log_dir,
     )
 except Exception as _log_setup_err:
     # Non-fatal — basicConfig fallback remains active
@@ -427,16 +430,20 @@ async def lifespan(_app: FastAPI):
     _static_index = Path(__file__).parent / "static" / "index.html"
     if not _static_index.exists():
         import threading
+
         def _bg_build():
             try:
                 from scripts.bootstrap_dev import build_frontend
+
                 build_frontend(verbose=True)
                 # Re-mount the SPA now that static/index.html exists
                 from core.page_routes import register_page_routes as _rpr
+
                 _rpr(_app)
                 logger.info("Frontend build complete — SPA mounted at /")
             except Exception as _be:
                 logger.warning("Background frontend build failed: %s", _be)
+
         threading.Thread(target=_bg_build, daemon=True, name="frontend-build").start()
         logger.info("Frontend not built — starting background build (API available immediately)")
 
@@ -456,7 +463,7 @@ async def lifespan(_app: FastAPI):
         _scb_task.add_done_callback(lambda _: None)
         if hasattr(app_state, "background_tasks"):
             app_state.background_tasks.append(_scb_task)
-        logger.info("✓ Sharpe circuit breaker task started (lifespan)")
+        logger.info("[OK] Sharpe circuit breaker task started (lifespan)")
     except Exception as _scb_err:
         logger.warning("Sharpe circuit breaker not started (non-fatal): %s", _scb_err)
     # Start Prometheus sync loop (replaces deprecated @app.on_event("startup"))
@@ -465,9 +472,11 @@ async def lifespan(_app: FastAPI):
 
         _prom_interval = float(os.getenv("PROMETHEUS_SCRAPE_INTERVAL_SECONDS", "15"))
         _t = asyncio.create_task(_prom_sync_loop(_prom_interval))
+
         def _on_prom_done(task: "asyncio.Task[None]") -> None:
             if not task.cancelled() and task.exception():
                 logger.error("Prometheus sync loop died: %s", task.exception())
+
         _t.add_done_callback(_on_prom_done)
         logger.info("Prometheus sync loop started (interval=%.0fs)", _prom_interval)
     except Exception as _prom_err:
@@ -478,12 +487,12 @@ async def lifespan(_app: FastAPI):
     try:
         from core.outbox import get_relay as _get_outbox_relay
 
-        _outbox_task = asyncio.create_task(
-            _get_outbox_relay().run(), name="outbox-relay"
-        )
+        _outbox_task = asyncio.create_task(_get_outbox_relay().run(), name="outbox-relay")
+
         def _on_outbox_done(task: "asyncio.Task[None]") -> None:
             if not task.cancelled() and task.exception():
                 logger.error("Outbox relay task died — compliance events may be lost: %s", task.exception())
+
         _outbox_task.add_done_callback(_on_outbox_done)
         logger.info(
             "✓ Outbox relay started (interval=%.1fs batch=%s)",
@@ -498,7 +507,7 @@ async def lifespan(_app: FastAPI):
         from api.ws_live import start_broadcasters
 
         start_broadcasters()
-        logger.info("✓ Live WebSocket broadcasters started (/ws/live)")
+        logger.info("[OK] Live WebSocket broadcasters started (/ws/live)")
     except Exception as _ws_err:
         logger.warning("Live WS broadcasters not started: %s", _ws_err)
 
@@ -513,7 +522,7 @@ async def lifespan(_app: FastAPI):
         mount_nuclear_routes(app, _nuclear_engine)
         _t = asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
         _t.add_done_callback(lambda _: None)
-        logger.info("✓ Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
+        logger.info("[OK] Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
     except Exception as _nuclear_err:
         logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
 
@@ -523,7 +532,7 @@ async def lifespan(_app: FastAPI):
         from api.social_feed import refresh_leaderboard_cache as _refresh_lb
 
         _refresh_lb()
-        logger.info("✓ Leaderboard cache warmed up")
+        logger.info("[OK] Leaderboard cache warmed up")
     except Exception as _lb_err:
         logger.debug("Leaderboard warm-up skipped (non-fatal): %s", _lb_err)
 
@@ -534,7 +543,7 @@ async def lifespan(_app: FastAPI):
 
         if _db_get("signals:active") is None:
             _db_set("signals:active", [], changed_by="startup")
-            logger.info("✓ signals:active key seeded in db_store")
+            logger.info("[OK] signals:active key seeded in db_store")
     except Exception as _sig_err:
         logger.debug("signals:active seed skipped (non-fatal): %s", _sig_err)
 
@@ -577,6 +586,7 @@ async def startup_event():
         # can report real component states instead of "not configured".
         try:
             from infrastructure.health import get_health_checker as _get_hc
+
             _get_hc(app)
             logger.info("Health checker wired to app")
         except Exception as _hc_wire_err:
@@ -619,6 +629,7 @@ async def startup_event():
         # Mark startup probe as complete so /api/health/startup returns 200
         try:
             from api.health import mark_startup_complete as _mark_startup_complete
+
             _mark_startup_complete(tasks_done=_tasks_done, tasks_failed=_tasks_failed)
         except Exception as _hc_err:
             logger.warning("Could not mark startup complete: %s", _hc_err)
@@ -644,7 +655,7 @@ def _push_state_to_api_modules(state) -> None:
             _fn = getattr(_mod, _fn_name, None)
             if _fn is not None:
                 _fn(state)
-                logger.info("State pushed → %s", _mod_name)
+                logger.info("State pushed _> %s", _mod_name)
         except ImportError:
             ...  # nosec B110
         except Exception as _e:
@@ -780,12 +791,12 @@ async def shutdown_event():
             if not task.done():
                 task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        logger.info("✓ Background tasks cancelled")
+        logger.info("[OK] Background tasks cancelled")
 
     if app_state.event_store:
         try:
             await app_state.event_store.stop()
-            logger.info("✓ Event store stopped")
+            logger.info("[OK] Event store stopped")
         except Exception as e:
             logger.warning("Event store stop error: %s", e)
 
@@ -794,17 +805,17 @@ async def shutdown_event():
     if price_engine is not None and hasattr(price_engine, "stop"):
         try:
             await price_engine.stop()
-            logger.info("✓ Price engine stopped")
+            logger.info("[OK] Price engine stopped")
         except Exception as _pe_err:
             logger.warning("Price engine stop error: %s", _pe_err)
 
     if app_state.db_engine:
         app_state.db_engine.dispose()
-        logger.info("✓ Database engine disposed")
+        logger.info("[OK] Database engine disposed")
 
     if app_state.cache:
         app_state.cache.close()
-        logger.info("✓ Cache connection closed")
+        logger.info("[OK] Cache connection closed")
 
     # Stop data layer orchestrator
     try:
@@ -812,7 +823,7 @@ async def shutdown_event():
 
         if orchestrator._started:
             await orchestrator.stop()
-            logger.info("✓ Data layer orchestrator stopped")
+            logger.info("[OK] Data layer orchestrator stopped")
     except Exception as _dl_stop_exc:
         logger.warning("Data layer orchestrator stop error: %s", _dl_stop_exc)
 
@@ -830,6 +841,7 @@ _register_health_routes(app, app_state, kill_switch)
 # NOTE: GET / is registered by core/page_routes.py (serves the React SPA).
 # GET /status is registered by api/status.py (system status page).
 # Do not add duplicate registrations here.
+
 
 # Error handler
 @app.exception_handler(Exception)

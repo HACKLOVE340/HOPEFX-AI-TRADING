@@ -1,11 +1,11 @@
 # Deployment Guide
 
-> Current version: **v1.17** — Python 3.10, 3.11, or 3.12 required. API server listens on port **8000**.
+> Current version: **v1.17** — Python 3.12 required (matches `python:3.12-slim` Docker image). API server listens on port **8000**.
 
 ## Prerequisites
 
 - Linux server (Ubuntu 22.04+ recommended)
-- Python 3.10, 3.11, or 3.12
+- Python 3.12 (must match the Docker image — `python:3.12-slim`)
 - Redis 7+
 - PostgreSQL 16+ (for production; SQLite used automatically in development)
 - Docker + Docker Compose (recommended)

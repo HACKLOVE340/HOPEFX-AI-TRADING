@@ -201,11 +201,10 @@ def _enforce_tls(redis_url: str) -> str:
             "to auto-upgrade. This check prevents credentials from being sent in plaintext."
         )
 
-    # Warn once per process — repeated per-connection warnings flood the log
-    # in development where many connections are created on startup.
+    # Log once per process at DEBUG in dev — it's expected and not actionable.
     global _tls_warning_emitted
     if not _tls_warning_emitted:
-        logger.warning(
+        logger.debug(
             "Redis: plaintext redis:// connection in %s environment. "
             "Use rediss:// in production or set REDIS_FORCE_TLS=true.",
             app_env,
@@ -328,10 +327,10 @@ async def get_redis(
     # Fast-fail when the circuit breaker is open — don't attempt reconnect
     try:
         from resilience.service_circuit_breakers import redis_breaker as _rb
+
         if _rb.is_open:
             logger.debug(
-                "get_redis: Redis circuit breaker OPEN — returning None. "
-                "Retry in %.0fs.", _rb._seconds_until_probe()
+                "get_redis: Redis circuit breaker OPEN — returning None. Retry in %.0fs.", _rb._seconds_until_probe()
             )
             return None
     except Exception:  # nosec B110 — circuit breaker is non-fatal
@@ -399,6 +398,7 @@ async def _ping_or_reset() -> None:
         # Record success so the breaker can transition HALF_OPEN → CLOSED
         try:
             from resilience.service_circuit_breakers import redis_breaker as _rb
+
             _rb.record_success()
         except Exception:  # nosec B110
             pass
@@ -410,6 +410,7 @@ async def _ping_or_reset() -> None:
         # Record failure in circuit breaker
         try:
             from resilience.service_circuit_breakers import redis_breaker as _rb
+
             _rb.record_failure(exc)
         except Exception:  # nosec B110
             pass
@@ -459,7 +460,7 @@ async def get_health() -> dict[str, Any]:
 
         return info
     except Exception:
-        logger.exception("Redis health check failed: %s")
+        logger.exception("Redis health check failed")
         return {"mode": _connection_mode, "connected": False, "error": "Redis unavailable — check server logs"}
 
 
@@ -490,7 +491,12 @@ def get_sync_redis() -> Any | None:
     Return a synchronous Redis client using the same env-var configuration as
     get_redis().  Falls back gracefully to None when Redis is unavailable.
 
-    Used by components that cannot run in an async context (e.g. TCA recorder).
+    Used by components that cannot run in an async context (e.g. superadmin
+    endpoints, TCA recorder, Celery tasks).
+
+    Password injection: if REDIS_PASSWORD is set and not already embedded in
+    REDIS_URL, it is injected into the URL before connecting — matching the
+    same logic used by EventBus, MarketDataCache, and ConfigStore.
     """
     try:
         import redis as _redis_sync
@@ -499,8 +505,20 @@ def get_sync_redis() -> Any | None:
         return None
 
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    password = os.getenv("REDIS_PASSWORD", "") or None
+
+    # Inject password when not already embedded in the URL.
+    if password and "@" not in redis_url.split("://", 1)[-1]:
+        scheme, rest = redis_url.split("://", 1)
+        redis_url = f"{scheme}://:{password}@{rest}"
+
     try:
-        client = _redis_sync.Redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=2)
+        client = _redis_sync.Redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+        )
         client.ping()
         return client
     except Exception as exc:
@@ -508,5 +526,13 @@ def get_sync_redis() -> Any | None:
         return None
 
 
-# Convenience alias used by many modules that call `get_redis_client()`
+# ── Aliases ───────────────────────────────────────────────────────────────────
+# get_redis_client is the ASYNC client factory (aliased to get_redis).
+# Always await it: `rc = await get_redis_client()`.
+# For synchronous contexts use get_sync_redis() or get_sync_redis_client().
 get_redis_client = get_redis
+
+# Explicit sync alias for callers that need a synchronous client.
+# Prefer this over get_redis_client in non-async code to avoid the
+# "coroutine object has no attribute" error from forgetting await.
+get_sync_redis_client = get_sync_redis

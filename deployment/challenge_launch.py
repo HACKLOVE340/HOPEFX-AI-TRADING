@@ -46,6 +46,7 @@ try:
     import discord
     from discord import app_commands
     from discord.ext import commands
+
     _DISCORD_AVAILABLE = True
 except ImportError:
     _DISCORD_AVAILABLE = False
@@ -56,6 +57,7 @@ except ImportError:
 
 
 # ── config helpers ────────────────────────────────────────────────────────────
+
 
 def _env(key: str, default: str = "") -> str:
     return os.environ.get(key, default).strip()
@@ -71,6 +73,7 @@ def _require(key: str) -> str:
 
 # ── persistence helpers ───────────────────────────────────────────────────────
 
+
 def _load_json(path: Path, default: Any) -> Any:
     if path.exists():
         try:
@@ -85,6 +88,7 @@ def _save_json(path: Path, data: Any) -> None:
 
 
 # ── pass criteria ─────────────────────────────────────────────────────────────
+
 
 def _check_pass(
     pnl_pct: float,
@@ -105,6 +109,7 @@ def _check_pass(
 
 
 # ── ChallengeLauncher class ───────────────────────────────────────────────────
+
 
 class ChallengeLauncher:
     """
@@ -153,13 +158,15 @@ class ChallengeLauncher:
             if not t.get("results"):
                 continue
             best = max(t["results"], key=lambda r: r["pnl_pct"])
-            rows.append({
-                "discord_id": uid,
-                "name": t.get("display_name", t.get("username", uid)),
-                "pnl_pct": best["pnl_pct"],
-                "dd_pct": best["drawdown_pct"],
-                "passed": t.get("passed", False),
-            })
+            rows.append(
+                {
+                    "discord_id": uid,
+                    "name": t.get("display_name", t.get("username", uid)),
+                    "pnl_pct": best["pnl_pct"],
+                    "dd_pct": best["drawdown_pct"],
+                    "passed": t.get("passed", False),
+                }
+            )
         rows.sort(key=lambda r: r["pnl_pct"], reverse=True)
         return rows[:top_n]
 
@@ -266,9 +273,7 @@ class ChallengeLauncher:
             try:
                 entry = launcher.submit_result(uid, str(interaction.user), pnl_pct, drawdown_pct, trading_days)
             except ValueError:
-                await interaction.response.send_message(
-                    "You're not registered yet. Use `/join` first.", ephemeral=True
-                )
+                await interaction.response.send_message("You're not registered yet. Use `/join` first.", ephemeral=True)
                 return
 
             if entry["passed"]:
@@ -291,9 +296,7 @@ class ChallengeLauncher:
                         )
                     except discord.Forbidden:
                         logger.warning("Could not DM winner %s (DMs disabled)", interaction.user)
-                    announce_ch = discord.utils.get(
-                        interaction.guild.text_channels, name=launcher.announce_channel
-                    )
+                    announce_ch = discord.utils.get(interaction.guild.text_channels, name=launcher.announce_channel)
                     if announce_ch:
                         await announce_ch.send(
                             f"FIRST PASSER: {interaction.user.mention} — "
@@ -310,9 +313,7 @@ class ChallengeLauncher:
         async def leaderboard_cmd(interaction: discord.Interaction):
             rows = launcher.get_leaderboard(10)
             if not rows:
-                await interaction.response.send_message(
-                    "No testers registered yet. Use `/join`!", ephemeral=True
-                )
+                await interaction.response.send_message("No testers registered yet. Use `/join`!", ephemeral=True)
                 return
             medals = ["1.", "2.", "3."] + [f"{i}." for i in range(4, 11)]
             lines = ["**HOPEFX Beta Challenge Leaderboard**\n"]

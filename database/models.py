@@ -608,15 +608,24 @@ class AuditLogEntry(Base):
 
     __tablename__ = "audit_log"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Integer maps to INTEGER in SQLite (gets the implicit rowid alias / autoincrement)
+    # and to BIGINT in PostgreSQL via dialect — both correct for an audit log.
+    id = Column(Integer, primary_key=True, autoincrement=True)
     sequence_number = Column(BigInteger, nullable=False, index=True)
     timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
+    # created_at mirrors timestamp for query compatibility with the superadmin audit API.
+    created_at = Column(DateTime, default=_utcnow, nullable=False, index=True)
     level = Column(String(20), nullable=False)  # INFO, COMPLIANCE, CRITICAL
     category = Column(String(30), nullable=False)  # ORDER, RISK, KYC, SYSTEM
     actor = Column(String(100), nullable=False)  # user_id or system component
     action = Column(String(200), nullable=False)
     data_json = Column(Text, nullable=True)  # JSON payload
     hash_chain = Column(String(64), nullable=False)  # tamper-evident chain
+    # Fields required by the superadmin audit/security APIs.
+    event_type = Column(String(100), nullable=True, index=True)
+    user_id = Column(String(100), nullable=True, index=True)
+    detail = Column(Text, nullable=True)
+    ip_address = Column(String(45), nullable=True)
 
 
 class KYCRecord(Base):
@@ -1261,6 +1270,7 @@ if SQLALCHEMY_AVAILABLE:
 
         def to_dict(self) -> dict:
             import json as _json
+
             features: list = []
             try:
                 features = _json.loads(self.features_json or "[]")

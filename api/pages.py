@@ -34,7 +34,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter
 from fastapi.responses import FileResponse, HTMLResponse
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Pages"])
 
 _TEMPLATES = Path(__file__).parent.parent / "templates"
-_STATIC    = Path(__file__).parent.parent / "static"
+_STATIC = Path(__file__).parent.parent / "static"
 _SPA_INDEX = _STATIC / "index.html"
 
 
@@ -52,10 +52,7 @@ def _read(name: str) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         logger.error("Template not found: %s", path)
-        return (
-            f"<html><body><h1>HOPEFX</h1>"
-            f"<p>Page template '{name}' not found.</p></body></html>"
-        )
+        return f"<html><body><h1>HOPEFX</h1><p>Page template '{name}' not found.</p></body></html>"
 
 
 def _spa() -> FileResponse | HTMLResponse:
@@ -65,7 +62,7 @@ def _spa() -> FileResponse | HTMLResponse:
     # SPA not built yet — redirect to API docs as a fallback
     return HTMLResponse(
         content='<html><head><meta http-equiv="refresh" content="0;url=/docs"></head>'
-                '<body>Redirecting to API docs…</body></html>',
+        "<body>Redirecting to API docs…</body></html>",
         status_code=200,
     )
 
@@ -73,6 +70,7 @@ def _spa() -> FileResponse | HTMLResponse:
 # ── Shared JS assets ─────────────────────────────────────────────────────────
 # Kept for backward compatibility with any bookmarked or cached pages that
 # still reference /auth.js. New code uses the React SPA exclusively.
+
 
 @router.get("/auth.js", include_in_schema=False)
 async def auth_js():
@@ -87,6 +85,7 @@ async def auth_js():
 # These routes previously served Jinja2 templates. They now serve the React
 # SPA so React Router can handle the path with the full-featured Login.tsx /
 # Register.tsx components (CSRF, TOTP, role-based redirect, etc.).
+
 
 @router.get("/login", response_class=HTMLResponse, include_in_schema=False)
 async def login_page():
@@ -114,6 +113,7 @@ async def reset_password_page():
 
 # ── Info / community pages → React SPA ───────────────────────────────────────
 
+
 @router.get("/security", response_class=HTMLResponse, include_in_schema=False)
 async def security_page():
     """Security dashboard — served by the React SPA (SecurityDashboard.tsx)."""
@@ -134,6 +134,7 @@ async def affiliate_page():
 
 # ── Legal pages → React SPA ───────────────────────────────────────────────────
 
+
 @router.get("/about", response_class=HTMLResponse, include_in_schema=False)
 async def about_page():
     """About HOPEFX — served by the React SPA."""
@@ -153,6 +154,7 @@ async def terms_page():
 
 
 # ── Documentation pages ───────────────────────────────────────────────────────
+
 
 @router.get("/docs/FAQ.md", response_class=HTMLResponse, include_in_schema=False)
 async def docs_faq():

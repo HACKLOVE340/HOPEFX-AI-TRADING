@@ -408,6 +408,7 @@ class MockKYCProvider(KYCProvider):  # healer: ignore — assert_not_production(
 
     def __init__(self) -> None:
         from utils.production_guard import assert_not_production
+
         assert_not_production(
             "MockKYCProvider",
             replacement="SumsubKYCProvider or OnfidoKYCProvider",

@@ -346,7 +346,9 @@ class PortfolioAnalytics:
 
         # Sortino ratio (downside deviation)
         downside_returns = portfolio_returns[portfolio_returns < 0]
-        downside_std = float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 1 else 0.0
+        downside_std = (
+            float(np.nan_to_num(downside_returns.std(), nan=0.0)) * np.sqrt(252) if len(downside_returns) > 1 else 0.0
+        )
         sortino = (annualized_return - self.risk_free_rate) / downside_std if downside_std > 0 else 0
 
         # Maximum drawdown
@@ -802,7 +804,9 @@ class PortfolioOptimizer:
 
             def neg_sharpe(weights: np.ndarray) -> float:
                 port_ret = float(np.dot(np.nan_to_num(weights, nan=0.0), np.nan_to_num(mu, nan=0.0)))
-                port_var = float(np.nan_to_num(weights, nan=0.0) @ np.nan_to_num(cov, nan=0.0) @ np.nan_to_num(weights, nan=0.0))
+                port_var = float(
+                    np.nan_to_num(weights, nan=0.0) @ np.nan_to_num(cov, nan=0.0) @ np.nan_to_num(weights, nan=0.0)
+                )
                 port_vol = np.sqrt(max(port_var, 1e-12))
                 return -(port_ret - rf_annual) / max(port_vol, 1e-9)
 

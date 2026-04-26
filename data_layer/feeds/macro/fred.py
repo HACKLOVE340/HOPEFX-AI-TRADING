@@ -36,7 +36,11 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 _FRED_BASE = "https://api.stlouisfed.org/fred/series/observations"
-_FRED_KEY = os.getenv("FRED_API_KEY", "")
+
+# Do NOT read FRED_API_KEY at module level — .env may not be loaded yet at
+# import time. The key is read inside fetch_series() on every call so it
+# picks up the value after python-dotenv has populated the environment.
+_FRED_KEY = ""  # kept for backward-compat imports; not used internally
 
 # Series definitions: (series_id, human_name, gold_impact_direction)
 # gold_impact_direction: +1 = rising value is bullish for gold, -1 = bearish
@@ -92,9 +96,11 @@ class FREDFeed:
         else:
             start = observation_start
 
-        # FRED requires an API key for all requests since 2024.
-        # Without a key every request returns HTTP 400.
-        if not _FRED_KEY:
+        # Read the API key at call time so it is picked up after .env is loaded.
+        # FRED requires an API key for all requests since 2024; without one
+        # every request returns HTTP 400.
+        fred_key = os.getenv("FRED_API_KEY", "")
+        if not fred_key:
             logger.debug("FRED fetch_series %s skipped — FRED_API_KEY not set", series_id)
             return pd.Series(dtype=float)
 
@@ -104,7 +110,7 @@ class FREDFeed:
             "file_type": "json",
             "sort_order": "asc",
             "limit": limit,
-            "api_key": _FRED_KEY,
+            "api_key": fred_key,
         }
 
         try:

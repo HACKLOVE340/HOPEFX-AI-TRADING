@@ -9,16 +9,12 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../hooks/useApi';
-import {
-  PageHeader,
-  DataTable,
-  type Column,
-  Badge,
-  type BadgeVariant,
-  Spinner,
-  ErrorBanner,
-  EmptyState,
-} from '../components';
+import { PageHeader } from '../components/PageHeader';
+import { DataTable, type Column } from '../components/DataTable';
+import { Badge, type BadgeVariant } from '../components/Badge';
+import { Spinner } from '../components/Spinner';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { EmptyState } from '../components/EmptyState';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

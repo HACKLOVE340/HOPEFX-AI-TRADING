@@ -596,14 +596,10 @@ class GeopoliticalRiskProvider:
             )
             self._all_sources_warned = True
         else:
-            logger.debug(
-                "All geopolitical data sources still unavailable (suppressed repeat warning)."
-            )
+            logger.debug("All geopolitical data sources still unavailable (suppressed repeat warning).")
         return []
 
-    async def _fetch_from_worldmonitor(
-        self, timeout_s: int
-    ) -> list[GeopoliticalEvent]:
+    async def _fetch_from_worldmonitor(self, timeout_s: int) -> list[GeopoliticalEvent]:
         """Fetch geopolitical events from the World Monitor public REST API.
 
         World Monitor exposes a typed REST API at https://worldmonitor.app.
@@ -631,7 +627,6 @@ class GeopoliticalRiskProvider:
 
         try:
             async with aiohttp.ClientSession(headers=headers, timeout=timeout) as session:
-
                 # ── 1. ACLED conflict events ──────────────────────────────────
                 try:
                     url = f"{base}/api/conflict/v1/list-acled-events"
@@ -643,31 +638,33 @@ class GeopoliticalRiskProvider:
                                 loc = row.get("location") or {}
                                 fatalities = int(row.get("fatalities") or 0)
                                 severity = (
-                                    RiskSeverity.CRITICAL if fatalities > 100
-                                    else RiskSeverity.HIGH if fatalities > 10
-                                    else RiskSeverity.MEDIUM if fatalities > 0
+                                    RiskSeverity.CRITICAL
+                                    if fatalities > 100
+                                    else RiskSeverity.HIGH
+                                    if fatalities > 10
+                                    else RiskSeverity.MEDIUM
+                                    if fatalities > 0
                                     else RiskSeverity.LOW
                                 )
                                 ts_ms = row.get("occurredAt")
-                                ts = (
-                                    datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
-                                    if ts_ms else datetime.now(UTC)
-                                )
+                                ts = datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else datetime.now(UTC)
                                 coords: tuple[float, float] | None = None
                                 if loc.get("latitude") is not None:
                                     coords = (float(loc["latitude"]), float(loc["longitude"]))
-                                events.append(GeopoliticalEvent(
-                                    event_type=GeopoliticalEventType.CONFLICT,
-                                    severity=severity,
-                                    title=row.get("eventType", "Armed conflict"),
-                                    description=f"{row.get('actors', [])} — {row.get('source', '')}",
-                                    region=row.get("admin1", country) or "Global",
-                                    countries=[country] if country else [],
-                                    coordinates=coords,
-                                    timestamp=ts,
-                                    source="worldmonitor/acled",
-                                    confidence=0.9,
-                                ))
+                                events.append(
+                                    GeopoliticalEvent(
+                                        event_type=GeopoliticalEventType.CONFLICT,
+                                        severity=severity,
+                                        title=row.get("eventType", "Armed conflict"),
+                                        description=f"{row.get('actors', [])} — {row.get('source', '')}",
+                                        region=row.get("admin1", country) or "Global",
+                                        countries=[country] if country else [],
+                                        coordinates=coords,
+                                        timestamp=ts,
+                                        source="worldmonitor/acled",
+                                        confidence=0.9,
+                                    )
+                                )
                         else:
                             logger.debug("World Monitor ACLED HTTP %s", resp.status)
                 except aiohttp.ClientError as exc:
@@ -684,32 +681,34 @@ class GeopoliticalRiskProvider:
                                 loc = row.get("location") or {}
                                 deaths = int(row.get("deathsBest") or 0)
                                 severity = (
-                                    RiskSeverity.CRITICAL if deaths > 100
-                                    else RiskSeverity.HIGH if deaths > 10
-                                    else RiskSeverity.MEDIUM if deaths > 0
+                                    RiskSeverity.CRITICAL
+                                    if deaths > 100
+                                    else RiskSeverity.HIGH
+                                    if deaths > 10
+                                    else RiskSeverity.MEDIUM
+                                    if deaths > 0
                                     else RiskSeverity.LOW
                                 )
                                 ts_ms = row.get("dateStart")
-                                ts = (
-                                    datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
-                                    if ts_ms else datetime.now(UTC)
-                                )
+                                ts = datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else datetime.now(UTC)
                                 coords = None
                                 if loc.get("latitude") is not None:
                                     coords = (float(loc["latitude"]), float(loc["longitude"]))
                                 vtype = row.get("violenceType", "")
-                                events.append(GeopoliticalEvent(
-                                    event_type=GeopoliticalEventType.CONFLICT,
-                                    severity=severity,
-                                    title=f"{vtype} conflict: {row.get('sideA', '')} vs {row.get('sideB', '')}",
-                                    description=row.get("sourceOriginal", ""),
-                                    region=country or "Global",
-                                    countries=[country] if country else [],
-                                    coordinates=coords,
-                                    timestamp=ts,
-                                    source="worldmonitor/ucdp",
-                                    confidence=0.85,
-                                ))
+                                events.append(
+                                    GeopoliticalEvent(
+                                        event_type=GeopoliticalEventType.CONFLICT,
+                                        severity=severity,
+                                        title=f"{vtype} conflict: {row.get('sideA', '')} vs {row.get('sideB', '')}",
+                                        description=row.get("sourceOriginal", ""),
+                                        region=country or "Global",
+                                        countries=[country] if country else [],
+                                        coordinates=coords,
+                                        timestamp=ts,
+                                        source="worldmonitor/ucdp",
+                                        confidence=0.85,
+                                    )
+                                )
                         else:
                             logger.debug("World Monitor UCDP HTTP %s", resp.status)
                 except aiohttp.ClientError as exc:
@@ -725,25 +724,30 @@ class GeopoliticalRiskProvider:
                                 score = float(risk.get("score") or 0)
                                 level = risk.get("level", "").lower()
                                 severity = (
-                                    RiskSeverity.CRITICAL if score >= 80
-                                    else RiskSeverity.HIGH if level == "severity_level_high" or score >= 60
-                                    else RiskSeverity.MEDIUM if level == "severity_level_medium" or score >= 40
+                                    RiskSeverity.CRITICAL
+                                    if score >= 80
+                                    else RiskSeverity.HIGH
+                                    if level == "severity_level_high" or score >= 60
+                                    else RiskSeverity.MEDIUM
+                                    if level == "severity_level_medium" or score >= 40
                                     else RiskSeverity.LOW
                                 )
                                 region = risk.get("region", "Global")
                                 factors = risk.get("factors", [])
-                                events.append(GeopoliticalEvent(
-                                    event_type=GeopoliticalEventType.POLITICAL_UNREST,
-                                    severity=severity,
-                                    title=f"Strategic risk: {region}",
-                                    description=", ".join(factors),
-                                    region=region,
-                                    countries=[region],
-                                    timestamp=datetime.now(UTC),
-                                    source="worldmonitor/cii",
-                                    confidence=0.8,
-                                    risk_score=score,
-                                ))
+                                events.append(
+                                    GeopoliticalEvent(
+                                        event_type=GeopoliticalEventType.POLITICAL_UNREST,
+                                        severity=severity,
+                                        title=f"Strategic risk: {region}",
+                                        description=", ".join(factors),
+                                        region=region,
+                                        countries=[region],
+                                        timestamp=datetime.now(UTC),
+                                        source="worldmonitor/cii",
+                                        confidence=0.8,
+                                        risk_score=score,
+                                    )
+                                )
                         else:
                             logger.debug("World Monitor risk-scores HTTP %s", resp.status)
                 except aiohttp.ClientError as exc:
@@ -758,32 +762,33 @@ class GeopoliticalRiskProvider:
                             for row in data.get("outages", []):
                                 sev_raw = row.get("severity", "").lower()
                                 severity = (
-                                    RiskSeverity.CRITICAL if "total" in sev_raw
-                                    else RiskSeverity.HIGH if "major" in sev_raw
+                                    RiskSeverity.CRITICAL
+                                    if "total" in sev_raw
+                                    else RiskSeverity.HIGH
+                                    if "major" in sev_raw
                                     else RiskSeverity.MEDIUM
                                 )
                                 ts_ms = row.get("detectedAt")
-                                ts = (
-                                    datetime.fromtimestamp(ts_ms / 1000, tz=UTC)
-                                    if ts_ms else datetime.now(UTC)
-                                )
+                                ts = datetime.fromtimestamp(ts_ms / 1000, tz=UTC) if ts_ms else datetime.now(UTC)
                                 country = row.get("country", "")
                                 loc = row.get("location") or {}
                                 coords = None
                                 if loc.get("latitude") is not None:
                                     coords = (float(loc["latitude"]), float(loc["longitude"]))
-                                events.append(GeopoliticalEvent(
-                                    event_type=GeopoliticalEventType.INFRASTRUCTURE_OUTAGE,
-                                    severity=severity,
-                                    title=row.get("title", "Internet outage"),
-                                    description=row.get("description", ""),
-                                    region=row.get("region", country) or "Global",
-                                    countries=[country] if country else [],
-                                    coordinates=coords,
-                                    timestamp=ts,
-                                    source="worldmonitor/outages",
-                                    confidence=0.75,
-                                ))
+                                events.append(
+                                    GeopoliticalEvent(
+                                        event_type=GeopoliticalEventType.INFRASTRUCTURE_OUTAGE,
+                                        severity=severity,
+                                        title=row.get("title", "Internet outage"),
+                                        description=row.get("description", ""),
+                                        region=row.get("region", country) or "Global",
+                                        countries=[country] if country else [],
+                                        coordinates=coords,
+                                        timestamp=ts,
+                                        source="worldmonitor/outages",
+                                        confidence=0.75,
+                                    )
+                                )
                         else:
                             logger.debug("World Monitor outages HTTP %s", resp.status)
                 except aiohttp.ClientError as exc:
@@ -887,22 +892,27 @@ class GeopoliticalRiskProvider:
 
                 fatalities = int(row.get("fatalities", 0) or 0)
                 severity = (
-                    RiskSeverity.CRITICAL if fatalities > 100
-                    else RiskSeverity.HIGH if fatalities > 10
-                    else RiskSeverity.MEDIUM if fatalities > 0
+                    RiskSeverity.CRITICAL
+                    if fatalities > 100
+                    else RiskSeverity.HIGH
+                    if fatalities > 10
+                    else RiskSeverity.MEDIUM
+                    if fatalities > 0
                     else RiskSeverity.LOW
                 )
 
-                events.append(GeopoliticalEvent(
-                    event_type=GeopoliticalEventType.CONFLICT,
-                    title=title,
-                    description=notes[:500] if notes else "",
-                    severity=severity,
-                    region=country,
-                    countries=[country] if country else [],
-                    timestamp=ts,
-                    source="ACLED",
-                ))
+                events.append(
+                    GeopoliticalEvent(
+                        event_type=GeopoliticalEventType.CONFLICT,
+                        title=title,
+                        description=notes[:500] if notes else "",
+                        severity=severity,
+                        region=country,
+                        countries=[country] if country else [],
+                        timestamp=ts,
+                        source="ACLED",
+                    )
+                )
             logger.debug("ACLED returned %d events", len(events))
             return events
         except Exception as exc:
@@ -945,16 +955,18 @@ class GeopoliticalRiskProvider:
                 except (ValueError, TypeError, AttributeError):
                     ts = datetime.now(UTC)
 
-                events.append(GeopoliticalEvent(
-                    event_type=GeopoliticalEventType.POLITICAL_UNREST,
-                    title=title,
-                    description="",
-                    severity=RiskSeverity.MEDIUM,
-                    region=", ".join(country_names) if country_names else "Global",
-                    countries=country_names,
-                    timestamp=ts,
-                    source="ReliefWeb",
-                ))
+                events.append(
+                    GeopoliticalEvent(
+                        event_type=GeopoliticalEventType.POLITICAL_UNREST,
+                        title=title,
+                        description="",
+                        severity=RiskSeverity.MEDIUM,
+                        region=", ".join(country_names) if country_names else "Global",
+                        countries=country_names,
+                        timestamp=ts,
+                        source="ReliefWeb",
+                    )
+                )
             logger.debug("ReliefWeb returned %d events", len(events))
             return events
         except Exception as exc:

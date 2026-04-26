@@ -29,13 +29,25 @@ Gold demand signal logic
   Rising ETF flows          → institutional positioning bullish
   Falling jewellery demand  → consumer price sensitivity (bearish at extremes)
 
-Data sources
-------------
-WGC Gold Demand Trends (quarterly):
-  https://www.gold.org/goldhub/data/gold-demand-statistics
+Data sources and fallback chain
+--------------------------------
+Each series is resolved through a priority chain; the first source that
+returns usable data wins.
 
-WGC ETF Holdings and Flows (monthly):
-  https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows
+  wgc_total_demand / wgc_investment / wgc_jewellery / wgc_central_bank
+    1. WGC JSON API  (goldhub-api.gold.org — machine-readable, no key)
+    2. WGC CSV download  (www.gold.org?download=csv)
+    3. Local cache  (stale-but-valid file in WGC_CACHE_DIR)
+
+  wgc_etf_flow
+    1. WGC JSON API  (goldhub-api.gold.org)
+    2. WGC CSV download
+    3. yfinance proxy  (GLD daily AUM → implied flow, monthly resampled)
+    4. Local cache
+
+  wgc_central_bank  (additional proxy when WGC is unavailable)
+    World Bank API  (indicator FI.RES.TOTL.CD — total reserves including
+    gold, annual first-difference used as CB accumulation proxy)
 
 Environment variables
 ---------------------
@@ -43,6 +55,10 @@ Environment variables
   WGC_REFRESH_INTERVAL   — seconds between refreshes (default: 86400 = 24h)
   WGC_DEMAND_URL         — override quarterly demand CSV URL
   WGC_ETF_FLOW_URL       — override ETF flow CSV URL
+  WGC_JSON_API_BASE      — override WGC JSON API base URL
+  WGC_YFINANCE_ETF       — yfinance ticker for ETF proxy (default: GLD)
+  WGC_WB_CB_INDICATOR    — World Bank indicator for CB proxy
+                           (default: FI.RES.TOTL.CD)
 """
 
 from __future__ import annotations
@@ -83,6 +99,27 @@ _ETF_FLOW_URL = os.getenv(
 # These are the direct download links used by their own charting tools.
 _WGC_DEMAND_CSV_URL = "https://www.gold.org/goldhub/data/gold-demand-statistics?download=csv"
 _WGC_ETF_CSV_URL = "https://www.gold.org/goldhub/data/global-gold-backed-etf-holdings-and-flows?download=csv"
+
+# WGC JSON API — machine-readable endpoint served by goldhub-api.gold.org.
+# Returns JSON arrays keyed by dataset slug; no authentication required.
+# Ref: https://goldhub-api.gold.org/v1/datasets/<slug>
+_WGC_JSON_API_BASE = os.getenv(
+    "WGC_JSON_API_BASE",
+    "https://goldhub-api.gold.org/v1/datasets",
+)
+# Dataset slugs used by the WGC JSON API
+_WGC_JSON_DEMAND_SLUG = "gold-demand-statistics"
+_WGC_JSON_ETF_SLUG = "global-gold-backed-etf-holdings-and-flows"
+
+# yfinance ETF proxy — GLD AUM changes are used as a monthly ETF-flow proxy
+# when the WGC endpoint is unavailable.
+_YFINANCE_ETF_TICKER = os.getenv("WGC_YFINANCE_ETF", "GLD")
+
+# World Bank API — FI.RES.TOTL.CD (total reserves including gold, USD) is used
+# as a central-bank demand proxy when WGC data is unavailable.
+# We diff the series to approximate net quarterly CB purchases.
+_WB_CB_INDICATOR = os.getenv("WGC_WB_CB_INDICATOR", "FI.RES.TOTL.CD")
+_WB_API_BASE = "https://api.worldbank.org/v2"
 
 # HTTP timeout for WGC requests
 _HTTP_TIMEOUT = 30.0
@@ -254,6 +291,250 @@ def _csv_to_series(
     return results
 
 
+# ── Source helpers ────────────────────────────────────────────────────────────
+
+
+async def _fetch_wgc_json_api(
+    slug: str,
+    col_variants: dict[str, list[str]],
+    http_fetch: Any,
+) -> dict[str, pd.Series]:
+    """
+    Fetch a WGC dataset from the goldhub JSON API.
+
+    The API returns a JSON object with a ``data`` list of row dicts.  Each row
+    has a ``date`` field (ISO-8601 or quarter string) and one or more numeric
+    columns matching the WGC CSV column names.
+
+    ``http_fetch`` is a coroutine callable with signature
+    ``async (url: str) -> str | None`` — typically ``WGCFeed._fetch_url``.
+
+    Returns an empty dict on any error so callers can fall through to the next
+    source in the chain.
+    """
+    import json
+
+    url = f"{_WGC_JSON_API_BASE}/{slug}"
+    text = await http_fetch(url)
+    if not text:
+        return {}
+
+    try:
+        payload = json.loads(text)
+    except Exception as exc:
+        logger.debug("WGC JSON API: JSON parse error for %s: %s", slug, exc)
+        return {}
+
+    # Normalise: API may return {"data": [...]} or a bare list
+    rows = payload.get("data", payload) if isinstance(payload, dict) else payload
+    if not isinstance(rows, list) or not rows:
+        logger.debug("WGC JSON API: unexpected payload shape for %s", slug)
+        return {}
+
+    try:
+        df = pd.DataFrame(rows)
+    except Exception as exc:
+        logger.debug("WGC JSON API: DataFrame construction failed for %s: %s", slug, exc)
+        return {}
+
+    dates = _parse_date_col(df)
+    if dates is None or dates.notna().sum() == 0:
+        logger.debug("WGC JSON API: no parseable date column for %s. cols=%s", slug, list(df.columns))
+        return {}
+
+    df["_date"] = dates
+    df = df.dropna(subset=["_date"]).set_index("_date").sort_index()
+
+    results: dict[str, pd.Series] = {}
+    for series_name, variants in col_variants.items():
+        col = _find_col(df, variants)
+        if col is None:
+            continue
+        try:
+            s = pd.to_numeric(df[col], errors="coerce").dropna()
+            if s.empty:
+                continue
+            s.index = pd.DatetimeIndex(s.index)
+            s.name = series_name
+            results[series_name] = s
+            logger.info(
+                "WGC JSON API: %s — %d obs (latest: %.1f t on %s)",
+                series_name,
+                len(s),
+                float(s.iloc[-1]),
+                s.index[-1].date().isoformat(),
+            )
+        except Exception as exc:
+            logger.debug("WGC JSON API: extraction failed for %s: %s", series_name, exc)
+
+    return results
+
+
+async def _etf_proxy_yfinance(loop: Any | None = None) -> dict[str, pd.Series]:
+    """
+    Derive a monthly ETF-flow proxy from yfinance GLD price/volume data.
+
+    GLD AUM is not directly available via yfinance, so we use the product of
+    adjusted close price and volume as a proportional AUM proxy, then compute
+    month-over-month changes as an implied flow signal (in arbitrary units,
+    not tonnes).  The series is normalised to the WGC ETF-flow scale using the
+    last 12 months of overlap when WGC data is available; otherwise it is
+    returned as-is with a ``_proxy`` suffix so downstream code can distinguish
+    it from authoritative WGC data.
+
+    Returns ``{"wgc_etf_flow_proxy": pd.Series}`` or ``{}`` on failure.
+    """
+    try:
+        import yfinance as yf
+    except ImportError:
+        logger.debug("yfinance not installed — ETF proxy unavailable")
+        return {}
+
+    ticker = _YFINANCE_ETF_TICKER
+    try:
+        _loop = loop or asyncio.get_running_loop()
+        raw: pd.DataFrame = await _loop.run_in_executor(
+            None,
+            lambda: yf.download(ticker, period="10y", interval="1d", progress=False, auto_adjust=True),
+        )
+    except Exception as exc:
+        logger.debug("yfinance download failed for %s: %s", ticker, exc)
+        return {}
+
+    if raw is None or raw.empty:
+        logger.debug("yfinance returned empty DataFrame for %s", ticker)
+        return {}
+
+    try:
+        # Flatten MultiIndex columns if present (yfinance ≥0.2.38 behaviour)
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+
+        close = raw.get("Close", raw.get("Adj Close"))
+        volume = raw.get("Volume")
+        if close is None or volume is None:
+            logger.debug("yfinance: missing Close or Volume for %s", ticker)
+            return {}
+
+        aum_proxy = (close * volume).rename("aum_proxy")
+        aum_proxy.index = pd.DatetimeIndex(aum_proxy.index).tz_localize("UTC") if aum_proxy.index.tz is None else pd.DatetimeIndex(aum_proxy.index).tz_convert("UTC")
+
+        # Resample to monthly, compute MoM change as flow proxy
+        monthly = aum_proxy.resample("MS").sum()
+        flow_proxy = monthly.diff().dropna()
+        flow_proxy.name = "wgc_etf_flow_proxy"
+
+        if flow_proxy.empty:
+            return {}
+
+        logger.info(
+            "yfinance ETF proxy (%s): %d monthly obs (latest: %.2e on %s)",
+            ticker,
+            len(flow_proxy),
+            float(flow_proxy.iloc[-1]),
+            flow_proxy.index[-1].date().isoformat(),
+        )
+        return {"wgc_etf_flow_proxy": flow_proxy}
+    except Exception as exc:
+        logger.warning("yfinance ETF proxy computation failed: %s", exc)
+        return {}
+
+
+async def _cb_proxy_world_bank(loop: Any | None = None) -> dict[str, pd.Series]:
+    """
+    Fetch World Bank total-reserves data as a central-bank demand proxy.
+
+    Uses indicator FI.RES.TOTL.CD (total reserves including gold, current USD)
+    aggregated across all countries.  The annual first-difference is used as a
+    proxy for net CB gold purchases (positive = accumulation).
+
+    The series is returned as ``wgc_central_bank_proxy`` to distinguish it from
+    authoritative WGC quarterly data.
+
+    World Bank API docs: https://datahelpdesk.worldbank.org/knowledgebase/articles/898581
+    """
+    import json
+
+    # Aggregate world total: country code "WLD"
+    url = (
+        f"{_WB_API_BASE}/country/WLD/indicator/{_WB_CB_INDICATOR}"
+        "?format=json&per_page=100&mrv=30"
+    )
+
+    try:
+        _loop = loop or asyncio.get_running_loop()
+
+        def _sync_fetch() -> str | None:
+            try:
+                import requests
+
+                r = requests.get(url, timeout=_HTTP_TIMEOUT)
+                if r.status_code == 200:
+                    return r.text
+                logger.debug("World Bank API returned HTTP %d for %s", r.status_code, _WB_CB_INDICATOR)
+            except Exception as exc:
+                logger.debug("World Bank API request failed: %s", exc)
+            return None
+
+        text = await _loop.run_in_executor(None, _sync_fetch)
+    except Exception as exc:
+        logger.debug("World Bank CB proxy executor error: %s", exc)
+        return {}
+
+    if not text:
+        return {}
+
+    try:
+        payload = json.loads(text)
+        # WB API returns [metadata_dict, [data_rows]]
+        if not isinstance(payload, list) or len(payload) < 2:
+            return {}
+        rows = payload[1]
+        if not rows:
+            return {}
+
+        records = []
+        for row in rows:
+            date_str = row.get("date", "")
+            value = row.get("value")
+            if value is None or not date_str:
+                continue
+            try:
+                ts = pd.Timestamp(year=int(date_str), month=1, day=1, tz="UTC")
+                records.append((ts, float(value)))
+            except (ValueError, TypeError):
+                continue
+
+        if not records:
+            return {}
+
+        s = pd.Series(
+            {ts: val for ts, val in records},
+            name="wgc_central_bank_proxy",
+            dtype=float,
+        ).sort_index()
+        s.index = pd.DatetimeIndex(s.index)
+
+        # Annual first-difference as CB accumulation proxy
+        proxy = s.diff().dropna()
+        proxy.name = "wgc_central_bank_proxy"
+
+        if proxy.empty:
+            return {}
+
+        logger.info(
+            "World Bank CB proxy (%s): %d annual obs (latest: %.2e on %s)",
+            _WB_CB_INDICATOR,
+            len(proxy),
+            float(proxy.iloc[-1]),
+            proxy.index[-1].date().isoformat(),
+        )
+        return {"wgc_central_bank_proxy": proxy}
+    except Exception as exc:
+        logger.warning("World Bank CB proxy parse failed: %s", exc)
+        return {}
+
+
 # ── WGCFeed ───────────────────────────────────────────────────────────────────
 
 
@@ -284,6 +565,9 @@ class WGCFeed:
         # Suppress repeated "offline" warnings — log once per provider lifetime
         self._warned_demand_offline: bool = False
         self._warned_etf_offline: bool = False
+        self._warned_json_api_offline: bool = False
+        self._warned_yfinance_offline: bool = False
+        self._warned_wb_offline: bool = False
 
     # ── HTTP ──────────────────────────────────────────────────────────────────
 
@@ -357,6 +641,7 @@ class WGCFeed:
             logger.warning("WGC: cache write failed for %s: %s", filename, exc)
 
     def _read_cache(self, filename: str) -> str | None:
+        """Return cached content only if it is within _REFRESH_INTERVAL."""
         try:
             path = self._cache_path(filename)
             if path.exists():
@@ -368,27 +653,51 @@ class WGCFeed:
             logger.debug("WGC: cache read failed for %s: %s", filename, exc)
         return None
 
+    def _read_cache_any_age(self, filename: str) -> str | None:
+        """Return cached content regardless of age — used as last-resort fallback."""
+        try:
+            path = self._cache_path(filename)
+            if path.exists():
+                return path.read_text(encoding="utf-8")
+        except Exception as exc:
+            logger.debug("WGC: stale cache read failed for %s: %s", filename, exc)
+        return None
+
     # ── Fetch ─────────────────────────────────────────────────────────────────
 
     async def _fetch_demand(self) -> dict[str, pd.Series]:
         """
-        Fetch WGC quarterly gold demand data.
+        Fetch WGC quarterly gold demand data via a three-source fallback chain.
 
-        Tries the direct CSV download URL first. If WGC's download endpoint
-        returns HTML (they sometimes gate downloads), falls back to the cached
-        file. If no cache exists, returns an empty dict — the MacroStore will
-        use zero-fill until the next successful fetch.
+        Priority:
+          1. WGC JSON API  (goldhub-api.gold.org — structured, no key)
+          2. WGC CSV download  (www.gold.org?download=csv)
+          3. Local disk cache  (stale-but-valid file from a previous run)
+
+        Returns an empty dict only when all three sources fail.
         """
-        cached = self._read_cache(_DEMAND_CACHE_FILE)
-        if cached:
-            logger.debug("WGC: using cached demand data")
-            return _csv_to_series(cached, _DEMAND_COL_VARIANTS)
+        # ── 1. WGC JSON API ───────────────────────────────────────────────────
+        try:
+            json_series = await _fetch_wgc_json_api(
+                _WGC_JSON_DEMAND_SLUG, _DEMAND_COL_VARIANTS, self._fetch_url
+            )
+            if json_series:
+                logger.debug("WGC demand: resolved via JSON API")
+                return json_series
+            if not self._warned_json_api_offline:
+                logger.debug("WGC JSON API returned no demand data — trying CSV download")
+                self._warned_json_api_offline = True
+        except Exception as exc:
+            if not self._warned_json_api_offline:
+                logger.debug("WGC JSON API demand fetch failed (%s) — trying CSV download", exc)
+                self._warned_json_api_offline = True
 
+        # ── 2. WGC CSV download ───────────────────────────────────────────────
         text = await self._fetch_url(_WGC_DEMAND_CSV_URL)
         if text and "," in text and len(text) > 200:
-            # Validate it looks like CSV (not an HTML error page)
             if not text.strip().startswith("<!"):
                 self._write_cache(_DEMAND_CACHE_FILE, text)
+                logger.debug("WGC demand: resolved via CSV download")
                 return _csv_to_series(text, _DEMAND_COL_VARIANTS)
             if not self._warned_demand_offline:
                 logger.warning(
@@ -399,29 +708,50 @@ class WGCFeed:
                 self._warned_demand_offline = True
         elif not self._warned_demand_offline:
             logger.warning(
-                "WGC demand fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
+                "WGC demand CSV fetch returned no usable data — www.gold.org unreachable. "
                 "Place a manually downloaded CSV at %s",
                 self._cache_path(_DEMAND_CACHE_FILE),
             )
             self._warned_demand_offline = True
 
+        # ── 3. Stale local cache ──────────────────────────────────────────────
+        cached = self._read_cache_any_age(_DEMAND_CACHE_FILE)
+        if cached:
+            logger.info("WGC demand: using stale local cache (all live sources failed)")
+            return _csv_to_series(cached, _DEMAND_COL_VARIANTS)
+
         return {}
 
     async def _fetch_etf_flow(self) -> dict[str, pd.Series]:
         """
-        Fetch WGC monthly ETF holdings and flow data.
+        Fetch WGC monthly ETF flow data via a four-source fallback chain.
 
-        Same fallback logic as _fetch_demand().
+        Priority:
+          1. WGC JSON API  (goldhub-api.gold.org)
+          2. WGC CSV download  (www.gold.org?download=csv)
+          3. yfinance GLD proxy  (AUM-change approximation, monthly)
+          4. Local disk cache  (stale-but-valid file from a previous run)
+
+        The yfinance proxy series is keyed ``wgc_etf_flow_proxy`` so callers
+        can distinguish it from authoritative WGC data.
         """
-        cached = self._read_cache(_ETF_CACHE_FILE)
-        if cached:
-            logger.debug("WGC: using cached ETF flow data")
-            return _csv_to_series(cached, _ETF_COL_VARIANTS)
+        # ── 1. WGC JSON API ───────────────────────────────────────────────────
+        try:
+            json_series = await _fetch_wgc_json_api(
+                _WGC_JSON_ETF_SLUG, _ETF_COL_VARIANTS, self._fetch_url
+            )
+            if json_series:
+                logger.debug("WGC ETF flow: resolved via JSON API")
+                return json_series
+        except Exception as exc:
+            logger.debug("WGC JSON API ETF fetch failed (%s) — trying CSV download", exc)
 
+        # ── 2. WGC CSV download ───────────────────────────────────────────────
         text = await self._fetch_url(_WGC_ETF_CSV_URL)
         if text and "," in text and len(text) > 200:
             if not text.strip().startswith("<!"):
                 self._write_cache(_ETF_CACHE_FILE, text)
+                logger.debug("WGC ETF flow: resolved via CSV download")
                 return _csv_to_series(text, _ETF_COL_VARIANTS)
             if not self._warned_etf_offline:
                 logger.warning(
@@ -432,11 +762,38 @@ class WGCFeed:
                 self._warned_etf_offline = True
         elif not self._warned_etf_offline:
             logger.warning(
-                "WGC ETF flow fetch returned no usable data — www.gold.org unreachable or returned no CSV. "
+                "WGC ETF flow CSV fetch returned no usable data — www.gold.org unreachable. "
                 "Place a manually downloaded CSV at %s",
                 self._cache_path(_ETF_CACHE_FILE),
             )
             self._warned_etf_offline = True
+
+        # ── 3. yfinance ETF proxy ─────────────────────────────────────────────
+        try:
+            yf_series = await _etf_proxy_yfinance()
+            if yf_series:
+                # Log once: first time we fall back to the proxy
+                if not self._warned_yfinance_offline:
+                    logger.info(
+                        "WGC ETF flow: using yfinance %s proxy (WGC sources unavailable)",
+                        _YFINANCE_ETF_TICKER,
+                    )
+                    self._warned_yfinance_offline = True
+                return yf_series
+            # yfinance returned empty — fall through to stale cache
+            if not self._warned_yfinance_offline:
+                logger.debug("yfinance ETF proxy returned no data — trying stale cache")
+                self._warned_yfinance_offline = True
+        except Exception as exc:
+            if not self._warned_yfinance_offline:
+                logger.debug("yfinance ETF proxy failed (%s) — trying stale cache", exc)
+                self._warned_yfinance_offline = True
+
+        # ── 4. Stale local cache ──────────────────────────────────────────────
+        cached = self._read_cache_any_age(_ETF_CACHE_FILE)
+        if cached:
+            logger.info("WGC ETF flow: using stale local cache (all live sources failed)")
+            return _csv_to_series(cached, _ETF_COL_VARIANTS)
 
         return {}
 
@@ -444,14 +801,22 @@ class WGCFeed:
         """
         Fetch all WGC series concurrently.
 
+        Runs demand, ETF-flow, and World Bank CB proxy fetches in parallel.
+        The World Bank CB proxy (``wgc_central_bank_proxy``) is only included
+        when the authoritative ``wgc_central_bank`` series is absent, so it
+        acts as a last-resort fallback rather than overwriting WGC data.
+
         Returns a dict of {series_name: pd.Series(float, DatetimeIndex[UTC])}.
         Series that could not be fetched are omitted — callers must handle
         missing keys gracefully.
         """
         demand_task = asyncio.create_task(self._fetch_demand())
         etf_task = asyncio.create_task(self._fetch_etf_flow())
+        wb_task = asyncio.create_task(_cb_proxy_world_bank())
 
-        demand_series, etf_series = await asyncio.gather(demand_task, etf_task, return_exceptions=True)
+        demand_series, etf_series, wb_series = await asyncio.gather(
+            demand_task, etf_task, wb_task, return_exceptions=True
+        )
 
         results: dict[str, pd.Series] = {}
 
@@ -464,6 +829,18 @@ class WGCFeed:
             results.update(etf_series)
         else:
             logger.warning("WGC ETF flow fetch raised: %s", etf_series)
+
+        # Include World Bank CB proxy only when WGC authoritative CB data is missing
+        if isinstance(wb_series, dict) and wb_series:
+            if "wgc_central_bank" not in results:
+                results.update(wb_series)
+                if not self._warned_wb_offline:
+                    logger.info(
+                        "WGC: wgc_central_bank absent — using World Bank CB proxy (%s)",
+                        _WB_CB_INDICATOR,
+                    )
+        elif not isinstance(wb_series, dict):
+            logger.debug("World Bank CB proxy raised: %s", wb_series)
 
         self._last_fetch = datetime.now(UTC)
         self._cached_series = results

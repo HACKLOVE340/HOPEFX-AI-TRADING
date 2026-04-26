@@ -14,6 +14,10 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+// Static import avoids the Rolldown INEFFECTIVE_DYNAMIC_IMPORT warning.
+// resetCsrfCache is a pure synchronous function with no circular-dependency
+// risk at module evaluation time — the store is initialised after useApi.
+import { resetCsrfCache } from '../hooks/useApi';
 import type {
   User,
   PriceTick,
@@ -228,10 +232,7 @@ export const useStore = create<AppStore>()(
         clearAuth: () => {
           // Invalidate the in-memory CSRF cache so the next request fetches a
           // fresh token rather than sending a stale one the server has expired.
-          // Dynamic import avoids a circular dependency (store ↔ useApi).
-          import('../hooks/useApi').then(({ resetCsrfCache }) => {
-            resetCsrfCache();
-          }).catch(() => { /* ignore — safe to skip in test/SSR contexts */ });
+          resetCsrfCache();
           set({ token: null, user: null, isAuthenticated: false, plan: 'free' }, false, 'auth/clearAuth');
         },
 
@@ -433,6 +434,9 @@ export const selectEquityCurve        = (s: AppStore) => s.equityCurve;
 export const selectPerformanceSummary = (s: AppStore) => s.performanceSummary;
 export const selectTriggeredAlerts    = (s: AppStore) => s.triggeredAlerts;
 export const selectKillSwitch         = (s: AppStore) => s.account?.kill_switch ?? false;
+// Derived from the macro slice — true when a high-impact event blackout is active.
+// Used by OrderEntryForm to disable order submission with a clear UI message.
+export const selectIsBlackout         = (s: AppStore) => s.macro?.is_blackout ?? false;
 export const selectEquitySnapshot     = (s: AppStore) => s.equitySnapshot;
 export const selectRiskSnapshot       = (s: AppStore) => s.riskSnapshot;
 export const selectVolumeDelta        = (s: AppStore) => s.volumeDelta;

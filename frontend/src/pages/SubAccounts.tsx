@@ -9,18 +9,14 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../hooks/useApi';
-import {
-  PageHeader,
-  DataTable,
-  type Column,
-  Badge,
-  type BadgeVariant,
-  Modal,
-  Spinner,
-  ErrorBanner,
-  EmptyState,
-  MetricCard,
-} from '../components';
+import { PageHeader } from '../components/PageHeader';
+import { DataTable, type Column } from '../components/DataTable';
+import { Badge, type BadgeVariant } from '../components/Badge';
+import { Modal } from '../components/Modal';
+import { Spinner } from '../components/Spinner';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { EmptyState } from '../components/EmptyState';
+import { MetricCard } from '../components/MetricCard';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

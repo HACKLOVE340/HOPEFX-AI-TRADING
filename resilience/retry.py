@@ -124,7 +124,11 @@ class RetryPolicy:
                 delay = self._compute_delay(attempt)
                 logger.warning(
                     "retry: attempt %d/%d failed (%s: %s) — retrying in %.2fs",
-                    attempt, self.max_attempts, type(exc).__name__, exc, delay,
+                    attempt,
+                    self.max_attempts,
+                    type(exc).__name__,
+                    exc,
+                    delay,
                 )
                 if self.on_retry:
                     with contextlib.suppress(Exception):  # nosec B110
@@ -157,7 +161,11 @@ class RetryPolicy:
                 delay = self._compute_delay(attempt)
                 logger.warning(
                     "retry_sync: attempt %d/%d failed (%s: %s) — retrying in %.2fs",
-                    attempt, self.max_attempts, type(exc).__name__, exc, delay,
+                    attempt,
+                    self.max_attempts,
+                    type(exc).__name__,
+                    exc,
+                    delay,
                 )
                 if self.on_retry:
                     with contextlib.suppress(Exception):  # nosec B110
@@ -194,14 +202,18 @@ def retry(
 
     def decorator(func: Callable) -> Callable:
         if asyncio.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 return await policy.execute(func, *args, **kwargs)
+
             return async_wrapper
         else:
+
             @functools.wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 return policy.execute_sync(func, *args, **kwargs)
+
             return sync_wrapper
 
     return decorator

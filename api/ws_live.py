@@ -18,7 +18,7 @@ Message format (server → client):
   { "type": "error",           "code": str, "message": str }
   { "type": "microstructure",  "data": MicrostructureSnapshot }  — chart-bot channel
   { "type": "volume_delta",    "data": VolumeDeltaBar }          — chart-bot channel
-  { "type": "sentiment_update","data": SentimentSnapshot }       — chart-bot channel
+  { "type": "sentiment_update","data": { "signal": SentimentSignal, "recent_articles": NewsArticle[] } }  — chart-bot channel
   { "type": "risk_update",     "data": RiskSnapshot }            — chart-bot channel
   { "type": "equity_update",   "data": EquitySnapshot }          — chart-bot channel
   { "type": "news_item",       "data": NewsItem }                — chart-bot channel
@@ -61,7 +61,7 @@ import os
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, ClassVar
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
@@ -76,8 +76,17 @@ _last_mid: dict[str, float] = {}
 AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "10"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
-# Set to "false" to allow unauthenticated connections (dev/demo mode)
+# Set to "false" to allow unauthenticated connections (dev/demo mode only).
+# In production this MUST be true — all WS data (prices, signals, account
+# updates) would otherwise be broadcast to unauthenticated connections.
 WS_AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+
+_APP_ENV: str = os.getenv("APP_ENV", "development").lower()
+if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
+    raise RuntimeError(
+        "WS_AUTH_REQUIRED=false is not permitted in production (APP_ENV=production). "
+        "Set WS_AUTH_REQUIRED=true or remove the override."
+    )
 
 
 def _validate_ws_token(token: str) -> dict | None:
@@ -178,7 +187,7 @@ class LiveConnectionManager:
         Send to all connections subscribed to channel.
         Empty subscription set = subscribed to all channels.
         """
-        dead: ClassVar[list[str]] = []
+        dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
@@ -196,7 +205,7 @@ class LiveConnectionManager:
         Send a message only to connections belonging to a specific user.
         Used for per-user channels: account updates, position fills, alerts.
         """
-        dead: ClassVar[list[str]] = []
+        dead: list[str] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
                 continue
@@ -615,11 +624,15 @@ async def _price_broadcaster_live_only() -> None:
     a broker is connected (e.g. paper broker with market_prices populated).
     Sends no_live_feed when no live price is available for a symbol.
     """
-    _no_feed_warned: ClassVar[set[str]] = set()
+    global _prices_seeded
+    _no_feed_warned: set[str] = set()
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
             continue
+        # Re-seed from broker on every cycle until we have prices
+        if not _prices_seeded:
+            _seed_from_broker()
         any_live = False
         for symbol in _SYMBOLS:
             tick = _make_tick(symbol)
@@ -674,7 +687,7 @@ async def _heartbeat_broadcaster() -> None:
         await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
         if _manager.connection_count == 0:
             continue
-        dead: ClassVar[list[str]] = []
+        dead: list[str] = []
         for cid in list(_manager._connections.keys()):
             misses = _manager.record_hb_miss(cid)
             if misses > HEARTBEAT_MISS_LIMIT:
@@ -707,10 +720,16 @@ async def _chartbot_broadcaster() -> None:
     Channels served:
       microstructure  → { type: "microstructure",   data: MicrostructureSnapshot }
       volume_delta    → { type: "volume_delta",      data: VolumeDeltaBar }
-      sentiment       → { type: "sentiment_update",  data: SentimentSnapshot }
+      sentiment       → { type: "sentiment_update",  data: { signal: SentimentSignal, recent_articles: NewsArticle[] } }
       risk            → { type: "risk_update",       data: RiskSnapshot }
       equity          → { type: "equity_update",     data: EquitySnapshot }
-      news            → { type: "news_item",         data: NewsItem[] }
+      news            → { type: "news_item",         data: NewsArticle }
+
+    SentimentSignal fields (from data_layer.sentiment.engine):
+      news_sentiment_score    : float  — EMA of article sentiment scores [-1, 1]
+      news_sentiment_momentum : float  — rate of change of sentiment EMA
+      news_article_count_1h   : float  — gold-relevant articles in last hour
+      news_bullish_ratio      : float  — fraction of recent articles that are bullish [0, 1]
     """
     while True:
         await asyncio.sleep(_CHARTBOT_POLL_INTERVAL)
@@ -719,7 +738,7 @@ async def _chartbot_broadcaster() -> None:
 
             # ── microstructure + volume_delta ─────────────────────────────────
             try:
-                snap = _orch._micro.get_snapshot() if hasattr(_orch, "_micro") else None
+                snap = _orch.get_microstructure_snapshot()
                 if snap is not None:
                     micro_data = {
                         "timestamp": snap.timestamp.isoformat(),
@@ -753,32 +772,14 @@ async def _chartbot_broadcaster() -> None:
 
             # ── sentiment ─────────────────────────────────────────────────────
             try:
-                if hasattr(_orch, "_sentiment") and _orch._sentiment is not None:
-                    features = _orch.get_ml_features()
-                    sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
-                    articles: list[dict] = []
-                    try:
-                        raw_articles = _orch._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
-                        articles = [
-                            {
-                                "title": a.title,
-                                "source": a.source,
-                                "sentiment_score": a.sentiment_score,
-                                "sentiment_label": a.sentiment_label,
-                                "published_at": a.published_at.isoformat() if a.published_at else None,
-                                "url": getattr(a, "url", None),
-                            }
-                            for a in (raw_articles or [])[:5]
-                        ]
-                    except Exception as _fmt_exc:  # nosec B110 — article formatting is non-fatal
-                        logger.debug("ws_live: article serialisation skipped: %s", _fmt_exc)
+                sentiment_snap = _orch.get_sentiment_snapshot()
+                if sentiment_snap is not None:
                     await _manager.broadcast(
                         "sentiment",
-                        {"type": "sentiment_update", "data": {"signal": sentiment_features, "articles": articles}},
+                        {"type": "sentiment_update", "data": sentiment_snap},
                     )
-                    if articles:
-                        for article in articles[:3]:
-                            await _manager.broadcast("news", {"type": "news_item", "data": article})
+                    for article in (sentiment_snap.get("recent_articles") or [])[:3]:
+                        await _manager.broadcast("news", {"type": "news_item", "data": article})
             except Exception as _exc:
                 logger.debug("chartbot_broadcaster: sentiment error: %s", _exc)
 
@@ -826,18 +827,121 @@ async def _chartbot_broadcaster() -> None:
             logger.debug("chartbot_broadcaster: outer error: %s", exc)
 
 
+async def _account_update_broadcaster() -> None:
+    """
+    Push account_update messages to clients subscribed to the 'account' channel.
+
+    Polls the broker every 5 seconds and broadcasts the full AccountMetrics
+    shape that the frontend store expects. Falls back gracefully when the
+    broker is not yet initialised.
+    """
+    _POLL_INTERVAL = 5  # seconds
+    while True:
+        await asyncio.sleep(_POLL_INTERVAL)
+        if _manager.connection_count == 0:
+            continue
+        try:
+            from core.app_state import app_state as _app_state  # type: ignore[import]
+
+            broker = getattr(_app_state, "broker", None) if _app_state else None
+            if broker is None:
+                continue
+
+            acct_raw = broker.get_account_info()
+            if not acct_raw:
+                continue
+
+            # Normalise to the AccountMetrics shape the frontend store expects
+            balance = float(acct_raw.get("balance", 0.0) or 0.0)
+            equity = float(acct_raw.get("equity", balance) or balance)
+            margin_used = float(acct_raw.get("margin_used", 0.0) or 0.0)
+            margin_free = float(acct_raw.get("margin_free", equity - margin_used) or 0.0)
+            # When margin_used == 0 there are no open positions, so margin level
+            # is effectively infinite (no risk). Use 9999.0 as a sentinel so the
+            # frontend RiskDashboard does not interpret 0.0 as a margin call.
+            # This is the canonical fix for the original bug report (margin_level=0.0).
+            margin_level = (equity / margin_used * 100) if margin_used > 0 else 9999.0
+            daily_pnl = float(acct_raw.get("daily_pnl", acct_raw.get("unrealized_pnl", 0.0)))
+            daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
+            total_pnl = float(acct_raw.get("total_pnl", acct_raw.get("realized_pnl", 0.0)))
+
+            # Risk manager stats (optional)
+            rm = getattr(_app_state, "risk_manager", None) if _app_state else None
+            win_rate = float(getattr(rm, "win_rate", 0.0) or 0.0)
+            sharpe = float(getattr(rm, "sharpe_ratio", 0.0) or 0.0)
+            max_dd = float(getattr(rm, "max_drawdown_pct", 0.0) or 0.0)
+
+            # Open trade count from positions
+            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+            open_trades = len(positions) if positions else int(acct_raw.get("open_trades", 0))
+
+            account_msg = {
+                "type": "account_update",
+                "data": {
+                    "balance": balance,
+                    "equity": equity,
+                    "margin_used": margin_used,
+                    "margin_free": margin_free,
+                    "margin_level": round(margin_level, 2),
+                    "daily_pnl": round(daily_pnl, 2),
+                    "daily_pnl_pct": round(daily_pnl_pct, 4),
+                    "total_pnl": round(total_pnl, 2),
+                    "win_rate": round(win_rate, 2),
+                    "sharpe_ratio": round(sharpe, 4),
+                    "max_drawdown": round(max_dd, 4),
+                    "open_trades": open_trades,
+                },
+            }
+            await _manager.broadcast("account", account_msg)
+        except Exception as exc:
+            logger.debug("account_update_broadcaster: %s", exc)
+
+
+def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type-arg]
+    """Log unexpected broadcaster task completion so crashes are not silently swallowed."""
+    exc = task.exception() if not task.cancelled() else None
+    if exc is not None:
+        logger.error(
+            "WS broadcaster task %r exited with exception: %s",
+            task.get_name(),
+            exc,
+            exc_info=exc,
+        )
+    elif task.cancelled():
+        logger.debug("WS broadcaster task %r was cancelled", task.get_name())
+    else:
+        logger.warning(
+            "WS broadcaster task %r exited cleanly — this is unexpected and may indicate a bug",
+            task.get_name(),
+        )
+
+
+# Strong references to broadcaster tasks so they are not garbage-collected.
+# Assigning each task to the same local variable `_t` would drop the reference
+# to all but the last task, allowing the GC to cancel them silently.
+_broadcaster_tasks: list[asyncio.Task] = []  # type: ignore[type-arg]
+
+
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
+    global _broadcaster_tasks
     loop = asyncio.get_running_loop()
-    _t = loop.create_task(_price_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_heartbeat_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_eventbus_signal_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    _t = loop.create_task(_chartbot_broadcaster())
-    _t.add_done_callback(lambda _: None)
-    logger.info("WS live broadcasters started (EventBus → broker poll → no_live_feed → chart-bot)")
+
+    _specs = [
+        ("price_broadcaster",          _price_broadcaster),
+        ("heartbeat_broadcaster",       _heartbeat_broadcaster),
+        ("signal_broadcaster",          _eventbus_signal_broadcaster),
+        ("chartbot_broadcaster",        _chartbot_broadcaster),
+        ("account_update_broadcaster",  _account_update_broadcaster),
+    ]
+
+    _broadcaster_tasks = []
+    for name, coro_fn in _specs:
+        task = loop.create_task(coro_fn(), name=name)
+        task.add_done_callback(_broadcaster_done_callback)
+        _broadcaster_tasks.append(task)
+
+    logger.info("WS live broadcasters started (price → account → signal → heartbeat → chart-bot)")
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────
@@ -872,7 +976,6 @@ async def ws_live(websocket: WebSocket) -> None:
 
     allowed, reason = await limiter.check_and_register(websocket, client_ip)
     if not allowed:
-        await websocket.close(code=1008, reason=reason)
         return
 
     cid = await _manager.connect(websocket)
@@ -929,7 +1032,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {

@@ -318,6 +318,7 @@ class TestGetBrokerManager:
     def _get_app_state_module():
         """Return the core.app_state *module* (not the instance exported by core.__init__)."""
         import importlib
+
         return importlib.import_module("core.app_state")
 
     def test_returns_none_when_no_app_state(self):

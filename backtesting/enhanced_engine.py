@@ -39,6 +39,7 @@ _ATR_FALLBACK_VOL = 0.001  # fallback volatility when realized variance is zero
 # ── Risk check severity constants ─────────────────────────────────────────────
 _CIRCUIT_BREAKER_HALT_LEVEL = 2  # circuit_breaker_level at which trading halts
 
+import contextlib
 import gzip
 import json
 import logging
@@ -367,8 +368,8 @@ class TransactionCostModel:
     # The old 0.40% p.a. long rate undercharged by ~47%.
     # These annual-rate fields are kept for backward compatibility and are used
     # only when use_swap_model=False.
-    overnight_rate_annual: float = 0.00749   # −0.749% p.a. — XAUUSD long (corrected)
-    overnight_rate_long_annual: float = 0.00749   # −0.749% p.a. — long carry cost
+    overnight_rate_annual: float = 0.00749  # −0.749% p.a. — XAUUSD long (corrected)
+    overnight_rate_long_annual: float = 0.00749  # −0.749% p.a. — long carry cost
     overnight_rate_short_annual: float = -0.00110  # +0.110% p.a. — short (receive)
     # use_swap_model: when True (default), OvernightSwapModel is used for all
     # overnight financing calculations (USD/lot/night with Wednesday triple-swap).
@@ -511,7 +512,9 @@ class TransactionCostModel:
                 maxfev=5000,
             )
             eta_fit, gamma_fit, beta_fit = popt
-            perr = np.sqrt(np.abs(np.nan_to_num(np.diag(pcov), nan=0.0)))  # abs guards negative diag from ill-conditioned fits
+            perr = np.sqrt(
+                np.abs(np.nan_to_num(np.diag(pcov), nan=0.0))
+            )  # abs guards negative diag from ill-conditioned fits
 
             # Goodness of fit
             y_pred = _model((x_arr, s_arr), *popt)
@@ -917,7 +920,11 @@ class MarketMicrostructureAnalyzer:
         self._extract_regime_features()
 
         # Rule-based classification (ML could be added)
-        volatility = np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0)) if self.realized_variance > 0 else 0
+        volatility = (
+            np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0))
+            if self.realized_variance > 0
+            else 0
+        )
 
         # Trend detection via Hurst
         self._calculate_hurst()
@@ -1040,7 +1047,11 @@ class MarketMicrostructureAnalyzer:
         rec["regime"] = self.current_regime.name
         rec["confidence"] = self.regime_confidence
         rec["toxicity"] = self.order_flow_toxicity
-        rec["realized_vol"] = np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0)) if self.realized_variance > 0 else 0
+        rec["realized_vol"] = (
+            np.sqrt(max(float(np.nan_to_num(self.realized_variance, nan=0.0)), 0.0))
+            if self.realized_variance > 0
+            else 0
+        )
 
         return rec
 
@@ -1770,21 +1781,15 @@ class EnhancedBacktestEngine:
         # Extract weekday for Wednesday triple-swap
         weekday: int | None = None
         if use_swap and tick.timestamp is not None:
-            try:
+            with contextlib.suppress(Exception):  # nosec B110 — non-fatal; fall back to no triple-swap
                 weekday = int(tick.timestamp.weekday())
-            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
-                pass
 
         total_financing = 0.0
         for symbol, position in self.positions.items():
             if position.size == 0:
                 continue
             current_price = self._get_position_price(symbol, tick, position)
-            is_long = (
-                position.side.name == "BUY"
-                if hasattr(position.side, "name")
-                else str(position.side) == "BUY"
-            )
+            is_long = position.side.name == "BUY" if hasattr(position.side, "name") else str(position.side) == "BUY"
             side = "long" if is_long else "short"
 
             if use_swap and swap_model is not None:

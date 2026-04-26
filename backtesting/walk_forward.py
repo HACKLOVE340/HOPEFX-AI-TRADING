@@ -157,12 +157,12 @@ class WalkForwardEngine:
         suppress the return standard deviation.
         """
         completed_trades: list[dict] = []
-        open_trades: list[dict] = []   # stack of open positions
+        open_trades: list[dict] = []  # stack of open positions
         equity = [1.0]
         position = 0
         bar_idx = 0
 
-        for i, row in data.iterrows():
+        for _i, row in data.iterrows():
             signal = strategy.on_tick(row)
 
             if signal and signal["action"] in ["BUY", "SELL"]:

@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
 
@@ -115,7 +115,7 @@ const SystemHealthSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
       {revokeConfirm && (
         <ConfirmDialog
           title="Revoke API Key"

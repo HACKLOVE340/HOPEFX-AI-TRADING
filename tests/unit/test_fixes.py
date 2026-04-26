@@ -32,9 +32,11 @@ if str(_ROOT) not in sys.path:
 # 1. data/validator.py — intra-bar consistency
 # ---------------------------------------------------------------------------
 
+
 class TestDataValidator:
     def _make_validator(self):
         from data.validator import DataValidator
+
         return DataValidator(symbol="XAUUSD")
 
     def test_valid_bar_passes(self):
@@ -78,6 +80,7 @@ class TestDataValidator:
 # ---------------------------------------------------------------------------
 # 2. data/scheduler.py — high/low swap logic
 # ---------------------------------------------------------------------------
+
 
 class TestSchedulerHighLowSwap:
     """Test the pre-validation swap logic extracted from _update_timeframe."""
@@ -140,11 +143,13 @@ class TestSchedulerHighLowSwap:
 # 3. api/auth.py — cookie fallback in get_current_user
 # ---------------------------------------------------------------------------
 
+
 class TestAuthCookieFallback:
     def test_get_current_user_accepts_bearer(self):
         """get_current_user resolves token from Authorization header."""
-        from api.auth import _decode_token, get_current_user
+        from api.auth import get_current_user
         import inspect
+
         sig = inspect.signature(get_current_user)
         # Must accept 'request' and 'credentials' parameters
         assert "request" in sig.parameters
@@ -154,7 +159,6 @@ class TestAuthCookieFallback:
         """get_current_user raises 401 when neither header nor cookie is present."""
         from fastapi import HTTPException
         from api.auth import get_current_user
-        from unittest.mock import MagicMock
 
         mock_request = MagicMock()
         mock_request.cookies = {}  # no cookie
@@ -165,22 +169,19 @@ class TestAuthCookieFallback:
 
     def test_get_current_user_reads_cookie_when_no_bearer(self):
         """get_current_user falls back to hopefx_access_token cookie."""
-        from fastapi import HTTPException
-        from api.auth import get_current_user, _decode_token
-        from unittest.mock import MagicMock, patch
+        from api.auth import get_current_user
 
         mock_request = MagicMock()
         mock_request.cookies = {"hopefx_access_token": "fake-token"}
 
         with patch("api.auth._decode_token") as mock_decode:
             mock_decode.return_value = MagicMock(sub="user-123", role="superadmin")
-            result = get_current_user(request=mock_request, credentials=None)
+            get_current_user(request=mock_request, credentials=None)
             mock_decode.assert_called_once_with("fake-token")
 
     def test_bearer_takes_precedence_over_cookie(self):
         """Authorization header takes precedence over cookie."""
         from api.auth import get_current_user
-        from unittest.mock import MagicMock, patch
         from fastapi.security import HTTPAuthorizationCredentials
 
         mock_request = MagicMock()
@@ -199,24 +200,25 @@ class TestAuthCookieFallback:
 # 4. security/code_analyzer.py — 0 issues after fixes
 # ---------------------------------------------------------------------------
 
+
 class TestCodeAnalyzerClean:
     def test_no_high_severity_issues(self):
         """After fixes, code_analyzer must report 0 critical/high issues."""
         from security.code_analyzer import scan_codebase
+
         issues = scan_codebase()
         high_or_critical = [i for i in issues if i.severity in ("critical", "high")]
-        assert high_or_critical == [], (
-            f"Expected 0 critical/high issues, found {len(high_or_critical)}:\n"
-            + "\n".join(f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in high_or_critical)
+        assert high_or_critical == [], f"Expected 0 critical/high issues, found {len(high_or_critical)}:\n" + "\n".join(
+            f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in high_or_critical
         )
 
     def test_total_issues_zero(self):
         """After fixes, code_analyzer must report 0 total issues."""
         from security.code_analyzer import scan_codebase
+
         issues = scan_codebase()
-        assert len(issues) == 0, (
-            f"Expected 0 issues, found {len(issues)}:\n"
-            + "\n".join(f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in issues)
+        assert len(issues) == 0, f"Expected 0 issues, found {len(issues)}:\n" + "\n".join(
+            f"  {i.severity} | {i.category} | {i.file}:{i.line}" for i in issues
         )
 
 
@@ -224,17 +226,20 @@ class TestCodeAnalyzerClean:
 # 5. news/geopolitical_risk.py — singleton and _all_sources_warned
 # ---------------------------------------------------------------------------
 
+
 class TestGeopoliticalSingleton:
     def test_get_geopolitical_provider_returns_singleton(self):
         """get_geopolitical_provider() must return the same instance every call."""
         from news.geopolitical_risk import get_geopolitical_provider
+
         p1 = get_geopolitical_provider()
         p2 = get_geopolitical_provider()
         assert p1 is p2, "get_geopolitical_provider() must return the same singleton"
 
     def test_sentiment_engine_uses_singleton(self):
         """NewsSentimentEngine must use the singleton, not a new instance."""
-        from news.geopolitical_risk import get_geopolitical_provider, GeopoliticalRiskProvider
+        from news.geopolitical_risk import get_geopolitical_provider
+
         singleton = get_geopolitical_provider()
         # Mark the singleton's warned flag
         singleton._all_sources_warned = False
@@ -242,6 +247,7 @@ class TestGeopoliticalSingleton:
         # Import the engine — it should grab the same singleton
         try:
             from data_layer.sentiment.engine import NewsSentimentEngine
+
             engine = NewsSentimentEngine.__new__(NewsSentimentEngine)
             engine._tasks = []
             engine._running = False
@@ -256,17 +262,17 @@ class TestGeopoliticalSingleton:
             engine._prom_bull_ratio = None
 
             from news.geopolitical_risk import get_geopolitical_provider as _get_geo
+
             engine._geo_provider = _get_geo()
 
-            assert engine._geo_provider is singleton, (
-                "NewsSentimentEngine._geo_provider must be the singleton"
-            )
+            assert engine._geo_provider is singleton, "NewsSentimentEngine._geo_provider must be the singleton"
         except ImportError:
             pytest.skip("NewsSentimentEngine not importable in this environment")
 
     def test_all_sources_warned_fires_once(self):
         """_all_sources_warned flag prevents duplicate offline log messages."""
         from news.geopolitical_risk import GeopoliticalRiskProvider
+
         provider = GeopoliticalRiskProvider()
         provider._all_sources_warned = False
 
@@ -289,10 +295,7 @@ class TestGeopoliticalSingleton:
             # Simulate the offline branch 3 times — should only log once
             for _ in range(3):
                 if not provider._all_sources_warned:
-                    geo_logger.info(
-                        "All geopolitical data sources unavailable and cache empty — "
-                        "returning no events."
-                    )
+                    geo_logger.info("All geopolitical data sources unavailable and cache empty — returning no events.")
                     provider._all_sources_warned = True
         finally:
             geo_logger.removeHandler(handler)
@@ -305,18 +308,19 @@ class TestGeopoliticalSingleton:
 # 6. CFTC COT — _offline_warned module-level flag
 # ---------------------------------------------------------------------------
 
+
 class TestCFTCOfflineWarned:
     def test_offline_warned_flag_exists(self):
         """cftc_cot module must have a module-level _offline_warned flag."""
         import data_layer.feeds.macro.cftc_cot as cot_mod
-        assert hasattr(cot_mod, "_offline_warned"), (
-            "cftc_cot must have a module-level _offline_warned flag"
-        )
+
+        assert hasattr(cot_mod, "_offline_warned"), "cftc_cot must have a module-level _offline_warned flag"
         assert isinstance(cot_mod._offline_warned, bool)
 
     def test_neutral_series_has_all_keys(self):
         """CFTCCOTFeed._neutral_series() must return all 4 expected series."""
         from data_layer.feeds.macro.cftc_cot import CFTCCOTFeed
+
         feed = CFTCCOTFeed()
         neutral = feed._neutral_series()
         expected = {"cot_net_spec", "cot_net_spec_pct", "cot_comm_net", "cot_open_interest"}
@@ -327,22 +331,24 @@ class TestCFTCOfflineWarned:
 # 7. yfinance_compat — suppression is idempotent
 # ---------------------------------------------------------------------------
 
+
 class TestYfinanceCompat:
     def test_suppress_is_idempotent(self):
         """suppress_yfinance_warnings() is safe to call multiple times."""
-        from utils.yfinance_compat import suppress_yfinance_warnings, _SUPPRESSED
+        from utils.yfinance_compat import suppress_yfinance_warnings
+
         # Already suppressed at import time — calling again must not raise
         suppress_yfinance_warnings()
         suppress_yfinance_warnings()
         from utils import yfinance_compat
+
         assert yfinance_compat._SUPPRESSED is True
 
     def test_yfinance_loggers_at_critical(self):
         """All yfinance sub-loggers must be set to CRITICAL after suppression."""
         import logging
         from utils.yfinance_compat import suppress_yfinance_warnings
+
         suppress_yfinance_warnings()
         yf_logger = logging.getLogger("yfinance")
-        assert yf_logger.level == logging.CRITICAL, (
-            f"Expected CRITICAL, got {logging.getLevelName(yf_logger.level)}"
-        )
+        assert yf_logger.level == logging.CRITICAL, f"Expected CRITICAL, got {logging.getLevelName(yf_logger.level)}"

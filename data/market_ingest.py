@@ -315,13 +315,16 @@ class MarketIngest:
         now = datetime.now(UTC)
         try:
             from risk.lookahead_guard import LiveTradingGuard, FutureTimestampError, StaleDataError
+
             _live_guard = getattr(self, "_live_guard", None)
             if _live_guard is None:
                 self._live_guard = LiveTradingGuard(max_staleness_seconds=30)
                 _live_guard = self._live_guard
+
             # Build a minimal tick-like object for the guard
             class _T:
                 timestamp = now
+
             _live_guard.validate_tick(_T(), symbol=SYMBOL)
         except (FutureTimestampError, StaleDataError) as _guard_err:
             logger.warning("market_ingest: tick rejected by LiveTradingGuard: %s", _guard_err)

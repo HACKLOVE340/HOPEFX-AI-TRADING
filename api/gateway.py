@@ -277,7 +277,7 @@ class APIGateway:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Gateway order execution error: %s")
+                logger.exception("Gateway order execution error")
                 raise HTTPException(
                     status_code=500,
                     detail="Order execution failed — check server logs",
@@ -294,7 +294,6 @@ class APIGateway:
             client_ip = get_client_ip(websocket)
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
             if not allowed:
-                await websocket.close(code=1008, reason=reason)
                 return
             token = websocket.query_params.get("token")
             if not token or not self._verify_token(token, raise_exception=False):

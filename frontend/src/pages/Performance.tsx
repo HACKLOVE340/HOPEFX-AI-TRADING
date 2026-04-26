@@ -26,11 +26,12 @@ interface PublicPerformance {
   note:            string;
 }
 
+// Canonical shape returned by both /api/performance/equity-curve and
+// /api/pnl/equity-curve. Both endpoints use the same Pydantic EquityPoint
+// model: { time: float (unix seconds), value: float (equity in currency) }.
 interface EquityPoint {
-  time?:      number;
-  value?:     number;
-  timestamp?: string;
-  equity?:    number;
+  time:  number;
+  value: number;
 }
 
 interface Trade {
@@ -49,13 +50,6 @@ interface Trade {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function normaliseEquity(raw: EquityPoint[]): { t: number; v: number }[] {
-  return raw.map((p) => ({
-    t: p.time ?? (p.timestamp ? new Date(p.timestamp).getTime() / 1000 : 0),
-    v: p.value ?? p.equity ?? 0,
-  })).filter((p) => p.t > 0 && p.v > 0);
-}
 
 // ── SVG equity curve ──────────────────────────────────────────────────────────
 
@@ -257,7 +251,11 @@ const Performance: React.FC = () => {
   });
 
   const pub    = publicQ.data;
-  const equity = equityQ.data ? normaliseEquity(equityQ.data) : [];
+  // Both equity-curve endpoints return { time: number, value: number }.
+  // Filter out any points with zero time or value (e.g. missing data).
+  const equity = (equityQ.data ?? [])
+    .filter((p) => p.time > 0 && p.value > 0)
+    .map((p) => ({ t: p.time, v: p.value }));
   const trades = tradesQ.data?.trades ?? [];
   const filteredTrades = tradeSymbol
     ? trades.filter((t) => t.symbol.includes(tradeSymbol.toUpperCase()))

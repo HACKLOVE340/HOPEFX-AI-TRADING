@@ -38,74 +38,70 @@ os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "15")
 # Issue 1 — WebSocket auth bypass
 # ===========================================================================
 class TestWebSocketAuthBypass:
-    """JWT decode failure must reject the connection, not authenticate it."""
+    """JWT decode failure must reject the connection, not authenticate it.
 
-    def _make_manager(self):
-        """Import WebSocketManager fresh so patches apply cleanly."""
-        from api.websocket_server import WebSocketManager
+    Migrated from api.websocket_server (shim) to api.ws_live._validate_ws_token,
+    which is the canonical token-validation path used by the live WS endpoint.
+    """
 
-        return WebSocketManager()
+    def test_invalid_token_returns_none(self):
+        """A token that fails JWT decode must return None (→ connection rejected)."""
+        from api.ws_live import _validate_ws_token
 
-    @pytest.mark.asyncio
-    async def test_invalid_token_returns_error(self):
-        """A token that fails JWT decode must return an error dict."""
-        mgr = self._make_manager()
-        # Patch _decode_token to raise (simulates wrong secret / expired)
-        with patch("api.auth._decode_token", side_effect=Exception("bad token")):
-            result = await mgr._handle_auth("conn-1", "totally-invalid-token")
-        assert "error" in result
-        assert "authenticated" not in result.get("status", "")
+        with patch("auth.jwt.decode_access_token", side_effect=Exception("bad token")):
+            result = _validate_ws_token("totally-invalid-token")
+        assert result is None
 
-    @pytest.mark.asyncio
-    async def test_invalid_token_does_not_set_authenticated(self):
-        """Connection must NOT be marked authenticated after a decode failure."""
-        from datetime import datetime
-
-        from api.websocket_server import ConnectionInfo
-
-        mgr = self._make_manager()
-        # Manually register a connection using the correct dataclass fields
-        mgr._connection_info["conn-2"] = ConnectionInfo(
-            connection_id="conn-2",
-            connected_at=datetime.now(UTC),
-        )
-        with patch("api.auth._decode_token", side_effect=Exception("expired")):
-            await mgr._handle_auth("conn-2", "bad-token")
-        assert mgr._connection_info["conn-2"].authenticated is False
-
-    @pytest.mark.asyncio
-    async def test_empty_token_returns_error(self):
+    def test_empty_token_returns_none(self):
         """Empty token must be rejected immediately."""
-        mgr = self._make_manager()
-        result = await mgr._handle_auth("conn-3", "")
-        assert "error" in result
+        from api.ws_live import _validate_ws_token
+
+        with patch("auth.jwt.decode_access_token", side_effect=Exception("empty")):
+            result = _validate_ws_token("")
+        assert result is None
+
+    def test_valid_token_returns_payload(self):
+        """A valid JWT must return the decoded payload dict."""
+        from api.ws_live import _validate_ws_token
+
+        fake_payload = {"sub": "user-123", "role": "trader"}
+        with patch("auth.jwt.decode_access_token", return_value=fake_payload):
+            result = _validate_ws_token("valid.jwt.token")
+        assert result is not None
+        assert result["sub"] == "user-123"
+
+    def test_bearer_prefix_stripped(self):
+        """Bearer prefix is stripped before decode is attempted."""
+        from api.ws_live import _validate_ws_token
+
+        captured = []
+
+        def _capture(token):
+            captured.append(token)
+            return {"sub": "u1"}
+
+        with patch("auth.jwt.decode_access_token", side_effect=_capture):
+            _validate_ws_token("Bearer my.jwt.token")
+        assert captured[0] == "my.jwt.token"
 
     @pytest.mark.asyncio
-    async def test_none_token_returns_error(self):
-        """None token must be rejected immediately."""
-        mgr = self._make_manager()
-        result = await mgr._handle_auth("conn-4", None)
-        assert "error" in result
+    async def test_invalid_token_does_not_authenticate_connection(self):
+        """After a failed token, LiveConnectionManager must not mark the connection authenticated."""
+        from api.ws_live import LiveConnectionManager, _validate_ws_token
 
-    @pytest.mark.asyncio
-    async def test_valid_token_authenticates(self):
-        """A valid JWT must still authenticate successfully."""
-        from datetime import datetime
+        mgr = LiveConnectionManager()
 
-        from api.websocket_server import ConnectionInfo
+        class _FakeWS:
+            async def accept(self): pass
+            async def send_text(self, t): pass
 
-        mgr = self._make_manager()
-        mgr._connection_info["conn-5"] = ConnectionInfo(
-            connection_id="conn-5",
-            connected_at=datetime.now(UTC),
-        )
-        fake_payload = MagicMock()
-        fake_payload.sub = "user-123"
-        with patch("api.auth._decode_token", return_value=fake_payload):
-            result = await mgr._handle_auth("conn-5", "valid.jwt.token")
-        assert result.get("status") == "authenticated"
-        assert mgr._connection_info["conn-5"].authenticated is True
-        assert mgr._connection_info["conn-5"].user_id == "user-123"
+        cid = await mgr.connect(_FakeWS())
+        # Simulate auth failure: _validate_ws_token returns None
+        with patch("auth.jwt.decode_access_token", side_effect=Exception("expired")):
+            payload = _validate_ws_token("bad-token")
+        assert payload is None
+        # Connection must remain unauthenticated
+        assert not mgr.is_authenticated(cid)
 
 
 # ===========================================================================

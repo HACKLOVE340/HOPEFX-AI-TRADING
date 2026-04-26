@@ -182,10 +182,14 @@ def compute_atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
     low = df["low"]
     prev_close = df["close"].shift(1)
 
-    tr = pd.concat(
-        [high - low, (high - prev_close).abs(), (low - prev_close).abs()],
-        axis=1,
-    ).fillna(0.0).max(axis=1)
+    tr = (
+        pd.concat(
+            [high - low, (high - prev_close).abs(), (low - prev_close).abs()],
+            axis=1,
+        )
+        .fillna(0.0)
+        .max(axis=1)
+    )
 
     return tr.ewm(span=period, adjust=False).mean()
 
@@ -287,9 +291,7 @@ def generate_ml_signals(
     _model_path = _Path(model_path) if model_path else (_root / "ml" / "saved_models" / "current.pkl")
 
     if not _model_path.exists():
-        logger.warning(
-            "ML model not found at %s — falling back to heuristic signals", _model_path
-        )
+        logger.warning("ML model not found at %s — falling back to heuristic signals", _model_path)
         result = generate_signals(df)
         result["ml_proba"] = np.nan
         result["signal_source"] = "heuristic_fallback"
@@ -331,20 +333,20 @@ def generate_ml_signals(
             df_out.loc[no_pred, "signal"] = heuristic["signal"].values
             df_out.loc[no_pred, "signal_source"] = "heuristic_fallback"
 
-        n_long = int((df_out["signal"] == 1).sum())   # healer: ignore — boolean sum, no NaN
+        n_long = int((df_out["signal"] == 1).sum())  # healer: ignore — boolean sum, no NaN
         n_short = int((df_out["signal"] == -1).sum())  # healer: ignore — boolean sum, no NaN
-        n_flat = int((df_out["signal"] == 0).sum())    # healer: ignore — boolean sum, no NaN
+        n_flat = int((df_out["signal"] == 0).sum())  # healer: ignore — boolean sum, no NaN
         logger.info(
             "ML signals: long=%d  short=%d  flat=%d  abstain_rate=%.1f%%",
-            n_long, n_short, n_flat,
+            n_long,
+            n_short,
+            n_flat,
             100.0 * n_flat / max(len(df_out), 1),
         )
         return df_out
 
     except Exception as exc:
-        logger.warning(
-            "ML signal generation failed (%s) — falling back to heuristic signals", exc
-        )
+        logger.warning("ML signal generation failed (%s) — falling back to heuristic signals", exc)
         result = generate_signals(df)
         result["ml_proba"] = np.nan
         result["signal_source"] = "heuristic_fallback"
@@ -399,6 +401,7 @@ def run_backtest(
       trade_pnls : list of net PnL per completed trade (for trade-level Sharpe)
     """
     from backtesting.transaction_costs import get_swap_model as _get_swap_model
+
     _swap = _get_swap_model()
     _swap_ticker = _SYMBOL_TO_SWAP_TICKER.get(symbol, "XAUUSD")
 
@@ -467,15 +470,13 @@ def run_backtest(
             lots = POSITION_SIZE  # 1 lot = 100 oz for gold
             # Extract weekday for Wednesday triple-swap when index is datetime
             weekday: int | None = None
-            try:
+            try:  # noqa: SIM105
                 weekday = int(_ts.weekday())
             except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
                 pass
-            overnight_cost = abs(
-                _swap.cost_usd_per_night(
-                    _swap_ticker, lots=lots, side=side, weekday=weekday
-                )
-            ) / _BARS_PER_DAY_H1
+            overnight_cost = (
+                abs(_swap.cost_usd_per_night(_swap_ticker, lots=lots, side=side, weekday=weekday)) / _BARS_PER_DAY_H1
+            )
             equity -= overnight_cost
         # ─────────────────────────────────────────────────────────────────────
 
@@ -558,14 +559,18 @@ def walk_forward_backtest(
     test_df = df.iloc[split_idx:]
 
     train_equity, train_pnls = run_backtest(
-        train_df, initial_capital,
-        use_ml_signals=use_ml_signals, model_path=model_path,
+        train_df,
+        initial_capital,
+        use_ml_signals=use_ml_signals,
+        model_path=model_path,
     )
     # Carry forward ending capital from train into test
     test_start_capital = float(train_equity["equity"].iloc[-1]) if len(train_equity) > 0 else initial_capital
     test_equity, test_pnls = run_backtest(
-        test_df, test_start_capital,
-        use_ml_signals=use_ml_signals, model_path=model_path,
+        test_df,
+        test_start_capital,
+        use_ml_signals=use_ml_signals,
+        model_path=model_path,
     )
 
     full_equity = pd.concat([train_equity, test_equity]).ffill().fillna(0.0)
@@ -801,19 +806,26 @@ def main() -> dict:
 
     parser = argparse.ArgumentParser(description="HOPEFX real-data walk-forward backtest")
     parser.add_argument(
-        "--heuristic", action="store_true",
+        "--heuristic",
+        action="store_true",
         help="Use SMA/RSI heuristic signals instead of the production ML model",
     )
     parser.add_argument(
-        "--model", type=str, default=None,
+        "--model",
+        type=str,
+        default=None,
         help="Path to the ML model pkl file (default: ml/saved_models/current.pkl)",
     )
     parser.add_argument(
-        "--since", type=str, default="2021-01-01T00:00:00Z",
+        "--since",
+        type=str,
+        default="2021-01-01T00:00:00Z",
         help="ISO-8601 start date for data fetch",
     )
     parser.add_argument(
-        "--max-bars", type=int, default=30_000,
+        "--max-bars",
+        type=int,
+        default=30_000,
         help="Maximum bars to fetch per symbol",
     )
     args = parser.parse_args()

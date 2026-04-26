@@ -359,7 +359,7 @@ if _FASTAPI_AVAILABLE:
     class EstimateRequest(BaseModel):
         tier: str
         billing_cycle: str = "monthly"  # "monthly" | "annual"
-        trade_volume_usd: float = 0.0   # monthly notional volume
+        trade_volume_usd: float = 0.0  # monthly notional volume
 
     @router.get("/plans", summary="List all subscription plans with full feature matrix")
     async def get_plans(billing_cycle: str = Query("monthly", pattern="^(monthly|annual)$")):
@@ -404,14 +404,16 @@ if _FASTAPI_AVAILABLE:
         for key, label in _FEATURE_LABELS.items():
             val_a = a["features"].get(key, False)
             val_b = b["features"].get(key, False)
-            comparison.append({
-                "feature": key,
-                "label": label,
-                tier_a: val_a,
-                tier_b: val_b,
-                "gained": (not val_a) and val_b,
-                "lost": val_a and (not val_b),
-            })
+            comparison.append(
+                {
+                    "feature": key,
+                    "label": label,
+                    tier_a: val_a,
+                    tier_b: val_b,
+                    "gained": (not val_a) and val_b,
+                    "lost": val_a and (not val_b),
+                }
+            )
 
         return {
             "tier_a": {"id": tier_a, "name": a["name"], "price_usd_monthly": a["price_usd_monthly"]},
@@ -437,18 +439,20 @@ if _FASTAPI_AVAILABLE:
         plan_map = {p["id"]: p for p in _PLANS}
 
         upgrades = []
-        for tier_id in tier_order[current_idx + 1:]:
+        for tier_id in tier_order[current_idx + 1 :]:
             p = plan_map[tier_id]
-            upgrades.append({
-                "id": tier_id,
-                "name": p["name"],
-                "price_usd_monthly": p["price_usd_monthly"],
-                "price_usd_annual": p["price_usd_annual"],
-                "badge": p["badge"],
-                "cta": p["cta"],
-                "cta_href": p["cta_href"],
-                "highlights": p["highlights"],
-            })
+            upgrades.append(
+                {
+                    "id": tier_id,
+                    "name": p["name"],
+                    "price_usd_monthly": p["price_usd_monthly"],
+                    "price_usd_annual": p["price_usd_annual"],
+                    "badge": p["badge"],
+                    "cta": p["cta"],
+                    "cta_href": p["cta_href"],
+                    "highlights": p["highlights"],
+                }
+            )
 
         return {
             "current_tier": current_tier,

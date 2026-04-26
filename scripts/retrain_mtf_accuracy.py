@@ -66,6 +66,7 @@ DATASET_YEARS_APPROX = 58
 
 # ── Calibration helper (replaces cv='prefit' removed in sklearn 1.4) ─────────
 
+
 class _IsoCalibratedEstimator:
     """Wraps a pre-fitted estimator with an isotonic calibration layer."""
 
@@ -418,7 +419,9 @@ def train_stacking_ensemble(X_train, y_train, X_cal, y_cal):
 
     logger.info(
         "Stacking split: fit=%d  oof=%d  cal=%d",
-        len(X_fit), len(X_oof), len(X_cal),
+        len(X_fit),
+        len(X_oof),
+        len(X_cal),
     )
 
     # Train base learners on X_fit only — they never see X_oof or X_cal

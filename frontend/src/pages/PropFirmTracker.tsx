@@ -2,10 +2,16 @@
  * Prop Firm Challenge Tracker — live drawdown, profit target, trading days.
  *
  * Wires to: GET /api/risk/prop-firm-status  (every 10s)
+ *
+ * Uses TanStack Query for data fetching (retry, stale-while-revalidate,
+ * deduplication) and usePolling to pause polling when the tab is hidden.
  */
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api } from '../hooks/useApi';
+import { usePolling } from '../hooks/usePolling';
+import { useStore, selectIsAuth, useHasHydrated } from '../store';
 
 interface PropFirmStatus {
   daily_loss_pct: number;
@@ -61,27 +67,26 @@ const ProgressBar: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PropFirmTracker: React.FC = () => {
-  const [status, setStatus]   = useState<PropFirmStatus | null>(null);
-  const [error, setError]     = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const enabled  = hydrated && isAuth;
 
-  const fetchStatus = async () => {
-    try {
+  const { data: status, error, isLoading, refetch } = useQuery<PropFirmStatus>({
+    queryKey:        ['prop-firm-status'],
+    queryFn:         async () => {
       const res = await api.get<PropFirmStatus>('/risk/prop-firm-status');
-      setStatus(res.data);
-      setError(null);
-    } catch (e: unknown) {
-      setError((e as { message?: string })?.message ?? 'Failed to load');
-    } finally {
-      setLoading(false);
-    }
-  };
+      return res.data;
+    },
+    enabled,
+    staleTime:       8_000,
+    // Polling is driven by usePolling below so the interval pauses when the
+    // tab is hidden — avoids unnecessary requests while the user is away.
+    refetchInterval: false,
+    retry:           2,
+  });
 
-  useEffect(() => {
-    fetchStatus();
-    const id = setInterval(fetchStatus, 10_000);
-    return () => clearInterval(id);
-  }, []);
+  // Pause polling when the tab is hidden; resume + immediate refetch on focus.
+  usePolling(() => { if (enabled) refetch(); }, 10_000);
 
   const statusIcon = !status ? null
     : status.kill_switch_active ? '❌'
@@ -98,6 +103,8 @@ const PropFirmTracker: React.FC = () => {
       : '#86efac',
   };
 
+  const errorMsg = error instanceof Error ? error.message : error ? String(error) : null;
+
   return (
     <div style={s.page}>
       <div style={s.header}>
@@ -106,10 +113,10 @@ const PropFirmTracker: React.FC = () => {
         {statusIcon && <span style={{ fontSize: 22 }}>{statusIcon}</span>}
       </div>
 
-      {loading && <div style={s.loading}>Loading challenge status…</div>}
+      {isLoading && <div style={s.loading}>Loading challenge status…</div>}
 
-      {error && (
-        <div style={s.errorBox}>{error}</div>
+      {errorMsg && (
+        <div style={s.errorBox}>{errorMsg}</div>
       )}
 
       {status && (

@@ -70,15 +70,22 @@ _REPEATED_ERROR_THRESHOLD = 3
 # Lazily initialised so the module can be imported without prometheus_client.
 # All metrics use the hopefx_ namespace to match alert rule expressions.
 
+
 def _make_counter(name: str, description: str, labelnames: list[str] | None = None):
     """Create a Prometheus Counter, returning a no-op stub if unavailable."""
     try:
         from prometheus_client import Counter  # type: ignore[import]
+
         return Counter(name, description, labelnames or [])
     except Exception:
+
         class _NoOpCounter:
-            def labels(self, **_kw): return self
-            def inc(self, _amount=1): pass
+            def labels(self, **_kw):
+                return self
+
+            def inc(self, _amount=1):
+                pass
+
         return _NoOpCounter()
 
 
@@ -86,12 +93,20 @@ def _make_gauge(name: str, description: str, labelnames: list[str] | None = None
     """Create a Prometheus Gauge, returning a no-op stub if unavailable."""
     try:
         from prometheus_client import Gauge  # type: ignore[import]
+
         return Gauge(name, description, labelnames or [])
     except Exception:
+
         class _NoOpGauge:
-            def labels(self, **_kw): return self
-            def set(self, _v): pass
-            def inc(self, _v=1): pass
+            def labels(self, **_kw):
+                return self
+
+            def set(self, _v):
+                pass
+
+            def inc(self, _v=1):
+                pass
+
         return _NoOpGauge()
 
 
@@ -133,14 +148,16 @@ _STARTUP_COMPLETE = _make_gauge(
 
 # ── Rollback strategies ───────────────────────────────────────────────────────
 
+
 class RollbackStrategy:
-    SOFT   = "soft"    # disable feature flags, drain requests
+    SOFT = "soft"  # disable feature flags, drain requests
     MEDIUM = "medium"  # restart component, restore config
-    HARD   = "hard"    # git checkout specific files
-    FULL   = "full"    # git reset to last tag
+    HARD = "hard"  # git checkout specific files
+    FULL = "full"  # git reset to last tag
 
 
 # ── Rollback result ───────────────────────────────────────────────────────────
+
 
 @dataclass
 class RollbackResult:
@@ -165,6 +182,7 @@ class RollbackResult:
 
 
 # ── Trigger definition ────────────────────────────────────────────────────────
+
 
 @dataclass
 class RollbackTrigger:
@@ -192,6 +210,7 @@ class RollbackTrigger:
 
 
 # ── Auto rollback manager ─────────────────────────────────────────────────────
+
 
 class AutoRollbackManager:
     """
@@ -223,36 +242,44 @@ class AutoRollbackManager:
         """Register the default set of rollback triggers."""
 
         # Trigger 1: Broker circuit breaker open
-        self.register_trigger(RollbackTrigger(
-            name="broker_circuit_open",
-            condition=self._broker_circuit_open,
-            strategy=RollbackStrategy.SOFT,
-            cooldown_seconds=120.0,
-        ))
+        self.register_trigger(
+            RollbackTrigger(
+                name="broker_circuit_open",
+                condition=self._broker_circuit_open,
+                strategy=RollbackStrategy.SOFT,
+                cooldown_seconds=120.0,
+            )
+        )
 
         # Trigger 2: Database circuit breaker open
-        self.register_trigger(RollbackTrigger(
-            name="db_circuit_open",
-            condition=self._db_circuit_open,
-            strategy=RollbackStrategy.SOFT,
-            cooldown_seconds=120.0,
-        ))
+        self.register_trigger(
+            RollbackTrigger(
+                name="db_circuit_open",
+                condition=self._db_circuit_open,
+                strategy=RollbackStrategy.SOFT,
+                cooldown_seconds=120.0,
+            )
+        )
 
         # Trigger 3: Critical code issues detected by self-healer
-        self.register_trigger(RollbackTrigger(
-            name="critical_code_issues",
-            condition=self._critical_code_issues_detected,
-            strategy=RollbackStrategy.HARD,
-            cooldown_seconds=600.0,
-        ))
+        self.register_trigger(
+            RollbackTrigger(
+                name="critical_code_issues",
+                condition=self._critical_code_issues_detected,
+                strategy=RollbackStrategy.HARD,
+                cooldown_seconds=600.0,
+            )
+        )
 
         # Trigger 4: Repeated runtime errors in log file
-        self.register_trigger(RollbackTrigger(
-            name="repeated_runtime_errors",
-            condition=self._repeated_runtime_errors,
-            strategy=RollbackStrategy.MEDIUM,
-            cooldown_seconds=300.0,
-        ))
+        self.register_trigger(
+            RollbackTrigger(
+                name="repeated_runtime_errors",
+                condition=self._repeated_runtime_errors,
+                strategy=RollbackStrategy.MEDIUM,
+                cooldown_seconds=300.0,
+            )
+        )
 
     def register_trigger(self, trigger: RollbackTrigger) -> None:
         """Register a custom rollback trigger."""
@@ -265,6 +292,7 @@ class AutoRollbackManager:
     def _broker_circuit_open() -> bool:
         try:
             from resilience.service_circuit_breakers import broker_breaker
+
             return broker_breaker.is_open
         except ImportError:
             return False
@@ -273,6 +301,7 @@ class AutoRollbackManager:
     def _db_circuit_open() -> bool:
         try:
             from resilience.service_circuit_breakers import db_breaker
+
             return db_breaker.is_open
         except ImportError:
             return False
@@ -282,10 +311,9 @@ class AutoRollbackManager:
         """Return True if the self-healer has found critical code issues."""
         try:
             from security.self_healer import get_healer
+
             h = get_healer()
-            critical_count = sum(
-                1 for i in h._code_issues if i.get("severity") == "critical"
-            )
+            critical_count = sum(1 for i in h._code_issues if i.get("severity") == "critical")
             return critical_count > 0
         except Exception:
             return False
@@ -295,6 +323,7 @@ class AutoRollbackManager:
         """Return True if there are _REPEATED_ERROR_THRESHOLD+ ERROR entries in the last 5 minutes."""
         try:
             from security.code_analyzer import analyze_log_file
+
             issues = analyze_log_file(since_minutes=5)
             errors = [i for i in issues if i.level in ("ERROR", "CRITICAL")]
             return len(errors) >= _REPEATED_ERROR_THRESHOLD
@@ -329,7 +358,8 @@ class AutoRollbackManager:
             if trigger.should_trigger():
                 logger.warning(
                     "AutoRollback: trigger '%s' fired (strategy=%s)",
-                    trigger.name, trigger.strategy,
+                    trigger.name,
+                    trigger.strategy,
                 )
                 trigger.mark_triggered()
                 result = await self.rollback(
@@ -340,12 +370,14 @@ class AutoRollbackManager:
                 if result.success:
                     logger.info(
                         "AutoRollback: rollback '%s' completed in %.0fms",
-                        trigger.name, result.duration_ms,
+                        trigger.name,
+                        result.duration_ms,
                     )
                 else:
                     logger.error(
                         "AutoRollback: rollback '%s' FAILED: %s",
-                        trigger.name, result.errors,
+                        trigger.name,
+                        result.errors,
                     )
 
     # ── Rollback execution ────────────────────────────────────────────────────
@@ -373,7 +405,8 @@ class AutoRollbackManager:
 
         logger.warning(
             "AutoRollback: executing %s rollback — reason: %s",
-            strategy.upper(), reason,
+            strategy.upper(),
+            reason,
         )
 
         try:
@@ -424,6 +457,7 @@ class AutoRollbackManager:
         # 1. Disable risky feature flags
         try:
             from config.feature_flags import flags
+
             risky_flags = ["ENABLE_LIVE_TRADING", "ENABLE_AUTO_TRADING", "ENABLE_ML_SIGNALS"]
             for flag in risky_flags:
                 if hasattr(flags, flag.lower()):
@@ -435,6 +469,7 @@ class AutoRollbackManager:
         # 2. Force-close broker circuit breaker (allow retry)
         try:
             from resilience.service_circuit_breakers import broker_breaker
+
             if broker_breaker.is_open:
                 broker_breaker.force_close()
                 actions.append("Force-closed broker circuit breaker")
@@ -456,10 +491,12 @@ class AutoRollbackManager:
         # Restore last known-good auto-healing config
         try:
             from security.self_healer import get_healer
+
             h = get_healer()
             cfg_path = PROJECT_ROOT / "data" / "auto_healing_config.json"
             if cfg_path.exists():
                 import json as _json
+
                 cfg = _json.loads(cfg_path.read_text())
                 h.apply_config(cfg)
                 result.actions_taken.append("Restored auto-healing config from disk")
@@ -469,6 +506,7 @@ class AutoRollbackManager:
         # Trigger a fresh code analysis scan
         try:
             from security.self_healer import get_healer
+
             h = get_healer()
             asyncio.create_task(h._run_code_analysis(), name="rollback-code-scan")
             result.actions_taken.append("Triggered fresh code analysis scan")
@@ -489,11 +527,9 @@ class AutoRollbackManager:
             # Auto-detect changed files from self-healer drift events
             try:
                 from security.self_healer import get_healer
+
                 h = get_healer()
-                target_files = [
-                    e["path"] for e in h._drift_events[-10:]
-                    if e.get("type") == "modified"
-                ]
+                target_files = [e["path"] for e in h._drift_events[-10:] if e.get("type") == "modified"]
             except Exception:  # nosec B110 — healer may not be running; target_files stays empty
                 pass
 
@@ -502,9 +538,17 @@ class AutoRollbackManager:
             return
 
         import re as _re
+
         for rel_path in target_files:
-            # Validate path is a safe relative file path before passing to subprocess
-            if not _re.fullmatch(r"[A-Za-z0-9_./ \-]+", str(rel_path)):
+            # Normalise Windows-style backslashes to forward slashes before
+            # validation.  The self-healer stores paths using os.sep which is
+            # '\\' on Windows; git always accepts forward slashes on all
+            # platforms, so we normalise unconditionally.
+            rel_path = str(rel_path).replace("\\", "/")
+
+            # Validate path is a safe relative file path before passing to subprocess.
+            # Allowed: letters, digits, dot, underscore, forward-slash, hyphen, space.
+            if not _re.fullmatch(r"[A-Za-z0-9_./ \-]+", rel_path):
                 result.errors.append(f"Unsafe path rejected for git checkout: {rel_path!r}")
                 continue
             try:
@@ -527,6 +571,7 @@ class AutoRollbackManager:
         # Rebuild self-healer baseline after revert
         try:
             from security.self_healer import get_healer
+
             asyncio.create_task(get_healer().rebuild_baseline(), name="rollback-baseline-rebuild")
             result.actions_taken.append("Triggered baseline rebuild after hard rollback")
         except Exception as exc:
@@ -544,6 +589,7 @@ class AutoRollbackManager:
 
         try:
             import re as _re
+
             # Find last tag — fixed args, no user input
             proc = subprocess.run(  # nosec B603 B607
                 ["git", "describe", "--tags", "--abbrev=0"],
@@ -592,15 +638,14 @@ class AutoRollbackManager:
         # Write to disk
         try:
             ROLLBACK_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
-            ROLLBACK_HISTORY_PATH.write_text(
-                json.dumps(self._history[-50:], indent=2)
-            )
+            ROLLBACK_HISTORY_PATH.write_text(json.dumps(self._history[-50:], indent=2))
         except Exception as exc:
             logger.debug("AutoRollback: history write failed: %s", exc)
 
         # Write to Redis
         try:
             import redis as _redis_sync
+
             _rc = _redis_sync.from_url(
                 os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                 decode_responses=True,
@@ -623,6 +668,7 @@ class AutoRollbackManager:
         """Push rollback event to Redis alerts:critical."""
         try:
             import redis as _redis_sync
+
             _rc = _redis_sync.from_url(
                 os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                 decode_responses=True,
@@ -630,14 +676,16 @@ class AutoRollbackManager:
             )
             _rc.rpush(
                 "alerts:critical",
-                json.dumps({
-                    "type": "auto_rollback",
-                    "strategy": strategy,
-                    "reason": result.reason,
-                    "ts": result.rolled_back_at,
-                    "actions": len(result.actions_taken),
-                    "errors": result.errors[:5],
-                }),
+                json.dumps(
+                    {
+                        "type": "auto_rollback",
+                        "strategy": strategy,
+                        "reason": result.reason,
+                        "ts": result.rolled_back_at,
+                        "actions": len(result.actions_taken),
+                        "errors": result.errors[:5],
+                    }
+                ),
             )
             _rc.ltrim("alerts:critical", -1000, -1)
         except Exception:  # nosec B110
@@ -652,8 +700,7 @@ class AutoRollbackManager:
             "in_rollback": self._in_rollback,
             "rollback_count": self._rollback_count,
             "last_rollback": (
-                datetime.fromtimestamp(self._last_rollback_ts, UTC).isoformat()
-                if self._last_rollback_ts else None
+                datetime.fromtimestamp(self._last_rollback_ts, UTC).isoformat() if self._last_rollback_ts else None
             ),
             "triggers": [
                 {
@@ -661,8 +708,7 @@ class AutoRollbackManager:
                     "strategy": t.strategy,
                     "enabled": t.enabled,
                     "last_triggered": (
-                        datetime.fromtimestamp(t._last_triggered, UTC).isoformat()
-                        if t._last_triggered else None
+                        datetime.fromtimestamp(t._last_triggered, UTC).isoformat() if t._last_triggered else None
                     ),
                 }
                 for t in self._triggers

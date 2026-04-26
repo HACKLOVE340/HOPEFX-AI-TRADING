@@ -688,9 +688,7 @@ class SelfHealer:
             "claude_fix_queue_depth": len(self._claude_fix_queue),
             "log_file": str(_LOG_FILE),
             # Advanced diagnostics
-            "last_diag_ts": datetime.fromtimestamp(self._last_diag_ts, UTC).isoformat()
-            if self._last_diag_ts
-            else None,
+            "last_diag_ts": datetime.fromtimestamp(self._last_diag_ts, UTC).isoformat() if self._last_diag_ts else None,
             "diag_has_critical": self._last_diag_report.get("has_critical", False),
             "diag_has_errors": self._last_diag_report.get("has_errors", False),
             "diag_counts": self._last_diag_report.get("counts", {}),
@@ -1549,39 +1547,45 @@ Return the complete fixed file:"""
                 with contextlib.suppress(Exception):
                     await redis.rpush(
                         "alerts:critical",
-                        json.dumps({
-                            "type": "diagnostic_failure",
-                            "check": result.check_name,
-                            "ts": result.checked_at,
-                            "detail": result.to_dict(),
-                        }),
+                        json.dumps(
+                            {
+                                "type": "diagnostic_failure",
+                                "check": result.check_name,
+                                "ts": result.checked_at,
+                                "detail": result.to_dict(),
+                            }
+                        ),
                     )
                     await redis.ltrim("alerts:critical", -1000, -1)
 
             # Enqueue import chain failures for Claude fix
             if result.check_name == "import_chain":
                 for broken in result.details.get("broken", [])[:5]:
-                    await self._enqueue_claude_fix({
-                        "category": "import_error",
-                        "severity": "critical",
-                        "description": f"Import chain broken: {broken.get('package')} — {broken.get('error', '')}",
-                        "file": broken.get("package", "").replace(".", "/") + ".py",
-                        "line": 0,
-                        "snippet": broken.get("error", "")[:200],
-                        "suggestion": "Fix the import error; run pip install -r requirements.txt",
-                    })
+                    await self._enqueue_claude_fix(
+                        {
+                            "category": "import_error",
+                            "severity": "critical",
+                            "description": f"Import chain broken: {broken.get('package')} — {broken.get('error', '')}",
+                            "file": broken.get("package", "").replace(".", "/") + ".py",
+                            "line": 0,
+                            "snippet": broken.get("error", "")[:200],
+                            "suggestion": "Fix the import error; run pip install -r requirements.txt",
+                        }
+                    )
 
             # Enqueue log pattern hits for Claude fix
             if result.check_name.startswith("log_pattern_"):
-                await self._enqueue_claude_fix({
-                    "category": result.check_name.replace("log_pattern_", ""),
-                    "severity": result.status,
-                    "description": result.message,
-                    "file": "logs/app.log",
-                    "line": 0,
-                    "snippet": result.details.get("sample", "")[:200],
-                    "suggestion": result.remediation,
-                })
+                await self._enqueue_claude_fix(
+                    {
+                        "category": result.check_name.replace("log_pattern_", ""),
+                        "severity": result.status,
+                        "description": result.message,
+                        "file": "logs/app.log",
+                        "line": 0,
+                        "snippet": result.details.get("sample", "")[:200],
+                        "suggestion": result.remediation,
+                    }
+                )
 
         # Auto-remediate if aggressiveness allows
         if self._aggressiveness in ("aggressive", "nuclear") and report.has_errors():
@@ -2243,10 +2247,7 @@ def _build_eager_heal_router() -> APIRouter:
         h = get_healer()
         status = h.get_full_status()
         status["last_diagnostic_report"] = h.get_last_diagnostic_report()
-        status["last_diag_ts"] = (
-            datetime.fromtimestamp(h._last_diag_ts, UTC).isoformat()
-            if h._last_diag_ts else None
-        )
+        status["last_diag_ts"] = datetime.fromtimestamp(h._last_diag_ts, UTC).isoformat() if h._last_diag_ts else None
         return status
 
     return r

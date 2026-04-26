@@ -33,7 +33,9 @@ Usage
 import asyncio
 import logging
 import os
-from typing import ClassVar
+from typing import Any, ClassVar
+
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
 
 # Maximum number of TWS reconnection attempts before giving up.
 _MAX_RECONNECT_ATTEMPTS = 3
@@ -76,7 +78,7 @@ def _resolve_env(value: object) -> str:
     return value
 
 
-class IBKRBroker:
+class IBKRBroker(BrokerConnector):
     """
     Async Interactive Brokers broker backed by ib_insync.
 
@@ -88,8 +90,8 @@ class IBKRBroker:
     """
 
     def __init__(self, config: dict) -> None:
+        super().__init__(config)
         self._config = config
-        self.connected: bool = False
         self._ib: object | None = IB() if _IB_AVAILABLE else None
         self._server_type: str | None = None
         self._host: str | None = None
@@ -158,12 +160,13 @@ class IBKRBroker:
             logger.error("IBKRBroker connect failed: %s", exc)
             return False
 
-    async def disconnect(self) -> None:
+    async def disconnect(self) -> bool:
         """Disconnect from TWS / IB Gateway."""
         if self.connected and _IB_AVAILABLE and self._ib:
             self._ib.disconnect()
             self.connected = False
             logger.info("IBKRBroker disconnected (account=%s)", self._account)
+        return True
 
     # ── Account ───────────────────────────────────────────────────────────────
 
@@ -470,6 +473,73 @@ class IBKRBroker:
         except Exception as exc:
             logger.error("IBKRBroker.get_tick error: %s", exc)
             return None
+
+    # ── BrokerConnector ABC implementations ───────────────────────────────────
+
+    async def get_order(self, order_id: str) -> Order | None:
+        """Fetch a single open/pending order by IBKR order ID."""
+        if not self._assert_connected("get_order"):
+            return None
+        open_trades = self._ib.openTrades()
+        target_id = int(order_id) if order_id.isdigit() else None
+        for trade in open_trades:
+            if trade.order.orderId == target_id:
+                o = trade.order
+                return Order(
+                    id=str(o.orderId),
+                    symbol=trade.contract.symbol,
+                    side=OrderSide.BUY if o.action == "BUY" else OrderSide.SELL,
+                    type=OrderType.MARKET if o.orderType == "MKT" else OrderType.LIMIT,
+                    quantity=float(o.totalQuantity),
+                    status=trade.orderStatus.status,
+                )
+        return None
+
+    async def get_market_data(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return OHLCV bars from IBKR historical data request."""
+        if not self._assert_connected("get_market_data") or not _IB_AVAILABLE:
+            return []
+        _bar_size_map = {
+            "1m": "1 min", "5m": "5 mins", "15m": "15 mins", "30m": "30 mins",
+            "1h": "1 hour", "4h": "4 hours", "1d": "1 day",
+        }
+        bar_size = _bar_size_map.get(timeframe, "1 hour")
+        # Duration string: approximate from limit × bar size
+        _duration_map = {
+            "1 min": "1 D", "5 mins": "5 D", "15 mins": "10 D",
+            "30 mins": "20 D", "1 hour": "30 D", "4 hours": "60 D", "1 day": "365 D",
+        }
+        duration = _duration_map.get(bar_size, "30 D")
+        contract = _build_contract(symbol, "CASH", "IDEALPRO", "USD")
+        try:
+            bars = await self._ib.reqHistoricalDataAsync(
+                contract,
+                endDateTime="",
+                durationStr=duration,
+                barSizeSetting=bar_size,
+                whatToShow="MIDPOINT",
+                useRTH=True,
+                formatDate=1,
+            )
+            return [
+                {
+                    "timestamp": b.date.timestamp() if hasattr(b.date, "timestamp") else b.date,
+                    "open": float(b.open),
+                    "high": float(b.high),
+                    "low": float(b.low),
+                    "close": float(b.close),
+                    "volume": int(b.volume),
+                }
+                for b in (bars[-limit:] if len(bars) > limit else bars)
+            ]
+        except Exception as exc:
+            logger.error("IBKRBroker.get_market_data error: %s", exc)
+            return []
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

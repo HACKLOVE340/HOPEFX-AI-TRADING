@@ -344,6 +344,7 @@ class AdvancedPredictor:
             logger.critical(msg)
             try:
                 import sentry_sdk
+
                 sentry_sdk.capture_message(msg, level="fatal")
             except Exception as _sentry_exc:  # nosec B110
                 logger.debug("Sentry capture failed (non-fatal): %s", _sentry_exc)

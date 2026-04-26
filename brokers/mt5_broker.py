@@ -28,6 +28,8 @@ import logging
 import os
 from typing import Any
 
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -70,7 +72,7 @@ TRADE_ACTION_REMOVE = 8  # Delete pending order
 TRADE_ACTION_CLOSE_BY = 10  # Close by opposite position
 
 
-class MT5Broker:
+class MT5Broker(BrokerConnector):
     """
     Async MT5 broker backed by ``config/brokers.yaml`` credentials.
 
@@ -82,8 +84,8 @@ class MT5Broker:
     """
 
     def __init__(self, config: dict[str, Any]) -> None:
+        super().__init__(config)
         self._config = config
-        self.connected: bool = False
         self._login: int | None = None
         self._server: str | None = None
 
@@ -101,26 +103,69 @@ class MT5Broker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_connect)
 
-    async def disconnect(self) -> None:
+    async def disconnect(self) -> bool:
         """Shut down the MT5 terminal connection."""
         if self.connected and _MT5_AVAILABLE:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, _mt5.shutdown)
             self.connected = False
             logger.info("MT5Broker disconnected (login=%s)", self._login)
+        return True
 
     # ── Account ───────────────────────────────────────────────────────────────
 
-    async def get_account_info(self) -> dict[str, Any] | None:
-        """Return account details as a plain dict, or None if not connected."""
+    async def get_account_info(self) -> AccountInfo:  # type: ignore[override]
+        """Return account details as AccountInfo (conforms to BrokerConnector interface)."""
         if not self._assert_connected("get_account_info"):
+            return AccountInfo(balance=0.0, equity=0.0, margin_used=0.0, margin_available=0.0, positions_count=0)
+        loop = asyncio.get_running_loop()
+        raw = await loop.run_in_executor(None, self._sync_account_info)
+        if raw is None:
+            return AccountInfo(balance=0.0, equity=0.0, margin_used=0.0, margin_available=0.0, positions_count=0)
+        return AccountInfo(
+            balance=float(raw.get("balance", 0.0)),
+            equity=float(raw.get("equity", 0.0)),
+            margin_used=float(raw.get("margin", 0.0)),
+            margin_available=float(raw.get("free_margin", 0.0)),
+            positions_count=0,
+        )
+
+    async def get_account_info_raw(self) -> dict[str, Any] | None:
+        """Return raw MT5 account details as a plain dict, or None if not connected."""
+        if not self._assert_connected("get_account_info_raw"):
             return None
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_account_info)
 
-    async def get_positions(self) -> list[dict[str, Any]]:
-        """Return all open positions as a list of dicts."""
+    async def get_positions(self) -> list[Position]:  # type: ignore[override]
+        """Return all open positions as Position objects (conforms to BrokerConnector interface)."""
         if not self._assert_connected("get_positions"):
+            return []
+        loop = asyncio.get_running_loop()
+        raw_positions = await loop.run_in_executor(None, self._sync_positions)
+        positions: list[Position] = []
+        for p in raw_positions:
+            side = "LONG" if p.get("type") == "buy" else "SHORT"
+            qty = float(p.get("volume", 0.0))
+            entry = float(p.get("open_price", 0.0))
+            current = float(p.get("current_price", entry))
+            pnl = float(p.get("profit", 0.0))
+            positions.append(
+                Position(
+                    symbol=str(p.get("symbol", "")),
+                    side=side,
+                    quantity=qty,
+                    entry_price=entry,
+                    current_price=current,
+                    unrealized_pnl=pnl,
+                    id=str(p.get("ticket", "")),
+                )
+            )
+        return positions
+
+    async def get_positions_raw(self) -> list[dict[str, Any]]:
+        """Return all open positions as raw MT5 dicts."""
+        if not self._assert_connected("get_positions_raw"):
             return []
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_positions)
@@ -134,9 +179,74 @@ class MT5Broker:
 
     # ── Order execution ───────────────────────────────────────────────────────
 
-    async def place_order(self, order_params: dict[str, Any]) -> dict[str, Any]:
+    async def place_order(  # type: ignore[override]
+        self,
+        symbol: str,
+        side: OrderSide,
+        order_type: OrderType,
+        quantity: float,
+        price: float | None = None,
+        stop_price: float | None = None,
+        **kwargs: Any,
+    ) -> Order:
         """
-        Send a trade request to MT5.
+        Place an order via MT5, conforming to the BrokerConnector interface.
+
+        Translates the standard interface parameters into the MT5 request dict
+        and returns a ``brokers.base.Order`` on success.
+
+        Extra MT5-specific parameters (sl, tp, magic, comment) can be passed
+        via **kwargs.
+        """
+        if not self._assert_connected("place_order"):
+            raise RuntimeError("MT5Broker.place_order: not connected")
+
+        action = "buy" if side == OrderSide.BUY else "sell"
+        order_type_str = {
+            OrderType.MARKET: "market",
+            OrderType.LIMIT: "limit",
+            OrderType.STOP: "stop",
+            OrderType.STOP_LIMIT: "stop",
+        }.get(order_type, "market")
+
+        order_params: dict[str, Any] = {
+            "symbol": symbol,
+            "action": action,
+            "volume": quantity,
+            "order_type": order_type_str,
+            "price": price or 0.0,
+            "sl": kwargs.get("sl", 0.0),
+            "tp": kwargs.get("tp", 0.0),
+            "comment": kwargs.get("comment", "HOPEFX"),
+            "magic": kwargs.get("magic", 0),
+        }
+        if stop_price is not None:
+            order_params["price"] = stop_price
+
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, self._sync_place_order, order_params)
+
+        status = OrderStatus.FILLED if result.get("success") else OrderStatus.REJECTED
+        import uuid as _uuid
+        return Order(
+            id=str(result.get("order", _uuid.uuid4())),
+            symbol=symbol,
+            side=side,
+            type=order_type,
+            quantity=quantity,
+            price=price,
+            stop_price=stop_price,
+            status=status,
+            filled_quantity=quantity if result.get("success") else 0.0,
+            average_price=price,
+        )
+
+    async def place_order_raw(self, order_params: dict[str, Any]) -> dict[str, Any]:
+        """
+        Send a raw MT5 trade request dict and return the MT5 result dict.
+
+        Use this for MT5-specific parameters (sl, tp, magic, comment) that
+        are not part of the standard BrokerConnector interface.
 
         Parameters
         ----------
@@ -157,24 +267,10 @@ class MT5Broker:
         -------
         Dict with keys: ``success`` (bool), ``order`` (int ticket), ``comment`` (str).
         """
-        if not self._assert_connected("place_order"):
+        if not self._assert_connected("place_order_raw"):
             return {"success": False, "order": 0, "comment": "Not connected"}
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_place_order, order_params)
-
-    async def close_position(self, ticket: int, volume: float | None = None) -> dict[str, Any]:
-        """
-        Close an open position by ticket number.
-
-        Parameters
-        ----------
-        ticket: Position ticket to close.
-        volume: Partial close volume (None = full close).
-        """
-        if not self._assert_connected("close_position"):
-            return {"success": False, "comment": "Not connected"}
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
 
     async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> dict[str, Any]:
         """Modify the SL/TP of an open position."""
@@ -183,9 +279,22 @@ class MT5Broker:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_modify_position, ticket, sl, tp)
 
-    async def cancel_order(self, ticket: int) -> dict[str, Any]:
-        """Delete a pending order by ticket number."""
+    async def cancel_order(self, order_id: str) -> bool:  # type: ignore[override]
+        """Cancel a pending order by ticket ID (conforms to BrokerConnector interface)."""
         if not self._assert_connected("cancel_order"):
+            return False
+        try:
+            ticket = int(order_id)
+        except (ValueError, TypeError):
+            logger.error("MT5Broker.cancel_order: invalid order_id '%s'", order_id)
+            return False
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(None, self._sync_cancel_order, ticket)
+        return bool(result.get("success", False))
+
+    async def cancel_order_raw(self, ticket: int) -> dict[str, Any]:
+        """Delete a pending order by MT5 ticket number, returning the raw MT5 result."""
+        if not self._assert_connected("cancel_order_raw"):
             return {"success": False, "comment": "Not connected"}
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_cancel_order, ticket)
@@ -202,15 +311,15 @@ class MT5Broker:
         if not self._assert_connected("cancel_all_orders"):
             return cancelled
 
-        # 1. Close all open positions
+        # 1. Close all open positions (use raw dicts to access MT5 ticket IDs)
         try:
-            positions = await self.get_positions()
+            positions = await self.get_positions_raw()
             for pos in positions:
                 ticket = pos.get("ticket")
                 if ticket is None:
                     continue
                 try:
-                    result = await self.close_position(ticket)
+                    result = await self.close_position_by_ticket(ticket)
                     if result.get("success"):
                         cancelled.append(str(ticket))
                         logger.warning("MT5Broker.cancel_all_orders: closed position ticket=%s", ticket)
@@ -223,9 +332,9 @@ class MT5Broker:
                 except Exception as exc:
                     logger.error("MT5Broker.cancel_all_orders: close ticket=%s raised: %s", ticket, exc)
         except Exception as exc:
-            logger.error("MT5Broker.cancel_all_orders: get_positions failed: %s", exc)
+            logger.error("MT5Broker.cancel_all_orders: get_positions_raw failed: %s", exc)
 
-        # 2. Cancel all pending orders
+        # 2. Cancel all pending orders (use raw dicts to access MT5 ticket IDs)
         try:
             orders = await self.get_orders()
             for order in orders:
@@ -233,7 +342,7 @@ class MT5Broker:
                 if ticket is None:
                     continue
                 try:
-                    result = await self.cancel_order(ticket)
+                    result = await self.cancel_order_raw(ticket)
                     if result.get("success"):
                         cancelled.append(str(ticket))
                         logger.warning("MT5Broker.cancel_all_orders: cancelled order ticket=%s", ticket)
@@ -535,6 +644,82 @@ class MT5Broker:
             "mid": (tick.bid + tick.ask) / 2.0,
             "time": tick.time,
         }
+
+    # ── BrokerConnector ABC implementations ───────────────────────────────────
+
+    async def get_order(self, order_id: str) -> Order | None:
+        """Fetch a single pending order by ticket ID."""
+        if not self._assert_connected("get_order"):
+            return None
+        loop = asyncio.get_running_loop()
+        orders = await loop.run_in_executor(None, self._sync_orders)
+        ticket = int(order_id) if order_id.isdigit() else None
+        for o in orders:
+            if o.get("ticket") == ticket:
+                return Order(
+                    id=str(o["ticket"]),
+                    symbol=o.get("symbol", ""),
+                    side=OrderSide.BUY if o.get("type", 0) in (0, 2, 4) else OrderSide.SELL,
+                    type=OrderType.MARKET,
+                    quantity=float(o.get("volume", 0)),
+                    status="PENDING",
+                )
+        return None
+
+    async def close_position(self, symbol: str) -> bool:  # type: ignore[override]
+        """Close all open positions for *symbol* by ticket."""
+        if not self._assert_connected("close_position"):
+            return False
+        loop = asyncio.get_running_loop()
+        positions = await loop.run_in_executor(None, self._sync_positions)
+        success = True
+        for pos in positions:
+            if pos.get("symbol", "").upper() == symbol.upper():
+                result = await self.close_position_by_ticket(pos["ticket"])
+                if not result.get("success"):
+                    success = False
+        return success
+
+    async def close_position_by_ticket(self, ticket: int, volume: float | None = None) -> dict[str, Any]:
+        """Close a position by MT5 ticket number (internal helper)."""
+        if not self._assert_connected("close_position_by_ticket"):
+            return {"success": False, "comment": "Not connected"}
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
+
+    async def get_market_data(
+        self,
+        symbol: str,
+        timeframe: str = "1h",
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Return OHLCV bars from MT5 copy_rates_from_pos."""
+        if not self._assert_connected("get_market_data") or not _MT5_AVAILABLE:
+            return []
+        _tf_map = {
+            "1m": 1, "5m": 5, "15m": 15, "30m": 30,
+            "1h": 16385, "4h": 16388, "1d": 16408,
+        }
+        tf_const = _tf_map.get(timeframe, 16385)  # default H1
+        loop = asyncio.get_running_loop()
+
+        def _fetch() -> list[dict[str, Any]]:
+            rates = _mt5.copy_rates_from_pos(symbol, tf_const, 0, limit)
+            if rates is None:
+                return []
+            return [
+                {
+                    "timestamp": int(r["time"]),
+                    "open": float(r["open"]),
+                    "high": float(r["high"]),
+                    "low": float(r["low"]),
+                    "close": float(r["close"]),
+                    "volume": int(r["tick_volume"]),
+                }
+                for r in rates
+            ]
+
+        return await loop.run_in_executor(None, _fetch)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 

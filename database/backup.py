@@ -85,8 +85,7 @@ def _backup_postgres(database_url: str, backup_dir: Path) -> Path:
         if result.returncode != 0:
             out_path.unlink(missing_ok=True)
             raise RuntimeError(
-                f"pg_dump failed (exit {result.returncode}): "
-                f"{result.stderr.decode(errors='replace')[:500]}"
+                f"pg_dump failed (exit {result.returncode}): {result.stderr.decode(errors='replace')[:500]}"
             )
         gz.write(result.stdout)
 
@@ -126,6 +125,7 @@ def run_backup(database_url: str | None = None) -> Path:
         # Try to read from the connection module first (respects fallback logic)
         try:
             from database.connection import _db_manager  # type: ignore[attr-defined]
+
             database_url = str(_db_manager.url) if _db_manager else None
         except Exception as _exc:  # nosec B110 — falls back to DATABASE_URL env var below
             logger.debug("backup: could not read db_manager URL: %s", _exc)
@@ -135,8 +135,7 @@ def run_backup(database_url: str | None = None) -> Path:
 
     if not database_url:
         raise RuntimeError(
-            "DATABASE_URL is not set — cannot perform backup. "
-            "Set DATABASE_URL=postgresql://user:pass@host:5432/dbname"
+            "DATABASE_URL is not set — cannot perform backup. Set DATABASE_URL=postgresql://user:pass@host:5432/dbname"
         )
 
     _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
@@ -148,6 +147,5 @@ def run_backup(database_url: str | None = None) -> Path:
         return _backup_sqlite(database_url, _BACKUP_DIR)
     else:
         raise ValueError(
-            f"Unsupported database scheme '{scheme}'. "
-            "Only postgresql and sqlite are supported for backup."
+            f"Unsupported database scheme '{scheme}'. Only postgresql and sqlite are supported for backup."
         )

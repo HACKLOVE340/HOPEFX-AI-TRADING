@@ -206,6 +206,26 @@ class _ConfigNamespace:
             self.api_configs: dict = {}
 
 
+async def init_event_bus(s: Any) -> Any:
+    """
+    Connect the module-level EventBus singleton to Redis at startup.
+
+    Previously, bus.connect() was only called lazily from individual
+    subsystems (ws_live, paper_runner, market_ingest, main_loop), meaning
+    the bus was in an unconnected state during the entire startup sequence.
+    Connecting here ensures the bus is ready before any component publishes
+    its first event, and that the degraded-mode warning fires exactly once
+    at a predictable point in the startup log rather than mid-operation.
+
+    Non-fatal: if Redis is unavailable the bus activates its in-process
+    _LocalBus fallback and startup continues normally.
+    """
+    from core.event_bus import bus
+
+    await bus.connect()
+    return bus
+
+
 async def init_config(s: Any) -> Any:
     from config import initialize_config
 
@@ -265,6 +285,7 @@ async def init_database(s: Any) -> Any:
         from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
         from alembic.runtime.migration import MigrationContext
+        from alembic.util.exc import CommandError as AlembicCommandError
 
         alembic_cfg = AlembicConfig("alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
@@ -280,15 +301,30 @@ async def init_database(s: Any) -> Any:
             "Database migrations applied (alembic upgrade head, was=%s)",
             _current_rev or "none",
         )
-    except Exception as exc:
-        # Schema may already exist (e.g. created by a previous create_all run
-        # before Alembic was introduced, or a fresh SQLite dev database).
-        # Fall back to create_all with checkfirst=True so existing tables are
-        # left untouched.  Log at INFO — this is a normal first-run path.
-        logger.info("Alembic migration skipped (%s) — falling back to create_all", exc)
+    except ImportError:
+        # Alembic not installed — first-run path for minimal/dev installs.
+        # create_all is safe here because there is no existing schema to drift from.
+        logger.info("Alembic not installed — using create_all for schema setup")
         try:
             Base.metadata.create_all(engine, checkfirst=True)
             logger.info("Database schema ensured via create_all (checkfirst=True)")
+        except Exception as exc2:
+            logger.warning("create_all also failed: %s", exc2)
+    except Exception as exc:
+        # Alembic is installed but upgrade failed. Most common cause on dev
+        # machines: the DB was created via create_all before Alembic was
+        # introduced, so alembic_version table is missing.
+        # Fix: stamp the DB at head so future runs apply only new migrations,
+        # then run _ensure_user_columns() to add any missing columns directly.
+        logger.warning("Alembic upgrade failed (%s) — attempting auto-stamp and column sync.", exc)
+        try:
+            alembic_command.stamp(alembic_cfg, "head")
+            logger.info("DB stamped at alembic head — future migrations will apply incrementally")
+        except Exception as stamp_exc:
+            logger.warning("Alembic stamp failed: %s", stamp_exc)
+        try:
+            Base.metadata.create_all(engine, checkfirst=True)
+            logger.info("Database schema partially ensured via create_all (checkfirst=True)")
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
     s.db_engine = engine
@@ -300,7 +336,7 @@ _REDIS_MAXMEMORY_DEFAULT = "512mb"
 _REDIS_MAXMEMORY_POLICY_DEFAULT = "allkeys-lru"
 
 
-def _enforce_redis_maxmemory(host: str, port: int) -> None:
+def _enforce_redis_maxmemory(host: str, port: int, password: str | None = None) -> None:
     """
     Check Redis maxmemory and set a safe default if it is unlimited (0).
 
@@ -318,8 +354,9 @@ def _enforce_redis_maxmemory(host: str, port: int) -> None:
         r = _redis_sync.Redis(
             host=host,
             port=port,
-            socket_connect_timeout=2,
-            socket_timeout=2,
+            password=password,
+            socket_connect_timeout=0.5,
+            socket_timeout=0.5,
         )
         maxmemory = int(r.config_get("maxmemory").get("maxmemory", 0))
         if maxmemory == 0:
@@ -353,23 +390,58 @@ def _enforce_redis_maxmemory(host: str, port: int) -> None:
 
 
 async def init_cache(s: Any) -> Any:
-    host = os.getenv("REDIS_HOST", "localhost")
-    port = int(os.getenv("REDIS_PORT", "6379"))
+    # Prefer REDIS_URL (used by get_redis() and the rest of the app) over
+    # the legacy REDIS_HOST / REDIS_PORT pair so all components share the
+    # same Redis instance.
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if redis_url:
+        try:
+            from urllib.parse import urlparse
+
+            _parsed = urlparse(redis_url)
+            host = _parsed.hostname or "localhost"
+            port = int(_parsed.port or 6379)
+            password = _parsed.password or os.getenv("REDIS_PASSWORD") or None
+            db = int((_parsed.path or "/0").lstrip("/") or "0")
+        except Exception:
+            host = os.getenv("REDIS_HOST", "localhost")
+            port = int(os.getenv("REDIS_PORT", "6379"))
+            password = os.getenv("REDIS_PASSWORD") or None
+            db = 0
+    else:
+        host = os.getenv("REDIS_HOST", "localhost")
+        port = int(os.getenv("REDIS_PORT", "6379"))
+        password = os.getenv("REDIS_PASSWORD") or None
+        db = 0
 
     # Enforce maxmemory before the cache starts writing tick data.
     # Runs in executor so the sync Redis client doesn't block the event loop.
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, _enforce_redis_maxmemory, host, port)
+    await loop.run_in_executor(None, _enforce_redis_maxmemory, host, port, password)
 
     from cache import MarketDataCache
 
-    return MarketDataCache(
+    cache = MarketDataCache(
         host=host,
         port=port,
+        db=db,
+        password=password,
         max_retries=1,
         socket_connect_timeout=1,
         enable_fallback=True,
     )
+
+    # Wire Celery worker heartbeat registration so workers write their
+    # liveness key to the same Redis instance the health probe reads from.
+    try:
+        from celery_app import register_celery_health
+
+        register_celery_health(cache._redis_client)
+        logger.info("Celery health registration wired to Redis cache")
+    except Exception as _celery_exc:
+        logger.debug("Celery health registration skipped (non-fatal): %s", _celery_exc)
+
+    return cache
 
 
 async def init_data_scheduler(s: Any) -> Any:
@@ -419,14 +491,17 @@ async def init_hourly_trainer(s: Any) -> Any:
 
 async def init_websocket(s: Any, app: Any) -> Any:
     from api.admin import log_activity
-    from api.websocket_server import WebSocketManager, create_websocket_router
+    from api.ws_live import get_live_manager
 
-    ws = WebSocketManager()
-    app.include_router(create_websocket_router(ws))
-    s.ws_manager = ws
-    log_activity("WebSocket router registered")
-    # Price stream and OANDA poller are started in lifespan, not here
-    return ws
+    # Router is already registered by core/router_registry.py (register_routers).
+    # Only wire the manager into app_state here — do not call app.include_router
+    # again or the /ws/live WebSocket route is mounted twice, causing FastAPI to
+    # match the wrong handler on alternate requests.
+    mgr = get_live_manager()
+    s.ws_manager = mgr
+    log_activity("WebSocket manager wired (/ws/live)")
+    # Broadcasters are started in lifespan via start_broadcasters()
+    return mgr
 
 
 async def init_alert_engine(s: Any, app: Any) -> Any:
@@ -501,6 +576,53 @@ async def init_news_router(s: Any, app: Any) -> Any:
     return r
 
 
+def _ensure_user_columns(engine: Any) -> None:
+    """Add columns missing from auth-related tables (users, user_sessions, login_attempts).
+
+    Covers databases created before a migration was applied. Each ADD COLUMN is
+    wrapped in its own try/except so one failure never blocks the others.
+    """
+    import sqlalchemy as _sa
+    from database.user_models import LoginAttempt, User, UserSession
+
+    inspector = _sa.inspect(engine)
+
+    for model in (User, UserSession, LoginAttempt):
+        table_name = model.__tablename__
+        try:
+            existing = {col["name"] for col in inspector.get_columns(table_name)}
+        except Exception as exc:
+            logger.warning("Could not inspect table '%s': %s", table_name, exc)
+            continue
+
+        missing = [col for col in model.__table__.columns if col.name not in existing]
+        if not missing:
+            continue
+
+        with engine.begin() as conn:
+            for col in missing:
+                try:
+                    col_type = col.type.compile(engine.dialect)
+                    nullable = "NULL" if col.nullable else "NOT NULL"
+                    default_clause = ""
+                    if col.default is not None and col.default.is_scalar:
+                        val = col.default.arg
+                        if isinstance(val, str):
+                            default_clause = f" DEFAULT '{val}'"
+                        elif isinstance(val, bool):
+                            default_clause = f" DEFAULT {int(val)}"
+                        elif val is not None:
+                            default_clause = f" DEFAULT {val}"
+                    conn.execute(
+                        _sa.text(
+                            f'ALTER TABLE "{table_name}" ADD COLUMN "{col.name}" {col_type}{default_clause} {nullable}'
+                        )
+                    )
+                    logger.info("%s table: added missing column '%s'", table_name, col.name)
+                except Exception as exc:
+                    logger.warning("Could not add column '%s.%s': %s", table_name, col.name, exc)
+
+
 async def init_auth(s: Any) -> Any:
     from api.admin import log_activity
     from auth.jwt import _get_secret as _jwt_get_secret
@@ -521,6 +643,13 @@ async def init_auth(s: Any) -> Any:
     User.__table__.create(s.db_engine, checkfirst=True)
     UserSession.__table__.create(s.db_engine, checkfirst=True)
     LoginAttempt.__table__.create(s.db_engine, checkfirst=True)
+
+    # Add any columns present in the ORM model but missing from the live DB.
+    # This handles databases created before a migration was applied (e.g. the
+    # KYC columns added in migration k1l2m3n4o5p6).  Safe to run on every
+    # startup — existing columns are left untouched.
+    _ensure_user_columns(s.db_engine)
+
     svc = AuthService(session_factory=s.db_session_factory)
     set_auth_service(svc)
     log_activity("Auth Service initialized")
@@ -573,11 +702,22 @@ def _ensure_bootstrap_users(session_factory) -> None:
                 continue  # skip if password not configured
             existing = session.query(User).filter_by(email=email).first()
             if existing:
+                changed = False
                 # Ensure role is correct (may have been downgraded accidentally)
                 if existing.role != role:
                     existing.role = role
+                    changed = True
+                    logger.info("Bootstrap user role corrected: %s -> %s", email, role)
+                # Sync password — if .env was regenerated the hash will be stale
+                from auth.service import verify_password as _vp
+                if not _vp(password, existing.hashed_password):
+                    existing.hashed_password = hash_password(password)
+                    existing.status = UserStatus.ACTIVE.value
+                    existing.is_email_verified = True
+                    changed = True
+                    logger.info("Bootstrap user password resynced: %s", email)
+                if changed:
                     session.commit()
-                    logger.info("Bootstrap user role corrected: %s → %s", email, role)
                 continue
             user = User(
                 id=str(_uuid.uuid4()),
@@ -602,7 +742,25 @@ async def init_risk_manager(s: Any) -> Any:
         max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
         daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
     )
-    rm = RiskManager(config=rc)
+    # Wire the data layer orchestrator so the risk manager reads live data
+    # quality, sentiment, and macro features from the authoritative source.
+    orchestrator = None
+    try:
+        from data_layer.orchestrator import orchestrator as _orch
+
+        orchestrator = _orch
+    except Exception as _orch_exc:
+        logger.debug("init_risk_manager: orchestrator unavailable: %s", _orch_exc)
+
+    rm = RiskManager(config=rc, orchestrator=orchestrator)
+    # Also update the module-level singleton so callers that import
+    # risk_manager directly get the same wired instance.
+    try:
+        import risk.manager as _rm_mod
+
+        _rm_mod.risk_manager = rm
+    except Exception:
+        pass
     log_activity("Risk Manager initialized")
     return rm
 
@@ -635,16 +793,37 @@ async def init_broker(s: Any) -> Any:
     if broker_type == "mt5":
         mt5_broker = await _try_connect_mt5(log_activity)
         if mt5_broker is not None:
+            await _publish_broker_status(broker_type="mt5", connected=True)
             return mt5_broker
         # Fall through to paper broker so startup is not fatal if MT5 is unavailable.
-        log_activity("MT5 broker unavailable — falling back to paper trading (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD)")
+        log_activity(
+            "MT5 broker unavailable — falling back to paper trading (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD)"
+        )
 
     if broker_type == "oanda" and oanda_token and oanda_account:
         broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
         if broker is not None:
+            await _publish_broker_status(broker_type="oanda", connected=True)
             return broker
 
-    return await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
+    broker = await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
+    await _publish_broker_status(broker_type="paper", connected=True)
+    return broker
+
+
+async def _publish_broker_status(broker_type: str, connected: bool) -> None:
+    """Write broker connection status to Redis so health probes can read it."""
+    try:
+        import json as _json
+        from cache.redis_client import get_redis as _get_redis
+
+        rc = await _get_redis()
+        if rc is not None:
+            payload = _json.dumps({"broker_type": broker_type, "connected": connected})
+            await rc.set("broker:connection_status", payload, ex=3600)
+            logger.debug("broker:connection_status published to Redis (type=%s)", broker_type)
+    except Exception as _exc:
+        logger.debug("_publish_broker_status failed (non-fatal): %s", _exc)
 
 
 async def _try_connect_mt5(log_activity: Any) -> Any | None:
@@ -694,14 +873,13 @@ async def _try_connect_mt5(log_activity: Any) -> Any | None:
         broker = MT5Connector(config)
         if broker.connect():
             log_activity(f"MT5 broker connected (server={server} login={login})")
-            logger.info("✓ MT5 broker connected (server=%s login=%s)", server, login)
+            logger.info("[OK] MT5 broker connected (server=%s login=%s)", server, login)
             return broker
         logger.warning("MT5 connection returned False — falling back to paper broker")
         return None
     except ImportError:
         logger.warning(
-            "MetaTrader5 SDK not installed — falling back to paper broker. "
-            "Install with: pip install MetaTrader5"
+            "MetaTrader5 SDK not installed — falling back to paper broker. Install with: pip install MetaTrader5"
         )
         return None
     except Exception as exc:
@@ -1205,24 +1383,38 @@ async def init_trade_executor(s: Any) -> Any:
 
 
 async def init_hopefx_brain(s: Any) -> Any:
+    """
+    Initialise the canonical HOPEFXBrain (async loop, regime-aware).
+
+    Uses brain.brain.HOPEFXBrain which has start() + dominate() for the
+    continuous async decision loop. brain.hopefx_brain.HOPEFXBrain is a
+    per-bar synchronous helper used by the MCC and should not be used here.
+    """
     from brain.brain import HOPEFXBrain
 
-    b = HOPEFXBrain(
-        config={
-            "max_decision_history": 1000,
-            "regime_check_interval": 60,
-            "circuit_breaker_threshold": 5,
-        },
-    )
+    b = HOPEFXBrain(config={"max_decision_history": 1000, "regime_check_interval": 60, "circuit_breaker_threshold": 5})
+
+    broker = getattr(s, "broker", None)
+    price_engine = getattr(s, "price_engine", None)
+    risk_manager = getattr(s, "risk_manager", None)
+    strategy_manager = getattr(s, "strategy_brain", None)
+    alert_engine = getattr(s, "alert_engine", None)
+    position_tracker = getattr(s, "position_tracker", None)
+    trade_executor = getattr(s, "trade_executor", None)
+
     b.inject_components(
-        price_engine=s.price_engine,
-        risk_manager=s.risk_manager,
-        broker=s.broker,
-        strategy_manager=s.strategy_brain,
-        notification_manager=s.alert_engine,
-        position_tracker=s.position_tracker,
-        trade_executor=s.trade_executor,
+        price_engine=price_engine,
+        risk_manager=risk_manager,
+        broker=broker,
+        strategy_manager=strategy_manager,
+        notification_manager=alert_engine,
+        position_tracker=position_tracker,
+        trade_executor=trade_executor,
     )
+
+    await b.start()
+    asyncio.create_task(b.dominate(), name="hopefx-brain")
+    logger.info("HOPEFXBrain: started — dominate() loop running")
     return b
 
 
@@ -1273,6 +1465,11 @@ async def init_macro_store(s: Any) -> Any:
       2. If FRED is unavailable (no network, rate-limited, key missing), the
          bridge falls back to the CSV files in data/macro/ via the original
          ml.macro_bootstrap.load_into_store() path.
+      3. WGC gold demand series are fetched via wgc_feed.fetch_and_inject()
+         and merged into the store.  WGCFeed uses its own three/four-source
+         fallback chain (JSON API → CSV download → yfinance proxy / World Bank
+         CB proxy → stale cache) so this step is always attempted regardless
+         of FRED availability.
 
     The bridge also starts a daily refresh loop at 18:00 UTC so the store
     always has fresh values before the London session.
@@ -1322,6 +1519,26 @@ async def init_macro_store(s: Any) -> Any:
         except Exception as exc:
             logger.warning("MacroStore CSV fallback also failed: %s", exc)
 
+    # ── WGC gold demand series ───────────────────────────────────────────────
+    # Fetched independently of FRED — WGCFeed has its own fallback chain
+    # (JSON API → CSV download → yfinance ETF proxy / World Bank CB proxy →
+    # stale local cache) so this block is resilient to network failures.
+    # Series injected: wgc_total_demand, wgc_investment, wgc_central_bank,
+    #                  wgc_jewellery, wgc_etf_flow (and proxy variants).
+    wgc_injected = 0
+    try:
+        from data_layer.feeds.macro.wgc import wgc_feed
+
+        wgc_status = await wgc_feed.fetch_and_inject()
+        wgc_injected = wgc_status.get("series_injected", 0)
+        logger.info(
+            "WGC: %d series injected into MacroStore (fetched: %s)",
+            wgc_injected,
+            wgc_status.get("series_fetched", []),
+        )
+    except Exception as exc:
+        logger.warning("WGC startup download failed (%s) — gold demand series unavailable", exc)
+
     # Attach to app_state
     s.macro_store = macro_store
 
@@ -1329,6 +1546,7 @@ async def init_macro_store(s: Any) -> Any:
     log_activity(
         f"MacroStore initialised — {n_in_store} series loaded "
         f"({'FRED' if fred_loaded >= 3 else 'CSV fallback'}), "
+        f"WGC gold demand: {wgc_injected} series, "
         "daily refresh scheduled at 18:00 UTC",
     )
     return macro_store
@@ -1375,6 +1593,25 @@ async def init_inference_engine(s: Any) -> Any:
             f"online_learning={health['online_learning_enabled']} "
             f"mtf_fusion={health['mtf_fusion_enabled']}"
         )
+
+        # Publish ML status to Redis so health probes and superadmin can read it.
+        try:
+            import json as _json
+            from cache.redis_client import get_redis as _get_redis
+
+            _rc = await _get_redis()
+            if _rc is not None:
+                _payload = _json.dumps({
+                    "model_available": health.get("model_available", False),
+                    "model_version": health.get("model_version", "none"),
+                    "calibrator": health.get("calibrator_available", False),
+                    "online_learning": health.get("online_learning_enabled", False),
+                })
+                await _rc.set("ml:model:status", _payload, ex=3600)
+                logger.debug("ml:model:status published to Redis")
+        except Exception as _ml_redis_exc:
+            logger.debug("ML status Redis publish failed (non-fatal): %s", _ml_redis_exc)
+
         return engine
     except Exception as exc:
         logger.warning("InferenceEngine init failed (non-fatal): %s", exc)
@@ -1582,6 +1819,8 @@ async def init_signal_engine(s: Any) -> Any:
 
     t = asyncio.create_task(run_signal_engine(s))
     s.background_tasks.append(t)
+    # Expose the task handle on app_state so health checks and MCC can reference it
+    s.signal_engine = t
     log_activity("Signal engine started")
 
     # Post a startup alert to Discord so the community knows the engine is live.
@@ -1981,6 +2220,10 @@ def build_component_registry(app, feature_flags):
         .register("config", F.init_config, required=True, deps=["env_check"])
         .register("secrets", F.init_secrets_manager, required=False, deps=["config"])
         .register("database", F.init_database, required=True, deps=["config"])
+        # event_bus must connect before cache and broker so the degraded-mode
+        # warning fires once at startup rather than mid-operation, and so that
+        # components can publish events as soon as they initialise.
+        .register("event_bus", F.init_event_bus, required=False, deps=["config"])
         .register("cache", F.init_cache, required=False, deps=["config"])
         .register("hot_standby", F.init_hot_standby, required=False, deps=["cache", "broker"])
         .register("chaos_controller", F.init_chaos_controller, required=False, deps=["config"])
@@ -2134,6 +2377,26 @@ def build_component_registry(app, feature_flags):
             deps=["hourly_trainer"],
         )
         .register("reconciler", F.init_reconciler, required=False, deps=["database", "broker"])
+        # Master Control Centre — strategy orchestration, regime detection,
+        # signal aggregation, and broker execution routing.
+        # Depends on broker + signal_engine so it starts after both are live.
+        .register(
+            "mcc",
+            F.init_mcc,
+            required=False,
+            deps=["broker", "signal_engine"],
+        )
+        # ── Multi-source tick feed (yFinance → Alpha Vantage → Twelve Data) ──
+        # Runs concurrently with the existing TickFeedManager (OANDA/Finnhub/Polygon).
+        # Writes to Redis tick:SYMBOL keys and hopefx:tick pub/sub channel.
+        # Depends on cache (Redis) and broker (price bridge) but is non-fatal
+        # when either is unavailable — degrades gracefully to in-process only.
+        .register(
+            "multi_source_feed",
+            F.init_multi_source_feed,
+            required=False,
+            deps=["cache", "broker"],
+        )
         .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
         .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
@@ -2198,9 +2461,139 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["broker", "cache"],
         )
+        # HopeFXEngine — main trading engine wired to broker, risk, and brain.
+        # Registered last so all dependencies are available.
+        .register(
+            "engine",
+            F.init_trading_engine,
+            required=False,
+            deps=["broker", "risk_manager", "brain", "signal_engine"],
+        )
     )
 
     return registry
+
+
+async def init_trading_engine(s: Any) -> Any | None:
+    """
+    Initialise HopeFXEngine and store it on s.engine.
+
+    HopeFXEngine reads its own configuration from environment variables and
+    lazily connects to the broker on first tick.  We store the instance on
+    app_state.engine so health probes and admin endpoints can inspect
+    _running / status without importing hopefx_engine directly.
+    """
+    try:
+        from hopefx_engine import HopeFXEngine
+
+        engine = HopeFXEngine()
+        # Inject already-initialised components so the engine doesn't create
+        # duplicate instances when they are available.
+        if getattr(s, "broker", None) is not None:
+            engine._broker = s.broker
+        if getattr(s, "risk_manager", None) is not None:
+            engine._risk_manager = s.risk_manager
+        if getattr(s, "brain", None) is not None or getattr(s, "strategy_brain", None) is not None:
+            engine._brain = s.brain or s.strategy_brain
+        s.engine = engine
+        logger.info("HopeFXEngine initialised and wired to app_state.engine")
+        return engine
+    except Exception as exc:
+        logger.warning("HopeFXEngine init failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_mcc(s: Any) -> Any | None:
+    """
+    Initialise the Master Control Centre and wire it to all live components.
+
+    Connects:
+      - config_manager  → s.config
+      - cache           → s.cache
+      - broker          → s.broker  (price updates routed via on_price_update)
+      - risk_manager    → s.risk_manager  (daily P&L / kill-switch sync)
+      - brain           → s.brain / s.strategy_brain
+      - signal_engine   → s.signal_engine  (task handle)
+      - db_session      → s.db_session_factory
+
+    The MCC instance is stored on app_state.mcc so health checks and the
+    /api/health/components endpoint can report its status.
+    """
+    try:
+        from core.mcc.master_control import MasterControlCore, MCCConfig
+        from cache.market_data_cache import MarketDataCache
+
+        cfg = MCCConfig(
+            max_strategies_active=int(os.getenv("MCC_MAX_STRATEGIES", "5")),
+            emergency_drawdown_pct=float(os.getenv("MCC_EMERGENCY_DD_PCT", "0.10")),
+        )
+        mcc = MasterControlCore(cfg)
+
+        # Wire config + cache
+        config_mgr = getattr(s, "config", None)
+        cache = getattr(s, "cache", None)
+        db_session = None
+        if s.db_session_factory is not None:
+            try:
+                db_session = s.db_session_factory()
+            except Exception:
+                pass
+
+        if config_mgr is not None or cache is not None:
+            mcc.initialize(
+                config_manager=config_mgr,
+                cache=cache,
+                db_session=db_session,
+            )
+
+        # Seed current prices from broker market_prices
+        broker = getattr(s, "broker", None)
+        if broker is not None:
+            market_prices = getattr(broker, "market_prices", {})
+            from decimal import Decimal as _D
+            for sym, price in market_prices.items():
+                if price and price > 0:
+                    mcc.current_prices[sym] = _D(str(price))
+
+        # Register price-update callback on the price engine so MCC receives
+        # every tick and can route it to registered strategies.
+        pe = getattr(s, "price_engine", None)
+        if pe is not None:
+            from decimal import Decimal as _D
+
+            def _mcc_price_cb(tick: Any) -> None:
+                try:
+                    mcc.on_price_update(
+                        symbol=tick.symbol,
+                        price=_D(str(tick.mid)),
+                        bid=_D(str(tick.bid)),
+                        ask=_D(str(tick.ask)),
+                    )
+                except Exception as _cb_exc:
+                    logger.debug("MCC price callback error: %s", _cb_exc)
+
+            pe.register_price_callback(_mcc_price_cb) if hasattr(pe, "register_price_callback") else None
+
+        # Sync kill-switch state with risk manager
+        rm = getattr(s, "risk_manager", None)
+        if rm is not None and getattr(rm, "kill_switch_active", False):
+            mcc.trigger_kill_switch("risk_manager kill switch active at startup")
+
+        mcc.is_running = True
+        s.mcc = mcc
+        logger.info(
+            "MCC initialised — broker=%s price_engine=%s brain=%s signal_engine=%s",
+            type(broker).__name__ if broker else "None",
+            type(pe).__name__ if pe else "None",
+            type(getattr(s, "brain", None) or getattr(s, "strategy_brain", None)).__name__
+            if (getattr(s, "brain", None) or getattr(s, "strategy_brain", None))
+            else "None",
+            "running" if getattr(s, "signal_engine", None) else "None",
+        )
+        return mcc
+    except Exception as exc:
+        logger.warning("MCC init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_security_brain(s: Any, app: Any) -> Any | None:
@@ -2322,7 +2715,7 @@ async def init_chaos_controller(s: Any) -> Any | None:
         return controller
 
     except Exception:
-        logger.exception("init_chaos_controller failed: %s")
+        logger.exception("init_chaos_controller failed")
         return None
 
 
@@ -2389,7 +2782,7 @@ async def init_hot_standby(s: Any) -> Any | None:
         return replicator
 
     except Exception:
-        logger.exception("init_hot_standby failed: %s")
+        logger.exception("init_hot_standby failed")
         return None
 
 
@@ -2453,6 +2846,109 @@ async def init_tick_feed(s: Any) -> Any:
 
     except Exception as exc:
         logger.warning("init_tick_feed failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_multi_source_feed(s: Any) -> Any:
+    """
+    Start the MultiSourceTickFeed — yFinance → Alpha Vantage → Twelve Data fallback chain.
+
+    Responsibilities
+    ----------------
+    * Polls all configured symbols concurrently on a configurable interval.
+    * Per-source circuit breakers prevent cascading failures.
+    * Validated ticks are written to Redis (tick:SYMBOL, hopefx:dl:tick:SYMBOL,
+      hopefx:tick:SYMBOL pub/sub, hopefx:tick CH_TICK, price_queue list).
+    * Bridges every tick into the broker price table and execution engine cache.
+    * Wires OHLCV bars into the signal engine bar buffer when available.
+
+    Symbols are driven by config/multi_source_feed.yaml.
+    API keys: ALPHA_VANTAGE_KEY, TWELVE_API_KEY (yFinance needs no key).
+
+    Best-effort — missing keys disable individual sources but never block startup.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:
+            logger.info(msg)
+
+    try:
+        from data_feed.multi_source_feed import MultiSourceTickFeed
+
+        # Allow operator to restrict symbols via env var (comma-separated).
+        symbols_env = os.getenv("MULTI_FEED_SYMBOLS", "").strip()
+        symbols = [s.strip() for s in symbols_env.split(",") if s.strip()] if symbols_env else None
+
+        feed = MultiSourceTickFeed(symbols=symbols)
+
+        # Bridge: push every validated tick into the broker price table and
+        # execution engine last-tick cache so all downstream components see
+        # live prices from the multi-source feed.
+        broker_ref = getattr(s, "broker", None)
+        execution_engine_ref = getattr(s, "execution_engine", None)
+        price_engine_ref = getattr(s, "price_engine", None)
+
+        class _MultiSourceBridge:
+            async def on_new_price(self, symbol: str, price: float) -> None:
+                # Update broker price table (paper broker + live broker) for any symbol.
+                if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
+                    try:
+                        broker_ref.update_market_price(symbol, price)
+                    except Exception as _exc:
+                        logger.debug("multi_source_feed broker bridge error: %s", _exc)
+                # Update execution engine last-tick cache for any symbol.
+                if execution_engine_ref is not None and hasattr(execution_engine_ref, "update_last_tick"):
+                    try:
+                        execution_engine_ref.update_last_tick(symbol, price)
+                    except Exception as _exc:
+                        logger.debug("multi_source_feed exec engine bridge error: %s", _exc)
+                # Update price engine current price (symbol-aware when supported).
+                if price_engine_ref is not None and hasattr(price_engine_ref, "on_new_price"):
+                    try:
+                        import inspect as _inspect
+                        _sig = _inspect.signature(price_engine_ref.on_new_price)
+                        _nparams = sum(
+                            1 for p in _sig.parameters.values()
+                            if p.default is _inspect.Parameter.empty
+                            and p.kind not in (
+                                _inspect.Parameter.VAR_POSITIONAL,
+                                _inspect.Parameter.VAR_KEYWORD,
+                            )
+                        )
+                        if _nparams >= 2:
+                            await price_engine_ref.on_new_price(symbol, price)
+                        else:
+                            await price_engine_ref.on_new_price(price)
+                    except Exception as _exc:
+                        logger.debug("multi_source_feed price engine bridge error: %s", _exc)
+
+        feed.subscribe(_MultiSourceBridge())
+
+        # Wire signal engine if available
+        signal_engine_ref = getattr(s, "signal_engine", None)
+        if signal_engine_ref is not None and hasattr(signal_engine_ref, "on_new_price"):
+            feed.subscribe(signal_engine_ref)
+
+        await feed.start()
+
+        # Store on app_state
+        s.multi_source_feed = feed
+
+        active_symbols = list(feed._states.keys())
+        log_activity(
+            f"MultiSourceTickFeed started — symbols={active_symbols} "
+            f"chain=yFinance→AlphaVantage→TwelveData "
+            f"redis={'connected' if feed._tick_writer else 'unavailable'}"
+        )
+        logger.info(
+            "MultiSourceTickFeed registered on app_state | symbols=%s",
+            active_symbols,
+        )
+        return feed
+
+    except Exception as exc:
+        logger.warning("init_multi_source_feed failed (non-fatal): %s", exc)
         return None
 
 

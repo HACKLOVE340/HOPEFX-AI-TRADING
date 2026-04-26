@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 import logging
+
 logger = logging.getLogger(__name__)
 try:
     from audit.logger import AuditLogger, get_audit_logger

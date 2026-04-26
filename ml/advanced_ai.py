@@ -451,7 +451,7 @@ class VectorRAGNewsSentiment:
 
         weighted_score = 0.0
         total_weight = 0.0
-        similar: list[str] = field(default_factory=list)
+        similar: list[str] = []
 
         for sim, idx in zip(sims, idxs, strict=False):
             if idx < 0:
@@ -557,7 +557,7 @@ class OnlineRetrainer:
             self._retrain_count += 1
             logger.info("online_retrainer.done count=%d", self._retrain_count)
         except Exception:
-            logger.exception("online_retrainer.error: %s")
+            logger.exception("online_retrainer.error")
 
 
 # ---------------------------------------------------------------------------

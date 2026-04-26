@@ -7,7 +7,7 @@
 import React from 'react';
 import { useStore } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
-import { fmtPrice, fmtPct, fmtRatio, pnlColor, cn } from '../../lib/utils';
+import { fmtPctRaw, fmtRatio, pnlColor } from '../../lib/utils';
 
 export function AccountBar() {
   const account = useStore((s) => s.account);
@@ -43,7 +43,7 @@ export function AccountBar() {
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Daily P&L"
-        value={fmtPct(account.daily_pnl_pct / 100)}
+        value={fmtPctRaw(account.daily_pnl_pct)}
         sub={`$${account.daily_pnl >= 0 ? '+' : ''}${account.daily_pnl.toFixed(2)}`}
         valueColor={account.daily_pnl >= 0 ? '#00e676' : '#ff1744'}
         compact
@@ -72,11 +72,29 @@ export function AccountBar() {
       />
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
+        label="Max DD"
+        value={`${(account.max_drawdown * 100).toFixed(1)}%`}
+        valueColor="#ff3b5c"
+        compact
+      />
+      <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+      <MetricTile
         label="Sharpe"
         value={fmtRatio(account.sharpe_ratio)}
         valueColor="#00d4ff"
         compact
       />
+      {account.sortino_ratio != null && (
+        <>
+          <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
+          <MetricTile
+            label="Sortino"
+            value={fmtRatio(account.sortino_ratio)}
+            valueColor="#a78bfa"
+            compact
+          />
+        </>
+      )}
       <div className="w-px h-6 bg-[#1e2d3d] shrink-0" />
       <MetricTile
         label="Open Trades"

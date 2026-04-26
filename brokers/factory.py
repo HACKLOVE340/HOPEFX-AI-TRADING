@@ -322,8 +322,7 @@ class BrokerFactory:
 
         except ImportError as exc:
             logger.error(
-                "Cannot import broker class for type '%s': %s. "
-                "Ensure the required SDK is installed.",
+                "Cannot import broker class for type '%s': %s. Ensure the required SDK is installed.",
                 broker_type,
                 exc,
             )

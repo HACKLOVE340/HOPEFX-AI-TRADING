@@ -35,9 +35,7 @@ def _make_df(opens, highs, lows, closes, volumes=None):
     n = len(closes)
     if volumes is None:
         volumes = [1000] * n
-    return pd.DataFrame(
-        {"open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes}
-    )
+    return pd.DataFrame({"open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes})
 
 
 @pytest.fixture
@@ -54,7 +52,7 @@ def simple_df():
     return _make_df(
         opens=[100, 101, 104, 102, 107, 105],
         highs=[106, 106, 106, 109, 108, 106],
-        lows=[ 99, 100, 102, 101, 105, 103],
+        lows=[99, 100, 102, 101, 105, 103],
         closes=[100, 105, 103, 108, 106, 104],
     )
 
@@ -69,7 +67,7 @@ def gap_df():
     return _make_df(
         opens=[100, 102, 100],
         highs=[101, 103, 101],
-        lows=[ 99, 100,  99],
+        lows=[99, 100, 99],
         closes=[100, 101, 100],
     )
 
@@ -93,9 +91,7 @@ class TestBuildFilteredTarget:
     def test_gap_open_bias_corrected(self, gap_df):
         # Entry at open[1]=102, exit at close[1]=101 -> DOWN (lost money)
         y = build_filtered_target(gap_df, horizon=1, min_move_atr=0.0)
-        assert y.iloc[0] == 0.0, (
-            f"Gap-open: entry=102, exit=101 -> DOWN (lost money), got {y.iloc[0]}"
-        )
+        assert y.iloc[0] == 0.0, f"Gap-open: entry=102, exit=101 -> DOWN (lost money), got {y.iloc[0]}"
 
     def test_old_close_to_close_would_be_wrong_on_gap(self, gap_df):
         # Verify the old formula gives the OPPOSITE (wrong) answer
@@ -133,10 +129,10 @@ class TestBuildFilteredTarget:
         # 10-bar frame, horizon=5
         # Bar 0: entry=open[1], exit=close[5]
         n = 12
-        opens  = [100.0 + i for i in range(n)]
+        opens = [100.0 + i for i in range(n)]
         closes = [100.0 + i * 2 for i in range(n)]
-        highs  = [c + 1 for c in closes]
-        lows   = [c - 1 for c in closes]
+        highs = [c + 1 for c in closes]
+        lows = [c - 1 for c in closes]
         df = _make_df(opens, highs, lows, closes)
         y = build_filtered_target(df, horizon=5, min_move_atr=0.0)
         # Bar 0: entry=open[1]=101, exit=close[5]=110 -> UP

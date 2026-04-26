@@ -110,6 +110,7 @@ class NewsSentimentEngine:
         # Geopolitical risk provider — use the module-level singleton so all
         # consumers share one instance and _all_sources_warned fires only once.
         from news.geopolitical_risk import get_geopolitical_provider as _get_geo
+
         self._geo_provider: GeopoliticalRiskProvider = _get_geo()
         self._article_count: int = 0
         self._last_fetch_at: dict[NewsSource, float] = {}

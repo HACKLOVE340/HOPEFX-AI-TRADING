@@ -26,7 +26,6 @@ DELETE /api/ml/anomaly/reset         — reset the live store (admin)
 from __future__ import annotations
 
 import asyncio
-import functools
 import logging
 import os
 from datetime import datetime, timezone
@@ -44,9 +43,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ml/anomaly", tags=["Anomaly Detection"])
 
 # Persisted model path — shared between the API and the signal engine
-_ANOMALY_MODEL_PATH = Path(
-    os.getenv("ANOMALY_MODEL_PATH", "ml/saved_models/anomaly_weighter.pkl")
-)
+_ANOMALY_MODEL_PATH = Path(os.getenv("ANOMALY_MODEL_PATH", "ml/saved_models/anomaly_weighter.pkl"))
 
 # ── Singleton live store ──────────────────────────────────────────────────────
 # One AnomalyWeightStore per process, shared across requests.
@@ -82,7 +79,6 @@ def _get_live_store() -> Any:
 
 def _load_ohlcv(symbol: str, lookback: int = 500) -> Any:
     """Load OHLCV data for a symbol from the market data layer."""
-    import pandas as pd
 
     # Try the inference engine's data loader first (uses the same pipeline as live trading)
     try:
@@ -263,7 +259,6 @@ async def fit_anomaly_detector(
 
     Requires admin role — fitting is CPU-intensive and modifies the shared model.
     """
-    import numpy as np
 
     loop = asyncio.get_running_loop()
 
@@ -276,6 +271,7 @@ async def fit_anomaly_detector(
             raise ValueError(f"Insufficient OHLCV data for {body.symbol} (need ≥50 bars)")
 
         import pandas as pd
+
         feat_df = pd.DataFrame(feat)
 
         aw = AnomalyWeighter(
@@ -339,7 +335,6 @@ async def score_bars(
     Uses the persisted AnomalyWeighter if available; falls back to the live
     AnomalyWeightStore's internal weighter.
     """
-    import numpy as np
 
     loop = asyncio.get_running_loop()
 
@@ -417,7 +412,6 @@ async def flag_anomalies(
     Return the indices of anomalous bars in the most recent ``lookback`` OHLCV
     bars for the given symbol.
     """
-    import numpy as np
 
     loop = asyncio.get_running_loop()
 
@@ -523,16 +517,18 @@ async def anomaly_report(
 
         rows = []
         for idx, row in top.iterrows():
-            rows.append({
-                "index": str(idx),
-                "anomaly_score": round(float(row.get("anomaly_score", 0)), 6),
-                "is_anomaly": bool(row.get("is_anomaly", False)),
-                "anomaly_weight": round(float(row.get("anomaly_weight", 1.0)), 6),
-                "close": round(float(row.get("close", 0)), 5),
-                "high": round(float(row.get("high", 0)), 5),
-                "low": round(float(row.get("low", 0)), 5),
-                "volume": float(row.get("volume", 0)),
-            })
+            rows.append(
+                {
+                    "index": str(idx),
+                    "anomaly_score": round(float(row.get("anomaly_score", 0)), 6),
+                    "is_anomaly": bool(row.get("is_anomaly", False)),
+                    "anomaly_weight": round(float(row.get("anomaly_weight", 1.0)), 6),
+                    "close": round(float(row.get("close", 0)), 5),
+                    "high": round(float(row.get("high", 0)), 5),
+                    "low": round(float(row.get("low", 0)), 5),
+                    "volume": float(row.get("volume", 0)),
+                }
+            )
 
         return {
             "symbol": symbol.upper(),
@@ -573,9 +569,7 @@ async def retrain_anomaly_detector(
     The refit runs in a background thread so the response is immediate.
     """
     target_symbols: list[str] = symbols or [
-        s.strip()
-        for s in os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",")
-        if s.strip()
+        s.strip() for s in os.getenv("ALLOWED_SYMBOLS", "XAUUSD,EURUSD,GBPUSD").split(",") if s.strip()
     ]
 
     def _background_refit() -> None:

@@ -67,7 +67,7 @@ export interface MicrostructureSnapshot {
   readonly volume_delta:          number;   // buy_vol - sell_vol (signed)
   readonly cumulative_delta:      number;
   readonly buy_pressure:          number;   // 0–1
-  readonly sell_pressure:         number;   // 0–1
+  readonly sell_pressure:         number;   // 0–1 (complement of buy_pressure)
   readonly order_flow_imbalance:  number;   // (buy - sell) / (buy + sell)
   readonly trade_pressure:        number;
   readonly vwap:                  number;
@@ -75,6 +75,10 @@ export interface MicrostructureSnapshot {
   readonly bid_depth?:            number;
   readonly ask_depth?:            number;
   readonly depth_imbalance?:      number;
+  /** Kyle's lambda — price impact per unit of order flow */
+  readonly kyles_lambda?:         number;
+  /** Absorption ratio — how much volume is absorbed without price movement */
+  readonly absorption?:           number;
 }
 
 export interface MicrostructureFeatures {
@@ -242,12 +246,14 @@ export interface PerformanceSummary {
   readonly sharpe_ratio:      number;
   readonly sortino_ratio:     number;
   readonly max_drawdown_pct:  number;
+  /** Win rate as a percentage 0–100 (e.g. 62.5). API sends it pre-multiplied. */
   readonly win_rate:          number;
   readonly profit_factor:     number;
   readonly total_trades:      number;
   readonly avg_trade_pnl:     number;
   readonly best_trade:        number;
   readonly worst_trade:       number;
+  /** CVaR as a fraction 0–1 (e.g. 0.025 = 2.5%). Multiply by 100 to display. */
   readonly cvar_95:           number;
 }
 
@@ -276,6 +282,7 @@ export interface User {
   readonly username:         string;
   readonly role:             UserRole;
   // Fields returned by /api/auth/login and /api/auth/me
+  readonly plan?:            string;
   readonly kyc_status?:      string;
   readonly totp_enabled?:    boolean;
   readonly status?:          string;

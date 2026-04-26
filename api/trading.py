@@ -495,7 +495,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Broker order submission failed: %s")
+        logger.exception("Broker order submission failed")
         try:
             from core.metrics import ORDERS_TOTAL
 
@@ -743,7 +743,9 @@ async def place_order(
 @router.get("/orders", summary="List open and recent orders")
 async def get_orders(
     user: TokenPayload = Depends(get_current_user),
-    status_filter: str | None = Query(None, alias="status", description="Filter by order status (open, filled, cancelled)"),
+    status_filter: str | None = Query(
+        None, alias="status", description="Filter by order status (open, filled, cancelled)"
+    ),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
@@ -775,17 +777,19 @@ async def get_orders(
                 order_status = str(o_dict.get("status", "open")).lower()
                 if status_filter and order_status != status_filter.lower():
                     continue
-                orders.append({
-                    "order_id": str(o_dict.get("order_id") or o_dict.get("id", "")),
-                    "symbol": str(o_dict.get("symbol", "")),
-                    "side": str(o_dict.get("side", "")),
-                    "order_type": str(o_dict.get("order_type") or o_dict.get("type", "market")),
-                    "quantity": float(o_dict.get("quantity") or o_dict.get("units", 0)),
-                    "price": float(o_dict.get("price") or o_dict.get("limit_price") or 0),
-                    "status": order_status,
-                    "created_at": str(o_dict.get("created_at") or o_dict.get("time", "")),
-                    "filled_at": str(o_dict.get("filled_at") or o_dict.get("fill_time") or ""),
-                })
+                orders.append(
+                    {
+                        "order_id": str(o_dict.get("order_id") or o_dict.get("id", "")),
+                        "symbol": str(o_dict.get("symbol", "")),
+                        "side": str(o_dict.get("side", "")),
+                        "order_type": str(o_dict.get("order_type") or o_dict.get("type", "market")),
+                        "quantity": float(o_dict.get("quantity") or o_dict.get("units", 0)),
+                        "price": float(o_dict.get("price") or o_dict.get("limit_price") or 0),
+                        "status": order_status,
+                        "created_at": str(o_dict.get("created_at") or o_dict.get("time", "")),
+                        "filled_at": str(o_dict.get("filled_at") or o_dict.get("fill_time") or ""),
+                    }
+                )
         except Exception as exc:
             logger.debug("GET /orders broker fetch failed: %s", exc)
 
@@ -797,19 +801,21 @@ async def get_orders(
             order_status = "filled"
             if status_filter and order_status != status_filter.lower():
                 continue
-            orders.append({
-                "order_id": t_dict["trade_id"],
-                "symbol": t_dict["symbol"],
-                "side": t_dict["side"],
-                "order_type": "market",
-                "quantity": t_dict["quantity"],
-                "price": t_dict["entry_price"],
-                "status": order_status,
-                "created_at": t_dict["entry_time"],
-                "filled_at": t_dict["entry_time"],
-            })
+            orders.append(
+                {
+                    "order_id": t_dict["trade_id"],
+                    "symbol": t_dict["symbol"],
+                    "side": t_dict["side"],
+                    "order_type": "market",
+                    "quantity": t_dict["quantity"],
+                    "price": t_dict["entry_price"],
+                    "status": order_status,
+                    "created_at": t_dict["entry_time"],
+                    "filled_at": t_dict["entry_time"],
+                }
+            )
 
-    page = orders[offset: offset + limit]
+    page = orders[offset : offset + limit]
     return {"orders": page, "count": len(page), "total": len(orders), "offset": offset, "limit": limit}
 
 
@@ -862,7 +868,7 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
             if v is not None:
                 try:
                     return float(v)
-                except (TypeError, ValueError):  # try next key on cast failure
+                except (TypeError, ValueError):  # nosec B110 — try next key on cast failure
                     pass
         return default
 
@@ -1076,24 +1082,47 @@ async def get_prices(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Get current bid/ask prices. Requires: any authenticated user."""
-    if not app_state or not app_state.price_engine:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Price engine not available",
-        )
-
     prices: dict = {}
-    for symbol in app_state.price_engine.symbols:
-        tick = app_state.price_engine.get_last_price(symbol)
-        if tick:
-            prices[symbol] = {
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "last": getattr(tick, "last_price", None) or tick.mid,
-                "timestamp": tick.timestamp,
-            }
 
-    return prices
+    # Path 1: price engine available (preferred — has yfinance + broker fallback)
+    if app_state and app_state.price_engine:
+        for symbol in app_state.price_engine.symbols:
+            tick = app_state.price_engine.get_last_price(symbol)
+            if tick:
+                prices[symbol] = {
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "last": getattr(tick, "last_price", None) or tick.mid,
+                    "timestamp": tick.timestamp,
+                }
+        if prices:
+            return prices
+
+    # Path 2: broker market_prices direct (price engine not yet started)
+    broker = getattr(app_state, "broker", None) if app_state else None
+    market_prices = getattr(broker, "market_prices", {}) if broker else {}
+    if market_prices:
+        import time as _time
+        _spread_map = {
+            "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
+            "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+        }
+        now = _time.time()
+        for sym, price in market_prices.items():
+            if price and price > 0:
+                spread = _spread_map.get(sym, price * 0.0002)
+                prices[sym] = {
+                    "bid": round(price - spread / 2, 5),
+                    "ask": round(price + spread / 2, 5),
+                    "last": round(price, 5),
+                    "timestamp": now,
+                }
+        return prices
+
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="Price engine not available",
+    )
 
 
 @router.get(
@@ -1217,6 +1246,28 @@ async def start_paper_trading(
     db_set(paper_key, account, changed_by="trading_api")
     logger.info("Paper trading activated for user=%s", user.sub)
     return {"status": "activated", "account": account}
+
+
+@router.post("/paper/stop", status_code=200)
+async def stop_paper_trading(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Deactivate paper trading mode for the authenticated user.
+
+    Removes the paper account session key so a fresh session can be
+    started via /paper/start. Does not delete trade history.
+    """
+    from api.db_store import db_delete, db_get
+
+    paper_key = f"paper:account:{user.sub}"
+    existing = db_get(paper_key)
+    if not existing:
+        return {"status": "not_active"}
+
+    db_delete(paper_key)
+    logger.info("Paper trading deactivated for user=%s", user.sub)
+    return {"status": "deactivated"}
 
 
 @router.post("/emergency-stop")
@@ -1672,7 +1723,7 @@ def _make_strategy_router():
 try:
     router.include_router(_make_strategy_router())
 except Exception:  # nosec B110 — strategy sub-router registration failure is non-fatal at import time
-    logger.exception("Failed to register strategy sub-router: %s")
+    logger.exception("Failed to register strategy sub-router")
 
 
 # ── /trading/risk — alias for /trading/risk-metrics ──────────────────────────
@@ -1745,13 +1796,28 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     regime = "ranging"
     regime_confidence = 0.5
     try:
-        from strategies.regime_router import RegimeRouter as _RR
+        from strategies.regime_router import detect_regime as _detect_regime
 
-        rr = _RR()
-        detected = rr.detect_regime()
-        if detected:
-            regime = str(detected.get("regime", "ranging"))
-            regime_confidence = float(detected.get("confidence", 0.5))
+        # Fetch recent OHLCV from the live broker or app_state price engine
+        _ohlcv_df = None
+        try:
+            import pandas as _pd
+
+            if app_state is not None and hasattr(app_state, "broker") and app_state.broker is not None:
+                import asyncio as _asyncio
+
+                _raw = app_state.broker.get_market_data(symbol, timeframe="1h", limit=100)
+                if _asyncio.iscoroutine(_raw):
+                    _raw = await _raw
+                if _raw:
+                    _ohlcv_df = _pd.DataFrame(_raw)
+        except Exception:
+            pass
+
+        if _ohlcv_df is not None and len(_ohlcv_df) >= 50:
+            _regime_label, _regime_conf = _detect_regime(_ohlcv_df)
+            regime = str(_regime_label)
+            regime_confidence = float(_regime_conf)
     except Exception as exc:
         logger.debug("ai-analysis: regime detection failed: %s", exc)
 
@@ -1926,7 +1992,7 @@ async def run_stress_test(
             max_loss_pct=max_loss_pct,
         )
     except Exception:
-        _logger.exception("Stress test failed: %s")
+        _logger.exception("Stress test failed")
         raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None
 
 
@@ -2048,22 +2114,31 @@ async def get_trendlines(
         detector = AdvancedPatternDetector()
         patterns = detector.detect_all_patterns(df, min_confidence=0.5)
 
-        trendline_types = {"ascending_channel", "descending_channel", "wedge", "rising_wedge", "falling_wedge", "channel"}
+        trendline_types = {
+            "ascending_channel",
+            "descending_channel",
+            "wedge",
+            "rising_wedge",
+            "falling_wedge",
+            "channel",
+        }
         trendlines = []
         for p in patterns:
             ptype = str(getattr(p, "pattern_type", "")).lower()
             if any(t in ptype for t in trendline_types):
-                trendlines.append({
-                    "type": ptype,
-                    "direction": str(getattr(p, "direction", "neutral")).lower(),
-                    "confidence": float(getattr(p, "confidence", 0)),
-                    "start_index": int(getattr(p, "start_index", 0)),
-                    "end_index": int(getattr(p, "end_index", 0)),
-                    "support_slope": float(getattr(p, "support_slope", 0) or 0),
-                    "resistance_slope": float(getattr(p, "resistance_slope", 0) or 0),
-                    "target_price": float(getattr(p, "target_price", 0) or 0),
-                    "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
-                })
+                trendlines.append(
+                    {
+                        "type": ptype,
+                        "direction": str(getattr(p, "direction", "neutral")).lower(),
+                        "confidence": float(getattr(p, "confidence", 0)),
+                        "start_index": int(getattr(p, "start_index", 0)),
+                        "end_index": int(getattr(p, "end_index", 0)),
+                        "support_slope": float(getattr(p, "support_slope", 0) or 0),
+                        "resistance_slope": float(getattr(p, "resistance_slope", 0) or 0),
+                        "target_price": float(getattr(p, "target_price", 0) or 0),
+                        "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
+                    }
+                )
 
         return {"trendlines": trendlines, "symbol": symbol, "count": len(trendlines)}
     except Exception as exc:
@@ -2100,17 +2175,19 @@ async def get_chart_patterns(
 
         patterns = []
         for p in raw_patterns:
-            patterns.append({
-                "pattern_type": str(getattr(p, "pattern_type", "")),
-                "direction": str(getattr(p, "direction", "neutral")),
-                "confidence": float(getattr(p, "confidence", 0)),
-                "entry_price": float(getattr(p, "entry_price", 0) or 0),
-                "target_price": float(getattr(p, "target_price", 0) or 0),
-                "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
-                "start_index": int(getattr(p, "start_index", 0)),
-                "end_index": int(getattr(p, "end_index", 0)),
-                "description": str(getattr(p, "description", "")),
-            })
+            patterns.append(
+                {
+                    "pattern_type": str(getattr(p, "pattern_type", "")),
+                    "direction": str(getattr(p, "direction", "neutral")),
+                    "confidence": float(getattr(p, "confidence", 0)),
+                    "entry_price": float(getattr(p, "entry_price", 0) or 0),
+                    "target_price": float(getattr(p, "target_price", 0) or 0),
+                    "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
+                    "start_index": int(getattr(p, "start_index", 0)),
+                    "end_index": int(getattr(p, "end_index", 0)),
+                    "description": str(getattr(p, "description", "")),
+                }
+            )
 
         return {"patterns": patterns, "symbol": symbol, "count": len(patterns)}
     except Exception as exc:
@@ -2164,7 +2241,11 @@ async def get_microstructure_alias(
 
         if app_state and app_state.price_engine:
             norm = _normalise_symbol(symbol)
-            tick = app_state.price_engine.get_latest_tick(norm) if hasattr(app_state.price_engine, "get_latest_tick") else None
+            tick = (
+                app_state.price_engine.get_latest_tick(norm)
+                if hasattr(app_state.price_engine, "get_latest_tick")
+                else None
+            )
             if tick:
                 spread = float(getattr(tick, "ask", 0) - getattr(tick, "bid", 0))
                 mid = (float(getattr(tick, "ask", 0)) + float(getattr(tick, "bid", 0))) / 2
@@ -2186,7 +2267,14 @@ async def get_microstructure_alias(
 
     return {
         "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-        "spread": 0, "spreadPct": 0, "bidDepth": 0, "askDepth": 0,
-        "orderFlowImbalance": 0, "tradePressure": 50, "tickDirection": "flat",
-        "vwap": 0, "twap": 0, "marketImpact": 0,
+        "spread": 0,
+        "spreadPct": 0,
+        "bidDepth": 0,
+        "askDepth": 0,
+        "orderFlowImbalance": 0,
+        "tradePressure": 50,
+        "tickDirection": "flat",
+        "vwap": 0,
+        "twap": 0,
+        "marketImpact": 0,
     }

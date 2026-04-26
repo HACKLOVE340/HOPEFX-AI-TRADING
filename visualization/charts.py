@@ -211,10 +211,7 @@ class ChartGenerator:
 
         strategies = list(regime_data.keys())
         metrics = ["win_rate", "sharpe", "allocation"]
-        z = [
-            [regime_data[s].get(m, 0.0) for m in metrics]
-            for s in strategies
-        ]
+        z = [[regime_data[s].get(m, 0.0) for m in metrics] for s in strategies]
 
         try:
             import plotly.graph_objects as go

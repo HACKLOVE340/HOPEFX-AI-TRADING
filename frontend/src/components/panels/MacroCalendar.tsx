@@ -169,7 +169,9 @@ export function MacroCalendar() {
             No upcoming events in next 24h
           </div>
         ) : (
-          events.map((e, i) => <EventRow key={i} event={e} />)
+          events.map((e) => (
+            <EventRow key={`${e.scheduled_at}-${e.name}`} event={e} />
+          ))
         )}
       </div>
     </Panel>

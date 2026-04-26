@@ -80,7 +80,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
             "min_slippage": report.min_slippage,
             "avg_latency_ms": report.avg_latency_ms,
             "avg_fill_ratio": report.avg_fill_ratio,
-            "overall_quality": report.overall_quality.value,
+            "overall_quality": report.execution_quality.value,
         }
 
     @router.get("/slippage/distribution")

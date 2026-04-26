@@ -2231,3 +2231,13 @@ def _make_risk_manager() -> RiskManager:
 
 
 risk_manager = _make_risk_manager()
+
+
+def get_risk_manager() -> RiskManager:
+    """Return the module-level RiskManager singleton.
+
+    Callers that need the shared instance should use this accessor rather
+    than importing ``risk_manager`` directly so the reference stays valid
+    if the singleton is ever replaced (e.g. during testing).
+    """
+    return risk_manager

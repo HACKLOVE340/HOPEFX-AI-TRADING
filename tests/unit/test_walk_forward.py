@@ -25,7 +25,6 @@ import math
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from backtesting.walk_forward import WalkForwardEngine, _trade_level_sharpe
 
@@ -172,8 +171,12 @@ class TestWalkForwardEngine:
         engine.run(df, lambda: _AlternateBuySellStrategy(), [{}])
         stats = engine.get_aggregate_stats()
         for key in (
-            "num_windows", "overfit_windows", "avg_test_return",
-            "avg_test_sharpe", "consistency", "is_robust",
+            "num_windows",
+            "overfit_windows",
+            "avg_test_return",
+            "avg_test_sharpe",
+            "consistency",
+            "is_robust",
         ):
             assert key in stats, f"Missing key: {key}"
 

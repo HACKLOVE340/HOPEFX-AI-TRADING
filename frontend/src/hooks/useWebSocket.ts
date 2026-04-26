@@ -27,28 +27,31 @@ const REST_POLL_INTERVAL_MS  = 30_000;
 
 interface WsMessage {
   type:
+    // Connection lifecycle
     | 'connected'
     | 'auth_ok'
-    | 'price_tick'
-    | 'position_update'
-    | 'position_close'
-    | 'signal'
-    | 'alert_triggered'
-    | 'account_update'
-    | 'equity_update'
-    | 'microstructure'
-    | 'sentiment_update'
     | 'heartbeat'
     | 'pong'
     | 'subscribed'
     | 'unsubscribed'
     | 'no_live_feed'
     | 'error'
-    // chart-bot channel messages
+    // Market data
+    | 'price_tick'
+    | 'microstructure'
     | 'volume_delta'
+    | 'equity_update'
+    // Trading
+    | 'position_update'
+    | 'position_close'
+    | 'signal'
+    | 'alert_triggered'
+    | 'account_update'
+    // Intelligence
+    | 'sentiment_update'
     | 'risk_update'
     | 'news_item'
-    // System
+    // System events (nuclear halt, circuit breaker)
     | 'system_event'
     | 'nuclear_halt';
   data?:          unknown;
@@ -88,10 +91,29 @@ export function useWebSocket(enabled = true) {
     switch (msg.type) {
       case 'connected':
         if (msg.auth_required) {
-          const token = getState().token;
-          if (token && wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }));
-          }
+          // Async: refresh token if it's null (happens after page reload because
+          // the JWT lives in memory only and isn't persisted to localStorage).
+          const sendAuth = async () => {
+            let token = getState().token;
+            if (!token) {
+              try {
+                const res = await fetch('/api/auth/refresh', {
+                  method: 'POST', credentials: 'include',
+                });
+                if (res.ok) {
+                  const data = await res.json() as { access_token?: string; user?: import('../types').User };
+                  if (data.access_token && data.user) {
+                    getState().setAuth(data.access_token, data.user);
+                    token = data.access_token;
+                  }
+                }
+              } catch { /* refresh failed — WS will retry */ }
+            }
+            if (token && wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }));
+            }
+          };
+          void sendAuth();
         } else {
           authedRef.current = true;
           setWsStatus('connected');
@@ -109,7 +131,7 @@ export function useWebSocket(enabled = true) {
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
         }));
         break;
 
@@ -155,12 +177,11 @@ export function useWebSocket(enabled = true) {
         break;
 
       case 'sentiment_update': {
-        // Server sends { signal: SentimentSignal, articles: NewsArticle[] }
-        // Map to the SentimentResponse shape the store expects.
-        const rawSentiment = msg.data as { signal: unknown; articles: unknown[] };
+        // Server sends { signal: SentimentSignal, recent_articles: NewsArticle[] }
+        const rawSentiment = msg.data as { signal: unknown; recent_articles: unknown[] };
         setSentiment({
           signal: rawSentiment?.signal as import('../types').SentimentSignal,
-          recent_articles: (rawSentiment?.articles ?? []) as import('../types').NewsArticle[],
+          recent_articles: (rawSentiment?.recent_articles ?? []) as import('../types').NewsArticle[],
         });
         break;
       }
@@ -177,14 +198,10 @@ export function useWebSocket(enabled = true) {
         addNewsItem(msg.data as WsNewsItem);
         break;
 
-      case 'nuclear_halt':
-      case 'system_event': {
-        const raw = msg.data as Record<string, unknown> | undefined;
-        setSystemAlert({
-          type:   msg.type,
-          reason: (raw?.reason as string | undefined) ?? (msg.message ?? 'System event received'),
-          ts:     Date.now(),
-        } satisfies SystemAlert);
+      case 'system_event':
+      case 'nuclear_halt': {
+        const alert = msg.data as SystemAlert;
+        setSystemAlert(alert);
         break;
       }
 
@@ -228,6 +245,34 @@ export function useWebSocket(enabled = true) {
     }, HEARTBEAT_INTERVAL_MS);
   }, []);
 
+  /**
+   * Normalise a symbol key from the REST /trading/prices response to the
+   * slash format used by the WebSocket price_tick messages (e.g. "XAU/USD").
+   *
+   * The REST endpoint may return:
+   *   "XAUUSD"   (broker path — no separator, 6 chars)
+   *   "XAU/USD"  (price-engine path — already correct)
+   *   "XAU_USD"  (legacy — underscore)
+   *   "BTCUSDT"  (7-char crypto: BTC/USDT)
+   *   "BTCUSD"   (6-char crypto: BTC/USD)
+   *
+   * We convert all forms to "BASE/QUOTE" so store keys are consistent.
+   * Standard FX and metals use 3-char codes on each side (6 total).
+   * Crypto pairs with USDT/BUSD quote use 3+4 = 7 chars.
+   */
+  const normaliseSymbol = useCallback((raw: string): string => {
+    // Already slash format — return as-is
+    if (raw.includes('/')) return raw;
+    // Underscore separator → slash
+    if (raw.includes('_')) return raw.replace('_', '/');
+    // 7-char: 3-char base + 4-char quote (e.g. BTCUSDT → BTC/USDT)
+    if (raw.length === 7) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+    // 6-char: 3-char base + 3-char quote (e.g. XAUUSD → XAU/USD, EURUSD → EUR/USD)
+    if (raw.length === 6) return `${raw.slice(0, 3)}/${raw.slice(3)}`;
+    // Fallback — return unchanged; server may already use a non-standard format
+    return raw;
+  }, []);
+
   /** Poll REST prices when WS is unavailable so the UI shows recent data. */
   const pollRestPrices = useCallback(async () => {
     const token = getState().token;
@@ -236,7 +281,8 @@ export function useWebSocket(enabled = true) {
       const res = await tradingApi.prices();
       const { setPrice } = getState();
       const now = Date.now();
-      for (const [symbol, raw] of Object.entries(res.data)) {
+      for (const [rawSymbol, raw] of Object.entries(res.data)) {
+        const symbol = normaliseSymbol(rawSymbol);
         const mid = (raw.bid + raw.ask) / 2;
         setPrice({
           symbol,
@@ -251,7 +297,7 @@ export function useWebSocket(enabled = true) {
     } catch {
       // Non-fatal — WS reconnect will restore live data
     }
-  }, [getState]);
+  }, [getState, normaliseSymbol]);
 
   const startRestPoll = useCallback(() => {
     if (restPollTimer.current) return; // already running

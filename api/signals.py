@@ -814,6 +814,7 @@ def _register_signal_read_routes(router: Any) -> None:
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
+    from monetization.subscription import require_plan as _require_plan
 
     @router.get(
         "",
@@ -943,11 +944,12 @@ def _register_signal_write_routes(router: Any) -> None:
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
+    from monetization.subscription import require_plan as _require_plan
 
     @router.post("/generate")
     async def generate_signal(
         req: _GenerateSignalRequest,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         try:
             svc = _get_signal_service()
@@ -991,7 +993,7 @@ def _register_signal_write_routes(router: Any) -> None:
         except _HTTPException:
             raise
         except Exception:
-            logger.exception("Signal generation failed: %s")
+            logger.exception("Signal generation failed")
             raise _HTTPException(
                 status_code=500,
                 detail="Signal generation failed",
@@ -1058,11 +1060,12 @@ def _register_distribution_routes(
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
+    from monetization.subscription import require_plan as _require_plan
 
     @router.post("/distribution/oos-reference")
     async def set_oos_reference(
         body: SetOOSReferenceRequest,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         from ml.signal_validator import SignalRecord, get_validator
 
@@ -1076,7 +1079,7 @@ def _register_distribution_routes(
     @router.post("/distribution/validate")
     async def validate_signal_distribution(
         body: ValidateSignalsRequest,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         from ml.signal_validator import SignalRecord, get_validator
 
@@ -1094,7 +1097,7 @@ def _register_distribution_routes(
     @router.post("/distribution/add-live")
     async def add_live_signal(
         body: LiveSignalItem,
-        user: _TokenPayload = _Depends(_get_current_user),
+        user: _TokenPayload = _Depends(_require_plan("professional")),
     ):
         from ml.signal_validator import SignalRecord, get_validator
 
@@ -1152,6 +1155,7 @@ def _register_signal_alias_routes(router) -> None:
         """
         try:
             from api.news import get_sentiment_for_symbol
+
             result = await get_sentiment_for_symbol(symbol)
             return {
                 "score": float(result.get("sentiment_score", 0)),
@@ -1168,12 +1172,14 @@ def _register_signal_alias_routes(router) -> None:
 
         try:
             from data_layer.sentiment import get_sentiment
+
             result = await get_sentiment(symbol)
             return result
         except Exception:  # nosec B110 — fallback sentiment source unavailable; return neutral default
             pass
 
         from datetime import datetime, timezone
+
         return {
             "score": 0.0,
             "label": "neutral",
@@ -1199,6 +1205,7 @@ def _register_signal_alias_routes(router) -> None:
         """
         try:
             from api.news import get_news_for_symbol
+
             items = await get_news_for_symbol(symbol, limit=limit)
             return {"items": items, "count": len(items)}
         except Exception:  # nosec B110 — primary news source unavailable; try fallback below
@@ -1206,6 +1213,7 @@ def _register_signal_alias_routes(router) -> None:
 
         try:
             from news.news_aggregator import get_latest_news
+
             raw = get_latest_news(symbol=symbol, limit=limit)
             items = [
                 {

@@ -4,7 +4,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Input, Select, Toggle,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 
 interface PlatformConfig {
@@ -87,13 +87,13 @@ const PlatformSection: React.FC = () => {
 
   const set = (k: keyof PlatformConfig, v: unknown) => setCfg(c => c ? { ...c, [k]: v } : c);
 
-  if (loading) return <><SAStyles /><LoadingRows rows={10} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={10} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
   if (!cfg)    return null;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       {confirm === 'maintenance' && (
         <ConfirmDialog
           title={cfg.maintenance_mode ? 'Disable Maintenance Mode' : 'Enable Maintenance Mode'}

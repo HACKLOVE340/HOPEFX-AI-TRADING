@@ -148,7 +148,7 @@ const PerformanceMetrics: React.FC = () => {
     { label: 'Sharpe Ratio',   value: fmtRatio(sharpe),               positive: sharpe >= 1 ? true : sharpe < 0 ? false : null },
     { label: 'Sortino Ratio',  value: fmtRatio(sortino),              positive: sortino >= 1 ? true : sortino < 0 ? false : null },
     { label: 'Max Drawdown',   value: fmtPct(-Math.abs(maxDD)),       positive: false },
-    { label: 'Win Rate',       value: fmtPct(winRate * 100),          positive: winRate >= 0.5 },
+    { label: 'Win Rate',       value: fmtPct(winRate),                positive: winRate >= 50 },
     { label: 'Profit Factor',  value: fmtRatio(profitFactor),         positive: profitFactor >= 1 },
     { label: 'Total Trades',   value: String(totalTrades) },
     { label: 'Avg Trade P&L',  value: `$${avgPnl.toFixed(2)}`,        positive: avgPnl >= 0 },

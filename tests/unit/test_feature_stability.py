@@ -31,6 +31,7 @@ from scripts.feature_stability_analysis import compute_stability
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
+
 def _make_fold_results(n_folds: int, features: list[str], top_features: list[str]) -> list[dict]:
     """
     Build synthetic fold_results where `top_features` appear in every fold
@@ -46,19 +47,22 @@ def _make_fold_results(n_folds: int, features: list[str], top_features: list[str
         for feat in features:
             if feat not in top_features:
                 importance[feat] = 0.001 if fold == 1 else 0.0
-        results.append({
-            "fold": fold,
-            "accuracy": 0.58,
-            "f1": 0.60,
-            "auc": 0.61,
-            "train_size": 1000,
-            "test_size": 200,
-            "importance": importance,
-        })
+        results.append(
+            {
+                "fold": fold,
+                "accuracy": 0.58,
+                "f1": 0.60,
+                "auc": 0.61,
+                "train_size": 1000,
+                "test_size": 200,
+                "importance": importance,
+            }
+        )
     return results
 
 
 # ── compute_stability tests ───────────────────────────────────────────────────
+
 
 class TestComputeStability:
     """Tests for the core stability computation function."""
@@ -77,9 +81,7 @@ class TestComputeStability:
         )
 
         for feat in top:
-            assert feat in result["stable_features"], (
-                f"{feat} should be stable (appears in all 6 folds)"
-            )
+            assert feat in result["stable_features"], f"{feat} should be stable (appears in all 6 folds)"
 
     def test_unstable_features_appear_in_one_fold(self):
         """Features in top-N of only 1/6 folds should be classified unstable.
@@ -102,9 +104,7 @@ class TestComputeStability:
         )
 
         for feat in others:
-            assert feat in result["unstable_features"], (
-                f"{feat} should be unstable (never in top-2 across 6 folds)"
-            )
+            assert feat in result["unstable_features"], f"{feat} should be unstable (never in top-2 across 6 folds)"
 
     def test_stability_scores_sum_to_valid_range(self):
         """All stability scores must be in [0, 1]."""
@@ -126,12 +126,12 @@ class TestComputeStability:
         result = compute_stability(fold_results, top_n=4, stable_threshold=0.67, marginal_threshold=0.33)
 
         all_classified = (
-            set(result["stable_features"])
-            | set(result["marginal_features"])
-            | set(result["unstable_features"])
+            set(result["stable_features"]) | set(result["marginal_features"]) | set(result["unstable_features"])
         )
         # No feature should appear in two categories
-        assert len(result["stable_features"]) + len(result["marginal_features"]) + len(result["unstable_features"]) == len(all_classified)
+        assert len(result["stable_features"]) + len(result["marginal_features"]) + len(
+            result["unstable_features"]
+        ) == len(all_classified)
 
     def test_all_features_classified(self):
         """Every feature in the fold results must appear in exactly one category."""
@@ -143,13 +143,9 @@ class TestComputeStability:
         result = compute_stability(fold_results, top_n=3, stable_threshold=0.67, marginal_threshold=0.33)
 
         classified = (
-            set(result["stable_features"])
-            | set(result["marginal_features"])
-            | set(result["unstable_features"])
+            set(result["stable_features"]) | set(result["marginal_features"]) | set(result["unstable_features"])
         )
-        assert classified == set(all_feats), (
-            f"Unclassified features: {set(all_feats) - classified}"
-        )
+        assert classified == set(all_feats), f"Unclassified features: {set(all_feats) - classified}"
 
     def test_mean_importance_computed(self):
         """mean_importance must be present for every feature."""
@@ -201,14 +197,22 @@ class TestComputeStability:
         # In folds 3-6: feat_top dominates → feat_m not in top-1.
         results = []
         for fold in range(1, 7):
-            if fold <= 2:
-                imp = {"feat_top": 0.3, "feat_m": 0.7}  # feat_m wins top-1
-            else:
-                imp = {"feat_top": 1.0, "feat_m": 0.0}  # feat_top wins top-1
-            results.append({
-                "fold": fold, "accuracy": 0.55, "f1": 0.55, "auc": 0.55,
-                "train_size": 100, "test_size": 50, "importance": imp,
-            })
+            imp = (
+                {"feat_top": 0.3, "feat_m": 0.7}  # feat_m wins top-1
+                if fold <= 2
+                else {"feat_top": 1.0, "feat_m": 0.0}  # feat_top wins top-1
+            )
+            results.append(
+                {
+                    "fold": fold,
+                    "accuracy": 0.55,
+                    "f1": 0.55,
+                    "auc": 0.55,
+                    "train_size": 100,
+                    "test_size": 50,
+                    "importance": imp,
+                }
+            )
 
         # top_n=1 → only the highest-importance feature per fold counts
         result = compute_stability(results, top_n=1, stable_threshold=0.67, marginal_threshold=0.33)
@@ -224,6 +228,7 @@ class TestComputeStability:
 
 
 # ── Report structure tests ────────────────────────────────────────────────────
+
 
 class TestReportStructure:
     """Verify the report dict has all required keys."""
@@ -261,6 +266,7 @@ class TestReportStructure:
 
 # ── Integration: run_stability_analysis smoke mode ────────────────────────────
 
+
 class TestRunStabilityAnalysisSmoke:
     """
     Integration test using synthetic OHLCV data injected via monkeypatching.
@@ -294,10 +300,7 @@ class TestRunStabilityAnalysisSmoke:
 
         # Patch _build_features to use a simple feature set
         def _simple_features(df, horizon, min_move_atr):
-            X = pd.DataFrame({
-                f"feat_{i}": df["close"].pct_change(i + 1).fillna(0)
-                for i in range(10)
-            }, index=df.index)
+            X = pd.DataFrame({f"feat_{i}": df["close"].pct_change(i + 1).fillna(0) for i in range(10)}, index=df.index)
             y = (df["close"].shift(-horizon) > df["close"]).astype(int).fillna(0)
             X = X.iloc[:-horizon]
             y = y.iloc[:-horizon]
@@ -306,7 +309,7 @@ class TestRunStabilityAnalysisSmoke:
         monkeypatch.setattr(fsa, "_build_features", _simple_features)
 
         out = tmp_path / "stability.json"
-        report = fsa.run_stability_analysis(
+        fsa.run_stability_analysis(
             years=2,
             n_splits=2,
             top_n=5,
@@ -353,9 +356,13 @@ class TestRunStabilityAnalysisSmoke:
 
         out = tmp_path / "stability2.json"
         fsa.run_stability_analysis(
-            years=2, n_splits=2, top_n=1,
-            stable_threshold=0.5, marginal_threshold=0.25,
-            smoke=True, output_path=out,
+            years=2,
+            n_splits=2,
+            top_n=1,
+            stable_threshold=0.5,
+            marginal_threshold=0.25,
+            smoke=True,
+            output_path=out,
         )
 
         loaded = json.loads(out.read_text())

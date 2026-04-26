@@ -49,7 +49,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
                 "description": s.description,
                 "symbol": s.symbol,
                 "timeframe": s.timeframe,
-                "is_active": s.is_active,
+                "is_active": getattr(s, "is_active", getattr(s, "enabled", True)),
                 "rules_count": len(s.rules),
                 "created_at": s.created_at.isoformat(),
             }
@@ -125,6 +125,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
             raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
         try:
             from backtesting.engine import BacktestEngine
+
             engine = BacktestEngine()
             result = engine.run_strategy_backtest(
                 strategy_id=strategy_id,
@@ -149,16 +150,16 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
             "conditions": [
                 {"id": "crosses_above", "label": "Crosses above"},
                 {"id": "crosses_below", "label": "Crosses below"},
-                {"id": "greater_than",  "label": "Greater than"},
-                {"id": "less_than",     "label": "Less than"},
-                {"id": "equals",        "label": "Equals"},
+                {"id": "greater_than", "label": "Greater than"},
+                {"id": "less_than", "label": "Less than"},
+                {"id": "equals", "label": "Equals"},
             ],
             "actions": [
-                {"id": "buy",        "label": "Buy"},
-                {"id": "sell",       "label": "Sell"},
-                {"id": "close_all",  "label": "Close all"},
+                {"id": "buy", "label": "Buy"},
+                {"id": "sell", "label": "Sell"},
+                {"id": "close_all", "label": "Close all"},
                 {"id": "close_long", "label": "Close long"},
-                {"id": "close_short","label": "Close short"},
+                {"id": "close_short", "label": "Close short"},
             ],
         }
 
@@ -224,4 +225,3 @@ def _get_nocode_builder():
 
 
 router = create_nocode_router(_get_nocode_builder())
-

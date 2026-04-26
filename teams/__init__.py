@@ -731,15 +731,17 @@ def create_teams_router(manager: "TeamManager"):
         for team in manager.teams.values():
             if user_id and user_id not in team.members:
                 continue
-            teams.append({
-                "team_id": team.team_id,
-                "name": team.name,
-                "description": team.settings.get("description", ""),
-                "owner_id": team.owner_id,
-                "member_count": len(team.members),
-                "status": team.settings.get("status", "active"),
-                "created_at": team.created_at.isoformat(),
-            })
+            teams.append(
+                {
+                    "team_id": team.team_id,
+                    "name": team.name,
+                    "description": team.settings.get("description", ""),
+                    "owner_id": team.owner_id,
+                    "member_count": len(team.members),
+                    "status": team.settings.get("status", "active"),
+                    "created_at": team.created_at.isoformat(),
+                }
+            )
         return teams
 
     @router.post("/")

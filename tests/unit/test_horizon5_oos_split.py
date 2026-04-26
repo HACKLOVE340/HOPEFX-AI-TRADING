@@ -41,6 +41,7 @@ REPORT_PATH = MODEL_DIR / "horizon5_training_report.json"
 
 # ── horizon5_training_report.json content tests ───────────────────────────────
 
+
 class TestHorizon5ReportContent:
     """Verify the corrected horizon5_training_report.json has valid OOS metrics."""
 
@@ -60,9 +61,7 @@ class TestHorizon5ReportContent:
     def test_oos_years_is_at_least_one(self, report):
         """oos_years must be >= 1.0 for a credible OOS evaluation."""
         oos_years = report.get("oos_years", 0.0)
-        assert oos_years >= 1.0, (
-            f"oos_years={oos_years} — need >= 1.0 year for credible OOS evaluation"
-        )
+        assert oos_years >= 1.0, f"oos_years={oos_years} — need >= 1.0 year for credible OOS evaluation"
 
     def test_oos_sample_count_is_positive(self, report):
         """oos_sample_count must be > 0 — original was 0."""
@@ -75,9 +74,7 @@ class TestHorizon5ReportContent:
     def test_oos_sample_count_sufficient_for_significance(self, report):
         """oos_sample_count must be >= 100 for a meaningful binomial test."""
         oos_n = report.get("oos_sample_count", 0)
-        assert oos_n >= 100, (
-            f"oos_sample_count={oos_n} — need >= 100 for a meaningful binomial test"
-        )
+        assert oos_n >= 100, f"oos_sample_count={oos_n} — need >= 100 for a meaningful binomial test"
 
     def test_oos_accuracy_present(self, report):
         """OOS accuracy must be recorded in the report."""
@@ -89,31 +86,23 @@ class TestHorizon5ReportContent:
         """OOS accuracy must be above 50% (better than random)."""
         oos = report.get("oos", {})
         acc = oos.get("accuracy", 0.0)
-        assert acc > 0.50, (
-            f"OOS accuracy={acc:.4f} — must be > 0.50 (better than random)"
-        )
+        assert acc > 0.50, f"OOS accuracy={acc:.4f} — must be > 0.50 (better than random)"
 
     def test_oos_p_value_significant(self, report):
         """OOS p-value must be < 0.05 (statistically significant)."""
         oos = report.get("oos", {})
         p = oos.get("p_value_binomial", 1.0)
-        assert p < 0.05, (
-            f"OOS p-value={p:.4f} — must be < 0.05 for statistical significance"
-        )
+        assert p < 0.05, f"OOS p-value={p:.4f} — must be < 0.05 for statistical significance"
 
     def test_oos_significant_flag_true(self, report):
         """oos.significant must be True."""
         oos = report.get("oos", {})
-        assert oos.get("significant") is True, (
-            "oos.significant must be True — model must be statistically significant"
-        )
+        assert oos.get("significant") is True, "oos.significant must be True — model must be statistically significant"
 
     def test_horizon_is_five(self, report):
         """horizon must be 5 (matching execution engine hold period)."""
         horizon = report.get("horizon", 0)
-        assert horizon == 5, (
-            f"horizon={horizon} — must be 5 to match execution engine hold period"
-        )
+        assert horizon == 5, f"horizon={horizon} — must be 5 to match execution engine hold period"
 
     def test_sharpe_gate_present(self, report):
         """sharpe_gate section must be present."""
@@ -123,17 +112,14 @@ class TestHorizon5ReportContent:
         """Sharpe gate must be passed (N >= 600 OOS trades)."""
         sg = report.get("sharpe_gate", {})
         assert sg.get("gate_passed") is True, (
-            f"Sharpe gate not passed: {sg}. "
-            "Need N >= 600 OOS trades for credible Sharpe SE."
+            f"Sharpe gate not passed: {sg}. Need N >= 600 OOS trades for credible Sharpe SE."
         )
 
     def test_sharpe_gate_n_trades_sufficient(self, report):
         """Sharpe gate N must be >= 600."""
         sg = report.get("sharpe_gate", {})
         n = sg.get("n_trades", 0)
-        assert n >= 600, (
-            f"Sharpe gate n_trades={n} — need >= 600 for SE <= 0.09"
-        )
+        assert n >= 600, f"Sharpe gate n_trades={n} — need >= 600 for SE <= 0.09"
 
     def test_feature_count_positive(self, report):
         """feature_count must be > 0."""
@@ -150,9 +136,7 @@ class TestHorizon5ReportContent:
         """Walk-forward mean accuracy must be above 50%."""
         wf = report.get("walkforward", {})
         mean_acc = wf.get("mean_accuracy", 0.0)
-        assert mean_acc > 0.50, (
-            f"Walk-forward mean accuracy={mean_acc:.4f} — must be > 0.50"
-        )
+        assert mean_acc > 0.50, f"Walk-forward mean accuracy={mean_acc:.4f} — must be > 0.50"
 
     def test_oos_period_recorded(self, report):
         """OOS period (date range) must be recorded."""
@@ -165,6 +149,7 @@ class TestHorizon5ReportContent:
 
 
 # ── retrain_horizon5.py smoke mode fix ───────────────────────────────────────
+
 
 class TestSmokeOosYearsFix:
     """Verify that smoke mode no longer sets oos_years=0.0."""
@@ -192,9 +177,7 @@ class TestSmokeOosYearsFix:
         import scripts.retrain_horizon5 as rh5
 
         src = inspect.getsource(rh5.main)
-        assert "args.oos_years = 1.0" in src, (
-            "Smoke mode must set args.oos_years = 1.0 to enforce a minimum OOS split"
-        )
+        assert "args.oos_years = 1.0" in src, "Smoke mode must set args.oos_years = 1.0 to enforce a minimum OOS split"
 
     def test_write_horizon_meta_uses_args_oos_years(self):
         """
@@ -207,7 +190,7 @@ class TestSmokeOosYearsFix:
         args = MagicMock()
         args.horizon = 5
         args.years = 8
-        args.oos_years = 2.0   # non-zero, non-default
+        args.oos_years = 2.0  # non-zero, non-default
         args.symbol = "GC=F"
         args.no_macro = True
         args.stacking = False
@@ -247,6 +230,7 @@ class TestSmokeOosYearsFix:
 
 # ── Registry consistency ──────────────────────────────────────────────────────
 
+
 class TestRegistryConsistency:
     """horizon5_training_report.json must be consistent with registry.json."""
 
@@ -265,8 +249,7 @@ class TestRegistryConsistency:
         assert reg_acc is not None, "registry xgb_horizon5_v1.oos_accuracy must be set"
         assert report_acc is not None, "report oos.accuracy must be set"
         assert abs(report_acc - reg_acc) < 0.01, (
-            f"Report OOS accuracy ({report_acc:.4f}) inconsistent with "
-            f"registry ({reg_acc:.4f}) — difference > 0.01"
+            f"Report OOS accuracy ({report_acc:.4f}) inconsistent with registry ({reg_acc:.4f}) — difference > 0.01"
         )
 
     def test_horizon_consistent_with_registry(self):
@@ -291,9 +274,7 @@ class TestRegistryConsistency:
         report = json.loads(REPORT_PATH.read_text())
         report_oos_years = report.get("oos_years", 0.0)
 
-        assert report_oos_years >= 1.0, (
-            f"report oos_years={report_oos_years} — must be >= 1.0"
-        )
+        assert report_oos_years >= 1.0, f"report oos_years={report_oos_years} — must be >= 1.0"
         assert abs(report_oos_years - reg_oos_years) < 0.5, (
             f"oos_years mismatch: report={report_oos_years} registry={reg_oos_years}"
         )

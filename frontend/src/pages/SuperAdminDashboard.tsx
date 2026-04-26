@@ -2,12 +2,13 @@
  * SuperAdminDashboard.tsx
  * Master control center — superadmin only.
  *
- * Sections (20 total):
+ * Sections (23 total):
  *   Overview · Users · Platform · ML/AI · Trading Engine
  *   Financial · Security · Logs · Feature Flags
- *   Compliance · Risk Management · Broker Management · White-Label
- *   Nuclear Controls · GDPR · Rate Limiting · Alerting
- *   Reporting · Security Infrastructure · Audit Trail · System Health
+ *   Compliance · Audit Trail · GDPR
+ *   Risk Management · Nuclear Controls · Broker Management
+ *   White-Label · Alerting · Rate Limiting · Reporting
+ *   Security Infrastructure · System Health · Auto Healing · Reliability
  *
  * Access: isSuperAdmin() only. AdminGuard is NOT sufficient.
  * Wired via /superadmin route behind SuperAdminGuard.
@@ -146,13 +147,6 @@ const SuperAdminDashboard: React.FC = () => {
   return (
     <>
       <SAStyles />
-      <style>{`
-        @keyframes sa-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes sa-spin   { to { transform: rotate(360deg); } }
-        @keyframes sa-pulse  { 0%, 100% { opacity: 0.6; } 50% { opacity: 0.3; } }
-        .sa-row:hover        { background: #0f1f35 !important; }
-        .sa-tab-btn:hover    { background: #1e293b !important; }
-      `}</style>
 
       <div style={styles.page}>
         {/* ── Page header ── */}

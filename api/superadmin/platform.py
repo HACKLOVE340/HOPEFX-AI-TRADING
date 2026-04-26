@@ -709,7 +709,6 @@ async def test_smtp_config(
 ) -> dict:
     """Test SMTP connectivity using the current platform config or a provided override."""
     import smtplib
-    import socket
 
     body: dict = {}
     try:
@@ -738,7 +737,7 @@ async def test_smtp_config(
         server.quit()
         _log_superadmin_action(user, "smtp_test", f"host={host}:{port} ok")
         return {"ok": True, "host": host, "port": port}
-    except (smtplib.SMTPException, socket.error, OSError) as exc:
+    except (smtplib.SMTPException, OSError) as exc:
         _log_superadmin_action(user, "smtp_test_failed", f"host={host}:{port} err={exc}")
         return {"ok": False, "error": str(exc)}
 
@@ -818,6 +817,10 @@ async def validate_platform_config(
 
 @router.get("/engine/metrics")
 async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Return trading engine KPIs — all fields populated from real DB/engine data."""
+    now = _utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
     metrics: dict = {
         "trades_today": 0,
         "open_positions": 0,
@@ -828,13 +831,77 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
         "kill_switch_triggers": 0,
         "uptime_hours": 0.0,
     }
+
+    # ── Uptime from process start time ────────────────────────────────────────
     try:
-        from api.admin import app_state, _start_time
+        from api.admin import _start_time
 
         metrics["uptime_hours"] = round((time.time() - _start_time) / 3600, 2)
+    except Exception:
+        logger.debug("Suppressed exception (no detail) in %s", __name__)
+
+    # ── Live engine counters (open positions, rejected orders) ────────────────
+    try:
+        from api.admin import app_state
+
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
             metrics["open_positions"] = len(getattr(eng, "positions", {}))
+            metrics["rejected_orders"] = int(getattr(eng, "rejected_orders", 0))
+            metrics["kill_switch_triggers"] = int(getattr(eng, "kill_switch_triggers", 0))
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
+
+    # ── DB queries: trades today, PnL, win rate ───────────────────────────────
+    try:
+        from database.connection import SessionLocal
+        from database.models import Trade
+        from sqlalchemy import func
+
+        db = SessionLocal()
+        try:
+            # All trades opened today
+            today_trades = (
+                db.query(Trade)
+                .filter(Trade.entry_time >= today_start)
+                .all()
+            )
+            metrics["trades_today"] = len(today_trades)
+
+            # Open positions from DB (override engine count if DB has more)
+            open_count = sum(1 for t in today_trades if t.is_open)
+            if open_count > metrics["open_positions"]:
+                metrics["open_positions"] = open_count
+
+            # PnL today: sum of total_pnl for closed trades opened today
+            closed_today = [t for t in today_trades if not t.is_open]
+            if closed_today:
+                metrics["pnl_today"] = round(
+                    sum(float(t.total_pnl or 0.0) for t in closed_today), 2
+                )
+                winning = sum(1 for t in closed_today if (t.total_pnl or 0.0) > 0)
+                metrics["win_rate_today"] = round(winning / len(closed_today), 4)
+
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("get_engine_metrics: DB query: %s", exc)
+
+    # ── Avg execution latency from Redis (written by order execution layer) ───
+    try:
+        import json as _json
+        from cache.redis_client import get_redis_client
+
+        rc = get_redis_client()
+        if rc:
+            raw = rc.get("engine:execution_stats")
+            if raw:
+                stats = _json.loads(raw)
+                metrics["avg_execution_ms"] = int(stats.get("avg_execution_ms", 0))
+                # Override rejected_orders if the engine writes it to Redis
+                if "rejected_orders" in stats:
+                    metrics["rejected_orders"] = int(stats["rejected_orders"])
+    except Exception as exc:
+        logger.debug("get_engine_metrics: redis stats: %s", exc)
+
     return metrics

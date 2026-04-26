@@ -589,6 +589,55 @@ class MarketDataOrchestrator:
 
     # ── Convenience accessors ─────────────────────────────────────────────────
 
+    def get_microstructure_snapshot(self) -> object | None:
+        """Return the current MicrostructureSnapshot, or None if unavailable.
+
+        Provides a stable public API so callers do not need to access the
+        private ``_micro`` attribute directly.
+        """
+        try:
+            return self._micro.get_snapshot()
+        except Exception as exc:
+            logger.debug("get_microstructure_snapshot: %s", exc)
+            return None
+
+    def get_sentiment_snapshot(self) -> dict | None:
+        """Return a serialisable sentiment snapshot for WebSocket broadcast.
+
+        Combines ML feature signals with recent article data into the shape
+        expected by the frontend SentimentGauge component.  Returns None when
+        the sentiment engine is not yet initialised.
+        """
+        try:
+            if self._sentiment is None:
+                return None
+            features = self.get_ml_features()
+            sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
+            articles: list[dict] = []
+            try:
+                raw_articles = self._sentiment.get_recent_articles(hours=1.0, min_relevance=0.1)
+                articles = [
+                    {
+                        "headline": getattr(a, "title", getattr(a, "headline", "")),
+                        "source": getattr(a, "source", ""),
+                        "sentiment_score": getattr(a, "sentiment_score", 0.0),
+                        "sentiment_label": getattr(a, "sentiment_label", "neutral"),
+                        "published_at": (
+                            a.published_at.isoformat()
+                            if getattr(a, "published_at", None)
+                            else None
+                        ),
+                        "url": getattr(a, "url", None),
+                    }
+                    for a in (raw_articles or [])[:5]
+                ]
+            except Exception as _fmt_exc:
+                logger.debug("get_sentiment_snapshot: article serialisation skipped: %s", _fmt_exc)
+            return {"signal": sentiment_features, "recent_articles": articles}
+        except Exception as exc:
+            logger.debug("get_sentiment_snapshot: %s", exc)
+            return None
+
     def get_current_gold_price(self) -> float | None:
         """Return current consensus gold mid price, or None if unavailable."""
         tick = self.get_latest_tick()

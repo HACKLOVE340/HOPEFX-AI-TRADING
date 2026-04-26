@@ -51,7 +51,7 @@ async def get_security_events(
             rows = q.order_by(AuditLogEntry.created_at.desc()).limit(limit).all()
             for r in rows:
                 sev = "low"
-                et = getattr(r, "event_type", "")
+                et = r.event_type or ""
                 if et in ("brute_force", "unauthorized_access", "account_locked"):
                     sev = "critical"
                 elif et in ("login_failed", "2fa_failed", "rate_limit_exceeded"):
@@ -63,10 +63,12 @@ async def get_security_events(
                         "event_id": str(r.id),
                         "event_type": et,
                         "severity": sev,
-                        "user_id": getattr(r, "user_id", None),
-                        "ip_address": getattr(r, "ip_address", ""),
-                        "detail": getattr(r, "detail", ""),
-                        "created_at": _iso(r.created_at),
+                        "user_id": r.user_id,
+                        "ip_address": r.ip_address or "",
+                        "detail": r.detail or "",
+                        # created_at is the canonical timestamp; fall back to
+                        # timestamp for rows written before the migration.
+                        "created_at": _iso(r.created_at or r.timestamp),
                     }
                 )
         finally:
@@ -160,10 +162,12 @@ async def get_active_sessions(user: TokenPayload = Depends(_require_superadmin))
                         "session_id": s.id,
                         "user_id": u.id,
                         "username": u.username,
-                        "ip": getattr(s, "ip_address", ""),
-                        "device": getattr(s, "device_info", "Unknown"),
+                        "ip": s.ip_address or "",
+                        "device": s.device_info or "Unknown",
                         "created_at": _iso(s.created_at),
-                        "last_active": _iso(getattr(s, "last_active_at", s.created_at)),
+                        # last_active_at is updated on each authenticated request;
+                        # fall back to created_at for sessions predating the column.
+                        "last_active": _iso(s.last_active_at or s.created_at),
                     }
                 )
         finally:

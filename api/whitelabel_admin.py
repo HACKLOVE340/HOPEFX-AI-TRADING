@@ -38,7 +38,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, require_role
+from api.auth import TokenPayload, get_current_user, require_role
 from whitelabel import FeatureFlag
 
 # All whitelabel management endpoints require superadmin — tenant CRUD, API key
@@ -52,9 +52,11 @@ router = APIRouter(prefix="/api/whitelabel", tags=["Whitelabel"])
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
+
 def _db_session():
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception:
         return None
@@ -63,12 +65,14 @@ def _db_session():
 def _get_model():
     try:
         from database.models import WhitelabelTenant
+
         return WhitelabelTenant
     except Exception:
         return None
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
+
 
 class CreateTenantBody(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
@@ -90,6 +94,7 @@ class UpdateTenantBody(BaseModel):
 
 
 # ── Serialisation ─────────────────────────────────────────────────────────────
+
 
 def _row_to_dict(row: Any) -> dict:
     if hasattr(row, "to_dict"):
@@ -124,6 +129,7 @@ def _row_to_dict(row: Any) -> dict:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/tenants")
 async def list_tenants(
@@ -300,9 +306,7 @@ async def delete_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadmi
 
 
 @router.post("/tenants/{tenant_id}/features/{feature}")
-async def enable_feature(
-    tenant_id: str, feature: str, _user: TokenPayload = Depends(_superadmin)
-):
+async def enable_feature(tenant_id: str, feature: str, _user: TokenPayload = Depends(_superadmin)):
     try:
         flag_val = FeatureFlag(feature).value
     except ValueError:
@@ -331,9 +335,7 @@ async def enable_feature(
 
 
 @router.delete("/tenants/{tenant_id}/features/{feature}")
-async def disable_feature(
-    tenant_id: str, feature: str, _user: TokenPayload = Depends(_superadmin)
-):
+async def disable_feature(tenant_id: str, feature: str, _user: TokenPayload = Depends(_superadmin)):
     try:
         flag_val = FeatureFlag(feature).value
     except ValueError:
@@ -412,12 +414,13 @@ async def preview_tenant(tenant_id: str, _user: TokenPayload = Depends(_superadm
 
 
 @router.get("/features")
-async def list_available_features(_user: TokenPayload = Depends(_superadmin)):
+async def list_available_features(_user: TokenPayload = Depends(get_current_user)):
     """Return all available feature flags."""
     return {"features": [f.value for f in FeatureFlag]}
 
 
 # ── Internal helpers called by api/superadmin/infrastructure.py ──────────────
+
 
 def _get_tenants() -> list[dict]:
     Model = _get_model()

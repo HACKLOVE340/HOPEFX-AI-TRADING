@@ -4,7 +4,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { SuperAdminUser, BulkUserResult } from './types';
 import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
@@ -388,7 +388,7 @@ const UsersSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       {selected && <UserDetailDrawer user={selected} onClose={() => setSelected(null)} onRefresh={load} />}
       {bulkResult && <BulkResultToast result={bulkResult} onClose={() => setBulkResult(null)} />}
 

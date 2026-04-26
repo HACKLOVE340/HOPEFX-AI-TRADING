@@ -14,7 +14,7 @@
 	// postCreateCommand runs after the container is fully initialised.
 	// bootstrap_dev.py generates .env with stable secrets and seeds the DB —
 	// idempotent, safe to re-run. Must run after pip install so all deps exist.
-	"postCreateCommand": "apt-get update -qq && apt-get install -y --no-install-recommends redis-server cmake libzmq3-dev pkg-config ninja-build && pip install -q -r requirements-ci.txt && python scripts/bootstrap_dev.py && cd frontend && npm install && npm run build",
+	"postCreateCommand": "apt-get update -qq && apt-get install -y --no-install-recommends redis-server cmake libzmq3-dev pkg-config ninja-build && pip install -q --upgrade pip && pip install -q -r requirements-ci.txt && pip install -q joblib numba matplotlib psutil stable-baselines3 gymnasium pyotp 'ib_insync==0.9.86' && python scripts/bootstrap_dev.py && cd frontend && npm install && npm run build",
 	"forwardPorts": [5173, 8000, 6379],
 	"portsAttributes": {
 		"5173": {

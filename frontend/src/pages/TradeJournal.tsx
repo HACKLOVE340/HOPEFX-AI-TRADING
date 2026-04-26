@@ -90,15 +90,19 @@ const TradeJournal: React.FC = () => {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [tradesRes, statsRes, mistakesRes] = await Promise.allSettled([
-      api.get<JournalEntry[]>(`/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
-      api.get<JournalStats>('/journal/stats'),
-      api.get<JournalEntry[]>('/journal/mistakes'),
-    ]);
-    setTrades(tradesRes.status === 'fulfilled' ? (tradesRes.value.data ?? []) : []);
-    setStats(statsRes.status === 'fulfilled' ? statsRes.value.data : null);
-    setMistakes(mistakesRes.status === 'fulfilled' ? (mistakesRes.value.data ?? []) : []);
-    setLoading(false);
+    try {
+      const [tradesRes, statsRes, mistakesRes] = await Promise.allSettled([
+        api.get<JournalEntry[]>(`/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
+        api.get<JournalStats>('/journal/stats'),
+        api.get<JournalEntry[]>('/journal/mistakes'),
+      ]);
+      setTrades(tradesRes.status === 'fulfilled' ? (tradesRes.value.data ?? []) : []);
+      setStats(statsRes.status === 'fulfilled' ? statsRes.value.data : null);
+      setMistakes(mistakesRes.status === 'fulfilled' ? (mistakesRes.value.data ?? []) : []);
+    } finally {
+      // Always clear loading — even if Promise.allSettled itself rejects
+      setLoading(false);
+    }
   }, [filterTag]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);

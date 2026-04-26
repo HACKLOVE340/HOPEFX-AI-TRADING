@@ -25,16 +25,16 @@ POST /superadmin/reliability/history/record      — manually push current snaps
 from __future__ import annotations
 
 import asyncio
-import importlib
 import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from sqlalchemy import text as _sa_text
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow
@@ -48,13 +48,15 @@ UTC = timezone.utc
 # Component probe helpers
 # ---------------------------------------------------------------------------
 
+
 async def _probe_database() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from database.connection import SessionLocal
+
         db = SessionLocal()
         try:
-            db.execute(__import__("sqlalchemy").text("SELECT 1"))
+            db.execute(_sa_text("SELECT 1"))
             db.close()
         except Exception:
             db.close()
@@ -69,6 +71,7 @@ async def _probe_redis() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc is None:
             return {"status": "error", "latency_ms": 0, "detail": "Redis client not initialised"}
@@ -90,6 +93,7 @@ async def _probe_broker() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "broker"):
             broker = app_state.broker
             connected = getattr(broker, "connected", False)
@@ -117,11 +121,13 @@ async def _probe_ml_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("ml:model:status")
             if raw:
                 import json
+
                 data = json.loads(raw)
                 return {
                     "status": "ok",
@@ -133,6 +139,7 @@ async def _probe_ml_engine() -> dict[str, Any]:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     try:
         from ml.predictor import get_predictor
+
         pred = get_predictor()
         ready = getattr(pred, "is_ready", lambda: False)()
         return {
@@ -148,6 +155,7 @@ async def _probe_trading_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
             status = getattr(eng, "status", "unknown")
@@ -171,6 +179,7 @@ async def _probe_self_healer() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from security.self_healer import get_healer
+
         h = get_healer()
         running = getattr(h, "_running", False)
         baseline = len(getattr(h, "_baseline", {}))
@@ -189,6 +198,7 @@ async def _probe_websocket_server() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             clients = rc.scard("ws:connected_clients") or 0
@@ -211,6 +221,7 @@ async def _probe_otel_tracing() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from api.tracing import _OTEL_AVAILABLE, _OTLP_ENDPOINT, _SERVICE_NAME, _SAMPLING_RATE
+
         status = "ok" if _OTEL_AVAILABLE and _OTLP_ENDPOINT else ("warning" if _OTEL_AVAILABLE else "degraded")
         return {
             "status": status,
@@ -228,12 +239,14 @@ async def _probe_data_feed() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             tick = rc.get("tick:XAU_USD") or rc.get("price:XAUUSD") or rc.get("tick:XAUUSD")
             if tick:
                 import json
-                data = json.loads(tick) if isinstance(tick, (str, bytes)) else {}
+
+                data = json.loads(tick) if isinstance(tick, str | bytes) else {}
                 age_s = time.time() - float(data.get("ts", data.get("timestamp", time.time())))
                 status = "ok" if age_s < 60 else "warning"
                 return {
@@ -255,6 +268,7 @@ async def _probe_risk_manager() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from risk.manager import get_risk_manager
+
         rm = get_risk_manager()
         active = getattr(rm, "_active", True)
         return {
@@ -270,6 +284,7 @@ async def _probe_kill_switch() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from core.config_store import config_store
+
         ks = config_store.get("kill_switch_active")
         active = bool(ks) if ks is not None else False
         return {
@@ -285,11 +300,15 @@ async def _probe_kill_switch() -> dict[str, Any]:
 async def _probe_env_vars() -> dict[str, Any]:
     t0 = time.perf_counter()
     required = [
-        "SECURITY_JWT_SECRET", "DATABASE_URL",
+        "SECURITY_JWT_SECRET",
+        "DATABASE_URL",
     ]
     recommended = [
-        "REDIS_URL", "OANDA_API_KEY", "OTEL_EXPORTER_OTLP_ENDPOINT",
-        "SENTRY_DSN", "DISCORD_WEBHOOK_URL",
+        "REDIS_URL",
+        "OANDA_API_KEY",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "SENTRY_DSN",
+        "DISCORD_WEBHOOK_URL",
     ]
     missing_required = [k for k in required if not os.getenv(k)]
     missing_recommended = [k for k in recommended if not os.getenv(k)]
@@ -308,6 +327,7 @@ async def _probe_celery() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from celery_app import celery_app
+
         inspect = celery_app.control.inspect(timeout=3.0)
         stats = inspect.stats()
         if stats:
@@ -338,6 +358,7 @@ async def _probe_event_bus() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from core.event_bus import bus
+
         subscriber_count = len(getattr(bus, "_subscribers", {}))
         return {
             "status": "ok",
@@ -358,6 +379,7 @@ async def _probe_config_store() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from core.config_store import config_store
+
         test_key = "_reliability_probe_test"
         config_store.set(test_key, "1")
         val = config_store.get(test_key)
@@ -381,6 +403,7 @@ async def _probe_decision_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "decision_engine"):
             de = app_state.decision_engine
             ready = getattr(de, "_ready", True)
@@ -392,7 +415,6 @@ async def _probe_decision_engine() -> dict[str, Any]:
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
     try:
-        from core.decision.HOPEFXDecisionEngine import HOPEFXDecisionEngine
         return {
             "status": "ok",
             "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -411,6 +433,7 @@ async def _probe_signal_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from core.signal_engine import get_signal_engine
+
         se = get_signal_engine()
         active = getattr(se, "_active", True)
         return {
@@ -431,6 +454,7 @@ async def _probe_api_server() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
         from app import app as _app
+
         route_count = len(_app.routes)
         return {
             "status": "ok",
@@ -451,45 +475,45 @@ async def _probe_api_server() -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 _PROBES: dict[str, Any] = {
-    "database":        _probe_database,
-    "redis":           _probe_redis,
-    "broker":          _probe_broker,
-    "ml_engine":       _probe_ml_engine,
-    "trading_engine":  _probe_trading_engine,
-    "self_healer":     _probe_self_healer,
-    "websocket":       _probe_websocket_server,
-    "otel_tracing":    _probe_otel_tracing,
-    "data_feed":       _probe_data_feed,
-    "risk_manager":    _probe_risk_manager,
-    "kill_switch":     _probe_kill_switch,
-    "env_vars":        _probe_env_vars,
-    "celery":          _probe_celery,
-    "event_bus":       _probe_event_bus,
-    "config_store":    _probe_config_store,
+    "database": _probe_database,
+    "redis": _probe_redis,
+    "broker": _probe_broker,
+    "ml_engine": _probe_ml_engine,
+    "trading_engine": _probe_trading_engine,
+    "self_healer": _probe_self_healer,
+    "websocket": _probe_websocket_server,
+    "otel_tracing": _probe_otel_tracing,
+    "data_feed": _probe_data_feed,
+    "risk_manager": _probe_risk_manager,
+    "kill_switch": _probe_kill_switch,
+    "env_vars": _probe_env_vars,
+    "celery": _probe_celery,
+    "event_bus": _probe_event_bus,
+    "config_store": _probe_config_store,
     "decision_engine": _probe_decision_engine,
-    "signal_engine":   _probe_signal_engine,
-    "api_server":      _probe_api_server,
+    "signal_engine": _probe_signal_engine,
+    "api_server": _probe_api_server,
 }
 
 _COMPONENT_LABELS: dict[str, str] = {
-    "database":        "PostgreSQL Database",
-    "redis":           "Redis Cache",
-    "broker":          "Broker Connection",
-    "ml_engine":       "ML / AI Engine",
-    "trading_engine":  "Trading Engine",
-    "self_healer":     "Self-Healer",
-    "websocket":       "WebSocket Server",
-    "otel_tracing":    "OpenTelemetry Tracing",
-    "data_feed":       "Live Data Feed",
-    "risk_manager":    "Risk Manager",
-    "kill_switch":     "Kill Switch",
-    "env_vars":        "Environment Variables",
-    "celery":          "Celery Task Queue",
-    "event_bus":       "Internal Event Bus",
-    "config_store":    "Config Store",
+    "database": "PostgreSQL Database",
+    "redis": "Redis Cache",
+    "broker": "Broker Connection",
+    "ml_engine": "ML / AI Engine",
+    "trading_engine": "Trading Engine",
+    "self_healer": "Self-Healer",
+    "websocket": "WebSocket Server",
+    "otel_tracing": "OpenTelemetry Tracing",
+    "data_feed": "Live Data Feed",
+    "risk_manager": "Risk Manager",
+    "kill_switch": "Kill Switch",
+    "env_vars": "Environment Variables",
+    "celery": "Celery Task Queue",
+    "event_bus": "Internal Event Bus",
+    "config_store": "Config Store",
     "decision_engine": "Decision Engine",
-    "signal_engine":   "Signal Engine",
-    "api_server":      "API Server",
+    "signal_engine": "Signal Engine",
+    "api_server": "API Server",
 }
 
 _STATUS_RANK = {"ok": 0, "warning": 1, "degraded": 2, "error": 3, "critical": 4}
@@ -507,6 +531,7 @@ def _overall_status(results: dict[str, dict]) -> str:
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
 
 class ComponentResult(BaseModel):
     name: str
@@ -545,6 +570,7 @@ class SelfTestResult(BaseModel):
 # Routes
 # ---------------------------------------------------------------------------
 
+
 @router.get("/reliability/status")
 async def get_reliability_status(
     user: TokenPayload = Depends(_require_superadmin),
@@ -556,7 +582,7 @@ async def get_reliability_status(
     for name, task in tasks.items():
         try:
             results_raw[name] = await asyncio.wait_for(task, timeout=10.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             results_raw[name] = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
         except Exception as exc:
             results_raw[name] = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -565,15 +591,17 @@ async def get_reliability_status(
     components = []
     for name, result in results_raw.items():
         extra = {k: v for k, v in result.items() if k not in ("status", "latency_ms", "detail")}
-        components.append({
-            "name": name,
-            "label": _COMPONENT_LABELS.get(name, name),
-            "status": result.get("status", "error"),
-            "latency_ms": result.get("latency_ms", 0),
-            "detail": result.get("detail", ""),
-            "extra": extra,
-            "checked_at": now,
-        })
+        components.append(
+            {
+                "name": name,
+                "label": _COMPONENT_LABELS.get(name, name),
+                "status": result.get("status", "error"),
+                "latency_ms": result.get("latency_ms", 0),
+                "detail": result.get("detail", ""),
+                "extra": extra,
+                "checked_at": now,
+            }
+        )
 
     overall = _overall_status(results_raw)
     ok_count = sum(1 for r in results_raw.values() if r.get("status") == "ok")
@@ -594,6 +622,7 @@ async def get_reliability_status(
     # Persist to history ring in Redis (non-blocking best-effort)
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))
@@ -609,12 +638,7 @@ async def get_component_health(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """Per-component health with labels and descriptions."""
-    return {
-        "components": [
-            {"name": name, "label": label}
-            for name, label in _COMPONENT_LABELS.items()
-        ]
-    }
+    return {"components": [{"name": name, "label": label} for name, label in _COMPONENT_LABELS.items()]}
 
 
 @router.post("/reliability/probe")
@@ -631,7 +655,7 @@ async def run_probe(
         }
     try:
         result = await asyncio.wait_for(fn(), timeout=10.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         result = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
     except Exception as exc:
         result = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -652,6 +676,7 @@ async def get_recent_traces(
     """Return recent OTel spans from the in-memory ring buffer."""
     try:
         from api.tracing import _SPAN_BUFFER
+
         spans = list(_SPAN_BUFFER)[-limit:]
         return {"count": len(spans), "spans": list(reversed(spans))}
     except Exception as exc:
@@ -664,7 +689,8 @@ async def emit_test_trace(
 ) -> dict:
     """Emit a full end-to-end test trace: frontend→API→DB→Redis→broker."""
     try:
-        from api.tracing import get_tracer, _hex_trace_id, _hex_span_id, _SPAN_BUFFER
+        from api.tracing import get_tracer, _hex_trace_id, _hex_span_id
+
         tracer = get_tracer("hopefx.reliability")
         trace_id = _hex_trace_id()
         span_id = _hex_span_id()
@@ -687,7 +713,6 @@ async def emit_test_trace(
                 broker_result = await _probe_broker()
 
             try:
-                from opentelemetry import trace as _trace
                 ctx = root.get_span_context()
                 if ctx and ctx.is_valid:
                     trace_id = format(ctx.trace_id, "032x")
@@ -722,6 +747,7 @@ async def validate_setting_persisted(
     try:
         from cache.redis_client import get_redis_client
         import json
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("superadmin_platform_config")
@@ -741,14 +767,14 @@ async def validate_setting_persisted(
     # Check config store
     try:
         from core.config_store import config_store
+
         val = config_store.get(setting_key)
         results["config_store"] = {"found": val is not None, "value": val}
     except Exception as exc:
         results["config_store"] = {"found": False, "error": str(exc)}
 
-    results["consistent"] = (
-        results.get("redis", {}).get("found", False) or
-        results.get("config_store", {}).get("found", False)
+    results["consistent"] = results.get("redis", {}).get("found", False) or results.get("config_store", {}).get(
+        "found", False
     )
     return results
 
@@ -773,8 +799,7 @@ async def get_env_audit(
     result: dict[str, Any] = {}
     for group, keys in env_groups.items():
         result[group] = {
-            k: {"set": bool(os.getenv(k)), "required": k in ["SECURITY_JWT_SECRET", "DATABASE_URL"]}
-            for k in keys
+            k: {"set": bool(os.getenv(k)), "required": k in ["SECURITY_JWT_SECRET", "DATABASE_URL"]} for k in keys
         }
     return {"groups": result, "checked_at": _utcnow().isoformat()}
 
@@ -786,15 +811,18 @@ async def get_route_inventory(
     """Return all registered FastAPI routes with methods and tags."""
     try:
         from app import app as _app
+
         routes = []
         for route in _app.routes:
             if hasattr(route, "methods") and hasattr(route, "path"):
-                routes.append({
-                    "path": route.path,
-                    "methods": list(route.methods or []),
-                    "name": getattr(route, "name", ""),
-                    "tags": getattr(route, "tags", []),
-                })
+                routes.append(
+                    {
+                        "path": route.path,
+                        "methods": list(route.methods or []),
+                        "name": getattr(route, "name", ""),
+                        "tags": getattr(route, "tags", []),
+                    }
+                )
         return {"total": len(routes), "routes": sorted(routes, key=lambda r: r["path"])}
     except Exception as exc:
         return {"total": 0, "routes": [], "error": str(exc)}
@@ -821,10 +849,16 @@ async def run_self_test(
                 "detail": result.get("detail", ""),
                 "duration_ms": round((time.perf_counter() - t) * 1000, 2),
             }
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {"test": name, "passed": False, "status": "error", "detail": "Timeout", "duration_ms": 10000}
         except Exception as exc:
-            return {"test": name, "passed": False, "status": "error", "detail": str(exc), "duration_ms": round((time.perf_counter() - t) * 1000, 2)}
+            return {
+                "test": name,
+                "passed": False,
+                "status": "error",
+                "detail": str(exc),
+                "duration_ms": round((time.perf_counter() - t) * 1000, 2),
+            }
 
     probe_tasks = [_run_test(name, fn) for name, fn in _PROBES.items()]
     tests = await asyncio.gather(*probe_tasks)
@@ -856,7 +890,6 @@ async def validate_toggle_persisted(
     Returns a per-layer validation result so the UI can show exactly
     where a discrepancy exists.
     """
-    from fastapi import Request as _Request
     body: dict[str, Any] = {}
     try:
         body = await request.json()
@@ -877,6 +910,7 @@ async def validate_toggle_persisted(
     try:
         import json as _json
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw = rc.get("superadmin_platform_config")
@@ -898,6 +932,7 @@ async def validate_toggle_persisted(
     # Layer 2: Core config store
     try:
         from core.config_store import config_store
+
         val = config_store.get(key)
         results["layers"]["config_store"] = {
             "found": val is not None,
@@ -910,6 +945,7 @@ async def validate_toggle_persisted(
     # Layer 3: Live app_state (for engine-level settings)
     try:
         from api.admin import app_state
+
         if app_state:
             live_val = getattr(app_state, key, None)
             if live_val is not None:
@@ -923,9 +959,7 @@ async def validate_toggle_persisted(
 
     # Determine overall consistency
     layer_matches = [
-        v.get("match", False)
-        for v in results["layers"].values()
-        if "error" not in v and v.get("found", False)
+        v.get("match", False) for v in results["layers"].values() if "error" not in v and v.get("found", False)
     ]
     results["consistent"] = bool(layer_matches) and all(layer_matches)
     return results
@@ -938,6 +972,7 @@ async def get_reliability_metrics(
     """Return reliability metrics for dashboard widgets."""
     try:
         import psutil
+
         cpu = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory()
         disk = psutil.disk_usage("/")
@@ -956,6 +991,7 @@ async def get_reliability_metrics(
     redis_info: dict = {}
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             info = rc.info()
@@ -997,6 +1033,7 @@ async def get_reliability_history(
     items: list[dict] = []
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             raw_list = rc.lrange(_RELIABILITY_HISTORY_KEY, 0, limit - 1)
@@ -1023,6 +1060,7 @@ async def record_reliability_snapshot(
     snapshot = await get_reliability_status(user=user)
     try:
         from cache.redis_client import get_redis_client
+
         rc = get_redis_client()
         if rc:
             rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))

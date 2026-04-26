@@ -87,6 +87,11 @@ class User(Base):
 
     # KYC
     kyc_status = Column(String(20), default="unverified")  # unverified/pending/approved/rejected
+    kyc_submitted_at = Column(DateTime, nullable=True)
+    kyc_reviewed_at = Column(DateTime, nullable=True)
+    kyc_reviewer_id = Column(String(100), nullable=True)
+    kyc_rejection_reason = Column(String, nullable=True)
+    kyc_document_type = Column(String(50), nullable=True)
 
     # Subscription plan — free/starter/professional/enterprise
     # Updated by the billing layer on plan change; read by the superadmin users API.
@@ -150,6 +155,8 @@ class UserSession(Base):
     expires_at = Column(DateTime, nullable=False)
     revoked_at = Column(DateTime, nullable=True)
     is_revoked = Column(Boolean, default=False)
+    # Updated on each authenticated request to track real session activity.
+    last_active_at = Column(DateTime, nullable=True)
 
     user = relationship("User", back_populates="sessions")
 

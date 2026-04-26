@@ -249,6 +249,7 @@ class MobileAPIServer:
             if jti:
                 try:
                     from auth.service import is_access_token_revoked
+
                     if is_access_token_revoked(jti):
                         raise HTTPException(
                             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -649,7 +650,6 @@ class MobileAPIServer:
             client_ip = get_client_ip(websocket)
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
             if not allowed:
-                await websocket.close(code=1008, reason=reason)
                 return
 
             try:
@@ -701,7 +701,6 @@ class MobileAPIServer:
             client_ip = get_client_ip(websocket)
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
             if not allowed:
-                await websocket.close(code=1008, reason=reason)
                 return
 
             try:

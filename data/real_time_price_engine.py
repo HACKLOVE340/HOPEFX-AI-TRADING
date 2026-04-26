@@ -392,8 +392,28 @@ class RESTPriceFeed(PriceFeedBase):
                 return await response.json()
             raise ValueError(f"HTTP {response.status}: {await response.text()}")
 
+    # Coinbase only lists crypto products.  Forex and commodity symbols are
+    # never available on this endpoint — skip them immediately so the caller
+    # falls through to yfinance without an ERROR log on every poll cycle.
+    _COINBASE_SYMBOL_PREFIXES = ("BTC", "ETH", "SOL", "LTC", "BCH", "XRP", "DOGE", "ADA", "MATIC", "AVAX")
+
+    def _is_coinbase_symbol(self, symbol: str) -> bool:
+        """Return True only for symbols Coinbase Exchange actually carries."""
+        s = symbol.upper().replace("-", "").replace("/", "")
+        return any(s.startswith(p) for p in self._COINBASE_SYMBOL_PREFIXES)
+
     async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> list[OHLCV]:
-        """Get OHLCV from REST API"""
+        """Get OHLCV from Coinbase REST API.
+
+        Returns an empty list immediately for non-crypto symbols (forex, gold,
+        commodities) so the caller falls through to yfinance without making a
+        doomed HTTP request or logging a spurious ERROR.
+        """
+        # Fast-path: Coinbase does not carry forex or commodity symbols.
+        if not self._is_coinbase_symbol(symbol):
+            logger.debug("REST feed: skipping %s (not a Coinbase product)", symbol)
+            return []
+
         cache_key = f"{symbol}_{timeframe}_{limit}"
 
         # Check cache
@@ -431,10 +451,7 @@ class RESTPriceFeed(PriceFeedBase):
             #   [[time, low, high, open, close, volume], ...]
             # Coinbase Advanced Trade API returns a dict:
             #   {"candles": [{"start": ..., "low": ..., ...}, ...]}
-            if isinstance(raw, dict):
-                candles_raw = raw.get("candles", [])
-            else:
-                candles_raw = raw  # already a list
+            candles_raw = raw.get("candles", []) if isinstance(raw, dict) else raw  # already a list
 
             ohlcv_list = []
             for candle in reversed(candles_raw):  # newest-first → reverse to chronological
@@ -469,8 +486,9 @@ class RESTPriceFeed(PriceFeedBase):
             return ohlcv_list
 
         except Exception as e:
-            logger.error("REST API error for %s: %s", symbol, e)
-
+            # Demote to WARNING — yfinance is the intended fallback for crypto
+            # too, so a transient Coinbase outage is not an ERROR condition.
+            logger.warning("REST feed error for %s: %s", symbol, e)
             return []
 
 
@@ -715,32 +733,201 @@ class RealTimePriceEngine:
         """Register for candle updates"""
         self._candle_callbacks.append(callback)
 
-    def get_last_price(self, symbol: str) -> Tick | None:
-        """Get last price (prefer WebSocket)"""
-        # Try WebSocket first
-        tick = self._ws_feed.get_last_price(symbol)
-        if tick:
-            return tick
-
-        # Fall back to REST
-        return self._rest_feed.get_last_price(symbol)
-
     async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> list[OHLCV]:
         """
         Get OHLCV data, validated for price sanity and temporal ordering.
 
+        Resolution order:
+        1. WebSocket in-memory buffer (when primary feed is active)
+        2. REST feed (Coinbase / configured endpoint)
+        3. yfinance (free, no API key required) — always available
+        4. Paper broker market_prices synthetic bars (last resort)
+
         Applies the data validation layer before returning bars to callers so
         that strategies and the ML pipeline never receive malformed data.
         """
-        # Try WebSocket buffer first
+        # 1. WebSocket buffer
         if self._primary_active:
             data = self._ws_feed.get_ohlcv(symbol, timeframe, limit)
             if data:
                 return self._validate_ohlcv_list(data, symbol)
 
-        # Fall back to REST
+        # 2. REST feed
         raw = await self._rest_feed.get_ohlcv(symbol, timeframe, limit)
-        return self._validate_ohlcv_list(raw, symbol)
+        if raw:
+            return self._validate_ohlcv_list(raw, symbol)
+
+        # 3. yfinance fallback — free, no API key required
+        yf_data = await self._get_ohlcv_yfinance(symbol, timeframe, limit)
+        if yf_data:
+            return self._validate_ohlcv_list(yf_data, symbol)
+
+        # 4. Paper broker synthetic bars (last resort — uses static market_prices)
+        synth = self._get_ohlcv_from_broker(symbol, limit)
+        return self._validate_ohlcv_list(synth, symbol)
+
+    # ── yfinance OHLCV fallback ───────────────────────────────────────────────
+
+    # Map internal symbol names to yfinance tickers
+    _YF_TICKER_MAP: dict[str, str] = {
+        "XAUUSD": "GC=F",
+        "XAGUSD": "SI=F",
+        "XPTUSD": "PL=F",
+        "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X",
+        "USDJPY": "JPY=X",
+        "USDCHF": "CHF=X",
+        "AUDUSD": "AUDUSD=X",
+        "NZDUSD": "NZDUSD=X",
+        "USDCAD": "CAD=X",
+        "BTCUSD": "BTC-USD",
+        "BTC/USD": "BTC-USD",
+        "ETHUSD": "ETH-USD",
+        "ETH/USD": "ETH-USD",
+        "US30": "YM=F",
+        "US500": "ES=F",
+        "NAS100": "NQ=F",
+        "USOIL": "CL=F",
+        "UKOIL": "BZ=F",
+    }
+
+    _YF_INTERVAL_MAP: dict[str, str] = {
+        "1m": "1m",
+        "5m": "5m",
+        "15m": "15m",
+        "30m": "30m",
+        "1h": "1h",
+        "4h": "1h",   # yfinance has no 4h; use 1h and let caller aggregate
+        "1d": "1d",
+        "1w": "1wk",
+    }
+
+    async def _get_ohlcv_yfinance(
+        self, symbol: str, timeframe: str, limit: int
+    ) -> list[OHLCV]:
+        """Fetch OHLCV from yfinance in a thread pool (non-blocking)."""
+        try:
+            import yfinance as yf
+            import pandas as pd
+
+            ticker_sym = self._YF_TICKER_MAP.get(symbol.upper(), symbol)
+            interval = self._YF_INTERVAL_MAP.get(timeframe, "1h")
+
+            # Determine period based on limit + interval
+            _period_map = {
+                "1m": "7d", "5m": "60d", "15m": "60d", "30m": "60d",
+                "1h": "730d", "1d": "5y", "1wk": "10y",
+            }
+            period = _period_map.get(interval, "730d")
+
+            loop = asyncio.get_event_loop()
+
+            def _fetch() -> list[OHLCV]:
+                ticker = yf.Ticker(ticker_sym)
+                df: pd.DataFrame = ticker.history(period=period, interval=interval, auto_adjust=True)
+                if df.empty:
+                    return []
+                df = df.tail(limit)
+                result: list[OHLCV] = []
+                for ts, row in df.iterrows():
+                    result.append(
+                        OHLCV(
+                            timestamp=int(ts.timestamp()),
+                            open=float(row["Open"]),
+                            high=float(row["High"]),
+                            low=float(row["Low"]),
+                            close=float(row["Close"]),
+                            volume=float(row.get("Volume", 0)),
+                        )
+                    )
+                return result
+
+            data = await loop.run_in_executor(None, _fetch)
+            if data:
+                logger.info(
+                    "OHLCV yfinance: %s %s — %d bars fetched",
+                    symbol, timeframe, len(data),
+                )
+            return data
+        except Exception as exc:
+            logger.warning("OHLCV yfinance fallback failed for %s: %s", symbol, exc)
+            return []
+
+    def _get_ohlcv_from_broker(self, symbol: str, limit: int) -> list[OHLCV]:
+        """
+        Build synthetic OHLCV bars from the paper broker's static market_prices.
+        Used only as a last resort when all real data sources are unavailable.
+        Each bar spans 1 hour; price is constant (no movement fabricated).
+        """
+        try:
+            from app import app_state  # type: ignore[import]
+
+            broker = getattr(app_state, "broker", None)
+            market_prices = getattr(broker, "market_prices", {}) if broker else {}
+            price = market_prices.get(symbol)
+            if not price or price <= 0:
+                return []
+
+            now = int(time.time())
+            bars: list[OHLCV] = []
+            for i in range(limit):
+                ts = now - (limit - i) * 3600
+                bars.append(OHLCV(
+                    timestamp=ts,
+                    open=price, high=price, low=price, close=price, volume=0.0,
+                ))
+            logger.debug(
+                "OHLCV broker fallback: %s — %d synthetic bars (static price %.2f)",
+                symbol, len(bars), price,
+            )
+            return bars
+        except Exception as exc:
+            logger.debug("OHLCV broker fallback failed for %s: %s", symbol, exc)
+            return []
+
+    def get_last_price(self, symbol: str) -> "Tick | None":
+        """
+        Return the most recent tick for *symbol*.
+
+        Resolution order:
+        1. WebSocket feed in-memory buffer
+        2. REST feed in-memory buffer
+        3. Paper broker market_prices (synthesise a Tick on the fly)
+        """
+        # 1. WebSocket buffer
+        tick = self._ws_feed.get_last_price(symbol)
+        if tick is not None:
+            return tick
+
+        # 2. REST buffer
+        tick = self._rest_feed.get_last_price(symbol)
+        if tick is not None:
+            return tick
+
+        # 3. Paper broker static prices
+        try:
+            from app import app_state  # type: ignore[import]
+
+            broker = getattr(app_state, "broker", None)
+            market_prices = getattr(broker, "market_prices", {}) if broker else {}
+            price = market_prices.get(symbol)
+            if price and price > 0:
+                spread_map = {
+                    "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
+                    "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+                }
+                spread = spread_map.get(symbol, price * 0.0002)
+                return Tick(
+                    symbol=symbol,
+                    timestamp=time.time(),
+                    bid=round(price - spread / 2, 5),
+                    ask=round(price + spread / 2, 5),
+                    mid=round(price, 5),
+                    volume=0.0,
+                )
+        except Exception:
+            pass
+        return None
 
     def _validate_ohlcv_list(self, bars: list, symbol: str) -> list:
         """
@@ -755,31 +942,35 @@ class RealTimePriceEngine:
             import pandas as pd
             from data_layer.validation import validate_ohlcv
 
-            df = pd.DataFrame([
-                {
-                    "timestamp": getattr(b, "timestamp", i),
-                    "open": getattr(b, "open", 0.0),
-                    "high": getattr(b, "high", 0.0),
-                    "low": getattr(b, "low", 0.0),
-                    "close": getattr(b, "close", 0.0),
-                    "volume": getattr(b, "volume", 0.0),
-                }
-                for i, b in enumerate(bars)
-            ])
+            df = pd.DataFrame(
+                [
+                    {
+                        "timestamp": getattr(b, "timestamp", i),
+                        "open": getattr(b, "open", 0.0),
+                        "high": getattr(b, "high", 0.0),
+                        "low": getattr(b, "low", 0.0),
+                        "close": getattr(b, "close", 0.0),
+                        "volume": getattr(b, "volume", 0.0),
+                    }
+                    for i, b in enumerate(bars)
+                ]
+            )
             df = validate_ohlcv(df, symbol=symbol, strict=False, drop_bad_rows=True)
             # Reconstruct OHLCV objects from validated rows
             OHLCVType = type(bars[0])
             validated = []
             for _, row in df.iterrows():
                 with contextlib.suppress(Exception):  # skip rows that can't be reconstructed
-                    validated.append(OHLCVType(
-                        timestamp=row["timestamp"],
-                        open=row["open"],
-                        high=row["high"],
-                        low=row["low"],
-                        close=row["close"],
-                        volume=row["volume"],
-                    ))
+                    validated.append(
+                        OHLCVType(
+                            timestamp=row["timestamp"],
+                            open=row["open"],
+                            high=row["high"],
+                            low=row["low"],
+                            close=row["close"],
+                            volume=row["volume"],
+                        )
+                    )
             return validated if validated else bars
         except Exception:  # nosec B110 — validation is non-fatal for live feed
             return bars

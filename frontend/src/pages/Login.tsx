@@ -287,6 +287,8 @@ const Login: React.FC = () => {
         <div style={s.footer}>
           <Link to="/register" style={s.link}>Create account</Link>
           <span style={{ color: '#334155' }}>·</span>
+          <Link to="/forgot-password" style={s.link}>Forgot password</Link>
+          <span style={{ color: '#334155' }}>·</span>
           <Link to="/status" style={s.link}>System Status</Link>
           <span style={{ color: '#334155' }}>·</span>
           <a href="mailto:support@hopefx.io" style={s.link}>Support</a>

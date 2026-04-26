@@ -313,7 +313,7 @@ async def partial_fit(
             functools.partial(learner.partial_fit, bars),
         )
     except Exception:
-        logger.exception("partial_fit failed for %s: %s", req.symbol)
+        logger.exception("partial_fit failed for %s", req.symbol)
         raise HTTPException(
             status_code=500,
             detail="Online learning update failed — check server logs",

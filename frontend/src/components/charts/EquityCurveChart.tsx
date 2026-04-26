@@ -65,7 +65,10 @@ export function EquityCurveChart() {
   const startEquity = chartData[0]?.equity ?? 0;
   const endEquity   = chartData[chartData.length - 1]?.equity ?? 0;
   const totalReturn = startEquity > 0 ? (endEquity - startEquity) / startEquity : 0;
-  const maxDD       = perf?.max_drawdown_pct ?? Math.min(...(rawCurve.map((p) => p.drawdown) || [0])) * 100;
+  // Guard against empty array before Math.min — Math.min() with no args returns Infinity.
+  // perf.max_drawdown_pct is already a percentage (0–100) from the API.
+  const rawDrawdowns = rawCurve.map((p) => p.drawdown);
+  const maxDD = perf?.max_drawdown_pct ?? (rawDrawdowns.length > 0 ? Math.min(...rawDrawdowns) * -100 : 0);
 
   const headerRight = (
     <div className="flex items-center gap-4">
@@ -193,10 +196,12 @@ export function EquityCurveChart() {
           {/* Stats footer */}
           {perf && (
             <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[#1e2d3d] shrink-0">
-              <MetricTile label="Win Rate"     value={`${(perf.win_rate * 100).toFixed(1)}%`}  valueColor="#00e676" compact />
+              {/* win_rate from /performance/summary is already 0–100 (e.g. 62.5) */}
+              <MetricTile label="Win Rate"     value={`${perf.win_rate.toFixed(1)}%`}          valueColor="#00e676" compact />
               <MetricTile label="Profit Factor" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
               <MetricTile label="Total Trades" value={perf.total_trades.toString()}             compact />
               <MetricTile label="Avg Trade"    value={fmtPrice(perf.avg_trade_pnl, 2)}         valueColor={pnlColor(perf.avg_trade_pnl)} compact />
+              {/* cvar_95 from summary is a fraction (0–1) */}
               <MetricTile label="CVaR 95%"     value={`${(perf.cvar_95 * 100).toFixed(1)}%`}  valueColor="#ff3b5c" compact />
             </div>
           )}

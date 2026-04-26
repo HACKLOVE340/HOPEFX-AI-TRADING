@@ -34,6 +34,7 @@ Task 47 — Monte Carlo Simulation
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import math
 import pathlib
@@ -49,6 +50,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
+from monetization.subscription import require_plan
 
 logger = logging.getLogger(__name__)
 # Router-level auth dependency: every endpoint on this router requires a valid
@@ -219,7 +221,7 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
 @router.post("/api/advanced/ab-tests/run", status_code=201)
 async def start_ab_test(
     req: ABTestRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Start an A/B test between two strategies using the real backtesting engine.
@@ -260,14 +262,14 @@ async def start_ab_test(
 
 
 @router.get("/api/advanced/ab-tests")
-async def list_ab_tests(user: TokenPayload = Depends(get_current_user)):
+async def list_ab_tests(user: TokenPayload = Depends(require_plan("professional"))):
     tests = _kv_scan("advanced:ab_test:*") or list(_ab_tests.values())
     tests = [t for t in tests if t.get("user_id") == user.sub]
     return {"tests": tests, "total": len(tests)}
 
 
 @router.get("/api/advanced/ab-tests/{test_id}")
-async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_user)):
+async def get_ab_test(test_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     t = _kv_get(f"advanced:ab_test:{test_id}") or _ab_tests.get(test_id)
     if not t or t["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Test not found")
@@ -280,7 +282,7 @@ async def get_ab_test(test_id: str, user: TokenPayload = Depends(get_current_use
 
 
 @router.post("/api/backtesting/{run_id}/share")
-async def share_backtest(run_id: str, user: TokenPayload = Depends(get_current_user)):
+async def share_backtest(run_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """
     Generate a public share URL for a completed backtest result.
     Returns 404 when the run_id does not correspond to a real backtest.
@@ -628,7 +630,7 @@ def _eval_indicator(formula: str, symbol: str, periods: int) -> list[dict]:
 @router.post("/api/indicators/preview")
 async def preview_indicator(
     req: IndicatorPreviewRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Evaluate a custom indicator formula against real OHLCV data.
@@ -648,7 +650,7 @@ async def preview_indicator(
 
 
 @router.get("/api/indicators")
-async def list_indicators(user: TokenPayload = Depends(get_current_user)):
+async def list_indicators(user: TokenPayload = Depends(require_plan("professional"))):
     all_inds = _kv_scan("advanced:indicator:*") or list(_indicators.values())
     user_indicators = [i for i in all_inds if i.get("user_id") == user.sub]
     return {"indicators": user_indicators}
@@ -657,7 +659,7 @@ async def list_indicators(user: TokenPayload = Depends(get_current_user)):
 @router.post("/api/indicators", status_code=201)
 async def save_indicator(
     req: SaveIndicatorRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     ind_id = str(uuid.uuid4())[:12]
     ind_data = {
@@ -675,7 +677,7 @@ async def save_indicator(
 
 
 @router.delete("/api/indicators/{ind_id}")
-async def delete_indicator(ind_id: str, user: TokenPayload = Depends(get_current_user)):
+async def delete_indicator(ind_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
     if not ind or ind["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Indicator not found")
@@ -730,9 +732,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                         for bar in ohlcv
                     ]
                     returns = [
-                        (closes[i] - closes[i - 1]) / closes[i - 1]
-                        for i in range(1, len(closes))
-                        if closes[i - 1] > 0
+                        (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                     ]
                     if returns:
                         series[sym] = returns
@@ -769,15 +769,11 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                     for row in reader:
                         val = row.get("close") or row.get("Close")
                         if val is not None:
-                            try:
+                            with contextlib.suppress(ValueError):  # skip non-numeric rows
                                 closes.append(float(val))
-                            except ValueError:  # noqa: swallowed-exception — skip non-numeric rows
-                                pass
-                closes = closes[-(window + 5):]
+                closes = closes[-(window + 5) :]
                 returns = [
-                    (closes[i] - closes[i - 1]) / closes[i - 1]
-                    for i in range(1, len(closes))
-                    if closes[i - 1] > 0
+                    (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes)) if closes[i - 1] > 0
                 ]
                 if len(returns) >= 5:
                     series[sym] = returns
@@ -819,7 +815,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                     df = _yf.download(ticker, period="6mo", interval="1d", progress=False, auto_adjust=True)
                     if df is not None and not df.empty and "Close" in df.columns:
                         closes = df["Close"].dropna().tolist()
-                        closes = closes[-(window + 5):]
+                        closes = closes[-(window + 5) :]
                         returns = [
                             (closes[i] - closes[i - 1]) / closes[i - 1]
                             for i in range(1, len(closes))
@@ -829,7 +825,9 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                             series[sym] = returns
                             logger.debug(
                                 "correlation: yfinance loaded %s (%s) — %d bars",
-                                sym, ticker, len(returns),
+                                sym,
+                                ticker,
+                                len(returns),
                             )
                 except Exception as exc:
                     logger.debug("correlation: yfinance miss for %s (%s): %s", sym, ticker, exc)
@@ -889,7 +887,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
 @router.get("/api/advanced/correlation")
 async def get_correlation_matrix(
     window: int = 60,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Return a rolling Pearson correlation matrix for the default symbol set.
@@ -907,7 +905,7 @@ async def get_correlation_matrix(
 
 
 @router.get("/api/advanced/cot-sentiment")
-async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
+async def get_cot_gold(user: TokenPayload = Depends(require_plan("professional"))):
     """
     Return CFTC Commitment of Traders data for gold (COMEX).
 
@@ -915,7 +913,6 @@ async def get_cot_gold(user: TokenPayload = Depends(get_current_user)):
     publication cadence).  When the API is unreachable the last cached response
     is returned with a ``stale=true`` flag rather than a 503.
     """
-    global _cot_cache
 
     def _build_result(rec: dict, stale: bool = False) -> dict:
         net_long = int(rec.get("noncomm_positions_long_all", 0)) - int(
@@ -1085,7 +1082,7 @@ def _run_monte_carlo(params: _MonteCarloParams) -> dict:
 async def run_monte_carlo(
     run_id: str,
     req: MonteCarloRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
     Run Monte Carlo simulation on a completed backtest result.
@@ -1133,7 +1130,7 @@ async def run_monte_carlo(
 
 
 @router.get("/api/backtesting/{run_id}/monte-carlo")
-async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(get_current_user)):
+async def get_monte_carlo(run_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Return cached Monte Carlo results. Returns 404 when not yet computed."""
     mc = _kv_get(f"advanced:mc_cache:{run_id}") or _mc_cache.get(run_id)
     if mc:
@@ -1162,7 +1159,7 @@ _adv_router = APIRouter(
 async def _adv_correlation(
     symbols: str = "XAUUSD,DXY,SPX500,OIL",
     window: int = 60,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict[str, Any]:
     """Alias: GET /api/advanced/correlation → correlation matrix."""
     sym_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
@@ -1171,19 +1168,19 @@ async def _adv_correlation(
 
 
 @_adv_router.get("/cot-sentiment", include_in_schema=False)
-async def _adv_cot_sentiment(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
+async def _adv_cot_sentiment(user: TokenPayload = Depends(require_plan("professional"))) -> dict[str, Any]:
     """Alias: GET /api/advanced/cot-sentiment → COT gold data."""
     return await get_cot_gold(user=user)
 
 
 @_adv_router.get("/ab-tests", include_in_schema=False)
-async def _adv_list_ab(user: TokenPayload = Depends(get_current_user)):
+async def _adv_list_ab(user: TokenPayload = Depends(require_plan("professional"))):
     """Alias: GET /api/advanced/ab-tests → list_ab_tests."""
     return await list_ab_tests(user=user)
 
 
 @_adv_router.get("/ab-tests/{test_id}", include_in_schema=False)
-async def _adv_get_ab(test_id: str, user: TokenPayload = Depends(get_current_user)):
+async def _adv_get_ab(test_id: str, user: TokenPayload = Depends(require_plan("professional"))):
     """Alias: GET /api/advanced/ab-tests/{id} → get_ab_test."""
     return await get_ab_test(test_id=test_id, user=user)
 
@@ -1191,7 +1188,7 @@ async def _adv_get_ab(test_id: str, user: TokenPayload = Depends(get_current_use
 @_adv_router.post("/ab-tests/run", include_in_schema=False, status_code=201)
 async def _adv_run_ab(
     req: ABTestRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_plan("professional")),
 ) -> dict[str, Any]:
     """Alias: POST /api/advanced/ab-tests/run → start_ab_test."""
     return await start_ab_test(req=req, user=user)

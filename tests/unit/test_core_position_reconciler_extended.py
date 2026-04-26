@@ -267,7 +267,7 @@ async def test_get_price_returns_float_or_none():
 
 @pytest.mark.asyncio
 async def test_get_price_yfinance_exception():
-    yfinance = pytest.importorskip("yfinance", reason="yfinance not installed")
+    pytest.importorskip("yfinance", reason="yfinance not installed")
     r = _make_reconciler()
     with patch("yfinance.Ticker", side_effect=RuntimeError("yf error")):
         price = await r._get_price("XAUUSD")

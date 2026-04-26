@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
-  ConfirmDialog, Input, SAStyles,
+  ConfirmDialog, Input,
 } from './ui';
 
 const fmtDate = (iso: string | null) =>
@@ -99,7 +99,7 @@ const NuclearControlsSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
       {confirm && (
         <ConfirmDialog
           title={confirm.label}
@@ -280,8 +280,8 @@ const PropFirmBreachPanel: React.FC = () => {
     setLoading(true);
     try {
       const [b, d] = await Promise.allSettled([
-        superadminApi.propBreaches ? superadminApi.propBreaches() : Promise.reject('no method'),
-        superadminApi.drawdownStats ? superadminApi.drawdownStats() : Promise.reject('no method'),
+        superadminApi.propBreaches(),
+        superadminApi.drawdownStats(),
       ]);
       if (b.status === 'fulfilled') setBreaches(b.value.data.breaches ?? b.value.data ?? []);
       if (d.status === 'fulfilled') setDrawdown(d.value.data);

@@ -32,30 +32,18 @@ from .signals import (
     SignalStrength,
     TradingSignal,
 )
-from .websocket_server import (
-    ChannelType,
-    ConnectionInfo,
-    WebSocketManager,
-    WebSocketMessage,
-    create_websocket_router,
-    get_websocket_manager,
-)
+from .ws_live import LiveConnectionManager, get_live_manager
 
 __all__ = [
-    "ChannelType",
-    "ConnectionInfo",
+    "LiveConnectionManager",
     "RealTimeSignalService",
     "SignalAlert",
     "SignalAnalytics",
     "SignalDirection",
     "SignalStrength",
     "TradingSignal",
-    # WebSocket
-    "WebSocketManager",
-    "WebSocketMessage",
     "admin",
-    "create_websocket_router",
-    "get_websocket_manager",
+    "get_live_manager",
     "trading",
 ]
 

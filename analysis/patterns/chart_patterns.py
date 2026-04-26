@@ -715,19 +715,19 @@ class ChartPatternDetector:
             return []
 
         closes = df[cols["close"]].tolist()
-        highs  = df[cols["high"]].tolist()
-        lows   = df[cols["low"]].tolist()
+        highs = df[cols["high"]].tolist()
+        lows = df[cols["low"]].tolist()
         n = len(closes)
 
         if n < self.min_bars:
             return []
 
         # Tuning parameters
-        pole_bars       = max(5, self.swing_window * 2)   # max bars for the pole
-        pole_pct        = 0.02                             # min pole move (2 %)
-        consol_bars     = max(5, self.swing_window * 2)   # consolidation window
-        consol_range_pct = 0.50                           # consol range ≤ 50 % of pole
-        slope_tol       = 0.0002                          # parallel-slope tolerance
+        pole_bars = max(5, self.swing_window * 2)  # max bars for the pole
+        pole_pct = 0.02  # min pole move (2 %)
+        consol_bars = max(5, self.swing_window * 2)  # consolidation window
+        consol_range_pct = 0.50  # consol range ≤ 50 % of pole
+        slope_tol = 0.0002  # parallel-slope tolerance
 
         results: list[ChartPattern] = []
         seen_ends: set[int] = set()  # deduplicate overlapping patterns
@@ -748,13 +748,13 @@ class ChartPatternDetector:
 
                 # Consolidation window immediately after the pole
                 c_start = pole_end
-                c_end   = min(c_start + consol_bars, n - 1)
+                c_end = min(c_start + consol_bars, n - 1)
                 if c_end <= c_start + 2:
                     continue
 
-                c_highs  = highs[c_start : c_end + 1]
-                c_lows   = lows[c_start  : c_end + 1]
-                c_range  = max(c_highs) - min(c_lows)
+                c_highs = highs[c_start : c_end + 1]
+                c_lows = lows[c_start : c_end + 1]
+                c_range = max(c_highs) - min(c_lows)
                 pole_height = abs(pole_move)
 
                 # Consolidation must be tight relative to the pole
@@ -767,43 +767,39 @@ class ChartPatternDetector:
 
                 # Fit trendlines through consolidation highs and lows
                 xs = list(range(len(c_highs)))
-                high_slope, high_intercept = _linear_slope(
-                    [float(x) for x in xs], c_highs
-                )
-                low_slope, low_intercept = _linear_slope(
-                    [float(x) for x in xs], c_lows
-                )
+                high_slope, high_intercept = _linear_slope([float(x) for x in xs], c_highs)
+                low_slope, low_intercept = _linear_slope([float(x) for x in xs], c_lows)
 
                 # Classify: flag vs pennant
                 slope_diff = abs(high_slope - low_slope)
-                is_parallel  = slope_diff < slope_tol
-                is_converging = (
-                    (bullish_pole and high_slope < 0 and low_slope > 0)
-                    or (not bullish_pole and high_slope > 0 and low_slope < 0)
+                is_parallel = slope_diff < slope_tol
+                is_converging = (bullish_pole and high_slope < 0 and low_slope > 0) or (
+                    not bullish_pole and high_slope > 0 and low_slope < 0
                 )
 
                 if not (is_parallel or is_converging):
                     continue
 
                 pattern_type = (
-                    ("bull_flag"    if bullish_pole else "bear_flag")
-                    if is_parallel else
-                    ("bull_pennant" if bullish_pole else "bear_pennant")
+                    ("bull_flag" if bullish_pole else "bear_flag")
+                    if is_parallel
+                    else ("bull_pennant" if bullish_pole else "bear_pennant")
                 )
                 direction = "bullish" if bullish_pole else "bearish"
 
                 # Breakout target: pole height projected from consolidation end
                 entry_price = c_highs[-1] if bullish_pole else c_lows[-1]
-                target      = entry_price + pole_height if bullish_pole else entry_price - pole_height
-                stop_loss   = min(c_lows) if bullish_pole else max(c_highs)
+                target = entry_price + pole_height if bullish_pole else entry_price - pole_height
+                stop_loss = min(c_lows) if bullish_pole else max(c_highs)
 
                 rr = (
                     abs(target - entry_price) / abs(entry_price - stop_loss)
-                    if abs(entry_price - stop_loss) > 0 else 0.0
+                    if abs(entry_price - stop_loss) > 0
+                    else 0.0
                 )
 
                 # Confidence: higher for tighter consolidation and stronger pole
-                tightness  = 1.0 - (c_range / (consol_range_pct * pole_height))
+                tightness = 1.0 - (c_range / (consol_range_pct * pole_height))
                 pole_strength = min(abs(pole_pct_move) / 0.05, 1.0)  # cap at 5 %
                 confidence = round(min(0.55 + 0.20 * tightness + 0.10 * pole_strength, 0.85), 3)
 
@@ -815,13 +811,13 @@ class ChartPatternDetector:
                         start_index=pole_start,
                         end_index=c_end,
                         key_levels={
-                            "pole_start":  round(closes[pole_start], 5),
-                            "pole_end":    round(closes[pole_end], 5),
+                            "pole_start": round(closes[pole_start], 5),
+                            "pole_end": round(closes[pole_end], 5),
                             "consol_high": round(max(c_highs), 5),
-                            "consol_low":  round(min(c_lows), 5),
-                            "entry":       round(entry_price, 5),
-                            "target":      round(target, 5),
-                            "stop_loss":   round(stop_loss, 5),
+                            "consol_low": round(min(c_lows), 5),
+                            "entry": round(entry_price, 5),
+                            "target": round(target, 5),
+                            "stop_loss": round(stop_loss, 5),
                         },
                         description=(
                             f"{'Bull' if bullish_pole else 'Bear'} "

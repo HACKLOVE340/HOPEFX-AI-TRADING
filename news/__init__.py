@@ -276,10 +276,7 @@ def create_news_router():
                 "symbol": symbol.upper(),
                 "sentiment_score": 0.0,
                 "label": "neutral",
-                "note": (
-                    "Sentiment engine unavailable; install textblob or vaderSentiment "
-                    "for live scores."
-                ),
+                "note": ("Sentiment engine unavailable; install textblob or vaderSentiment for live scores."),
             }
 
     return news_router

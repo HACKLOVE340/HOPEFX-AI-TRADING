@@ -22,13 +22,11 @@ Covers:
 from __future__ import annotations
 
 import sys
-import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
@@ -37,6 +35,7 @@ import real_data_backtest as rdb
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 def _make_ohlcv(n: int = 300, seed: int = 42) -> pd.DataFrame:
     """Minimal OHLCV DataFrame with UTC DatetimeIndex."""
@@ -58,15 +57,18 @@ def _make_mock_model(proba: float = 0.65) -> MagicMock:
     """Return a mock sklearn model that always predicts `proba` for class 1."""
     mock = MagicMock()
     mock.predict_proba = MagicMock(
-        side_effect=lambda X: np.column_stack([
-            np.full(len(X), 1 - proba),
-            np.full(len(X), proba),
-        ])
+        side_effect=lambda X: np.column_stack(
+            [
+                np.full(len(X), 1 - proba),
+                np.full(len(X), proba),
+            ]
+        )
     )
     return mock
 
 
 # ── generate_ml_signals() ─────────────────────────────────────────────────────
+
 
 class TestGenerateMlSignals:
     """generate_ml_signals() must use 5-bar forward-return target."""
@@ -99,9 +101,7 @@ class TestGenerateMlSignals:
         df = _make_ohlcv(200)
         result = rdb.generate_ml_signals(df, model_path=str(tmp_path / "missing.pkl"))
         assert "ml_proba" in result.columns
-        assert result["ml_proba"].isna().all(), (
-            "ml_proba must be NaN when model is unavailable"
-        )
+        assert result["ml_proba"].isna().all(), "ml_proba must be NaN when model is unavailable"
 
     def test_ml_signals_use_model_proba(self, tmp_path):
         """When model is available, signals must be derived from model probabilities."""
@@ -126,9 +126,7 @@ class TestGenerateMlSignals:
         assert "ml_proba" in result.columns
         ml_rows = result[result["signal_source"] == "ml_model"]
         if len(ml_rows) > 0:
-            assert (ml_rows["signal"] == 1).all(), (
-                "With proba=0.80 >= threshold=0.52, all ML signals must be +1"
-            )
+            assert (ml_rows["signal"] == 1).all(), "With proba=0.80 >= threshold=0.52, all ML signals must be +1"
 
     def test_ml_signals_abstain_when_proba_near_half(self, tmp_path):
         """When proba ≈ 0.5, signal must be 0 (abstain)."""
@@ -163,8 +161,7 @@ class TestGenerateMlSignals:
 
         with (
             patch("joblib.load", return_value=_make_mock_model()),
-            patch("ml.features_extended.build_extended_features",
-                  side_effect=ImportError("ml not available")),
+            patch("ml.features_extended.build_extended_features", side_effect=ImportError("ml not available")),
         ):
             result = rdb.generate_ml_signals(df, model_path=str(model_file))
 
@@ -177,6 +174,7 @@ class TestGenerateMlSignals:
         the default horizon parameter value in the function signature.
         """
         import inspect
+
         sig = inspect.signature(rdb.generate_ml_signals)
         horizon_default = sig.parameters["horizon"].default
         assert horizon_default == 5, (
@@ -192,6 +190,7 @@ class TestGenerateMlSignals:
 
 
 # ── run_backtest() ────────────────────────────────────────────────────────────
+
 
 class TestRunBacktest:
     """run_backtest() must use ML signals by default."""
@@ -248,9 +247,7 @@ class TestRunBacktest:
         equity_df, _ = rdb.run_backtest(df, initial_capital=capital, use_ml_signals=False)
         if len(equity_df) > 0:
             # First bar: no trade yet, equity = initial_capital (minus any overnight cost)
-            assert equity_df["equity"].iloc[0] <= capital + 1.0, (
-                "Initial equity must not exceed initial_capital"
-            )
+            assert equity_df["equity"].iloc[0] <= capital + 1.0, "Initial equity must not exceed initial_capital"
 
     def test_trade_pnls_are_floats(self):
         """All trade PnLs must be finite floats."""
@@ -263,6 +260,7 @@ class TestRunBacktest:
 
 # ── walk_forward_backtest() ───────────────────────────────────────────────────
 
+
 class TestWalkForwardBacktest:
     """walk_forward_backtest() must thread use_ml_signals through to run_backtest."""
 
@@ -273,11 +271,11 @@ class TestWalkForwardBacktest:
 
         original_rb = rdb.run_backtest
 
-        def _track_rb(df, initial_capital=rdb.INITIAL_CAPITAL, symbol=rdb.SYMBOL,
-                      use_ml_signals=True, model_path=None):
+        def _track_rb(df, initial_capital=rdb.INITIAL_CAPITAL, symbol=rdb.SYMBOL, use_ml_signals=True, model_path=None):
             calls.append(use_ml_signals)
-            return original_rb(df, initial_capital=initial_capital, symbol=symbol,
-                               use_ml_signals=False)  # use heuristic to avoid model dep
+            return original_rb(
+                df, initial_capital=initial_capital, symbol=symbol, use_ml_signals=False
+            )  # use heuristic to avoid model dep
 
         with patch.object(rdb, "run_backtest", side_effect=_track_rb):
             rdb.walk_forward_backtest(df, use_ml_signals=True)
@@ -293,11 +291,9 @@ class TestWalkForwardBacktest:
 
         original_rb = rdb.run_backtest
 
-        def _track_rb(df, initial_capital=rdb.INITIAL_CAPITAL, symbol=rdb.SYMBOL,
-                      use_ml_signals=True, model_path=None):
+        def _track_rb(df, initial_capital=rdb.INITIAL_CAPITAL, symbol=rdb.SYMBOL, use_ml_signals=True, model_path=None):
             calls.append(use_ml_signals)
-            return original_rb(df, initial_capital=initial_capital, symbol=symbol,
-                               use_ml_signals=False)
+            return original_rb(df, initial_capital=initial_capital, symbol=symbol, use_ml_signals=False)
 
         with patch.object(rdb, "run_backtest", side_effect=_track_rb):
             rdb.walk_forward_backtest(df, use_ml_signals=False)
@@ -311,12 +307,19 @@ class TestWalkForwardBacktest:
         df = _make_ohlcv(200)
         result = rdb.walk_forward_backtest(df, use_ml_signals=False)
         required = {
-            "train_equity", "test_equity", "full_equity",
-            "train_sharpe", "test_sharpe",
-            "train_sharpe_se", "test_sharpe_se",
-            "train_trade_count", "test_trade_count",
-            "train_pnls", "test_pnls",
-            "bar_sharpe_train", "bar_sharpe_test",
+            "train_equity",
+            "test_equity",
+            "full_equity",
+            "train_sharpe",
+            "test_sharpe",
+            "train_sharpe_se",
+            "test_sharpe_se",
+            "train_trade_count",
+            "test_trade_count",
+            "train_pnls",
+            "test_pnls",
+            "bar_sharpe_train",
+            "bar_sharpe_test",
             "signal_source",
         }
         for key in required:
@@ -339,12 +342,11 @@ class TestWalkForwardBacktest:
         total = train_len + test_len
         if total > 0:
             train_frac = train_len / total
-            assert 0.60 <= train_frac <= 0.80, (
-                f"Train fraction {train_frac:.2f} outside expected range [0.60, 0.80]"
-            )
+            assert 0.60 <= train_frac <= 0.80, f"Train fraction {train_frac:.2f} outside expected range [0.60, 0.80]"
 
 
 # ── trade_level_sharpe() ──────────────────────────────────────────────────────
+
 
 class TestTradeLevelSharpe:
     """trade_level_sharpe() arithmetic correctness."""
@@ -377,7 +379,7 @@ class TestTradeLevelSharpe:
         Use varied PnLs so std > 0 and trade_level_sharpe doesn't short-circuit.
         """
         rng = np.random.default_rng(7)
-        pnls_small = list(rng.normal(10, 5, 10))   # N=10
+        pnls_small = list(rng.normal(10, 5, 10))  # N=10
         pnls_large = list(rng.normal(10, 5, 200))  # N=200
         _, se_small = rdb.trade_level_sharpe(pnls_small)
         _, se_large = rdb.trade_level_sharpe(pnls_large)
@@ -396,6 +398,7 @@ class TestTradeLevelSharpe:
 
 # ── annualised_sharpe() ───────────────────────────────────────────────────────
 
+
 class TestAnnualisedSharpe:
     """annualised_sharpe() returns 0 for flat equity."""
 
@@ -411,6 +414,7 @@ class TestAnnualisedSharpe:
 
 
 # ── max_drawdown() ────────────────────────────────────────────────────────────
+
 
 class TestMaxDrawdown:
     """max_drawdown() returns correct peak-to-trough fraction."""

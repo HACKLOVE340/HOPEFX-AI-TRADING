@@ -66,10 +66,13 @@ def create_explainability_router(explainer: "AIExplainer"):
         return {
             "model_name": perf.model_name,
             "accuracy": perf.accuracy,
-            "win_rate": perf.win_rate,
-            "avg_confidence": perf.avg_confidence,
+            "precision": perf.precision,
+            "recall": perf.recall,
+            "f1_score": perf.f1_score,
             "total_predictions": perf.total_predictions,
-            "summary": perf.summary,
+            "correct_predictions": perf.correct_predictions,
+            "best_performing_conditions": perf.best_performing_conditions,
+            "worst_performing_conditions": perf.worst_performing_conditions,
         }
 
     @router.post("/counterfactual")

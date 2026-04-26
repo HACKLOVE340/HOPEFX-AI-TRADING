@@ -194,7 +194,9 @@ def register_routers(
     logger.info("Tracing router registered (/api/tracing)")
     logger.info("ML anomaly router registered (/api/ml/anomaly)")
     logger.info("Portfolio allocator router registered (/api/portfolio/allocator)")
-    logger.info("Pages router registered (/login, /register, /about, /privacy, /terms, /security, /marketplace, /affiliate, /docs/*)")
+    logger.info(
+        "Pages router registered (/login, /register, /about, /privacy, /terms, /security, /marketplace, /affiliate, /docs/*)"
+    )
 
     # ── Feature-gated routers ─────────────────────────────────────────────────
     if feature_flags.TWO_FACTOR_AUTH:
@@ -601,15 +603,7 @@ def register_routers(
     except Exception as _ws_live_err:
         logger.warning("Live WebSocket router not registered: %s", _ws_live_err)
 
-    # ── WebSocket server (legacy /ws endpoint) ────────────────────────────────
-    try:
-        from api.websocket_server import create_websocket_router, get_websocket_manager
-
-        _ws_router = create_websocket_router(get_websocket_manager())
-        _include_router_deduped(app, _ws_router)
-        logger.info("WebSocket server router registered (/ws)")
-    except Exception as _ws_err:
-        logger.warning("WebSocket server router not registered: %s", _ws_err)
+    # Legacy /ws endpoint removed — all WebSocket traffic uses /ws/live (ws_live.py)
 
     # ── API v1 versioned prefix ────────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.

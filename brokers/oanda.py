@@ -499,7 +499,7 @@ class OANDABroker:
                     return {"status": "closed", "symbol": symbol, "raw": data}
                 return {"status": "rejected", "reason": str(data), "symbol": symbol}
         except Exception:  # pylint: disable=broad-exception-caught
-            logger.exception("OANDABroker close_position %s: %s")
+            logger.exception("OANDABroker close_position %s", symbol)
             return {"status": "rejected", "reason": "Close failed — check server logs"}
 
     # ── Ping ──────────────────────────────────────────────────────────────────

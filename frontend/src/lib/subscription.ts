@@ -92,7 +92,8 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   wallet:       'starter',
 
   // ── Professional ──────────────────────────────────────────────────────────
-  trading:        'professional',   // advanced AI charting terminal
+  trading:        'professional',   // advanced AI charting terminal (ChartDashboard)
+  terminal:       'professional',   // classic trading terminal (TradingTerminal)
   geopolitical:   'professional',   // geopolitical risk intelligence
   'ai-strategy':  'professional',
   'copy-trading': 'professional',

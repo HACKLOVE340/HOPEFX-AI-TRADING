@@ -54,11 +54,16 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
   // syncing=true for any authenticated session until the server confirms the
   // user profile.  Covers both first-load (token already in memory) and
   // page-refresh (token=null, silent refresh running in interceptor).
-  const synced  = useRef(false);
+  //
+  // synced tracks the token value that was last verified so re-login within
+  // the same session (new token) always triggers a fresh /me fetch.
+  const syncedToken = useRef<string | null | undefined>(undefined);
   const [syncing, setSyncing] = useState(isAuth);
 
   useEffect(() => {
     if (!isAuth) {
+      // Reset so the next login triggers a fresh /me fetch.
+      syncedToken.current = undefined;
       setSyncing(false);
       return;
     }
@@ -72,12 +77,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
       return;
     }
 
-    // Fetch fresh user profile on every mount.
-    // If token is null the request returns 401; the response interceptor in
-    // useApi.ts silently refreshes via the httpOnly cookie, updates Zustand,
-    // and retries the request — all transparently inside this .then() chain.
-    if (!synced.current) {
-      synced.current = true;
+    // Fetch fresh user profile whenever the token changes (covers login,
+    // silent refresh, and re-login within the same session).
+    // undefined means "never synced"; null means "token not yet restored".
+    if (syncedToken.current !== token) {
+      syncedToken.current = token;
       setSyncing(true);
       authApi.me()
         .then((res) => {
@@ -127,10 +131,25 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
     const requiredRank = ROLE_RANK[requiredRole] ?? 0;
     if (userRank < requiredRank) {
       return (
-        <div role="alert" style={{ padding: '2rem', textAlign: 'center' }}>
-          <h2>Access Denied</h2>
-          <p>This page requires the <strong>{requiredRole}</strong> role.</p>
-          <p>Your current role does not have sufficient permissions.</p>
+        <div
+          role="alert"
+          style={{
+            minHeight: '100vh', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center',
+            background: '#0f172a', color: '#f1f5f9',
+            fontFamily: 'Inter, system-ui, sans-serif', gap: 12,
+          }}
+        >
+          <span style={{ fontSize: 40 }}>🔒</span>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>
+            Access Denied
+          </h2>
+          <p style={{ margin: 0, fontSize: 14, color: '#94a3b8', textAlign: 'center', maxWidth: 360 }}>
+            This page requires the{' '}
+            <span style={{ color: '#60a5fa', fontWeight: 600 }}>{requiredRole}</span>{' '}
+            role. Your current role (<span style={{ color: '#94a3b8', fontWeight: 600 }}>{user.role}</span>)
+            does not have sufficient permissions.
+          </p>
         </div>
       );
     }

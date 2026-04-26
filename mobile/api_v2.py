@@ -218,6 +218,42 @@ class MobileAPIServer:
         # WebSocket connections tracking
         self.active_connections: dict[str, list[WebSocket]] = {}
 
+    def _resolve_broker(self):
+        """Return broker: self.broker if set, otherwise app_state.broker."""
+        if self.broker is not None:
+            return self.broker
+        try:
+            from app import app_state as _state
+            return getattr(_state, "broker", None)
+        except Exception:
+            return None
+
+    @staticmethod
+    async def _call_broker(method, *args, **kwargs):
+        """Call sync or async broker method and return result."""
+        import inspect
+        result = method(*args, **kwargs)
+        if inspect.iscoroutine(result):
+            result = await result
+        return result
+
+    @staticmethod
+    def _account_info_to_dict(info) -> dict:
+        """Normalise AccountInfo dataclass or dict to a plain dict."""
+        if isinstance(info, dict):
+            return info
+        return {
+            "balance": float(getattr(info, "balance", 0) or 0),
+            "equity": float(getattr(info, "equity", 0) or 0),
+            "margin_used": float(getattr(info, "margin_used", 0) or 0),
+            "margin_available": float(
+                getattr(info, "margin_available", getattr(info, "free_margin", 0)) or 0
+            ),
+            "open_trades": 0,
+            "daily_pnl": 0.0,
+            "monthly_pnl": 0.0,
+        }
+
     def _setup_routes(self) -> None:
         """Register all route groups."""
         self._register_health_routes()
@@ -361,7 +397,8 @@ class MobileAPIServer:
             """Get account overview"""
 
             try:
-                if not self.broker:
+                broker = self._resolve_broker()
+                if not broker:
                     raise HTTPException(status_code=503, detail="Broker offline")
 
                 # Try cache first
@@ -371,7 +408,8 @@ class MobileAPIServer:
                     if cached:
                         return Account(**cached)
 
-                account_info = await self.broker.get_account_info(user_id)
+                raw_info = await self._call_broker(broker.get_account_info)
+                account_info = self._account_info_to_dict(raw_info)
 
                 account = Account(
                     account_id=user_id,
@@ -406,19 +444,47 @@ class MobileAPIServer:
             """Get real-time quote"""
 
             try:
-                if not self.broker:
+                broker = self._resolve_broker()
+                if not broker:
                     raise HTTPException(status_code=503, detail="Broker offline")
 
-                quote = await self.broker.get_quote(symbol)
+                quote_getter = getattr(broker, "get_quote", None)
+                if quote_getter is None:
+                    # Fall back to price engine via app_state
+                    try:
+                        from app import app_state as _state
+                        pe = getattr(_state, "price_engine", None)
+                        if pe:
+                            tick = pe.get_last_price(symbol)
+                            if tick:
+                                return QuoteData(
+                                    symbol=symbol,
+                                    bid=float(tick.bid),
+                                    ask=float(tick.ask),
+                                    last_update=datetime.now(UTC),
+                                    spread=float(tick.ask) - float(tick.bid),
+                                )
+                    except Exception:
+                        pass
+                    raise HTTPException(status_code=503, detail="Quote unavailable")
 
+                quote = await self._call_broker(quote_getter, symbol)
+                if isinstance(quote, dict):
+                    return QuoteData(
+                        symbol=symbol,
+                        bid=float(quote["bid"]),
+                        ask=float(quote["ask"]),
+                        last_update=datetime.now(UTC),
+                        spread=float(quote["ask"]) - float(quote["bid"]),
+                        bid_volume=float(quote.get("bid_volume", 0)),
+                        ask_volume=float(quote.get("ask_volume", 0)),
+                    )
                 return QuoteData(
                     symbol=symbol,
-                    bid=float(quote["bid"]),
-                    ask=float(quote["ask"]),
+                    bid=float(getattr(quote, "bid", 0)),
+                    ask=float(getattr(quote, "ask", 0)),
                     last_update=datetime.now(UTC),
-                    spread=float(quote["ask"]) - float(quote["bid"]),
-                    bid_volume=float(quote.get("bid_volume", 0)),
-                    ask_volume=float(quote.get("ask_volume", 0)),
+                    spread=float(getattr(quote, "ask", 0)) - float(getattr(quote, "bid", 0)),
                 )
 
             except HTTPException:
@@ -437,7 +503,8 @@ class MobileAPIServer:
             """Place new order"""
 
             try:
-                if not self.broker:
+                broker = self._resolve_broker()
+                if not broker:
                     raise HTTPException(status_code=503, detail="Broker offline")
 
                 # Validate order
@@ -451,13 +518,13 @@ class MobileAPIServer:
                     raise ValueError("Price required for STOP orders")
 
                 # Check risk limits
-                if self.broker and hasattr(self.broker, "check_risk"):
-                    is_ok, reason = await self.broker.check_risk(user_id, order)
+                if hasattr(broker, "check_risk"):
+                    is_ok, reason = await self._call_broker(broker.check_risk, user_id, order)
                     if not is_ok:
                         raise ValueError(f"Risk check failed: {reason}")
 
                 # Place order
-                result = await self.broker.place_order(
+                result = await self._call_broker(broker.place_order,
                     user_id=user_id,
                     symbol=order.symbol,
                     side=order.side,
@@ -503,29 +570,52 @@ class MobileAPIServer:
             """Get all open trades"""
 
             try:
-                if not self.broker:
+                broker = self._resolve_broker()
+                if not broker:
                     raise HTTPException(status_code=503, detail="Broker offline")
 
-                trades = await self.broker.get_open_trades(user_id)
+                # get_positions() is the standard broker method
+                getter = getattr(broker, "get_open_trades", None) or getattr(broker, "get_positions", None)
+                if getter is None:
+                    return []
+                raw_trades = await self._call_broker(getter)
 
-                return [
-                    TradeData(
-                        trade_id=t["trade_id"],
-                        symbol=t["symbol"],
-                        side=t["side"],
-                        entry_price=float(t["entry_price"]),
-                        quantity=float(t["quantity"]),
-                        current_price=float(t["current_price"]),
-                        pnl=float(t["pnl"]),
-                        pnl_percentage=float(t["pnl_percentage"]),
-                        entry_time=datetime.fromisoformat(t["entry_time"]),
-                        duration_seconds=int(
-                            (datetime.now(UTC) - datetime.fromisoformat(t["entry_time"])).total_seconds()
-                        ),
-                        spread=float(t.get("spread", 0)),
-                    )
-                    for t in trades
-                ]
+                result = []
+                for t in (raw_trades or []):
+                    if isinstance(t, dict):
+                        td = t
+                    else:
+                        td = {
+                            "trade_id": getattr(t, "id", str(t)),
+                            "symbol": getattr(t, "symbol", ""),
+                            "side": getattr(t, "side", "buy"),
+                            "entry_price": float(getattr(t, "entry_price", 0) or 0),
+                            "quantity": float(getattr(t, "quantity", getattr(t, "size", 0)) or 0),
+                            "current_price": float(getattr(t, "current_price", getattr(t, "entry_price", 0)) or 0),
+                            "pnl": float(getattr(t, "unrealized_pnl", 0) or 0),
+                            "pnl_percentage": 0.0,
+                            "entry_time": getattr(t, "opened_at", datetime.now(UTC)).isoformat()
+                            if hasattr(getattr(t, "opened_at", None), "isoformat")
+                            else str(getattr(t, "opened_at", datetime.now(UTC).isoformat())),
+                        }
+                    try:
+                        entry_t = datetime.fromisoformat(str(td.get("entry_time", datetime.now(UTC).isoformat())))
+                        result.append(TradeData(
+                            trade_id=str(td.get("trade_id", "")),
+                            symbol=str(td.get("symbol", "")),
+                            side=str(td.get("side", "buy")),
+                            entry_price=float(td.get("entry_price", 0)),
+                            quantity=float(td.get("quantity", 0)),
+                            current_price=float(td.get("current_price", td.get("entry_price", 0))),
+                            pnl=float(td.get("pnl", 0)),
+                            pnl_percentage=float(td.get("pnl_percentage", 0)),
+                            entry_time=entry_t,
+                            duration_seconds=int((datetime.now(UTC) - entry_t).total_seconds()),
+                            spread=float(td.get("spread", 0)),
+                        ))
+                    except Exception:
+                        pass
+                return result
 
             except HTTPException:
                 raise
@@ -543,24 +633,30 @@ class MobileAPIServer:
             """Close specific trade"""
 
             try:
-                if not self.broker:
+                broker = self._resolve_broker()
+                if not broker:
                     raise HTTPException(status_code=503, detail="Broker offline")
 
-                result = await self.broker.close_trade(trade_id)
+                closer = getattr(broker, "close_trade", None) or getattr(broker, "close_position", None)
+                if closer is None:
+                    raise HTTPException(status_code=503, detail="Broker does not support trade close")
+                result = await self._call_broker(closer, trade_id)
 
                 if background_tasks and self.notification_service:
+                    result_dict = result if isinstance(result, dict) else {}
                     background_tasks.add_task(
                         self.notification_service.send,
                         user_id=user_id,
                         title="Trade Closed",
-                        body=f"Trade #{trade_id} closed with P&L: {result.get('pnl', 0)}",
+                        body=f"Trade #{trade_id} closed with P&L: {result_dict.get('pnl', 0)}",
                     )
 
+                result_dict = result if isinstance(result, dict) else {}
                 return {
                     "trade_id": trade_id,
                     "status": "closed",
-                    "close_price": result.get("close_price", 0),
-                    "pnl": result.get("pnl", 0),
+                    "close_price": result_dict.get("close_price", 0),
+                    "pnl": result_dict.get("pnl", 0),
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
 
@@ -586,21 +682,29 @@ class MobileAPIServer:
             """Get performance data"""
 
             try:
-                if not self.broker:
+                broker = self._resolve_broker()
+                if not broker:
                     raise HTTPException(status_code=503, detail="Broker offline")
 
-                performance = await self.broker.get_performance(user_id, days=days)
+                perf_getter = getattr(broker, "get_performance", None)
+                if perf_getter is not None:
+                    performance = await self._call_broker(perf_getter, user_id, days=days)
+                else:
+                    performance = []
 
-                return [
-                    PerformanceData(
-                        day=p["date"],
-                        pnl=float(p["pnl"]),
-                        trades=int(p["trades"]),
-                        win_rate=float(p["win_rate"]),
-                        max_drawdown=float(p["max_drawdown"]),
-                    )
-                    for p in performance
-                ]
+                result = []
+                for p in (performance or []):
+                    try:
+                        result.append(PerformanceData(
+                            day=p["date"],
+                            pnl=float(p["pnl"]),
+                            trades=int(p["trades"]),
+                            win_rate=float(p["win_rate"]),
+                            max_drawdown=float(p["max_drawdown"]),
+                        ))
+                    except Exception:
+                        pass
+                return result
 
             except HTTPException:
                 raise
@@ -679,7 +783,6 @@ class MobileAPIServer:
             client_ip = get_client_ip(websocket)
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
             if not allowed:
-                await websocket.close(code=1008, reason=reason)
                 return
 
             await websocket.accept()
@@ -722,7 +825,6 @@ class MobileAPIServer:
             client_ip = get_client_ip(websocket)
             allowed, reason = await limiter.check_and_register(websocket, client_ip)
             if not allowed:
-                await websocket.close(code=1008, reason=reason)
                 return
 
             await websocket.accept()
@@ -791,6 +893,7 @@ class MobileAPIServer:
         if jti:
             try:
                 from auth.service import is_access_token_revoked
+
                 if is_access_token_revoked(jti):
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -847,11 +950,12 @@ def _build_router_from_app(built_app: "FastAPI") -> "_APIRouter":
     r = _APIRouter(prefix="/mobile", tags=["Mobile"])
     try:
         from fastapi.routing import APIRoute as _APIRoute
+
         for _route in built_app.routes:
             if isinstance(_route, _APIRoute):
                 _path = _route.path
                 if _path.startswith("/mobile"):
-                    _path = _path[len("/mobile"):]
+                    _path = _path[len("/mobile") :]
                 r.add_api_route(
                     path=_path,
                     endpoint=_route.endpoint,
@@ -865,8 +969,8 @@ def _build_router_from_app(built_app: "FastAPI") -> "_APIRouter":
                 )
     except Exception as _err:
         _logger_v2.warning(
-            "mobile.api_v2: could not copy routes onto APIRouter — "
-            "mobile v2 endpoints may be unavailable: %s", _err,
+            "mobile.api_v2: could not copy routes onto APIRouter — mobile v2 endpoints may be unavailable: %s",
+            _err,
         )
     return r
 

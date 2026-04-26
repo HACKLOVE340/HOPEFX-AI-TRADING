@@ -25,7 +25,11 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-      id-token: write   # required for PyPI Trusted Publishing (OIDC)
+      # id-token: write is required for PyPI Trusted Publishing (OIDC).
+      # Requested unconditionally so GitHub resolves the permission at
+      # job-init time; the actual publish step is gated by the tag ref
+      # and vars.PUBLISH_TO_PYPI so it never runs on branch pushes.
+      id-token: write
     steps:
       - name: Skip on non-tag push
         # Exit early on branch pushes — nothing to release.

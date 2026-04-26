@@ -114,13 +114,11 @@ class TestTickSignalEngine:
         for _ in range(30):
             eng.on_tick(3300.0)
         # Step 2: push fast below slow with a downward sequence
-        for p in [3280.0, 3260.0, 3240.0, 3220.0, 3200.0,
-                  3180.0, 3160.0, 3140.0, 3120.0, 3100.0]:
+        for p in [3280.0, 3260.0, 3240.0, 3220.0, 3200.0, 3180.0, 3160.0, 3140.0, 3120.0, 3100.0]:
             eng.on_tick(p)
         # Step 3: sharp upward reversal — fast EMA crosses above slow → BUY
         signals = []
-        for p in [3200.0, 3250.0, 3300.0, 3350.0, 3400.0,
-                  3420.0, 3440.0, 3460.0, 3480.0, 3500.0]:
+        for p in [3200.0, 3250.0, 3300.0, 3350.0, 3400.0, 3420.0, 3440.0, 3460.0, 3480.0, 3500.0]:
             s = eng.on_tick(p)
             if s:
                 signals.append(s)
@@ -141,13 +139,11 @@ class TestTickSignalEngine:
         for _ in range(30):
             eng.on_tick(3300.0)
         # Step 2: push fast above slow with an upward sequence
-        for p in [3320.0, 3340.0, 3360.0, 3380.0, 3400.0,
-                  3420.0, 3440.0, 3460.0, 3480.0, 3500.0]:
+        for p in [3320.0, 3340.0, 3360.0, 3380.0, 3400.0, 3420.0, 3440.0, 3460.0, 3480.0, 3500.0]:
             eng.on_tick(p)
         # Step 3: sharp downward reversal — fast EMA crosses below slow → SELL
         signals = []
-        for p in [3400.0, 3350.0, 3300.0, 3250.0, 3200.0,
-                  3180.0, 3160.0, 3140.0, 3120.0, 3100.0]:
+        for p in [3400.0, 3350.0, 3300.0, 3250.0, 3200.0, 3180.0, 3160.0, 3140.0, 3120.0, 3100.0]:
             s = eng.on_tick(p)
             if s:
                 signals.append(s)
@@ -175,12 +171,10 @@ class TestTickSignalEngine:
         # Converge, push down, then reverse up to trigger a BUY crossover
         for _ in range(30):
             eng.on_tick(3300.0)
-        for p in [3280.0, 3260.0, 3240.0, 3220.0, 3200.0,
-                  3180.0, 3160.0, 3140.0, 3120.0, 3100.0]:
+        for p in [3280.0, 3260.0, 3240.0, 3220.0, 3200.0, 3180.0, 3160.0, 3140.0, 3120.0, 3100.0]:
             eng.on_tick(p)
         signal = None
-        for p in [3200.0, 3250.0, 3300.0, 3350.0, 3400.0,
-                  3420.0, 3440.0, 3460.0, 3480.0, 3500.0]:
+        for p in [3200.0, 3250.0, 3300.0, 3350.0, 3400.0, 3420.0, 3440.0, 3460.0, 3480.0, 3500.0]:
             s = eng.on_tick(p)
             if s:
                 signal = s

@@ -138,7 +138,9 @@ class PerformanceMetrics:
 
         excess_returns = returns - (self.risk_free_rate / 252)
 
-        return float(np.sqrt(252) * (excess_returns.mean() / max(float(np.nan_to_num(downside_returns.std(), nan=0.0)), 1e-9)))
+        return float(
+            np.sqrt(252) * (excess_returns.mean() / max(float(np.nan_to_num(downside_returns.std(), nan=0.0)), 1e-9))
+        )
 
     def calculate_max_drawdown(self) -> float:
         """Calculate maximum drawdown percentage."""

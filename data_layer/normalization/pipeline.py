@@ -296,7 +296,11 @@ class NormalizationPipeline:
         out["log_volume"] = float(np.log1p(max(v, 0.0)))
 
         # log_return
-        lr = float(np.nan_to_num(np.log(c / prev_close), nan=0.0)) if prev_close and prev_close > 0.0 and c > 0.0 else 0.0
+        lr = (
+            float(np.nan_to_num(np.log(c / prev_close), nan=0.0))
+            if prev_close and prev_close > 0.0 and c > 0.0
+            else 0.0
+        )
         out["log_return"] = lr
 
         # gap_flag: absolute log return > 0.5%

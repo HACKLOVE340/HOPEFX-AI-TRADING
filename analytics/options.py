@@ -140,7 +140,7 @@ class OptionsAnalyzer:
 
         d1, d2 = self._d1_d2(spot_price, strike_price, time_to_expiry, volatility, risk_free_rate)
         sqrt_t = math.sqrt(time_to_expiry)
-        nd1 = self._norm_pdf(d1)          # standard normal PDF at d1
+        nd1 = self._norm_pdf(d1)  # standard normal PDF at d1
         discount = math.exp(-risk_free_rate * time_to_expiry)
         is_call = option_type.lower() == "call"
 
@@ -202,9 +202,7 @@ class OptionsAnalyzer:
         # Newton-Raphson: f(σ) = BS_price(σ) - market_price = 0
         sigma = 0.20  # initial guess
         for _ in range(max_iter):
-            price = self.price_option(
-                option_type, spot_price, strike_price, time_to_expiry, sigma, risk_free_rate
-            )
+            price = self.price_option(option_type, spot_price, strike_price, time_to_expiry, sigma, risk_free_rate)
             d1, _ = self._d1_d2(spot_price, strike_price, time_to_expiry, sigma, risk_free_rate)
             vega_ann = spot_price * self._norm_pdf(d1) * math.sqrt(time_to_expiry)
             if vega_ann < 1e-10:
@@ -220,9 +218,7 @@ class OptionsAnalyzer:
         lo, hi = 1e-6, 10.0
         for _ in range(100):
             mid = (lo + hi) / 2.0
-            p = self.price_option(
-                option_type, spot_price, strike_price, time_to_expiry, mid, risk_free_rate
-            )
+            p = self.price_option(option_type, spot_price, strike_price, time_to_expiry, mid, risk_free_rate)
             if abs(p - market_price) < tol:
                 return round(mid, 6)
             if p < market_price:

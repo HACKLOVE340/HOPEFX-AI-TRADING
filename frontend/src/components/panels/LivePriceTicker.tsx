@@ -7,7 +7,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store';
-import { fmtPrice, fmtPct, fmtSpread, cn } from '../../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtSpread, cn } from '../../lib/utils';
 import { StatusDot } from '../ui/StatusDot';
 import { Sparkline } from '../ui/Sparkline';
 import type { PriceTick } from '../../types';
@@ -96,7 +96,7 @@ function TickerCell({ symbol, tick, history, active }: TickerCellProps) {
             isUp ? 'text-[#00e676]' : 'text-[#ff1744]',
           )}
         >
-          {tick ? fmtPct(change / 100) : '—'}
+          {tick ? fmtPctRaw(change) : '—'}
         </span>
       </div>
 
@@ -182,7 +182,8 @@ function MicroStrip() {
 
 // ── Main ticker bar ───────────────────────────────────────────────────────────
 
-const SYMBOLS = ['XAU_USD', 'XAG_USD', 'EUR_USD', 'GBP_USD', 'USD_JPY'];
+// Slash format matches the WebSocket price_tick symbol keys sent by ws_live.py.
+const SYMBOLS = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY'];
 
 export function LivePriceTicker() {
   const prices    = useStore((s) => s.prices);
@@ -200,7 +201,7 @@ export function LivePriceTicker() {
             symbol={sym}
             tick={prices[sym]}
             history={histories[sym] ?? []}
-            active={sym === 'XAU_USD'}
+            active={sym === 'XAU/USD'}
           />
         ))}
 

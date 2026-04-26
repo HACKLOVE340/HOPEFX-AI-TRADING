@@ -31,7 +31,6 @@ from __future__ import annotations
 import importlib
 import sys
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -40,6 +39,7 @@ sys.path.insert(0, str(ROOT))
 
 
 # ── MT5Broker conditional import guard ───────────────────────────────────────
+
 
 class TestMT5BrokerGuard:
     """MT5Broker must import cleanly even when MetaTrader5 SDK is absent."""
@@ -57,13 +57,13 @@ class TestMT5BrokerGuard:
     def test_mt5_available_flag_is_bool(self):
         """_MT5_AVAILABLE must be a bool (True if SDK installed, False otherwise)."""
         import brokers.mt5_broker as m
-        assert isinstance(m._MT5_AVAILABLE, bool), (
-            f"_MT5_AVAILABLE must be bool, got {type(m._MT5_AVAILABLE)}"
-        )
+
+        assert isinstance(m._MT5_AVAILABLE, bool), f"_MT5_AVAILABLE must be bool, got {type(m._MT5_AVAILABLE)}"
 
     def test_mt5_broker_class_importable(self):
         """MT5Broker class must be importable regardless of SDK availability."""
         from brokers.mt5_broker import MT5Broker
+
         assert MT5Broker is not None
 
     @pytest.mark.asyncio
@@ -74,6 +74,7 @@ class TestMT5BrokerGuard:
         connect() is async — must be awaited.
         """
         import brokers.mt5_broker as m
+
         if m._MT5_AVAILABLE:
             pytest.skip("MetaTrader5 SDK is installed — guard not exercised")
 
@@ -94,15 +95,15 @@ class TestMT5BrokerGuard:
     def test_mt5_broker_status_includes_sdk_flag(self):
         """MT5Broker.status() must include sdk_available key."""
         import brokers.mt5_broker as m
+
         broker = m.MT5Broker(config={"login": 12345, "password": "test", "server": "test-server"})
         status = broker.status()
-        assert "sdk_available" in status, (
-            "MT5Broker.status() must include 'sdk_available' key"
-        )
+        assert "sdk_available" in status, "MT5Broker.status() must include 'sdk_available' key"
         assert isinstance(status["sdk_available"], bool)
 
 
 # ── IBKRBroker conditional import guard ──────────────────────────────────────
+
 
 class TestIBKRBrokerGuard:
     """IBKRBroker must import cleanly even when ib_insync is absent."""
@@ -120,13 +121,13 @@ class TestIBKRBrokerGuard:
     def test_ib_available_flag_is_bool(self):
         """_IB_AVAILABLE must be a bool."""
         import brokers.ibkr as m
-        assert isinstance(m._IB_AVAILABLE, bool), (
-            f"_IB_AVAILABLE must be bool, got {type(m._IB_AVAILABLE)}"
-        )
+
+        assert isinstance(m._IB_AVAILABLE, bool), f"_IB_AVAILABLE must be bool, got {type(m._IB_AVAILABLE)}"
 
     def test_ibkr_broker_class_importable(self):
         """IBKRBroker class must be importable regardless of SDK availability."""
         from brokers.ibkr import IBKRBroker
+
         assert IBKRBroker is not None
 
     @pytest.mark.asyncio
@@ -137,6 +138,7 @@ class TestIBKRBrokerGuard:
         connect() is async — must be awaited.
         """
         import brokers.ibkr as m
+
         if m._IB_AVAILABLE:
             pytest.skip("ib_insync is installed — guard not exercised")
 
@@ -149,20 +151,19 @@ class TestIBKRBrokerGuard:
         except RuntimeError:
             pass  # Acceptable
         except ImportError as exc:
-            pytest.fail(
-                f"IBKRBroker.connect() raised ImportError: {exc}\n"
-                "Must raise RuntimeError or return False."
-            )
+            pytest.fail(f"IBKRBroker.connect() raised ImportError: {exc}\nMust raise RuntimeError or return False.")
 
     def test_ibkr_broker_not_available_when_sdk_absent(self):
         """When ib_insync is absent, _IB_AVAILABLE must be False."""
         import brokers.ibkr as m
+
         if m._IB_AVAILABLE:
             pytest.skip("ib_insync is installed — this test only applies when absent")
         assert m._IB_AVAILABLE is False
 
 
 # ── FIX adapter conditional import guard ─────────────────────────────────────
+
 
 class TestFIXAdapterGuard:
     """FIXAdapter must import cleanly and fall back to simplefix when quickfix absent."""
@@ -180,9 +181,8 @@ class TestFIXAdapterGuard:
     def test_fix_backend_is_string(self):
         """_FIX_BACKEND must be a string ('quickfix', 'simplefix', or 'none')."""
         import execution.fix_adapter as m
-        assert isinstance(m._FIX_BACKEND, str), (
-            f"_FIX_BACKEND must be str, got {type(m._FIX_BACKEND)}"
-        )
+
+        assert isinstance(m._FIX_BACKEND, str), f"_FIX_BACKEND must be str, got {type(m._FIX_BACKEND)}"
         assert m._FIX_BACKEND in ("quickfix", "pyfixmsg", "simplefix", "none"), (
             f"_FIX_BACKEND={m._FIX_BACKEND!r} — must be one of: quickfix, pyfixmsg, simplefix, none"
         )
@@ -190,6 +190,7 @@ class TestFIXAdapterGuard:
     def test_fix_adapter_class_importable(self):
         """FIXAdapter class must be importable regardless of backend availability."""
         from execution.fix_adapter import FIXAdapter
+
         assert FIXAdapter is not None
 
     def test_fix_adapter_falls_back_to_simplefix_or_none(self):
@@ -198,8 +199,10 @@ class TestFIXAdapterGuard:
         'simplefix' or 'none' — never 'quickfix'.
         """
         import execution.fix_adapter as m
+
         try:
             import quickfix  # noqa: F401
+
             pytest.skip("quickfix is installed — fallback not exercised")
         except ImportError:
             pass
@@ -211,14 +214,14 @@ class TestFIXAdapterGuard:
     def test_fix_adapter_connect_raises_runtime_not_import(self):
         """FIXAdapter.connect() must raise RuntimeError (not ImportError) when backend absent."""
         import execution.fix_adapter as m
+
         if m._FIX_BACKEND == "quickfix":
             pytest.skip("quickfix is installed — guard not exercised")
 
         adapter = m.FIXAdapter.__new__(m.FIXAdapter)
         # Minimal init without network
         try:
-            adapter.__init__(host="127.0.0.1", port=9876, sender_comp_id="TEST",
-                             target_comp_id="BROKER")
+            adapter.__init__(host="127.0.0.1", port=9876, sender_comp_id="TEST", target_comp_id="BROKER")
         except Exception:
             pass  # init may fail without a real FIX server
 
@@ -237,6 +240,7 @@ class TestFIXAdapterGuard:
 
 
 # ── requirements-ci.txt completeness ─────────────────────────────────────────
+
 
 class TestRequirementsCiCompleteness:
     """requirements-ci.txt must contain all packages needed for the test suite."""
@@ -330,6 +334,7 @@ class TestRequirementsCiCompleteness:
 
 # ── Previously-failing test modules now import cleanly ────────────────────────
 
+
 class TestPreviouslyFailingModulesImport:
     """
     The 7 test files that previously failed to collect must now import cleanly.
@@ -359,13 +364,14 @@ class TestPreviouslyFailingModulesImport:
                 "This module previously failed to collect. "
                 "Add the missing package to requirements-ci.txt."
             )
-        except Exception as exc:
+        except Exception:
             # Non-import errors (e.g. missing DB, missing env var) are acceptable
             # at import time — they'll surface as test failures, not collection errors.
             pass
 
 
 # ── Broker factory handles missing SDKs ──────────────────────────────────────
+
 
 class TestBrokerFactoryMissingSDKs:
     """BrokerFactory must not raise when broker SDKs are absent."""
@@ -380,14 +386,16 @@ class TestBrokerFactoryMissingSDKs:
     def test_factory_list_available_brokers(self):
         """BrokerFactory.list_available() must return a list (may be empty if SDKs absent)."""
         from brokers.factory import BrokerFactory
+
         available = BrokerFactory.list_available()
-        assert isinstance(available, (list, dict, set)), (
+        assert isinstance(available, list | dict | set), (
             f"list_available() must return a collection, got {type(available)}"
         )
 
     def test_factory_create_paper_broker_always_works(self):
         """PaperTradingBroker must always be creatable — no external SDK required."""
         from brokers import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=10_000.0)
         assert broker is not None
 
@@ -397,10 +405,12 @@ class TestBrokerFactoryMissingSDKs:
         The broker object must be constructable and status() must work.
         """
         import brokers.mt5_broker as m
+
         if m._MT5_AVAILABLE:
             pytest.skip("MetaTrader5 SDK is installed")
 
         from brokers.mt5_broker import MT5Broker
+
         broker = MT5Broker(config={"login": 0, "password": "", "server": ""})
         assert broker is not None
         status = broker.status()

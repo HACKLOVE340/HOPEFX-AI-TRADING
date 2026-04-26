@@ -1,11 +1,12 @@
 // superadmin/AutoHealingSection.tsx
 // Autonomous Healing Engine — Super Admin control panel
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
 import {
   SectionCard, ActionBtn, KpiTile, StatusBadge,
   Toggle, Input, Select, Divider,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles, Spinner,
+  ErrorState, LoadingRows, ConfirmDialog, Spinner,
 } from './ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -993,7 +994,7 @@ const AutoHealingSection: React.FC = () => {
   const [quarLoading, setQuarLoading]         = useState(false);
   const [approvalLoading, setApprovalLoading] = useState(false);
 
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
 
   const errDetail = (e: unknown) =>
     (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -1080,14 +1081,10 @@ const AutoHealingSection: React.FC = () => {
     } finally { setLoading(false); }
   }, [loadStatus, loadConfig, loadDrift, loadPatches, loadQuarantine, loadApproval]);
 
-  useEffect(() => {
-    load();
-    pollRef.current = setInterval(() => {
-      loadStatus();
-      loadApproval();
-    }, 15_000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [load, loadStatus, loadApproval]);
+  useEffect(() => { load(); }, [load]);
+
+  // Refresh status + pending approvals every 15s — pauses when tab is hidden
+  usePolling(() => { loadStatus(); loadApproval(); }, 15_000);
 
   // Reload active tab data when tab changes
   useEffect(() => {
@@ -1169,12 +1166,12 @@ const AutoHealingSection: React.FC = () => {
   // Pending approval badge count
   const approvalCount = useMemo(() => pendingApproval.length, [pendingApproval]);
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       <style>{`
         @keyframes heal-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }

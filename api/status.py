@@ -469,6 +469,7 @@ async def status_page():
 
 
 import os as _os
+
 _STATUS_CHECK_TIMEOUT_SEC: float = float(_os.getenv("HEALTH_CHECK_TIMEOUT_SEC", "15.0"))
 # Each individual probe has a 3s timeout (infrastructure/health.py).
 # 6 probes × 3s = 18s worst-case sequential, but they run concurrently so
@@ -495,7 +496,7 @@ async def _run_checks() -> dict[str, Any]:
 
     try:
         return await asyncio.wait_for(_do_checks(), timeout=_STATUS_CHECK_TIMEOUT_SEC)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "Health checks timed out after %.1fs — returning degraded status. "
             "Set HEALTH_CHECK_TIMEOUT_SEC env var to increase the limit.",

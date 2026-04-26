@@ -30,11 +30,12 @@ echo "╚═══════════════════════�
 echo ""
 
 # ── 1. Python version ─────────────────────────────────────────────────────────
+# Dockerfile uses python:3.12-slim. Require 3.12+ in production to match.
 echo "[ 1/8 ] Python version"
 PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
 PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
-if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 11 ]; }; then
-    fail "Python 3.11+ required (found $(python3 --version)). Upgrade Python."
+if [ "${PY_MAJOR}" -lt 3 ] || { [ "${PY_MAJOR}" -eq 3 ] && [ "${PY_MINOR}" -lt 12 ]; }; then
+    fail "Python 3.12+ required (found $(python3 --version)). The Docker image uses python:3.12-slim."
 fi
 ok "Python $(python3 --version | cut -d' ' -f2)"
 

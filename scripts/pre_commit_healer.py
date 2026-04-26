@@ -53,8 +53,11 @@ _ABSTRACT_DECORATORS = frozenset({"abstractmethod", "abc.abstractmethod"})
 
 def _is_test_file(path: Path) -> bool:
     parts = path.parts
-    return any(p in ("tests", "test_unit", "test_integration", "examples") for p in parts) or \
-           path.name.startswith("test_") or path.name.endswith("_test.py")
+    return (
+        any(p in ("tests", "test_unit", "test_integration", "examples") for p in parts)
+        or path.name.startswith("test_")
+        or path.name.endswith("_test.py")
+    )
 
 
 def _has_abstract_decorator(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -69,7 +72,8 @@ def _has_abstract_decorator(func_node: ast.FunctionDef | ast.AsyncFunctionDef) -
 def _body_is_only_pass(body: list[ast.stmt]) -> bool:
     """Return True when the function body is only `pass` (possibly with a docstring)."""
     non_doc = [
-        s for s in body
+        s
+        for s in body
         if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant) and isinstance(s.value.value, str))
     ]
     return len(non_doc) == 1 and isinstance(non_doc[0], ast.Pass)
@@ -137,27 +141,43 @@ def check_file(path: Path) -> list[str]:
     # intentionally no-ops (optional dependency stubs for prometheus, OTel,
     # torch, CUDA, etc.).  Methods in these classes are exempt from the
     # bare-pass check.
-    _NULL_CLASS_NAMES = frozenset({
-        "_Noop", "_Stub", "_NullCtx", "_NullSpanCtx", "_FakeModule",
-        "_NullTxn", "_NoopTxn", "_C",
-        # OTel no-op span/tracer (including inner _Span classes)
-        "_NoOpSpan", "_NoOpTracer", "_NoopSpan", "_NoopTracer", "_Span",
-        # Prometheus no-op histogram/counter
-        "_NoOpHistogram", "_NoOpCounter", "_NoOpGauge",
-        # Generic null-object patterns
-        "_NullBroker", "_NullCache", "_NullDB",
-    })
+    _NULL_CLASS_NAMES = frozenset(
+        {
+            "_Noop",
+            "_Stub",
+            "_NullCtx",
+            "_NullSpanCtx",
+            "_FakeModule",
+            "_NullTxn",
+            "_NoopTxn",
+            "_C",
+            # OTel no-op span/tracer (including inner _Span classes)
+            "_NoOpSpan",
+            "_NoOpTracer",
+            "_NoopSpan",
+            "_NoopTracer",
+            "_Span",
+            # Prometheus no-op histogram/counter
+            "_NoOpHistogram",
+            "_NoOpCounter",
+            "_NoOpGauge",
+            # Generic null-object patterns
+            "_NullBroker",
+            "_NullCache",
+            "_NullDB",
+        }
+    )
 
     # Build a mapping: function node → enclosing class name (if any)
     _func_to_class: dict[int, str | None] = {}
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             for item in ast.walk(node):
-                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item is not node:
+                if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef) and item is not node:
                     _func_to_class[id(item)] = node.name
 
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
 
         # Skip abstract methods — pass is valid there

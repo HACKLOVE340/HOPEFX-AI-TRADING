@@ -50,8 +50,14 @@ HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_HEARTBEAT_INTERVA
 MAX_PUBLIC_CONNECTIONS: int = int(os.getenv("WS_PUBLIC_MAX_CONNECTIONS", "500"))
 
 PUBLIC_SYMBOLS = [
-    "XAU_USD", "EUR_USD", "GBP_USD", "USD_JPY",
-    "XAG_USD", "BTC_USD", "USD_CHF", "AUD_USD",
+    "XAU_USD",
+    "EUR_USD",
+    "GBP_USD",
+    "USD_JPY",
+    "XAG_USD",
+    "BTC_USD",
+    "USD_CHF",
+    "AUD_USD",
 ]
 
 # ── Connection registry ───────────────────────────────────────────────────────
@@ -70,6 +76,7 @@ async def _get_price_tick(symbol: str) -> dict | None:
     """
     try:
         from data_layer import get_latest_tick
+
         tick = await get_latest_tick(symbol)
         if tick:
             mid = (tick.bid + tick.ask) / 2.0
@@ -90,6 +97,7 @@ async def _get_price_tick(symbol: str) -> dict | None:
     # Redis cache fallback
     try:
         from cache.redis_client import get_redis
+
         redis = await get_redis()
         if redis:
             raw = await redis.get(f"tick:{symbol}")
@@ -158,6 +166,7 @@ async def ws_public(ws: WebSocket) -> None:
     _active_connections.add(ws)
     logger.debug("ws/public: new connection (total=%d)", len(_active_connections))
 
+    broadcast_task: asyncio.Task | None = None  # initialised before try so finally can always reference it
     try:
         # Confirm subscription
         await ws.send_json({"type": "subscribed", "channels": ["prices"]})
@@ -181,6 +190,7 @@ async def ws_public(ws: WebSocket) -> None:
     except Exception as exc:
         logger.debug("ws/public: connection error: %s", exc)
     finally:
-        broadcast_task.cancel()
+        if broadcast_task is not None:
+            broadcast_task.cancel()
         _active_connections.discard(ws)
         logger.debug("ws/public: disconnected (total=%d)", len(_active_connections))

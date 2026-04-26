@@ -96,11 +96,7 @@ async def _broadcast_via_bitgo(
     passphrase = os.getenv("BITGO_PASSPHRASE", "")
     bitgo_env = os.getenv("BITGO_ENV", "prod")
 
-    base_url = (
-        "https://app.bitgo.com/api/v2"
-        if bitgo_env == "prod"
-        else "https://app.bitgo-test.com/api/v2"
-    )
+    base_url = "https://app.bitgo.com/api/v2" if bitgo_env == "prod" else "https://app.bitgo-test.com/api/v2"
 
     # BitGo uses integer satoshis
     amount_sat = int(amount_btc * Decimal("100000000"))
@@ -161,9 +157,7 @@ async def _broadcast_via_fireblocks(
     try:
         import jwt as _jwt  # PyJWT
     except ImportError as exc:
-        raise RuntimeError(
-            "Fireblocks integration requires PyJWT: pip install PyJWT cryptography"
-        ) from exc
+        raise RuntimeError("Fireblocks integration requires PyJWT: pip install PyJWT cryptography") from exc
 
     api_key = os.environ["FIREBLOCKS_API_KEY"]
     secret_raw = os.environ["FIREBLOCKS_API_SECRET"]
@@ -250,8 +244,8 @@ async def _broadcast_via_bitcoin_rpc(
         "params": [
             destination_address,
             float(amount_btc),
-            "",    # comment
-            "",    # comment_to
+            "",  # comment
+            "",  # comment_to
             True,  # subtractfeefromamount — fee deducted from the sent amount
         ],
     }
@@ -298,9 +292,7 @@ async def _broadcast_via_blockcypher(
     try:
         import blockcypher  # type: ignore[import]
     except ImportError as exc:
-        raise RuntimeError(
-            "BlockCypher integration requires blockcypher-cli: pip install blockcypher"
-        ) from exc
+        raise RuntimeError("BlockCypher integration requires blockcypher-cli: pip install blockcypher") from exc
 
     token = os.getenv("BLOCKCYPHER_TOKEN", "")
     amount_sat = int(amount_btc * Decimal("100000000"))
@@ -375,9 +367,7 @@ async def _broadcast_withdrawal(
     src = os.getenv("BITCOIN_SOURCE_ADDRESS", source_address)
     if wif and src:
         try:
-            return await _broadcast_via_blockcypher(
-                destination_address, amount_btc, fee_btc, src, wif
-            )
+            return await _broadcast_via_blockcypher(destination_address, amount_btc, fee_btc, src, wif)
         except Exception as exc:
             logger.error("BlockCypher broadcast failed: %s", exc)
             errors.append(f"BlockCypher: {exc}")
@@ -387,8 +377,7 @@ async def _broadcast_withdrawal(
         "Bitcoin withdrawal broadcast failed — no backend succeeded. "
         f"Errors: {'; '.join(errors) or 'none configured'}. "
         "Set at least one of: BITGO_ACCESS_TOKEN, FIREBLOCKS_API_KEY, "
-        "BITCOIN_RPC_URL, or BITCOIN_WIF_PRIVATE_KEY."
-        + (" (APP_ENV=production)" if env == "production" else "")
+        "BITCOIN_RPC_URL, or BITCOIN_WIF_PRIVATE_KEY." + (" (APP_ENV=production)" if env == "production" else "")
     )
 
 

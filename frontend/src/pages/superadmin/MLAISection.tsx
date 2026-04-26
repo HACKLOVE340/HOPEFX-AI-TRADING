@@ -4,7 +4,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, Select,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles, KpiTile,
+  ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { MLModel } from './types';
 
@@ -111,12 +111,12 @@ const MLAISection: React.FC = () => {
     } finally { setBusy(null); }
   };
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {confirm && (
         <ConfirmDialog

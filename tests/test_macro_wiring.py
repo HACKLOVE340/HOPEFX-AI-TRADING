@@ -41,6 +41,7 @@ def _auth(role: str = "admin") -> dict[str, str]:
     )
     return {"Authorization": f"Bearer {token}"}
 
+
 # ── unit: MacroStore ──────────────────────────────────────────────────────────
 
 

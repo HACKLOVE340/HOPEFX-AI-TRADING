@@ -219,7 +219,7 @@ class HOPEFXBrain:
                 await self.auto_heal()
                 await self._sync_flashpoint_iocs()
             except Exception:
-                logger.exception("HOPEFXBrain loop error: %s")
+                logger.exception("HOPEFXBrain loop error")
             await asyncio.sleep(SCAN_INTERVAL)
 
     # ── Endpoint scanner ──────────────────────────────────────────────────────

@@ -68,12 +68,12 @@ class TokenPayload(BaseModel):
     existing tokens.
     """
 
-    sub: str                    # user_id (UUID string)
+    sub: str  # user_id (UUID string)
     role: str = "user"
     exp: int | None = None
     iat: int | None = None
-    jti: str | None = None      # JWT ID — used for blacklist revocation on logout
-    type: str | None = None     # "access" discriminator checked by _decode_token
+    jti: str | None = None  # JWT ID — used for blacklist revocation on logout
+    type: str | None = None  # "access" discriminator checked by _decode_token
     email: str | None = None
     username: str | None = None
 
@@ -163,6 +163,40 @@ def _decode_token(token: str) -> TokenPayload:
         ) from exc
 
 
+def _update_session_activity(user_id: str) -> None:
+    """Update last_active_at on the most-recent non-revoked session for user_id.
+
+    Called as a fire-and-forget background task from get_current_user so that
+    the superadmin sessions panel shows real activity timestamps rather than
+    the session creation time.  Failures are suppressed — this is best-effort.
+    """
+    try:
+        from datetime import datetime, timezone as _tz
+
+        from database.connection import SessionLocal
+        from database.user_models import UserSession
+
+        now = datetime.now(_tz.utc)
+        db = SessionLocal()
+        try:
+            sess = (
+                db.query(UserSession)
+                .filter(
+                    UserSession.user_id == user_id,
+                    UserSession.is_revoked == False,  # noqa: E712
+                )
+                .order_by(UserSession.created_at.desc())
+                .first()
+            )
+            if sess:
+                sess.last_active_at = now
+                db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("session activity update suppressed: %s", exc)
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
@@ -174,8 +208,13 @@ def get_current_user(
       2. hopefx_access_token cookie            (browser navigation fallback)
 
     Raises 401 if neither is present or the token is invalid.
+
+    Also schedules a background update of UserSession.last_active_at so the
+    superadmin sessions panel reflects real activity rather than creation time.
     """
-    token: str | None = credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    token: str | None = (
+        credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    )
 
     if not token:
         raise HTTPException(
@@ -184,7 +223,20 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    return _decode_token(token)
+    payload = _decode_token(token)
+
+    # Update session activity in the background — non-blocking, best-effort.
+    # Use starlette's BackgroundTasks attached to the request state so the
+    # update runs after the response is sent without delaying the caller.
+    try:
+        if not hasattr(request.state, "background_tasks"):
+            from starlette.background import BackgroundTasks as _BT
+            request.state.background_tasks = _BT()
+        request.state.background_tasks.add_task(_update_session_activity, payload.sub)
+    except Exception:
+        pass  # Never block a request due to activity tracking
+
+    return payload
 
 
 def require_role(minimum_role: str):
@@ -227,8 +279,14 @@ def require_role(minimum_role: str):
 
 
 def validate_order_symbol(symbol: str) -> str:
-    """Validate symbol is in the allowed set (prevents injection via symbol field)."""
-    upper = symbol.upper().strip()
+    """Validate symbol is in the allowed set (prevents injection via symbol field).
+
+    Normalises common alternate formats before checking:
+      XAU/USD  -> XAUUSD
+      XAU_USD  -> XAUUSD
+      xauusd   -> XAUUSD
+    """
+    upper = symbol.upper().strip().replace("/", "").replace("_", "").replace("-", "")
     if upper not in ALLOWED_SYMBOLS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

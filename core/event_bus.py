@@ -45,9 +45,12 @@ from typing import Any
 
 try:
     import redis.asyncio as aioredis  # redis-py >= 4.2  # pylint: disable=no-name-in-module
+    import redis.exceptions as _redis_exc
+
     _REDIS_ASYNCIO_AVAILABLE = True
 except (ImportError, AttributeError):
     aioredis = None  # type: ignore[assignment]
+    _redis_exc = None  # type: ignore[assignment]
     _REDIS_ASYNCIO_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -284,6 +287,17 @@ def _make_redis() -> aioredis.Redis:
             logger.warning("EventBus: Sentinel init failed (%s) — falling back to REDIS_URL", exc)
 
     url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+    # Inject REDIS_PASSWORD into the URL when it is not already embedded.
+    # from_url() only picks up credentials that are part of the URL string;
+    # a standalone REDIS_PASSWORD env var is ignored on the standard path
+    # (unlike the Sentinel path above which passes password= explicitly).
+    # We only inject when the URL has no userinfo component to avoid
+    # overwriting credentials that were intentionally embedded in REDIS_URL.
+    if password and "@" not in url.split("://", 1)[-1]:
+        scheme, rest = url.split("://", 1)
+        url = f"{scheme}://:{password}@{rest}"
+
     # socket_timeout=None: pub/sub connections must not time out on idle channels.
     # socket_connect_timeout=5: fail fast if Redis is unreachable at connect time.
     return aioredis.from_url(
@@ -292,6 +306,16 @@ def _make_redis() -> aioredis.Redis:
         socket_connect_timeout=5,
         socket_timeout=None,
     )
+
+
+def _make_redis_pubsub() -> aioredis.Redis:
+    """Create a dedicated Redis client for pub/sub subscriptions.
+
+    Identical to _make_redis() — kept as a separate factory so callers can
+    be replaced independently if pubsub-specific tuning is needed later.
+    socket_timeout=None is intentional: listen() must block indefinitely.
+    """
+    return _make_redis()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -462,10 +486,13 @@ class EventBus:
             return  # unreachable; satisfies type checker
 
         # Redis path with auto-reconnect
+        _pubsub_redis: aioredis.Redis | None = None
         while True:
             pubsub = None
             try:
-                pubsub = self._redis.pubsub()
+                if _pubsub_redis is None:
+                    _pubsub_redis = _make_redis_pubsub()
+                pubsub = _pubsub_redis.pubsub()
                 await pubsub.subscribe(*channels)
                 logger.info("EventBus subscribed to channels: %s", channels)
 
@@ -478,7 +505,7 @@ class EventBus:
                             ignore_subscribe_messages=True,
                             timeout=1.0,
                         )
-                    except (TimeoutError, asyncio.TimeoutError):
+                    except TimeoutError:
                         # No message within the poll window — normal for idle channels
                         continue
                     except Exception:
@@ -513,9 +540,15 @@ class EventBus:
                 if pubsub:
                     await pubsub.unsubscribe()
                 return
+            except (TimeoutError, _redis_exc.TimeoutError):
+                # Idle pubsub timeout — no messages received within socket_timeout.
+                # This is normal on quiet channels; just re-subscribe without logging.
+                _pubsub_redis = None
+                continue
             except Exception as exc:
                 self._metrics["errors"] += 1
                 logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
+                _pubsub_redis = None
                 await asyncio.sleep(5)
                 try:
                     self._redis = _make_redis()

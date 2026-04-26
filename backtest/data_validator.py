@@ -82,6 +82,7 @@ logger = logging.getLogger(__name__)
 # suppression logic lives in one place.
 try:
     from utils.yfinance_compat import suppress_yfinance_warnings as _suppress_yf
+
     _suppress_yf()
 except Exception:  # nosec B110 — yfinance may not be installed
     # Fallback: apply suppressions directly
@@ -213,7 +214,7 @@ async def _fetch_yfinance(
     # safe_download() handles GC=F → GLD fallback automatically.
     _ticker_map: dict[str, str] = {
         "XAU/USDT": "GC=F",
-        "XAU/USD":  "GC=F",
+        "XAU/USD": "GC=F",
         "BTC/USDT": "BTC-USD",
         "ETH/USDT": "ETH-USD",
     }

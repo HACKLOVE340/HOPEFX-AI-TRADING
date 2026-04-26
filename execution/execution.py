@@ -154,8 +154,7 @@ def _check_latency_opt_gate() -> bool:
         return False
 
     logger.info(
-        "C++ shim / latency optimisation UNLOCKED "
-        "(paper_fills≥500, live_fills=%d≥%d, LATENCY_OPT_PHASE_UNLOCKED=true)",
+        "C++ shim / latency optimisation UNLOCKED (paper_fills≥500, live_fills=%d≥%d, LATENCY_OPT_PHASE_UNLOCKED=true)",
         live_fills,
         _LATENCY_OPT_MIN_LIVE_FILLS,
     )
@@ -446,10 +445,7 @@ async def _connect_oanda() -> Any | None:
     account_id = resolve_oanda_account()
     api_token = resolve_oanda_token()
     if not account_id or not api_token:
-        logger.warning(
-            "OANDA credentials not set — skipping OANDA broker. "
-            "Set OANDA_API_KEY and OANDA_ACCOUNT_ID."
-        )
+        logger.warning("OANDA credentials not set — skipping OANDA broker. Set OANDA_API_KEY and OANDA_ACCOUNT_ID.")
         return None
     try:
         from brokers.oanda import OANDABroker

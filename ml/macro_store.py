@@ -143,8 +143,15 @@ class MacroStore:
 
         Called by data ingestion jobs when new data arrives (e.g. weekly COT,
         monthly CPI, daily DXY close).
+
+        Accepts both tz-naive and tz-aware inputs.  Tz-aware values are
+        converted to UTC; tz-naive values are assumed to be UTC.
         """
-        ts = pd.Timestamp(as_of, tz="UTC")
+        raw = pd.Timestamp(as_of)
+        if raw.tzinfo is not None:
+            ts = raw.tz_convert("UTC")
+        else:
+            ts = raw.tz_localize("UTC")
         if series_name not in self._series:
             self._series[series_name] = pd.Series(dtype=float, name=series_name)
         self._series[series_name][ts] = float(value)

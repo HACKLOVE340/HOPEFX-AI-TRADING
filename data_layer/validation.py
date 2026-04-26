@@ -56,6 +56,7 @@ logger = logging.getLogger(__name__)
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
 
+
 class DataValidationError(ValueError):
     """Raised when data fails a validation check in strict mode."""
 
@@ -77,6 +78,7 @@ class PriceSanityError(DataValidationError):
 
 
 # ── Validation result ─────────────────────────────────────────────────────────
+
 
 @dataclass
 class ValidationResult:
@@ -213,9 +215,7 @@ def validate_ohlcv(
         out_of_bounds = (df["close"] < lo_bound) | (df["close"] > hi_bound)
         if out_of_bounds.any():
             n = int(out_of_bounds.sum())
-            errors.append(
-                f"{n} rows with close outside [{lo_bound}, {hi_bound}] for {symbol}"
-            )
+            errors.append(f"{n} rows with close outside [{lo_bound}, {hi_bound}] for {symbol}")
             bad_mask |= out_of_bounds
 
     # Non-positive prices
@@ -258,6 +258,7 @@ def validate_ohlcv(
 
 
 # ── Feature matrix validation ─────────────────────────────────────────────────
+
 
 def validate_features(
     X: pd.DataFrame | np.ndarray,
@@ -319,8 +320,7 @@ def validate_features(
     nan_cols = X.columns[X.isna().any()].tolist()
     if nan_cols:
         errors.append(
-            f"NaN values in feature columns: {nan_cols[:10]}"
-            + (" (truncated)" if len(nan_cols) > 10 else "")
+            f"NaN values in feature columns: {nan_cols[:10]}" + (" (truncated)" if len(nan_cols) > 10 else "")
         )
 
     # Inf check
@@ -345,10 +345,7 @@ def validate_features(
         now_ts = pd.Timestamp.now(tz=UTC)
         future_count = int(np.nan_to_num((X.index > now_ts).sum(), nan=0))
         if future_count > 0:
-            errors.append(
-                f"{future_count} rows have future timestamps in the feature index — "
-                "possible look-ahead bias"
-            )
+            errors.append(f"{future_count} rows have future timestamps in the feature index — possible look-ahead bias")
 
     if errors:
         msg = "validate_features: " + "; ".join(errors)
@@ -360,6 +357,7 @@ def validate_features(
 
 
 # ── Pipeline validator ────────────────────────────────────────────────────────
+
 
 class DataValidator:
     """
@@ -393,7 +391,7 @@ class DataValidator:
 
         Records the result and publishes alerts for failures.
         """
-        result = ValidationResult(stage=stage, symbol=symbol, rows_checked=len(df))
+        result = ValidationResult(passed=False, stage=stage, symbol=symbol, rows_checked=len(df))
         try:
             clean = validate_ohlcv(
                 df,
@@ -422,6 +420,7 @@ class DataValidator:
     ) -> pd.DataFrame | np.ndarray:
         """Validate a feature matrix before model inference."""
         result = ValidationResult(
+            passed=False,
             stage=stage,
             rows_checked=len(X) if hasattr(X, "__len__") else 0,
         )
@@ -449,7 +448,9 @@ class DataValidator:
         if not result.passed:
             logger.warning(
                 "DataValidator [%s/%s]: FAILED — %s",
-                result.stage, result.symbol, "; ".join(result.errors),
+                result.stage,
+                result.symbol,
+                "; ".join(result.errors),
             )
             self._publish_alert(result)
 
@@ -457,16 +458,20 @@ class DataValidator:
         """Push validation failure to Redis alerts:critical (non-fatal)."""
         try:
             from cache.redis_client import get_redis_client
+
             rc = get_redis_client()
             if rc:
                 import json
+
                 rc.rpush(
                     "alerts:critical",
-                    json.dumps({
-                        "type": "data_validation_failure",
-                        "ts": result.validated_at,
-                        "detail": result.to_dict(),
-                    }),
+                    json.dumps(
+                        {
+                            "type": "data_validation_failure",
+                            "ts": result.validated_at,
+                            "detail": result.to_dict(),
+                        }
+                    ),
                 )
                 rc.ltrim("alerts:critical", -1000, -1)
         except Exception:  # nosec B110 — alert publishing is non-fatal
@@ -480,7 +485,8 @@ class DataValidator:
             "total_failed": self._total_failed,
             "pass_rate": (
                 round(self._total_validated / (self._total_validated + self._total_failed), 4)
-                if (self._total_validated + self._total_failed) > 0 else 1.0
+                if (self._total_validated + self._total_failed) > 0
+                else 1.0
             ),
             "recent_failures": recent_failures,
         }

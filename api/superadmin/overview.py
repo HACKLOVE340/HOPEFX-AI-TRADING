@@ -3,7 +3,10 @@
 # Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
 """SuperAdmin overview sub-router."""
 
+import json as _json
 import logging
+import pathlib
+from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -21,7 +24,11 @@ router = APIRouter()
 
 @router.get("/overview")
 async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dict[str, Any]:
-    """Platform-wide health snapshot."""
+    """Platform-wide health snapshot — all KPI fields populated from real data."""
+    now = _utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    mtd_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
     overview: dict[str, Any] = {
         "total_users": 0,
         "active_users_24h": 0,
@@ -46,26 +53,148 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
         "avg_response_ms": 0,
     }
 
-    # User counts from DB
+    # ── DB queries: users, trades, signals, sessions, connections ─────────────
     try:
         from database.connection import SessionLocal
-        from database.user_models import User
-        from datetime import timedelta
+        from database.models import Signal, Trade, WalletTransaction
+        from database.user_models import User, UserSession
+        from sqlalchemy import func, text
 
         db = SessionLocal()
         try:
-            now = _utcnow()
+            # Users
             overview["total_users"] = db.query(User).count()
             overview["active_users_24h"] = (
-                db.query(User).filter(User.last_login_at >= now - timedelta(hours=24)).count()
+                db.query(User)
+                .filter(User.last_login_at >= now - timedelta(hours=24))
+                .count()
             )
-            overview["new_users_7d"] = db.query(User).filter(User.created_at >= now - timedelta(days=7)).count()
+            overview["new_users_7d"] = (
+                db.query(User)
+                .filter(User.created_at >= now - timedelta(days=7))
+                .count()
+            )
+
+            # Trades opened today
+            overview["total_trades_today"] = (
+                db.query(Trade).filter(Trade.entry_time >= today_start).count()
+            )
+
+            # Open positions
+            overview["open_positions"] = (
+                db.query(Trade).filter(Trade.is_open == True).count()  # noqa: E712
+            )
+
+            # Signals generated today
+            overview["signals_generated_today"] = (
+                db.query(Signal).filter(Signal.generated_at >= today_start).count()
+            )
+
+            # Active (non-revoked, non-expired) sessions
+            overview["active_sessions"] = (
+                db.query(UserSession)
+                .filter(
+                    UserSession.is_revoked == False,  # noqa: E712
+                    UserSession.expires_at > now,
+                )
+                .count()
+            )
+
+            # Revenue MTD: sum of completed inbound wallet transactions this month
+            try:
+                rev_row = (
+                    db.query(func.sum(WalletTransaction.amount))  # pylint: disable=not-callable
+                    .filter(
+                        WalletTransaction.created_at >= mtd_start,
+                        WalletTransaction.transaction_type.in_(
+                            ["deposit", "subscription", "fee_credit", "commission"]
+                        ),
+                        WalletTransaction.status == "completed",
+                    )
+                    .scalar()
+                )
+                overview["revenue_mtd"] = round(float(rev_row or 0.0), 2)
+            except Exception as exc:
+                logger.debug("overview: revenue_mtd wallet query: %s", exc)
+
+            # Active DB connections (PostgreSQL only; silently skipped on SQLite)
+            try:
+                row = db.execute(
+                    text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
+                ).scalar()
+                overview["db_connections"] = int(row or 0)
+            except Exception:
+                pass  # SQLite or pg_stat_activity unavailable
+
         finally:
             db.close()
     except Exception as exc:
         logger.debug("overview: DB unavailable: %s", exc)
 
-    # Kill switch + maintenance from config store
+    # ── Revenue MTD fallback: monetization analytics ──────────────────────────
+    if overview["revenue_mtd"] == 0.0:
+        try:
+            from monetization.analytics import revenue_analytics
+
+            rev = revenue_analytics.get_revenue_by_period(mtd_start, now)
+            overview["revenue_mtd"] = round(
+                float(sum(rev.values())) if isinstance(rev, dict) else float(rev or 0), 2
+            )
+        except Exception as exc:
+            logger.debug("overview: revenue_analytics unavailable: %s", exc)
+
+    # ── ML model accuracy ─────────────────────────────────────────────────────
+    # 1. Redis key written by the inference engine on each evaluation cycle.
+    # 2. Evaluation JSON files written by the training pipeline.
+    try:
+        from cache.redis_client import get_redis_client
+
+        rc = get_redis_client()
+        if rc:
+            raw = rc.get("ml:model:accuracy")
+            if raw:
+                overview["ml_model_accuracy"] = round(float(_json.loads(raw)), 4)
+    except Exception as exc:
+        logger.debug("overview: ml accuracy redis: %s", exc)
+
+    if overview["ml_model_accuracy"] == 0.0:
+        try:
+            ml_base = pathlib.Path(__file__).parent.parent.parent / "ml"
+            for p in [
+                ml_base / "saved_models" / "advanced_oos_meta.json",
+                ml_base / "evaluation_results.json",
+                ml_base / "saved_models" / "metrics.json",
+            ]:
+                if p.exists():
+                    data = _json.loads(p.read_text())
+                    acc = float(
+                        data.get("accuracy")
+                        or data.get("oos_accuracy")
+                        or data.get("test_accuracy")
+                        or 0.0
+                    )
+                    if acc > 0.0:
+                        overview["ml_model_accuracy"] = round(acc, 4)
+                        break
+        except Exception as exc:
+            logger.debug("overview: ml accuracy file: %s", exc)
+
+    # ── Error rate + avg response time ────────────────────────────────────────
+    # Written by the request-timing middleware into Redis key "metrics:request_stats".
+    try:
+        from cache.redis_client import get_redis_client
+
+        rc = get_redis_client()
+        if rc:
+            raw = rc.get("metrics:request_stats")
+            if raw:
+                stats = _json.loads(raw)
+                overview["error_rate_pct"] = round(float(stats.get("error_rate_pct", 0.0)), 3)
+                overview["avg_response_ms"] = int(stats.get("avg_response_ms", 0))
+    except Exception as exc:
+        logger.debug("overview: request_stats redis: %s", exc)
+
+    # ── Kill switch + maintenance from config store ───────────────────────────
     try:
         cs = _get_config_store()
         if cs:
@@ -78,18 +207,21 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
-    # Engine status
+    # ── Engine status ─────────────────────────────────────────────────────────
     try:
         from api.admin import app_state
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
             overview["engine_status"] = getattr(eng, "status", "running")
-            overview["open_positions"] = len(getattr(eng, "positions", {}))
+            # Only override open_positions if the engine has a live in-memory count.
+            live_pos = len(getattr(eng, "positions", {}))
+            if live_pos > 0:
+                overview["open_positions"] = live_pos
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
-    # Redis memory
+    # ── Redis memory ──────────────────────────────────────────────────────────
     try:
         from cache.redis_client import get_redis_client
 
@@ -100,7 +232,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
-    # System resources
+    # ── System resources ──────────────────────────────────────────────────────
     try:
         import psutil
 
@@ -109,10 +241,15 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
-    # Determine health
+    # ── Derive system_health from populated metrics ───────────────────────────
     if overview["kill_switch_active"] or overview["error_rate_pct"] > 10:
         overview["system_health"] = "critical"
-    elif overview["maintenance_mode"] or overview["cpu_pct"] > 85 or overview["memory_pct"] > 85:
+    elif (
+        overview["maintenance_mode"]
+        or overview["cpu_pct"] > 85
+        or overview["memory_pct"] > 85
+        or overview["error_rate_pct"] > 2
+    ):
         overview["system_health"] = "degraded"
 
     return overview

@@ -1,9 +1,10 @@
 // superadmin/LogsSection.tsx — live system logs with level filter and export
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, ActionBtn, Select, Input,
-  ErrorState, SAStyles,
+  ErrorState,
 } from './ui';
 import type { LogEntry } from './types';
 
@@ -48,11 +49,8 @@ const LogsSection: React.FC = () => {
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-refresh every 10s
-  useEffect(() => {
-    const id = setInterval(() => load(), 10_000);
-    return () => clearInterval(id);
-  }, [load]);
+  // Auto-refresh every 10s — pauses when tab is hidden
+  usePolling(load, 10_000);
 
   useEffect(() => {
     if (autoScroll && bottomRef.current) {
@@ -92,7 +90,7 @@ const LogsSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {/* Log level controls */}
       {Object.keys(logLevels).length > 0 && (

@@ -75,8 +75,8 @@ MODEL_DIR = ROOT / "ml" / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-DEFAULT_TOP_N = 50          # top-N features per fold to consider "important"
-DEFAULT_STABLE_THRESHOLD = 0.67   # >= 4/6 folds → stable
+DEFAULT_TOP_N = 50  # top-N features per fold to consider "important"
+DEFAULT_STABLE_THRESHOLD = 0.67  # >= 4/6 folds → stable
 DEFAULT_MARGINAL_THRESHOLD = 0.33  # >= 2/6 folds → marginal (review)
 DEFAULT_N_SPLITS = 6
 DEFAULT_YEARS = 50
@@ -86,6 +86,7 @@ DEFAULT_MIN_MOVE_ATR = 0.25
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
+
 
 def _load_data(years: int, smoke: bool) -> pd.DataFrame:
     """Load XAUUSD OHLCV via yfinance (same source as production retrain)."""
@@ -122,10 +123,12 @@ def _load_data(years: int, smoke: bool) -> pd.DataFrame:
 
 # ── Feature matrix ────────────────────────────────────────────────────────────
 
+
 def _build_features(df: pd.DataFrame, horizon: int, min_move_atr: float) -> tuple[pd.DataFrame, pd.Series]:
     """Build the full feature matrix using the production pipeline."""
     try:
         from ml.features_extended import build_extended_features
+
         logger.info("Building extended feature matrix…")
         X, y = build_extended_features(df, horizon=horizon, min_move_atr=min_move_atr)
         logger.info("Feature matrix: %d rows × %d features", len(X), X.shape[1])
@@ -135,6 +138,7 @@ def _build_features(df: pd.DataFrame, horizon: int, min_move_atr: float) -> tupl
 
     try:
         from ml.advanced_features import build_advanced_features
+
         logger.info("Building advanced feature matrix (fallback)…")
         X, y = build_advanced_features(df, horizon=horizon, min_move_atr=min_move_atr)
         logger.info("Feature matrix: %d rows × %d features", len(X), X.shape[1])
@@ -144,6 +148,7 @@ def _build_features(df: pd.DataFrame, horizon: int, min_move_atr: float) -> tupl
 
 
 # ── Per-fold importance extraction ────────────────────────────────────────────
+
 
 def _train_fold_and_extract_importance(
     X_train: pd.DataFrame,
@@ -168,24 +173,29 @@ def _train_fold_and_extract_importance(
     n_est = 50 if ci_mode else 300
     lr = 0.1 if ci_mode else 0.05
 
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("xgb", xgb.XGBClassifier(
-            n_estimators=n_est,
-            max_depth=3 if ci_mode else 5,
-            learning_rate=lr,
-            subsample=0.75,
-            colsample_bytree=0.75,
-            min_child_weight=3,
-            gamma=0.05,
-            reg_alpha=0.1,
-            reg_lambda=1.5,
-            importance_type="gain",   # gain > frequency for stability analysis
-            eval_metric="logloss",
-            random_state=42,
-            n_jobs=1,
-        )),
-    ])
+    model = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            (
+                "xgb",
+                xgb.XGBClassifier(
+                    n_estimators=n_est,
+                    max_depth=3 if ci_mode else 5,
+                    learning_rate=lr,
+                    subsample=0.75,
+                    colsample_bytree=0.75,
+                    min_child_weight=3,
+                    gamma=0.05,
+                    reg_alpha=0.1,
+                    reg_lambda=1.5,
+                    importance_type="gain",  # gain > frequency for stability analysis
+                    eval_metric="logloss",
+                    random_state=42,
+                    n_jobs=1,
+                ),
+            ),
+        ]
+    )
 
     model.fit(X_train, y_train)
 
@@ -209,7 +219,12 @@ def _train_fold_and_extract_importance(
 
     logger.info(
         "Fold %d  acc=%.3f  f1=%.3f  auc=%.3f  train=%d  test=%d",
-        fold, acc, f1, auc, len(X_train), len(X_test),
+        fold,
+        acc,
+        f1,
+        auc,
+        len(X_train),
+        len(X_test),
     )
 
     return {
@@ -224,6 +239,7 @@ def _train_fold_and_extract_importance(
 
 
 # ── Stability computation ─────────────────────────────────────────────────────
+
 
 def compute_stability(
     fold_results: list[dict],
@@ -273,21 +289,27 @@ def compute_stability(
     # Classify
     stable = sorted(
         [f for f, s in stability_scores.items() if s >= stable_threshold],
-        key=lambda f: stability_scores[f], reverse=True,
+        key=lambda f: stability_scores[f],
+        reverse=True,
     )
     marginal = sorted(
-        [f for f, s in stability_scores.items()
-         if marginal_threshold <= s < stable_threshold],
-        key=lambda f: stability_scores[f], reverse=True,
+        [f for f, s in stability_scores.items() if marginal_threshold <= s < stable_threshold],
+        key=lambda f: stability_scores[f],
+        reverse=True,
     )
     unstable = sorted(
         [f for f, s in stability_scores.items() if s < marginal_threshold],
-        key=lambda f: stability_scores[f], reverse=True,
+        key=lambda f: stability_scores[f],
+        reverse=True,
     )
 
     logger.info(
         "Feature stability: %d stable  %d marginal  %d unstable  (top-%d, threshold=%.2f)",
-        len(stable), len(marginal), len(unstable), top_n, stable_threshold,
+        len(stable),
+        len(marginal),
+        len(unstable),
+        top_n,
+        stable_threshold,
     )
     if stable:
         logger.info("Top 10 stable features: %s", stable[:10])
@@ -308,6 +330,7 @@ def compute_stability(
 
 # ── Main analysis ─────────────────────────────────────────────────────────────
 
+
 def run_stability_analysis(
     years: int = DEFAULT_YEARS,
     n_splits: int = DEFAULT_N_SPLITS,
@@ -327,6 +350,7 @@ def run_stability_analysis(
     from sklearn.model_selection import TimeSeriesSplit
 
     import os
+
     ci_mode = smoke or bool(os.getenv("CI_FAST") or os.getenv("HOPEFX_CI"))
 
     if ci_mode:
@@ -363,8 +387,12 @@ def run_stability_analysis(
             continue
 
         result = _train_fold_and_extract_importance(
-            X_train, y_train, X_test, y_test,
-            fold=fold_idx, ci_mode=ci_mode,
+            X_train,
+            y_train,
+            X_test,
+            y_test,
+            fold=fold_idx,
+            ci_mode=ci_mode,
         )
         fold_results.append(result)
 
@@ -381,10 +409,7 @@ def run_stability_analysis(
 
     # 5. Fold-level accuracy summary
     fold_accs = [r["accuracy"] for r in fold_results]
-    fold_summary = [
-        {k: v for k, v in r.items() if k != "importance"}
-        for r in fold_results
-    ]
+    fold_summary = [{k: v for k, v in r.items() if k != "importance"} for r in fold_results]
 
     # 6. Assemble report
     report = {
@@ -439,13 +464,13 @@ def run_stability_analysis(
     print(f"  Marginal         : {len(stability['marginal_features'])}")
     print(f"  Unstable (drop)  : {len(stability['unstable_features'])}")
     print(f"  Mean fold acc    : {np.mean(fold_accs):.4f} ± {np.std(fold_accs):.4f}")
-    print(f"\n  Top 15 stable features:")
+    print("\n  Top 15 stable features:")
     for feat in stability["stable_features"][:15]:
         score = stability["stability_scores"][feat]
         mean_imp = stability["mean_importance"][feat]
         print(f"    {feat:<40s}  stability={score:.2f}  mean_gain={mean_imp:.6f}")
     if stability["unstable_features"]:
-        print(f"\n  Top 10 unstable features (recommend dropping):")
+        print("\n  Top 10 unstable features (recommend dropping):")
         for feat in stability["unstable_features"][:10]:
             score = stability["stability_scores"][feat]
             cv = stability["cv_importance"].get(feat, float("inf"))
@@ -457,29 +482,43 @@ def run_stability_analysis(
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description="Walk-forward feature stability analysis for HOPEFX ML models.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    p.add_argument("--years", type=int, default=DEFAULT_YEARS,
-                   help="Years of XAUUSD history to use")
-    p.add_argument("--n-splits", type=int, default=DEFAULT_N_SPLITS,
-                   help="Number of walk-forward CV folds")
-    p.add_argument("--top-n", type=int, default=DEFAULT_TOP_N,
-                   help="Top-N features per fold to consider 'important'")
-    p.add_argument("--stable-threshold", type=float, default=DEFAULT_STABLE_THRESHOLD,
-                   help="Fraction of folds a feature must appear in to be 'stable'")
-    p.add_argument("--marginal-threshold", type=float, default=DEFAULT_MARGINAL_THRESHOLD,
-                   help="Fraction of folds below which a feature is 'unstable'")
-    p.add_argument("--horizon", type=int, default=DEFAULT_HORIZON,
-                   help="Prediction horizon in bars (must match production model)")
-    p.add_argument("--min-move-atr", type=float, default=DEFAULT_MIN_MOVE_ATR,
-                   help="Minimum move (ATR multiples) to include a bar as a training sample")
-    p.add_argument("--output", type=Path, default=MODEL_DIR / "feature_stability.json",
-                   help="Output path for the stability report JSON")
-    p.add_argument("--smoke", action="store_true",
-                   help="Smoke-test mode: 2Y data, 2 folds (fast CI validation)")
+    p.add_argument("--years", type=int, default=DEFAULT_YEARS, help="Years of XAUUSD history to use")
+    p.add_argument("--n-splits", type=int, default=DEFAULT_N_SPLITS, help="Number of walk-forward CV folds")
+    p.add_argument("--top-n", type=int, default=DEFAULT_TOP_N, help="Top-N features per fold to consider 'important'")
+    p.add_argument(
+        "--stable-threshold",
+        type=float,
+        default=DEFAULT_STABLE_THRESHOLD,
+        help="Fraction of folds a feature must appear in to be 'stable'",
+    )
+    p.add_argument(
+        "--marginal-threshold",
+        type=float,
+        default=DEFAULT_MARGINAL_THRESHOLD,
+        help="Fraction of folds below which a feature is 'unstable'",
+    )
+    p.add_argument(
+        "--horizon", type=int, default=DEFAULT_HORIZON, help="Prediction horizon in bars (must match production model)"
+    )
+    p.add_argument(
+        "--min-move-atr",
+        type=float,
+        default=DEFAULT_MIN_MOVE_ATR,
+        help="Minimum move (ATR multiples) to include a bar as a training sample",
+    )
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=MODEL_DIR / "feature_stability.json",
+        help="Output path for the stability report JSON",
+    )
+    p.add_argument("--smoke", action="store_true", help="Smoke-test mode: 2Y data, 2 folds (fast CI validation)")
     return p.parse_args()
 
 

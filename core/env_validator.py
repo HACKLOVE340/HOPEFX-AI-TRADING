@@ -196,9 +196,9 @@ RECOMMENDED_VARS: list[EnvVar] = [
 _DEV_PLACEHOLDERS: dict[str, str] = {
     "SECURITY_JWT_SECRET": "dev-jwt-secret-minimum-32-characters-long!!",  # pragma: allowlist secret
     "CONFIG_ENCRYPTION_KEY": "dev-key-minimum-32-characters-long-for-testing",
-    "HOPEFX_KILL_SWITCH_TOKEN": "CHANGE_ME_generate_64_char_hex_token",  # noqa: healer
-    "POSTGRES_PASSWORD": "CHANGE_ME_db_password",  # pragma: allowlist secret  # noqa: healer
-    "REDIS_PASSWORD": "CHANGE_ME_redis_password",  # pragma: allowlist secret  # noqa: healer
+    "HOPEFX_KILL_SWITCH_TOKEN": "CHANGE_ME_generate_64_char_hex_token",
+    "POSTGRES_PASSWORD": "CHANGE_ME_db_password",  # pragma: allowlist secret
+    "REDIS_PASSWORD": "CHANGE_ME_redis_password",  # pragma: allowlist secret
 }
 
 

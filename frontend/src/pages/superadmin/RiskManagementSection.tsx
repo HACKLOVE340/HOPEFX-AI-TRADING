@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
-  ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type {
   CircuitBreakerState, VaRMetrics, StressTestResult,
@@ -105,8 +105,8 @@ const RiskManagementSection: React.FC = () => {
     ? propBreaches.filter(b => b.status === breachFilter || b.severity === breachFilter || b.breach_type === breachFilter)
     : propBreaches;
 
-  if (loading) return <><SAStyles /><LoadingRows rows={8} /></>;
-  if (error)   return <><SAStyles /><ErrorState message={error} onRetry={load} /></>;
+  if (loading) return <><LoadingRows rows={8} /></>;
+  if (error)   return <><ErrorState message={error} onRetry={load} /></>;
 
   const TABS: { id: RiskTab; label: string; icon: string }[] = [
     { id: 'overview',        label: 'Overview',       icon: '📊' },
@@ -118,7 +118,7 @@ const RiskManagementSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
       {confirm && (
         <ConfirmDialog
           title={`Reset Circuit Breaker: ${confirm.name}`}
@@ -258,12 +258,16 @@ const RiskManagementSection: React.FC = () => {
                 <tbody>
                   {stressTests.map((t, i) => (
                     <tr key={i} className="sa-row" style={{ borderBottom: '1px solid #0f172a' }}>
-                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{t.scenario}</td>
-                      <td style={{ padding: '10px 12px', fontWeight: 700, color: t.pnl_impact < 0 ? '#f87171' : '#4ade80' }}>{fmtMoney(t.pnl_impact)}</td>
+                      <td style={{ padding: '10px 12px', fontWeight: 600, color: '#f1f5f9' }}>{t.name ?? t.scenario}</td>
+                      <td style={{ padding: '10px 12px', fontWeight: 700, color: (t.pnl_usd ?? t.pnl_impact ?? 0) < 0 ? '#f87171' : '#4ade80' }}>
+                        {t.pnl_usd != null ? fmtMoney(t.pnl_usd) : t.pnl_impact != null ? fmtMoney(t.pnl_impact) : '—'}
+                      </td>
                       <td style={{ padding: '10px 12px', color: t.pnl_pct < 0 ? '#f87171' : '#4ade80' }}>{fmtPct(t.pnl_pct)}</td>
-                      <td style={{ padding: '10px 12px', color: '#f87171' }}>{fmtMoney(t.max_loss)}</td>
-                      <td style={{ padding: '10px 12px', color: '#94a3b8' }}>{fmtPct(t.probability * 100)}</td>
-                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{fmtDate(t.run_at)}</td>
+                      <td style={{ padding: '10px 12px', color: '#f87171' }}>{t.max_loss != null ? fmtMoney(t.max_loss) : '—'}</td>
+                      <td style={{ padding: '10px 12px', color: '#94a3b8' }}>
+                        {t.probability != null ? fmtPct(t.probability * 100) : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 12 }}>{t.run_at ? fmtDate(t.run_at) : '—'}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -86,9 +86,7 @@ def resolve_oanda_token() -> str:
         val = os.getenv(var, "").strip()
         if val:
             if var != "OANDA_API_KEY":
-                logger.warning(
-                    "OANDA token read from %s — prefer OANDA_API_KEY (canonical name)", var
-                )
+                logger.warning("OANDA token read from %s — prefer OANDA_API_KEY (canonical name)", var)
             return val
     return ""
 
@@ -104,9 +102,7 @@ def resolve_oanda_account() -> str:
         val = os.getenv(var, "").strip()
         if val:
             if var != "OANDA_ACCOUNT_ID":
-                logger.warning(
-                    "OANDA account ID read from %s — prefer OANDA_ACCOUNT_ID (canonical name)", var
-                )
+                logger.warning("OANDA account ID read from %s — prefer OANDA_ACCOUNT_ID (canonical name)", var)
             return val
     return ""
 
@@ -122,9 +118,7 @@ def resolve_oanda_environment() -> str:
         val = os.getenv(var, "").strip().lower()
         if val in ("practice", "live"):
             if var != "OANDA_ENVIRONMENT":
-                logger.warning(
-                    "OANDA environment read from %s — prefer OANDA_ENVIRONMENT (canonical name)", var
-                )
+                logger.warning("OANDA environment read from %s — prefer OANDA_ENVIRONMENT (canonical name)", var)
             return val
     return "practice"
 

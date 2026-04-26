@@ -50,8 +50,26 @@ _auth_service = None
 # Sliding-window counter: max N requests per window_seconds per IP.
 # Uses Redis when available, falls back to in-memory (single-process only).
 
-_AUTH_RATE_LIMIT = int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", "10"))  # max attempts
-_AUTH_RATE_WINDOW = int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", "60"))  # per minute
+def _parse_int_env(name: str, default: int) -> int:
+    """Parse an integer env var, raising a clear error if the value is not a plain integer.
+
+    Values like '1h' or '60s' are rejected — these variables expect a bare number.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        raise ValueError(
+            f"Environment variable {name}={raw!r} must be a plain integer "
+            f"(e.g. {default}), not a duration string. "
+            f"Check your .env file or shell environment."
+        )
+
+
+_AUTH_RATE_LIMIT = _parse_int_env("AUTH_RATE_LIMIT_REQUESTS", 10)   # max attempts
+_AUTH_RATE_WINDOW = _parse_int_env("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)  # seconds
 
 # Trusted reverse-proxy IPs — only these may set X-Forwarded-For.
 # Comma-separated list; defaults to loopback only.
@@ -209,7 +227,9 @@ def _get_current_user_id(
 
     Raises 401 if neither is present or the token is invalid/expired.
     """
-    token: str | None = credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    token: str | None = (
+        credentials.credentials if credentials is not None else request.cookies.get("hopefx_access_token")
+    )
 
     if not token:
         raise HTTPException(
@@ -391,7 +411,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
             )
         )
     except Exception as _login_exc:
-        logger.error("Login service error for %s: %s", resolved_email, _login_exc)
+        logger.error("Login service error for %s: %s", resolved_email, _login_exc, exc_info=True)
         raise HTTPException(status_code=503, detail="Authentication service temporarily unavailable") from _login_exc
 
     if not ok:
@@ -718,7 +738,7 @@ async def get_csrf_token(response: Response) -> dict:
         key=_CSRF_COOKIE_NAME,
         value=token,
         max_age=_CSRF_COOKIE_MAX_AGE,
-        httponly=False,   # JS must be able to read it to set the header
+        httponly=False,  # JS must be able to read it to set the header
         samesite="strict",
         secure=secure,
         path="/",

@@ -1,15 +1,20 @@
 /**
  * components/ui/Sparkline.tsx
  * Minimal SVG sparkline for price history in ticker rows.
+ *
+ * Each instance uses a unique gradient ID derived from a stable counter so
+ * multiple sparklines rendered simultaneously don't share the same SVG
+ * gradient definition (SVG IDs are global in the document — sharing them
+ * causes all sparklines to inherit the last-rendered gradient color).
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useId } from 'react';
 
 interface SparklineProps {
-  data:      number[];
-  width?:    number;
-  height?:   number;
-  color?:    string;
+  data:       number[];
+  width?:     number;
+  height?:    number;
+  color?:     string;
   className?: string;
 }
 
@@ -20,6 +25,11 @@ export function Sparkline({
   color,
   className,
 }: SparklineProps) {
+  // useId produces a stable, unique ID per component instance — safe for SSR
+  // and concurrent rendering. Prefix with 'sg' to keep it a valid XML ID.
+  const uid = useId();
+  const gradId = `sg${uid.replace(/:/g, '')}`;
+
   const path = useMemo(() => {
     if (data.length < 2) return '';
     const min = Math.min(...data);
@@ -39,7 +49,7 @@ export function Sparkline({
   }, [data, width, height]);
 
   const trend = data.length >= 2 ? data[data.length - 1] - data[0] : 0;
-  const autoColor = trend >= 0 ? '#00e676' : '#ff1744';
+  const autoColor  = trend >= 0 ? '#00e676' : '#ff1744';
   const strokeColor = color ?? autoColor;
 
   if (!path) return null;
@@ -53,15 +63,16 @@ export function Sparkline({
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id={`sg-${strokeColor.replace('#', '')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={strokeColor} stopOpacity="0.15" />
+        {/* Instance-scoped gradient ID — no collision across multiple sparklines */}
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stopColor={strokeColor} stopOpacity="0.15" />
           <stop offset="100%" stopColor={strokeColor} stopOpacity="0" />
         </linearGradient>
       </defs>
       {/* Fill area */}
       <path
         d={`${path} L ${width - 2},${height - 2} L 2,${height - 2} Z`}
-        fill={`url(#sg-${strokeColor.replace('#', '')})`}
+        fill={`url(#${gradId})`}
       />
       {/* Line */}
       <path

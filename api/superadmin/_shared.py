@@ -5,6 +5,8 @@
 # No commercial use without explicit permission.
 """Shared imports, Pydantic models, and helpers for the superadmin sub-routers."""
 
+import hashlib
+import json
 import logging
 import re as _re
 from datetime import datetime, timezone
@@ -96,14 +98,56 @@ def _get_config_store():
 
 
 def _log_superadmin_action(user: TokenPayload, action: str, detail: str = "") -> None:
-    """Write a superadmin action to the audit log."""
+    """Write a superadmin action to the AuditLogEntry table with hash-chain integrity.
+
+    Each row's hash_chain is SHA-256(prev_hash + sequence_number + actor + action + detail + timestamp),
+    forming a tamper-evident linked chain.  Falls back to logger-only on any DB error
+    so that superadmin operations are never blocked by audit failures.
+    """
     logger.warning("SUPERADMIN [%s] %s %s", user.sub, action, detail)
     try:
-        from api.admin import log_activity
+        from database.connection import SessionLocal
+        from database.models import AuditLogEntry
 
-        log_activity(f"[SUPERADMIN:{user.sub}] {action} {detail}")
-    except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        now = _utcnow()
+        db = SessionLocal()
+        try:
+            # Determine next sequence number and previous hash for chain integrity.
+            last = (
+                db.query(AuditLogEntry)
+                .order_by(AuditLogEntry.sequence_number.desc())
+                .first()
+            )
+            seq = (last.sequence_number + 1) if last else 1
+            prev_hash = last.hash_chain if last else "0" * 64
+
+            # Build the hash: chain previous hash + this entry's fields.
+            chain_input = f"{prev_hash}:{seq}:{user.sub}:{action}:{detail}:{now.isoformat()}"
+            new_hash = hashlib.sha256(chain_input.encode()).hexdigest()
+
+            entry = AuditLogEntry(
+                sequence_number=seq,
+                timestamp=now,
+                created_at=now,
+                level="COMPLIANCE",
+                category="SUPERADMIN",
+                actor=user.sub,
+                action=action,
+                data_json=json.dumps({"detail": detail}) if detail else None,
+                hash_chain=new_hash,
+                # New columns added by migration k1l2m3n4o5p6
+                event_type=f"superadmin.{action}",
+                user_id=user.sub,
+                detail=detail or None,
+                ip_address=None,  # IP not available in this context; set by callers that have it
+            )
+            db.add(entry)
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:
+        # Never block a superadmin operation due to audit DB failure.
+        logger.error("SUPERADMIN audit DB write failed (action still executed): %s", exc)
 
 
 # ── Pydantic request/response models ─────────────────────────────────────────

@@ -1,9 +1,16 @@
 /**
  * components/panels/OrderBookDepth.tsx
- * Order book depth visualization built from live microstructure data.
- * Renders bid/ask depth bars, mid price, spread, and depth imbalance.
- * Uses microstructure snapshot (bid_depth, ask_depth, depth_imbalance)
- * from the orchestrator — no synthetic data.
+ * Estimated depth visualisation built from live microstructure data.
+ *
+ * IMPORTANT: This is NOT a real Level-2 order book. It constructs estimated
+ * bid/ask depth levels from the microstructure engine's bid_depth and
+ * ask_depth scalars using exponential decay. True L2 resting orders are not
+ * available from retail FX brokers. The panel is labelled "Estimated Depth"
+ * to make this distinction clear to traders.
+ *
+ * Both bid and ask bar widths are normalised to the same global maximum so
+ * depth imbalance is visually apparent (a side with 10× more depth shows a
+ * proportionally wider bar).
  */
 
 import React, { useMemo } from 'react';
@@ -113,7 +120,9 @@ export function OrderBookDepth() {
   const micro = useStore((s) => s.microstructure);
   const tick  = useStore((s) => s.prices['XAU_USD'] as PriceTick | undefined);
 
-  const mid    = tick?.mid ?? micro ? (micro!.bid + micro!.ask) / 2 : 0;
+  // Explicit parentheses: ?? has lower precedence than ?: so without them
+  // `tick?.mid ?? micro ? ... : 0` would parse as `(tick?.mid ?? micro) ? ... : 0`.
+  const mid    = tick?.mid ?? (micro ? (micro.bid + micro.ask) / 2 : 0);
   const spread = tick?.spread ?? micro?.spread ?? 0;
   const bid    = tick?.bid ?? micro?.bid ?? 0;
   const ask    = tick?.ask ?? micro?.ask ?? 0;
@@ -125,6 +134,9 @@ export function OrderBookDepth() {
   const { bids, asks, maxSize } = useMemo(() => {
     const bids = buildLevels(mid, spread, bidDepth, askDepth, 'bid', 8);
     const asks = buildLevels(mid, spread, bidDepth, askDepth, 'ask', 8);
+    // Normalise BOTH sides to the same global maximum so depth imbalance is
+    // visually apparent. If asks have 10× more depth than bids, ask bars will
+    // be proportionally wider — not capped at 100% independently per side.
     const allSizes = [...bids, ...asks].map((l) => l.size);
     const maxSize  = allSizes.length > 0 ? Math.max(...allSizes) : 1;
     return { bids, asks, maxSize };
@@ -133,13 +145,19 @@ export function OrderBookDepth() {
   const hasData = mid > 0 && (bidDepth > 0 || askDepth > 0);
 
   return (
-    <Panel title="Order Book" noPad bodyClass="p-0">
+    <Panel title="Estimated Depth" noPad bodyClass="p-0">
       {!hasData ? (
         <div className="flex items-center justify-center h-full text-slate-600 text-xs p-4">
           Awaiting depth data…
         </div>
       ) : (
         <div className="flex flex-col h-full">
+          {/* Disclaimer — not a real L2 book */}
+          <div className="px-3 py-1 bg-[#0d1421] border-b border-[#1e2d3d]">
+            <span className="text-[9px] text-slate-600 italic">
+              Estimated from microstructure — not real L2 resting orders
+            </span>
+          </div>
           {/* Column headers */}
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#1e2d3d]">
             <span className="text-[9px] text-[#00e676] uppercase tracking-wider">Price (Bid)</span>
@@ -215,4 +233,4 @@ export function OrderBookDepth() {
 
 // ── Guarded export (ErrorBoundary + Suspense) ─────────────────────────────────
 import { withPanelGuard } from '../ui/withPanelGuard';
-export const OrderBookDepthGuarded = withPanelGuard(OrderBookDepth, 'Order Book', 8);
+export const OrderBookDepthGuarded = withPanelGuard(OrderBookDepth, 'Estimated Depth', 8);

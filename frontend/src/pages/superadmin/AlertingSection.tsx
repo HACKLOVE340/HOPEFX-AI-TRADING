@@ -5,7 +5,7 @@ import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
   SectionCard, SeverityBadge, ActionBtn, Select, Input, Toggle,
-  KpiTile, ErrorState, LoadingRows, ConfirmDialog, SAStyles,
+  KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { AlertRule } from './types';
 
@@ -114,7 +114,7 @@ const AlertingSection: React.FC = () => {
 
   return (
     <>
-      <SAStyles />
+
       {deleteConfirm && (
         <ConfirmDialog
           title="Delete Alert Rule"

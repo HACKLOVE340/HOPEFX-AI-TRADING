@@ -93,7 +93,9 @@ const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> 
     });
     ro.observe(containerRef.current);
 
-    return () => { chart.remove(); ro.disconnect(); };
+    // Disconnect observer before removing chart so a chart.remove() error
+    // cannot prevent the observer from being cleaned up (memory leak).
+    return () => { ro.disconnect(); chart.remove(); };
   }, [folds, visibleFolds]);
 
   return <div ref={containerRef} style={{ width: '100%', height: 300 }} />;

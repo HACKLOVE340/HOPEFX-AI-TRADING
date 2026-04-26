@@ -33,7 +33,6 @@ import numpy as np
 import pytest
 
 from analytics.monte_carlo import (
-    BootstrapResult,
     MonteCarloEngine,
     _chi2_sf,
     _ljung_box_p,
@@ -73,13 +72,16 @@ def engine():
 
 
 class TestChi2SF:
-    @pytest.mark.parametrize("x,df,expected", [
-        (11.07, 5, 0.0500),
-        (1.0,   5, 0.9626),
-        (3.84,  1, 0.0500),
-        (9.49,  4, 0.0500),
-        (0.0,   3, 1.0000),
-    ])
+    @pytest.mark.parametrize(
+        "x,df,expected",
+        [
+            (11.07, 5, 0.0500),
+            (1.0, 5, 0.9626),
+            (3.84, 1, 0.0500),
+            (9.49, 4, 0.0500),
+            (0.0, 3, 1.0000),
+        ],
+    )
     def test_known_values(self, x, df, expected):
         got = _chi2_sf(x, df)
         assert abs(got - expected) < 1e-3, f"chi2_sf({x},{df})={got}, expected {expected}"
@@ -184,9 +186,16 @@ class TestMonteCarloEngine:
         result = engine.run(iid_pnls, initial_capital=100_000)
         s = result.summary()
         for key in (
-            "n_paths", "n_trades", "original_sharpe", "original_max_dd",
-            "sharpe_ci_95", "max_dd_ci_95", "ruin_probability",
-            "probability_of_profit", "sharpe_se", "sharpe_positive_fraction",
+            "n_paths",
+            "n_trades",
+            "original_sharpe",
+            "original_max_dd",
+            "sharpe_ci_95",
+            "max_dd_ci_95",
+            "ruin_probability",
+            "probability_of_profit",
+            "sharpe_se",
+            "sharpe_positive_fraction",
         ):
             assert key in s, f"Missing key: {key}"
 

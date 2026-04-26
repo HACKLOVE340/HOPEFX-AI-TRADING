@@ -303,6 +303,24 @@ class PredictResponse(BaseModel):
     generated_at: str
 
 
+class AccuracyThresholds(BaseModel):
+    """Configurable pass/warn/fail thresholds for accuracy metrics.
+
+    Returned alongside the metrics so the frontend can colour-code values
+    without hardcoding thresholds in the UI.  Defaults match the production
+    signal-filter configuration and can be overridden via environment variables
+    ML_THRESHOLD_ACCURACY, ML_THRESHOLD_WIN_RATE, ML_THRESHOLD_SHARPE,
+    ML_THRESHOLD_F1.
+    """
+
+    accuracy_good: float = float(os.getenv("ML_THRESHOLD_ACCURACY_GOOD", "0.60"))
+    accuracy_warn: float = float(os.getenv("ML_THRESHOLD_ACCURACY_WARN", "0.50"))
+    win_rate_good: float = float(os.getenv("ML_THRESHOLD_WIN_RATE_GOOD", "0.55"))
+    sharpe_good:   float = float(os.getenv("ML_THRESHOLD_SHARPE_GOOD",   "1.50"))
+    sharpe_warn:   float = float(os.getenv("ML_THRESHOLD_SHARPE_WARN",   "0.50"))
+    f1_good:       float = float(os.getenv("ML_THRESHOLD_F1_GOOD",       "0.60"))
+
+
 class AccuracyResponse(BaseModel):
     model_id: str
     accuracy: float
@@ -314,6 +332,7 @@ class AccuracyResponse(BaseModel):
     total_signals: int
     evaluated_at: str
     note: str = ""
+    thresholds: AccuracyThresholds = Field(default_factory=AccuracyThresholds)
 
 
 class ModelInfo(BaseModel):
@@ -1028,15 +1047,6 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
     return payload
 
 
-@router.get(
-    "/engine-health",
-    response_model=MLEngineHealthResponse,
-    summary="InferenceEngine detailed health (admin)",
-    responses={
-        200: {"description": "Engine healthy"},
-        503: {"description": "Engine unavailable or model not loaded"},
-    },
-)
 def _engine_macro_status() -> dict:
     """Return MacroStore availability dict."""
     try:
@@ -1093,6 +1103,15 @@ def _engine_model_files(saved_dir: Any) -> dict:
     return model_files
 
 
+@router.get(
+    "/engine-health",
+    response_model=MLEngineHealthResponse,
+    summary="InferenceEngine detailed health (admin)",
+    responses={
+        200: {"description": "Engine healthy"},
+        503: {"description": "Engine unavailable or model not loaded"},
+    },
+)
 async def ml_engine_health(user: TokenPayload = Depends(require_role("admin"))):
     """
     Return detailed InferenceEngine diagnostics (admin only).
@@ -1592,6 +1611,89 @@ async def get_drift_report() -> dict:
             "error": type(exc).__name__,
             "requires_retrain": False,
             "live_samples": 0,
+        }
+
+
+@router.get(
+    "/drift/status",
+    summary="Live feature drift status",
+    tags=["ML Models"],
+)
+async def get_drift_status() -> dict:
+    """
+    Return the current feature drift status from the inference engine and drift monitor.
+
+    Provides a lightweight summary suitable for dashboard polling — use
+    ``/drift-report`` for the full per-feature PSI/KS breakdown.
+    """
+    status: dict[str, Any] = {
+        "available": False,
+        "drift_detected": False,
+        "drift_z_max": 0.0,
+        "drift_z_threshold": float(os.getenv("DRIFT_Z_THRESHOLD", "4.0")),
+        "drift_window": int(os.getenv("DRIFT_WINDOW", "50")),
+        "block_on_drift": os.getenv("DRIFT_BLOCK", "false").lower() == "true",
+        "framework": "z-score",
+        "psi_red_threshold": 0.25,
+        "psi_yellow_threshold": 0.10,
+        "ks_p_threshold": 0.05,
+    }
+    try:
+        eng = _get_predictor()
+        if eng is not None:
+            status["available"] = True
+            status["drift_detected"] = getattr(eng, "_drift_detected", False)
+            status["drift_z_max"] = round(getattr(eng, "_drift_z_max", 0.0), 3)
+            try:
+                from ml.drift_monitor import get_drift_monitor
+                monitor = get_drift_monitor()
+                status["psi_monitor_loaded"] = monitor._stats != {}
+                status["framework"] = "z-score + PSI + KS-test (production)"
+            except Exception:
+                status["psi_monitor_loaded"] = False
+    except Exception as exc:
+        logger.debug("drift_status: %s", exc)
+    return status
+
+
+@router.get(
+    "/sharpe-circuit-breaker/status",
+    summary="Sharpe circuit breaker state for all tracked model versions",
+    tags=["ML Models"],
+)
+async def get_sharpe_circuit_breaker_status() -> dict:
+    """
+    Return the current state of the Sharpe circuit breaker for every tracked
+    model version.
+
+    When a model's rolling Sharpe drops below the configured threshold for
+    the required number of consecutive windows, the circuit opens and the
+    model is gated out of production.  This endpoint exposes that state so
+    the superadmin ML panel can surface it without polling the full model card.
+    """
+    try:
+        from ml.sharpe_circuit_breaker import get_sharpe_cb
+        cb = get_sharpe_cb()
+        states = cb.get_status()
+        any_open = any(v.get("is_open", False) for v in states.values())
+        return {
+            "available": True,
+            "any_open": any_open,
+            "models": states,
+            "config": {
+                "min_sharpe": float(os.getenv("SHARPE_CB_MIN_SHARPE", "0.5")),
+                "consecutive_windows": int(os.getenv("SHARPE_CB_CONSECUTIVE", "3")),
+                "eval_interval_s": int(os.getenv("SHARPE_CB_EVAL_INTERVAL_S", "300")),
+                "reset_after_s": int(os.getenv("SHARPE_CB_RESET_AFTER_S", "3600")),
+            },
+        }
+    except Exception as exc:
+        logger.debug("sharpe_circuit_breaker_status: %s", exc)
+        return {
+            "available": False,
+            "any_open": False,
+            "models": {},
+            "error": type(exc).__name__,
         }
 
 

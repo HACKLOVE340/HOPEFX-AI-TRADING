@@ -1,9 +1,10 @@
 // superadmin/OverviewSection.tsx — platform-wide KPI overview
 import React, { useEffect, useState, useCallback } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { usePolling } from '../../hooks/usePolling';
 import {
   KpiTile, SectionCard, StatusBadge, ActionBtn,
-  Spinner, ErrorState, LoadingRows, SAStyles,
+  Spinner, ErrorState, LoadingRows,
 } from './ui';
 import type { PlatformOverview } from './types';
 
@@ -160,15 +161,12 @@ const OverviewSection: React.FC = () => {
 
   useEffect(() => { load(); loadInfra(); }, [load, loadInfra]);
 
-  // Auto-refresh every 30s
-  useEffect(() => {
-    const id = setInterval(() => { load(true); loadInfra(); }, 30_000);
-    return () => clearInterval(id);
-  }, [load, loadInfra]);
+  // Auto-refresh every 30s — pauses when tab is hidden
+  usePolling(() => { load(true); loadInfra(); }, 30_000);
 
   if (loading) return (
     <div>
-      <SAStyles />
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14, marginBottom: 20 }}>
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} style={{ height: 100, borderRadius: 12, background: '#1e293b', animation: 'sa-pulse 1.5s ease-in-out infinite' }} />
@@ -192,7 +190,7 @@ const OverviewSection: React.FC = () => {
 
   return (
     <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-      <SAStyles />
+
 
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>

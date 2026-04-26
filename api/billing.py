@@ -1162,10 +1162,7 @@ async def list_support_tickets(
 
     keys = db_keys_prefix("elite:support:ELITE-")
     all_tickets = [db_get(k) for k in keys]
-    user_tickets = [
-        t for t in all_tickets
-        if isinstance(t, dict) and t.get("user_id") == user.sub
-    ]
+    user_tickets = [t for t in all_tickets if isinstance(t, dict) and t.get("user_id") == user.sub]
     # Sort newest first
     user_tickets.sort(key=lambda t: t.get("created_at", ""), reverse=True)
     page = user_tickets[offset : offset + limit]
@@ -1256,10 +1253,7 @@ async def list_custom_dev_requests(
 
     keys = db_keys_prefix("elite:custom_dev:CDR-")
     all_reqs = [db_get(k) for k in keys]
-    user_reqs = [
-        r for r in all_reqs
-        if isinstance(r, dict) and r.get("user_id") == user.sub
-    ]
+    user_reqs = [r for r in all_reqs if isinstance(r, dict) and r.get("user_id") == user.sub]
     user_reqs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     page = user_reqs[offset : offset + limit]
 

@@ -282,7 +282,8 @@ def backtest_symbol(
         subsample=0.8,
         colsample_bytree=0.8,
         min_child_weight=3,
-        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0)) / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
+        scale_pos_weight=float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
+        / max(float(np.nan_to_num((y_train == 1).sum(), nan=0.0)), 1),
         eval_metric="logloss",
         random_state=42,
         n_jobs=1,
@@ -352,7 +353,11 @@ def backtest_symbol(
 
     # Transaction cost summary for this symbol
     mean_tc = float(tc_costs.mean()) if len(tc_costs) > 0 else 0.0
-    raw_sharpe = float(np.nan_to_num(raw_pnls, nan=0.0).mean() / max(float(np.nan_to_num(raw_pnls, nan=0.0).std(ddof=1)) if len(raw_pnls) > 1 else 1e-6, 1e-6) * np.sqrt(252))
+    raw_sharpe = float(
+        np.nan_to_num(raw_pnls, nan=0.0).mean()
+        / max(float(np.nan_to_num(raw_pnls, nan=0.0).std(ddof=1)) if len(raw_pnls) > 1 else 1e-6, 1e-6)
+        * np.sqrt(252)
+    )
 
     # Classification metrics
     acc = accuracy_score(y_oos, (proba >= 0.5).astype(int))
@@ -620,7 +625,7 @@ def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> d
     result["_validation"] = {
         "outlier_symbols": outlier_syms,
         "outlier_reasons": {sym: reason for sym, reason in zip(outlier_syms, outlier_reasons, strict=False)},
-        "full_pooled": full_stats,   # includes inflated outliers — for audit only
+        "full_pooled": full_stats,  # includes inflated outliers — for audit only
         "honest_pooled": honest_stats,
         "gate_uses_honest_pool": bool(outlier_syms),
         "note": (
@@ -633,9 +638,7 @@ def compute_pooled_metrics(symbol_results: list[dict], target_n: int = 600) -> d
     }
 
     if outlier_syms:
-        result["message"] = (
-            f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + authoritative["message"]
-        )
+        result["message"] = f"[HONEST POOL — {','.join(outlier_syms)} excluded] " + authoritative["message"]
 
     return result
 

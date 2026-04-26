@@ -256,9 +256,11 @@ async def _check_database() -> ComponentStatus:
             sync_engine = getattr(_app_state, "db_engine", None)
             if sync_engine is not None:
                 loop = asyncio.get_event_loop()
+
                 def _ping() -> None:
                     with sync_engine.connect() as conn:
                         conn.execute(_text("SELECT 1"))
+
                 await asyncio.wait_for(
                     loop.run_in_executor(None, _ping),
                     timeout=_CHECK_TIMEOUT_SEC,
@@ -509,6 +511,131 @@ def _check_ready_sync() -> bool:
     return True
 
 
+async def _check_price_engine() -> ComponentStatus:
+    """Check whether the price engine is running and has live prices."""
+    t0 = time.perf_counter()
+    try:
+        from core.app_state import app_state as _app_state  # type: ignore[import]
+
+        pe = getattr(_app_state, "price_engine", None)
+        if pe is None:
+            return ComponentStatus(
+                name="price_engine",
+                status="degraded",
+                critical=False,
+                latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+                detail="Not initialised — broker fallback active",
+            )
+        active = getattr(pe, "active", False)
+        symbols = getattr(pe, "symbols", [])
+        # Count symbols with a live price
+        live_count = sum(1 for s in symbols if pe.get_last_price(s) is not None)
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        status = "healthy" if active and live_count > 0 else ("degraded" if active else "down")
+        return ComponentStatus(
+            name="price_engine",
+            status=status,
+            critical=False,
+            latency_ms=latency_ms,
+            detail=f"active={active} symbols={len(symbols)} live_prices={live_count}",
+        )
+    except Exception as exc:
+        return ComponentStatus(
+            name="price_engine",
+            status="unknown",
+            critical=False,
+            latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+            detail=str(exc),
+        )
+
+
+async def _check_brain() -> ComponentStatus:
+    """Check whether the strategy brain / signal engine is running."""
+    t0 = time.perf_counter()
+    try:
+        from core.app_state import app_state as _app_state  # type: ignore[import]
+
+        brain = getattr(_app_state, "brain", None) or getattr(_app_state, "strategy_brain", None)
+        signal_engine = getattr(_app_state, "signal_engine", None)
+
+        if brain is None and signal_engine is None:
+            return ComponentStatus(
+                name="brain",
+                status="degraded",
+                critical=False,
+                latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+                detail="Brain and signal engine not initialised — awaiting broker+price_engine",
+            )
+
+        details: list[str] = []
+        if brain is not None:
+            brain_active = getattr(brain, "active", getattr(brain, "running", True))
+            details.append(f"brain={type(brain).__name__}(active={brain_active})")
+        if signal_engine is not None:
+            se_active = getattr(signal_engine, "active", getattr(signal_engine, "running", True))
+            details.append(f"signal_engine={type(signal_engine).__name__}(active={se_active})")
+
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return ComponentStatus(
+            name="brain",
+            status="healthy",
+            critical=False,
+            latency_ms=latency_ms,
+            detail=" | ".join(details),
+        )
+    except Exception as exc:
+        return ComponentStatus(
+            name="brain",
+            status="unknown",
+            critical=False,
+            latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+            detail=str(exc),
+        )
+
+
+async def _check_master_control() -> ComponentStatus:
+    """Check whether the master control centre (MCC) is wired and running."""
+    t0 = time.perf_counter()
+    try:
+        from core.mcc.master_control import MasterControlCentre  # type: ignore[import]
+        from core.app_state import app_state as _app_state  # type: ignore[import]
+
+        mcc = getattr(_app_state, "mcc", None)
+        if mcc is None:
+            # Try the module-level singleton
+            try:
+                from core.mcc import master_control as _mc_mod  # type: ignore[import]
+                mcc = getattr(_mc_mod, "_mcc_instance", None)
+            except Exception:
+                pass
+
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        if mcc is None:
+            return ComponentStatus(
+                name="master_control",
+                status="degraded",
+                critical=False,
+                latency_ms=latency_ms,
+                detail="MCC not initialised",
+            )
+        running = getattr(mcc, "running", getattr(mcc, "active", True))
+        return ComponentStatus(
+            name="master_control",
+            status="healthy" if running else "degraded",
+            critical=False,
+            latency_ms=latency_ms,
+            detail=f"{type(mcc).__name__}(running={running})",
+        )
+    except Exception as exc:
+        return ComponentStatus(
+            name="master_control",
+            status="unknown",
+            critical=False,
+            latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+            detail=str(exc),
+        )
+
+
 async def _run_all_checks() -> list[ComponentStatus]:
     """Run all component checks concurrently and return results.
 
@@ -523,10 +650,16 @@ async def _run_all_checks() -> list[ComponentStatus]:
         _check_orchestrator(),
         _check_broker(),
         _check_db_migrations(),
+        _check_price_engine(),
+        _check_brain(),
+        _check_master_control(),
         return_exceptions=True,
     )
     statuses: list[ComponentStatus] = []
-    names = ["redis", "database", "kill_switch", "ml_model", "orchestrator", "broker", "db_migrations"]
+    names = [
+        "redis", "database", "kill_switch", "ml_model", "orchestrator",
+        "broker", "db_migrations", "price_engine", "brain", "master_control",
+    ]
     for i, result in enumerate(results):
         if isinstance(result, Exception):
             statuses.append(
@@ -561,6 +694,7 @@ async def health_root() -> dict[str, Any]:
     so that generic health-check tools hitting /api/health get a useful response.
     """
     from fastapi.responses import RedirectResponse
+
     return RedirectResponse(url="/api/health/ready", status_code=302)
 
 

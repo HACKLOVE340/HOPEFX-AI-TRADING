@@ -69,6 +69,15 @@ class AppState:
         # Feature engineer — sklearn-compatible OHLCV feature pipeline
         # Populated by init_feature_engineer() in startup_factories.py
         self.feature_engineer = None
+        # Signal engine — asyncio task handle returned by init_signal_engine()
+        self.signal_engine = None
+        # Master Control Centre — strategy orchestration and lifecycle management
+        self.mcc = None
+        # HopeFXEngine — main trading engine (populated by init_trading_engine)
+        self.engine = None
+        # Multi-source tick feed — yFinance → Alpha Vantage → Twelve Data fallback chain
+        # Populated by init_multi_source_feed() in startup_factories.py
+        self.multi_source_feed = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 

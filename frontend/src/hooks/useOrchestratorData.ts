@@ -2,12 +2,40 @@
  * hooks/useOrchestratorData.ts
  * TanStack Query hooks for all data-layer REST endpoints.
  * Polls at appropriate intervals and writes directly into Zustand store.
+ *
+ * Bootstrap staggering
+ * --------------------
+ * Critical queries (health, microstructure, account, positions, signals) fire
+ * immediately on mount.  Non-critical queries (sentiment, macro, quality,
+ * equity curve, performance summary, weekly, signal analytics, ML health,
+ * calendar, data feeds, signal summary) are delayed by BOOTSTRAP_DELAY_MS so
+ * they do not all race the API at the same time as the critical ones.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { dataLayerApi, performanceApi, tradingApi, signalsApi, mlExtendedApi, calendarApi } from '../lib/api';
+
+// Non-critical queries are held back for this many milliseconds after mount
+// so the initial burst of critical requests can complete first.
+const BOOTSTRAP_DELAY_MS = 3_000;
+
+/**
+ * Returns false for the first `delayMs` milliseconds after the component
+ * mounts, then true.  Used to stagger non-critical bootstrap queries so they
+ * do not all fire simultaneously with the critical ones.
+ */
+function useDelayedEnabled(delayMs: number): boolean {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const id = setTimeout(() => setReady(true), delayMs);
+    return () => clearTimeout(id);
+  }, [delayMs]);
+
+  return ready;
+}
 import type {
   OrchestratorHealth,
   QualityReport,
@@ -79,12 +107,13 @@ export function useMicrostructure(symbol = 'XAU_USD') {
   return query;
 }
 
-// ── Sentiment (every 30s) ─────────────────────────────────────────────────────
+// ── Sentiment (every 30s, delayed 3s) ────────────────────────────────────────
 
 export function useSentiment() {
   const setSentiment = useStore((s) => s.setSentiment);
   const isAuth       = useStore(selectIsAuth);
   const hydrated     = useHasHydrated();
+  const delayed      = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   const query = useQuery<SentimentResponse>({
     queryKey: ['sentiment'],
@@ -92,7 +121,7 @@ export function useSentiment() {
       const res = await dataLayerApi.sentiment();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
@@ -104,12 +133,13 @@ export function useSentiment() {
   return query;
 }
 
-// ── Macro calendar (every 60s) ────────────────────────────────────────────────
+// ── Macro calendar (every 60s, delayed 3s) ───────────────────────────────────
 
 export function useMacro() {
   const setMacro = useStore((s) => s.setMacro);
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   const query = useQuery<MacroResponse>({
     queryKey: ['macro'],
@@ -117,7 +147,7 @@ export function useMacro() {
       const res = await dataLayerApi.macro();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 60_000,
     staleTime:       30_000,
   });
@@ -129,12 +159,13 @@ export function useMacro() {
   return query;
 }
 
-// ── Quality report (every 15s) ────────────────────────────────────────────────
+// ── Quality report (every 15s, delayed 3s) ───────────────────────────────────
 
 export function useQualityReport(symbol = 'XAU_USD') {
   const setQualityReport = useStore((s) => s.setQualityReport);
   const isAuth           = useStore(selectIsAuth);
   const hydrated         = useHasHydrated();
+  const delayed          = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   const query = useQuery<QualityReport>({
     queryKey: ['quality', symbol],
@@ -142,7 +173,7 @@ export function useQualityReport(symbol = 'XAU_USD') {
       const res = await dataLayerApi.quality(symbol);
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 15_000,
     staleTime:       7_500,
   });
@@ -154,12 +185,13 @@ export function useQualityReport(symbol = 'XAU_USD') {
   return query;
 }
 
-// ── Equity curve (every 30s) ──────────────────────────────────────────────────
+// ── Equity curve (every 30s, delayed 3s) ─────────────────────────────────────
 
 export function useEquityCurve() {
   const setEquityCurve = useStore((s) => s.setEquityCurve);
   const isAuth         = useStore(selectIsAuth);
   const hydrated       = useHasHydrated();
+  const delayed        = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   const query = useQuery<EquityPoint[]>({
     queryKey: ['performance', 'equity-curve'],
@@ -167,7 +199,7 @@ export function useEquityCurve() {
       const res = await performanceApi.equityCurve();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
@@ -179,12 +211,13 @@ export function useEquityCurve() {
   return query;
 }
 
-// ── Performance summary (every 30s) ──────────────────────────────────────────
+// ── Performance summary (every 30s, delayed 3s) ──────────────────────────────
 
 export function usePerformanceSummary() {
   const setPerformanceSummary = useStore((s) => s.setPerformanceSummary);
   const isAuth                = useStore(selectIsAuth);
   const hydrated              = useHasHydrated();
+  const delayed               = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   const query = useQuery<PerformanceSummary>({
     queryKey: ['performance', 'summary'],
@@ -192,7 +225,7 @@ export function usePerformanceSummary() {
       const res = await performanceApi.summary();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
@@ -209,9 +242,14 @@ export function usePerformanceSummary() {
 }
 
 // ── Account (every 10s — fallback when WS is down) ────────────────────────────
+// Always fetches once on mount so the account bar is populated immediately.
+// The WS account_update message only fires on state *changes*, not on initial
+// subscription — so without this initial fetch, account stays null until the
+// first trade event arrives.
 
 export function useAccount() {
   const setAccount = useStore((s) => s.setAccount);
+  const account    = useStore((s) => s.account);
   const wsStatus   = useStore((s) => s.wsStatus);
   const isAuth     = useStore(selectIsAuth);
   const hydrated   = useHasHydrated();
@@ -222,10 +260,13 @@ export function useAccount() {
       const res = await tradingApi.account();
       return res.data as AccountMetrics;
     },
-    enabled:         hydrated && isAuth,
-    // Only poll when WS is not connected
+    enabled: hydrated && isAuth,
+    // When WS is connected: suppress interval polling (WS pushes changes),
+    // but still allow the initial fetch (staleTime=0 when account is null).
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
-    staleTime:       5_000,
+    // If account is already populated from WS, treat cached data as fresh for
+    // 30s. If account is null (first load), staleTime=0 forces an immediate fetch.
+    staleTime: account !== null ? 30_000 : 0,
   });
 
   useEffect(() => {
@@ -236,6 +277,9 @@ export function useAccount() {
 }
 
 // ── Positions (every 10s — fallback when WS is down) ─────────────────────────
+// Always fetches once on mount. WS position_update only fires on changes,
+// not on initial subscription — without this, positions shows empty until
+// the first trade event.
 
 export function usePositions() {
   const setPositions = useStore((s) => s.setPositions);
@@ -253,7 +297,9 @@ export function usePositions() {
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
-    staleTime:       5_000,
+    // staleTime=0 ensures an immediate fetch on mount even when WS is up,
+    // since WS only pushes changes — not the initial snapshot.
+    staleTime: 0,
   });
 
   useEffect(() => {
@@ -265,6 +311,8 @@ export function usePositions() {
 
 // ── Signals (every 15s — fallback when WS is down) ───────────────────────────
 // Backend returns { signals: Signal[], count: number } — unwrap here.
+// Always fetches once on mount so the signal feed is populated immediately
+// even when WS is connected (WS only pushes new signals, not the backlog).
 
 export function useSignals() {
   const setSignals = useStore((s) => s.setSignals);
@@ -282,7 +330,9 @@ export function useSignals() {
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 15_000,
-    staleTime:       7_500,
+    // staleTime=0 ensures an immediate fetch on mount even when WS is up,
+    // since WS only pushes new signals — not the existing backlog.
+    staleTime: 0,
   });
 
   useEffect(() => {
@@ -292,11 +342,12 @@ export function useSignals() {
   return query;
 }
 
-// ── Active signals with analytics (used by signal panels) ────────────────────
+// ── Active signals with analytics (used by signal panels, delayed 3s) ────────
 
 export function useSignalSummary() {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   return useQuery({
     queryKey: ['signals', 'summary'],
@@ -304,17 +355,18 @@ export function useSignalSummary() {
       const res = await signalsApi.summary();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });
 }
 
-// ── Weekly performance report (every 5 min) ───────────────────────────────────
+// ── Weekly performance report (every 5 min, delayed 3s) ──────────────────────
 
 export function useWeeklyPerformance() {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   return useQuery({
     queryKey: ['performance', 'weekly'],
@@ -322,17 +374,18 @@ export function useWeeklyPerformance() {
       const res = await performanceApi.weekly();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 5 * 60_000,
     staleTime:       2.5 * 60_000,
   });
 }
 
-// ── Signal analytics (every 60s) ──────────────────────────────────────────────
+// ── Signal analytics (every 60s, delayed 3s) ─────────────────────────────────
 
 export function useSignalAnalytics() {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   return useQuery({
     queryKey: ['signals', 'analytics'],
@@ -340,17 +393,18 @@ export function useSignalAnalytics() {
       const res = await signalsApi.analytics();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 60_000,
     staleTime:       30_000,
   });
 }
 
-// ── ML model health (every 60s) ───────────────────────────────────────────────
+// ── ML model health (every 60s, delayed 3s) ───────────────────────────────────
 
 export function useMLHealth() {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   return useQuery({
     queryKey: ['ml', 'health'],
@@ -358,17 +412,18 @@ export function useMLHealth() {
       const res = await mlExtendedApi.health();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 60_000,
     staleTime:       30_000,
   });
 }
 
-// ── High-impact calendar events (every 15 min) ────────────────────────────────
+// ── High-impact calendar events (every 15 min, delayed 3s) ───────────────────
 
 export function useHighImpactCalendar() {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   return useQuery({
     queryKey: ['calendar', 'high-impact'],
@@ -376,17 +431,18 @@ export function useHighImpactCalendar() {
       const res = await calendarApi.highImpact();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 15 * 60_000,
     staleTime:       7.5 * 60_000,
   });
 }
 
-// ── Data feed status (every 30s) ──────────────────────────────────────────────
+// ── Data feed status (every 30s, delayed 3s) ─────────────────────────────────
 
 export function useDataFeeds() {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
 
   return useQuery({
     queryKey: ['data-layer', 'feeds'],
@@ -394,7 +450,7 @@ export function useDataFeeds() {
       const res = await dataLayerApi.feeds();
       return res.data;
     },
-    enabled:         hydrated && isAuth,
+    enabled:         hydrated && isAuth && delayed,
     refetchInterval: 30_000,
     staleTime:       15_000,
   });

@@ -38,12 +38,12 @@ logger = logging.getLogger(__name__)
 # ── Ticker fallback map ───────────────────────────────────────────────────────
 # When a primary ticker returns empty data, try these in order.
 _FALLBACKS: dict[str, list[str]] = {
-    "GC=F": ["GLD", "IAU"],       # gold futures → SPDR Gold ETF → iShares Gold ETF
-    "SI=F": ["SLV"],              # silver futures → iShares Silver ETF
-    "CL=F": ["USO"],              # crude oil futures → US Oil Fund ETF
-    "NG=F": ["UNG"],              # natural gas futures → US Natural Gas Fund ETF
-    "ZC=F": ["CORN"],             # corn futures → Teucrium Corn ETF
-    "ZW=F": ["WEAT"],             # wheat futures → Teucrium Wheat ETF
+    "GC=F": ["GLD", "IAU"],  # gold futures → SPDR Gold ETF → iShares Gold ETF
+    "SI=F": ["SLV"],  # silver futures → iShares Silver ETF
+    "CL=F": ["USO"],  # crude oil futures → US Oil Fund ETF
+    "NG=F": ["UNG"],  # natural gas futures → US Natural Gas Fund ETF
+    "ZC=F": ["CORN"],  # corn futures → Teucrium Corn ETF
+    "ZW=F": ["WEAT"],  # wheat futures → Teucrium Wheat ETF
 }
 
 _SUPPRESSED = False

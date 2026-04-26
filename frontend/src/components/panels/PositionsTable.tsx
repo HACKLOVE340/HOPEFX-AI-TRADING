@@ -6,6 +6,9 @@
  *   GET  /api/trading/positions        (via usePositions TanStack Query hook)
  *   DELETE /api/trading/positions/{id} (close single)
  *   DELETE /api/trading/positions      (close all)
+ *
+ * Uses an inline confirmation dialog instead of window.confirm so the UI
+ * remains non-blocking and works correctly in sandboxed iframes.
  */
 
 import React, { useState, useCallback } from 'react';
@@ -17,6 +20,38 @@ import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
 import { fmtPrice, fmtPnl, fmtDateTime, cn } from '../../lib/utils';
 import type { Position } from '../../types';
+
+// ── Inline confirmation dialog ────────────────────────────────────────────────
+
+function ConfirmDialog({
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="mx-4 mt-3 px-3 py-2.5 rounded bg-[#1e2d3d] border border-[#ff1744]/30 flex items-center justify-between gap-3">
+      <span className="text-[12px] text-slate-300">{message}</span>
+      <div className="flex gap-2 shrink-0">
+        <button
+          onClick={onCancel}
+          className="px-2.5 py-1 rounded text-[11px] font-semibold border border-[#334155] text-slate-400 hover:text-slate-200 transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          className="px-2.5 py-1 rounded text-[11px] font-semibold bg-[#ff1744]/20 border border-[#ff1744]/40 text-[#ff1744] hover:bg-[#ff1744]/30 transition-colors"
+        >
+          Confirm
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ── P&L badge ─────────────────────────────────────────────────────────────────
 
@@ -110,9 +145,10 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
   const setPositions = useStore((s) => s.setPositions);
   const qc          = useQueryClient();
 
-  const [closingId, setClosingId]   = useState<string | null>(null);
-  const [closingAll, setClosingAll] = useState(false);
-  const [error, setError]           = useState<string | null>(null);
+  const [closingId, setClosingId]       = useState<string | null>(null);
+  const [closingAll, setClosingAll]     = useState(false);
+  const [error, setError]               = useState<string | null>(null);
+  const [confirmCloseAll, setConfirmCloseAll] = useState(false);
 
   const filtered = symbol
     ? positions.filter((p) => p.symbol === symbol)
@@ -141,8 +177,8 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     }
   }, [removePos, onClosed, invalidate]);
 
-  const handleCloseAll = useCallback(async () => {
-    if (!window.confirm(`Close all ${filtered.length} position(s)?`)) return;
+  const handleCloseAllConfirmed = useCallback(async () => {
+    setConfirmCloseAll(false);
     setClosingAll(true);
     setError(null);
     try {
@@ -156,7 +192,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
     } finally {
       setClosingAll(false);
     }
-  }, [filtered.length, setPositions, invalidate]);
+  }, [setPositions, invalidate]);
 
   const headerRight = filtered.length > 0 ? (
     <div className="flex items-center gap-3">
@@ -168,7 +204,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       </span>
       <CloseBtn
         label="Close All"
-        onClick={handleCloseAll}
+        onClick={() => setConfirmCloseAll(true)}
         loading={closingAll}
         danger
       />
@@ -181,6 +217,14 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       headerRight={headerRight}
       noPad
     >
+      {confirmCloseAll && (
+        <ConfirmDialog
+          message={`Close all ${filtered.length} open position(s)? This cannot be undone.`}
+          onConfirm={handleCloseAllConfirmed}
+          onCancel={() => setConfirmCloseAll(false)}
+        />
+      )}
+
       {error && (
         <div className="mx-4 mt-3 px-3 py-2 rounded bg-[#ff1744]/10 border border-[#ff1744]/20 text-[#ff1744] text-[11px]">
           {error}
