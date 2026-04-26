@@ -38,6 +38,7 @@ import CorrelationDashboard from './pages/CorrelationDashboard'
 import CustomIndicators     from './pages/CustomIndicators'
 import WhitelabelAdmin      from './pages/WhitelabelAdmin'
 import SuperAdminDashboard  from './pages/SuperAdminDashboard'
+import ReliabilityDashboard from './pages/ReliabilityDashboard'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard'
@@ -114,6 +115,7 @@ function App() {
         <Route path="/indicators"   element={<AuthGuard><Layout><ErrorBoundary label="Indicators"><CustomIndicators /></ErrorBoundary></Layout></AuthGuard>} />
         {/* Superadmin-only routes */}
         <Route path="/superadmin"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="SuperAdmin"><SuperAdminDashboard /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/superadmin/reliability" element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Reliability"><ReliabilityDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/whitelabel"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Whitelabel"><WhitelabelAdmin /></ErrorBoundary></Layout></AuthGuard>} />
 
         {/* ── Fallback ───────────────────────────────────────────────────── */}

@@ -68,8 +68,25 @@ def _parse_int_env(name: str, default: int) -> int:
         )
 
 
-_AUTH_RATE_LIMIT = _parse_int_env("AUTH_RATE_LIMIT_REQUESTS", 10)   # max attempts
+_AUTH_RATE_LIMIT = _parse_int_env("AUTH_RATE_LIMIT_REQUESTS", 10)   # max attempts (module-level default)
 _AUTH_RATE_WINDOW = _parse_int_env("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)  # seconds
+
+
+def _get_rate_limit() -> int:
+    """Read AUTH_RATE_LIMIT_REQUESTS at call time so tests can override it via
+    os.environ after this module has already been imported."""
+    try:
+        return int(os.getenv("AUTH_RATE_LIMIT_REQUESTS", str(_AUTH_RATE_LIMIT)))
+    except (ValueError, TypeError):
+        return _AUTH_RATE_LIMIT
+
+
+def _get_rate_window() -> int:
+    """Read AUTH_RATE_LIMIT_WINDOW_SECONDS at call time."""
+    try:
+        return int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", str(_AUTH_RATE_WINDOW)))
+    except (ValueError, TypeError):
+        return _AUTH_RATE_WINDOW
 
 # Trusted reverse-proxy IPs — only these may set X-Forwarded-For.
 # Comma-separated list; defaults to loopback only.
@@ -92,7 +109,15 @@ def _get_client_ip(request: Request) -> str:
 
 
 def _check_ip_rate_limit(ip: str) -> None:
-    """Raise HTTP 429 if the IP has exceeded the auth rate limit."""
+    """Raise HTTP 429 if the IP has exceeded the auth rate limit.
+
+    Limits are read dynamically from the environment at call time so that
+    test modules can override AUTH_RATE_LIMIT_REQUESTS via os.environ even
+    after this module has been imported.
+    """
+    limit = _get_rate_limit()
+    window = _get_rate_window()
+
     # Try Redis first
     try:
         import redis as _redis
@@ -109,17 +134,17 @@ def _check_ip_rate_limit(ip: str) -> None:
         key = f"auth_rl:{ip}"
         pipe = r.pipeline()
         now = time.time()
-        pipe.zremrangebyscore(key, 0, now - _AUTH_RATE_WINDOW)
+        pipe.zremrangebyscore(key, 0, now - window)
         pipe.zadd(key, {str(now): now})
         pipe.zcard(key)
-        pipe.expire(key, _AUTH_RATE_WINDOW + 1)
+        pipe.expire(key, window + 1)
         results = pipe.execute()
         count = results[2]
-        if count > _AUTH_RATE_LIMIT:
+        if count > limit:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many auth attempts. Try again in {_AUTH_RATE_WINDOW}s.",
-                headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
+                detail=f"Too many auth attempts. Try again in {window}s.",
+                headers={"Retry-After": str(window)},
             )
         return
     except HTTPException:
@@ -129,21 +154,27 @@ def _check_ip_rate_limit(ip: str) -> None:
 
     # In-memory fallback
     now = time.time()
-    cutoff = now - _AUTH_RATE_WINDOW
+    cutoff = now - window
     timestamps = [t for t in _ip_windows[ip] if t > cutoff]
     timestamps.append(now)
     _ip_windows[ip] = timestamps
-    if len(timestamps) > _AUTH_RATE_LIMIT:
+    if len(timestamps) > limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many auth attempts. Try again in {_AUTH_RATE_WINDOW}s.",
-            headers={"Retry-After": str(_AUTH_RATE_WINDOW)},
+            detail=f"Too many auth attempts. Try again in {window}s.",
+            headers={"Retry-After": str(window)},
         )
 
 
 def set_auth_service(service) -> None:
     global _auth_service
     _auth_service = service
+
+
+def reset_rate_limit_state() -> None:
+    """Clear the in-memory rate-limit window. Call this in test teardown to
+    prevent cross-module state leakage when running the full test suite."""
+    _ip_windows.clear()
 
 
 def _svc():

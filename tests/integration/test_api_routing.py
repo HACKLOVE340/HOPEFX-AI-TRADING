@@ -75,7 +75,14 @@ def _trader_headers() -> dict:
 
 @pytest.fixture(scope="module")
 def client():
-    return TestClient(app, raise_server_exceptions=False)
+    yield TestClient(app, raise_server_exceptions=False)
+    # Reset in-memory auth rate-limit counters so subsequent test modules
+    # (e.g. e2e tests) don't inherit exhausted windows from this module.
+    try:
+        from auth.router import reset_rate_limit_state
+        reset_rate_limit_state()
+    except Exception:
+        pass
 
 
 # ── 1. Health and root endpoints ──────────────────────────────────────────────

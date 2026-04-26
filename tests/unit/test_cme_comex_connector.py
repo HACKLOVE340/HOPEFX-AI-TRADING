@@ -168,7 +168,7 @@ class TestConnect:
         # Force FIX and IBKR init to fail so paper path is exercised
         with patch.object(conn, "_init_fix", return_value=False), patch.object(conn, "_init_ibkr", return_value=False):
             assert conn.connect() is True
-        assert conn._connected is True
+        assert conn.connected is True
         assert conn._fix_available is False
         assert conn._ibkr_available is False
 
@@ -176,7 +176,7 @@ class TestConnect:
         conn = _make_connector(paper_fallback=False, ibkr_fallback=False)
         with patch.object(conn, "_init_fix", return_value=False):
             assert conn.connect() is False
-        assert conn._connected is False
+        assert conn.connected is False
 
     def test_connect_fix_success(self):
         conn = _make_connector(paper_fallback=False, ibkr_fallback=False)
@@ -211,7 +211,7 @@ class TestDisconnect:
         with patch.object(conn, "_init_fix", return_value=False):
             conn.connect()
         assert conn.disconnect() is True
-        assert conn._connected is False
+        assert conn.connected is False
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +308,7 @@ class TestPlaceOrderPaper:
 
     def test_no_execution_path_raises(self):
         conn = _make_connector(paper_fallback=False)
-        conn._connected = True
+        conn.connected = True
         with pytest.raises(RuntimeError, match="no execution path available"):
             conn.place_order("GC", OrderSide.BUY, OrderType.MARKET, 1.0)
 
@@ -341,7 +341,7 @@ class TestPlaceOrderIBKR:
     def test_ibkr_path_used_when_available(self):
         conn = _make_connector(ibkr_fallback=False, paper_fallback=False)
         conn._ibkr_available = True
-        conn._connected = True
+        conn.connected = True
         mock_ibkr = MagicMock()
         mock_ibkr.place_order.return_value = self._make_ibkr_order(2350.0, 1.0)
         conn._ibkr_connector = mock_ibkr
@@ -355,7 +355,7 @@ class TestPlaceOrderIBKR:
     def test_ibkr_fill_source_recorded(self):
         conn = _make_connector(ibkr_fallback=False, paper_fallback=False)
         conn._ibkr_available = True
-        conn._connected = True
+        conn.connected = True
         mock_ibkr = MagicMock()
         mock_ibkr.place_order.return_value = self._make_ibkr_order(2400.0, 2.0)
         conn._ibkr_connector = mock_ibkr
@@ -527,7 +527,7 @@ class TestMetrics:
         conn = _make_connector()
         conn._fix_available = True
         conn._ibkr_available = True
-        conn._connected = True
+        conn.connected = True
         # Add a paper fill so metrics() returns the full dict (not early-return stub)
         conn._fills.append(
             CMEFill(

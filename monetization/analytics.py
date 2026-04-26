@@ -38,44 +38,30 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics — optional, degrades gracefully when prometheus_client
-# is not installed.
+# is not installed.  Uses idempotent helpers from core.prom_registry so that
+# re-importing this module in tests never raises ValueError on duplicate names.
 # ---------------------------------------------------------------------------
 try:
-    from prometheus_client import Counter, Gauge  # type: ignore
+    from core.prom_registry import prom_counter as _pc, prom_gauge as _pg  # type: ignore
 
-    _PROM_MRR = Gauge(
-        "hopefx_mrr_usd",
-        "Monthly Recurring Revenue in USD",
-    )
-    _PROM_ARR = Gauge(
-        "hopefx_arr_usd",
-        "Annual Recurring Revenue in USD",
-    )
-    _PROM_CHURN = Gauge(
-        "hopefx_churn_rate_pct",
-        "Subscription churn rate as a percentage",
-    )
-    _PROM_ACTIVE_SUBS = Gauge(
-        "hopefx_active_subscriptions",
-        "Number of active subscriptions",
-    )
-    _PROM_NEW_SUBS = Counter(
-        "hopefx_new_subscriptions_total",
-        "Total new subscriptions since startup",
-    )
-    _PROM_CANCELLATIONS = Counter(
+    _PROM_MRR = _pg("hopefx_mrr_usd", "Monthly Recurring Revenue in USD")
+    _PROM_ARR = _pg("hopefx_arr_usd", "Annual Recurring Revenue in USD")
+    _PROM_CHURN = _pg("hopefx_churn_rate_pct", "Subscription churn rate as a percentage")
+    _PROM_ACTIVE_SUBS = _pg("hopefx_active_subscriptions", "Number of active subscriptions")
+    _PROM_NEW_SUBS = _pc("hopefx_new_subscriptions_total", "Total new subscriptions since startup")
+    _PROM_CANCELLATIONS = _pc(
         "hopefx_subscription_cancellations_total",
         "Total subscription cancellations since startup",
     )
-    _PROM_TRIAL_CONVERSIONS = Counter(
+    _PROM_TRIAL_CONVERSIONS = _pc(
         "hopefx_trial_conversions_total",
         "Total trial-to-paid conversions since startup",
     )
-    _PROM_PAYMENT_FAILURES = Counter(
+    _PROM_PAYMENT_FAILURES = _pc(
         "hopefx_payment_failures_total",
         "Total payment failures since startup",
     )
-    _PROM_AFFILIATE_COMMISSIONS = Counter(
+    _PROM_AFFILIATE_COMMISSIONS = _pc(
         "hopefx_affiliate_commissions_paid_total",
         "Total affiliate commissions paid in USD since startup",
     )

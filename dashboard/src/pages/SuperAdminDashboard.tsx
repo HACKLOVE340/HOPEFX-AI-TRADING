@@ -391,6 +391,14 @@ export default function SuperAdminDashboard() {
             description="Risk parameters, broker config, system settings"
             href="/settings"
           />
+          <QuickLink
+            icon={Activity}
+            label="Reliability"
+            description="Circuit breakers, hot standby, auto-rollback history, component probes"
+            href="/superadmin/reliability"
+            badge="live"
+            badgeColor="bg-green-500/20 text-green-400 border-green-500/30"
+          />
         </div>
       </div>
 

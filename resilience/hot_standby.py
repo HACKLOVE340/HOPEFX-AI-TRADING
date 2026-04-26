@@ -148,21 +148,19 @@ _KEY_FILLS = "hopefx:state:fills"
 _KEY_VERSION = "hopefx:state:version"
 
 # ── Prometheus ────────────────────────────────────────────────────────────────
-try:
-    from prometheus_client import Counter, Gauge, Histogram
+# Use idempotent helpers so re-importing this module never raises ValueError.
+from core.prom_registry import prom_counter as _pc, prom_gauge as _pg, prom_histogram as _ph
 
-    _prom_role = Gauge("hopefx_standby_role", "Current pod role: 1=primary 0=standby")
-    _prom_promotions = Counter("hopefx_standby_promotions_total", "Number of standby→primary promotions")
-    _prom_heartbeat_age = Gauge("hopefx_standby_heartbeat_age_s", "Seconds since last primary heartbeat")
-    _prom_state_version = Gauge("hopefx_standby_state_version", "Current replicated state version")
-    _prom_repl_lag_ms = Histogram(
-        "hopefx_standby_replication_lag_ms",
-        "State replication write latency ms",
-        buckets=[1, 5, 10, 25, 50, 100, 250],
-    )
-    _PROM_OK = True
-except ImportError:
-    _PROM_OK = False
+_prom_role = _pg("hopefx_standby_role", "Current pod role: 1=primary 0=standby")
+_prom_promotions = _pc("hopefx_standby_promotions_total", "Number of standby→primary promotions")
+_prom_heartbeat_age = _pg("hopefx_standby_heartbeat_age_s", "Seconds since last primary heartbeat")
+_prom_state_version = _pg("hopefx_standby_state_version", "Current replicated state version")
+_prom_repl_lag_ms = _ph(
+    "hopefx_standby_replication_lag_ms",
+    "State replication write latency ms",
+    buckets=[1, 5, 10, 25, 50, 100, 250],
+)
+_PROM_OK = _prom_role is not None
 
 
 class Role(StrEnum):

@@ -266,6 +266,8 @@ class TestInitCache:
     def test_uses_redis_env_vars(self, monkeypatch):
         from core.startup_factories import init_cache
 
+        # Clear REDIS_URL so the code falls through to REDIS_HOST/REDIS_PORT
+        monkeypatch.delenv("REDIS_URL", raising=False)
         monkeypatch.setenv("REDIS_HOST", "redis-server")
         monkeypatch.setenv("REDIS_PORT", "6380")
         s = _make_state()

@@ -141,11 +141,13 @@ const StatusPage: React.FC = () => {
   const status = data?.status ?? 'unknown';
   const components = data?.components ?? {};
 
-  // Compute 30-day uptime from history
-  const last30 = history.slice(-30);
-  const avg30 = last30.length
-    ? last30.reduce((s, d) => s + d.uptime_pct, 0) / last30.length
+  // Uptime average covers whatever window the API returned (up to 90 days).
+  // The label shown to the user reflects the actual window, not a hardcoded "30".
+  const historyDays = history.length;
+  const avgUptime = historyDays
+    ? history.reduce((s, d) => s + d.uptime_pct, 0) / historyDays
     : 100;
+  const uptimeWindowLabel = historyDays >= 85 ? '90-day' : historyDays >= 25 ? '30-day' : historyDays > 0 ? `${historyDays}-day` : '—';
 
   return (
     <div style={styles.page}>
@@ -212,8 +214,8 @@ const StatusPage: React.FC = () => {
       <div style={styles.uptimeCard}>
         <div style={{ display: 'flex', gap: 32, marginBottom: 16 }}>
           <div>
-            <div style={styles.uptimeValue}>{avg30.toFixed(2)}%</div>
-            <div style={styles.uptimeLabel}>30-day uptime</div>
+            <div style={styles.uptimeValue}>{avgUptime.toFixed(2)}%</div>
+            <div style={styles.uptimeLabel}>{uptimeWindowLabel} uptime</div>
           </div>
           <div>
             <div style={{ ...styles.uptimeValue, fontSize: 24 }}>{data?.uptime_human ?? '—'}</div>
@@ -222,7 +224,7 @@ const StatusPage: React.FC = () => {
         </div>
         <UptimeBar history={history} />
         <div style={styles.historyLabels}>
-          <span>90 days ago</span>
+          <span>{historyDays > 0 ? `${historyDays} days ago` : '—'}</span>
           <span>Today</span>
         </div>
       </div>
@@ -245,7 +247,7 @@ const StatusPage: React.FC = () => {
               </div>
             ))
         ) : (
-          <p style={{ color: '#64748b', fontSize: 14 }}>No incidents in the last 90 days.</p>
+          <p style={{ color: '#64748b', fontSize: 14 }}>No incidents in the last {historyDays > 0 ? historyDays : '—'} days.</p>
         )}
       </div>
 
