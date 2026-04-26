@@ -250,6 +250,23 @@ const Performance: React.FC = () => {
     enabled: tab === 'weekly',
   });
 
+  const [tradeSide, setTradeSide]   = useState('');
+  const [tradeFrom, setTradeFrom]   = useState('');
+  const [tradeTo,   setTradeTo]     = useState('');
+  const [exporting, setExporting]   = useState(false);
+
+  const handleExport = useCallback(async (format: 'csv' | 'pdf') => {
+    setExporting(true);
+    try {
+      const { performanceExtApi } = await import('../hooks/useApi');
+      const res = await performanceExtApi.export(format);
+      const url = URL.createObjectURL(new Blob([res.data as BlobPart]));
+      const a = document.createElement('a');
+      a.href = url; a.download = `performance.${format}`; a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* non-fatal */ } finally { setExporting(false); }
+  }, []);
+
   const pub    = publicQ.data;
   // Both equity-curve endpoints return { time: number, value: number }.
   // Filter out any points with zero time or value (e.g. missing data).
@@ -257,9 +274,13 @@ const Performance: React.FC = () => {
     .filter((p) => p.time > 0 && p.value > 0)
     .map((p) => ({ t: p.time, v: p.value }));
   const trades = tradesQ.data?.trades ?? [];
-  const filteredTrades = tradeSymbol
-    ? trades.filter((t) => t.symbol.includes(tradeSymbol.toUpperCase()))
-    : trades;
+  const filteredTrades = trades.filter((t) => {
+    if (tradeSymbol && !t.symbol.includes(tradeSymbol.toUpperCase())) return false;
+    if (tradeSide && t.side !== tradeSide) return false;
+    if (tradeFrom && new Date(t.entry_time) < new Date(tradeFrom)) return false;
+    if (tradeTo   && new Date(t.entry_time) > new Date(tradeTo))   return false;
+    return true;
+  });
 
   const refresh = useCallback(() => {
     publicQ.refetch();
@@ -336,15 +357,20 @@ const Performance: React.FC = () => {
       {/* ── Trades ────────────────────────────────────────────────────────── */}
       {tab === 'trades' && (
         <div style={s.card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
             <h3 style={s.cardTitle}>Trade History {tradesQ.data ? `(${filteredTrades.length})` : ''}</h3>
-            <input
-              type="text"
-              placeholder="Filter symbol…"
-              value={tradeSymbol}
-              onChange={(e) => setTradeSymbol(e.target.value)}
-              style={s.filterInput}
-            />
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <input type="text" placeholder="Symbol…" value={tradeSymbol} onChange={(e) => setTradeSymbol(e.target.value)} style={s.filterInput} />
+              <select value={tradeSide} onChange={(e) => setTradeSide(e.target.value)} style={s.filterInput}>
+                <option value="">All sides</option>
+                <option value="buy">Buy / Long</option>
+                <option value="sell">Sell / Short</option>
+              </select>
+              <input type="date" value={tradeFrom} onChange={(e) => setTradeFrom(e.target.value)} style={s.filterInput} title="From date" />
+              <input type="date" value={tradeTo}   onChange={(e) => setTradeTo(e.target.value)}   style={s.filterInput} title="To date" />
+              <button onClick={() => handleExport('csv')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 12 }}>⬇ CSV</button>
+              <button onClick={() => handleExport('pdf')} disabled={exporting} style={{ ...s.refreshBtn, fontSize: 12 }}>⬇ PDF</button>
+            </div>
           </div>
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
           {tradesQ.isError && <div style={{ color: '#f87171', fontSize: 13 }}>Failed to load trades — authentication required</div>}
@@ -373,14 +399,50 @@ const Performance: React.FC = () => {
       {/* ── Weekly ────────────────────────────────────────────────────────── */}
       {tab === 'weekly' && (
         <div style={s.card}>
-          <h3 style={s.cardTitle}>Weekly Report</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={s.cardTitle}>Weekly Performance Report</h3>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => handleExport('csv')} disabled={exporting} style={s.refreshBtn}>⬇ Export CSV</button>
+              <button onClick={() => handleExport('pdf')} disabled={exporting} style={s.refreshBtn}>⬇ Export PDF</button>
+            </div>
+          </div>
           {weeklyQ.isLoading && <PanelSkeleton rows={4} />}
-          {weeklyQ.isError && <div style={{ color: '#f87171', fontSize: 13 }}>No weekly report — POST /api/performance/weekly-report/generate to create one</div>}
-          {weeklyQ.data && (
-            <pre style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', whiteSpace: 'pre-wrap', overflowY: 'auto', maxHeight: 400, background: '#0f172a', borderRadius: 6, padding: 12, border: '1px solid #334155' }}>
-              {JSON.stringify(weeklyQ.data, null, 2)}
-            </pre>
+          {weeklyQ.isError && (
+            <div style={{ color: '#f87171', fontSize: 13, padding: '12px 0' }}>
+              No weekly report available yet. Reports are generated automatically each Sunday.
+            </div>
           )}
+          {weeklyQ.data && (() => {
+            const wr = weeklyQ.data as Record<string, unknown>;
+            const rows: { label: string; value: string; positive?: boolean }[] = [
+              { label: 'Period',         value: String(wr.period ?? wr.week ?? '—') },
+              { label: 'Net P&L',        value: `$${Number(wr.net_pnl ?? 0).toFixed(2)}`,         positive: Number(wr.net_pnl ?? 0) >= 0 },
+              { label: 'Total Trades',   value: String(wr.total_trades ?? '—') },
+              { label: 'Win Rate',       value: `${Number(wr.win_rate ?? 0).toFixed(1)}%`,         positive: Number(wr.win_rate ?? 0) >= 50 },
+              { label: 'Sharpe',         value: String(wr.sharpe_ratio ?? wr.sharpe ?? '—') },
+              { label: 'Max Drawdown',   value: `${Number(wr.max_drawdown_pct ?? 0).toFixed(2)}%`, positive: false },
+              { label: 'Best Trade',     value: `$${Number(wr.best_trade_pnl ?? 0).toFixed(2)}`,   positive: true },
+              { label: 'Worst Trade',    value: `$${Number(wr.worst_trade_pnl ?? 0).toFixed(2)}`,  positive: false },
+            ];
+            return (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(160px,1fr))', gap: 12, marginBottom: 20 }}>
+                  {rows.map(({ label, value, positive }) => (
+                    <div key={label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 16, fontWeight: 700, color: positive === undefined ? '#f1f5f9' : positive ? '#4ade80' : '#f87171' }}>{value}</div>
+                    </div>
+                  ))}
+                </div>
+                {wr.ai_commentary && (
+                  <div style={{ background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 8, padding: '12px 16px' }}>
+                    <div style={{ fontSize: 12, color: '#60a5fa', marginBottom: 6, fontWeight: 600 }}>🤖 AI Commentary</div>
+                    <p style={{ fontSize: 13, color: '#94a3b8', margin: 0, lineHeight: 1.6 }}>{String(wr.ai_commentary)}</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 
