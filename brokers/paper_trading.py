@@ -251,11 +251,12 @@ class PaperTradingBroker(BrokerConnector):
 
         # Tracks when each symbol's price was last updated by a LIVE feed.
         # Symbols absent from this dict are using hardcoded fallback prices.
-        # If a symbol was once live but hasn't been updated in
-        # PAPER_PRICE_STALE_SECONDS (default 120s), orders are rejected
-        # to prevent trading on stale prices with real P&L consequences.
         self._price_timestamps: dict[str, float] = {}
         self._price_stale_secs = float(os.getenv("PAPER_PRICE_STALE_SECONDS", "120"))
+
+        # Optional price feed / engine — set via set_price_feed().
+        # Queried in place_order() to refresh prices before filling.
+        self._price_feed = None
 
         # Simulated market prices - Multi-asset support
         # Last updated: 2025-Q2. These are fallback prices used only when
@@ -435,24 +436,42 @@ class PaperTradingBroker(BrokerConnector):
         # Generate order ID
         order_id = str(uuid.uuid4())
 
-        # Get current market price — check for staleness before filling
+        # Get current market price — try price feed first for freshest data
         current_price = self.market_prices.get(symbol, 0.0)
+        if self._price_feed is not None:
+            try:
+                broker_sym = symbol.replace("/", "")
+                tick = (
+                    self._price_feed.get_last_price(broker_sym)
+                    or self._price_feed.get_last_price(symbol)
+                )
+                if tick is not None:
+                    mid = getattr(tick, "mid", None) or (
+                        (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
+                    )
+                    if mid and mid > 0:
+                        self.update_market_price(symbol, float(mid))
+                        current_price = float(mid)
+            except Exception as _exc:
+                logger.debug("price_feed lookup failed for %s: %s", symbol, _exc)
+
         if current_price == 0.0:
             logger.warning("Unknown symbol %s, using default price 1000.0", symbol)
             current_price = 1000.0
 
-        # Staleness guard: if this symbol was once live-fed but hasn't been
-        # updated in PAPER_PRICE_STALE_SECONDS, reject the order.
-        # Symbols that were NEVER live-fed (hardcoded defaults) get a loud
-        # warning but are allowed through — prevents blocking pure paper demo.
+        # Staleness guard: warn but never block — paper trading must stay
+        # operational even when the live feed is temporarily disconnected.
         last_update = self._price_timestamps.get(symbol)
         if last_update is not None:
             age = time.time() - last_update
-            if age > self._price_stale_secs:
-                raise ConnectionError(
-                    f"Price feed stale for {symbol}: last update was {age:.0f}s ago "
-                    f"(threshold={self._price_stale_secs:.0f}s). "
-                    "Live feed appears disconnected — order rejected to prevent mispriced fills."
+            if self._price_stale_secs > 0 and age > self._price_stale_secs:
+                logger.warning(
+                    "Price feed stale for %s: last update %.0fs ago (threshold=%.0fs). "
+                    "Filling at last known price %.5f — reconnect feed for accurate fills.",
+                    symbol,
+                    age,
+                    self._price_stale_secs,
+                    current_price,
                 )
         else:
             logger.warning(
