@@ -250,8 +250,8 @@ class HOPEFXBrain:
             missing.append("strategy_manager")
 
         if missing:
-            logger.warning(
-                "HOPEFXBrain: missing components %s — brain will run in degraded mode "
+            logger.error(
+                "HOPEFXBrain: Missing components %s — brain will run in degraded mode "
                 "(no live prices/account data until components are available)",
                 missing,
             )

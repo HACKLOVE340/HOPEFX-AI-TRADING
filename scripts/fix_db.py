@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 try:
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env", override=False)
-except ImportError:
+except ImportError:  # noqa: BLE001 — python-dotenv is optional
     pass
 
 DB_URL = os.environ.get("DATABASE_URL", f"sqlite:///{ROOT / 'hopefx.db'}")

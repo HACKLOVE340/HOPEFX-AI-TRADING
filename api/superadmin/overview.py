@@ -123,8 +123,8 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
                 ).scalar()
                 overview["db_connections"] = int(row or 0)
-            except Exception:
-                pass  # SQLite or pg_stat_activity unavailable
+            except Exception:  # noqa: BLE001 — SQLite or pg_stat_activity unavailable
+                pass
 
         finally:
             db.close()

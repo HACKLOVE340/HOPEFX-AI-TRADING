@@ -154,8 +154,8 @@ async def get_queue_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
         if rc:
             for q in ["app:logs", "platform:broadcasts", "ml:retrain_queue", "signals:queue"]:
                 queues[q] = rc.llen(q)
-    except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+    except Exception:  # noqa: BLE001 — Redis queue stats are optional
+        logger.debug("Celery inspect unavailable — using Redis lengths only")
     return {"queues": queues}
 
 

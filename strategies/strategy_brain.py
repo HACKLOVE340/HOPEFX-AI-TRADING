@@ -516,7 +516,7 @@ class StrategyBrain:
                         ohlcv = raw or []
                         if ohlcv:
                             current_price = float(ohlcv[-1].close)
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — OHLCV fetch is best-effort
                         pass
 
                     if current_price == 0.0:
@@ -524,7 +524,7 @@ class StrategyBrain:
                             tick = price_engine.get_last_price(symbol)
                             if tick is not None:
                                 current_price = (tick.bid + tick.ask) / 2.0
-                        except Exception:
+                        except Exception:  # noqa: BLE001 — tick fetch is best-effort
                             pass
 
                 if current_price == 0.0:

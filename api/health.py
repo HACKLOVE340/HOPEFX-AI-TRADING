@@ -606,7 +606,7 @@ async def _check_master_control() -> ComponentStatus:
             try:
                 from core.mcc import master_control as _mc_mod  # type: ignore[import]
                 mcc = getattr(_mc_mod, "_mcc_instance", None)
-            except Exception:
+            except Exception:  # noqa: BLE001 — MCC import is optional
                 pass
 
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
