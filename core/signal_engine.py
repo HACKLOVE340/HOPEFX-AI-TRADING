@@ -1562,6 +1562,50 @@ def _resolve_sl_tp(
         return sl, tp
 
 
+def _push_mtf_bar(
+    data: dict[str, Any],
+    symbol: str,
+    app_state: Any | None = None,
+) -> None:
+    """Push the latest OHLCV bar into the MTFFusionStore live buffers.
+
+    The MTFFusionStore maintains H4 and D1 rolling buffers.  Calling
+    push_bar() on each tick keeps those buffers current so align_to_h1()
+    always sees the latest regime context without a full reload.
+
+    Timeframe is inferred from the bar interval stored in data["interval"]
+    (default "1h").  The store internally decides whether to aggregate the
+    bar into H4 or D1 based on the timeframe label.
+
+    Non-blocking: any error is logged at DEBUG level and silently ignored.
+    """
+    try:
+        store = getattr(app_state, "mtf_store", None)
+        if store is None:
+            from research.pipeline.mtf_fusion import _MTF_STORE_SINGLETON
+
+            store = _MTF_STORE_SINGLETON
+        if store is None or not getattr(store, "is_ready", False):
+            return
+
+        bar = pd.DataFrame(
+            [
+                {
+                    "open": data.get("open", data["close"]),
+                    "high": data.get("high", data["close"]),
+                    "low": data.get("low", data["close"]),
+                    "close": data["close"],
+                    "volume": data.get("volume", 0.0),
+                }
+            ],
+            index=[datetime.now(UTC)],
+        )
+        timeframe = data.get("interval", "1h")
+        store.push_bar(bar, timeframe=timeframe)
+    except Exception as exc:
+        logger.debug("_push_mtf_bar failed for %s (non-fatal): %s", symbol, exc)
+
+
 async def _tick(app_state: Any) -> None:
     """
     Process one tick for all watched symbols.
@@ -1582,6 +1626,11 @@ async def _tick(app_state: Any) -> None:
         data: dict[str, Any] | None = await _fetch_market_data(symbol, app_state=app_state)
         if not data:
             continue
+
+        # ── MTF live bar update ───────────────────────────────────────────────
+        # Push the latest bar into the MTFFusionStore so the H4/D1 buffers
+        # stay current without requiring a full reload on each tick.
+        _push_mtf_bar(data, symbol, app_state)
 
         sig_info = _compute_signal(brain, data, symbol)
         if sig_info is None:
