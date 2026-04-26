@@ -554,7 +554,7 @@ class MT5Broker(BrokerConnector):
                     id=str(o["ticket"]),
                     symbol=o.get("symbol", ""),
                     side=OrderSide.BUY if o.get("type", 0) in (0, 2, 4) else OrderSide.SELL,
-                    order_type=OrderType.MARKET,
+                    type=OrderType.MARKET,
                     quantity=float(o.get("volume", 0)),
                     status="PENDING",
                 )

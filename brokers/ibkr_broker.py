@@ -489,7 +489,7 @@ class IBKRBroker(BrokerConnector):
                     id=str(o.orderId),
                     symbol=trade.contract.symbol,
                     side=OrderSide.BUY if o.action == "BUY" else OrderSide.SELL,
-                    order_type=OrderType.MARKET if o.orderType == "MKT" else OrderType.LIMIT,
+                    type=OrderType.MARKET if o.orderType == "MKT" else OrderType.LIMIT,
                     quantity=float(o.totalQuantity),
                     status=trade.orderStatus.status,
                 )

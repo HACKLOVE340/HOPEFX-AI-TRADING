@@ -738,7 +738,7 @@ class OandaBroker(BrokerConnector):
                     id=str(o.get("id", order_id)),
                     symbol=o.get("instrument", ""),
                     side=OrderSide.BUY if float(o.get("units", 0)) > 0 else OrderSide.SELL,
-                    order_type=OrderType.MARKET,
+                    type=OrderType.MARKET,
                     quantity=abs(float(o.get("units", 0))),
                     status=o.get("state", "PENDING"),
                 )
