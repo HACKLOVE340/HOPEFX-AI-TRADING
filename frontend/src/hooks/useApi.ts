@@ -983,3 +983,68 @@ export const eliteApi = {
   listCustomDevReqs: (limit = 50, offset = 0) =>
     api.get('/billing/elite/custom-dev/requests', { params: { limit, offset } }),
 };
+
+// ── Geopolitical Intelligence ──────────────────────────────────────────────────
+// Backend: /api/news/* (news/__init__.py — inline FastAPI router)
+
+export const geopoliticalApi = {
+  signal:       ()                     => api.get('/news/geopolitical/signal'),
+  events:       (forceRefresh = false) => api.get('/news/geopolitical/events', { params: { force_refresh: forceRefresh } }),
+  assessment:   ()                     => api.get('/news/geopolitical/assessment'),
+  worldMonitor: ()                     => api.get('/news/geopolitical/world-monitor'),
+  newsSentiment:(symbol: string)       => api.get(`/news/sentiment/${encodeURIComponent(symbol)}`),
+};
+
+// ── Watchlist ─────────────────────────────────────────────────────────────────
+// Backend: /api/watchlist/* (api/watchlist.py)
+
+export const watchlistApi = {
+  list:   ()               => api.get('/watchlist'),
+  add:    (symbol: string) => api.post(`/watchlist/${encodeURIComponent(symbol)}`),
+  remove: (symbol: string) => api.delete(`/watchlist/${encodeURIComponent(symbol)}`),
+  prices: ()               => api.get('/watchlist/prices'),
+};
+
+// ── Strategy Marketplace ──────────────────────────────────────────────────────
+// Backend: /api/monetization/marketplace/* (api/monetization.py)
+
+export const marketplaceApi = {
+  strategies: (params?: Record<string, unknown>)  => api.get('/monetization/marketplace/strategies', { params }),
+  strategy:   (id: string)                        => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(id)}`),
+  purchase:   (payload: object)                   => api.post('/monetization/marketplace/purchase', payload),
+  featured:   ()                                  => api.get('/monetization/marketplace/featured'),
+  stats:      ()                                  => api.get('/monetization/marketplace/stats'),
+  list:       (payload: object)                   => api.post('/monetization/marketplace/list', payload),
+};
+
+// ── Security Auto-Healing Dashboard ──────────────────────────────────────────
+// Backend: /api/security/* (api/security_dashboard.py)
+
+export const securityHealingApi = {
+  attacks:         ()               => api.get('/security/attacks'),
+  alerts:          ()               => api.get('/security/alerts'),
+  lockdownStatus:  ()               => api.get('/security/lockdown'),
+  blockedIps:      ()               => api.get('/security/blocked-ips'),
+  healStatus:      ()               => api.get('/security/heal/status'),
+  drift:           ()               => api.get('/security/heal/drift'),
+  patches:         ()               => api.get('/security/heal/patches'),
+  scanNow:         ()               => api.post('/security/heal/scan/now'),
+  rebuildBaseline: ()               => api.post('/security/heal/baseline/rebuild'),
+  avStatus:        ()               => api.get('/security/av/status'),
+  avThreats:       ()               => api.get('/security/av/threats'),
+  avScan:          (payload = {})   => api.post('/security/av/scan', payload),
+  avQuarantine:    (payload = {})   => api.post('/security/av/quarantine', payload),
+};
+
+// ── Security Fix Approval Queue ───────────────────────────────────────────────
+// Backend: /api/security/fixes/* (api/security/fixes.py)
+
+export const securityFixesApi = {
+  list:       (params?: Record<string, unknown>) => api.get('/security/fixes', { params }),
+  approved:   (params?: Record<string, unknown>) => api.get('/security/fixes/approved', { params }),
+  declined:   (params?: Record<string, unknown>) => api.get('/security/fixes/declined', { params }),
+  stats:      ()                                 => api.get('/security/fixes/stats'),
+  approve:    (fixId: string, notes?: string)    => api.post('/security/fixes/approve', { fix_id: fixId, notes }),
+  decline:    (fixId: string, reason?: string)   => api.post('/security/fixes/decline', { fix_id: fixId, reason }),
+  scan:       ()                                 => api.post('/security/fixes/scan'),
+};

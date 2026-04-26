@@ -164,6 +164,20 @@ interface WsSlice {
   setHeartbeat:  (ts: number) => void;
 }
 
+// ─── System Event slice ───────────────────────────────────────────────────────
+
+export interface SystemAlert {
+  type: string;
+  reason: string;
+  ts: number;
+}
+
+interface SystemEventSlice {
+  systemAlert:      SystemAlert | null;
+  setSystemAlert:   (alert: SystemAlert) => void;
+  clearSystemAlert: () => void;
+}
+
 // ─── Combined store type ──────────────────────────────────────────────────────
 
 export type AppStore =
@@ -174,7 +188,8 @@ export type AppStore =
   AccountSlice &
   OrchestratorSlice &
   AlertsSlice &
-  WsSlice;
+  WsSlice &
+  SystemEventSlice;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -363,6 +378,15 @@ export const useStore = create<AppStore>()(
 
         setHeartbeat: (ts) =>
           set({ lastHeartbeat: ts }, false, 'ws/heartbeat'),
+
+        // ── System Events ──────────────────────────────────────────────────────
+        systemAlert: null,
+
+        setSystemAlert: (alert) =>
+          set({ systemAlert: alert }, false, 'system/setAlert'),
+
+        clearSystemAlert: () =>
+          set({ systemAlert: null }, false, 'system/clear'),
       }),
       {
         name: 'hopefx-store',
@@ -416,6 +440,7 @@ export const selectNewsItems          = (s: AppStore) => s.newsItems;
 export const selectDataQualityScore   = (s: AppStore) =>
   s.orchestratorHealth?.quality_score ?? null;
 export const selectPlan               = (s: AppStore) => s.plan;
+export const selectSystemAlert        = (s: AppStore) => s.systemAlert;
 
 // ─── Hydration hook ───────────────────────────────────────────────────────────
 // Use this in any component/hook that must wait for localStorage rehydration

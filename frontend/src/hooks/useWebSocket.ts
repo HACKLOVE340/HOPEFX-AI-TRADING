@@ -11,7 +11,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useStore } from '../store';
 import { tradingApi } from './useApi';
 import type { PriceTick, Position, Signal, AccountMetrics, MicrostructureSnapshot } from '../types';
-import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem } from '../store';
+import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert } from '../store';
 
 const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
@@ -45,16 +45,12 @@ interface WsMessage {
     | 'no_live_feed'
     | 'error'
     // chart-bot channel messages
-    | 'microstructure'
     | 'volume_delta'
-    | 'sentiment_update'
     | 'risk_update'
-    | 'equity_update'
     | 'news_item'
-    // server acknowledgements
-    | 'subscribed'
-    | 'unsubscribed'
-    | 'pong';
+    // System
+    | 'system_event'
+    | 'nuclear_halt';
   data?:          unknown;
   auth_required?: boolean;
   code?:          string;
@@ -86,7 +82,7 @@ export function useWebSocket(enabled = true) {
       setWsStatus, setHeartbeat, setPrice,
       upsertPosition, removePosition, addSignal, setAccount,
       setMicrostructure, setVolumeDelta, setSentiment,
-      setRiskSnapshot, setEquitySnapshot, addNewsItem,
+      setRiskSnapshot, setEquitySnapshot, addNewsItem, setSystemAlert,
     } = getState();
 
     switch (msg.type) {
@@ -102,7 +98,7 @@ export function useWebSocket(enabled = true) {
           wsRef.current?.send(JSON.stringify({
             type: 'subscribe',
             channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
+                       'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
           }));
         }
         break;
@@ -113,7 +109,7 @@ export function useWebSocket(enabled = true) {
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
         }));
         break;
 
@@ -180,6 +176,17 @@ export function useWebSocket(enabled = true) {
       case 'news_item':
         addNewsItem(msg.data as WsNewsItem);
         break;
+
+      case 'nuclear_halt':
+      case 'system_event': {
+        const raw = msg.data as Record<string, unknown> | undefined;
+        setSystemAlert({
+          type:   msg.type,
+          reason: (raw?.reason as string | undefined) ?? (msg.message ?? 'System event received'),
+          ts:     Date.now(),
+        } satisfies SystemAlert);
+        break;
+      }
 
       // ── server acknowledgements ───────────────────────────────────────────
 
