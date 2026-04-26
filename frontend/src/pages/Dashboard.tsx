@@ -15,6 +15,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
 import {
   useStore,
@@ -23,8 +24,11 @@ import {
   selectSignals,
   selectWsStatus,
   selectEquityCurve,
+  selectRiskSnapshot,
+  selectMicrostructure,
+  selectSentiment,
 } from '../store';
-import { mlApi } from '../hooks/useApi';
+import { mlApi, tradingApi } from '../hooks/useApi';
 import type { EquityPoint } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -333,6 +337,167 @@ const MlAccuracyCard: React.FC = () => {
   );
 };
 
+// ─── Market Regime panel ──────────────────────────────────────────────────────
+
+interface MarketRegime {
+  regime: string;
+  confidence: number;
+  volatility: string;
+  trend: string;
+  description?: string;
+}
+
+const MarketRegimePanel: React.FC = () => {
+  const [regime, setRegime] = useState<MarketRegime | null>(null);
+  const [err, setErr]       = useState(false);
+
+  useEffect(() => {
+    tradingApi.regime('XAU/USD')
+      .then((r) => setRegime(r.data as MarketRegime))
+      .catch(() => setErr(true));
+  }, []);
+
+  if (err || !regime) {
+    return (
+      <div style={{ color: '#475569', fontSize: 13 }}>
+        {err ? 'Regime data unavailable.' : 'Loading…'}
+      </div>
+    );
+  }
+
+  const regimeColor =
+    regime.regime === 'trending_up'   ? '#4ade80' :
+    regime.regime === 'trending_down' ? '#f87171' :
+    regime.regime === 'ranging'       ? '#fbbf24' : '#94a3b8';
+
+  return (
+    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+      <div>
+        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regimeColor }}>
+          {regime.regime.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+        </div>
+        {regime.description && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{regime.description}</div>}
+      </div>
+      <div>
+        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Confidence</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>{(regime.confidence * 100).toFixed(1)}%</div>
+      </div>
+      <div>
+        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Volatility</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regime.volatility === 'high' ? '#f87171' : regime.volatility === 'medium' ? '#fbbf24' : '#4ade80' }}>
+          {regime.volatility.charAt(0).toUpperCase() + regime.volatility.slice(1)}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Trend</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: regime.trend === 'up' ? '#4ade80' : regime.trend === 'down' ? '#f87171' : '#94a3b8' }}>
+          {regime.trend === 'up' ? '↑ Bullish' : regime.trend === 'down' ? '↓ Bearish' : '→ Neutral'}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Risk snapshot panel ──────────────────────────────────────────────────────
+
+const RiskSnapshotPanel: React.FC = () => {
+  const risk = useStore(selectRiskSnapshot);
+  const micro = useStore(selectMicrostructure);
+  const sentiment = useStore(selectSentiment);
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+      {[
+        {
+          label: 'Daily Loss',
+          value: risk?.daily_loss_pct != null ? `${risk.daily_loss_pct.toFixed(2)}%` : '—',
+          warn: risk?.daily_loss_pct != null && risk.daily_loss_pct > 3,
+        },
+        {
+          label: 'Max Drawdown',
+          value: risk?.max_drawdown_pct != null ? `${risk.max_drawdown_pct.toFixed(2)}%` : '—',
+          warn: risk?.max_drawdown_pct != null && risk.max_drawdown_pct > 8,
+        },
+        {
+          label: 'Open Risk',
+          value: risk?.open_risk_pct != null ? `${risk.open_risk_pct.toFixed(2)}%` : '—',
+          warn: risk?.open_risk_pct != null && risk.open_risk_pct > 5,
+        },
+        {
+          label: 'Kill Switch',
+          value: risk?.kill_switch_active ? '🔴 ACTIVE' : '🟢 Off',
+          warn: !!risk?.kill_switch_active,
+        },
+        {
+          label: 'Spread (XAU)',
+          value: micro?.spread != null ? `$${micro.spread.toFixed(2)}` : '—',
+          warn: micro?.spread != null && micro.spread > 0.5,
+        },
+        {
+          label: 'Sentiment',
+          value: sentiment?.signal?.news_sentiment_score != null
+            ? `${(sentiment.signal.news_sentiment_score * 100).toFixed(0)}%`
+            : '—',
+          warn: false,
+        },
+      ].map(({ label, value, warn }) => (
+        <div key={label} style={{
+          background: warn ? 'rgba(248,113,113,0.08)' : '#0f172a',
+          border: `1px solid ${warn ? '#f87171' : '#1e293b'}`,
+          borderRadius: 8, padding: '10px 14px',
+        }}>
+          <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: warn ? '#f87171' : '#f8fafc' }}>{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── Quick-nav shortcuts ──────────────────────────────────────────────────────
+
+const QUICK_LINKS = [
+  { icon: '⚡', label: 'Trade',        path: '/trade'       },
+  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-charts'   },
+  { icon: '☢️', label: 'Nuclear AI',   path: '/nuclear'     },
+  { icon: '📓', label: 'Journal',      path: '/journal'     },
+  { icon: '🏆', label: 'Performance',  path: '/performance' },
+  { icon: '💹', label: 'P&L',          path: '/pnl'         },
+  { icon: '🌍', label: 'Geopolitical', path: '/geopolitical'},
+  { icon: '📡', label: 'Signal Feed',  path: '/feed'        },
+];
+
+const QuickNav: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      {QUICK_LINKS.map(({ icon, label, path }) => (
+        <button
+          key={path}
+          onClick={() => navigate(path)}
+          style={{
+            background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+            padding: '8px 14px', cursor: 'pointer', color: '#94a3b8',
+            fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+            transition: 'border-color 0.15s, color 0.15s',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6';
+            (e.currentTarget as HTMLButtonElement).style.color = '#60a5fa';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155';
+            (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8';
+          }}
+        >
+          <span>{icon}</span> {label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 // ─── WS status badge ──────────────────────────────────────────────────────────
 
 const WsBadge: React.FC = () => {
@@ -364,7 +529,6 @@ const Dashboard: React.FC = () => {
   // All data is populated by AppShell's useBootstrapData (TanStack Query + WebSocket).
   // Reading directly from the store avoids duplicate polling loops.
   const account      = useStore(selectAccount);
-  const wsStatus     = useStore(selectWsStatus);
   // Equity curve is fetched by useEquityCurve() inside useBootstrapData — read from store.
   const equityHistory = useStore(selectEquityCurve);
 
@@ -422,9 +586,25 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      <div style={s.twoCol}>
+        <div style={s.card}>
+          <div style={{ ...s.cardTitle, marginBottom: 12 }}>Market Regime — XAU/USD</div>
+          <MarketRegimePanel />
+        </div>
+        <div style={s.card}>
+          <div style={{ ...s.cardTitle, marginBottom: 12 }}>Risk Snapshot</div>
+          <RiskSnapshotPanel />
+        </div>
+      </div>
+
       <div style={s.card}>
         <div style={s.cardTitle}>ML Model Accuracy</div>
         <MlAccuracyCard />
+      </div>
+
+      <div style={s.card}>
+        <div style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</div>
+        <QuickNav />
       </div>
     </div>
   );
