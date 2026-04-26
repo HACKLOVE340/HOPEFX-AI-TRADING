@@ -667,7 +667,7 @@ def walk_forward_eval(
 
     total = len(df)
     fold_size = total // n_folds
-    folds_results: list[WalkForwardFold] = field(default_factory=list)
+    folds_results: list[WalkForwardFold] = []
 
     logger.info(
         "Walk-forward eval: %d candles, %d folds, %d steps/fold",
