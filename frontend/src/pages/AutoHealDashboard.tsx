@@ -136,10 +136,62 @@ const DriftTable: React.FC<{ events: DriftEvent[]; loading: boolean }> = ({ even
   </div>
 );
 
+// ── Diff viewer modal ─────────────────────────────────────────────────────────
+
+const DiffModal: React.FC<{ patch: PatchRecord; onClose: () => void }> = ({ patch, onClose }) => (
+  <div
+    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    onClick={onClose}
+  >
+    <div
+      style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 12, maxWidth: 860, width: '100%', maxHeight: '80vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      onClick={e => e.stopPropagation()}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', borderBottom: '1px solid #1e2d3d' }}>
+        <div>
+          <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>Patch Diff — {patch.file}</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+            {patch.endpoint} · {new Date(patch.applied_at).toLocaleString()}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, padding: '2px 8px', borderRadius: 4, background: patch.success ? '#14532d' : '#450a0a', color: patch.success ? '#4ade80' : '#f87171' }}>
+            {patch.success ? '✅ Applied' : '❌ Failed'}
+          </span>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20, lineHeight: 1 }}>×</button>
+        </div>
+      </div>
+      <div style={{ overflowY: 'auto', padding: '16px 20px', flex: 1 }}>
+        {patch.message && (
+          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, padding: '8px 12px', fontSize: 13, color: '#94a3b8', marginBottom: 12 }}>
+            {patch.message}
+          </div>
+        )}
+        {patch.diff ? (
+          <pre style={{ ...diffStyle, margin: 0, maxHeight: 'none' }}>
+            {patch.diff.split('\n').map((line, i) => (
+              <span key={i} style={{
+                display: 'block',
+                color: line.startsWith('+') ? '#4ade80' : line.startsWith('-') ? '#f87171' : line.startsWith('@@') ? '#60a5fa' : '#94a3b8',
+                background: line.startsWith('+') ? 'rgba(74,222,128,0.05)' : line.startsWith('-') ? 'rgba(248,113,113,0.05)' : 'transparent',
+              }}>
+                {line}
+              </span>
+            ))}
+          </pre>
+        ) : (
+          <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No diff available for this patch.</div>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
 const PatchTable: React.FC<{ patches: PatchRecord[]; loading: boolean }> = ({ patches, loading }) => {
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [diffPatch, setDiffPatch] = useState<PatchRecord | null>(null);
   return (
     <div style={panelStyle}>
+      {diffPatch && <DiffModal patch={diffPatch} onClose={() => setDiffPatch(null)} />}
       <div style={panelHeaderStyle}>
         <span style={panelTitleStyle}>Patch History</span>
         <span style={panelCountStyle}>{patches.length}</span>
@@ -151,21 +203,11 @@ const PatchTable: React.FC<{ patches: PatchRecord[]; loading: boolean }> = ({ pa
       ) : (
         <div style={tableWrapStyle}>
           {patches.slice(0, 20).map((p, i) => (
-            <div key={i}>
-              <div
-                style={{ ...tableRowStyle, cursor: 'pointer' }}
-                onClick={() => setExpanded(expanded === i ? null : i)}
-              >
-                <span style={successBadgeStyle(p.success)}>{p.success ? '✅ applied' : '❌ failed'}</span>
-                <span style={monoStyle}>{p.file}</span>
-                <span style={timeStyle}>{new Date(p.applied_at).toLocaleTimeString()}</span>
-              </div>
-              {expanded === i && p.diff && (
-                <pre style={diffStyle}>{p.diff}</pre>
-              )}
-              {expanded === i && !p.diff && (
-                <div style={{ padding: '6px 16px', color: '#94a3b8', fontSize: 11 }}>{p.message}</div>
-              )}
+            <div key={i} style={{ ...tableRowStyle, cursor: 'pointer' }} onClick={() => setDiffPatch(p)}>
+              <span style={successBadgeStyle(p.success)}>{p.success ? '✅ applied' : '❌ failed'}</span>
+              <span style={monoStyle}>{p.file}</span>
+              <span style={{ ...timeStyle, marginLeft: 'auto' }}>{new Date(p.applied_at).toLocaleTimeString()}</span>
+              <span style={{ fontSize: 11, color: '#3b82f6', marginLeft: 8 }}>View diff →</span>
             </div>
           ))}
         </div>
@@ -226,9 +268,11 @@ const AutoHealDashboard: React.FC = () => {
   const [threats, setThreats] = useState<Threat[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
-  const [avScanning, setAvScanning] = useState(false);
-  const [rebuilding, setRebuilding] = useState(false);
+  const [scanning, setScanning]         = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [avScanning, setAvScanning]     = useState(false);
+  const [avProgress, setAvProgress]     = useState(0);
+  const [rebuilding, setRebuilding]     = useState(false);
   const [quarantining, setQuarantining] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
@@ -261,14 +305,27 @@ const AutoHealDashboard: React.FC = () => {
 
   const handleScan = async () => {
     setScanning(true);
-    try { await triggerScan(); await loadAll(); } catch { setError('Scan trigger failed'); }
-    finally { setScanning(false); }
+    setScanProgress(0);
+    // Simulate progress while scan runs (real progress from WS if available)
+    const interval = setInterval(() => setScanProgress(p => Math.min(p + 8, 90)), 400);
+    try {
+      await triggerScan();
+      setScanProgress(100);
+      await loadAll();
+    } catch { setError('Scan trigger failed'); }
+    finally { clearInterval(interval); setScanning(false); setTimeout(() => setScanProgress(0), 1500); }
   };
 
   const handleAvScan = async () => {
     setAvScanning(true);
-    try { await triggerAvScan(); await loadAll(); } catch { setError('AV scan trigger failed'); }
-    finally { setAvScanning(false); }
+    setAvProgress(0);
+    const interval = setInterval(() => setAvProgress(p => Math.min(p + 5, 90)), 600);
+    try {
+      await triggerAvScan();
+      setAvProgress(100);
+      await loadAll();
+    } catch { setError('AV scan trigger failed'); }
+    finally { clearInterval(interval); setAvScanning(false); setTimeout(() => setAvProgress(0), 1500); }
   };
 
   const handleRebuild = async () => {
@@ -297,15 +354,29 @@ const AutoHealDashboard: React.FC = () => {
 
       {/* Action bar */}
       <div style={actionBarStyle}>
-        <button style={actionBtnStyle} onClick={handleScan} disabled={scanning}>
-          {scanning ? 'Scanning…' : '🔍 Integrity Scan'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button style={actionBtnStyle} onClick={handleScan} disabled={scanning}>
+            {scanning ? `🔍 Scanning… ${scanProgress}%` : '🔍 Integrity Scan'}
+          </button>
+          {scanning && (
+            <div style={{ width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${scanProgress}%`, height: '100%', background: '#3b82f6', borderRadius: 4, transition: 'width 0.3s ease' }} />
+            </div>
+          )}
+        </div>
         <button style={actionBtnStyle} onClick={handleRebuild} disabled={rebuilding}>
           {rebuilding ? 'Rebuilding…' : '📐 Rebuild Baseline'}
         </button>
-        <button style={{ ...actionBtnStyle, background: '#7c3aed' }} onClick={handleAvScan} disabled={avScanning}>
-          {avScanning ? 'Scanning…' : '🛡️ AV Full Scan'}
-        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <button style={{ ...actionBtnStyle, background: '#7c3aed' }} onClick={handleAvScan} disabled={avScanning}>
+            {avScanning ? `🛡️ AV Scan… ${avProgress}%` : '🛡️ AV Full Scan'}
+          </button>
+          {avScanning && (
+            <div style={{ width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+              <div style={{ width: `${avProgress}%`, height: '100%', background: '#7c3aed', borderRadius: 4, transition: 'width 0.3s ease' }} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPI strip — SelfHealer */}
