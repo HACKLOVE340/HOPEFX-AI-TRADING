@@ -92,31 +92,44 @@ _deep_ensemble_store: Any | None = None
 def _get_deep_ensemble_store() -> Any | None:
     """Return the module-level DeepEnsembleStore singleton, loading on first call."""
     global _deep_ensemble_store
+
+    # Check feature flag; fall back to env-var when flags module is unavailable.
+    enabled = False
     try:
         from config.feature_flags import flags
 
-        if not flags.DEEP_ENSEMBLE:
-            return None
+        enabled = bool(flags.DEEP_ENSEMBLE)
     except Exception as _exc:
         logger.debug("_get_deep_ensemble_store: feature-flags unavailable: %s", _exc)
-        return None
-        try:
-            from research.pipeline.models_ensemble import DeepEnsembleStore
+        import os
 
-            store = DeepEnsembleStore()
-            if store.load():
-                _deep_ensemble_store = store
-                logger.info(
-                    "DeepEnsembleStore active (OOS=%.1f%%, p=%.4f)",
-                    store.oos_accuracy * 100,
-                    store.p_value,
-                )
-            else:
-                # Store a sentinel so we don't retry on every tick
-                _deep_ensemble_store = False  # type: ignore[assignment]
-        except Exception as exc:
-            logger.debug("DeepEnsembleStore init failed: %s", exc)
+        enabled = os.getenv("FEATURE_DEEP_ENSEMBLE", "").lower() in ("1", "true", "yes")
+
+    if not enabled:
+        return None
+
+    # Already loaded (or already failed — sentinel False)
+    if _deep_ensemble_store is not None:
+        return _deep_ensemble_store or None
+
+    try:
+        from research.pipeline.models_ensemble import DeepEnsembleStore
+
+        store = DeepEnsembleStore()
+        if store.load():
+            _deep_ensemble_store = store
+            logger.info(
+                "DeepEnsembleStore active (OOS=%.1f%%, p=%.4f)",
+                store.oos_accuracy * 100,
+                store.p_value,
+            )
+        else:
+            # Sentinel: don't retry on every tick
             _deep_ensemble_store = False  # type: ignore[assignment]
+    except Exception as exc:
+        logger.debug("DeepEnsembleStore init failed: %s", exc)
+        _deep_ensemble_store = False  # type: ignore[assignment]
+
     # Return None for the sentinel (False) so callers get a clean None
     return _deep_ensemble_store or None
 
