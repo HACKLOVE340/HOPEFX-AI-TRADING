@@ -1,0 +1,157 @@
+# HOPEFX AI Trading — Multi-Source Tick Feed Configuration
+#
+# Fallback chain per symbol:
+#   1. yFinance   — free, no key required, ~1-2 s polling
+#   2. Alpha Vantage — free tier 25 req/day, 5 req/min; key required
+#   3. Twelve Data — free tier 800 credits/day; key required
+#
+# Set API keys via environment variables.  Never commit real keys.
+# Placeholder values here are used only when the env var is absent.
+
+multi_source_feed:
+
+  # ── Global settings ─────────────────────────────────────────────────────────
+
+  # Ordered fallback chain — first healthy source wins each poll cycle.
+  fallback_order:
+    - "yfinance"
+    - "alpha_vantage"
+    - "twelve_data"
+
+  # Polling interval in seconds (applies to all REST sources).
+  refresh_seconds: 2
+
+  # Per-request HTTP timeout (seconds).
+  timeout_seconds: 5
+
+  # Maximum retry attempts per provider before marking failure.
+  max_retries: 3
+
+  # Consecutive failures before circuit breaker opens.
+  circuit_breaker_threshold: 5
+
+  # Seconds before a tripped circuit breaker retries.
+  circuit_breaker_cooldown: 60
+
+  # Rolling in-memory tick history per symbol.
+  history_size: 5000
+
+  # Stale-data threshold: reject ticks older than this many seconds.
+  max_stale_seconds: 30
+
+  # Anomaly guard: reject ticks that jump more than this % from last price.
+  anomaly_jump_pct: 5.0
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    host: "${REDIS_HOST:localhost}"
+    port: "${REDIS_PORT:6379}"
+    db:   "${REDIS_DB:0}"
+    # Key pattern for latest tick: tick:SYMBOL  (e.g. tick:XAUUSD)
+    tick_key_prefix: "tick"
+    # Key TTL in seconds — ensures stale keys expire automatically.
+    tick_key_ttl: 30
+    # Pub/sub channel pattern: hopefx:tick:SYMBOL
+    pubsub_channel_prefix: "hopefx:tick"
+    # Legacy price_queue list key (NuclearStreamer compatibility).
+    legacy_queue_key: "price_queue"
+
+  # ── Symbols ──────────────────────────────────────────────────────────────────
+  # Each symbol maps to its provider-specific ticker strings.
+  symbols:
+    XAUUSD:
+      yfinance_ticker:      "GC=F"          # Gold futures (continuous)
+      alpha_vantage_symbol: "XAU"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "XAU/USD"
+      price_min: 1000.0
+      price_max: 10000.0
+
+    EURUSD:
+      yfinance_ticker:      "EURUSD=X"
+      alpha_vantage_symbol: "EUR"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "EUR/USD"
+      price_min: 0.5
+      price_max: 2.5
+
+    GBPUSD:
+      yfinance_ticker:      "GBPUSD=X"
+      alpha_vantage_symbol: "GBP"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "GBP/USD"
+      price_min: 0.5
+      price_max: 3.0
+
+    USDJPY:
+      yfinance_ticker:      "JPY=X"
+      alpha_vantage_symbol: "USD"
+      alpha_vantage_market: "JPY"
+      twelve_data_symbol:   "USD/JPY"
+      price_min: 50.0
+      price_max: 200.0
+
+    USDCHF:
+      yfinance_ticker:      "CHF=X"
+      alpha_vantage_symbol: "USD"
+      alpha_vantage_market: "CHF"
+      twelve_data_symbol:   "USD/CHF"
+      price_min: 0.5
+      price_max: 2.0
+
+    AUDUSD:
+      yfinance_ticker:      "AUDUSD=X"
+      alpha_vantage_symbol: "AUD"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "AUD/USD"
+      price_min: 0.3
+      price_max: 1.5
+
+    USDCAD:
+      yfinance_ticker:      "CAD=X"
+      alpha_vantage_symbol: "USD"
+      alpha_vantage_market: "CAD"
+      twelve_data_symbol:   "USD/CAD"
+      price_min: 0.5
+      price_max: 2.0
+
+    NZDUSD:
+      yfinance_ticker:      "NZDUSD=X"
+      alpha_vantage_symbol: "NZD"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "NZD/USD"
+      price_min: 0.3
+      price_max: 1.5
+
+  # ── yFinance ─────────────────────────────────────────────────────────────────
+  # No API key required.  Uses yfinance library (pip install yfinance).
+  # Rate limit: ~2000 req/hour per IP.  Suitable for 1-2 s polling.
+  yfinance:
+    enabled: true
+    # yfinance download period for the latest price bar.
+    period: "1d"
+    interval: "1m"
+
+  # ── Alpha Vantage ─────────────────────────────────────────────────────────────
+  # Free tier: 25 requests/day, 5 requests/minute.
+  # Docs: https://www.alphavantage.co/documentation/
+  alpha_vantage:
+    enabled: true
+    api_key: "${ALPHA_VANTAGE_KEY:${ALPHA_VANTAGE_API_KEY:}}"
+    base_url: "https://www.alphavantage.co/query"
+    # Function used for FX rates.
+    fx_function: "CURRENCY_EXCHANGE_RATE"
+    # Function used for commodity (gold) prices.
+    commodity_function: "CURRENCY_EXCHANGE_RATE"
+
+  # ── Twelve Data ──────────────────────────────────────────────────────────────
+  # Free tier: 800 API credits/day, 8 credits/minute.
+  # Docs: https://twelvedata.com/docs#price
+  twelve_data:
+    enabled: true
+    api_key: "${TWELVE_API_KEY:}"
+    base_url: "https://api.twelvedata.com"
+    # Endpoint for real-time price.
+    price_endpoint: "/price"
+    # Endpoint for quote (bid/ask).
+    quote_endpoint: "/quote"
