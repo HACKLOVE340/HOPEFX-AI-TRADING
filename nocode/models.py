@@ -181,6 +181,11 @@ class NoCodeStrategy:
     updated_at: datetime = field(default_factory=datetime.now)
     enabled: bool = True
 
+    @property
+    def is_active(self) -> bool:
+        """Alias for enabled — used by API serialisation."""
+        return self.enabled
+
     def to_json(self) -> str:
         """Serialize strategy to JSON."""
         return json.dumps(self.to_dict(), indent=2)

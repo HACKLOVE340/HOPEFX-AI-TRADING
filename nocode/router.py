@@ -49,7 +49,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
                 "description": s.description,
                 "symbol": s.symbol,
                 "timeframe": s.timeframe,
-                "is_active": s.is_active,
+                "is_active": getattr(s, "is_active", getattr(s, "enabled", True)),
                 "rules_count": len(s.rules),
                 "created_at": s.created_at.isoformat(),
             }
