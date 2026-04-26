@@ -391,7 +391,7 @@ class DataValidator:
 
         Records the result and publishes alerts for failures.
         """
-        result = ValidationResult(stage=stage, symbol=symbol, rows_checked=len(df))
+        result = ValidationResult(passed=False, stage=stage, symbol=symbol, rows_checked=len(df))
         try:
             clean = validate_ohlcv(
                 df,
@@ -420,6 +420,7 @@ class DataValidator:
     ) -> pd.DataFrame | np.ndarray:
         """Validate a feature matrix before model inference."""
         result = ValidationResult(
+            passed=False,
             stage=stage,
             rows_checked=len(X) if hasattr(X, "__len__") else 0,
         )
