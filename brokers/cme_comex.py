@@ -401,7 +401,7 @@ class CMEComexConnector(BrokerConnector):
             quantity=quantity,
             ord_type=fix_type,
             price=price,
-            stop_price=stop_price,
+            stop_px=stop_price,
             account=self._cme_account,
         )
 
