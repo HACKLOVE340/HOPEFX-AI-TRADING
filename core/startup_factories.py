@@ -390,9 +390,29 @@ def _enforce_redis_maxmemory(host: str, port: int, password: str | None = None) 
 
 
 async def init_cache(s: Any) -> Any:
-    host = os.getenv("REDIS_HOST", "localhost")
-    port = int(os.getenv("REDIS_PORT", "6379"))
-    password = os.getenv("REDIS_PASSWORD") or None
+    # Prefer REDIS_URL (used by get_redis() and the rest of the app) over
+    # the legacy REDIS_HOST / REDIS_PORT pair so all components share the
+    # same Redis instance.
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if redis_url:
+        try:
+            from urllib.parse import urlparse
+
+            _parsed = urlparse(redis_url)
+            host = _parsed.hostname or "localhost"
+            port = int(_parsed.port or 6379)
+            password = _parsed.password or os.getenv("REDIS_PASSWORD") or None
+            db = int((_parsed.path or "/0").lstrip("/") or "0")
+        except Exception:
+            host = os.getenv("REDIS_HOST", "localhost")
+            port = int(os.getenv("REDIS_PORT", "6379"))
+            password = os.getenv("REDIS_PASSWORD") or None
+            db = 0
+    else:
+        host = os.getenv("REDIS_HOST", "localhost")
+        port = int(os.getenv("REDIS_PORT", "6379"))
+        password = os.getenv("REDIS_PASSWORD") or None
+        db = 0
 
     # Enforce maxmemory before the cache starts writing tick data.
     # Runs in executor so the sync Redis client doesn't block the event loop.
@@ -401,14 +421,27 @@ async def init_cache(s: Any) -> Any:
 
     from cache import MarketDataCache
 
-    return MarketDataCache(
+    cache = MarketDataCache(
         host=host,
         port=port,
+        db=db,
         password=password,
         max_retries=1,
         socket_connect_timeout=1,
         enable_fallback=True,
     )
+
+    # Wire Celery worker heartbeat registration so workers write their
+    # liveness key to the same Redis instance the health probe reads from.
+    try:
+        from celery_app import register_celery_health
+
+        register_celery_health(cache._redis_client)
+        logger.info("Celery health registration wired to Redis cache")
+    except Exception as _celery_exc:
+        logger.debug("Celery health registration skipped (non-fatal): %s", _celery_exc)
+
+    return cache
 
 
 async def init_data_scheduler(s: Any) -> Any:
@@ -709,7 +742,25 @@ async def init_risk_manager(s: Any) -> Any:
         max_drawdown_pct=float(os.getenv("RISK_MAX_DRAWDOWN_PCT", "0.10")),
         daily_loss_limit_pct=float(os.getenv("RISK_MAX_DAILY_LOSS_PCT", "0.05")),
     )
-    rm = RiskManager(config=rc)
+    # Wire the data layer orchestrator so the risk manager reads live data
+    # quality, sentiment, and macro features from the authoritative source.
+    orchestrator = None
+    try:
+        from data_layer.orchestrator import orchestrator as _orch
+
+        orchestrator = _orch
+    except Exception as _orch_exc:
+        logger.debug("init_risk_manager: orchestrator unavailable: %s", _orch_exc)
+
+    rm = RiskManager(config=rc, orchestrator=orchestrator)
+    # Also update the module-level singleton so callers that import
+    # risk_manager directly get the same wired instance.
+    try:
+        import risk.manager as _rm_mod
+
+        _rm_mod.risk_manager = rm
+    except Exception:
+        pass
     log_activity("Risk Manager initialized")
     return rm
 
@@ -742,6 +793,7 @@ async def init_broker(s: Any) -> Any:
     if broker_type == "mt5":
         mt5_broker = await _try_connect_mt5(log_activity)
         if mt5_broker is not None:
+            await _publish_broker_status(broker_type="mt5", connected=True)
             return mt5_broker
         # Fall through to paper broker so startup is not fatal if MT5 is unavailable.
         log_activity(
@@ -751,9 +803,27 @@ async def init_broker(s: Any) -> Any:
     if broker_type == "oanda" and oanda_token and oanda_account:
         broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
         if broker is not None:
+            await _publish_broker_status(broker_type="oanda", connected=True)
             return broker
 
-    return await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
+    broker = await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
+    await _publish_broker_status(broker_type="paper", connected=True)
+    return broker
+
+
+async def _publish_broker_status(broker_type: str, connected: bool) -> None:
+    """Write broker connection status to Redis so health probes can read it."""
+    try:
+        import json as _json
+        from cache.redis_client import get_redis as _get_redis
+
+        rc = await _get_redis()
+        if rc is not None:
+            payload = _json.dumps({"broker_type": broker_type, "connected": connected})
+            await rc.set("broker:connection_status", payload, ex=3600)
+            logger.debug("broker:connection_status published to Redis (type=%s)", broker_type)
+    except Exception as _exc:
+        logger.debug("_publish_broker_status failed (non-fatal): %s", _exc)
 
 
 async def _try_connect_mt5(log_activity: Any) -> Any | None:
