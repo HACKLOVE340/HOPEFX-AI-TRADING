@@ -17,11 +17,13 @@ import sys
 
 _SITE_REDIS = None
 for _sp in sys.path:
-    if not ("site-packages" in _sp or "dist-packages" in _sp):
+    # sys.path entries may be str or pathlib.Path — normalise to str.
+    _sp_str = str(_sp)
+    if not ("site-packages" in _sp_str or "dist-packages" in _sp_str):
         continue
-    _candidate = os.path.join(_sp, "redis", "__init__.py")
+    _candidate = os.path.join(_sp_str, "redis", "__init__.py")
     if os.path.isfile(_candidate):
-        _SITE_REDIS = os.path.join(_sp, "redis")
+        _SITE_REDIS = os.path.join(_sp_str, "redis")
         break
 
 if _SITE_REDIS is None:
