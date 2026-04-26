@@ -288,15 +288,25 @@ class ServiceCircuitBreaker:
             pass
 
     def _update_prom_state(self, state: CircuitState) -> None:
-        """Update Prometheus gauge (non-fatal if prometheus_client absent)."""
-        try:
-            from prometheus_client import Gauge
+        """Update Prometheus gauge (non-fatal if prometheus_client absent).
 
-            _g = Gauge(
-                f"hopefx_circuit_breaker_state_{self.name.replace('-', '_')}",
-                f"Circuit breaker state for {self.name} (0=closed,1=half_open,2=open)",
-            )
-            _g.set({"closed": 0, "half_open": 1, "open": 2}.get(state.value, 0))
+        The gauge is created once and cached on the instance so subsequent
+        state transitions actually update the value.  Previously a new
+        Gauge() was constructed on every call; the second call raised
+        ValueError (duplicate registration) which was silently swallowed,
+        leaving the metric permanently stuck at the first state.
+        """
+        try:
+            if not hasattr(self, "_prom_state_gauge"):
+                from core.prom_registry import prom_gauge
+
+                self._prom_state_gauge = prom_gauge(
+                    f"hopefx_circuit_breaker_state_{self.name.replace('-', '_')}",
+                    f"Circuit breaker state for {self.name} (0=closed,1=half_open,2=open)",
+                )
+            g = self._prom_state_gauge
+            if g is not None:
+                g.set({"closed": 0, "half_open": 1, "open": 2}.get(state.value, 0))
         except Exception:  # nosec B110
             pass
 

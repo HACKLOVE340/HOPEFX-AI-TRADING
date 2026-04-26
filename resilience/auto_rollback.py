@@ -67,82 +67,33 @@ ROLLBACK_HISTORY_PATH = PROJECT_ROOT / "data" / "rollback_history.json"
 _REPEATED_ERROR_THRESHOLD = 3
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
-# Lazily initialised so the module can be imported without prometheus_client.
-# All metrics use the hopefx_ namespace to match alert rule expressions.
+# Use idempotent helpers from core.prom_registry so re-importing this module
+# (e.g. in tests) never raises ValueError on duplicate metric registration.
 
+from core.prom_registry import prom_counter as _pc, prom_gauge as _pg  # noqa: E402
 
-def _make_counter(name: str, description: str, labelnames: list[str] | None = None):
-    """Create a Prometheus Counter, returning a no-op stub if unavailable."""
-    try:
-        from prometheus_client import Counter  # type: ignore[import]
-
-        return Counter(name, description, labelnames or [])
-    except Exception:
-
-        class _NoOpCounter:
-            def labels(self, **_kw):
-                return self
-
-            def inc(self, _amount=1):
-                pass
-
-        return _NoOpCounter()
-
-
-def _make_gauge(name: str, description: str, labelnames: list[str] | None = None):
-    """Create a Prometheus Gauge, returning a no-op stub if unavailable."""
-    try:
-        from prometheus_client import Gauge  # type: ignore[import]
-
-        return Gauge(name, description, labelnames or [])
-    except Exception:
-
-        class _NoOpGauge:
-            def labels(self, **_kw):
-                return self
-
-            def set(self, _v):
-                pass
-
-            def inc(self, _v=1):
-                pass
-
-        return _NoOpGauge()
-
-
-# Total rollbacks by service
-_ROLLBACK_TOTAL = _make_counter(
+_ROLLBACK_TOTAL = _pc(
     "hopefx_rollback_total",
     "Total automatic rollbacks triggered",
     ["service"],
 )
-
-# Rollbacks by strategy (soft/medium/hard/full)
-_ROLLBACK_STRATEGY_TOTAL = _make_counter(
+_ROLLBACK_STRATEGY_TOTAL = _pc(
     "hopefx_rollback_strategy_total",
     "Total rollbacks by strategy",
     ["strategy"],
 )
-
-# Rollbacks by trigger source
-_ROLLBACK_TRIGGER_TOTAL = _make_counter(
+_ROLLBACK_TRIGGER_TOTAL = _pc(
     "hopefx_rollback_trigger_total",
     "Total rollbacks by trigger source",
     ["trigger"],
 )
-
-# Rollbacks that themselves failed
-_ROLLBACK_FAILED_TOTAL = _make_counter(
+_ROLLBACK_FAILED_TOTAL = _pc(
     "hopefx_rollback_failed_total",
     "Total rollback attempts that failed",
-    [],
 )
-
-# Startup complete gauge (0=not started, 1=complete)
-_STARTUP_COMPLETE = _make_gauge(
+_STARTUP_COMPLETE = _pg(
     "hopefx_startup_complete",
     "1 when application startup has completed, 0 otherwise",
-    [],
 )
 
 
@@ -435,15 +386,18 @@ class AutoRollbackManager:
 
             # ── Prometheus metrics ────────────────────────────────────────────
             service_name = os.getenv("OTEL_SERVICE_NAME", "hopefx-trading")
-            _ROLLBACK_TOTAL.labels(service=service_name).inc()
-            _ROLLBACK_STRATEGY_TOTAL.labels(strategy=strategy).inc()
-
-            # Derive trigger name from reason (format: "trigger:<name>")
             trigger_name = reason.split(":", 1)[1] if reason.startswith("trigger:") else reason
-            _ROLLBACK_TRIGGER_TOTAL.labels(trigger=trigger_name).inc()
-
-            if not result.success:
-                _ROLLBACK_FAILED_TOTAL.inc()
+            try:
+                if _ROLLBACK_TOTAL is not None:
+                    _ROLLBACK_TOTAL.labels(service=service_name).inc()
+                if _ROLLBACK_STRATEGY_TOTAL is not None:
+                    _ROLLBACK_STRATEGY_TOTAL.labels(strategy=strategy).inc()
+                if _ROLLBACK_TRIGGER_TOTAL is not None:
+                    _ROLLBACK_TRIGGER_TOTAL.labels(trigger=trigger_name).inc()
+                if not result.success and _ROLLBACK_FAILED_TOTAL is not None:
+                    _ROLLBACK_FAILED_TOTAL.inc()
+            except Exception:  # nosec B110
+                pass
 
         return result
 
