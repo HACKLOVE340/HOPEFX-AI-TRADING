@@ -1,10 +1,279 @@
 /**
  * AdminPanel.tsx
- * Redirects to /superadmin — the legacy /admin dual-system has been removed.
- * All user management, audit log, and feature flags are now in SuperAdminDashboard.
+ * Admin landing dashboard — role: admin or superadmin.
+ *
+ * Sections:
+ *   - Platform KPIs (users, trades, revenue, uptime)
+ *   - Active system alerts
+ *   - Recent audit events
+ *   - Quick-action links to sub-sections
+ *
+ * Backend endpoints:
+ *   GET /api/admin/overview
+ *   GET /api/admin/audit-log?limit=8
+ *   GET /api/admin/alerts
  */
-import React from 'react';
-import { Navigate } from 'react-router-dom';
 
-const AdminPanel: React.FC = () => <Navigate to="/superadmin" replace />;
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../hooks/useApi';
+import { PageHeader } from '../components/PageHeader';
+import { Spinner } from '../components/Spinner';
+import { ErrorBanner } from '../components/ErrorBanner';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface AdminOverview {
+  total_users: number;
+  active_users_24h: number;
+  total_trades_today: number;
+  open_positions: number;
+  revenue_today_usd: number;
+  revenue_mtd_usd: number;
+  platform_uptime_pct: number;
+  active_subscriptions: number;
+  pending_withdrawals: number;
+  flagged_accounts: number;
+  ml_model_accuracy: number;
+  ws_connections: number;
+}
+
+interface AuditEvent {
+  event_id: string;
+  user_id: string;
+  event_type: string;
+  detail: string;
+  ip_address: string;
+  created_at: string;
+}
+
+interface AdminAlert {
+  id: string;
+  severity: 'critical' | 'warning' | 'info';
+  title: string;
+  message: string;
+  created_at: string;
+  resolved: boolean;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const fmtUSD = (n: number) =>
+  n >= 1_000_000
+    ? `$${(n / 1_000_000).toFixed(2)}M`
+    : n >= 1_000
+    ? `$${(n / 1_000).toFixed(1)}K`
+    : `$${n.toFixed(2)}`;
+
+const fmtDate = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  } catch {
+    return iso;
+  }
+};
+
+const severityColor = (sev: string) =>
+  sev === 'critical' ? '#f87171' : sev === 'warning' ? '#fbbf24' : '#60a5fa';
+
+const eventColor = (type: string) => {
+  if (type.includes('fail') || type.includes('ban') || type.includes('block')) return '#f87171';
+  if (type.includes('warn') || type.includes('withdraw')) return '#fbbf24';
+  if (type.includes('trade') || type.includes('signal')) return '#60a5fa';
+  return '#94a3b8';
+};
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+const KpiCard: React.FC<{
+  label: string; value: string; sub?: string; accent?: string;
+}> = ({ label, value, sub, accent }) => (
+  <div style={{
+    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+    padding: '18px 20px', borderTop: accent ? `3px solid ${accent}` : undefined,
+  }}>
+    <div style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+      {label}
+    </div>
+    <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc', lineHeight: 1 }}>{value}</div>
+    {sub && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>{sub}</div>}
+  </div>
+);
+
+const QuickAction: React.FC<{
+  icon: string; label: string; desc: string; path: string; onClick: (p: string) => void;
+}> = ({ icon, label, desc, path, onClick }) => (
+  <button
+    onClick={() => onClick(path)}
+    style={{
+      background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+      padding: '14px 16px', cursor: 'pointer', textAlign: 'left', color: '#f1f5f9',
+      transition: 'border-color 0.15s, background 0.15s',
+    }}
+    onMouseEnter={e => {
+      (e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6';
+      (e.currentTarget as HTMLButtonElement).style.background = '#1e293b';
+    }}
+    onMouseLeave={e => {
+      (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155';
+      (e.currentTarget as HTMLButtonElement).style.background = '#0f172a';
+    }}
+  >
+    <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
+    <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>{label}</div>
+    <div style={{ fontSize: 11, color: '#64748b' }}>{desc}</div>
+  </button>
+);
+
+// ── Main ──────────────────────────────────────────────────────────────────────
+
+const AdminPanel: React.FC = () => {
+  const navigate = useNavigate();
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [alerts, setAlerts] = useState<AdminAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [ovRes, auditRes, alertsRes] = await Promise.allSettled([
+        api.get<AdminOverview>('/admin/overview'),
+        api.get<{ events: AuditEvent[] }>('/admin/audit-log?limit=8'),
+        api.get<{ alerts: AdminAlert[] }>('/admin/alerts'),
+      ]);
+      if (ovRes.status === 'fulfilled') setOverview(ovRes.value.data);
+      if (auditRes.status === 'fulfilled') setAuditEvents(auditRes.value.data.events ?? []);
+      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts ?? []);
+      if (ovRes.status === 'rejected') setError('Failed to load admin overview.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const go = (path: string) => navigate(path);
+  const activeAlerts = alerts.filter(a => !a.resolved);
+
+  const sectionStyle: React.CSSProperties = {
+    margin: '0 24px 24px',
+    background: '#1e293b',
+    border: '1px solid #334155',
+    borderRadius: 10,
+    overflow: 'hidden',
+  };
+  const sectionHeader: React.CSSProperties = {
+    padding: '14px 20px',
+    borderBottom: '1px solid #334155',
+    fontSize: 13, fontWeight: 700, color: '#94a3b8',
+    textTransform: 'uppercase', letterSpacing: '0.06em',
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  };
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: '12px 20px', borderBottom: '1px solid #0f172a', fontSize: 13,
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif', paddingBottom: 48 }}>
+      <PageHeader
+        title="🔧 Admin Panel"
+        subtitle="Platform operations, user management, and system health"
+        actions={
+          <button
+            onClick={load}
+            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: '#60a5fa', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
+          >
+            ↻ Refresh
+          </button>
+        }
+      />
+
+      {error && <div style={{ padding: '0 24px 16px' }}><ErrorBanner message={error} /></div>}
+
+      {loading && !overview ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}><Spinner /></div>
+      ) : (
+        <>
+          {/* KPI Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, padding: '0 24px 24px' }}>
+            <KpiCard label="Total Users"      value={overview ? overview.total_users.toLocaleString() : '—'}          sub={overview ? `${overview.active_users_24h} active (24h)` : undefined}                                accent="#3b82f6" />
+            <KpiCard label="Trades Today"     value={overview ? overview.total_trades_today.toLocaleString() : '—'}    sub={overview ? `${overview.open_positions} open positions` : undefined}                              accent="#22c55e" />
+            <KpiCard label="Revenue Today"    value={overview ? fmtUSD(overview.revenue_today_usd) : '—'}              sub={overview ? `MTD: ${fmtUSD(overview.revenue_mtd_usd)}` : undefined}                               accent="#f59e0b" />
+            <KpiCard label="Active Subs"      value={overview ? overview.active_subscriptions.toLocaleString() : '—'}  sub={overview ? `${overview.pending_withdrawals} pending withdrawals` : undefined}                    accent="#8b5cf6" />
+            <KpiCard label="Platform Uptime"  value={overview ? `${overview.platform_uptime_pct.toFixed(2)}%` : '—'}   sub={overview ? `${overview.ws_connections} WS connections` : undefined}                              accent="#06b6d4" />
+            <KpiCard label="ML Accuracy"      value={overview ? `${(overview.ml_model_accuracy * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? `⚠️ ${overview.flagged_accounts} flagged` : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
+          </div>
+
+          {/* Active Alerts */}
+          {activeAlerts.length > 0 && (
+            <div style={sectionStyle}>
+              <div style={sectionHeader}>
+                <span>⚠️ Active Alerts</span>
+                <span style={{ fontSize: 11, color: '#f87171' }}>{activeAlerts.length} unresolved</span>
+              </div>
+              {activeAlerts.map(alert => (
+                <div key={alert.id} style={{ ...rowStyle, borderLeft: `3px solid ${severityColor(alert.severity)}`, background: `${severityColor(alert.severity)}08` }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: `${severityColor(alert.severity)}20`, color: severityColor(alert.severity), textTransform: 'uppercase', flexShrink: 0 }}>
+                    {alert.severity}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: 13 }}>{alert.title}</div>
+                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>{alert.message}</div>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(alert.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Recent Audit Events */}
+          <div style={sectionStyle}>
+            <div style={sectionHeader}>
+              <span>🔍 Recent Audit Events</span>
+              <button onClick={() => go('/audit')} style={{ background: 'transparent', border: 'none', color: '#3b82f6', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+                View all →
+              </button>
+            </div>
+            {auditEvents.length === 0 ? (
+              <div style={{ padding: '24px 20px', color: '#475569', fontSize: 13 }}>No recent audit events.</div>
+            ) : auditEvents.map(ev => (
+              <div key={ev.event_id} style={rowStyle}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: eventColor(ev.event_type), flexShrink: 0 }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type}</span>
+                <span style={{ flex: 1, color: '#94a3b8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
+                <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{ev.ip_address}</span>
+                <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick Actions */}
+          <div style={sectionStyle}>
+            <div style={sectionHeader}>Quick Actions</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, padding: '16px 20px' }}>
+              <QuickAction icon="🔍" label="Audit Log"      desc="Browse all platform events"       path="/audit"      onClick={go} />
+              <QuickAction icon="🛡️" label="Security Ops"   desc="Threats, IPs, sessions"           path="/security"   onClick={go} />
+              <QuickAction icon="🩺" label="Auto-Heal"      desc="Self-healing & circuit breakers"  path="/auto-heal"  onClick={go} />
+              <QuickAction icon="🏷️" label="Whitelabel"     desc="Branding & tenant config"         path="/whitelabel" onClick={go} />
+              <QuickAction icon="🟢" label="System Status"  desc="Health & uptime"                  path="/status"     onClick={go} />
+              <QuickAction icon="⚡" label="Super Admin"    desc="Master control panel"             path="/superadmin" onClick={go} />
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 export default AdminPanel;
