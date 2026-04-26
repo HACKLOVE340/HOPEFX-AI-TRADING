@@ -165,20 +165,6 @@ class MT5Broker(BrokerConnector):
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_place_order, order_params)
 
-    async def close_position(self, ticket: int, volume: float | None = None) -> dict[str, Any]:
-        """
-        Close an open position by ticket number.
-
-        Parameters
-        ----------
-        ticket: Position ticket to close.
-        volume: Partial close volume (None = full close).
-        """
-        if not self._assert_connected("close_position"):
-            return {"success": False, "comment": "Not connected"}
-        loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(None, self._sync_close_position, ticket, volume)
-
     async def modify_position(self, ticket: int, sl: float = 0.0, tp: float = 0.0) -> dict[str, Any]:
         """Modify the SL/TP of an open position."""
         if not self._assert_connected("modify_position"):
@@ -213,7 +199,7 @@ class MT5Broker(BrokerConnector):
                 if ticket is None:
                     continue
                 try:
-                    result = await self.close_position(ticket)
+                    result = await self.close_position_by_ticket(ticket)
                     if result.get("success"):
                         cancelled.append(str(ticket))
                         logger.warning("MT5Broker.cancel_all_orders: closed position ticket=%s", ticket)
