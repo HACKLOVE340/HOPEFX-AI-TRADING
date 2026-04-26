@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi';
+import { watchlistApi } from '../hooks/useApi';
 import { useStore } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ const WatchlistPage: React.FC = () => {
 
   const fetchWatchlist = useCallback(async () => {
     try {
-      const res = await api.get<{ items: Array<Omit<WatchlistItem, 'history'> & { history?: number[] }> }>('/watchlist');
+      const res = await watchlistApi.list() as { data: { items: Array<Omit<WatchlistItem, 'history'> & { history?: number[] }> } };
       if (res.data.items?.length) {
         setItems(res.data.items.map(normalise));
       }
@@ -111,7 +111,7 @@ const WatchlistPage: React.FC = () => {
     fetchWatchlist();
     const id = setInterval(async () => {
       try {
-        const res = await api.get<Array<Omit<WatchlistItem, 'history'> & { history?: number[] }>>('/watchlist/prices');
+        const res = await watchlistApi.prices() as { data: Array<Omit<WatchlistItem, 'history'> & { history?: number[] }> };
         if (Array.isArray(res.data) && res.data.length > 0) {
           setItems(res.data.map(normalise));
         }
@@ -150,7 +150,7 @@ const WatchlistPage: React.FC = () => {
     setAdding(true);
     setError('');
     try {
-      await api.post(`/watchlist/${sym}`);
+      await watchlistApi.add(sym);
       setAddSymbol('');
       await fetchWatchlist();
     } catch (err: unknown) {
@@ -164,7 +164,7 @@ const WatchlistPage: React.FC = () => {
 
   const handleRemove = async (symbol: string) => {
     try {
-      await api.delete(`/watchlist/${symbol}`);
+      await watchlistApi.remove(symbol);
       setItems((prev) => prev.filter((i) => i.symbol !== symbol));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : `Failed to remove ${symbol}.`;

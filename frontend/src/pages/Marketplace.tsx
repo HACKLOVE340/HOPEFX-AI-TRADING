@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../hooks/useApi';
+import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -229,9 +229,7 @@ const Marketplace: React.FC = () => {
       const params: Record<string, string> = { sort_by: sortBy, limit: '50' };
       if (category !== 'all') params.category = category;
       if (search) params.query = search;
-      const res = await api.get<{ strategies: Strategy[]; total: number }>('/monetization/marketplace/strategies',
-        { params }
-      );
+      const res = await marketplaceApi.strategies(params) as { data: { strategies: Strategy[]; total: number } };
       setStrategies(res.data.strategies ?? []);
     } catch (err) {
       setStrategies([]);
@@ -244,9 +242,9 @@ const Marketplace: React.FC = () => {
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
 
   useEffect(() => {
-    api.get<{ total_strategies: number; total_subscribers: number }>('/monetization/marketplace/stats')
-      .then(r => {
-        const d = r.data;
+    marketplaceApi.stats()
+      .then((r) => {
+        const d = (r as { data: { total_strategies: number; total_subscribers: number } }).data;
         if (d && typeof d.total_strategies === 'number' && typeof d.total_subscribers === 'number') {
           setStats(d);
         }
@@ -261,7 +259,7 @@ const Marketplace: React.FC = () => {
     setSelected(s);
     setReviewsErr(null);
     try {
-      const res = await api.get<{ strategy: Strategy; reviews: Review[] }>(`/monetization/marketplace/strategies/${s.strategy_id}`);
+      const res = await marketplaceApi.strategy(s.strategy_id) as { data: { strategy: Strategy; reviews: Review[] } };
       setSelectedReviews(res.data.reviews ?? []);
     } catch (err) {
       setSelectedReviews([]);
@@ -272,7 +270,7 @@ const Marketplace: React.FC = () => {
   const handleSubscribe = async (s: Strategy) => {
     setPurchaseError(null);
     try {
-      await api.post('/monetization/marketplace/purchase', {
+      await marketplaceApi.purchase({
         buyer_id: currentUser?.id ?? '',
         strategy_id: s.strategy_id,
       });

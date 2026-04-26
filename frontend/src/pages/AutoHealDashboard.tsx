@@ -9,7 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { api } from '../hooks/useApi';
+import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
@@ -70,44 +70,44 @@ interface Threat {
 // ── API helpers ───────────────────────────────────────────────────────────────
 
 async function fetchHealStatus(): Promise<HealStatus> {
-  const { data } = await api.get<HealStatus>('/security/heal/status');
+  const { data } = await securityHealingApi.healStatus() as { data: HealStatus };
   return data;
 }
 
 async function fetchDrift(limit = 50): Promise<DriftEvent[]> {
-  const { data } = await api.get<DriftEvent[]>(`/security/heal/drift?limit=${limit}`);
-  return data ?? [];
+  const res = await securityHealingApi.drift() as { data: DriftEvent[] | { events?: DriftEvent[] } };
+  return (Array.isArray(res.data) ? res.data : (res.data as { events?: DriftEvent[] }).events) ?? [];
 }
 
 async function fetchPatches(limit = 50): Promise<PatchRecord[]> {
-  const { data } = await api.get<PatchRecord[]>(`/security/heal/patches?limit=${limit}`);
-  return data ?? [];
+  const res = await securityHealingApi.patches() as { data: PatchRecord[] | { patches?: PatchRecord[] } };
+  return (Array.isArray(res.data) ? res.data : (res.data as { patches?: PatchRecord[] }).patches) ?? [];
 }
 
 async function triggerScan(): Promise<void> {
-  await api.post('/security/heal/scan/now');
+  await securityHealingApi.scanNow();
 }
 
 async function rebuildBaseline(): Promise<void> {
-  await api.post('/security/heal/baseline/rebuild');
+  await securityHealingApi.rebuildBaseline();
 }
 
 async function fetchAvStatus(): Promise<AvStatus> {
-  const { data } = await api.get<AvStatus>('/security/av/status');
+  const { data } = await securityHealingApi.avStatus() as { data: AvStatus };
   return data;
 }
 
 async function fetchThreats(): Promise<Threat[]> {
-  const { data } = await api.get<Threat[]>('/security/av/threats');
-  return data ?? [];
+  const res = await securityHealingApi.avThreats() as { data: Threat[] | { threats?: Threat[] } };
+  return (Array.isArray(res.data) ? res.data : (res.data as { threats?: Threat[] }).threats) ?? [];
 }
 
 async function triggerAvScan(): Promise<void> {
-  await api.post('/security/av/scan');
+  await securityHealingApi.avScan();
 }
 
 async function quarantineThreat(threatId: string): Promise<void> {
-  await api.post('/security/av/quarantine', { threat_id: threatId });
+  await securityHealingApi.avQuarantine({ threat_id: threatId });
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────

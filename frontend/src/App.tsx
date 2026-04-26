@@ -27,7 +27,7 @@ import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
-import { useStore, selectIsAuth, useHasHydrated } from './store';
+import { useStore, selectIsAuth, useHasHydrated, selectSystemAlert, selectTriggeredAlerts } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
 import { useBootstrapData } from './hooks/useOrchestratorData';
@@ -289,6 +289,105 @@ const NoLiveFeedBanner: React.FC = () => {
   );
 };
 
+// ── System alert banner (nuclear halt / system_event from WS system channel) ──
+const SystemAlertBanner: React.FC = () => {
+  const alert = useStore(selectSystemAlert);
+  const clearSystemAlert = useStore((s) => s.clearSystemAlert);
+
+  if (!alert) return null;
+
+  const isHalt = alert.type === 'nuclear_halt';
+
+  return (
+    <div
+      role="alertdialog"
+      aria-live="assertive"
+      aria-atomic="true"
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 10000,
+        background: isHalt ? '#450a0a' : '#1c1917',
+        borderBottom: `2px solid ${isHalt ? '#dc2626' : '#f59e0b'}`,
+        color: isHalt ? '#fca5a5' : '#fcd34d',
+        fontSize: 13, fontWeight: 700,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        padding: '8px 20px',
+        letterSpacing: '0.02em',
+      }}
+    >
+      <span style={{ fontSize: 16 }}>{isHalt ? '🚨' : '⚠️'}</span>
+      <span>
+        {isHalt ? 'NUCLEAR HALT ACTIVATED — ' : 'SYSTEM EVENT — '}
+        {alert.reason}
+      </span>
+      <button
+        onClick={clearSystemAlert}
+        aria-label="Dismiss system alert"
+        style={{
+          marginLeft: 'auto', background: 'transparent', border: 'none',
+          color: 'inherit', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '0 4px',
+          opacity: 0.7,
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
+};
+
+// ── Triggered-alert toasts (price alert fired via WS alert_triggered) ─────────
+const TriggeredAlertToasts: React.FC = () => {
+  const alerts = useStore(selectTriggeredAlerts);
+  const clearAll = useStore((s) => s.clearTriggeredAlerts);
+
+  // Only show the latest 3 unacknowledged alerts
+  const visible = alerts.slice(0, 3);
+  if (visible.length === 0) return null;
+
+  return (
+    <div
+      role="log"
+      aria-live="polite"
+      style={{
+        position: 'fixed', bottom: 20, right: 20, zIndex: 9998,
+        display: 'flex', flexDirection: 'column', gap: 8,
+        maxWidth: 320,
+      }}
+    >
+      {visible.map((a) => (
+        <div
+          key={a.id}
+          style={{
+            background: '#0f172a', border: '1px solid #1e40af',
+            borderLeft: '3px solid #3b82f6',
+            borderRadius: 8, padding: '10px 14px',
+            color: '#e2e8f0', fontSize: 12, fontWeight: 600,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div style={{ fontSize: 11, color: '#60a5fa', marginBottom: 3 }}>
+            🔔 ALERT TRIGGERED — {a.symbol}
+          </div>
+          <div>{a.message ?? `${a.condition} @ ${a.target_price}`}</div>
+          <div style={{ fontSize: 10, color: '#475569', marginTop: 4 }}>
+            {new Date(a.triggered_at).toLocaleTimeString()}
+          </div>
+        </div>
+      ))}
+      {alerts.length > 0 && (
+        <button
+          onClick={clearAll}
+          style={{
+            alignSelf: 'flex-end', background: 'transparent', border: 'none',
+            color: '#475569', cursor: 'pointer', fontSize: 11, padding: '2px 4px',
+          }}
+        >
+          Clear all
+        </button>
+      )}
+    </div>
+  );
+};
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const wrap = (el: React.ReactNode) => <ErrorBoundary>{el}</ErrorBoundary>;
 
@@ -347,7 +446,9 @@ const AppShell: React.FC = () => {
       color: 'var(--text, #f1f5f9)',
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     }}>
+      <SystemAlertBanner />
       <NoLiveFeedBanner />
+      <TriggeredAlertToasts />
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
       <main style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
