@@ -181,6 +181,3 @@ class CognitiveEngine:
             "sentiment": self.sentiment,
             "signal_strength": strength,
         }
-
-
-## Features:

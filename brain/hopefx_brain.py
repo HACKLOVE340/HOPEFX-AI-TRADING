@@ -862,7 +862,7 @@ class HOPEFXBrain:
         # Use edge selector's strategy if available and not skip, else default routing.
         if (
             _edge_decision is not None
-            and _edge_decision.edge != "skip"
+            and _edge_decision.edge != EDGE_SKIP
             and _edge_decision.strategy_name not in ("", "none")
         ):
             strategy_name = _edge_decision.strategy_name

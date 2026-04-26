@@ -52,6 +52,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -209,8 +210,8 @@ class NuclearHopeFXSupervisor:
         self.rl_agent = self._load_rl_agent()
         self._vec_normalize = self._load_vec_normalize()
 
-        # Event history for audit trail (last 100 events)
-        self._event_history: list[dict[str, Any]] = []
+        # Event history for audit trail (last 100 events — bounded deque, O(1) append)
+        self._event_history: deque[dict[str, Any]] = deque(maxlen=100)
 
         logger.info(
             "NuclearHopeFXSupervisor ready | rl_agent=%s vecnorm=%s model=%s",
@@ -417,8 +418,6 @@ class NuclearHopeFXSupervisor:
             "matched_terms": [t["term"] for t in meta.get("matched_terms", [])[:5]],
         }
         self._event_history.append(record)
-        if len(self._event_history) > 100:
-            self._event_history.pop(0)
 
         logger.info(
             "NuclearSupervisor | severity=%d score=%.3f rl=%s action=%s nuclear_level=%d paused=%s",
@@ -742,12 +741,12 @@ class NuclearHopeFXSupervisor:
             ),
             "pause_elapsed": (time.monotonic() - self._pause_since_ts if self._pause_since_ts > 0 else 0.0),
             "event_history_count": len(self._event_history),
-            "last_event": self._event_history[-1] if self._event_history else None,
+            "last_event": self._event_history[-1] if self._event_history else None,  # deque[-1] is O(1)
         }
 
     def get_event_history(self, n: int = 20) -> list[dict[str, Any]]:
         """Return the last n processed events."""
-        return self._event_history[-n:]
+        return list(self._event_history)[-n:]
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

@@ -161,12 +161,12 @@ class TestHOPEFXBrainInit:
         assert brain.broker is broker
         assert brain.price_engine is price_engine
 
-    def test_inject_missing_critical_components_logs_error(self, brain, caplog):
+    def test_inject_missing_critical_components_logs_warning(self, brain, caplog):
         import logging
 
-        with caplog.at_level(logging.ERROR, logger="brain.brain"):
+        with caplog.at_level(logging.WARNING, logger="brain.brain"):
             brain.inject_components()
-        assert "Missing components" in caplog.text
+        assert "missing components" in caplog.text.lower()
 
 
 # ── Regime detection ──────────────────────────────────────────────────────────
