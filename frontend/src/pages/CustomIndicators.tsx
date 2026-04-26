@@ -4,7 +4,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
-import { api } from '../hooks/useApi';
+import { indicatorsApi } from '../hooks/useApi';
 
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
@@ -28,7 +28,12 @@ const PreviewChart: React.FC<{ data: PreviewPoint[]; color: string }> = ({ data,
       rightPriceScale: { borderColor: '#334155' },
     });
     const series = chart.addSeries(LineSeries, { color, lineWidth: 2 });
-    series.setData(data.map((d, i) => ({ time: (1700000000 + i * 86400) as UTCTimestamp, value: d.value })));
+    // Use real timestamps: anchor to today and step back by day per point
+    const nowSec = Math.floor(Date.now() / 1000);
+    series.setData(data.map((d, i) => ({
+      time: (nowSec - (data.length - 1 - i) * 86400) as UTCTimestamp,
+      value: d.value,
+    })));
     chart.timeScale().fitContent();
     return () => chart.remove();
   }, [data, color]);
@@ -63,8 +68,9 @@ const CustomIndicators: React.FC = () => {
 
   const loadIndicators = useCallback(async () => {
     try {
-      const res = await api.get('/indicators');
-      setIndicators(res.data.indicators || []);
+      const res = await indicatorsApi.list();
+      const d = res.data as { indicators?: Indicator[] } | Indicator[];
+      setIndicators(Array.isArray(d) ? d : (d.indicators ?? []));
     } catch { setIndicators([]); }
   }, []);
 
@@ -73,8 +79,9 @@ const CustomIndicators: React.FC = () => {
   const runPreview = async () => {
     setLoading(true); setError('');
     try {
-      const res = await api.post('/indicators/preview', { formula, symbol, periods: 100 });
-      setPreview(res.data.data || []);
+      const res = await indicatorsApi.preview({ formula, symbol, periods: 100 });
+      const d = res.data as { data?: PreviewPoint[] } | PreviewPoint[];
+      setPreview(Array.isArray(d) ? d : (d.data ?? []));
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Formula error');
       setPreview([]);
@@ -85,8 +92,9 @@ const CustomIndicators: React.FC = () => {
   const save = async () => {
     if (!name.trim()) { setError('Enter a name first.'); return; }
     try {
-      await api.post('/indicators', { name, formula, symbol, color });
+      await indicatorsApi.create({ name, formula, symbol, color });
       setMsg(`Saved "${name}"`);
+      setName('');
       await loadIndicators();
     } catch { setError('Failed to save.'); }
   };
@@ -94,7 +102,7 @@ const CustomIndicators: React.FC = () => {
   const del = async (id: string) => {
     setDeleteErr('');
     try {
-      await api.delete(`/indicators/${id}`);
+      await indicatorsApi.delete(id);
       setIndicators(prev => prev.filter(i => i.id !== id));
     } catch (err) {
       setDeleteErr(extractErrorMessage(err, 'Failed to delete indicator. Please try again.'));
