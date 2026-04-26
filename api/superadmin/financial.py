@@ -184,7 +184,7 @@ async def get_subscription_stats(user: TokenPayload = Depends(_require_superadmi
                 db = SessionLocal()
                 try:
                     rows = (
-                        db.query(User.plan, func.count(User.id))
+                        db.query(User.plan, func.count(User.id))  # pylint: disable=not-callable
                         .group_by(User.plan)
                         .all()
                     )

@@ -2852,7 +2852,10 @@ async def generate_report(
             if hasattr(gen, "generate"):
                 import asyncio
 
-                asyncio.create_task(gen.generate(period=body.period))
+                # generate() is synchronous and requires trades + equity_curve;
+                # run in executor so it doesn't block the event loop.
+                loop = asyncio.get_event_loop()
+                loop.run_in_executor(None, gen.generate, [], [])
         else:
             # Queue for background generation
             from cache.redis_client import get_sync_redis
@@ -3482,12 +3485,15 @@ async def trigger_job(
             from reports.weekly_report import WeeklyReportGenerator
             import asyncio
 
-            asyncio.create_task(WeeklyReportGenerator().generate())
+            # generate() is synchronous and requires trades + equity_curve;
+            # run in executor with empty defaults as a background no-op trigger.
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, WeeklyReportGenerator().generate, [], [])
         elif job_id == "integrity_scan":
             from security.self_healer import SelfHealer
             import asyncio
 
-            asyncio.create_task(SelfHealer().scan())
+            asyncio.create_task(SelfHealer()._scan_integrity())  # pylint: disable=protected-access
     except Exception as exc:
         logger.warning("Job direct dispatch error: %s", exc)
     return {"job_id": job_id, "status": "triggered", "triggered_at": _utcnow().isoformat()}

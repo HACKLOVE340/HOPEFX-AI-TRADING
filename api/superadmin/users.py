@@ -63,7 +63,7 @@ def _user_stats(db, user_id: str) -> dict:
         # Count all trades across all accounts owned by this user
         account_ids = [row[0] for row in db.query(Account.id).filter(Account.user_id == uid_int).all()]
         if account_ids:
-            total_trades = db.query(func.count(Trade.id)).filter(Trade.account_id.in_(account_ids)).scalar() or 0
+            total_trades = db.query(func.count(Trade.id)).filter(Trade.account_id.in_(account_ids)).scalar() or 0  # pylint: disable=not-callable
             revenue_generated = (
                 db.query(func.coalesce(func.sum(Trade.total_pnl), 0.0))
                 .filter(Trade.account_id.in_(account_ids))
