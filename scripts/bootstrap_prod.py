@@ -61,9 +61,10 @@ def main() -> None:
 
     try:
         from auth.service import AuthService
+        from database.connection import SessionLocal
         from database.user_models import User
 
-        svc = AuthService()
+        svc = AuthService(session_factory=SessionLocal)
 
         # Check if superadmin already exists
         existing = svc.get_user_by_email(email)
