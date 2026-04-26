@@ -65,7 +65,7 @@ def _user_stats(db, user_id: str) -> dict:
         if account_ids:
             total_trades = db.query(func.count(Trade.id)).filter(Trade.account_id.in_(account_ids)).scalar() or 0  # pylint: disable=not-callable
             revenue_generated = (
-                db.query(func.coalesce(func.sum(Trade.total_pnl), 0.0))
+                db.query(func.coalesce(func.sum(Trade.total_pnl), 0.0))  # pylint: disable=not-callable
                 .filter(Trade.account_id.in_(account_ids))
                 .scalar()
                 or 0.0
@@ -73,7 +73,7 @@ def _user_stats(db, user_id: str) -> dict:
 
     # Wallet deposits as an additional revenue signal (user_id is String here)
     wallet_deposits = (
-        db.query(func.coalesce(func.sum(WalletTransaction.amount), 0.0))
+        db.query(func.coalesce(func.sum(WalletTransaction.amount), 0.0))  # pylint: disable=not-callable
         .filter(
             WalletTransaction.user_id == user_id,
             WalletTransaction.transaction_type == "deposit",

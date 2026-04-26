@@ -103,7 +103,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             # Revenue MTD: sum of completed inbound wallet transactions this month
             try:
                 rev_row = (
-                    db.query(func.sum(WalletTransaction.amount))
+                    db.query(func.sum(WalletTransaction.amount))  # pylint: disable=not-callable
                     .filter(
                         WalletTransaction.created_at >= mtd_start,
                         WalletTransaction.transaction_type.in_(
