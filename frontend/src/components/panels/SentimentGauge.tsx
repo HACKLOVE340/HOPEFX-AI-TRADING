@@ -25,8 +25,6 @@ function ArcGauge({ score }: { score: number }) {
 
   // Needle angle: -1 → 210°, 0 → 270°, +1 → 330°
   const needleAngle = 270 + safeScore * sweepAngle;
-  // Use safeScore for all downstream calculations
-  const score = safeScore; // shadow param with validated value
 
   const toRad = (deg: number) => (deg * Math.PI) / 180;
 
@@ -55,7 +53,7 @@ function ArcGauge({ score }: { score: number }) {
   const needleRad = toRad(needleAngle);
   const nx = cx + (r - 10) * Math.cos(needleRad);
   const ny = cy + (r - 10) * Math.sin(needleRad);
-  const needleColor = sentimentColor(score);
+  const needleColor = sentimentColor(safeScore);
 
   return (
     <svg width="160" height="100" viewBox="0 0 160 100" className="mx-auto">
@@ -66,7 +64,7 @@ function ArcGauge({ score }: { score: number }) {
       {/* Bull arc (right half) */}
       {arcPath(270, startAngle + sweepAngle * 2, '#00e676', 0.7)}
       {/* Active fill */}
-      {score < 0
+      {safeScore < 0
         ? arcPath(needleAngle, 270, '#ff1744')
         : arcPath(270, needleAngle, '#00e676')}
       {/* Needle */}
