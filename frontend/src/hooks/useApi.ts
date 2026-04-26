@@ -1002,12 +1002,17 @@ export const watchlistApi = {
 // Backend: /api/monetization/marketplace/* (api/monetization.py)
 
 export const marketplaceApi = {
-  strategies: (params?: Record<string, unknown>)  => api.get('/monetization/marketplace/strategies', { params }),
-  strategy:   (id: string)                        => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(id)}`),
-  purchase:   (payload: object)                   => api.post('/monetization/marketplace/purchase', payload),
-  featured:   ()                                  => api.get('/monetization/marketplace/featured'),
-  stats:      ()                                  => api.get('/monetization/marketplace/stats'),
-  list:       (payload: object)                   => api.post('/monetization/marketplace/list', payload),
+  strategies:    (params?: Record<string, unknown>)  => api.get('/monetization/marketplace/strategies', { params }),
+  strategy:      (id: string)                        => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(id)}`),
+  purchase:      (payload: object)                   => api.post('/monetization/marketplace/purchase', payload),
+  featured:      ()                                  => api.get('/monetization/marketplace/featured'),
+  stats:         ()                                  => api.get('/monetization/marketplace/stats'),
+  list:          (payload: object)                   => api.post('/monetization/marketplace/list', payload),
+  myStrategies:  (userId: string)                    => api.get(`/monetization/marketplace/strategies?creator_id=${userId}`),
+  review:        (strategyId: string, payload: object) => api.post(`/monetization/marketplace/strategies/${encodeURIComponent(strategyId)}/reviews`, payload),
+  reviews:       (strategyId: string)                => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(strategyId)}/reviews`),
+  unsubscribe:   (strategyId: string)                => api.delete(`/monetization/marketplace/subscriptions/${encodeURIComponent(strategyId)}`),
+  mySubscriptions: ()                                => api.get('/monetization/marketplace/subscriptions'),
 };
 
 // ── Security Auto-Healing Dashboard ──────────────────────────────────────────
