@@ -89,14 +89,18 @@ const TeamsPage    = React.lazy(() => import('./pages/TeamsPage'));
 const ReplayPage   = React.lazy(() => import('./pages/ReplayPage'));
 
 // ── Account ───────────────────────────────────────────────────────────────────
-const Profile        = React.lazy(() => import('./pages/Profile'));
-const Wallet         = React.lazy(() => import('./pages/Wallet'));
-const SubAccounts    = React.lazy(() => import('./pages/SubAccounts'));
-const EliteDashboard = React.lazy(() => import('./pages/EliteDashboard'));
-const CryptoCheckout = React.lazy(() => import('./pages/CryptoCheckout'));
-const PricingPage    = React.lazy(() => import('./pages/PricingPage'));
-const Settings       = React.lazy(() => import('./pages/Settings'));
-const TwoFactorSetup = React.lazy(() => import('./pages/TwoFactorSetup'));
+const Profile             = React.lazy(() => import('./pages/Profile'));
+const Wallet              = React.lazy(() => import('./pages/Wallet'));
+const SubAccounts         = React.lazy(() => import('./pages/SubAccounts'));
+const EliteDashboard      = React.lazy(() => import('./pages/EliteDashboard'));
+const CryptoCheckout      = React.lazy(() => import('./pages/CryptoCheckout'));
+const PricingPage         = React.lazy(() => import('./pages/PricingPage'));
+const Settings            = React.lazy(() => import('./pages/Settings'));
+const TwoFactorSetup      = React.lazy(() => import('./pages/TwoFactorSetup'));
+const NotificationsPage   = React.lazy(() => import('./pages/NotificationsPage'));
+const KYCPage             = React.lazy(() => import('./pages/KYCPage'));
+const ChatPage            = React.lazy(() => import('./pages/ChatPage'));
+const MobilePage          = React.lazy(() => import('./pages/MobilePage'));
 
 // ── Admin-only (legacy /admin route redirects to /audit — the admin landing) ──
 const AdminPanel        = React.lazy(() => import('./pages/AdminPanel'));
@@ -414,14 +418,18 @@ const AppShell: React.FC = () => {
             <Route path="/replay"       element={wrap(gated('replay',       <ReplayPage />))} />
 
             {/* Account */}
-            <Route path="/profile"      element={wrap(gated('profile',      <Profile />))} />
-            <Route path="/profile/:id"  element={wrap(<Profile />)} />
-            <Route path="/wallet"       element={wrap(gated('wallet',       <Wallet />))} />
-            <Route path="/sub-accounts" element={wrap(gated('sub-accounts', <SubAccounts />))} />
-            <Route path="/elite"        element={wrap(gated('elite',        <EliteDashboard />))} />
-            <Route path="/checkout"     element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
-            <Route path="/settings"     element={wrap(gated('settings',     <Settings />))} />
-            <Route path="/2fa-setup"    element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
+            <Route path="/profile"         element={wrap(gated('profile',      <Profile />))} />
+            <Route path="/profile/:id"     element={wrap(<Profile />)} />
+            <Route path="/wallet"          element={wrap(gated('wallet',       <Wallet />))} />
+            <Route path="/sub-accounts"    element={wrap(gated('sub-accounts', <SubAccounts />))} />
+            <Route path="/elite"           element={wrap(gated('elite',        <EliteDashboard />))} />
+            <Route path="/checkout"        element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
+            <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
+            <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
+            <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
+            <Route path="/kyc"             element={wrap(<AuthGuard><KYCPage /></AuthGuard>)} />
+            <Route path="/chat"            element={wrap(<AuthGuard><ChatPage /></AuthGuard>)} />
+            <Route path="/mobile"          element={wrap(<AuthGuard><MobilePage /></AuthGuard>)} />
 
             {/* Legacy admin routes — redirect to /superadmin (single system) */}
             {/* /admin → /audit for admin role; superadmin users see /superadmin in their sidebar */}
