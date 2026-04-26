@@ -414,6 +414,11 @@ def register_celery_health(redis_client) -> None:
 
 # ── Standalone entry point ────────────────────────────────────────────────────
 
+# Public alias — callers that do `from celery_app import celery_app` receive
+# the same object as `from celery_app import app`.
+celery_app = app
+
+
 if __name__ == "__main__":
     if not _CELERY_AVAILABLE:
         print("Celery is not installed. Run: pip install 'celery[redis]>=5.4.0'")
