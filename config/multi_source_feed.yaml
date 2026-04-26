@@ -58,7 +58,12 @@ multi_source_feed:
 
   # ── Symbols ──────────────────────────────────────────────────────────────────
   # Each symbol maps to its provider-specific ticker strings.
+  # price_min / price_max define the plausible range for anomaly rejection.
+  # Symbols with an empty alpha_vantage_symbol or twelve_data_symbol are
+  # automatically skipped by the respective adapter.
   symbols:
+
+    # ── Precious metals ───────────────────────────────────────────────────────
     XAUUSD:
       yfinance_ticker:      "GC=F"          # Gold futures (continuous)
       alpha_vantage_symbol: "XAU"
@@ -67,6 +72,23 @@ multi_source_feed:
       price_min: 1000.0
       price_max: 10000.0
 
+    XAGUSD:
+      yfinance_ticker:      "SI=F"          # Silver futures (continuous)
+      alpha_vantage_symbol: "XAG"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "XAG/USD"
+      price_min: 5.0
+      price_max: 500.0
+
+    XPTUSD:
+      yfinance_ticker:      "PL=F"          # Platinum futures (continuous)
+      alpha_vantage_symbol: "XPT"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "XPT/USD"
+      price_min: 200.0
+      price_max: 5000.0
+
+    # ── Major FX pairs ────────────────────────────────────────────────────────
     EURUSD:
       yfinance_ticker:      "EURUSD=X"
       alpha_vantage_symbol: "EUR"
@@ -123,6 +145,46 @@ multi_source_feed:
       price_min: 0.3
       price_max: 1.5
 
+    # ── Commodities ───────────────────────────────────────────────────────────
+    USOIL:
+      # WTI Crude Oil futures (continuous)
+      yfinance_ticker:      "CL=F"
+      # Alpha Vantage has no direct WTI endpoint; empty string skips it.
+      alpha_vantage_symbol: ""
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "WTI/USD"
+      price_min: 10.0
+      price_max: 300.0
+
+    # ── Crypto ────────────────────────────────────────────────────────────────
+    BTCUSD:
+      yfinance_ticker:      "BTC-USD"
+      alpha_vantage_symbol: "BTC"
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "BTC/USD"
+      price_min: 1000.0
+      price_max: 1000000.0
+
+    # ── Equity indices ────────────────────────────────────────────────────────
+    NAS100:
+      # NASDAQ-100 futures (continuous)
+      yfinance_ticker:      "NQ=F"
+      # Alpha Vantage does not expose index futures; empty string skips it.
+      alpha_vantage_symbol: ""
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "NDX"
+      price_min: 5000.0
+      price_max: 100000.0
+
+    US30:
+      # Dow Jones Industrial Average futures (continuous)
+      yfinance_ticker:      "YM=F"
+      alpha_vantage_symbol: ""
+      alpha_vantage_market: "USD"
+      twelve_data_symbol:   "DJI"
+      price_min: 10000.0
+      price_max: 200000.0
+
   # ── yFinance ─────────────────────────────────────────────────────────────────
   # No API key required.  Uses yfinance library (pip install yfinance).
   # Rate limit: ~2000 req/hour per IP.  Suitable for 1-2 s polling.
@@ -139,10 +201,9 @@ multi_source_feed:
     enabled: true
     api_key: "${ALPHA_VANTAGE_KEY:${ALPHA_VANTAGE_API_KEY:}}"
     base_url: "https://www.alphavantage.co/query"
-    # Function used for FX rates.
+    # Function used for FX rates and metals (XAU, XAG, XPT treated as currencies).
     fx_function: "CURRENCY_EXCHANGE_RATE"
-    # Function used for commodity (gold) prices.
-    commodity_function: "CURRENCY_EXCHANGE_RATE"
+    # Symbols with an empty alpha_vantage_symbol are skipped automatically.
 
   # ── Twelve Data ──────────────────────────────────────────────────────────────
   # Free tier: 800 API credits/day, 8 credits/minute.
