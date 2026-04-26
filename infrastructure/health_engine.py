@@ -311,16 +311,24 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
     async def _probe_trading_engine() -> dict[str, Any]:
         try:
-            from api.admin import app_state
+            from core.app_state import app_state
 
-            if app_state and hasattr(app_state, "engine"):
-                eng = app_state.engine
+            eng = getattr(app_state, "engine", None)
+            if eng is not None:
                 running = getattr(eng, "_running", False)
                 status = getattr(eng, "status", "unknown")
                 return {
                     "status": "ok" if running else "warning",
                     "detail": f"engine status={status} running={running}",
                     "engine_status": status,
+                }
+            # Fallback: decision_engine is always initialised
+            de = getattr(app_state, "decision_engine", None)
+            if de is not None:
+                ready = getattr(de, "ready", True)
+                return {
+                    "status": "ok" if ready else "warning",
+                    "detail": f"decision_engine ready={ready} (trading engine pending broker)",
                 }
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110

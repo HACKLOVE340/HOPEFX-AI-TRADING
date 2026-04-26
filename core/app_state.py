@@ -73,6 +73,8 @@ class AppState:
         self.signal_engine = None
         # Master Control Centre — strategy orchestration and lifecycle management
         self.mcc = None
+        # HopeFXEngine — main trading engine (populated by init_trading_engine)
+        self.engine = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 

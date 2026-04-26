@@ -2361,9 +2361,46 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["broker", "cache"],
         )
+        # HopeFXEngine — main trading engine wired to broker, risk, and brain.
+        # Registered last so all dependencies are available.
+        .register(
+            "engine",
+            F.init_trading_engine,
+            required=False,
+            deps=["broker", "risk_manager", "brain", "signal_engine"],
+        )
     )
 
     return registry
+
+
+async def init_trading_engine(s: Any) -> Any | None:
+    """
+    Initialise HopeFXEngine and store it on s.engine.
+
+    HopeFXEngine reads its own configuration from environment variables and
+    lazily connects to the broker on first tick.  We store the instance on
+    app_state.engine so health probes and admin endpoints can inspect
+    _running / status without importing hopefx_engine directly.
+    """
+    try:
+        from hopefx_engine import HopeFXEngine
+
+        engine = HopeFXEngine()
+        # Inject already-initialised components so the engine doesn't create
+        # duplicate instances when they are available.
+        if getattr(s, "broker", None) is not None:
+            engine._broker = s.broker
+        if getattr(s, "risk_manager", None) is not None:
+            engine._risk_manager = s.risk_manager
+        if getattr(s, "brain", None) is not None or getattr(s, "strategy_brain", None) is not None:
+            engine._brain = s.brain or s.strategy_brain
+        s.engine = engine
+        logger.info("HopeFXEngine initialised and wired to app_state.engine")
+        return engine
+    except Exception as exc:
+        logger.warning("HopeFXEngine init failed (non-fatal): %s", exc)
+        return None
 
 
 async def init_mcc(s: Any) -> Any | None:
