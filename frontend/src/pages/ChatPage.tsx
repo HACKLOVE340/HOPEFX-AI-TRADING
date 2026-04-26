@@ -126,7 +126,7 @@ const ChatPage: React.FC = () => {
     };
     setMessages(prev => [...prev, optimistic]);
     try {
-      await chatApi.sendMessage(activeRoom.id, { content });
+      await chatApi.sendMessage(activeRoom.id, content);
     } catch {
       // Remove optimistic on failure
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));

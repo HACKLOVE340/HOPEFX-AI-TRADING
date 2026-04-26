@@ -159,7 +159,7 @@ function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
         <YAxis domain={['auto', 'auto']} hide />
         <Tooltip
           contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-          formatter={(v: number) => [`$${v.toFixed(2)}`, 'Equity']}
+          formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, 'Equity']}
           labelFormatter={() => ''}
         />
         <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill="url(#eq-grad)" dot={false} />
@@ -189,7 +189,7 @@ function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
         <ReferenceLine y={0} stroke="#334155" strokeDasharray="3 3" />
         <Tooltip
           contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-          formatter={(v: number) => [`${v.toFixed(2)}%`, 'Drawdown']}
+          formatter={(v: unknown) => [`${Number(v).toFixed(2)}%`, 'Drawdown']}
           labelFormatter={() => ''}
         />
         <Area type="monotone" dataKey="dd" stroke="#ff1744" strokeWidth={1.5} fill="url(#dd-grad)" dot={false} />

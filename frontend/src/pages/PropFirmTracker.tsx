@@ -264,7 +264,7 @@ const PropFirmTracker: React.FC = () => {
                 <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
                 <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
                 <Tooltip contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-                  formatter={(v: number) => [`$${v.toFixed(2)}`, 'P&L']} />
+                  formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, 'P&L']} />
                 <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
                   {(dailyQ.data ?? []).map((d, i) => (
                     <Cell key={i} fill={d.pnl >= 0 ? '#4ade80' : '#f87171'} />

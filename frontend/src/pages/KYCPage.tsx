@@ -69,7 +69,7 @@ const KYCPage: React.FC = () => {
       const form = new FormData();
       form.append('document_type', docType);
       form.append('file', file);
-      await kycApi.upload(form);
+      await kycApi.uploadDocument(form);
       setUploadedDocs(prev => [...prev.filter(d => d !== docType), docType]);
       setUploads(prev => { const n = { ...prev }; delete n[docType]; return n; });
     } catch { /* non-fatal */ }
@@ -80,7 +80,9 @@ const KYCPage: React.FC = () => {
     setSubmitting(true);
     setSubmitMsg('');
     try {
-      await kycApi.submit({ document_types: uploadedDocs });
+      const form = new FormData();
+      uploadedDocs.forEach(d => form.append('document_types[]', d));
+      await kycApi.submit(form);
       setSubmitMsg('KYC documents submitted successfully. Review typically takes 1–2 business days.');
       await loadStatus();
     } catch (e: unknown) {

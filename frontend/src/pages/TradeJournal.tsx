@@ -297,7 +297,7 @@ const TradeJournal: React.FC = () => {
                   <YAxis tick={{ fill: '#64748b', fontSize: 11 }} domain={[0, 100]} unit="%" />
                   <Tooltip
                     contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-                    formatter={(v: number) => [`${v.toFixed(1)}%`, 'Win Rate']}
+                    formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, 'Win Rate']}
                   />
                   <Bar dataKey="win_rate" radius={[4, 4, 0, 0]}>
                     {stats.by_emotion.map((e, i) => (
