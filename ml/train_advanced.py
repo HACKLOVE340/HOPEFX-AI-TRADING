@@ -1373,19 +1373,55 @@ class AdvancedTrainer:
 
         Steps
         -----
-        1. Walk-forward cross-validation (expanding window)
-        2. Final model training on full in-sample data
-        3. OOS evaluation on held-out years
-        4. Sharpe gate check
+        1. Build features and target from the raw OHLCV DataFrame.
+        2. Split into in-sample and OOS sets based on oos_years.
+        3. Walk-forward cross-validation on the in-sample set.
+        4. Final model training on the full in-sample set.
+        5. OOS evaluation on the held-out set.
+        6. Sharpe gate check.
         """
+        from ml.advanced_features import build_advanced_features
 
-        wf = walk_forward_eval(
-            df,
-            oos_years=self.config.oos_years,
-            min_years=self.config.min_years,
-        )
-        final = train_final_model(df, model_dir=self.config.model_dir)
-        oos = oos_eval_advanced(df, oos_years=self.config.oos_years)
+        # 1. Build X, y from raw OHLCV
+        feat_df = build_advanced_features(df)
+        target_col = "target"
+        if target_col not in feat_df.columns:
+            raise ValueError(
+                "build_advanced_features did not produce a 'target' column — "
+                "check that df contains OHLCV columns (open, high, low, close, volume)."
+            )
+        X_all = feat_df.drop(columns=[target_col]).dropna()
+        y_all = feat_df[target_col].loc[X_all.index]
+
+        # 2. Split in-sample / OOS by oos_years (trading days ≈ 252/year)
+        oos_n = round(self.config.oos_years * 252)
+        min_n = round(self.config.min_years * 252)
+        if len(X_all) < min_n:
+            raise ValueError(
+                f"DataFrame has {len(X_all)} rows after feature engineering; "
+                f"need at least {min_n} ({self.config.min_years} years)."
+            )
+
+        if oos_n > 0 and len(X_all) > oos_n:
+            X_cv, X_oos = X_all.iloc[:-oos_n], X_all.iloc[-oos_n:]
+            y_cv, y_oos = y_all.iloc[:-oos_n], y_all.iloc[-oos_n:]
+        else:
+            X_cv, X_oos = X_all, X_all.iloc[0:0]
+            y_cv, y_oos = y_all, y_all.iloc[0:0]
+
+        # 3. Walk-forward cross-validation
+        wf = walk_forward_eval(X_cv, y_cv)
+
+        # 4. Final model on full in-sample data
+        import os as _os
+        _os.makedirs(self.config.model_dir, exist_ok=True)
+        final = train_final_model(X_cv, y_cv)
+
+        # 5. OOS evaluation (skip if no OOS data)
+        if len(X_oos) > 0:
+            oos = oos_eval_advanced(X_cv, y_cv, X_oos, y_oos)
+        else:
+            oos = {"n_trades": 0, "sharpe": 0.0, "skipped": "no OOS data"}
 
         self._report = {
             "walk_forward": wf,
