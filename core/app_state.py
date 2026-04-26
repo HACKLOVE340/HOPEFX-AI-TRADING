@@ -75,6 +75,9 @@ class AppState:
         self.mcc = None
         # HopeFXEngine — main trading engine (populated by init_trading_engine)
         self.engine = None
+        # Multi-source tick feed — yFinance → Alpha Vantage → Twelve Data fallback chain
+        # Populated by init_multi_source_feed() in startup_factories.py
+        self.multi_source_feed = None
         # Background asyncio tasks — populated at startup, cancelled at shutdown
         self.background_tasks: list = []
 

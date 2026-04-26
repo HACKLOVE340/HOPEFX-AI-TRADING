@@ -2386,6 +2386,17 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["broker", "signal_engine"],
         )
+        # ── Multi-source tick feed (yFinance → Alpha Vantage → Twelve Data) ──
+        # Runs concurrently with the existing TickFeedManager (OANDA/Finnhub/Polygon).
+        # Writes to Redis tick:SYMBOL keys and hopefx:tick pub/sub channel.
+        # Depends on cache (Redis) and broker (price bridge) but is non-fatal
+        # when either is unavailable — degrades gracefully to in-process only.
+        .register(
+            "multi_source_feed",
+            F.init_multi_source_feed,
+            required=False,
+            deps=["cache", "broker"],
+        )
         .register("telegram_bot", F.init_telegram_bot, required=False, deps=["alert_engine"])
         .register("mobile", _app(F.init_mobile), required=False, deps=["config"])
         .register("hyperopt", _app(F.init_hyperopt), required=False, deps=["config"])
@@ -2835,6 +2846,96 @@ async def init_tick_feed(s: Any) -> Any:
 
     except Exception as exc:
         logger.warning("init_tick_feed failed (non-fatal): %s", exc)
+        return None
+
+
+async def init_multi_source_feed(s: Any) -> Any:
+    """
+    Start the MultiSourceTickFeed — yFinance → Alpha Vantage → Twelve Data fallback chain.
+
+    Responsibilities
+    ----------------
+    * Polls all configured symbols concurrently on a configurable interval.
+    * Per-source circuit breakers prevent cascading failures.
+    * Validated ticks are written to Redis (tick:SYMBOL, hopefx:dl:tick:SYMBOL,
+      hopefx:tick:SYMBOL pub/sub, hopefx:tick CH_TICK, price_queue list).
+    * Bridges every tick into the broker price table and execution engine cache.
+    * Wires OHLCV bars into the signal engine bar buffer when available.
+
+    Symbols are driven by config/multi_source_feed.yaml.
+    API keys: ALPHA_VANTAGE_KEY, TWELVE_API_KEY (yFinance needs no key).
+
+    Best-effort — missing keys disable individual sources but never block startup.
+    """
+    try:
+        from api.admin import log_activity
+    except Exception:
+        def log_activity(msg: str) -> None:
+            logger.info(msg)
+
+    try:
+        from data_feed.multi_source_feed import MultiSourceTickFeed
+
+        # Allow operator to restrict symbols via env var (comma-separated).
+        symbols_env = os.getenv("MULTI_FEED_SYMBOLS", "").strip()
+        symbols = [s.strip() for s in symbols_env.split(",") if s.strip()] if symbols_env else None
+
+        feed = MultiSourceTickFeed(symbols=symbols)
+
+        # Bridge: push every validated tick into the broker price table and
+        # execution engine last-tick cache so all downstream components see
+        # live prices from the multi-source feed.
+        broker_ref = getattr(s, "broker", None)
+        execution_engine_ref = getattr(s, "execution_engine", None)
+        price_engine_ref = getattr(s, "price_engine", None)
+
+        class _MultiSourceBridge:
+            async def on_new_price(self, price: float) -> None:
+                # Update broker price table (paper broker + live broker)
+                if broker_ref is not None and hasattr(broker_ref, "update_market_price"):
+                    try:
+                        broker_ref.update_market_price("XAUUSD", price)
+                    except Exception as _exc:
+                        logger.debug("multi_source_feed broker bridge error: %s", _exc)
+                # Update execution engine last-tick cache
+                if execution_engine_ref is not None and hasattr(execution_engine_ref, "update_last_tick"):
+                    try:
+                        execution_engine_ref.update_last_tick("XAUUSD", price)
+                    except Exception as _exc:
+                        logger.debug("multi_source_feed exec engine bridge error: %s", _exc)
+                # Update price engine current price
+                if price_engine_ref is not None and hasattr(price_engine_ref, "on_new_price"):
+                    try:
+                        await price_engine_ref.on_new_price(price)
+                    except Exception as _exc:
+                        logger.debug("multi_source_feed price engine bridge error: %s", _exc)
+
+        feed.subscribe(_MultiSourceBridge())
+
+        # Wire signal engine if available
+        signal_engine_ref = getattr(s, "signal_engine", None)
+        if signal_engine_ref is not None and hasattr(signal_engine_ref, "on_new_price"):
+            feed.subscribe(signal_engine_ref)
+
+        await feed.start()
+
+        # Store on app_state
+        s.multi_source_feed = feed
+
+        active_symbols = list(feed._states.keys())
+        log_activity(
+            f"MultiSourceTickFeed started — symbols={active_symbols} "
+            f"chain=yFinance→AlphaVantage→TwelveData "
+            f"redis={'connected' if feed._tick_writer else 'unavailable'}"
+        )
+        logger.info(
+            "MultiSourceTickFeed registered on app_state | symbols=%s",
+            active_symbols,
+        )
+        return feed
+
+    except Exception as exc:
+        logger.warning("init_multi_source_feed failed (non-fatal): %s", exc)
         return None
 
 
