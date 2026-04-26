@@ -42,7 +42,13 @@ def _make_superadmin_app() -> FastAPI:
 
 
 def _ensure_db_tables() -> None:
-    """Create all SQLAlchemy tables in the test SQLite DB (idempotent)."""
+    """Drop and recreate all SQLAlchemy tables for a clean test schema.
+
+    drop_all + create_all is necessary because SQLite's create_all() does not
+    add new columns to existing tables.  When the ORM model gains a new column
+    (e.g. kyc_submitted_at) the stale hopefx.db would otherwise cause 500
+    errors on every endpoint that touches the users table.
+    """
     try:
         from database.connection import engine
         from database.models import Base  # user_models also uses this Base
@@ -51,9 +57,10 @@ def _ensure_db_tables() -> None:
         import database.user_models  # noqa: F401  # pylint: disable=unused-import
 
         if Base is not None and engine is not None:
+            Base.metadata.drop_all(engine)
             Base.metadata.create_all(engine)
     except Exception:
-        pass  # non-fatal; DB tables may already exist or DB may be unavailable
+        pass  # non-fatal; DB may be unavailable in this environment
 
 
 @pytest.fixture(scope="module")

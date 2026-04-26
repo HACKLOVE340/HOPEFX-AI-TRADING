@@ -15,12 +15,15 @@ all parsing, validation, and error-handling logic runs against real code.
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
 
 from data_feed.sources.yfinance_source import YFinanceSource
+
+_YF_MOD = "data_feed.sources.yfinance_source"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -32,6 +35,22 @@ def _make_df(close: float) -> pd.DataFrame:
 
 def _empty_df() -> pd.DataFrame:
     return pd.DataFrame()
+
+
+@contextmanager
+def _patch_yf(return_value=None, side_effect=None):
+    """Patch both _YF_AVAILABLE=True and _yf.download in one context manager.
+
+    Necessary because yfinance may not be installed in CI — when _YF_AVAILABLE
+    is False, fetch() returns None before ever reaching the mocked download().
+    """
+    mock_yf = MagicMock()
+    if side_effect is not None:
+        mock_yf.download.side_effect = side_effect
+    else:
+        mock_yf.download.return_value = return_value
+    with patch(f"{_YF_MOD}._YF_AVAILABLE", True), patch(f"{_YF_MOD}._yf", mock_yf):
+        yield mock_yf
 
 
 # ── YFinanceSource construction ───────────────────────────────────────────────
@@ -66,8 +85,7 @@ class TestYFinanceSourceFetch:
     async def test_fetch_returns_close_price(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = _make_df(1950.25)
+        with _patch_yf(return_value=_make_df(1950.25)):
             price = await src.fetch("XAUUSD", cfg)
         assert price == pytest.approx(1950.25)
 
@@ -79,8 +97,7 @@ class TestYFinanceSourceFetch:
         def fake_download(ticker, **kwargs):
             captured["ticker"] = ticker
             return _make_df(25.50)
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.side_effect = fake_download
+        with _patch_yf(side_effect=fake_download):
             await src.fetch("XAGUSD", cfg)
         assert captured["ticker"] == "SI=F"
 
@@ -92,8 +109,7 @@ class TestYFinanceSourceFetch:
         def fake_download(ticker, **kwargs):
             captured.update(kwargs)
             return _make_df(1950.0)
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.side_effect = fake_download
+        with _patch_yf(side_effect=fake_download):
             await src.fetch("XAUUSD", cfg)
         assert captured["period"] == "5d"
         assert captured["interval"] == "5m"
@@ -103,8 +119,7 @@ class TestYFinanceSourceFetch:
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
         df = pd.DataFrame({"Close": [1900.0, 1920.0, 1950.0]})
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = df
+        with _patch_yf(return_value=df):
             price = await src.fetch("XAUUSD", cfg)
         assert price == pytest.approx(1950.0)
 
@@ -112,8 +127,7 @@ class TestYFinanceSourceFetch:
     async def test_fetch_btcusd_ticker(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "BTC-USD"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = _make_df(65000.0)
+        with _patch_yf(return_value=_make_df(65000.0)):
             price = await src.fetch("BTCUSD", cfg)
         assert price == pytest.approx(65000.0)
 
@@ -121,8 +135,7 @@ class TestYFinanceSourceFetch:
     async def test_fetch_nas100_ticker(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "NQ=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = _make_df(19500.0)
+        with _patch_yf(return_value=_make_df(19500.0)):
             price = await src.fetch("NAS100", cfg)
         assert price == pytest.approx(19500.0)
 
@@ -152,8 +165,7 @@ class TestYFinanceSourceDataQuality:
     async def test_empty_dataframe_returns_none(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = _empty_df()
+        with _patch_yf(return_value=_empty_df()):
             price = await src.fetch("XAUUSD", cfg)
         assert price is None
 
@@ -161,8 +173,7 @@ class TestYFinanceSourceDataQuality:
     async def test_zero_price_returns_none(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = _make_df(0.0)
+        with _patch_yf(return_value=_make_df(0.0)):
             price = await src.fetch("XAUUSD", cfg)
         assert price is None
 
@@ -170,8 +181,7 @@ class TestYFinanceSourceDataQuality:
     async def test_negative_price_returns_none(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = _make_df(-100.0)
+        with _patch_yf(return_value=_make_df(-100.0)):
             price = await src.fetch("XAUUSD", cfg)
         assert price is None
 
@@ -179,10 +189,8 @@ class TestYFinanceSourceDataQuality:
     async def test_all_nan_close_returns_none(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        import numpy as np
         df = pd.DataFrame({"Close": [float("nan"), float("nan")]})
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = df
+        with _patch_yf(return_value=df):
             price = await src.fetch("XAUUSD", cfg)
         assert price is None
 
@@ -192,8 +200,7 @@ class TestYFinanceSourceDataQuality:
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
         df = pd.DataFrame({"Adj Close": [1955.0]})
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = df
+        with _patch_yf(return_value=df):
             price = await src.fetch("XAUUSD", cfg)
         assert price == pytest.approx(1955.0)
 
@@ -206,8 +213,7 @@ class TestYFinanceSourceErrors:
     async def test_download_exception_returns_none(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.side_effect = RuntimeError("network error")
+        with _patch_yf(side_effect=RuntimeError("network error")):
             price = await src.fetch("XAUUSD", cfg)
         assert price is None
 
@@ -215,8 +221,7 @@ class TestYFinanceSourceErrors:
     async def test_download_returns_none_returns_none(self):
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "GC=F"}
-        with patch("data_feed.sources.yfinance_source._yf") as mock_yf:
-            mock_yf.download.return_value = None
+        with _patch_yf(return_value=None):
             price = await src.fetch("XAUUSD", cfg)
         assert price is None
 
