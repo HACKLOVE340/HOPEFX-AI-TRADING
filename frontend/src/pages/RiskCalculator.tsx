@@ -5,7 +5,8 @@
  * Calculates R:R ratio, position size, pip value, margin, and max loss.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useStore, selectAccount } from '../store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -134,15 +135,33 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const RiskCalculator: React.FC = () => {
+  const account = useStore(selectAccount);
+  const prices  = useStore((s) => s.prices);
+
   const [state, setState] = useState<CalcState>({
     symbol:         'XAU/USD',
     accountBalance: '10000',
     riskPercent:    '1',
-    entryPrice:     '2350',
-    stopLoss:       '2340',
-    takeProfit:     '2380',
+    entryPrice:     '',
+    stopLoss:       '',
+    takeProfit:     '',
     leverage:       '100',
   });
+
+  // Auto-populate balance from live account data
+  useEffect(() => {
+    if (account?.balance && account.balance > 0) {
+      setState((prev) => ({ ...prev, accountBalance: account.balance.toFixed(2) }));
+    }
+  }, [account?.balance]);
+
+  // Auto-populate entry price from live price feed when symbol changes
+  useEffect(() => {
+    const tick = prices[state.symbol];
+    if (tick?.mid && tick.mid > 0) {
+      setState((prev) => ({ ...prev, entryPrice: tick.mid.toFixed(2) }));
+    }
+  }, [state.symbol, prices]);
 
   const set = useCallback((key: keyof CalcState) => (v: string) =>
     setState((prev) => ({ ...prev, [key]: v })), []);
