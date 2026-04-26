@@ -77,8 +77,8 @@ class EWCRegularizer:
                 if param.grad is not None:
                     fisher[name] += param.grad.data**2
 
-        # Average
-        n = len(dataloader)
+        # Average — guard against empty dataloader
+        n = len(dataloader) or 1
         for name in fisher:
             self.fisher_dict[name] = fisher[name] / n
 

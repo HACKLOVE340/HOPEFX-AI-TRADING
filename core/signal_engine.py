@@ -608,19 +608,32 @@ def _predict_basic(
     """
 
     prices = data.get("prices", [data["close"]])
-    closes = pd.Series(prices)
+    closes = pd.Series(prices, dtype=float)
+
+    def _safe_pct(n: int) -> float:
+        """Return pct_change(n) for the last element, 0.0 on NaN/inf/insufficient data."""
+        if len(closes) <= n:
+            return 0.0
+        val = closes.pct_change(n).iloc[-1]
+        return float(val) if np.isfinite(val) else 0.0
+
+    def _safe_vol(window: int) -> float:
+        """Return rolling std of pct_change, 0.0 on NaN/inf/insufficient data."""
+        if len(closes) <= window:
+            return 0.0
+        val = closes.dropna().pct_change().rolling(window).std().iloc[-1]
+        return float(np.nan_to_num(val, nan=0.0, posinf=0.0, neginf=0.0))
+
     feat = {
-        "close": data["close"],
-        "open": data["open"],
-        "high": data["high"],
-        "low": data["low"],
-        "volume": data.get("volume", 0),
-        "ret_1": closes.pct_change(1).iloc[-1] if len(closes) > 1 else 0,
-        "ret_5": closes.pct_change(5).iloc[-1] if len(closes) > 5 else 0,
-        "ret_20": closes.pct_change(20).iloc[-1] if len(closes) > 20 else 0,
-        "vol_20": float(np.nan_to_num(closes.dropna().pct_change().rolling(20).std().iloc[-1], nan=0.0))
-        if len(closes) > 20
-        else 0,
+        "close": float(data["close"]) if np.isfinite(data["close"]) else 0.0,
+        "open": float(data["open"]) if np.isfinite(data["open"]) else 0.0,
+        "high": float(data["high"]) if np.isfinite(data["high"]) else 0.0,
+        "low": float(data["low"]) if np.isfinite(data["low"]) else 0.0,
+        "volume": float(data.get("volume", 0) or 0),
+        "ret_1": _safe_pct(1),
+        "ret_5": _safe_pct(5),
+        "ret_20": _safe_pct(20),
+        "vol_20": _safe_vol(20),
     }
     X = pd.DataFrame([feat])
 
@@ -632,6 +645,9 @@ def _predict_basic(
     else:
         prob = base_confidence
 
+    # Final NaN guard — never return a non-finite probability
+    if not np.isfinite(prob):
+        prob = base_confidence
     logger.debug("Basic ML (%s) prob for %s: %.4f", model_ver, symbol, prob)
     return prob, model_ver
 
@@ -1049,9 +1065,15 @@ def _estimate_annualised_volatility(data: dict[str, Any] | None, entry: float) -
         if len(prices) < _MIN_PRICES_FOR_VOL:
             return _GOLD_VOL_BASELINE
         p_arr = np.nan_to_num(np.array(prices[-21:], dtype=float), nan=0.0)
+        # Guard: replace non-positive prices to avoid log(0) = -inf
         p_arr = np.where(p_arr > 0, p_arr, 1e-9)
         log_returns = np.diff(np.log(p_arr))
-        return float(np.std(log_returns)) * (252**0.5)
+        # Guard: replace any remaining NaN/inf in log_returns before std
+        log_returns = np.nan_to_num(log_returns, nan=0.0, posinf=0.0, neginf=0.0)
+        std = float(np.std(log_returns))
+        if not np.isfinite(std) or std == 0.0:
+            return _GOLD_VOL_BASELINE
+        return std * (252**0.5)
     except Exception as _exc:
         logger.debug("_estimate_current_vol: numpy calculation failed: %s", _exc)
         return _GOLD_VOL_BASELINE

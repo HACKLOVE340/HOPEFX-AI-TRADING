@@ -387,7 +387,7 @@ class VWAPExecutor:
         """Return normalised weights for n_slices starting at start_hour_utc."""
         hours = [(start_hour_utc + i) % 24 for i in range(n_slices)]
         raw = [_XAUUSD_VOLUME_PROFILE[h] for h in hours]
-        total = sum(raw)
+        total = sum(raw) or 1.0  # guard: all-zero profile falls back to uniform
         return [w / total for w in raw]
 
     async def execute(
