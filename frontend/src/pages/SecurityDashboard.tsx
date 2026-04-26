@@ -94,6 +94,9 @@ const SecurityDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clearingLockdown, setClearingLockdown] = useState(false);
+  const [togglingLockdown, setTogglingLockdown] = useState(false);
+  const [unblockingIp, setUnblockingIp]         = useState<string | null>(null);
+  const [unblockErr, setUnblockErr]             = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     try {
@@ -133,6 +136,33 @@ const SecurityDashboard: React.FC = () => {
     }
   };
 
+  const handleToggleLockdown = async () => {
+    setTogglingLockdown(true);
+    try {
+      const { adminApi } = await import('../hooks/useApi');
+      await adminApi.lockdown(!lockdown.lockdown_active);
+      setLockdown({ lockdown_active: !lockdown.lockdown_active });
+    } catch {
+      setError('Failed to toggle lockdown');
+    } finally {
+      setTogglingLockdown(false);
+    }
+  };
+
+  const handleUnblockIp = async (ip: string) => {
+    setUnblockingIp(ip);
+    setUnblockErr(null);
+    try {
+      const { adminApi } = await import('../hooks/useApi');
+      await adminApi.unblockIp(ip);
+      setBlockedIPs(prev => prev.filter(b => b !== ip));
+    } catch {
+      setUnblockErr(`Failed to unblock ${ip}`);
+    } finally {
+      setUnblockingIp(null);
+    }
+  };
+
   // Derived stats
   const totalAttacks = Object.keys(attacks).length;
   const highSeverity = Object.values(attacks).filter(a => a.severity >= 0.7).length;
@@ -148,21 +178,32 @@ const SecurityDashboard: React.FC = () => {
         subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring"
       />
 
-      {/* Lockdown banner */}
-      {lockdown.lockdown_active && (
-        <div style={lockdownBannerStyle}>
-          <span style={{ fontWeight: 700, fontSize: 14 }}>
-            ⚠ FULL LOCKDOWN ACTIVE — Trading paused, IPs blocked
-          </span>
-          <button
-            style={clearBtnStyle}
-            onClick={handleClearLockdown}
-            disabled={clearingLockdown}
-          >
-            {clearingLockdown ? 'Clearing…' : 'Clear Lockdown'}
-          </button>
-        </div>
-      )}
+      {/* Lockdown banner + toggle */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        {lockdown.lockdown_active && (
+          <div style={{ ...lockdownBannerStyle, flex: 1 }}>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>
+              ⚠ FULL LOCKDOWN ACTIVE — Trading paused, IPs blocked
+            </span>
+            <button style={clearBtnStyle} onClick={handleClearLockdown} disabled={clearingLockdown}>
+              {clearingLockdown ? 'Clearing…' : 'Clear Lockdown'}
+            </button>
+          </div>
+        )}
+        <button
+          onClick={handleToggleLockdown}
+          disabled={togglingLockdown}
+          style={{
+            background: lockdown.lockdown_active ? '#14532d' : '#450a0a',
+            border: `1px solid ${lockdown.lockdown_active ? '#166534' : '#7f1d1d'}`,
+            borderRadius: 8, color: lockdown.lockdown_active ? '#4ade80' : '#f87171',
+            cursor: 'pointer', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+            flexShrink: 0,
+          }}
+        >
+          {togglingLockdown ? '…' : lockdown.lockdown_active ? '🔓 Disable Lockdown' : '🔒 Enable Lockdown'}
+        </button>
+      </div>
 
       {/* Error banner */}
       {error && (
@@ -232,14 +273,32 @@ const SecurityDashboard: React.FC = () => {
             <span style={panelTitleStyle}>Blocked IPs</span>
             <span style={panelCountStyle}>{blockedIPs.length}</span>
           </div>
+          {unblockErr && (
+            <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 6, color: '#f87171', fontSize: 12, padding: '6px 10px', margin: '0 0 8px' }}>
+              {unblockErr}
+            </div>
+          )}
           {blockedIPs.length === 0 ? (
             <div style={emptyStyle}>No IPs currently blocked</div>
           ) : (
             <div style={ipListStyle}>
               {blockedIPs.map(ip => (
-                <div key={ip} style={ipRowStyle}>
-                  <span style={ipTextStyle}>{ip}</span>
-                  <span style={blockedBadgeStyle}>blocked</span>
+                <div key={ip} style={{ ...ipRowStyle, justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={ipTextStyle}>{ip}</span>
+                    <span style={blockedBadgeStyle}>blocked</span>
+                  </div>
+                  <button
+                    onClick={() => handleUnblockIp(ip)}
+                    disabled={unblockingIp === ip}
+                    style={{
+                      background: 'transparent', border: '1px solid #334155',
+                      borderRadius: 5, color: '#94a3b8', cursor: 'pointer',
+                      fontSize: 11, padding: '2px 8px',
+                    }}
+                  >
+                    {unblockingIp === ip ? '…' : 'Unblock'}
+                  </button>
                 </div>
               ))}
             </div>

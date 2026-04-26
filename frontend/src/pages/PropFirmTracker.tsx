@@ -7,9 +7,12 @@
  * deduplication) and usePolling to pause polling when the tab is hidden.
  */
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../hooks/useApi';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+} from 'recharts';
+import { propFirmExtApi } from '../hooks/useApi';
 import { usePolling } from '../hooks/usePolling';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
 
@@ -28,6 +31,33 @@ interface PropFirmStatus {
   ai_message: string;
   current_equity: number;
   starting_equity: number;
+}
+
+interface ChallengeRecord {
+  challenge_id: string;
+  account_size: number;
+  phase: string;
+  result: 'passed' | 'failed' | 'active';
+  started_at: string;
+  ended_at: string | null;
+  profit_pct: number;
+  max_drawdown_pct: number;
+}
+
+interface BreachAlert {
+  alert_id: string;
+  alert_type: string;
+  message: string;
+  severity: 'warning' | 'critical';
+  created_at: string;
+  acknowledged: boolean;
+}
+
+interface DailyStat {
+  date: string;
+  pnl: number;
+  trades: number;
+  drawdown_pct: number;
 }
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
@@ -70,20 +100,60 @@ const PropFirmTracker: React.FC = () => {
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
   const enabled  = hydrated && isAuth;
+  const [activeTab, setActiveTab] = useState<'live' | 'history' | 'alerts' | 'daily'>('live');
+  const [ackingId, setAckingId]   = useState<string | null>(null);
 
   const { data: status, error, isLoading, refetch } = useQuery<PropFirmStatus>({
     queryKey:        ['prop-firm-status'],
-    queryFn:         async () => {
-      const res = await api.get<PropFirmStatus>('/risk/prop-firm-status');
-      return res.data;
-    },
+    queryFn:         async () => (await propFirmExtApi.status()).data as PropFirmStatus,
     enabled,
     staleTime:       8_000,
-    // Polling is driven by usePolling below so the interval pauses when the
-    // tab is hidden — avoids unnecessary requests while the user is away.
     refetchInterval: false,
     retry:           2,
   });
+
+  const historyQ = useQuery<ChallengeRecord[]>({
+    queryKey: ['prop-firm-history'],
+    queryFn:  async () => {
+      const r = await propFirmExtApi.history();
+      const d = r.data as ChallengeRecord[] | { challenges?: ChallengeRecord[] };
+      return Array.isArray(d) ? d : (d.challenges ?? []);
+    },
+    enabled: enabled && activeTab === 'history',
+    staleTime: 60_000,
+  });
+
+  const alertsQ = useQuery<BreachAlert[]>({
+    queryKey: ['prop-firm-alerts'],
+    queryFn:  async () => {
+      const r = await propFirmExtApi.breachAlerts();
+      const d = r.data as BreachAlert[] | { alerts?: BreachAlert[] };
+      return Array.isArray(d) ? d : (d.alerts ?? []);
+    },
+    enabled: enabled && activeTab === 'alerts',
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+
+  const dailyQ = useQuery<DailyStat[]>({
+    queryKey: ['prop-firm-daily'],
+    queryFn:  async () => {
+      const r = await propFirmExtApi.dailyStats();
+      const d = r.data as DailyStat[] | { stats?: DailyStat[] };
+      return Array.isArray(d) ? d : (d.stats ?? []);
+    },
+    enabled: enabled && activeTab === 'daily',
+    staleTime: 60_000,
+  });
+
+  const handleAcknowledge = useCallback(async (alertId: string) => {
+    setAckingId(alertId);
+    try {
+      await propFirmExtApi.acknowledgeAlert(alertId);
+      alertsQ.refetch();
+    } catch { /* non-fatal */ }
+    finally { setAckingId(null); }
+  }, [alertsQ]);
 
   // Pause polling when the tab is hidden; resume + immediate refetch on focus.
   usePolling(() => { if (enabled) refetch(); }, 10_000);
@@ -111,8 +181,112 @@ const PropFirmTracker: React.FC = () => {
         <span style={{ fontSize: 28 }}>🛡️</span>
         <h1 style={s.title}>Prop Firm Challenge Tracker</h1>
         {statusIcon && <span style={{ fontSize: 22 }}>{statusIcon}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {(['live', 'history', 'alerts', 'daily'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              background: activeTab === t ? '#1e3a5f' : '#1e293b',
+              border: `1px solid ${activeTab === t ? '#3b82f6' : '#334155'}`,
+              borderRadius: 8, color: activeTab === t ? '#60a5fa' : '#64748b',
+              cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px',
+            }}>
+              {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* ── History Tab ── */}
+      {activeTab === 'history' && (
+        <div style={s.progressCard}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Challenge History</h3>
+          {historyQ.isLoading && <div style={s.loading}>Loading…</div>}
+          {!historyQ.isLoading && (historyQ.data ?? []).length === 0 && (
+            <div style={{ color: '#475569', textAlign: 'center', padding: 32 }}>No challenge history yet.</div>
+          )}
+          {(historyQ.data ?? []).map(ch => (
+            <div key={ch.challenge_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
+              <div>
+                <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 14 }}>Phase {ch.phase} — ${ch.account_size.toLocaleString()}</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{new Date(ch.started_at).toLocaleDateString()} {ch.ended_at ? `→ ${new Date(ch.ended_at).toLocaleDateString()}` : '(active)'}</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: ch.result === 'passed' ? '#4ade80' : ch.result === 'failed' ? '#f87171' : '#f59e0b' }}>
+                  {ch.result.toUpperCase()}
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b' }}>P&L: {ch.profit_pct >= 0 ? '+' : ''}{ch.profit_pct.toFixed(2)}% · DD: {ch.max_drawdown_pct.toFixed(2)}%</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Alerts Tab ── */}
+      {activeTab === 'alerts' && (
+        <div style={s.progressCard}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Breach Alerts</h3>
+          {alertsQ.isLoading && <div style={s.loading}>Loading…</div>}
+          {!alertsQ.isLoading && (alertsQ.data ?? []).length === 0 && (
+            <div style={{ color: '#4ade80', textAlign: 'center', padding: 32 }}>✅ No breach alerts. All limits within bounds.</div>
+          )}
+          {(alertsQ.data ?? []).map(alert => (
+            <div key={alert.alert_id} style={{ background: alert.severity === 'critical' ? '#450a0a' : '#431407', border: `1px solid ${alert.severity === 'critical' ? '#7f1d1d' : '#92400e'}`, borderRadius: 8, padding: '12px 16px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: alert.severity === 'critical' ? '#f87171' : '#fbbf24', marginBottom: 4 }}>
+                  {alert.severity === 'critical' ? '🚨' : '⚠️'} {alert.alert_type}
+                </div>
+                <div style={{ fontSize: 13, color: '#94a3b8' }}>{alert.message}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{new Date(alert.created_at).toLocaleString()}</div>
+              </div>
+              {!alert.acknowledged && (
+                <button onClick={() => handleAcknowledge(alert.alert_id)} disabled={ackingId === alert.alert_id}
+                  style={{ background: '#334155', border: 'none', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '4px 10px', flexShrink: 0, marginLeft: 12 }}>
+                  {ackingId === alert.alert_id ? '…' : 'Acknowledge'}
+                </button>
+              )}
+              {alert.acknowledged && <span style={{ fontSize: 11, color: '#4ade80', flexShrink: 0, marginLeft: 12 }}>✓ Ack</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Daily Stats Tab ── */}
+      {activeTab === 'daily' && (
+        <div style={s.progressCard}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Daily P&L Stats</h3>
+          {dailyQ.isLoading && <div style={s.loading}>Loading…</div>}
+          {!dailyQ.isLoading && (dailyQ.data ?? []).length === 0 && (
+            <div style={{ color: '#475569', textAlign: 'center', padding: 32 }}>No daily stats yet.</div>
+          )}
+          {(dailyQ.data ?? []).length > 0 && (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={dailyQ.data} margin={{ top: 4, right: 8, left: 0, bottom: 40 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
+                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
+                <Tooltip contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
+                  formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, 'P&L']} />
+                <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
+                  {(dailyQ.data ?? []).map((d, i) => (
+                    <Cell key={i} fill={d.pnl >= 0 ? '#4ade80' : '#f87171'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          {(dailyQ.data ?? []).map(d => (
+            <div key={d.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #1e293b', fontSize: 13 }}>
+              <span style={{ color: '#94a3b8' }}>{d.date}</span>
+              <span style={{ color: d.pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>{d.pnl >= 0 ? '+' : ''}${d.pnl.toFixed(2)}</span>
+              <span style={{ color: '#64748b' }}>{d.trades} trades</span>
+              <span style={{ color: '#f87171' }}>DD: {d.drawdown_pct.toFixed(2)}%</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Live Tab ── */}
+      {activeTab === 'live' && (
+      <>
       {isLoading && <div style={s.loading}>Loading challenge status…</div>}
 
       {errorMsg && (
@@ -192,6 +366,8 @@ const PropFirmTracker: React.FC = () => {
             </span>
           </div>
         </>
+      )}
+      </>
       )}
     </div>
   );

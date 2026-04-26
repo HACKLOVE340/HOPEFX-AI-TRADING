@@ -7,9 +7,9 @@
  *           DELETE /api/social/copy/{trader_id}
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store';
-import { api } from '../hooks/useApi';
+import { copyTradingApi } from '../hooks/useApi';
 
 function extractApiError(err: unknown, fallback: string): string {
   const detail = (err as { response?: { data?: { detail?: string } } })
@@ -31,6 +31,16 @@ interface Leader {
   win_rate: number;
   trades_per_week: number;
   avg_trade_duration: string;
+}
+
+interface ActiveSession {
+  trader_id: string;
+  trader_name: string;
+  allocation_amount: number;
+  unrealised_pnl: number | null;
+  realised_pnl: number | null;
+  started_at: string;
+  status: string;
 }
 
 
@@ -95,25 +105,45 @@ const LeaderCard: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CopyTrading: React.FC = () => {
-  const [leaders, setLeaders]       = useState<Leader[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [loadErr, setLoadErr]       = useState('');
-  const [selected, setSelected]     = useState<string | null>(null);
-  const [allocation, setAllocation] = useState(10000);
-  const [sortBy, setSortBy]         = useState<'return' | 'sharpe' | 'followers'>('return');
-  const [copying, setCopying]       = useState(false);
-  const [copyMsg, setCopyMsg]       = useState('');
+  const [leaders, setLeaders]           = useState<Leader[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [loadErr, setLoadErr]           = useState('');
+  const [selected, setSelected]         = useState<string | null>(null);
+  const [allocation, setAllocation]     = useState(10000);
+  const [sortBy, setSortBy]             = useState<'return' | 'sharpe' | 'followers'>('return');
+  const [copying, setCopying]           = useState(false);
+  const [copyMsg, setCopyMsg]           = useState('');
+  const [sessions, setSessions]         = useState<ActiveSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [stoppingId, setStoppingId]     = useState<string | null>(null);
+  const [updatingId, setUpdatingId]     = useState<string | null>(null);
+  const [editAlloc, setEditAlloc]       = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab]       = useState<'browse' | 'active'>('browse');
 
-  useEffect(() => {
-    api.get<Leader[]>('/leaderboard')
-      .then((r) => { setLeaders(r.data ?? []); setLoadErr(''); })
-      .catch((err: unknown) => {
-        console.warn('[CopyTrading] Failed to load leaders:', err);
-        setLoadErr(extractApiError(err, 'Failed to load traders. Please try again.'));
-        setLeaders([]);
-      })
-      .finally(() => setLoading(false));
+  const loadLeaders = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await copyTradingApi.leaders();
+      const d = r.data as Leader[] | { traders?: Leader[]; leaderboard?: Leader[] };
+      setLeaders(Array.isArray(d) ? d : (d.traders ?? d.leaderboard ?? []));
+      setLoadErr('');
+    } catch (err: unknown) {
+      setLoadErr(extractApiError(err, 'Failed to load traders. Please try again.'));
+      setLeaders([]);
+    } finally { setLoading(false); }
   }, []);
+
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    try {
+      const r = await copyTradingApi.activeSessions();
+      const d = r.data as ActiveSession[] | { sessions?: ActiveSession[] };
+      setSessions(Array.isArray(d) ? d : (d.sessions ?? []));
+    } catch { setSessions([]); }
+    finally { setSessionsLoading(false); }
+  }, []);
+
+  useEffect(() => { loadLeaders(); loadSessions(); }, [loadLeaders, loadSessions]);
 
   const sorted = [...leaders].sort((a, b) => {
     if (sortBy === 'return')    return b.return_3m - a.return_3m;
@@ -129,12 +159,36 @@ const CopyTrading: React.FC = () => {
     setCopying(true);
     setCopyMsg('');
     try {
-      await api.post(`/social/copy/${selected}`, { allocation_amount: allocation });
+      await copyTradingApi.startCopy(selected, { allocation_amount: allocation });
       setCopyMsg(`Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()}`);
+      setSelected(null);
+      await loadSessions();
+      setActiveTab('active');
     } catch (e: unknown) {
       setCopyMsg(`Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`);
     }
     setCopying(false);
+  };
+
+  const handleStopCopy = async (traderId: string) => {
+    setStoppingId(traderId);
+    try {
+      await copyTradingApi.stopCopy(traderId);
+      await loadSessions();
+    } catch { /* non-fatal */ }
+    finally { setStoppingId(null); }
+  };
+
+  const handleUpdateAllocation = async (traderId: string) => {
+    const amount = editAlloc[traderId];
+    if (!amount || amount <= 0) return;
+    setUpdatingId(traderId);
+    try {
+      await copyTradingApi.updateAllocation(traderId, amount);
+      await loadSessions();
+      setEditAlloc(prev => { const n = { ...prev }; delete n[traderId]; return n; });
+    } catch { /* non-fatal */ }
+    finally { setUpdatingId(null); }
   };
 
   const estimatedMonthlyFee = selectedLeader
@@ -146,14 +200,99 @@ const CopyTrading: React.FC = () => {
       <div style={s.header}>
         <h1 style={s.title}>Copy Trading Marketplace</h1>
         <div style={{ display: 'flex', gap: 8 }}>
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'return' | 'sharpe' | 'followers')} style={s.select}>
-            <option value="return">Sort by Return</option>
-            <option value="sharpe">Sort by Sharpe</option>
-            <option value="followers">Sort by Followers</option>
-          </select>
+          {(['browse', 'active'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              ...s.tabBtn,
+              ...(activeTab === t ? s.tabBtnActive : {}),
+            }}>
+              {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
+            </button>
+          ))}
         </div>
       </div>
 
+      {/* ── Active Sessions Tab ── */}
+      {activeTab === 'active' && (
+        <div>
+          {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
+          {!sessionsLoading && sessions.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
+              No active copy sessions. Browse traders and start copying.
+            </div>
+          )}
+          {sessions.map(sess => {
+            const totalPnl = (sess.unrealised_pnl ?? 0) + (sess.realised_pnl ?? 0);
+            return (
+              <div key={sess.trader_id} style={{ ...s.allocationCard, marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>{sess.trader_name}</div>
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                      Started {new Date(sess.started_at).toLocaleDateString()} ·{' '}
+                      <span style={{ color: sess.status === 'active' ? '#4ade80' : '#f59e0b' }}>{sess.status}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: totalPnl >= 0 ? '#4ade80' : '#f87171' }}>
+                      {totalPnl >= 0 ? '+' : ''}${totalPnl.toFixed(2)}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Total P&L</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, margin: '16px 0' }}>
+                  <div style={s.sessMetric}>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Allocation</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9' }}>${sess.allocation_amount.toLocaleString()}</div>
+                  </div>
+                  <div style={s.sessMetric}>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Unrealised P&L</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.unrealised_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                      {sess.unrealised_pnl != null ? `${sess.unrealised_pnl >= 0 ? '+' : ''}$${sess.unrealised_pnl.toFixed(2)}` : '—'}
+                    </div>
+                  </div>
+                  <div style={s.sessMetric}>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Realised P&L</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: (sess.realised_pnl ?? 0) >= 0 ? '#4ade80' : '#f87171' }}>
+                      {sess.realised_pnl != null ? `${sess.realised_pnl >= 0 ? '+' : ''}$${sess.realised_pnl.toFixed(2)}` : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Allocation update */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+                  <input
+                    type="number"
+                    placeholder="New allocation…"
+                    value={editAlloc[sess.trader_id] ?? ''}
+                    onChange={e => setEditAlloc(prev => ({ ...prev, [sess.trader_id]: Number(e.target.value) }))}
+                    style={{ ...s.input, width: 160 }}
+                  />
+                  <button
+                    onClick={() => handleUpdateAllocation(sess.trader_id)}
+                    disabled={updatingId === sess.trader_id}
+                    style={{ ...s.copyBtn, padding: '8px 14px', fontSize: 13, background: '#3b82f6' }}
+                  >
+                    {updatingId === sess.trader_id ? 'Updating…' : 'Update Allocation'}
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => handleStopCopy(sess.trader_id)}
+                  disabled={stoppingId === sess.trader_id}
+                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
+                >
+                  {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── Browse Tab ── */}
+      {activeTab === 'browse' && (
+      <>
       {/* Leader cards */}
       {loading ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>Loading traders…</p>
@@ -244,6 +383,8 @@ const CopyTrading: React.FC = () => {
           )}
         </div>
       )}
+      </>
+      )}
     </div>
   );
 };
@@ -275,6 +416,9 @@ const s: Record<string, React.CSSProperties> = {
   summaryVal:    { fontSize: 13, fontWeight: 600, color: '#f1f5f9' },
   copyBtn:       { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '12px 24px' },
   cancelBtn:     { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 14, cursor: 'pointer', padding: '12px 20px' },
+  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
+  sessMetric:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' },
 };
 
 export default CopyTrading;

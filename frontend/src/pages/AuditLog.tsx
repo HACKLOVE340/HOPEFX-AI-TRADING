@@ -7,8 +7,9 @@
  * Access: admin role only (enforced by AuthGuard + backend).
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { api } from '../hooks/useApi';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { adminApi } from '../hooks/useApi';
+import { useStore } from '../store';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
@@ -139,23 +140,24 @@ const AuditLog: React.FC = () => {
   const [filterUser, setFilterUser]   = useState('');
   const [filterType, setFilterType]   = useState('');
   const [exporting, setExporting]     = useState(false);
+  const [liveCount, setLiveCount]     = useState(0);
+  const wsRef = useRef<WebSocket | null>(null);
+  const token = useStore(s => s.token);
 
   const fetchAudit = useCallback(async (pg: number, uid: string, etype: string) => {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({
-        page: String(pg),
-        limit: String(PAGE_SIZE),
-      });
-      if (uid.trim())   params.set('user_id', uid.trim());
-      if (etype.trim()) params.set('event_type', etype.trim());
+      const params: Record<string, unknown> = { page: pg, limit: PAGE_SIZE };
+      if (uid.trim())   params.user_id    = uid.trim();
+      if (etype.trim()) params.event_type = etype.trim();
 
-      const res = await api.get<AuditResponse>(`/admin/audit-log?${params}`);
-      setEvents(res.data.events);
-      setTotal(res.data.total);
-      setPage(res.data.page);
-      setPages(res.data.pages);
+      const res = await adminApi.auditLog(params);
+      const d = res.data as AuditResponse;
+      setEvents(d.events ?? []);
+      setTotal(d.total ?? 0);
+      setPage(d.page ?? pg);
+      setPages(d.pages ?? 1);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load audit log';
       setError(msg);
@@ -170,6 +172,30 @@ const AuditLog: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Real-time WS event injection — subscribe to /ws/audit-events
+  useEffect(() => {
+    if (!token) return;
+    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:8000';
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(`${wsBase}/ws/audit-events?token=${token}`);
+      wsRef.current = ws;
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data as string) as { type?: string; event?: AuditEvent };
+          if (msg.type === 'audit_event' && msg.event) {
+            // Prepend new event to the top of the list (most recent first)
+            setEvents(prev => [msg.event!, ...prev].slice(0, PAGE_SIZE));
+            setTotal(prev => prev + 1);
+            setLiveCount(prev => prev + 1);
+          }
+        } catch { /* ignore malformed frames */ }
+      };
+      ws.onerror = () => { /* WS unavailable — polling only */ };
+    } catch { /* WS unavailable */ }
+    return () => { ws?.close(); wsRef.current = null; };
+  }, [token]);
+
   const handleSearch = () => {
     void fetchAudit(1, filterUser, filterType);
   };
@@ -177,7 +203,7 @@ const AuditLog: React.FC = () => {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await api.get('/admin/audit-log/export', { responseType: 'blob' });
+      const res = await adminApi.auditExport();
       const url = URL.createObjectURL(res.data as Blob);
       const a   = document.createElement('a');
       a.href    = url;
@@ -195,7 +221,7 @@ const AuditLog: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Audit Log"
-        subtitle={`${total.toLocaleString()} events total`}
+        subtitle={`${total.toLocaleString()} events total${liveCount > 0 ? ` · ${liveCount} live` : ''}`}
         actions={
           <button
             onClick={handleExport}

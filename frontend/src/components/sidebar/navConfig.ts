@@ -79,14 +79,18 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/marketplace',  label: 'Marketplace',    icon: '🛒', group: 'community', plan: 'free',         featureKey: 'marketplace'  },
   { path: '/affiliate',    label: 'Affiliate',      icon: '🤝', group: 'community', plan: 'free',         featureKey: 'affiliate'    },
   { path: '/teams',        label: 'Teams',          icon: '👥', group: 'community', plan: 'enterprise',   featureKey: 'teams'        },
+  { path: '/chat',         label: 'Chat',           icon: '💬', group: 'community', plan: 'free',         featureKey: 'chat'         },
 
   // ── Account ───────────────────────────────────────────────────────────────
-  { path: '/profile',      label: 'Profile',        icon: '👤', group: 'account',   plan: 'free',         featureKey: 'profile'      },
-  { path: '/wallet',       label: 'Wallet',         icon: '💰', group: 'account',   plan: 'starter',      featureKey: 'wallet'       },
-  { path: '/sub-accounts', label: 'Sub-Accounts',   icon: '👥', group: 'account',   plan: 'elite',        featureKey: 'sub-accounts' },
-  { path: '/elite',        label: 'Elite Hub',      icon: '⭐', group: 'account',   plan: 'elite',        featureKey: 'elite'        },
-  { path: '/pricing',      label: 'Upgrade Plan',   icon: '💳', group: 'account',   plan: 'free',         featureKey: 'settings'     },
-  { path: '/settings',     label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',         featureKey: 'settings'     },
+  { path: '/profile',        label: 'Profile',        icon: '👤', group: 'account',   plan: 'free',     featureKey: 'profile'        },
+  { path: '/wallet',         label: 'Wallet',         icon: '💰', group: 'account',   plan: 'starter',  featureKey: 'wallet'         },
+  { path: '/notifications',  label: 'Notifications',  icon: '🔔', group: 'account',   plan: 'free',     featureKey: 'notifications'  },
+  { path: '/kyc',            label: 'KYC Verification', icon: '🪪', group: 'account', plan: 'free',     featureKey: 'kyc'            },
+  { path: '/mobile',         label: 'Mobile App',     icon: '📱', group: 'account',   plan: 'free',     featureKey: 'mobile'         },
+  { path: '/sub-accounts',   label: 'Sub-Accounts',   icon: '👥', group: 'account',   plan: 'elite',    featureKey: 'sub-accounts'   },
+  { path: '/elite',          label: 'Elite Hub',      icon: '⭐', group: 'account',   plan: 'elite',    featureKey: 'elite'          },
+  { path: '/pricing',        label: 'Upgrade Plan',   icon: '💳', group: 'account',   plan: 'free',     featureKey: 'settings'       },
+  { path: '/settings',       label: 'Settings',       icon: '⚙️', group: 'account',   plan: 'free',     featureKey: 'settings'       },
 
   // ── Admin (admin + superadmin) ────────────────────────────────────────────
   // These routes are guarded by AdminGuard (role >= admin).

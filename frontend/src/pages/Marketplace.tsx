@@ -24,7 +24,7 @@ function extractErr(err: unknown, fb: string): string {
 const fmt = (n: number, d = 1) => n.toFixed(d);
 const Stars: React.FC<{rating: number; size?: number}> = ({rating, size=14}) => {
   const full = Math.floor(rating); const half = rating - full >= 0.5;
-  return <span style={{fontSize:size,lineHeight:1}}>{'★'.repeat(full)}{half?'½':'}{'☆'.repeat(5-full-(half?1:0))}</span>;
+  return <span style={{fontSize:size,lineHeight:1}}>{'★'.repeat(full)}{half ? '½' : ''}{'☆'.repeat(5-full-(half?1:0))}</span>;
 };
 const PerfBadge: React.FC<{label:string;value:string;positive?:boolean}> = ({label,value,positive}) => (
   <div style={st.perfBadge}><div style={{...st.perfValue,color:positive===false?'#f87171':'#4ade80'}}>{value}</div><div style={st.perfLabel}>{label}</div></div>

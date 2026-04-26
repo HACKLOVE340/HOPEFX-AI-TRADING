@@ -13,7 +13,10 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../hooks/useApi';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+} from 'recharts';
+import { journalApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -91,16 +94,25 @@ const TradeJournal: React.FC = () => {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
+      const params: Record<string, unknown> = {};
+      if (filterTag) params.tag = filterTag;
       const [tradesRes, statsRes, mistakesRes] = await Promise.allSettled([
-        api.get<JournalEntry[]>(`/journal/trades${filterTag ? `?tag=${filterTag}` : ''}`),
-        api.get<JournalStats>('/journal/stats'),
-        api.get<JournalEntry[]>('/journal/mistakes'),
+        journalApi.trades(params),
+        journalApi.stats(),
+        journalApi.mistakes(),
       ]);
-      setTrades(tradesRes.status === 'fulfilled' ? (tradesRes.value.data ?? []) : []);
-      setStats(statsRes.status === 'fulfilled' ? statsRes.value.data : null);
-      setMistakes(mistakesRes.status === 'fulfilled' ? (mistakesRes.value.data ?? []) : []);
+      if (tradesRes.status === 'fulfilled') {
+        const d = tradesRes.value.data as JournalEntry[] | { trades?: JournalEntry[] };
+        setTrades(Array.isArray(d) ? d : (d.trades ?? []));
+      } else { setTrades([]); }
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value.data as JournalStats);
+      } else { setStats(null); }
+      if (mistakesRes.status === 'fulfilled') {
+        const d = mistakesRes.value.data as JournalEntry[] | { mistakes?: JournalEntry[] };
+        setMistakes(Array.isArray(d) ? d : (d.mistakes ?? []));
+      } else { setMistakes([]); }
     } finally {
-      // Always clear loading — even if Promise.allSettled itself rejects
       setLoading(false);
     }
   }, [filterTag]);
@@ -117,7 +129,7 @@ const TradeJournal: React.FC = () => {
     setSaving(true);
     setSaveErr(null);
     try {
-      await api.patch(`/journal/trades/${editing}`, editForm);
+      await journalApi.updateTrade(editing, editForm as Record<string, unknown>);
       setEditing(null);
       await fetchAll();
     } catch (err: unknown) {
@@ -272,28 +284,90 @@ const TradeJournal: React.FC = () => {
           {stats.by_tag.map((t) => <TagRow key={t.tag} stat={t} />)}
 
           <h3 style={s.sectionTitle}>Win Rate by Emotion</h3>
+          {stats.by_emotion.length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={stats.by_emotion.map(e => ({
+                  name: `${EMOTION_EMOJI[e.tag] ?? ''} ${e.tag}`,
+                  win_rate: e.win_rate,
+                  avg_pnl: e.avg_pnl,
+                }))} margin={{ top: 4, right: 8, left: 0, bottom: 40 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
+                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} domain={[0, 100]} unit="%" />
+                  <Tooltip
+                    contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
+                    formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, 'Win Rate']}
+                  />
+                  <Bar dataKey="win_rate" radius={[4, 4, 0, 0]}>
+                    {stats.by_emotion.map((e, i) => (
+                      <Cell key={i} fill={e.win_rate >= 50 ? '#4ade80' : '#f87171'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
           {stats.by_emotion.map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
         </div>
       )}
 
       {/* ── MISTAKES TAB ── */}
       {tab === 'mistakes' && (
-        mistakes.length === 0 ? <div style={s.empty}>No rule deviations recorded. Keep it up!</div> :
-        mistakes.map((entry) => (
-          <div key={entry.trade_id} style={{ ...s.tradeCard, border: '1px solid #7f1d1d' }}>
-            <div style={s.tradeHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...s.sideBadge, background: '#450a0a', color: '#f87171' }}>{entry.side.toUpperCase()}</span>
-                <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{entry.symbol}</span>
-                <span style={s.deviationBadge}>⚠ {entry.rule_deviation ?? 'Rule deviation'}</span>
-              </div>
-              <span style={{ fontSize: 16, fontWeight: 700, color: pnlColor(entry.pnl) }}>
-                {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
-              </span>
-            </div>
-            {entry.notes && <p style={s.notes}>{entry.notes}</p>}
-          </div>
-        ))
+        <>
+          {mistakes.length === 0
+            ? <div style={s.empty}>No rule deviations recorded. Keep it up! 🎯</div>
+            : (
+              <>
+                {/* Summary banner */}
+                <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 24 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 2 }}>TOTAL DEVIATIONS</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>{mistakes.length}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 2 }}>COST OF MISTAKES</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>
+                      ${Math.abs(mistakes.reduce((sum, m) => sum + (m.pnl ?? 0), 0)).toFixed(2)}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: '#f87171', marginBottom: 2 }}>WIN RATE ON MISTAKES</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#fca5a5' }}>
+                      {mistakes.length > 0
+                        ? `${((mistakes.filter(m => (m.pnl ?? 0) > 0).length / mistakes.length) * 100).toFixed(0)}%`
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
+                {mistakes.map((entry) => (
+                  <div key={entry.trade_id} style={{ ...s.tradeCard, border: '1px solid #7f1d1d' }}>
+                    <div style={s.tradeHeader}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ ...s.sideBadge, background: '#450a0a', color: '#f87171' }}>{entry.side.toUpperCase()}</span>
+                        <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{entry.symbol}</span>
+                        <span style={s.deviationBadge}>⚠ {entry.rule_deviation ?? 'Rule deviation'}</span>
+                        {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <span style={{ fontSize: 12, color: '#64748b' }}>{new Date(entry.opened_at).toLocaleDateString()}</span>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: pnlColor(entry.pnl) }}>
+                          {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
+                        </span>
+                      </div>
+                    </div>
+                    {entry.notes && <p style={s.notes}>{entry.notes}</p>}
+                    {entry.tags.length > 0 && (
+                      <div style={s.tagRow}>
+                        {entry.tags.map(t => <span key={t} style={s.tag}>{t}</span>)}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )
+          }
+        </>
       )}
     </div>
   );

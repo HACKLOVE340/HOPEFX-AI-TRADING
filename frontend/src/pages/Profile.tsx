@@ -21,7 +21,7 @@ interface TraderProfile {
   recent_signals: { signal_id: string; symbol: string; direction: string; confidence: number; pnl: number; created_at: string; }[];
 }
 
-interface EditForm { display_name: string; bio: string; country: string; }
+interface EditForm extends Record<string, unknown> { display_name: string; bio: string; country: string; }
 
 const Profile: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
