@@ -1071,8 +1071,10 @@ def _estimate_annualised_volatility(data: dict[str, Any] | None, entry: float) -
         # Guard: replace any remaining NaN/inf in log_returns before std
         log_returns = np.nan_to_num(log_returns, nan=0.0, posinf=0.0, neginf=0.0)
         std = float(np.std(log_returns))
-        if not np.isfinite(std) or std == 0.0:
+        if not np.isfinite(std):
             return _GOLD_VOL_BASELINE
+        if std == 0.0:
+            return 0.0  # constant prices → zero volatility
         return std * (252**0.5)
     except Exception as _exc:
         logger.debug("_estimate_current_vol: numpy calculation failed: %s", _exc)

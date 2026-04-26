@@ -233,8 +233,8 @@ def get_current_user(
             from starlette.background import BackgroundTasks as _BT
             request.state.background_tasks = _BT()
         request.state.background_tasks.add_task(_update_session_activity, payload.sub)
-    except Exception:
-        pass  # Never block a request due to activity tracking
+    except Exception:  # noqa: BLE001 — activity tracking must never block auth
+        pass
 
     return payload
 

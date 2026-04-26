@@ -464,7 +464,7 @@ class MobileAPIServer:
                                     last_update=datetime.now(UTC),
                                     spread=float(tick.ask) - float(tick.bid),
                                 )
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — tick parse failure falls through to 503
                         pass
                     raise HTTPException(status_code=503, detail="Quote unavailable")
 
@@ -613,7 +613,7 @@ class MobileAPIServer:
                             duration_seconds=int((datetime.now(UTC) - entry_t).total_seconds()),
                             spread=float(td.get("spread", 0)),
                         ))
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — malformed trade dict skipped
                         pass
                 return result
 
@@ -702,7 +702,7 @@ class MobileAPIServer:
                             win_rate=float(p["win_rate"]),
                             max_drawdown=float(p["max_drawdown"]),
                         ))
-                    except Exception:
+                    except Exception:  # noqa: BLE001 — malformed portfolio entry skipped
                         pass
                 return result
 

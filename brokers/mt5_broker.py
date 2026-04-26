@@ -181,23 +181,31 @@ class MT5Broker(BrokerConnector):
 
     async def place_order(  # type: ignore[override]
         self,
-        symbol: str,
-        side: OrderSide,
-        order_type: OrderType,
-        quantity: float,
+        symbol_or_params: "str | dict[str, Any]",
+        side: "OrderSide | None" = None,
+        order_type: "OrderType | None" = None,
+        quantity: float = 0.0,
         price: float | None = None,
         stop_price: float | None = None,
         **kwargs: Any,
-    ) -> Order:
+    ) -> "Order | dict[str, Any]":
         """
-        Place an order via MT5, conforming to the BrokerConnector interface.
+        Place an order via MT5.
 
-        Translates the standard interface parameters into the MT5 request dict
-        and returns a ``brokers.base.Order`` on success.
-
-        Extra MT5-specific parameters (sl, tp, magic, comment) can be passed
-        via **kwargs.
+        Accepts two calling conventions:
+        1. Standard BrokerConnector interface:
+               place_order(symbol, side, order_type, quantity, price, stop_price)
+           Returns a ``brokers.base.Order``.
+        2. Raw dict interface (legacy / MT5-specific):
+               place_order({"symbol": ..., "action": ..., "volume": ...})
+           Returns the raw MT5 result dict (same as place_order_raw).
         """
+        # ── Dict / raw interface ──────────────────────────────────────────────
+        if isinstance(symbol_or_params, dict):
+            return await self.place_order_raw(symbol_or_params)
+
+        # ── Standard BrokerConnector interface ────────────────────────────────
+        symbol: str = symbol_or_params
         if not self._assert_connected("place_order"):
             raise RuntimeError("MT5Broker.place_order: not connected")
 
@@ -207,7 +215,7 @@ class MT5Broker(BrokerConnector):
             OrderType.LIMIT: "limit",
             OrderType.STOP: "stop",
             OrderType.STOP_LIMIT: "stop",
-        }.get(order_type, "market")
+        }.get(order_type, "market")  # type: ignore[arg-type]
 
         order_params: dict[str, Any] = {
             "symbol": symbol,
@@ -231,8 +239,8 @@ class MT5Broker(BrokerConnector):
         return Order(
             id=str(result.get("order", _uuid.uuid4())),
             symbol=symbol,
-            side=side,
-            type=order_type,
+            side=side,  # type: ignore[arg-type]
+            type=order_type,  # type: ignore[arg-type]
             quantity=quantity,
             price=price,
             stop_price=stop_price,

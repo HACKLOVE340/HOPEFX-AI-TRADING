@@ -1811,7 +1811,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
                     _raw = await _raw
                 if _raw:
                     _ohlcv_df = _pd.DataFrame(_raw)
-        except Exception:
+        except Exception:  # noqa: BLE001 — OHLCV fetch is best-effort
             pass
 
         if _ohlcv_df is not None and len(_ohlcv_df) >= 50:

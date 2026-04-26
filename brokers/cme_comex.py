@@ -230,7 +230,7 @@ class CMEComexConnector(BrokerConnector):
 
     # ── BrokerConnector interface ─────────────────────────────────────────────
 
-    async def connect(self) -> bool:  # type: ignore[override]
+    def connect(self) -> bool:  # type: ignore[override]
         """
         Attempt FIX connection first, then IBKR fallback.
         Returns True if at least one execution path is available.
@@ -249,7 +249,7 @@ class CMEComexConnector(BrokerConnector):
         )
         return self.connected
 
-    async def disconnect(self) -> bool:  # type: ignore[override]
+    def disconnect(self) -> bool:  # type: ignore[override]
         if self._fix_adapter:
             try:
                 self._fix_adapter.stop()
@@ -259,7 +259,7 @@ class CMEComexConnector(BrokerConnector):
         logger.info("CMEComexConnector disconnected.")
         return True
 
-    async def place_order(  # type: ignore[override]
+    def place_order(  # type: ignore[override]
         self,
         symbol: str,
         side: OrderSide,
@@ -275,26 +275,17 @@ class CMEComexConnector(BrokerConnector):
         quantity is in contracts (1 contract = 100 troy oz).
         price is in USD per troy oz (same as spot gold price).
         """
-        import asyncio as _asyncio
-
         fix_symbol = self._normalise_symbol(symbol)
         self._order_seq += 1
 
         t0 = time.monotonic()
 
-        loop = _asyncio.get_event_loop()
         if self._fix_available and self._fix_adapter:
-            fill = await loop.run_in_executor(
-                None, self._place_via_fix, fix_symbol, side, order_type, quantity, price, stop_price
-            )
+            fill = self._place_via_fix(fix_symbol, side, order_type, quantity, price, stop_price)
         elif self._ibkr_available and self._ibkr_connector:
-            fill = await loop.run_in_executor(
-                None, self._place_via_ibkr, fix_symbol, side, order_type, quantity, price, stop_price
-            )
+            fill = self._place_via_ibkr(fix_symbol, side, order_type, quantity, price, stop_price)
         elif self._paper_fallback:
-            fill = await loop.run_in_executor(
-                None, self._place_paper, fix_symbol, side, order_type, quantity, price
-            )
+            fill = self._place_paper(fix_symbol, side, order_type, quantity, price)
         else:
             raise RuntimeError("CMEComexConnector: no execution path available — connect() first")
 
@@ -305,14 +296,10 @@ class CMEComexConnector(BrokerConnector):
         self._fills.append(fill)
         return self._fill_to_order(fill, symbol, side, order_type, quantity)
 
-    async def get_account_info(self) -> AccountInfo:  # type: ignore[override]
+    def get_account_info(self) -> AccountInfo:  # type: ignore[override]
         if self._ibkr_available and self._ibkr_connector:
             try:
-                result = self._ibkr_connector.get_account_info()
-                import asyncio as _asyncio
-                if _asyncio.iscoroutine(result):
-                    return await result
-                return result
+                return self._ibkr_connector.get_account_info()
             except Exception as exc:
                 logger.warning("CME: IBKR account info failed: %s", exc)
         return AccountInfo(
@@ -323,7 +310,7 @@ class CMEComexConnector(BrokerConnector):
             positions_count=0,
         )
 
-    async def get_market_data(  # type: ignore[override]
+    def get_market_data(  # type: ignore[override]
         self,
         symbol: str,
         timeframe: str = "1h",
@@ -332,56 +319,40 @@ class CMEComexConnector(BrokerConnector):
         """Fetch GC OHLCV bars via IBKR or return empty list."""
         if self._ibkr_available and self._ibkr_connector:
             try:
-                result = self._ibkr_connector.get_market_data("GC", timeframe, limit)
-                import asyncio as _asyncio
-                if _asyncio.iscoroutine(result):
-                    return await result
-                return result
+                return self._ibkr_connector.get_market_data("GC", timeframe, limit)
             except Exception as exc:
                 logger.warning("CME: IBKR market data failed: %s", exc)
         return []
 
-    async def get_positions(self) -> list[Position]:  # type: ignore[override]
+    def get_positions(self) -> list[Position]:  # type: ignore[override]
         if self._ibkr_available and self._ibkr_connector:
             try:
-                result = self._ibkr_connector.get_positions()
-                import asyncio as _asyncio
-                if _asyncio.iscoroutine(result):
-                    return await result
-                return result
+                return self._ibkr_connector.get_positions()
             except Exception as exc:
                 logger.warning("CME: IBKR positions failed: %s", exc)
         return []
 
-    async def cancel_order(self, order_id: str) -> bool:  # type: ignore[override]
+    def cancel_order(self, order_id: str) -> bool:  # type: ignore[override]
         """Cancel a pending order. Not supported on paper path; IBKR delegates."""
         if self._ibkr_available and self._ibkr_connector:
             try:
-                result = self._ibkr_connector.cancel_order(order_id)
-                import asyncio as _asyncio
-                if _asyncio.iscoroutine(result):
-                    return await result
-                return result
+                return self._ibkr_connector.cancel_order(order_id)
             except Exception as exc:
                 logger.warning("CME: cancel_order failed: %s", exc)
         logger.warning("CME: cancel_order not supported on current execution path")
         return False
 
-    async def close_position(self, symbol: str) -> bool:  # type: ignore[override]
+    def close_position(self, symbol: str) -> bool:  # type: ignore[override]
         """Close an open position. Delegates to IBKR when available."""
         if self._ibkr_available and self._ibkr_connector:
             try:
-                result = self._ibkr_connector.close_position(symbol)
-                import asyncio as _asyncio
-                if _asyncio.iscoroutine(result):
-                    return await result
-                return result
+                return self._ibkr_connector.close_position(symbol)
             except Exception as exc:
                 logger.warning("CME: close_position failed: %s", exc)
         logger.warning("CME: close_position not supported on current execution path")
         return False
 
-    async def get_order(self, order_id: str) -> Order | None:  # type: ignore[override]
+    def get_order(self, order_id: str) -> Order | None:  # type: ignore[override]
         """Look up a previously placed order by ID from local fill history."""
         for fill in self._fills:
             if fill.order_id == order_id:

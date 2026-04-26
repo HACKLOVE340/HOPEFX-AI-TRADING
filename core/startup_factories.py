@@ -759,7 +759,7 @@ async def init_risk_manager(s: Any) -> Any:
         import risk.manager as _rm_mod
 
         _rm_mod.risk_manager = rm
-    except Exception:
+    except Exception:  # noqa: BLE001 — module-level alias is best-effort
         pass
     log_activity("Risk Manager initialized")
     return rm
@@ -2536,7 +2536,7 @@ async def init_mcc(s: Any) -> Any | None:
         if s.db_session_factory is not None:
             try:
                 db_session = s.db_session_factory()
-            except Exception:
+            except Exception:  # noqa: BLE001 — DB session creation is best-effort
                 pass
 
         if config_mgr is not None or cache is not None:
