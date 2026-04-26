@@ -404,15 +404,29 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
             rc = await get_redis()
             if rc:
-                for key in ("tick:XAU_USD", "tick:XAUUSD", "price:XAUUSD"):
+                # Check all known tick key patterns (data layer + legacy)
+                for key in (
+                    "hopefx:dl:tick:XAU_USD",
+                    "tick:XAU_USD",
+                    "tick:XAUUSD",
+                    "price:XAUUSD",
+                ):
                     raw = await rc.get(key)
                     if raw:
-                        data = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
-                        age_s = time.time() - float(data.get("ts", data.get("timestamp", time.time())))
+                        try:
+                            data = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
+                        except (json.JSONDecodeError, ValueError):
+                            data = {}
+                        ts_val = data.get("ts", data.get("timestamp", data.get("time", None)))
+                        if ts_val is not None:
+                            age_s = time.time() - float(ts_val)
+                        else:
+                            age_s = 0.0
                         return {
-                            "status": "ok" if age_s < 60 else "warning",
-                            "detail": f"last tick age={age_s:.1f}s",
+                            "status": "ok" if age_s < 120 else "warning",
+                            "detail": f"last tick age={age_s:.1f}s key={key}",
                             "tick_age_seconds": round(age_s, 1),
+                            "key": key,
                         }
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110

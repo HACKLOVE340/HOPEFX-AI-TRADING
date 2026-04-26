@@ -1593,6 +1593,25 @@ async def init_inference_engine(s: Any) -> Any:
             f"online_learning={health['online_learning_enabled']} "
             f"mtf_fusion={health['mtf_fusion_enabled']}"
         )
+
+        # Publish ML status to Redis so health probes and superadmin can read it.
+        try:
+            import json as _json
+            from cache.redis_client import get_redis as _get_redis
+
+            _rc = await _get_redis()
+            if _rc is not None:
+                _payload = _json.dumps({
+                    "model_available": health.get("model_available", False),
+                    "model_version": health.get("model_version", "none"),
+                    "calibrator": health.get("calibrator_available", False),
+                    "online_learning": health.get("online_learning_enabled", False),
+                })
+                await _rc.set("ml:model:status", _payload, ex=3600)
+                logger.debug("ml:model:status published to Redis")
+        except Exception as _ml_redis_exc:
+            logger.debug("ML status Redis publish failed (non-fatal): %s", _ml_redis_exc)
+
         return engine
     except Exception as exc:
         logger.warning("InferenceEngine init failed (non-fatal): %s", exc)
