@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../hooks/useApi';
+import { useStore, selectWsStatus } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,7 @@ const UptimeBar: React.FC<{ history: HistoryDay[] }> = ({ history }) => (
 // ── Main component ────────────────────────────────────────────────────────────
 
 const StatusPage: React.FC = () => {
+  const wsStatus = useStore(selectWsStatus);
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
   const [incidents, setIncidents] = useState<Incident[]>([]);
@@ -190,6 +192,27 @@ const StatusPage: React.FC = () => {
           </div>
         </div>
         <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
+      </div>
+
+      {/* WebSocket live status */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
+        padding: '10px 16px', marginBottom: 16,
+      }}>
+        <span style={{
+          width: 9, height: 9, borderRadius: '50%', flexShrink: 0,
+          background: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444',
+          boxShadow: wsStatus === 'connected' ? '0 0 6px #22c55e' : 'none',
+        }} />
+        <span style={{ fontSize: 13, color: '#94a3b8' }}>
+          WebSocket feed: <strong style={{ color: wsStatus === 'connected' ? '#22c55e' : wsStatus === 'connecting' ? '#f59e0b' : '#ef4444' }}>
+            {wsStatus.charAt(0).toUpperCase() + wsStatus.slice(1)}
+          </strong>
+        </span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#475569' }}>
+          Live market data stream
+        </span>
       </div>
 
       {/* Components */}
