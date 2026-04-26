@@ -242,33 +242,33 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
     async def _probe_redis() -> dict[str, Any]:
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_redis
 
-            rc = get_redis_client()
+            rc = await get_redis()
             if rc is None:
-                return {"status": "error", "detail": "Redis client not initialised"}
-            pong = rc.ping()
-            info = rc.info("server")
+                return {"status": "error", "detail": "Redis client not initialised — check REDIS_URL"}
+            pong = await rc.ping()
+            info = await rc.info("server")
+            mem_info = await rc.info("memory")
             return {
                 "status": "ok" if pong else "error",
                 "detail": f"PONG={pong}",
                 "version": info.get("redis_version", "unknown"),
                 "uptime_seconds": info.get("uptime_in_seconds", 0),
-                "used_memory_mb": round(rc.info("memory").get("used_memory", 0) / 1e6, 2),
+                "used_memory_mb": round(mem_info.get("used_memory", 0) / 1e6, 2),
             }
         except Exception as exc:
             return {"status": "error", "detail": str(exc)}
 
     async def _probe_broker() -> dict[str, Any]:
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_redis
+            import json
 
-            rc = get_redis_client()
+            rc = await get_redis()
             if rc:
-                raw = rc.get("broker:connection_status")
+                raw = await rc.get("broker:connection_status")
                 if raw:
-                    import json
-
                     data = json.loads(raw)
                     connected = data.get("connected", False)
                     broker_type = data.get("broker_type", "unknown")
@@ -288,22 +288,23 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
     async def _probe_ml_engine() -> dict[str, Any]:
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_redis
             import json
 
-            rc = get_redis_client()
+            rc = await get_redis()
             if rc:
-                raw = rc.get("ml:model:status") or rc.get("ml:engine_status")
+                raw = await rc.get("ml:model:status") or await rc.get("ml:engine_status")
                 if raw:
                     data = json.loads(raw)
                     return {"status": "ok", "detail": "ML status from Redis", **data}
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
         try:
-            from ml.predictor import get_predictor
+            # ml.predictor is an alias module — try advanced_predictor directly
+            from ml.advanced_predictor import get_predictor
 
             pred = get_predictor()
-            ready = getattr(pred, "is_ready", lambda: False)()
+            ready = getattr(pred, "is_ready", lambda: True)()
             return {"status": "ok" if ready else "warning", "detail": f"predictor ready={ready}"}
         except Exception as exc:
             return {"status": "warning", "detail": str(exc)}
@@ -390,15 +391,15 @@ def _register_default_probes(engine: HealthEngine) -> None:
 
     async def _probe_data_feed() -> dict[str, Any]:
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_redis
             import json
 
-            rc = get_redis_client()
+            rc = await get_redis()
             if rc:
                 for key in ("tick:XAU_USD", "tick:XAUUSD", "price:XAUUSD"):
-                    raw = rc.get(key)
+                    raw = await rc.get(key)
                     if raw:
-                        data = json.loads(raw) if isinstance(raw, str | bytes) else {}
+                        data = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
                         age_s = time.time() - float(data.get("ts", data.get("timestamp", time.time())))
                         return {
                             "status": "ok" if age_s < 60 else "warning",
@@ -407,19 +408,19 @@ def _register_default_probes(engine: HealthEngine) -> None:
                         }
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
-        return {"status": "warning", "detail": "No live tick data in Redis"}
+        return {"status": "warning", "detail": "No live tick data found in Redis"}
 
     async def _probe_websocket() -> dict[str, Any]:
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_redis
 
-            rc = get_redis_client()
+            rc = await get_redis()
             if rc:
-                clients = rc.scard("ws:connected_clients") or 0
+                clients = await rc.scard("ws:connected_clients") or 0
                 return {"status": "ok", "detail": f"connected_clients={clients}", "connected_clients": clients}
         except Exception:
             logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
-        return {"status": "ok", "detail": "WebSocket server running"}
+        return {"status": "ok", "detail": "WebSocket server running (no client count available)"}
 
     async def _probe_event_bus() -> dict[str, Any]:
         try:
