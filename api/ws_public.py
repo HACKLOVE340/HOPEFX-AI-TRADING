@@ -166,6 +166,7 @@ async def ws_public(ws: WebSocket) -> None:
     _active_connections.add(ws)
     logger.debug("ws/public: new connection (total=%d)", len(_active_connections))
 
+    broadcast_task: asyncio.Task | None = None  # initialised before try so finally can always reference it
     try:
         # Confirm subscription
         await ws.send_json({"type": "subscribed", "channels": ["prices"]})
@@ -189,6 +190,7 @@ async def ws_public(ws: WebSocket) -> None:
     except Exception as exc:
         logger.debug("ws/public: connection error: %s", exc)
     finally:
-        broadcast_task.cancel()
+        if broadcast_task is not None:
+            broadcast_task.cancel()
         _active_connections.discard(ws)
         logger.debug("ws/public: disconnected (total=%d)", len(_active_connections))
