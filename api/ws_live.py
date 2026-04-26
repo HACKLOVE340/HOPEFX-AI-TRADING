@@ -18,7 +18,7 @@ Message format (server → client):
   { "type": "error",           "code": str, "message": str }
   { "type": "microstructure",  "data": MicrostructureSnapshot }  — chart-bot channel
   { "type": "volume_delta",    "data": VolumeDeltaBar }          — chart-bot channel
-  { "type": "sentiment_update","data": SentimentSnapshot }       — chart-bot channel
+  { "type": "sentiment_update","data": { "signal": SentimentSignal, "recent_articles": NewsArticle[] } }  — chart-bot channel
   { "type": "risk_update",     "data": RiskSnapshot }            — chart-bot channel
   { "type": "equity_update",   "data": EquitySnapshot }          — chart-bot channel
   { "type": "news_item",       "data": NewsItem }                — chart-bot channel
@@ -720,10 +720,16 @@ async def _chartbot_broadcaster() -> None:
     Channels served:
       microstructure  → { type: "microstructure",   data: MicrostructureSnapshot }
       volume_delta    → { type: "volume_delta",      data: VolumeDeltaBar }
-      sentiment       → { type: "sentiment_update",  data: SentimentSnapshot }
+      sentiment       → { type: "sentiment_update",  data: { signal: SentimentSignal, recent_articles: NewsArticle[] } }
       risk            → { type: "risk_update",       data: RiskSnapshot }
       equity          → { type: "equity_update",     data: EquitySnapshot }
-      news            → { type: "news_item",         data: NewsItem[] }
+      news            → { type: "news_item",         data: NewsArticle }
+
+    SentimentSignal fields (from data_layer.sentiment.engine):
+      news_sentiment_score    : float  — EMA of article sentiment scores [-1, 1]
+      news_sentiment_momentum : float  — rate of change of sentiment EMA
+      news_article_count_1h   : float  — gold-relevant articles in last hour
+      news_bullish_ratio      : float  — fraction of recent articles that are bullish [0, 1]
     """
     while True:
         await asyncio.sleep(_CHARTBOT_POLL_INTERVAL)

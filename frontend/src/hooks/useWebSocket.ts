@@ -174,12 +174,11 @@ export function useWebSocket(enabled = true) {
         break;
 
       case 'sentiment_update': {
-        // Server sends { signal: SentimentSignal, articles: NewsArticle[] }
-        // Map to the SentimentResponse shape the store expects.
-        const rawSentiment = msg.data as { signal: unknown; articles: unknown[] };
+        // Server sends { signal: SentimentSignal, recent_articles: NewsArticle[] }
+        const rawSentiment = msg.data as { signal: unknown; recent_articles: unknown[] };
         setSentiment({
           signal: rawSentiment?.signal as import('../types').SentimentSignal,
-          recent_articles: (rawSentiment?.articles ?? []) as import('../types').NewsArticle[],
+          recent_articles: (rawSentiment?.recent_articles ?? []) as import('../types').NewsArticle[],
         });
         break;
       }
