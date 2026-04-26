@@ -1002,12 +1002,17 @@ export const watchlistApi = {
 // Backend: /api/monetization/marketplace/* (api/monetization.py)
 
 export const marketplaceApi = {
-  strategies: (params?: Record<string, unknown>)  => api.get('/monetization/marketplace/strategies', { params }),
-  strategy:   (id: string)                        => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(id)}`),
-  purchase:   (payload: object)                   => api.post('/monetization/marketplace/purchase', payload),
-  featured:   ()                                  => api.get('/monetization/marketplace/featured'),
-  stats:      ()                                  => api.get('/monetization/marketplace/stats'),
-  list:       (payload: object)                   => api.post('/monetization/marketplace/list', payload),
+  strategies:    (params?: Record<string, unknown>)  => api.get('/monetization/marketplace/strategies', { params }),
+  strategy:      (id: string)                        => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(id)}`),
+  purchase:      (payload: object)                   => api.post('/monetization/marketplace/purchase', payload),
+  featured:      ()                                  => api.get('/monetization/marketplace/featured'),
+  stats:         ()                                  => api.get('/monetization/marketplace/stats'),
+  list:          (payload: object)                   => api.post('/monetization/marketplace/list', payload),
+  myStrategies:  (userId: string)                    => api.get(`/monetization/marketplace/strategies?creator_id=${userId}`),
+  review:        (strategyId: string, payload: object) => api.post(`/monetization/marketplace/strategies/${encodeURIComponent(strategyId)}/reviews`, payload),
+  reviews:       (strategyId: string)                => api.get(`/monetization/marketplace/strategies/${encodeURIComponent(strategyId)}/reviews`),
+  unsubscribe:   (strategyId: string)                => api.delete(`/monetization/marketplace/subscriptions/${encodeURIComponent(strategyId)}`),
+  mySubscriptions: ()                                => api.get('/monetization/marketplace/subscriptions'),
 };
 
 // ── Security Auto-Healing Dashboard ──────────────────────────────────────────
@@ -1040,4 +1045,277 @@ export const securityFixesApi = {
   approve:    (fixId: string, notes?: string)    => api.post('/security/fixes/approve', { fix_id: fixId, notes }),
   decline:    (fixId: string, reason?: string)   => api.post('/security/fixes/decline', { fix_id: fixId, reason }),
   scan:       ()                                 => api.post('/security/fixes/scan'),
+};
+
+// ── Affiliate API ─────────────────────────────────────────────────────────────
+// Backend: /api/monetization/affiliate/*
+
+export const affiliateApi = {
+  account:          (userId: string)                          => api.get(`/monetization/affiliate/${userId}`),
+  signup:           (payload: Record<string, unknown>)        => api.post('/monetization/affiliate/signup', payload),
+  referrals:        (affiliateId: string, params?: Record<string, unknown>) =>
+                      api.get(`/monetization/affiliate/${affiliateId}/referrals`, { params }),
+  leaderboard:      (params?: Record<string, unknown>)        => api.get('/monetization/affiliate/leaderboard', { params }),
+  withdraw:         (affiliateId: string, amount: number)     =>
+                      api.post(`/monetization/affiliate/${affiliateId}/withdraw`, { amount }),
+  commissions:      (affiliateId: string, params?: Record<string, unknown>) =>
+                      api.get(`/monetization/affiliate/${affiliateId}/commissions`, { params }),
+  updatePayment:    (affiliateId: string, payload: Record<string, unknown>) =>
+                      api.patch(`/monetization/affiliate/${affiliateId}/payment-method`, payload),
+};
+
+// ── Social / Signal Feed API ──────────────────────────────────────────────────
+// Backend: /api/social/*
+
+export const socialApi = {
+  feed:             (params?: Record<string, unknown>)        => api.get('/social/feed', { params }),
+  react:            (signalId: string, reaction: 'up' | 'down') =>
+                      api.post(`/social/signals/${signalId}/react`, { reaction }),
+  comments:         (signalId: string)                        => api.get(`/social/signals/${signalId}/comments`),
+  addComment:       (signalId: string, text: string)          =>
+                      api.post(`/social/signals/${signalId}/comments`, { text }),
+  optIn:            ()                                        => api.post('/social/opt-in'),
+  optOut:           ()                                        => api.post('/social/opt-out'),
+  optStatus:        ()                                        => api.get('/social/opt-status'),
+  copyTrader:       (traderId: string, payload: Record<string, unknown>) =>
+                      api.post(`/social/copy/${traderId}`, payload),
+  stopCopy:         (traderId: string)                        => api.delete(`/social/copy/${traderId}`),
+  activeCopies:     ()                                        => api.get('/social/copy/active'),
+  updateAllocation: (traderId: string, amount: number)        =>
+                      api.patch(`/social/copy/${traderId}/allocation`, { allocation_amount: amount }),
+  profile:          (traderId: string)                        => api.get(`/social/traders/${traderId}`),
+  follow:           (traderId: string)                        => api.post(`/social/follow/${traderId}`),
+  unfollow:         (traderId: string)                        => api.delete(`/social/follow/${traderId}`),
+};
+
+// ── Notifications API ─────────────────────────────────────────────────────────
+// Backend: /api/notifications/*
+
+export const notificationsApi = {
+  list:             (params?: Record<string, unknown>)        => api.get('/notifications', { params }),
+  unreadCount:      ()                                        => api.get('/notifications/unread-count'),
+  markRead:         (notifId: string)                         => api.patch(`/notifications/${notifId}/read`),
+  markAllRead:      ()                                        => api.post('/notifications/mark-all-read'),
+  delete:           (notifId: string)                         => api.delete(`/notifications/${notifId}`),
+  preferences:      ()                                        => api.get('/notifications/preferences'),
+  updatePrefs:      (payload: Record<string, unknown>)        => api.patch('/notifications/preferences', payload),
+  subscribe:        (payload: Record<string, unknown>)        => api.post('/notifications/subscribe', payload),
+};
+
+// ── Profile API ───────────────────────────────────────────────────────────────
+// Backend: /api/profile/*
+
+export const profileApi = {
+  get:              (userId?: string)                         =>
+                      api.get(userId ? `/profile/${userId}` : '/profile/me'),
+  update:           (payload: Record<string, unknown>)        => api.patch('/profile/me', payload),
+  uploadAvatar:     (formData: FormData)                      =>
+                      api.post('/profile/me/avatar', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      }),
+  follow:           (userId: string)                          => api.post(`/profile/${userId}/follow`),
+  unfollow:         (userId: string)                          => api.delete(`/profile/${userId}/follow`),
+  followers:        (userId: string)                          => api.get(`/profile/${userId}/followers`),
+  following:        (userId: string)                          => api.get(`/profile/${userId}/following`),
+  signals:          (userId: string, params?: Record<string, unknown>) =>
+                      api.get(`/profile/${userId}/signals`, { params }),
+  strategies:       (userId: string)                          => api.get(`/profile/${userId}/strategies`),
+  stats:            (userId: string)                          => api.get(`/profile/${userId}/stats`),
+};
+
+// ── Admin API ─────────────────────────────────────────────────────────────────
+// Backend: /api/admin/*
+
+export const adminApi = {
+  // Users
+  users:            (params?: Record<string, unknown>)        => api.get('/admin/users', { params }),
+  user:             (userId: string)                          => api.get(`/admin/users/${userId}`),
+  updateUser:       (userId: string, payload: Record<string, unknown>) =>
+                      api.patch(`/admin/users/${userId}`, payload),
+  banUser:          (userId: string, reason?: string)         =>
+                      api.post(`/admin/users/${userId}/ban`, { reason }),
+  unbanUser:        (userId: string)                          => api.post(`/admin/users/${userId}/unban`),
+  resetPassword:    (userId: string)                          => api.post(`/admin/users/${userId}/reset-password`),
+  // Audit
+  auditLog:         (params?: Record<string, unknown>)        => api.get('/admin/audit-log', { params }),
+  auditExport:      ()                                        => api.get('/admin/audit-log/export', { responseType: 'blob' }),
+  // Platform
+  platformConfig:   ()                                        => api.get('/admin/platform/config'),
+  updateConfig:     (payload: Record<string, unknown>)        => api.patch('/admin/platform/config', payload),
+  maintenanceMode:  (enabled: boolean)                        =>
+                      api.post('/admin/platform/maintenance', { enabled }),
+  // KYC
+  kycList:          (params?: Record<string, unknown>)        => api.get('/admin/kyc', { params }),
+  kycApprove:       (userId: string)                          => api.post(`/admin/kyc/${userId}/approve`),
+  kycReject:        (userId: string, reason: string)          =>
+                      api.post(`/admin/kyc/${userId}/reject`, { reason }),
+  // Security
+  lockdown:         (enable: boolean)                         =>
+                      api.post('/security/lockdown', { enable }),
+  unblockIp:        (ip: string)                              => api.post('/security/unblock-ip', { ip }),
+  blockIp:          (ip: string, reason?: string)             =>
+                      api.post('/security/block-ip', { ip, reason }),
+};
+
+// ── Billing API ───────────────────────────────────────────────────────────────
+// Backend: /api/billing/*
+
+export const billingApi = {
+  balance:          ()                                        => api.get('/billing/balance'),
+  transactions:     (params?: Record<string, unknown>)        => api.get('/billing/transactions', { params }),
+  subscription:     ()                                        => api.get('/billing/subscription'),
+  cancelSub:        ()                                        => api.post('/billing/subscription/cancel'),
+  resumeSub:        ()                                        => api.post('/billing/subscription/resume'),
+  changePlan:       (plan: string)                            => api.post('/billing/subscription/change', { plan }),
+  paymentMethods:   ()                                        => api.get('/billing/payment-methods'),
+  addPaymentMethod: (payload: Record<string, unknown>)        =>
+                      api.post('/billing/payment-methods', payload),
+  removePaymentMethod: (methodId: string)                     =>
+                      api.delete(`/billing/payment-methods/${methodId}`),
+  setDefaultMethod: (methodId: string)                        =>
+                      api.post(`/billing/payment-methods/${methodId}/default`),
+  deposit:          (payload: Record<string, unknown>)        => api.post('/payments/deposit', payload),
+  withdraw:         (payload: Record<string, unknown>)        => api.post('/payments/withdraw', payload),
+  invoices:         (params?: Record<string, unknown>)        => api.get('/billing/invoices', { params }),
+  invoice:          (invoiceId: string)                       => api.get(`/billing/invoices/${invoiceId}`),
+  plans:            ()                                        => api.get('/billing/plans'),
+};
+
+// ── Copy Trading API ──────────────────────────────────────────────────────────
+// Backend: /api/social/copy/* and /api/leaderboard/*
+
+export const copyTradingApi = {
+  leaders:          (params?: Record<string, unknown>)        => api.get('/leaderboard', { params }),
+  leaderProfile:    (traderId: string)                        => api.get(`/leaderboard/${traderId}`),
+  leaderStats:      (traderId: string)                        => api.get(`/leaderboard/${traderId}/stats`),
+  startCopy:        (traderId: string, payload: Record<string, unknown>) =>
+                      api.post(`/social/copy/${traderId}`, payload),
+  stopCopy:         (traderId: string)                        => api.delete(`/social/copy/${traderId}`),
+  activeSessions:   ()                                        => api.get('/social/copy/active'),
+  updateAllocation: (traderId: string, amount: number)        =>
+                      api.patch(`/social/copy/${traderId}/allocation`, { allocation_amount: amount }),
+  history:          (params?: Record<string, unknown>)        => api.get('/social/copy/history', { params }),
+  performance:      (traderId: string)                        => api.get(`/social/copy/${traderId}/performance`),
+};
+
+// ── KYC API ───────────────────────────────────────────────────────────────────
+// Backend: /api/kyc/*
+
+export const kycApi = {
+  status:           ()                                        => api.get('/kyc/status'),
+  submit:           (formData: FormData)                      =>
+                      api.post('/kyc/submit', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      }),
+  documents:        ()                                        => api.get('/kyc/documents'),
+  uploadDocument:   (formData: FormData)                      =>
+                      api.post('/kyc/documents', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      }),
+};
+
+// ── Chat API ──────────────────────────────────────────────────────────────────
+// Backend: /api/chat/*
+
+export const chatApi = {
+  rooms:            ()                                        => api.get('/chat/rooms'),
+  room:             (roomId: string)                          => api.get(`/chat/rooms/${roomId}`),
+  createRoom:       (payload: Record<string, unknown>)        => api.post('/chat/rooms', payload),
+  messages:         (roomId: string, params?: Record<string, unknown>) =>
+                      api.get(`/chat/rooms/${roomId}/messages`, { params }),
+  sendMessage:      (roomId: string, text: string, attachments?: string[]) =>
+                      api.post(`/chat/rooms/${roomId}/messages`, { text, attachments }),
+  deleteMessage:    (roomId: string, msgId: string)           =>
+                      api.delete(`/chat/rooms/${roomId}/messages/${msgId}`),
+  directMessages:   (userId: string, params?: Record<string, unknown>) =>
+                      api.get(`/chat/dm/${userId}`, { params }),
+  sendDM:           (userId: string, text: string)            =>
+                      api.post(`/chat/dm/${userId}`, { text }),
+  onlineUsers:      ()                                        => api.get('/chat/online'),
+};
+
+// ── Journal API ───────────────────────────────────────────────────────────────
+// Backend: /api/journal/*
+
+export const journalApi = {
+  trades:           (params?: Record<string, unknown>)        => api.get('/journal/trades', { params }),
+  trade:            (tradeId: string)                         => api.get(`/journal/trades/${tradeId}`),
+  updateTrade:      (tradeId: string, payload: Record<string, unknown>) =>
+                      api.patch(`/journal/trades/${tradeId}`, payload),
+  stats:            (params?: Record<string, unknown>)        => api.get('/journal/stats', { params }),
+  mistakes:         (params?: Record<string, unknown>)        => api.get('/journal/mistakes', { params }),
+  emotionStats:     ()                                        => api.get('/journal/emotion-stats'),
+  weeklyReport:     ()                                        => api.get('/journal/weekly-report'),
+  export:           (format: 'csv' | 'json' = 'csv')         =>
+                      api.get(`/journal/export?format=${format}`, { responseType: 'blob' }),
+  tags:             ()                                        => api.get('/journal/tags'),
+};
+
+// ── Prop Firm API ─────────────────────────────────────────────────────────────
+// Backend: /api/risk/prop-firm*
+
+export const propFirmExtApi = {
+  status:           ()                                        => api.get('/risk/prop-firm-status'),
+  history:          (params?: Record<string, unknown>)        => api.get('/risk/prop-firm/history', { params }),
+  challenges:       ()                                        => api.get('/risk/prop-firm/challenges'),
+  dailyStats:       (params?: Record<string, unknown>)        => api.get('/risk/prop-firm/daily-stats', { params }),
+  breachAlerts:     ()                                        => api.get('/risk/prop-firm/breach-alerts'),
+  acknowledgeAlert: (alertId: string)                         =>
+                      api.post(`/risk/prop-firm/breach-alerts/${alertId}/acknowledge`),
+  accounts:         ()                                        => api.get('/risk/prop-firm/accounts'),
+};
+
+// ── Performance Extended API ──────────────────────────────────────────────────
+// Backend: /api/performance/*
+
+export const performanceExtApi = {
+  public:           ()                                        => api.get('/performance/public'),
+  equityCurve:      ()                                        => api.get('/performance/equity-curve'),
+  weeklyReport:     ()                                        => api.get('/performance/weekly-report/latest'),
+  weeklyReports:    (params?: Record<string, unknown>)        => api.get('/performance/weekly-reports', { params }),
+  export:           (format: 'csv' | 'pdf' = 'csv', params?: Record<string, unknown>) =>
+                      api.get(`/performance/export?format=${format}`, { params, responseType: 'blob' }),
+  tradeBreakdown:   (params?: Record<string, unknown>)        => api.get('/performance/trade-breakdown', { params }),
+  attribution:      ()                                        => api.get('/performance/attribution'),
+};
+
+// ── PnL Extended API ──────────────────────────────────────────────────────────
+// Backend: /api/pnl/*
+
+export const pnlApi = {
+  summary:          ()                                        => api.get('/pnl/summary'),
+  equityCurve:      ()                                        => api.get('/pnl/equity-curve'),
+  drawdownCurve:    ()                                        => api.get('/pnl/drawdown-curve'),
+  tradeLog:         (params?: Record<string, unknown>)        => api.get('/pnl/trade-log', { params }),
+  openPositions:    ()                                        => api.get('/pnl/open-positions'),
+  export:           (format: 'csv' | 'json' = 'csv')         =>
+                      api.get(`/pnl/export?format=${format}`, { responseType: 'blob' }),
+};
+
+// ── AI Strategy Extended API ──────────────────────────────────────────────────
+// Backend: /api/brain/*
+
+export const aiStrategyApi = {
+  generate:         (payload: Record<string, unknown>)        => api.post('/brain/generate-strategy', payload),
+  deploy:           (payload: Record<string, unknown>)        => api.post('/brain/deploy-strategy', payload),
+  history:          (params?: Record<string, unknown>)        => api.get('/brain/strategies', { params }),
+  strategy:         (strategyId: string)                      => api.get(`/brain/strategies/${strategyId}`),
+  deleteStrategy:   (strategyId: string)                      => api.delete(`/brain/strategies/${strategyId}`),
+  backtest:         (strategyId: string)                      => api.post(`/brain/strategies/${strategyId}/backtest`),
+  activate:         (strategyId: string)                      => api.post(`/brain/strategies/${strategyId}/activate`),
+  deactivate:       (strategyId: string)                      => api.post(`/brain/strategies/${strategyId}/deactivate`),
+};
+
+// ── Indicators Extended API ───────────────────────────────────────────────────
+// Backend: /api/indicators/*
+
+export const indicatorsApi = {
+  list:             ()                                        => api.get('/indicators'),
+  create:           (payload: Record<string, unknown>)        => api.post('/indicators', payload),
+  update:           (id: string, payload: Record<string, unknown>) =>
+                      api.patch(`/indicators/${id}`, payload),
+  delete:           (id: string)                              => api.delete(`/indicators/${id}`),
+  preview:          (payload: Record<string, unknown>)        => api.post('/indicators/preview', payload),
+  apply:            (id: string, payload: Record<string, unknown>) =>
+                      api.post(`/indicators/${id}/apply`, payload),
 };

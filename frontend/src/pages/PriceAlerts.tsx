@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../hooks/useApi';
+import { useStore, selectTriggeredAlerts } from '../store';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,7 +75,9 @@ const PriceAlerts: React.FC = () => {
   const [history, setHistory]     = useState<AlertTrigger[]>([]);
   const [loading, setLoading]     = useState(true);
   const [loadErr, setLoadErr]     = useState<string | null>(null);
-  const [tab, setTab]             = useState<'active' | 'history'>('active');
+  const [tab, setTab]             = useState<'active' | 'history' | 'live'>('active');
+  // Live triggered alerts from WebSocket store
+  const wsTriggered = useStore(selectTriggeredAlerts);
   const [showForm, setShowForm]   = useState(false);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState('');
@@ -167,7 +170,7 @@ const PriceAlerts: React.FC = () => {
     <div style={s.page}>
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Price Alerts</h1>
+          <h1 style={s.title}>🔔 Price Alerts</h1>
           <p style={s.subtitle}>Get notified via Discord, Telegram, or email when price conditions are met.</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
@@ -238,14 +241,19 @@ const PriceAlerts: React.FC = () => {
 
       {/* Tabs */}
       <div style={s.tabs}>
-        {(['active', 'history'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}>
-            {t === 'active'
-              ? `Active Alerts (${alerts.filter((a) => a.status !== 'cancelled').length})`
-              : 'Trigger History'}
-          </button>
-        ))}
+        <button onClick={() => setTab('active')} style={{ ...s.tab, ...(tab === 'active' ? s.tabActive : {}) }}>
+          Active Alerts ({alerts.filter((a) => a.status !== 'cancelled').length})
+        </button>
+        <button onClick={() => setTab('live')} style={{ ...s.tab, ...(tab === 'live' ? s.tabActive : {}) }}>
+          Live Triggers {wsTriggered.length > 0 && (
+            <span style={{ marginLeft: 6, background: '#f97316', color: '#fff', borderRadius: 10, fontSize: 10, padding: '1px 6px', fontWeight: 700 }}>
+              {wsTriggered.length}
+            </span>
+          )}
+        </button>
+        <button onClick={() => setTab('history')} style={{ ...s.tab, ...(tab === 'history' ? s.tabActive : {}) }}>
+          Trigger History
+        </button>
       </div>
 
       {/* Active alerts */}
@@ -275,6 +283,25 @@ const PriceAlerts: React.FC = () => {
             </button>
           </div>
         ))
+      )}
+
+      {/* Live WS triggers */}
+      {tab === 'live' && (
+        wsTriggered.length === 0
+          ? <div style={s.empty}>No live triggers yet. Alerts fire here in real-time via WebSocket.</div>
+          : wsTriggered.map((t) => (
+            <div key={t.id} style={{ ...s.historyRow, background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
+              <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontWeight: 600, color: '#f1f5f9', fontSize: 13 }}>{t.symbol}</span>
+                <span style={{ color: '#64748b', fontSize: 12, marginLeft: 8 }}>{t.condition}</span>
+                {t.message && <span style={{ color: '#94a3b8', fontSize: 12, marginLeft: 8 }}>{t.message}</span>}
+              </div>
+              <span style={{ fontSize: 12, color: '#475569' }}>
+                {new Date(t.triggered_at).toLocaleString()}
+              </span>
+            </div>
+          ))
       )}
 
       {/* History */}

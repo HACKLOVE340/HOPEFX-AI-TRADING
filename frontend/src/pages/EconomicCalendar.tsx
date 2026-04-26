@@ -18,6 +18,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
+import { useStore, selectMacro } from '../store';
 import { MacroCalendar } from '../components/panels/MacroCalendar';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 
@@ -156,6 +157,7 @@ const EconomicCalendar: React.FC = () => {
 
   // Data-layer macro events (via TanStack Query + Zustand)
   useMacro();
+  const macro = useStore(selectMacro);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -219,7 +221,7 @@ const EconomicCalendar: React.FC = () => {
       {/* Header */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Economic Calendar</h1>
+          <h1 style={s.title}>📅 Economic Calendar</h1>
           <p style={s.subtitle}>Upcoming market-moving events. Red = high impact on gold/USD.</p>
         </div>
 
@@ -250,6 +252,23 @@ const EconomicCalendar: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Blackout banner */}
+      {macro?.is_blackout && (
+        <div style={{
+          background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8,
+          padding: '10px 16px', marginBottom: 16,
+          display: 'flex', alignItems: 'center', gap: 10,
+          color: '#f87171', fontSize: 13, fontWeight: 600,
+        }}>
+          🔴 Trading Blackout Active — high-impact event imminent. Order submission is paused.
+          {macro.impact_score != null && (
+            <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 400, color: '#fca5a5' }}>
+              Impact score: {(macro.impact_score * 100).toFixed(0)}%
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Tab bar */}
       <div style={s.tabs}>

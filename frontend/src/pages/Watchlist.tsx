@@ -175,7 +175,7 @@ const WatchlistPage: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.title}>Watchlist</h1>
+        <h1 style={s.title}>👁️ Watchlist</h1>
         <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
       </div>
 
@@ -202,23 +202,44 @@ const WatchlistPage: React.FC = () => {
             <span style={{ flex: 1 }}>Symbol</span>
             <span style={{ width: 90, textAlign: 'right' }}>Bid</span>
             <span style={{ width: 90, textAlign: 'right' }}>Ask</span>
+            <span style={{ width: 100, textAlign: 'right' }}>Mid</span>
             <span style={{ width: 80, textAlign: 'right' }}>24h</span>
             <span style={{ width: 70, textAlign: 'center' }}>Trend</span>
-            <span style={{ width: 40 }} />
+            <span style={{ width: 80, textAlign: 'center' }}>Actions</span>
           </div>
           {enrichedItems.map((item) => (
-            <div key={item.symbol} style={s.tableRow} onClick={() => navigate('/trading')} title={`Open ${item.symbol} chart`}>
-              <span style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}>{item.symbol}</span>
-              <span style={{ width: 90, textAlign: 'right', color: '#94a3b8', fontSize: 13 }}>{formatPrice(item.symbol, item.bid)}</span>
-              <span style={{ width: 90, textAlign: 'right', color: '#94a3b8', fontSize: 13 }}>{formatPrice(item.symbol, item.ask)}</span>
+            <div key={item.symbol} style={s.tableRow}>
+              <span
+                style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}
+                onClick={() => navigate('/ai-charts')}
+                title={`Open ${item.symbol} chart`}
+              >
+                {item.symbol}
+              </span>
+              <span style={{ width: 90, textAlign: 'right', color: '#f87171', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.bid)}</span>
+              <span style={{ width: 90, textAlign: 'right', color: '#4ade80', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.ask)}</span>
+              <span style={{ width: 100, textAlign: 'right', color: '#f8fafc', fontSize: 13, fontWeight: 700 }}>{formatPrice(item.symbol, item.mid)}</span>
               <span style={{ width: 80, textAlign: 'right', fontWeight: 600, color: item.change_pct >= 0 ? '#4ade80' : '#f87171' }}>
                 {item.change_pct >= 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
               </span>
               <span style={{ width: 70, display: 'flex', justifyContent: 'center' }}>
                 <Sparkline history={item.history} />
               </span>
-              <span style={{ width: 40, textAlign: 'right' }}>
-                <button onClick={(e) => { e.stopPropagation(); handleRemove(item.symbol); }} style={s.removeBtn} title="Remove">×</button>
+              <span style={{ width: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <button
+                  onClick={() => navigate('/alerts')}
+                  style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}
+                  title={`Set alert for ${item.symbol}`}
+                >
+                  🔔
+                </button>
+                <button
+                  onClick={() => handleRemove(item.symbol)}
+                  style={s.removeBtn}
+                  title="Remove from watchlist"
+                >
+                  ×
+                </button>
               </span>
             </div>
           ))}

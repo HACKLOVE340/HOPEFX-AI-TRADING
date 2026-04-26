@@ -308,6 +308,7 @@ class NuclearAIChartEngine:
         nuclear_data = self._get_nuclear_data(risk_data)
         bars = self._get_bars()
         signals = self._get_signals()
+        indicators = self._compute_indicators(bars)
         equity_curve = list(self._equity_curve)
         prediction_path = self._build_prediction_path(price_data, nuclear_data)
         gauge = self._build_geopolitical_gauge(nuclear_data)
@@ -317,6 +318,7 @@ class NuclearAIChartEngine:
             "ts": ts,
             "price": price_data,
             "bars": bars,
+            "indicators": indicators,
             "nuclear": nuclear_data,
             "risk": risk_data,
             "signals": signals,
@@ -325,6 +327,180 @@ class NuclearAIChartEngine:
             "geopolitical_gauge": gauge,
             "nuclear_events": list(self._nuclear_events)[-20:],
         }
+
+    # ── Indicator computation ─────────────────────────────────────────────────
+
+    def _compute_indicators(self, bars: dict[str, list[dict]]) -> dict[str, dict]:
+        """Compute the full technical indicator suite over the 1h bar series.
+
+        Uses charting.indicators.IndicatorLibrary so every indicator added to
+        the library is automatically available here without code changes.
+
+        Returns a dict keyed by timeframe ("1h") containing per-indicator
+        series ready for the frontend chart overlay:
+
+            {
+              "1h": {
+                "SMA_20":  {"values": [...], "period": 20},
+                "EMA_50":  {"values": [...], "period": 50},
+                "MACD":    {"macd": [...], "signal": [...], "histogram": [...]},
+                "BB":      {"upper": [...], "middle": [...], "lower": [...]},
+                "RSI":     {"values": [...], "period": 14},
+                "ATR":     {"values": [...], "period": 14},
+                "STOCH":   {"k": [...], "d": [...]},
+                "VWAP":    {"values": [...]},
+                "OBV":     {"values": [...]},
+                "ADX":     {"adx": [...], "plus_di": [...], "minus_di": [...]},
+                "ICHIMOKU":{"tenkan": [...], "kijun": [...],
+                            "senkou_a": [...], "senkou_b": [...], "chikou": [...]},
+              }
+            }
+
+        All series are aligned to the bar timestamps. Missing values at the
+        start (warm-up period) are represented as null in the JSON output.
+        Non-fatal: returns {} on any error.
+        """
+        result: dict[str, dict] = {}
+        try:
+            from charting.indicators import (
+                ADX,
+                ATR,
+                BollingerBands,
+                EMA,
+                Ichimoku,
+                MACD,
+                OBV,
+                RSI,
+                SMA,
+                Stochastic,
+                VWAP,
+            )
+
+            for tf, bar_list in bars.items():
+                if not bar_list:
+                    continue
+
+                close = [b["close"] for b in bar_list]
+                high  = [b["high"]  for b in bar_list]
+                low   = [b["low"]   for b in bar_list]
+                vol   = [b.get("volume", 0.0) for b in bar_list]
+                n     = len(close)
+
+                def _pad(series: list[float], length: int) -> list[float | None]:
+                    """Left-pad with None so series aligns to bar timestamps."""
+                    pad = length - len(series)
+                    return [None] * pad + list(series)  # type: ignore[list-item]
+
+                tf_indicators: dict[str, object] = {}
+
+                # ── Moving averages ───────────────────────────────────────────
+                for period in (20, 50, 200):
+                    sma_vals = SMA(period=period).calculate(close)
+                    tf_indicators[f"SMA_{period}"] = {
+                        "values": _pad(sma_vals, n),
+                        "period": period,
+                        "type": "overlay",
+                    }
+                for period in (9, 21, 50):
+                    ema_vals = EMA(period=period).calculate(close)
+                    tf_indicators[f"EMA_{period}"] = {
+                        "values": _pad(ema_vals, n),
+                        "period": period,
+                        "type": "overlay",
+                    }
+
+                # ── RSI ───────────────────────────────────────────────────────
+                rsi_vals = RSI(period=14).calculate(close)
+                tf_indicators["RSI"] = {
+                    "values": _pad(rsi_vals, n),
+                    "period": 14,
+                    "type": "oscillator",
+                    "overbought": 70,
+                    "oversold": 30,
+                }
+
+                # ── MACD ──────────────────────────────────────────────────────
+                macd_line, sig_line, histogram = MACD(fast=12, slow=26, signal=9).calculate_full(close)
+                tf_indicators["MACD"] = {
+                    "macd":      _pad(macd_line, n),
+                    "signal":    _pad(sig_line,  n),
+                    "histogram": _pad(histogram, n),
+                    "type": "oscillator",
+                }
+
+                # ── Bollinger Bands ───────────────────────────────────────────
+                bb_upper, bb_mid, bb_lower = BollingerBands(period=20, std_dev=2.0).calculate_full(close)
+                tf_indicators["BB"] = {
+                    "upper":  _pad(bb_upper, n),
+                    "middle": _pad(bb_mid,   n),
+                    "lower":  _pad(bb_lower, n),
+                    "period": 20,
+                    "std_dev": 2.0,
+                    "type": "overlay",
+                }
+
+                # ── ATR ───────────────────────────────────────────────────────
+                atr_vals = ATR(period=14).calculate_hlc(high, low, close)
+                tf_indicators["ATR"] = {
+                    "values": _pad(atr_vals, n),
+                    "period": 14,
+                    "type": "oscillator",
+                }
+
+                # ── Stochastic ────────────────────────────────────────────────
+                stoch = Stochastic(period=14, smooth_k=3)
+                stoch_k = stoch.calculate(close)
+                stoch_d = stoch.calculate_d(close)
+                tf_indicators["STOCH"] = {
+                    "k": _pad(stoch_k, n),
+                    "d": _pad(stoch_d, n),
+                    "period": 14,
+                    "type": "oscillator",
+                    "overbought": 80,
+                    "oversold": 20,
+                }
+
+                # ── VWAP ──────────────────────────────────────────────────────
+                vwap_vals = VWAP().calculate_hlcv(high, low, close, vol)
+                tf_indicators["VWAP"] = {
+                    "values": list(vwap_vals),
+                    "type": "overlay",
+                }
+
+                # ── OBV ───────────────────────────────────────────────────────
+                obv_vals = OBV().calculate_cv(close, vol)
+                tf_indicators["OBV"] = {
+                    "values": list(obv_vals),
+                    "type": "volume",
+                }
+
+                # ── ADX ───────────────────────────────────────────────────────
+                adx_vals, plus_di, minus_di = ADX(period=14).calculate_full(high, low, close)
+                tf_indicators["ADX"] = {
+                    "adx":      _pad(adx_vals,  n),
+                    "plus_di":  _pad(plus_di,   n),
+                    "minus_di": _pad(minus_di,  n),
+                    "period": 14,
+                    "type": "oscillator",
+                }
+
+                # ── Ichimoku Cloud ────────────────────────────────────────────
+                ich = Ichimoku(tenkan=9, kijun=26, senkou_b=52).calculate_full(high, low, close)
+                tf_indicators["ICHIMOKU"] = {
+                    "tenkan":   _pad(ich["tenkan"],   n),
+                    "kijun":    _pad(ich["kijun"],    n),
+                    "senkou_a": _pad(ich["senkou_a"], n),
+                    "senkou_b": _pad(ich["senkou_b"], n),
+                    "chikou":   list(ich["chikou"]),
+                    "type": "overlay",
+                }
+
+                result[tf] = tf_indicators
+
+        except Exception as exc:
+            logger.warning("_compute_indicators failed (non-fatal): %s", exc)
+
+        return result
 
     # ── Price data ────────────────────────────────────────────────────────────
 

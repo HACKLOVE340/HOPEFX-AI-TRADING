@@ -282,6 +282,53 @@ const TradeHistory: React.FC = () => {
   );
 };
 
+// ── Allocation breakdown ──────────────────────────────────────────────────────
+
+const AllocationBreakdown: React.FC = () => {
+  const positions = useStore(selectPositions);
+
+  if (positions.length === 0) return null;
+
+  // Group by symbol, sum notional exposure
+  const bySymbol: Record<string, { long: number; short: number }> = {};
+  for (const p of positions) {
+    if (!bySymbol[p.symbol]) bySymbol[p.symbol] = { long: 0, short: 0 };
+    const notional = p.size * p.current_price;
+    if (p.side === 'long') bySymbol[p.symbol]!.long  += notional;
+    else                   bySymbol[p.symbol]!.short += notional;
+  }
+
+  const totalNotional = Object.values(bySymbol).reduce(
+    (acc, v) => acc + v.long + v.short, 0,
+  );
+
+  return (
+    <Panel title="Allocation by Symbol">
+      <div className="flex flex-col gap-2">
+        {Object.entries(bySymbol).map(([sym, { long, short }]) => {
+          const total = long + short;
+          const pct   = totalNotional > 0 ? (total / totalNotional) * 100 : 0;
+          return (
+            <div key={sym} className="flex items-center gap-3">
+              <span className="text-[12px] font-semibold text-slate-200 w-20 flex-shrink-0">{sym}</span>
+              <div className="flex-1 h-2 rounded bg-[#0d1421] overflow-hidden">
+                <div
+                  className="h-2 rounded transition-all"
+                  style={{ width: `${pct}%`, background: '#3b82f6' }}
+                />
+              </div>
+              <span className="text-[11px] text-slate-400 tabular-nums w-12 text-right">{pct.toFixed(1)}%</span>
+              <span className="text-[11px] text-slate-500 tabular-nums w-24 text-right">
+                ${total.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Portfolio: React.FC = () => {
@@ -289,15 +336,46 @@ const Portfolio: React.FC = () => {
   useEquityCurve();
   usePositions();
 
+  const handleExport = async () => {
+    try {
+      const res = await tradingApi.trades(1000);
+      const raw = res.data as TradeRecord[] | { trades: TradeRecord[] };
+      const trades = Array.isArray(raw) ? raw : (raw?.trades ?? []);
+      if (trades.length === 0) { alert('No trades to export.'); return; }
+      const headers = ['id','symbol','side','quantity','entry_price','exit_price','pnl','opened_at','closed_at'];
+      const csv = [
+        headers.join(','),
+        ...trades.map(t =>
+          headers.map(h => JSON.stringify((t as unknown as Record<string, unknown>)[h] ?? '')).join(',')
+        ),
+      ].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = `hopefx-trades-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch {
+      alert('Export failed. Please try again.');
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
 
       {/* Page header */}
-      <div>
-        <h1 className="text-[18px] font-bold text-slate-100">Portfolio</h1>
-        <p className="text-[12px] text-slate-500 mt-0.5">
-          Balances, equity curve, and trade history
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-[18px] font-bold text-slate-100">💼 Portfolio</h1>
+          <p className="text-[12px] text-slate-500 mt-0.5">
+            Balances, equity curve, allocation, and trade history
+          </p>
+        </div>
+        <button
+          onClick={handleExport}
+          className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
+        >
+          ↓ Export CSV
+        </button>
       </div>
 
       {/* Account balances */}
@@ -308,6 +386,9 @@ const Portfolio: React.FC = () => {
 
       {/* Performance metrics */}
       <PerformanceMetrics />
+
+      {/* Allocation breakdown */}
+      <AllocationBreakdown />
 
       {/* Open positions */}
       <PositionsTable />
