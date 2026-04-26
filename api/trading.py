@@ -1796,9 +1796,10 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     regime = "ranging"
     regime_confidence = 0.5
     try:
+        from strategies.manager import StrategyManager as _SM
         from strategies.regime_router import RegimeRouter as _RR
 
-        rr = _RR()
+        rr = _RR(strategy_manager=_SM())
         detected = rr.detect_regime()
         if detected:
             regime = str(detected.get("regime", "ranging"))
