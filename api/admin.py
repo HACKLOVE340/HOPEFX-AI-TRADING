@@ -576,7 +576,7 @@ def save_settings(
             return {"status": "ok", "saved": list(payload.keys())}
         return {"status": "error", "detail": "Config store write failed"}
     except Exception:
-        logger.exception("save_settings failed: %s")
+        logger.exception("save_settings failed")
         return {"status": "error", "detail": "Settings save failed — check server logs"}
 
 

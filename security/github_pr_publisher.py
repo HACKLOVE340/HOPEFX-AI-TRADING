@@ -457,7 +457,7 @@ class GitHubPRPublisher:
                     "error": f"GitHub API error {exc.response.status_code}: {error_body}",
                 }
             except Exception:
-                logger.exception("Auto-heal PR failed: %s")
+                logger.exception("Auto-heal PR failed")
                 return {"status": "error", "error": "PR creation failed — check server logs"}
 
 

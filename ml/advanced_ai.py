@@ -557,7 +557,7 @@ class OnlineRetrainer:
             self._retrain_count += 1
             logger.info("online_retrainer.done count=%d", self._retrain_count)
         except Exception:
-            logger.exception("online_retrainer.error: %s")
+            logger.exception("online_retrainer.error")
 
 
 # ---------------------------------------------------------------------------

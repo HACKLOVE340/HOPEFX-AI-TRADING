@@ -288,7 +288,7 @@ class IBKRBroker:
             return fill_result
 
         except Exception:
-            logger.exception("IBKRBroker place_order: %s")
+            logger.exception("IBKRBroker place_order")
             return {"status": "rejected", "reason": "Order failed — check server logs", "broker": "ibkr"}
 
     def _build_gold_contract(self, symbol: str, use_futures: bool = False) -> Any:

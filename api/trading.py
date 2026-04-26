@@ -495,7 +495,7 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     except HTTPException:
         raise
     except Exception:
-        logger.exception("Broker order submission failed: %s")
+        logger.exception("Broker order submission failed")
         try:
             from core.metrics import ORDERS_TOTAL
 
@@ -1723,7 +1723,7 @@ def _make_strategy_router():
 try:
     router.include_router(_make_strategy_router())
 except Exception:  # nosec B110 — strategy sub-router registration failure is non-fatal at import time
-    logger.exception("Failed to register strategy sub-router: %s")
+    logger.exception("Failed to register strategy sub-router")
 
 
 # ── /trading/risk — alias for /trading/risk-metrics ──────────────────────────
@@ -1977,7 +1977,7 @@ async def run_stress_test(
             max_loss_pct=max_loss_pct,
         )
     except Exception:
-        _logger.exception("Stress test failed: %s")
+        _logger.exception("Stress test failed")
         raise HTTPException(status_code=500, detail="Stress test failed — check server logs") from None
 
 

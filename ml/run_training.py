@@ -231,7 +231,7 @@ def main():
                 acc = m.get("accuracy", m.get("rmse", "n/a"))
                 logger.info("  %-20s %-15s metric=%s", sym, name, acc)
         except Exception:
-            logger.exception("Failed for %s: %s", sym)
+            logger.exception("Failed for %s", sym)
             all_ok = False
 
     if not all_ok:

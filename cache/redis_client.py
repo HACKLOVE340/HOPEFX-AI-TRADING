@@ -460,7 +460,7 @@ async def get_health() -> dict[str, Any]:
 
         return info
     except Exception:
-        logger.exception("Redis health check failed: %s")
+        logger.exception("Redis health check failed")
         return {"mode": _connection_mode, "connected": False, "error": "Redis unavailable — check server logs"}
 
 

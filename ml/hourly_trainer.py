@@ -142,7 +142,7 @@ class HourlyTrainer:
             except asyncio.CancelledError:
                 break
             except Exception:
-                logger.exception("HourlyTrainer cycle error: %s")
+                logger.exception("HourlyTrainer cycle error")
 
             elapsed = time.monotonic() - cycle_start
             sleep_secs = max(0.0, self.interval_secs - elapsed)

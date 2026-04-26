@@ -2578,7 +2578,7 @@ async def init_chaos_controller(s: Any) -> Any | None:
         return controller
 
     except Exception:
-        logger.exception("init_chaos_controller failed: %s")
+        logger.exception("init_chaos_controller failed")
         return None
 
 
@@ -2645,7 +2645,7 @@ async def init_hot_standby(s: Any) -> Any | None:
         return replicator
 
     except Exception:
-        logger.exception("init_hot_standby failed: %s")
+        logger.exception("init_hot_standby failed")
         return None
 
 

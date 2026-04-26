@@ -277,7 +277,7 @@ class APIGateway:
             except HTTPException:
                 raise
             except Exception:
-                logger.exception("Gateway order execution error: %s")
+                logger.exception("Gateway order execution error")
                 raise HTTPException(
                     status_code=500,
                     detail="Order execution failed — check server logs",

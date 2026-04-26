@@ -112,7 +112,7 @@ async def ai_chat(
     try:
         response_text = await agent.chat(body.message)
     except Exception:
-        logger.exception("LLM chat error: %s")
+        logger.exception("LLM chat error")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI response failed — check server logs",

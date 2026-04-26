@@ -993,7 +993,7 @@ def _register_signal_write_routes(router: Any) -> None:
         except _HTTPException:
             raise
         except Exception:
-            logger.exception("Signal generation failed: %s")
+            logger.exception("Signal generation failed")
             raise _HTTPException(
                 status_code=500,
                 detail="Signal generation failed",
