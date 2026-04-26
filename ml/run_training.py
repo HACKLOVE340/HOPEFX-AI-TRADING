@@ -177,7 +177,58 @@ def run_pipeline(
         json.dump(manifest, f, indent=2)
     logger.info("Manifest written: %s", manifest_path)
 
+    # ── Register trained models with ModelRegistry ────────────────────────────
+    # Each model artifact is registered as a staging version.  Promotion to
+    # production requires the Sharpe gate to pass (ModelRegistry.promote()).
+    _register_with_model_registry(results, symbol, out_dir)
+
     return results
+
+
+def _register_with_model_registry(
+    results: dict,
+    symbol: str,
+    out_dir: Path,
+) -> None:
+    """Register each trained model artifact with ModelRegistry (staging state).
+
+    Errors are non-fatal — the training artifacts are already saved to disk.
+    The registry is a convenience layer for integrity verification and
+    promotion gating; missing it does not break inference.
+    """
+    try:
+        from ml.model_registry import ModelRegistry
+
+        reg = ModelRegistry()
+        for name, info in results.items():
+            model_path = info.get("model_path", "")
+            if not model_path or not Path(model_path).exists():
+                logger.debug("ModelRegistry: skipping %s — no artifact at %s", name, model_path)
+                continue
+            metrics = {k: v for k, v in (info.get("metrics") or {}).items() if isinstance(v, int | float)}
+            version_name = f"{symbol}_{name}_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+            try:
+                entry = reg.register(
+                    name=version_name,
+                    path=model_path,
+                    metadata={
+                        "symbol": symbol,
+                        "model_type": name,
+                        "metrics": metrics,
+                        "trained_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+                logger.info(
+                    "ModelRegistry: registered '%s'  sha256=%s…  state=staging",
+                    version_name,
+                    entry.get("sha256", "")[:16],
+                )
+            except Exception as reg_exc:
+                logger.warning("ModelRegistry: failed to register %s: %s", name, reg_exc)
+    except ImportError:
+        logger.debug("ModelRegistry not available — skipping registry registration")
+    except Exception as exc:
+        logger.warning("ModelRegistry: registration error (non-fatal): %s", exc)
 
 
 def main():
