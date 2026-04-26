@@ -88,6 +88,69 @@ _online_learner_store: Any | None = None
 # ── Deep ensemble store (Phase 4 — LSTM/Transformer/TCN stacking) ────────────
 _deep_ensemble_store: Any | None = None
 
+# ── LSTM signal layer (Phase 4b — standalone LSTM blend) ─────────────────────
+# Separate from DeepEnsembleStore: a lightweight single-model LSTM that blends
+# with the XGBoost probability when LSTM_SIGNAL_ENABLED=true.
+_lstm_signal_layer: Any | None = None
+_LSTM_SIGNAL_ENABLED: bool = os.getenv("LSTM_SIGNAL_ENABLED", "false").lower() in ("1", "true", "yes")
+_LSTM_SIGNAL_WEIGHT: float = float(os.getenv("LSTM_SIGNAL_WEIGHT", "0.0"))
+
+
+def _get_lstm_signal_layer() -> Any | None:
+    """Return the LSTMSignalLayer singleton, loading on first call."""
+    global _lstm_signal_layer
+    if not _LSTM_SIGNAL_ENABLED or _LSTM_SIGNAL_WEIGHT <= 0.0:
+        return None
+    if _lstm_signal_layer is not None:
+        return _lstm_signal_layer
+    try:
+        from ml.lstm_signal_layer import get_lstm_signal_layer
+
+        _lstm_signal_layer = get_lstm_signal_layer()
+        return _lstm_signal_layer
+    except Exception as exc:
+        logger.debug("_get_lstm_signal_layer: unavailable: %s", exc)
+        return None
+
+
+# ── Regime-conditional position sizing ───────────────────────────────────────
+# Maps MarketRegime → position size scalar (applied to base lot size).
+# Loaded from REGIME_SIZE_MAP env-var (JSON) or falls back to defaults.
+_DEFAULT_REGIME_SIZE_MAP: dict[str, float] = {
+    "TRENDING_UP": 1.0,
+    "TRENDING_DOWN": 1.0,
+    "MEAN_REVERTING": 0.6,
+    "RANGE_BOUND": 0.5,
+    "HIGH_VOL": 0.3,
+    "LOW_VOL": 0.8,
+    "UNKNOWN": 0.5,
+}
+
+
+def _load_regime_size_map() -> dict[str, float]:
+    raw = os.getenv("REGIME_SIZE_MAP", "")
+    if raw:
+        try:
+            import json
+
+            parsed = json.loads(raw)
+            return {k.upper(): float(v) for k, v in parsed.items()}
+        except Exception as exc:
+            logger.warning("REGIME_SIZE_MAP parse error — using defaults: %s", exc)
+    return _DEFAULT_REGIME_SIZE_MAP.copy()
+
+
+_REGIME_SIZE_MAP: dict[str, float] = _load_regime_size_map()
+
+
+def get_regime_position_scalar(regime_name: str) -> float:
+    """Return the position size scalar for the given regime name (0–1).
+
+    Used by the risk manager and execution engine to scale lot size based on
+    the current market regime detected by RegimeDetector.
+    """
+    return _REGIME_SIZE_MAP.get(regime_name.upper(), 0.5)
+
 
 def _get_deep_ensemble_store() -> Any | None:
     """Return the module-level DeepEnsembleStore singleton, loading on first call."""
@@ -522,6 +585,53 @@ def _apply_deep_ensemble_blend(prob: float, ohlcv_df: Any, symbol: str) -> float
     return prob
 
 
+def _apply_lstm_signal_blend(
+    prob: float,
+    ohlcv_df: Any,
+    macro_df: Any,
+    symbol: str,
+) -> float:
+    """Phase 4b: Blend standalone LSTMSignalLayer probability with XGBoost chain.
+
+    Weight is controlled by LSTM_SIGNAL_WEIGHT env-var (default 0.0 = disabled).
+    The LSTM receives the same daily-resampled OHLCV and macro features as the
+    XGBoost model so the feature space is identical.
+
+    Blending formula:
+        final = (1 - w) * xgb_prob + w * lstm_prob
+    where w = LSTM_SIGNAL_WEIGHT.
+
+    Falls back to the original prob on any error — never raises.
+    """
+    layer = _get_lstm_signal_layer()
+    if layer is None:
+        return prob
+    if not layer.is_available():
+        return prob
+    try:
+        result = layer.predict(ohlcv_df, macro_df=macro_df, symbol=symbol)
+        if result.get("abstain", True):
+            # LSTM abstained — don't blend, keep XGBoost probability
+            logger.debug("Phase4b LSTM abstained for %s — keeping XGBoost prob %.4f", symbol, prob)
+            return prob
+        lstm_prob = float(result["probability"])
+        w = _LSTM_SIGNAL_WEIGHT
+        blended = (1.0 - w) * prob + w * lstm_prob
+        blended = float(np.clip(blended, 0.0, 1.0))
+        logger.debug(
+            "Phase4b LSTM blend: %s xgb=%.4f lstm=%.4f w=%.2f → %.4f",
+            symbol,
+            prob,
+            lstm_prob,
+            w,
+            blended,
+        )
+        return blended
+    except Exception as exc:
+        logger.debug("Phase4b LSTM blend failed (non-fatal): %s", exc)
+    return prob
+
+
 def _predict_advanced(
     adv_predictor: Any,
     data: dict[str, Any],
@@ -595,14 +705,21 @@ def _predict_advanced(
     prob = _apply_online_blend(prob, model_df, symbol)
     prob = _apply_deep_ensemble_blend(prob, model_df, symbol)
 
+    # ── Phase 4b: LSTM signal layer blend ────────────────────────────────────
+    # Blend the standalone LSTMSignalLayer probability with the XGBoost chain.
+    # Weight is controlled by LSTM_SIGNAL_WEIGHT (default 0.0 = disabled).
+    # The LSTM receives the same daily-resampled OHLCV and macro features.
+    prob = _apply_lstm_signal_blend(prob, model_df, macro_df, symbol)
+
     logger.debug(
-        "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s daily_bars=%d]",
+        "ML chain (%s) %s: final=%.4f [macro=%s mtf=%s daily_bars=%d lstm=%s]",
         adv_predictor.version,
         symbol,
         prob,
         "yes" if macro_df is not None else "no",
         "yes" if mtf_df is not None else "no",
         len(model_df),
+        "yes" if _LSTM_SIGNAL_ENABLED and _LSTM_SIGNAL_WEIGHT > 0 else "no",
     )
     return float(prob), adv_predictor.version
 
@@ -1149,6 +1266,26 @@ async def _assess_risk_and_size(
         logger.info("Auto-trade sizing rejected: %s", sizing.reason)
         return None
 
+    # ── Regime-conditional position size scaling ──────────────────────────────
+    # Scale the approved size by the current market regime scalar.
+    # The regime is read from the signal payload (set by _build_signal_payload).
+    # This is a multiplicative overlay — it never increases size above the
+    # risk-manager-approved maximum, only reduces it in adverse regimes.
+    regime_name: str = signal_payload.get("regime", "UNKNOWN")
+    regime_scalar: float = get_regime_position_scalar(regime_name)
+    if regime_scalar < 1.0:
+        scaled_size = sizing.recommended_size * regime_scalar
+        logger.info(
+            "Regime-conditional sizing: %s regime=%s scalar=%.2f "
+            "approved=%.4f → scaled=%.4f",
+            symbol,
+            regime_name,
+            regime_scalar,
+            sizing.recommended_size,
+            scaled_size,
+        )
+        return scaled_size
+
     return sizing.recommended_size
 
 
@@ -1464,6 +1601,25 @@ async def _tick(app_state: Any) -> None:
         entry_price = getattr(signal, "entry_price", data["close"])
         sl_raw, tp_raw = _resolve_sl_tp(signal, data, direction, entry_price)
 
+        # ── Regime detection ──────────────────────────────────────────────────
+        # Detect the current market regime and attach it to the payload so:
+        #   1. The risk manager can apply regime-conditional position sizing.
+        #   2. The WebSocket / frontend can display the current regime.
+        #   3. The compliance log captures regime context per trade.
+        regime_name = "UNKNOWN"
+        regime_confidence = 0.0
+        try:
+            from core.regime_router import get_current_regime
+
+            regime_result = get_current_regime(symbol)
+            if regime_result is not None:
+                regime_name = regime_result.get("regime", "UNKNOWN")
+                regime_confidence = float(regime_result.get("confidence", 0.0))
+        except Exception as _re:
+            logger.debug("Regime detection unavailable for %s: %s", symbol, _re)
+
+        regime_scalar = get_regime_position_scalar(regime_name)
+
         signal_payload: dict[str, Any] = {
             "symbol": symbol,
             "direction": direction,
@@ -1475,6 +1631,13 @@ async def _tick(app_state: Any) -> None:
             "take_profit": round(tp_raw, 5) if tp_raw is not None else None,
             "timestamp": datetime.now(UTC).isoformat(),
             "source": "strategy_brain",
+            # Regime context — used by risk manager for position size scaling
+            "regime": regime_name,
+            "regime_confidence": round(regime_confidence, 4),
+            "regime_size_scalar": round(regime_scalar, 4),
+            # LSTM blend status — informational
+            "lstm_blend_active": _LSTM_SIGNAL_ENABLED and _LSTM_SIGNAL_WEIGHT > 0.0,
+            "lstm_signal_weight": _LSTM_SIGNAL_WEIGHT,
         }
 
         await _publish_and_broadcast(app_state, symbol, signal_payload)
