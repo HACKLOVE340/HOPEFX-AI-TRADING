@@ -934,8 +934,9 @@ class DiagnosticsEngine:
                     with log_file.open("r", encoding="utf-8", errors="replace") as f:
                         f.seek(0, 2)
                         size = f.tell()
-                        f.seek(max(0, size - 512_000))
-                        lines = f.readlines()[-5000:]
+                        # Cap at 128KB to keep scan fast regardless of log size
+                        f.seek(max(0, size - 131_072))
+                        lines = f.readlines()[-1000:]
                 except OSError:
                     return []
                 for line in lines:

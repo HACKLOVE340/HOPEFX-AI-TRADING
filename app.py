@@ -783,14 +783,26 @@ async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("Shutting down API server...")
 
-    # Cancel all tracked background tasks and wait for them to finish
+    # Cancel all tracked background tasks and wait for them to finish.
+    # Guard against tasks created on a different event loop (e.g. TestClient teardown).
     tasks = getattr(app_state, "background_tasks", [])
     if tasks:
         logger.info("Cancelling %d background task(s)...", len(tasks))
+        current_loop = asyncio.get_event_loop()
+        same_loop_tasks = []
         for task in tasks:
-            if not task.done():
+            if task.done():
+                continue
+            try:
+                # asyncio.Task.get_loop() available in Python 3.7+
+                if hasattr(task, "get_loop") and task.get_loop() is not current_loop:
+                    continue
                 task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+                same_loop_tasks.append(task)
+            except Exception as _task_err:
+                logger.debug("shutdown: could not cancel task %s: %s", task, _task_err)
+        if same_loop_tasks:
+            await asyncio.gather(*same_loop_tasks, return_exceptions=True)
         logger.info("[OK] Background tasks cancelled")
 
     if app_state.event_store:

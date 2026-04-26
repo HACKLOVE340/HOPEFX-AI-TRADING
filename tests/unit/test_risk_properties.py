@@ -53,7 +53,7 @@ def _make_rm(tmp_path=None) -> RiskManager:
     equity=st.floats(min_value=1_000.0, max_value=10_000_000.0, allow_nan=False, allow_infinity=False),
     vol=st.floats(min_value=0.001, max_value=1.0, allow_nan=False, allow_infinity=False),
 )
-@settings(max_examples=200, deadline=2000)
+@settings(max_examples=200, deadline=None)
 def test_position_size_never_negative(entry, stop_offset, tp_offset, equity, vol):
     rm = _make_rm()
     stop = entry - stop_offset

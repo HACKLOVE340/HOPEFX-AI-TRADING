@@ -1119,7 +1119,7 @@ class TestCMEComexConnector:
 
     def test_is_connected_false(self):
         c = self._make_connector()
-        assert c._connected is False
+        assert c.connected is False
 
     def test_normalise_symbol(self):
         from brokers.cme_comex import CMEComexConnector
@@ -2115,7 +2115,10 @@ class TestMT5BrokerConnector:
     async def test_get_account_info_not_connected(self):
         b = self._make_broker()
         info = await b.get_account_info()
-        assert info is None
+        # Production returns a zero-filled AccountInfo (safe default) when not connected
+        from brokers.base import AccountInfo
+        assert isinstance(info, AccountInfo)
+        assert info.balance == 0.0
 
     @pytest.mark.asyncio
     async def test_get_positions_not_connected(self):

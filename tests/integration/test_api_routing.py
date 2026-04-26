@@ -449,6 +449,7 @@ class TestBacktestingEndpoints:
         assert r.status_code in (401, 403, 422)
 
     def test_backtest_run_with_valid_params(self, client):
+        # /api/backtesting/run requires "professional" plan; trader token may get 403
         r = client.post(
             "/api/backtesting/run",
             json={
@@ -459,7 +460,7 @@ class TestBacktestingEndpoints:
             },
             headers=_trader_headers(),
         )
-        assert r.status_code in (200, 201, 202, 400, 404, 422, 503)
+        assert r.status_code in (200, 201, 202, 400, 403, 404, 422, 503)
 
     def test_backtest_strategies_list(self, client):
         r = client.get("/api/backtesting/strategies", headers=_trader_headers())
@@ -517,8 +518,9 @@ class TestMLEndpoints:
         assert r.status_code in (200, 403, 404, 422, 503, 500)
 
     def test_ml_engine_health_endpoint(self, client):
+        # engine-health requires admin role; trader token receives 403
         r = client.get("/api/ml/engine-health", headers=_trader_headers())
-        assert r.status_code in (200, 404, 503, 500)
+        assert r.status_code in (200, 403, 404, 503, 500)
 
 
 # ── 13. Portfolio endpoints ───────────────────────────────────────────────────

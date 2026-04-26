@@ -67,6 +67,12 @@ curl-cffi>=0.15.0  # CVE-2026-33752: SSRF via redirect — transitive dep of yfi
 
 # ── Machine learning ──────────────────────────────────────────────────────────
 scikit-learn>=1.6.0  # CVE-2024-5206 fixed in 1.5.1+
+joblib>=1.3.0
+xgboost>=2.0.0
+lightgbm>=4.0.0
+statsmodels>=0.14.0
+yfinance>=0.2.40
+hmmlearn>=0.3.0
 hmmlearn>=0.3.0
 # tensorflow>=2.15.0         # optional — uncomment for LSTM models
 lightgbm>=4.6.0  # CVE-2024-43598: fixed in 4.6.0+
