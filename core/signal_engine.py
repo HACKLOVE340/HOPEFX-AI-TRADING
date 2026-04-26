@@ -1442,3 +1442,54 @@ async def _tick(app_state: Any) -> None:
 
         await _publish_and_broadcast(app_state, symbol, signal_payload)
         await _execute_if_approved(app_state, symbol, signal_payload, data=data)
+
+
+# ── Public accessor ───────────────────────────────────────────────────────────
+
+
+class _SignalEngineProxy:
+    """
+    Lightweight proxy returned by get_signal_engine().
+
+    The signal engine runs as a module-level asyncio loop (run_signal_engine)
+    rather than a class instance.  This proxy exposes the attributes that
+    health probes and admin endpoints expect (_active, status, symbols) so
+    they can inspect the engine without importing internal state directly.
+    """
+
+    @property
+    def _active(self) -> bool:
+        """True when the signal engine loop is configured and running."""
+        return bool(_SYMBOLS and _INTERVAL_SECONDS > 0)
+
+    @property
+    def symbols(self) -> list[str]:
+        return list(_SYMBOLS)
+
+    @property
+    def interval_seconds(self) -> int:
+        return _INTERVAL_SECONDS
+
+    @property
+    def auto_trade(self) -> bool:
+        return _AUTO_TRADE
+
+    @property
+    def ml_available(self) -> bool:
+        return _ML_AVAILABLE
+
+    def status(self) -> dict[str, Any]:
+        return get_signal_engine_status()
+
+
+_signal_engine_proxy = _SignalEngineProxy()
+
+
+def get_signal_engine() -> _SignalEngineProxy:
+    """Return the signal engine proxy for health checks and admin inspection.
+
+    The signal engine is a module-level asyncio loop, not a class instance.
+    This accessor returns a proxy that exposes _active, symbols, and status()
+    so callers don't need to know the internal implementation detail.
+    """
+    return _signal_engine_proxy
