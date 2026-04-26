@@ -553,7 +553,7 @@ class PaperTradingBroker(BrokerConnector):
                     }
                 )
             except Exception as _rse:
-                logger.debug("PaperTradingBroker: Redis save_order failed: %s", _rse)
+                logger.warning("PaperTradingBroker: Redis save_order failed: %s", _rse)
         return order
 
     def _deduct_commission(self, quantity: float) -> float:
@@ -666,7 +666,7 @@ class PaperTradingBroker(BrokerConnector):
             try:
                 self._redis_state.remove_position(symbol)
             except Exception as _rse:
-                logger.debug("PaperTradingBroker: Redis remove_position failed: %s", _rse)
+                logger.warning("PaperTradingBroker: Redis remove_position failed: %s", _rse)
 
         logger.info(
             "Position closed: %s gross_pnl=$%.2f commission=$%.4f net_pnl=$%.2f balance=$%.2f",
@@ -676,6 +676,9 @@ class PaperTradingBroker(BrokerConnector):
             net_pnl,
             self.balance,
         )
+
+        # Snapshot equity after close so the equity curve reflects realised P&L
+        self._snapshot_equity()
 
         return True
 
@@ -918,4 +921,4 @@ class PaperTradingBroker(BrokerConnector):
                     }
                 )
             except Exception as _rse:
-                logger.debug("PaperTradingBroker: Redis save_position failed: %s", _rse)
+                logger.warning("PaperTradingBroker: Redis save_position failed: %s", _rse)

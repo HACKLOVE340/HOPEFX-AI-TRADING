@@ -486,13 +486,13 @@ class FillRecorder:
             try:
                 self._clock.record_fill(trade_return=trade_return, symbol=symbol)
             except Exception as exc:
-                logger.debug("FillRecorder: clock.record_fill error: %s", exc)
+                logger.warning("FillRecorder: clock.record_fill error: %s", exc)
 
         if self._gate is not None:
             try:
                 self._gate.record_fill(pnl=trade_return)
             except Exception as exc:
-                logger.debug("FillRecorder: gate.record_fill error: %s", exc)
+                logger.warning("FillRecorder: gate.record_fill error: %s", exc)
 
         logger.info(
             "FILL #%d  %s %s  price=%.5f  units=%.0f  source=%s",

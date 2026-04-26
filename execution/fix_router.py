@@ -469,7 +469,7 @@ class FIXRouter:
 
         # PaperTradingBroker.place_order is synchronous — run in executor to
         # avoid blocking the event loop during slippage calculation.
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         order = await loop.run_in_executor(
             None,
             lambda: broker.place_order(
