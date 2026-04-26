@@ -112,11 +112,12 @@ def _build_test_app():
     except Exception:
         pass
 
-    # Clear the in-memory IP rate-limit window so re-runs don't hit 429
+    # Reset the in-memory IP rate-limit window so prior integration tests
+    # that exhausted the counter don't cause 429s here.
     try:
-        import auth.router as _ar
+        from auth.router import reset_rate_limit_state
 
-        _ar._ip_windows.clear()
+        reset_rate_limit_state()
     except Exception:
         pass
 
