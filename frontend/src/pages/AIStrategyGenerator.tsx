@@ -6,9 +6,9 @@
  *           POST /api/brain/deploy-strategy
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store';
-import { api } from '../hooks/useApi';
+import { aiStrategyApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,16 @@ interface GenerateResponse {
 }
 
 type Stage = 'idle' | 'generating' | 'done' | 'error';
+
+interface StrategyRecord {
+  strategy_id: string;
+  strategy_name: string;
+  symbol: string;
+  timeframe: string;
+  created_at: string;
+  status: string;
+  backtest?: BacktestResult | null;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +64,21 @@ const AIStrategyGenerator: React.FC = () => {
   const [result, setResult]         = useState<GenerateResponse | null>(null);
   const [deploying, setDeploying]   = useState(false);
   const [deployMsg, setDeployMsg]   = useState('');
+  const [history, setHistory]       = useState<StrategyRecord[]>([]);
+  const [histLoading, setHistLoading] = useState(false);
+  const [activeTab, setActiveTab]   = useState<'generate' | 'history'>('generate');
+
+  const loadHistory = useCallback(async () => {
+    setHistLoading(true);
+    try {
+      const res = await aiStrategyApi.history({ limit: 20 });
+      const d = res.data as { strategies?: StrategyRecord[] } | StrategyRecord[];
+      setHistory(Array.isArray(d) ? d : (d.strategies ?? []));
+    } catch { setHistory([]); }
+    finally { setHistLoading(false); }
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
@@ -62,9 +87,11 @@ const AIStrategyGenerator: React.FC = () => {
     setDeployMsg('');
 
     try {
-      const res = await api.post<GenerateResponse>('/brain/generate-strategy', { prompt, symbol, timeframe });
-      setResult(res.data);
-      setStage(res.data.success ? 'done' : 'error');
+      const res = await aiStrategyApi.generate({ prompt, symbol, timeframe });
+      const d = res.data as GenerateResponse;
+      setResult(d);
+      setStage(d.success ? 'done' : 'error');
+      if (d.success) loadHistory();
     } catch (err: unknown) {
       setResult({
         success: false,
@@ -84,13 +111,14 @@ const AIStrategyGenerator: React.FC = () => {
     setDeployMsg('');
 
     try {
-      await api.post('/brain/deploy-strategy', {
+      await aiStrategyApi.deploy({
         strategy_name: result.strategy_name,
         strategy_code: result.strategy_code,
         symbol,
         mode: 'paper',
       });
       setDeployMsg('Strategy deployed to paper trading.');
+      loadHistory();
     } catch (err: unknown) {
       setDeployMsg(`Deploy failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
@@ -98,16 +126,85 @@ const AIStrategyGenerator: React.FC = () => {
     }
   };
 
+  const handleDeleteStrategy = async (strategyId: string) => {
+    try {
+      await aiStrategyApi.deleteStrategy(strategyId);
+      setHistory(prev => prev.filter(s => s.strategy_id !== strategyId));
+    } catch { /* non-fatal */ }
+  };
+
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.title}>AI Strategy Generator</h1>
-        <p style={s.subtitle}>
-          Describe your trading idea in plain English. The AI generates Python strategy code,
-          runs a backtest, and lets you deploy it to paper trading in one click.
-        </p>
+        <div>
+          <h1 style={s.title}>AI Strategy Generator</h1>
+          <p style={s.subtitle}>
+            Describe your trading idea in plain English. The AI generates Python strategy code,
+            runs a backtest, and lets you deploy it to paper trading in one click.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {(['generate', 'history'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              ...s.tabBtn,
+              ...(activeTab === t ? s.tabBtnActive : {}),
+            }}>
+              {t === 'generate' ? '✨ Generate' : `📋 History (${history.length})`}
+            </button>
+          ))}
+        </div>
       </div>
 
+      {/* ── History tab ── */}
+      {activeTab === 'history' && (
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Strategy History</h3>
+            <button onClick={loadHistory} disabled={histLoading} style={{ ...s.btn, width: 'auto', padding: '6px 14px', fontSize: 13 }}>
+              {histLoading ? '⟳' : '↻'} Refresh
+            </button>
+          </div>
+          {histLoading && <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>}
+          {!histLoading && history.length === 0 && (
+            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
+              No strategies generated yet. Use the Generate tab to create your first strategy.
+            </div>
+          )}
+          {history.map(str => (
+            <div key={str.strategy_id} style={{ ...s.histRow }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: '#f1f5f9', fontSize: 14 }}>{str.strategy_name}</div>
+                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {str.symbol} · {str.timeframe} · {new Date(str.created_at).toLocaleDateString()}
+                </div>
+                {str.backtest && (
+                  <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+                    <span style={{ fontSize: 11, color: str.backtest.total_return_pct >= 0 ? '#4ade80' : '#f87171' }}>
+                      {str.backtest.total_return_pct >= 0 ? '+' : ''}{str.backtest.total_return_pct.toFixed(1)}% return
+                    </span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Sharpe {str.backtest.sharpe_ratio.toFixed(2)}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>WR {str.backtest.win_rate.toFixed(0)}%</span>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{
+                  fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                  background: str.status === 'active' ? '#14532d' : '#1e293b',
+                  color: str.status === 'active' ? '#4ade80' : '#64748b',
+                }}>
+                  {str.status}
+                </span>
+                <button onClick={() => handleDeleteStrategy(str.strategy_id)} style={s.delBtn}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Generate tab ── */}
+      {activeTab === 'generate' && (
+      <>
       {/* Input panel */}
       <div style={s.card}>
         <div style={s.row}>
@@ -213,6 +310,8 @@ const AIStrategyGenerator: React.FC = () => {
           )}
         </div>
       )}
+      </>
+      )}
     </div>
   );
 };
@@ -230,7 +329,7 @@ const MetricCard: React.FC<{ label: string; value: string; positive: boolean }> 
 
 const s: Record<string, React.CSSProperties> = {
   page:          { padding: '24px', maxWidth: 900, margin: '0 auto' },
-  header:        { marginBottom: 24 },
+  header:        { marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 },
   title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 8px' },
   subtitle:      { fontSize: 14, color: '#64748b', margin: 0 },
   card:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
@@ -253,6 +352,10 @@ const s: Record<string, React.CSSProperties> = {
   deployRow:     { display: 'flex', alignItems: 'center', gap: 16 },
   deployBtn:     { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 20px' },
   errorBox:      { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: 16, color: '#f87171' },
+  tabBtn:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' },
+  tabBtnActive:  { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
+  histRow:       { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 0', borderBottom: '1px solid #1e293b' },
+  delBtn:        { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
 };
 
 export default AIStrategyGenerator;
