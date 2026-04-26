@@ -19,9 +19,9 @@
  *   DELETE /api/trading/positions
  */
 
-import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useStore, selectWsStatus, selectPriceHistory, useHasHydrated, selectIsAuth } from '../store';
+import React, { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
 import { OrderEntryForm } from '../components/panels/OrderEntryForm';
@@ -257,6 +257,87 @@ function TradeHistoryTab() {
   );
 }
 
+// ── AI Signal panel for selected symbol ──────────────────────────────────────
+
+const AISignalPanel: React.FC<{ symbol: string }> = ({ symbol }) => {
+  const signals = useStore(selectSignals);
+  const symSignals = signals
+    .filter((s) => s.symbol === symbol && s.status === 'active')
+    .slice(0, 3);
+
+  if (symSignals.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-16 text-slate-600 text-[11px]">
+        No active AI signals for {symbol}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {symSignals.map((sig) => {
+        const isLong = sig.direction === 'long';
+        const conf   = sig.confidence * 100;
+        return (
+          <div key={sig.id} className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+            <span className={cn(
+              'text-[10px] font-bold px-2 py-0.5 rounded uppercase',
+              isLong ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]',
+            )}>
+              {isLong ? '▲ Long' : '▼ Short'}
+            </span>
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <div className="flex gap-3 text-[10px] tabular-nums">
+                <span className="text-slate-500">Entry <span className="text-slate-300">{fmtPrice(sig.entry_price)}</span></span>
+                <span className="text-[#ff3b5c]">SL {fmtPrice(sig.stop_loss)}</span>
+                <span className="text-[#00e676]">TP {fmtPrice(sig.take_profit)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-1 rounded bg-[#1e2d3d]">
+                  <div
+                    className="h-1 rounded transition-all"
+                    style={{
+                      width: `${conf}%`,
+                      background: conf >= 75 ? '#00e676' : conf >= 55 ? '#ffb800' : '#ff1744',
+                    }}
+                  />
+                </div>
+                <span className="text-[10px] text-slate-500 tabular-nums">{conf.toFixed(0)}%</span>
+                <span className="text-[10px] text-slate-600">{sig.model}</span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ── Risk bar ──────────────────────────────────────────────────────────────────
+
+const RiskBar: React.FC = () => {
+  const risk = useStore(selectRiskSnapshot);
+  if (!risk) return null;
+
+  const items = [
+    { label: 'Daily Loss', value: risk.daily_loss_pct != null ? `${risk.daily_loss_pct.toFixed(2)}%` : '—', warn: (risk.daily_loss_pct ?? 0) > 3 },
+    { label: 'Max DD',     value: risk.max_drawdown_pct != null ? `${risk.max_drawdown_pct.toFixed(2)}%` : '—', warn: (risk.max_drawdown_pct ?? 0) > 8 },
+    { label: 'Open Risk',  value: risk.open_risk_pct != null ? `${risk.open_risk_pct.toFixed(2)}%` : '—', warn: (risk.open_risk_pct ?? 0) > 5 },
+    { label: 'Kill Switch', value: risk.kill_switch_active ? '🔴 ACTIVE' : '🟢 Off', warn: !!risk.kill_switch_active },
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-4 px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+      {items.map(({ label, value, warn }) => (
+        <div key={label} className="flex flex-col gap-0.5">
+          <span className="text-[9px] uppercase tracking-wider text-slate-500">{label}</span>
+          <span className={cn('font-semibold tabular-nums', warn ? 'text-[#ff1744]' : 'text-slate-300')}>{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 // ── Bottom section (tabbed) ───────────────────────────────────────────────────
 
 type BottomTab = 'all-positions' | 'history';
@@ -299,24 +380,51 @@ function BottomSection() {
 
 const Trade: React.FC = () => {
   const [selectedSymbol, setSelectedSymbol] = useState('XAU/USD');
+  const [closingAll, setClosingAll]         = useState(false);
   const prices      = useStore((s) => s.prices);
   const allHistory  = useStore((s) => s.priceHistory);
+  const qc          = useQueryClient();
 
   usePositions();
+
+  const handleCloseAll = async () => {
+    if (!window.confirm('Close ALL open positions? This cannot be undone.')) return;
+    setClosingAll(true);
+    try {
+      await tradingApi.closeAllPositions();
+      await qc.invalidateQueries({ queryKey: ['positions'] });
+    } catch {
+      // error surfaced by PositionsTable
+    } finally {
+      setClosingAll(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
 
       {/* Page header */}
-      <div>
-        <h1 className="text-[18px] font-bold text-slate-100">Trade</h1>
-        <p className="text-[12px] text-slate-500 mt-0.5">
-          Real-time execution — market, limit and stop orders
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-[18px] font-bold text-slate-100">⚡ Trade</h1>
+          <p className="text-[12px] text-slate-500 mt-0.5">
+            Real-time execution — market, limit and stop orders
+          </p>
+        </div>
+        <button
+          onClick={handleCloseAll}
+          disabled={closingAll}
+          className="px-3 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50"
+        >
+          {closingAll ? 'Closing…' : '✕ Close All'}
+        </button>
       </div>
 
       {/* Account metrics */}
       <AccountBar />
+
+      {/* Risk bar */}
+      <RiskBar />
 
       {/* Symbol selector strip */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
@@ -332,13 +440,21 @@ const Trade: React.FC = () => {
         ))}
       </div>
 
-      {/* Order entry + symbol positions */}
+      {/* Order entry + symbol positions + AI signals */}
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
         <OrderEntryForm
           symbol={selectedSymbol}
-          onOrderPlaced={() => {/* positions invalidated inside OrderEntryForm */}}
+          onOrderPlaced={() => qc.invalidateQueries({ queryKey: ['positions'] })}
         />
-        <PositionsTable symbol={selectedSymbol} />
+        <div className="flex flex-col gap-4">
+          <PositionsTable symbol={selectedSymbol} />
+          <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg p-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+              AI Signals — {selectedSymbol}
+            </div>
+            <AISignalPanel symbol={selectedSymbol} />
+          </div>
+        </div>
       </div>
 
       {/* Bottom: all positions + trade history tabs */}
