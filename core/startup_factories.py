@@ -458,12 +458,15 @@ async def init_hourly_trainer(s: Any) -> Any:
 
 async def init_websocket(s: Any, app: Any) -> Any:
     from api.admin import log_activity
-    from api.ws_live import get_live_manager, router as ws_live_router
+    from api.ws_live import get_live_manager
 
-    app.include_router(ws_live_router)
+    # Router is already registered by core/router_registry.py (register_routers).
+    # Only wire the manager into app_state here — do not call app.include_router
+    # again or the /ws/live WebSocket route is mounted twice, causing FastAPI to
+    # match the wrong handler on alternate requests.
     mgr = get_live_manager()
     s.ws_manager = mgr
-    log_activity("WebSocket router registered (/ws/live)")
+    log_activity("WebSocket manager wired (/ws/live)")
     # Broadcasters are started in lifespan via start_broadcasters()
     return mgr
 
