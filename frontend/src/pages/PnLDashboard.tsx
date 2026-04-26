@@ -18,7 +18,11 @@ import {
   TrendingUp, TrendingDown, Activity, Shield,
   Clock, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { api } from '../hooks/useApi';
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine,
+} from 'recharts';
+import { pnlApi } from '../hooks/useApi';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { fmtPrice, fmtPctRaw, fmtDateTime } from '../lib/utils';
 
@@ -133,61 +137,64 @@ function StatCard({
   );
 }
 
-// ── Mini sparkline chart (SVG) ────────────────────────────────────────────────
+// ── Recharts equity sparkline ─────────────────────────────────────────────────
 
-function MiniChart({
-  data,
-  color,
-  label,
-}: {
-  data: number[];
-  color: string;
-  label: string;
-}) {
-  // useId produces a document-unique ID so multiple MiniChart instances with
-  // the same label prop do not share an SVG gradient (which would cause one
-  // chart to render with the other's colour).
-  const uid = useId();
-  const gradId = `grad-${uid}`;
-
-  if (data.length < 2) {
-    return (
-      <div className="flex items-center justify-center h-32 text-slate-600 text-sm">
-        Not enough data
-      </div>
-    );
-  }
-
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min || 1;
-  const w = 400;
-  const h = 120;
-  const pad = 8;
-
-  const points = data.map((v, i) => {
-    const x = pad + (i / (data.length - 1)) * (w - pad * 2);
-    const y = h - pad - ((v - min) / range) * (h - pad * 2);
-    return `${x},${y}`;
-  });
-
-  const polyline = points.join(' ');
-  const area = `${pad},${h - pad} ${polyline} ${w - pad},${h - pad}`;
-
+function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
+  if (data.length < 2) return (
+    <div className="flex items-center justify-center h-32 text-slate-600 text-sm">Not enough data</div>
+  );
+  const up = data[data.length - 1].v >= data[0].v;
+  const color = up ? '#00e676' : '#ff1744';
   return (
-    <div>
-      <div className="text-xs text-slate-500 mb-2">{label}</div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32" preserveAspectRatio="none">
+    <ResponsiveContainer width="100%" height={128}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
         <defs>
-          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          <linearGradient id="eq-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
+            <stop offset="95%" stopColor={color} stopOpacity={0.02} />
           </linearGradient>
         </defs>
-        <polygon points={area} fill={`url(#${gradId})`} />
-        <polyline points={polyline} fill="none" stroke={color} strokeWidth="1.5" />
-      </svg>
-    </div>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e2d3d" />
+        <XAxis dataKey="ts" hide />
+        <YAxis domain={['auto', 'auto']} hide />
+        <Tooltip
+          contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
+          formatter={(v: number) => [`$${v.toFixed(2)}`, 'Equity']}
+          labelFormatter={() => ''}
+        />
+        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill="url(#eq-grad)" dot={false} />
+      </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── Recharts drawdown chart ───────────────────────────────────────────────────
+
+function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
+  if (data.length < 2) return (
+    <div className="flex items-center justify-center h-32 text-slate-600 text-sm">Not enough data</div>
+  );
+  return (
+    <ResponsiveContainer width="100%" height={128}>
+      <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="dd-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor="#ff1744" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="#ff1744" stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="#1e2d3d" />
+        <XAxis dataKey="ts" hide />
+        <YAxis domain={['auto', 0]} hide />
+        <ReferenceLine y={0} stroke="#334155" strokeDasharray="3 3" />
+        <Tooltip
+          contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
+          formatter={(v: number) => [`${v.toFixed(2)}%`, 'Drawdown']}
+          labelFormatter={() => ''}
+        />
+        <Area type="monotone" dataKey="dd" stroke="#ff1744" strokeWidth={1.5} fill="url(#dd-grad)" dot={false} />
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -204,7 +211,7 @@ const PnLDashboard: React.FC = () => {
   // ── Summary ────────────────────────────────────────────────────────────────
   const summaryQ = useQuery<PnLSummary>({
     queryKey:        ['pnl', 'summary'],
-    queryFn:         async () => (await api.get<PnLSummary>('/pnl/summary')).data,
+    queryFn:         async () => (await pnlApi.summary()).data as PnLSummary,
     enabled,
     refetchInterval: 30_000,
     staleTime:       15_000,
@@ -213,7 +220,7 @@ const PnLDashboard: React.FC = () => {
   // ── Equity curve ───────────────────────────────────────────────────────────
   const equityQ = useQuery<EquityPoint[]>({
     queryKey:        ['pnl', 'equity-curve'],
-    queryFn:         async () => (await api.get<EquityPoint[]>('/pnl/equity-curve')).data,
+    queryFn:         async () => (await pnlApi.equityCurve()).data as EquityPoint[],
     enabled,
     refetchInterval: 60_000,
     staleTime:       30_000,
@@ -222,7 +229,7 @@ const PnLDashboard: React.FC = () => {
   // ── Drawdown curve ─────────────────────────────────────────────────────────
   const drawdownQ = useQuery<DrawdownPoint[]>({
     queryKey:        ['pnl', 'drawdown-curve'],
-    queryFn:         async () => (await api.get<DrawdownPoint[]>('/pnl/drawdown-curve')).data,
+    queryFn:         async () => (await pnlApi.drawdownCurve()).data as DrawdownPoint[],
     enabled,
     refetchInterval: 60_000,
     staleTime:       30_000,
@@ -232,7 +239,7 @@ const PnLDashboard: React.FC = () => {
   const fillsQ = useQuery<FillEntry[]>({
     queryKey:        ['pnl', 'trade-log', page],
     queryFn:         async () =>
-      (await api.get<FillEntry[]>(`/pnl/trade-log?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`)).data,
+      (await pnlApi.tradeLog({ limit: PAGE_SIZE, offset: page * PAGE_SIZE })).data as FillEntry[],
     enabled,
     refetchInterval: 30_000,
     staleTime:       15_000,
@@ -241,7 +248,7 @@ const PnLDashboard: React.FC = () => {
   // ── Open positions ─────────────────────────────────────────────────────────
   const positionsQ = useQuery<OpenPosition[]>({
     queryKey:        ['pnl', 'open-positions'],
-    queryFn:         async () => (await api.get<OpenPosition[]>('/pnl/open-positions')).data,
+    queryFn:         async () => (await pnlApi.openPositions()).data as OpenPosition[],
     enabled,
     refetchInterval: 10_000,
     staleTime:       5_000,
@@ -262,11 +269,17 @@ const PnLDashboard: React.FC = () => {
     positionsQ.refetch();
   }, [summaryQ, equityQ, drawdownQ, fillsQ, positionsQ]);
 
-  const summary    = summaryQ.data ?? null;
-  const fills      = fillsQ.data ?? [];
-  const positions  = positionsQ.data ?? [];
-  const equityData = (equityQ.data ?? []).map((p) => p.equity);
-  const ddData     = (drawdownQ.data ?? []).map((p) => p.drawdown_pct);
+  const summary   = summaryQ.data ?? null;
+  const fills     = fillsQ.data ?? [];
+  const positions = positionsQ.data ?? [];
+  const equityData = (equityQ.data ?? []).map((p) => ({
+    ts: p.timestamp ? new Date(p.timestamp).toLocaleDateString() : '',
+    v:  p.equity,
+  }));
+  const ddData = (drawdownQ.data ?? []).map((p) => ({
+    ts: p.timestamp ? new Date(p.timestamp).toLocaleDateString() : '',
+    dd: p.drawdown_pct,
+  }));
   const totalFills = summary?.total_fills ?? 0;
   const totalPages = Math.ceil(totalFills / PAGE_SIZE);
   const isLoading  = summaryQ.isLoading || fillsQ.isLoading;
@@ -386,14 +399,14 @@ const PnLDashboard: React.FC = () => {
             <h3 className="font-semibold text-slate-200">Equity Curve</h3>
             <span className="text-xs text-slate-500">Account currency</span>
           </div>
-          <MiniChart data={equityData} color="#00e676" label="Equity ($)" />
+          <EquitySparkline data={equityData} />
         </div>
         <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-slate-200">Drawdown</h3>
-            <span className="text-xs text-slate-500">% from peak</span>
+            <h3 className="font-semibold text-slate-200">Drawdown Curve</h3>
+            <span className="text-xs text-slate-500">% from peak equity</span>
           </div>
-          <MiniChart data={ddData} color="#ff1744" label="Drawdown (%)" />
+          <DrawdownChart data={ddData} />
         </div>
       </div>
 
