@@ -32,7 +32,7 @@ class TestRedisConnection:
             self.client.set("tick_data", json.dumps(tick_data))
             logger.info("Sample tick data stored.")
         except Exception as e:
-            logger.error(f"Error storing tick data: {e}")
+            logger.error("Error storing tick data: %s", e)
 
     def retrieve_tick_data(self):
         try:
@@ -41,21 +41,21 @@ class TestRedisConnection:
                 return json.loads(data)
             return None
         except Exception as e:
-            logger.error(f"Error retrieving tick data: {e}")
+            logger.error("Error retrieving tick data: %s", e)
 
     def hset_order(self, order_id, order_info):
         try:
             self.client.hset("orders", order_id, json.dumps(order_info))
-            logger.info(f"Order {order_id} stored.")
+            logger.info("Order %s stored.", order_id)
         except Exception as e:
-            logger.error(f"Error setting order: {e}")
+            logger.error("Error setting order: %s", e)
 
     def hget_order(self, order_id):
         try:
             order = self.client.hget("orders", order_id)
             return json.loads(order) if order else None
         except Exception as e:
-            logger.error(f"Error getting order: {e}")
+            logger.error("Error getting order: %s", e)
 
     def test_list_operations(self):
         try:
@@ -63,15 +63,15 @@ class TestRedisConnection:
             self.client.rpush("orders_list", "order_2")
             logger.info("Orders added to list.")
             first_order = self.client.lpop("orders_list")
-            logger.info(f"Retrieved order from list: {first_order}")
+            logger.info("Retrieved order from list: %s", first_order)
         except Exception as e:
-            logger.error(f"Error performing list operations: {e}")
+            logger.error("Error performing list operations: %s", e)
 
     def measure_latency(self):
         start_time = time.time()
         self.client.ping()
         latency = time.time() - start_time
-        logger.info(f"Latency: {latency * 1000:.2f} ms")
+        logger.info("Latency: %.2f ms", latency * 1000)
 
 
 if __name__ == "__main__":
@@ -79,8 +79,8 @@ if __name__ == "__main__":
     if test_redis.test_connectivity():
         sample_ticks = {"tick": 12345, "timestamp": "2026-03-22 06:33:38"}
         test_redis.store_tick_data(sample_ticks)
-        logger.info("Retrieved tick data:", test_redis.retrieve_tick_data())
+        logger.info("Retrieved tick data: %s", test_redis.retrieve_tick_data())
         test_redis.hset_order("1", {"price": 100, "quantity": 10})
-        logger.info("Order 1:", test_redis.hget_order("1"))
+        logger.info("Order 1: %s", test_redis.hget_order("1"))
         test_redis.test_list_operations()
         test_redis.measure_latency()
