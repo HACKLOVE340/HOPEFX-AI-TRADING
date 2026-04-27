@@ -68,12 +68,9 @@ class SecurityMonitor:
         """Return a brief summary dict for dashboards."""
         recent = self.recent_attacks(10)
         return {
-            "total_attacks": self._total_count(),
+            "total_attacks": self.attack_count(),
             "recent_10": recent,
         }
-
-    def _total_count(self) -> int:
-        return _total_count
 
 
 # Singleton — lock guards against race conditions on multi-threaded startup

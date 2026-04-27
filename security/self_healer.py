@@ -817,11 +817,25 @@ class SelfHealer:
                 asyncio.create_task(self._run_tests(trigger="on_drift"))
 
     async def _push_drift_alerts(self, drift: list[dict[str, Any]]) -> None:
+        """Push drift events to alerts:critical.
+
+        Only genuinely suspicious events are escalated to the critical alert
+        queue to avoid flooding it with expected changes during development or
+        deployment:
+          - Any drift on a *protected* path → always critical
+          - ``deleted`` or ``new_file`` on any tracked path → critical
+          - ``modified`` on a non-protected path → dashboard log only
+        """
         redis = await _get_redis()
         if not redis:
             return
         try:
-            for event in drift:
+            critical_events = [
+                e for e in drift
+                if e.get("protected")
+                or e.get("type") in ("deleted", "new_file")
+            ]
+            for event in critical_events:
                 await redis.rpush(
                     "alerts:critical",
                     json.dumps(
@@ -833,7 +847,8 @@ class SelfHealer:
                         }
                     ),
                 )
-            await redis.ltrim("alerts:critical", -1000, -1)
+            if critical_events:
+                await redis.ltrim("alerts:critical", -1000, -1)
         except Exception as exc:
             logger.debug("SelfHealer: alert push failed: %s", exc)
 
@@ -1456,17 +1471,15 @@ Return the complete fixed file:"""
             return fixed.strip()
         except Exception as exc:
             logger.warning("SelfHealer: Claude API error: %s — trying llm_wrapper fallback", exc)
-            # Fallback: try the shared llm_wrapper (may use OpenAI if configured)
+            # Fallback: try the shared llm_wrapper (may use OpenAI if configured).
+            # Use asyncio.run() rather than manually creating a loop — it handles
+            # loop creation, running, and cleanup atomically and is safe to call
+            # from a thread-pool executor thread (which has no running loop).
             try:
                 import asyncio as _asyncio
+                from security.llm_wrapper import call_llm as _call_llm
 
-                loop = _asyncio.new_event_loop()
-                try:
-                    from security.llm_wrapper import call_llm as _call_llm
-
-                    fixed = loop.run_until_complete(_call_llm(prompt))
-                finally:
-                    loop.close()
+                fixed = _asyncio.run(_call_llm(prompt))
                 for fence in ("```python\n", "```py\n", "```\n"):
                     if fixed.startswith(fence):
                         fixed = fixed[len(fence) :]
@@ -2124,18 +2137,36 @@ def _build_eager_heal_router() -> APIRouter:
             # decode_access_token raises jwt.InvalidTokenError on any failure.
             _decode(token)
         except _HTTPEx:
-            # Re-raise HTTP 401/403 so FastAPI returns the correct status code.
             raise
         except ImportError:  # nosec B110 — auth module not yet available during early startup
-            # During early startup before auth module is loaded, allow through.
-            # The live healer router (mounted later) enforces auth strictly.
             logger.warning("SelfHealer eager router: auth.jwt unavailable, auth skipped")
         except Exception as exc:
-            # Any other verification failure (malformed token, expired, etc.) → 401.
+            raise _HTTPEx(status_code=401, detail="Authentication failed") from exc
+
+    def _require_admin(request: _Request) -> None:
+        """Verify Bearer JWT token and require admin/superadmin role."""
+        from fastapi import HTTPException as _HTTPEx
+
+        try:
+            from auth.jwt import decode_access_token as _decode
+
+            token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+            if not token:
+                raise _HTTPEx(status_code=401, detail="Authentication required")
+            payload = _decode(token)
+            role = (payload or {}).get("role", "")
+            if role not in ("admin", "superadmin"):
+                raise _HTTPEx(status_code=403, detail="Admin role required")
+        except _HTTPEx:
+            raise
+        except ImportError:  # nosec B110
+            logger.warning("SelfHealer eager router: auth.jwt unavailable, admin check skipped")
+        except Exception as exc:
             raise _HTTPEx(status_code=401, detail="Authentication failed") from exc
 
     @r.get("/status")
-    async def _status():
+    async def _status(request: _Request):
+        _require_auth(request)
         h = get_healer()
         applied = sum(1 for p in h._patch_history if p["success"])
         failed = sum(1 for p in h._patch_history if not p["success"])
@@ -2150,32 +2181,38 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.get("/drift")
-    async def _drift(limit: int = 50):
+    async def _drift(request: _Request, limit: int = 50):
+        _require_auth(request)
         return get_healer()._drift_events[-limit:]
 
     @r.get("/patches")
-    async def _patches(limit: int = 50):
+    async def _patches(request: _Request, limit: int = 50):
+        _require_auth(request)
         return get_healer()._patch_history[-limit:]
 
     @r.post("/baseline/rebuild")
-    async def _rebuild():
+    async def _rebuild(request: _Request):
+        _require_admin(request)
         result = await get_healer().rebuild_baseline()
         return result
 
     @r.post("/scan/now")
-    async def _scan_now():
+    async def _scan_now(request: _Request):
+        _require_admin(request)
         h = get_healer()
         await h._scan_integrity()
         return {"triggered": True, "drift_events": len(h._drift_events)}
 
     @r.post("/code-analysis/now", summary="Trigger immediate deep code analysis scan")
-    async def _code_analysis_now():
+    async def _code_analysis_now(request: _Request):
+        _require_admin(request)
         h = get_healer()
         result = await h.run_code_analysis_now()
         return result
 
     @r.get("/code-analysis/issues", summary="Get latest code analysis issues")
-    async def _code_issues(limit: int = 100):
+    async def _code_issues(request: _Request, limit: int = 100):
+        _require_auth(request)
         h = get_healer()
         issues = h.get_code_issues(limit=limit)
         return {
@@ -2188,13 +2225,15 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.post("/log-analysis/now", summary="Trigger immediate log file analysis")
-    async def _log_analysis_now():
+    async def _log_analysis_now(request: _Request):
+        _require_admin(request)
         h = get_healer()
         result = await h.run_log_analysis_now()
         return result
 
     @r.get("/log-analysis/issues", summary="Get latest log analysis issues")
-    async def _log_issues(limit: int = 100):
+    async def _log_issues(request: _Request, limit: int = 100):
+        _require_auth(request)
         h = get_healer()
         issues = h.get_log_issues(limit=limit)
         return {
@@ -2206,7 +2245,8 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.get("/claude-queue", summary="Get pending Claude fix queue")
-    async def _claude_queue():
+    async def _claude_queue(request: _Request):
+        _require_auth(request)
         h = get_healer()
         return {
             "depth": len(h._claude_fix_queue),
@@ -2214,20 +2254,23 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.delete("/claude-queue", summary="Clear the Claude fix queue")
-    async def _clear_claude_queue():
+    async def _clear_claude_queue(request: _Request):
+        _require_admin(request)
         h = get_healer()
         count = len(h._claude_fix_queue)
         h._claude_fix_queue.clear()
         return {"cleared": count}
 
     @r.post("/diagnostics/now", summary="Trigger immediate full diagnostics run")
-    async def _diagnostics_now():
+    async def _diagnostics_now(request: _Request):
+        _require_admin(request)
         h = get_healer()
         report = await h.run_diagnostics_now()
         return report
 
     @r.get("/diagnostics/report", summary="Get the last diagnostics report")
-    async def _diagnostics_report():
+    async def _diagnostics_report(request: _Request):
+        _require_auth(request)
         h = get_healer()
         report = h.get_last_diagnostic_report()
         if not report:
@@ -2235,7 +2278,8 @@ def _build_eager_heal_router() -> APIRouter:
         return report
 
     @r.get("/diagnostics/remediation-log", summary="Get diagnostics auto-remediation log")
-    async def _diagnostics_remediation_log():
+    async def _diagnostics_remediation_log(request: _Request):
+        _require_auth(request)
         h = get_healer()
         return {
             "entries": h.get_diagnostics_remediation_log(),
@@ -2243,7 +2287,8 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.get("/full-status", summary="Complete healer + diagnostics status")
-    async def _full_status():
+    async def _full_status(request: _Request):
+        _require_auth(request)
         h = get_healer()
         status = h.get_full_status()
         status["last_diagnostic_report"] = h.get_last_diagnostic_report()
