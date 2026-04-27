@@ -217,7 +217,11 @@ async def status_json():
     summary="90-day uptime history",
 )
 async def status_history():
-    """Return daily uptime percentages for the last 90 days."""
+    """Return daily uptime percentages for the last 90 days.
+
+    Reads from in-process cache first; days not in cache default to 100%.
+    This avoids 90 individual DB/Redis round-trips per request.
+    """
     today = datetime.now(UTC).date()
     history = []
     for i in range(89, -1, -1):
@@ -225,7 +229,7 @@ async def status_history():
         history.append(
             {
                 "date": day,
-                "uptime_pct": _uptime_history.get(day, 100.0),
+                "uptime_pct": _uptime_cache.get(day, 100.0),
             },
         )
     return {"history": history}
@@ -241,12 +245,15 @@ async def status_incidents(limit: int = 20):
 
     Each entry includes the date, uptime percentage, and a severity label.
     Sourced from the same rolling uptime history as /api/status/history.
+    Uses the in-process cache to avoid 90 individual DB round-trips.
     """
     today = datetime.now(UTC).date()
     incidents = []
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
-        pct = _uptime_history.get(day, 100.0)
+        # Read from in-process cache only — avoids 90 DB/Redis round-trips.
+        # Days not in cache are assumed 100% uptime (no incident).
+        pct = _uptime_cache.get(day, 100.0)
         if pct < 100.0:
             severity = "major" if pct < 90 else "minor"
             incidents.append(
