@@ -492,7 +492,9 @@ async def _run_checks() -> dict[str, Any]:
         try:
             result = await asyncio.wait_for(fn(), timeout=3.0)
             ms = round((_time.monotonic() - t0) * 1000, 1)
-            return name, {**result, "response_time_ms": ms}
+            # Overwrite any response_time_ms the probe itself set — use wall time
+            result["response_time_ms"] = ms
+            return name, result
         except asyncio.TimeoutError:
             ms = round((_time.monotonic() - t0) * 1000, 1)
             return name, {"status": "degraded", "message": "Probe timed out (3s)", "response_time_ms": ms}
