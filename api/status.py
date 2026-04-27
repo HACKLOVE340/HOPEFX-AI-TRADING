@@ -510,12 +510,22 @@ async def _run_checks() -> dict[str, Any]:
 
     async def _check_database() -> dict:
         import os as _os
-        from sqlalchemy import create_engine, text as _text
+        import asyncio as _asyncio
         db_url = _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
-        engine = create_engine(db_url, connect_args={"check_same_thread": False} if "sqlite" in db_url else {})
-        with engine.connect() as conn:
-            conn.execute(_text("SELECT 1"))
-        engine.dispose()
+
+        def _sync_check():
+            from sqlalchemy import create_engine, text as _text
+            _engine = create_engine(
+                db_url,
+                connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
+                pool_pre_ping=True,
+            )
+            with _engine.connect() as conn:
+                conn.execute(_text("SELECT 1"))
+            _engine.dispose()
+
+        loop = _asyncio.get_event_loop()
+        await loop.run_in_executor(None, _sync_check)
         return {"status": "healthy", "message": f"Connected ({db_url.split('://')[0]})"}
 
     async def _check_cache() -> dict:
@@ -587,18 +597,21 @@ async def _run_checks() -> dict[str, Any]:
 
     async def _check_system_resources() -> dict:
         try:
+            import asyncio as _asyncio
             import psutil
-            cpu = psutil.cpu_percent(interval=0.1)
-            mem = psutil.virtual_memory()
-            disk = psutil.disk_usage("/")
-            if cpu > 90 or mem.percent > 90 or disk.percent > 90:
-                return {
-                    "status": "degraded",
-                    "message": f"CPU {cpu:.0f}% | RAM {mem.percent:.0f}% | Disk {disk.percent:.0f}%",
-                }
+
+            def _read_resources():
+                cpu = psutil.cpu_percent(interval=0.1)
+                mem = psutil.virtual_memory()
+                disk = psutil.disk_usage("/")
+                return cpu, mem.percent, disk.percent
+
+            loop = _asyncio.get_event_loop()
+            cpu, mem_pct, disk_pct = await loop.run_in_executor(None, _read_resources)
+            status = "degraded" if (cpu > 90 or mem_pct > 90 or disk_pct > 90) else "healthy"
             return {
-                "status": "healthy",
-                "message": f"CPU {cpu:.0f}% | RAM {mem.percent:.0f}% | Disk {disk.percent:.0f}%",
+                "status": status,
+                "message": f"CPU {cpu:.0f}% | RAM {mem_pct:.0f}% | Disk {disk_pct:.0f}%",
             }
         except Exception:
             return {"status": "unknown", "message": "psutil unavailable"}
