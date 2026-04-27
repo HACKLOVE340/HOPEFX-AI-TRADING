@@ -6,6 +6,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { getWsBase } from '../lib/utils';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -63,7 +64,7 @@ const SocialFeed: React.FC = () => {
   const wsToken = useStore(s => s.token);
   useEffect(() => {
     if (!wsToken) return;
-    const wsUrl = `${(import.meta.env.VITE_WS_URL as string|undefined) ?? 'ws://localhost:8000'}/ws/social-feed?token=${wsToken}`;
+    const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
     let ws: WebSocket | null = null;
     try {
       ws = new WebSocket(wsUrl);
