@@ -531,7 +531,7 @@ async def _run_checks() -> dict[str, Any]:
                 conn.execute(_text("SELECT 1"))
             _engine.dispose()
 
-        loop = _asyncio.get_event_loop()
+        loop = _asyncio.get_running_loop()
         await loop.run_in_executor(None, _sync_check)
         return {"status": "healthy", "message": f"Connected ({db_url.split('://')[0]})"}
 
@@ -613,7 +613,7 @@ async def _run_checks() -> dict[str, Any]:
                 disk = psutil.disk_usage("/")
                 return cpu, mem.percent, disk.percent
 
-            loop = _asyncio.get_event_loop()
+            loop = _asyncio.get_running_loop()
             cpu, mem_pct, disk_pct = await loop.run_in_executor(None, _read_resources)
             status = "degraded" if (cpu > 90 or mem_pct > 90 or disk_pct > 90) else "healthy"
             return {
