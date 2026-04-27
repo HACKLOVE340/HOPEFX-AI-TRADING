@@ -1501,6 +1501,12 @@ Return the complete fixed file:"""
         Critical findings are auto-remediated and pushed to Redis for the
         superadmin dashboard.
         """
+        import os as _os
+        # Skip diagnostics in development — they make blocking HTTP calls to
+        # localhost which starve the single-worker event loop.
+        if _os.getenv("APP_ENV", "development").lower() in ("development", "dev", "test"):
+            logger.info("SelfHealer: diagnostics loop disabled in %s mode", _os.getenv("APP_ENV", "development"))
+            return
         # Stagger startup so it doesn't compete with the initial baseline build
         await asyncio.sleep(30)
         while self._running:
@@ -1509,6 +1515,8 @@ Return the complete fixed file:"""
                     await self._run_diagnostics()
                 else:
                     self._log("debug", "SelfHealer: diagnostics loop skipped — disabled")
+            except asyncio.CancelledError:
+                raise
             except Exception as exc:
                 logger.warning("SelfHealer: diagnostics loop error: %s", exc)
             await asyncio.sleep(self._diag_interval)
