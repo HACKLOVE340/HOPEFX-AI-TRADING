@@ -98,13 +98,29 @@ const { mockApiGet, mockApiPost } = vi.hoisted(() => ({
 
 vi.mock('../hooks/useApi', () => ({
   api: {
-    get:  mockApiGet,
-    post: mockApiPost,
+    get:    mockApiGet,
+    post:   mockApiPost,
+    patch:  vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: {
       request:  { handlers: [{}], use: vi.fn() },
       response: { handlers: [{}], use: vi.fn() },
     },
+  },
+  // marketplaceApi delegates to api.get/api.post — route through the same mocks
+  marketplaceApi: {
+    strategies:      (params?: unknown) => mockApiGet('/monetization/marketplace/strategies', { params }),
+    strategy:        (id: string) => mockApiGet(`/monetization/marketplace/strategies/${id}`),
+    purchase:        (payload: unknown) => mockApiPost('/monetization/marketplace/purchase', payload),
+    featured:        () => mockApiGet('/monetization/marketplace/featured'),
+    stats:           () => mockApiGet('/monetization/marketplace/stats'),
+    list:            (payload: unknown) => mockApiPost('/monetization/marketplace/list', payload),
+    myStrategies:    (userId: string) => mockApiGet(`/monetization/marketplace/strategies?creator_id=${userId}`),
+    review:          (strategyId: string, payload: unknown) => mockApiPost(`/monetization/marketplace/strategies/${strategyId}/reviews`, payload),
+    reviews:         (strategyId: string) => mockApiGet(`/monetization/marketplace/strategies/${strategyId}/reviews`),
+    unsubscribe:     (strategyId: string) => mockApiGet(`/monetization/marketplace/subscriptions/${strategyId}`),
+    mySubscriptions: () => mockApiGet('/monetization/marketplace/subscriptions'),
   },
   tradingApi:     { positions: vi.fn().mockResolvedValue({ data: [] }) },
   authApi:        { login: vi.fn(), logout: vi.fn(), me: vi.fn() },

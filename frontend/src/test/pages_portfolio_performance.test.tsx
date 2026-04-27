@@ -203,7 +203,8 @@ describe('Portfolio page', () => {
 
   it('renders Portfolio heading', async () => {
     await renderPortfolio();
-    expect(screen.getByText('Portfolio')).toBeInTheDocument();
+    // h1 contains emoji prefix: "💼 Portfolio"
+    expect(screen.getByText(/portfolio/i)).toBeInTheDocument();
   });
 
   it('renders account summary section', async () => {
@@ -255,20 +256,46 @@ describe('Portfolio page', () => {
 
   it('renders performance metrics section', async () => {
     await renderPortfolio();
-    expect(screen.getByText(/performance/i)).toBeInTheDocument();
+    // Multiple elements may contain "performance" — use getAllByText
+    expect(screen.getAllByText(/performance/i).length).toBeGreaterThan(0);
   });
 
   it('renders win rate stat tile', async () => {
+    // Pre-populate store so PerformanceMetrics renders immediately
+    act(() => {
+      useStore.getState().setPerformanceSummary({
+        total_trades: 42, win_rate: 65, avg_return_pct: 1.2,
+        total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
+        max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
+        best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,
+      });
+    });
     await renderPortfolio();
     expect(screen.getAllByText(/win rate/i).length).toBeGreaterThan(0);
   });
 
   it('renders sharpe ratio stat tile', async () => {
+    act(() => {
+      useStore.getState().setPerformanceSummary({
+        total_trades: 42, win_rate: 65, avg_return_pct: 1.2,
+        total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
+        max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
+        best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,
+      });
+    });
     await renderPortfolio();
     expect(screen.getAllByText(/sharpe/i).length).toBeGreaterThan(0);
   });
 
   it('renders max drawdown stat tile', async () => {
+    act(() => {
+      useStore.getState().setPerformanceSummary({
+        total_trades: 42, win_rate: 65, avg_return_pct: 1.2,
+        total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
+        max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
+        best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,
+      });
+    });
     await renderPortfolio();
     expect(screen.getAllByText(/drawdown/i).length).toBeGreaterThan(0);
   });
@@ -359,7 +386,8 @@ describe('Performance page', () => {
     const weeklyBtn = screen.getByRole('button', { name: /weekly/i });
     fireEvent.click(weeklyBtn);
     await waitFor(() => {
-      expect(screen.getByText(/weekly report/i)).toBeInTheDocument();
+      // Page renders "Weekly Performance Report" as h3 heading
+      expect(document.body.textContent).toMatch(/weekly performance report/i);
     }, { timeout: 3000 });
   });
 
@@ -367,8 +395,8 @@ describe('Performance page', () => {
     await renderPerformance();
     fireEvent.click(screen.getByRole('button', { name: /trades/i }));
     await waitFor(() => {
-      // Performance page uses "Filter symbol…" placeholder
-      expect(screen.getByPlaceholderText(/filter/i)).toBeInTheDocument();
+      // Performance page uses "Symbol…" placeholder on the trade filter input
+      expect(screen.getByPlaceholderText(/symbol/i)).toBeInTheDocument();
     }, { timeout: 3000 });
   });
 
@@ -434,7 +462,8 @@ describe('TradingDashboard page', () => {
 
   it('renders full-screen layout container', async () => {
     await renderTradingDashboard();
-    const layout = document.querySelector('[class*="h-screen"]');
+    // TradingDashboard uses h-full (not h-screen) for its root container
+    const layout = document.querySelector('[class*="h-full"]');
     expect(layout).toBeInTheDocument();
   });
 

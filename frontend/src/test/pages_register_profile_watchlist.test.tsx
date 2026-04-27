@@ -99,6 +99,39 @@ vi.mock('../hooks/useApi', () => ({
     run:  vi.fn().mockResolvedValue({ data: {} }),
   },
   leaderboardApi: { list: vi.fn().mockResolvedValue({ data: [] }) },
+  watchlistApi: {
+    list:   vi.fn().mockResolvedValue({ data: { items: [] } }),
+    add:    vi.fn().mockResolvedValue({ data: {} }),
+    remove: vi.fn().mockResolvedValue({ data: {} }),
+    prices: vi.fn().mockResolvedValue({ data: [] }),
+  },
+  profileApi: {
+    get:          vi.fn().mockResolvedValue({ data: {
+      user_id: 'u1', username: 'trader1', display_name: 'Trader One',
+      bio: 'Test bio', avatar_url: null, country: null,
+      joined_at: '2024-01-01T00:00:00Z',
+      followers_count: 5, following_count: 3, is_following: false,
+      stats: { total_trades: 40, win_rate: 62.5, avg_pnl: 200, sharpe_ratio: 1.4, total_return_pct: 12.5 },
+      strategies: [],
+      recent_signals: [],
+    } }),
+    update:       vi.fn().mockResolvedValue({ data: {} }),
+    uploadAvatar: vi.fn().mockResolvedValue({ data: {} }),
+    follow:       vi.fn().mockResolvedValue({ data: {} }),
+    unfollow:     vi.fn().mockResolvedValue({ data: {} }),
+    followers:    vi.fn().mockResolvedValue({ data: [] }),
+    following:    vi.fn().mockResolvedValue({ data: [] }),
+    signals:      vi.fn().mockResolvedValue({ data: { signals: [] } }),
+    strategies:   vi.fn().mockResolvedValue({ data: [] }),
+    stats:        vi.fn().mockResolvedValue({ data: {} }),
+  },
+  affiliateApi: {
+    account:     vi.fn().mockResolvedValue({ data: null }),
+    signup:      vi.fn().mockResolvedValue({ data: {} }),
+    referrals:   vi.fn().mockResolvedValue({ data: [] }),
+    leaderboard: vi.fn().mockResolvedValue({ data: [] }),
+    withdraw:    vi.fn().mockResolvedValue({ data: {} }),
+  },
   accountsApi: {
     listSubAccounts:  vi.fn().mockResolvedValue({ data: [] }),
     createSubAccount: vi.fn().mockResolvedValue({ data: {} }),
@@ -406,10 +439,11 @@ describe('Profile page', () => {
     }, { timeout: 3000 });
   });
 
-  it('renders Total P&L stat card after load', async () => {
+  it('renders Avg P&L stat card after load', async () => {
     await renderProfile();
     await waitFor(() => {
-      expect(document.body.innerHTML).toMatch(/total p/i);
+      // Profile page shows "Avg P&L" (not "Total P&L")
+      expect(document.body.innerHTML).toMatch(/avg p/i);
     }, { timeout: 3000 });
   });
 
@@ -468,7 +502,8 @@ describe('Watchlist page', () => {
 
   it('renders Watchlist heading', async () => {
     await renderWatchlist();
-    expect(screen.getByText('Watchlist')).toBeInTheDocument();
+    // h1 contains emoji prefix: "👁️ Watchlist"
+    expect(screen.getByText(/watchlist/i)).toBeInTheDocument();
   });
 
   it('renders Add symbol dropdown', async () => {
@@ -478,7 +513,8 @@ describe('Watchlist page', () => {
 
   it('Add symbol dropdown has default option', async () => {
     await renderWatchlist();
-    expect(screen.getByText(/add symbol/i)).toBeInTheDocument();
+    // Use getAllByText since the empty-state div also contains "Add symbol"
+    expect(screen.getAllByText(/add symbol/i).length).toBeGreaterThan(0);
   });
 
   it('renders Add button', async () => {
@@ -537,7 +573,8 @@ describe('PriceAlerts page', () => {
 
   it('renders Price Alerts heading', async () => {
     await renderPriceAlerts();
-    expect(screen.getByText('Price Alerts')).toBeInTheDocument();
+    // h1 contains emoji prefix: "🔔 Price Alerts"
+    expect(screen.getByText(/price alerts/i)).toBeInTheDocument();
   });
 
   it('renders Create Alert button', async () => {

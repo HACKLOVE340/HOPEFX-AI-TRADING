@@ -73,13 +73,25 @@ const { mockApiGet, mockApiPost } = vi.hoisted(() => ({
 
 vi.mock('../hooks/useApi', () => ({
   api: {
-    get:  mockApiGet,
-    post: mockApiPost,
+    get:    mockApiGet,
+    post:   mockApiPost,
+    patch:  vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: {
       request:  { handlers: [{}], use: vi.fn() },
       response: { handlers: [{}], use: vi.fn() },
     },
+  },
+  // affiliateApi delegates to api.get/api.post — route through the same mocks
+  affiliateApi: {
+    account:       (userId: string) => mockApiGet(`/monetization/affiliate/${userId}`),
+    signup:        (payload: unknown) => mockApiPost('/monetization/affiliate/signup', payload),
+    referrals:     (affiliateId: string, params?: unknown) => mockApiGet(`/monetization/affiliate/${affiliateId}/referrals`, { params }),
+    leaderboard:   (params?: unknown) => mockApiGet('/monetization/affiliate/leaderboard', { params }),
+    withdraw:      (affiliateId: string, amount: number) => mockApiPost(`/monetization/affiliate/${affiliateId}/withdraw`, { amount }),
+    commissions:   (affiliateId: string, params?: unknown) => mockApiGet(`/monetization/affiliate/${affiliateId}/commissions`, { params }),
+    updatePayment: (affiliateId: string, payload: unknown) => mockApiGet(`/monetization/affiliate/${affiliateId}/payment-method`, payload),
   },
   tradingApi:     { positions: vi.fn().mockResolvedValue({ data: [] }) },
   authApi:        { login: vi.fn(), logout: vi.fn(), me: vi.fn() },
@@ -344,7 +356,8 @@ describe('Affiliate — enrolled: overview tab', () => {
   it('shows Pending payout metric', async () => {
     await renderAffiliate();
     await waitFor(() => expect(screen.getByText('Pending payout')).toBeInTheDocument(), { timeout: 3000 });
-    expect(screen.getByText('$240.00')).toBeInTheDocument();
+    // $240.00 may appear in both the metric card and the commissions table
+    expect(screen.getAllByText('$240.00').length).toBeGreaterThan(0);
   });
 
   it('shows How commissions work section', async () => {
@@ -377,7 +390,8 @@ describe('Affiliate — enrolled: tabs', () => {
     await renderAffiliate();
     await waitFor(() => screen.getByRole('button', { name: /^referrals$/i }), { timeout: 3000 });
     fireEvent.click(screen.getByRole('button', { name: /^referrals$/i }));
-    await waitFor(() => expect(screen.getByText('Referral history')).toBeInTheDocument(), { timeout: 3000 });
+    // Page renders "Referral history (N)" with count suffix
+    await waitFor(() => expect(screen.getByText(/referral history/i)).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('Referrals tab shows referred user IDs', async () => {

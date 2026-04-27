@@ -74,12 +74,57 @@ class MockWebSocket {
 // fetch mock for polling fallback
 const mockFetch = vi.fn();
 
+const MOCK_PLANS = [
+  {
+    id: 'free', name: 'Free', tagline: 'Get started', price_usd_monthly: 0,
+    price_usd_annual: 0, annual_savings_pct: 0, commission_rate: 0,
+    commission_label: '0%', badge: null, cta: 'Get started', cta_href: '/register?plan=free',
+    highlights: ['Basic signals', 'Paper trading'], features: {}, limits: {},
+  },
+  {
+    id: 'starter', name: 'Starter', tagline: 'For active traders', price_usd_monthly: 1800,
+    // annual display = price_usd_annual / 10 → 12600 / 10 = $1,260/mo
+    price_usd_annual: 12600, annual_savings_pct: 17, commission_rate: 0.1,
+    commission_label: '0.1%', badge: null, cta: 'Get started', cta_href: '/register?plan=starter',
+    highlights: ['Live signals', 'Risk calculator'], features: {}, limits: {},
+  },
+  {
+    id: 'professional', name: 'Professional', tagline: 'For serious traders', price_usd_monthly: 4500,
+    // annual display = price_usd_annual / 10 → 31500 / 10 = $3,150/mo
+    price_usd_annual: 31500, annual_savings_pct: 30, commission_rate: 0.05,
+    commission_label: '0.05%', badge: 'Most popular', cta: 'Get started', cta_href: '/register?plan=professional',
+    highlights: ['AI strategy', 'Backtesting', 'Copy trading', 'Marketplace access'], features: {}, limits: {},
+  },
+  {
+    id: 'enterprise', name: 'Enterprise', tagline: 'For teams', price_usd_monthly: 0,
+    price_usd_annual: 0, annual_savings_pct: 0, commission_rate: 0,
+    commission_label: 'Custom', badge: null, cta: 'Contact sales', cta_href: '/contact',
+    highlights: ['Custom limits', 'Dedicated support'], features: {}, limits: {},
+  },
+  {
+    id: 'elite', name: 'Elite', tagline: 'Maximum power', price_usd_monthly: 10000,
+    // annual display = price_usd_annual / 10 → 70000 / 10 = $7,000/mo
+    price_usd_annual: 70000, annual_savings_pct: 30, commission_rate: 0,
+    commission_label: '0%', badge: null, cta: 'Contact sales', cta_href: '/register?plan=elite',
+    highlights: ['Nuclear AI', 'White-glove support', 'Custom dev', 'White-label option'], features: {}, limits: {},
+  },
+];
+
 beforeEach(() => {
   vi.stubGlobal('WebSocket', MockWebSocket);
   vi.stubGlobal('fetch', mockFetch);
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ symbol: 'XAU_USD', bid: 2340.5, ask: 2341.0, mid: 2340.75, change_pct: 0.42 }),
+  mockFetch.mockImplementation((url: string) => {
+    if (typeof url === 'string' && url.includes('/pricing/plans')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ plans: MOCK_PLANS }),
+      });
+    }
+    // Default: live ticker response
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ symbol: 'XAU_USD', bid: 2340.5, ask: 2341.0, mid: 2340.75, change_pct: 0.42 }),
+    });
   });
 });
 
@@ -333,33 +378,33 @@ describe('LandingPage — Pricing section', () => {
 
   it('renders Free plan', async () => {
     await renderLanding();
-    const freeEls = screen.getAllByText('Free');
-    expect(freeEls.length).toBeGreaterThan(0);
+    // Plans load asynchronously via fetch — wait for them
+    await waitFor(() => expect(screen.getAllByText('Free').length).toBeGreaterThan(0), { timeout: 3000 });
   });
 
   it('renders Starter plan', async () => {
     await renderLanding();
-    expect(screen.getByText('Starter')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Starter')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders Professional plan', async () => {
     await renderLanding();
-    expect(screen.getByText('Professional')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Professional')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders Enterprise plan', async () => {
     await renderLanding();
-    expect(screen.getByText('Enterprise')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Enterprise')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders Elite plan', async () => {
     await renderLanding();
-    expect(screen.getByText('Elite')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Elite')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders Most popular badge on Professional plan', async () => {
     await renderLanding();
-    expect(screen.getByText('Most popular')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Most popular')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders monthly pricing toggle', async () => {
@@ -374,17 +419,17 @@ describe('LandingPage — Pricing section', () => {
 
   it('shows monthly price $1,800 for Starter by default', async () => {
     await renderLanding();
-    expect(screen.getByText('$1,800')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('$1,800')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('shows monthly price $4,500 for Professional by default', async () => {
     await renderLanding();
-    expect(screen.getByText('$4,500')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('$4,500')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('shows monthly price $10,000 for Elite by default', async () => {
     await renderLanding();
-    expect(screen.getByText('$10,000')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('$10,000')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('switches to annual pricing on toggle click', async () => {
@@ -408,49 +453,59 @@ describe('LandingPage — Pricing section', () => {
 
   it('renders Get started CTA for Free plan', async () => {
     await renderLanding();
-    const links = screen.getAllByRole('link', { name: /get started/i });
-    expect(links.length).toBeGreaterThan(0);
+    // Plans load async — wait for CTA links to appear
+    await waitFor(() => {
+      const links = screen.getAllByRole('link', { name: /get started/i });
+      expect(links.length).toBeGreaterThan(0);
+    }, { timeout: 3000 });
   });
 
   it('renders Start free trial CTA for Professional', async () => {
     await renderLanding();
+    // Navbar and hero already have "Start free trial" links — no waitFor needed
     const trialLinks = screen.getAllByRole('link', { name: /start free trial/i });
     expect(trialLinks.length).toBeGreaterThan(0);
   });
 
   it('renders Contact sales CTA for Elite', async () => {
     await renderLanding();
-    const links = screen.getAllByRole('link', { name: /contact sales/i });
-    expect(links.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      const links = screen.getAllByRole('link', { name: /contact sales/i });
+      expect(links.length).toBeGreaterThan(0);
+    }, { timeout: 3000 });
   });
 
   it('Starter plan links to /register?plan=starter', async () => {
     await renderLanding();
-    const links = screen.getAllByRole('link', { name: /get started/i });
-    const starterLink = links.find(l => l.getAttribute('href') === '/register?plan=starter');
-    expect(starterLink).toBeTruthy();
+    await waitFor(() => {
+      const links = screen.getAllByRole('link', { name: /get started/i });
+      const starterLink = links.find(l => l.getAttribute('href') === '/register?plan=starter');
+      expect(starterLink).toBeTruthy();
+    }, { timeout: 3000 });
   });
 
   it('Elite plan links to /register?plan=elite', async () => {
     await renderLanding();
-    const links = screen.getAllByRole('link', { name: /contact sales/i });
-    const eliteLink = links.find(l => l.getAttribute('href') === '/register?plan=elite');
-    expect(eliteLink).toBeTruthy();
+    await waitFor(() => {
+      const links = screen.getAllByRole('link', { name: /contact sales/i });
+      const eliteLink = links.find(l => l.getAttribute('href') === '/register?plan=elite');
+      expect(eliteLink).toBeTruthy();
+    }, { timeout: 3000 });
   });
 
   it('renders Free plan features', async () => {
     await renderLanding();
-    expect(screen.getByText('Paper trading')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Paper trading')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders Professional plan features', async () => {
     await renderLanding();
-    expect(screen.getByText('Marketplace access')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Marketplace access')).toBeInTheDocument(), { timeout: 3000 });
   });
 
   it('renders Elite plan features', async () => {
     await renderLanding();
-    expect(screen.getByText('White-label option')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('White-label option')).toBeInTheDocument(), { timeout: 3000 });
   });
 });
 
@@ -497,8 +552,8 @@ describe('LandingPage — Footer', () => {
 
   it('renders footer links section', async () => {
     await renderLanding();
-    // Footer has product/company links
-    expect(screen.getByText(/privacy/i)).toBeInTheDocument();
+    // Footer has product/company links — multiple elements may match /privacy/i
+    expect(screen.getAllByText(/privacy/i).length).toBeGreaterThan(0);
   });
 });
 
