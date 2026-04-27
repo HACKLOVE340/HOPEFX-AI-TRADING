@@ -101,7 +101,7 @@ async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) ->
                 "load_avg_1m": 0.0, "load_avg_5m": 0.0, "load_avg_15m": 0.0,
             }
 
-    _loop = _asyncio.get_event_loop()
+    _loop = _asyncio.get_running_loop()
     sys_metrics = await _loop.run_in_executor(None, _read_sys)
     return {**svc, **sys_metrics}
 

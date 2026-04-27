@@ -240,7 +240,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
         def _read_sys():
             return psutil.cpu_percent(interval=0.1), psutil.virtual_memory().percent
 
-        _loop = _asyncio.get_event_loop()
+        _loop = _asyncio.get_running_loop()
         _cpu, _mem = await _loop.run_in_executor(None, _read_sys)
         overview["cpu_pct"] = round(_cpu, 1)
         overview["memory_pct"] = round(_mem, 1)
