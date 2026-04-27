@@ -537,20 +537,7 @@ async def test_smtp(payload: SmtpTestPayload, user: TokenPayload = Depends(requi
         raise HTTPException(status_code=502, detail=f"Connection failed: {exc}") from exc
 
 
-# =============================================================================
-# COMPAT ALIASES — AdminSettingsSection.tsx uses /api/admin/settings (bare)
-# while the canonical route is /api/admin/settings/system.
-# These thin aliases keep both paths working.
-# =============================================================================
-
-
-@router.get("/api/admin/settings", include_in_schema=False)
-async def get_admin_settings_alias(user: TokenPayload = Depends(require_role("admin"))):
-    """Alias: GET /api/admin/settings → get_system_settings."""
-    return await get_system_settings(user=user)
-
-
-@router.post("/api/admin/settings", include_in_schema=False)
-async def save_admin_settings_alias(request: Request, user: TokenPayload = Depends(require_role("admin"))):
-    """Alias: POST /api/admin/settings → save_system_settings."""
-    return await save_system_settings(request=request, user=user)
+# NOTE: GET /api/admin/settings and POST /api/admin/settings are handled by
+# api/admin.py (prefix="/api/admin", routes GET /settings and POST /settings).
+# admin.py is registered before this router so those paths are already claimed.
+# Duplicate handlers were removed here to avoid silent dead-code via dedup.
