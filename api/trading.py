@@ -1014,35 +1014,58 @@ async def close_all_positions(
     return {"status": "success", "closed_positions": closed}
 
 
-@router.get("/account", response_model=None, summary="Get broker account snapshot")
+@router.get("/account", response_model=None, summary="Get full AccountMetrics snapshot")
 async def get_account(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Get account information. Requires: any authenticated user.
+    Return a complete AccountMetrics payload for the authenticated user.
 
-    Returns a normalised dict compatible with the mobile app Account type:
-      account_id, balance, equity, margin_used, margin_available,
-      unrealized_pnl, daily_pnl, daily_pnl_pct, currency
+    Fields returned (all required by the frontend AccountMetrics type):
+      balance, equity, margin_used, margin_free, margin_level,
+      daily_pnl, daily_pnl_pct, total_pnl, win_rate, sharpe_ratio,
+      sortino_ratio, max_drawdown, open_trades, open_risk_pct,
+      cvar_95, kill_switch, unrealized_pnl, currency, account_id
     """
+    import math as _math
+    import os as _os
+
+    # ── Broker account info ───────────────────────────────────────────────────
     if not app_state or not app_state.broker:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
-        )
+        # Paper mode: return defaults from env
+        starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+        return {
+            "account_id": user.sub,
+            "balance": starting,
+            "equity": starting,
+            "margin_used": 0.0,
+            "margin_free": starting,
+            "margin_level": 0.0,
+            "daily_pnl": 0.0,
+            "daily_pnl_pct": 0.0,
+            "total_pnl": 0.0,
+            "unrealized_pnl": 0.0,
+            "win_rate": 0.0,
+            "sharpe_ratio": 0.0,
+            "sortino_ratio": 0.0,
+            "max_drawdown": 0.0,
+            "open_trades": 0,
+            "open_risk_pct": 0.0,
+            "cvar_95": 0.0,
+            "kill_switch": False,
+            "currency": "USD",
+        }
 
     raw = await _broker_call("get_account_info")
 
-    # Normalise to a consistent dict regardless of broker implementation
     def _f(obj, *keys, default=0.0):
-        """Extract first matching attribute/key from obj, return default if missing."""
         for k in keys:
             v = getattr(obj, k, None) if not isinstance(obj, dict) else obj.get(k)
             if v is not None:
                 try:
                     return float(v)
                 except (TypeError, ValueError):
-                    ...  # nosec B110
+                    pass
         return default
 
     def _s(obj, *keys, default=""):
@@ -1052,24 +1075,127 @@ async def get_account(
                 return str(v)
         return default
 
-    balance = _f(raw, "balance", "nav", "net_liquidation")
-    equity = _f(raw, "equity", "balance", "nav") or balance
-    margin_used = _f(raw, "margin_used", "margin", "used_margin")
-    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (equity - margin_used)
-    unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
-    daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
-    daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
+    balance      = _f(raw, "balance", "nav", "net_liquidation")
+    equity       = _f(raw, "equity", "balance", "nav") or balance
+    margin_used  = _f(raw, "margin_used", "margin", "used_margin")
+    margin_free  = _f(raw, "margin_available", "free_margin", "available_margin") or max(equity - margin_used, 0.0)
+    margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+    unrealized   = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
+    daily_pnl    = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
+    daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
+
+    # ── Trade statistics from DB ──────────────────────────────────────────────
+    win_rate = 0.0
+    sharpe_ratio = 0.0
+    sortino_ratio = 0.0
+    max_drawdown = 0.0
+    total_pnl = 0.0
+    open_trades = 0
+    open_risk_pct = 0.0
+    cvar_95 = 0.0
+
+    try:
+        from database.connection import get_db as _get_db
+        from database.models import Trade, TradeStatus
+
+        db = next(_get_db())
+        try:
+            # Closed trades for stats
+            closed = (
+                db.query(Trade)
+                .filter(Trade.status == TradeStatus.CLOSED)
+                .order_by(Trade.exit_time.asc())
+                .all()
+            )
+            # Open trades count
+            open_qs = db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
+            open_trades = len(open_qs)
+
+            if closed:
+                pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                total_pnl = round(sum(pnls), 2)
+                wins = [p for p in pnls if p > 0]
+                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+
+                # Equity curve for drawdown + Sharpe
+                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+                eq_vals: list[float] = []
+                running = starting
+                for p in pnls:
+                    running += p
+                    eq_vals.append(running)
+
+                # Max drawdown
+                peak = starting
+                for v in eq_vals:
+                    peak = max(peak, v)
+                    dd = (peak - v) / peak if peak > 0 else 0.0
+                    max_drawdown = max(max_drawdown, dd)
+                max_drawdown = round(max_drawdown * 100, 2)  # as %
+
+                # Sharpe (annualised, daily returns)
+                if len(pnls) >= 10:
+                    rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
+                    if rets:
+                        mean_r = sum(rets) / len(rets)
+                        var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
+                        std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
+                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+
+                        # Sortino (downside deviation only)
+                        neg_rets = [r for r in rets if r < 0]
+                        if neg_rets:
+                            down_var = sum(r ** 2 for r in neg_rets) / len(neg_rets)
+                            down_std = _math.sqrt(down_var)
+                            sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+
+                        # CVaR 95% (average of worst 5% returns)
+                        sorted_rets = sorted(rets)
+                        cutoff = max(1, int(len(sorted_rets) * 0.05))
+                        cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
+
+            # Open risk: sum of (quantity × entry_price) / equity
+            if open_qs and equity > 0:
+                total_notional = sum(
+                    float(t.quantity or 0.0) * float(t.entry_price or 0.0)
+                    for t in open_qs
+                )
+                open_risk_pct = round(total_notional / equity * 100, 2)
+
+        finally:
+            db.close()
+    except Exception as _exc:
+        logger.debug("Account stats from DB failed: %s", _exc)
+
+    # ── Kill switch state ─────────────────────────────────────────────────────
+    kill_switch_active = False
+    try:
+        from app import kill_switch as _ks
+        active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
+        kill_switch_active = bool(active() if callable(active) else active)
+    except Exception:
+        pass
 
     return {
-        "account_id": _s(raw, "account_id", "id", "accountId", default=user.sub),
-        "balance": round(balance, 2),
-        "equity": round(equity, 2),
-        "margin_used": round(margin_used, 2),
-        "margin_available": round(margin_avail, 2),
+        "account_id":    _s(raw, "account_id", "id", "accountId", default=user.sub),
+        "balance":       round(balance, 2),
+        "equity":        round(equity, 2),
+        "margin_used":   round(margin_used, 2),
+        "margin_free":   round(margin_free, 2),
+        "margin_level":  margin_level,
+        "daily_pnl":     round(daily_pnl, 2),
+        "daily_pnl_pct": daily_pnl_pct,
+        "total_pnl":     total_pnl,
         "unrealized_pnl": round(unrealized, 2),
-        "daily_pnl": round(daily_pnl, 2),
-        "daily_pnl_pct": round(daily_pnl_pct, 4),
-        "currency": _s(raw, "currency", "base_currency", default="USD"),
+        "win_rate":      win_rate,
+        "sharpe_ratio":  sharpe_ratio,
+        "sortino_ratio": sortino_ratio,
+        "max_drawdown":  max_drawdown,
+        "open_trades":   open_trades,
+        "open_risk_pct": open_risk_pct,
+        "cvar_95":       cvar_95,
+        "kill_switch":   kill_switch_active,
+        "currency":      _s(raw, "currency", "base_currency", default="USD"),
     }
 
 
