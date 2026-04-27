@@ -106,16 +106,14 @@ const NuclearDashboard = memo(() => {
   const isAuth  = useStore((s) => s.token !== null);
   const isMobile = useIsMobile();
 
-  // Connect to /ws/nuclear
+  // Connect to /ws/nuclear — must be called unconditionally (Rules of Hooks)
   const { status, lastAlert } = useNuclearWS(isAuth);
 
-  // Render mobile layout on small screens
-  if (isMobile) return <NuclearMobileView />;
-
-  const protectedView      = useNuclearStore((s) => s.protectedView);
-  const showExplainPanel   = useNuclearStore((s) => s.showExplainPanel);
+  // All store reads must be unconditional — called before any early return
+  const protectedView       = useNuclearStore((s) => s.protectedView);
+  const showExplainPanel    = useNuclearStore((s) => s.showExplainPanel);
   const setShowExplainPanel = useNuclearStore((s) => s.setShowExplainPanel);
-  const setNuclearAlert    = useNuclearStore((s) => s.setNuclearAlert);
+  const setNuclearAlert     = useNuclearStore((s) => s.setNuclearAlert);
 
   useEffect(() => { injectDashboardCSS(); }, []);
 
@@ -127,6 +125,8 @@ const NuclearDashboard = memo(() => {
   const handleExplainToggle = useCallback(() => {
     setShowExplainPanel(!showExplainPanel);
   }, [showExplainPanel, setShowExplainPanel]);
+
+  if (isMobile) return <NuclearMobileView />;
 
   return (
     <div style={s.root}>
