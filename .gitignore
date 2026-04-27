@@ -214,6 +214,7 @@ frontend/coverage/
 # Data layer runtime artifacts (generated at runtime, not source)
 data/lineage/
 data/dukascopy_cache/
+data/fred_cache/
 data/macro/*.csv
 -e
 # Admin bootstrap credential files (create_admin.py, create_superadmin.py)
