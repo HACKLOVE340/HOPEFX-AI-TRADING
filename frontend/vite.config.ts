@@ -15,7 +15,7 @@ export default defineConfig({
     host: '0.0.0.0',
     // Restrict to localhost and explicit tunnel hostnames; allowedHosts:true
     // opens DNS rebinding attack surface so we enumerate allowed hosts instead.
-    allowedHosts: ['localhost', '127.0.0.1', '.gitpod.io', '.ona.io', '.preview.app.github.dev'],
+    allowedHosts: ['localhost', '127.0.0.1', '.gitpod.io', '.ona.io', '.preview.app.github.dev', '.gitpod.dev', 'all'],
     proxy: {
       // Forward all /api/* requests to the FastAPI backend
       '/api': {
