@@ -1032,28 +1032,128 @@ async def get_account(
 
     # ── Broker account info ───────────────────────────────────────────────────
     if not app_state or not app_state.broker:
-        # Paper mode: return defaults from env
-        starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+        # Paper mode: seed balance from env, enrich with real DB trade stats
+        starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
+
+        # Pull real trade stats from DB even in paper mode
+        _win_rate = 0.0
+        _sharpe = 0.0
+        _sortino = 0.0
+        _max_dd = 0.0
+        _total_pnl = 0.0
+        _open_trades = 0
+        _open_risk_pct = 0.0
+        _cvar_95 = 0.0
+        _unrealized = 0.0
+        _daily_pnl = 0.0
+        _balance = starting
+
+        try:
+            from database.connection import SessionLocal as _SL
+            from database.models import Trade, TradeStatus
+            import datetime as _dt
+
+            _db = _SL()
+            try:
+                closed = (
+                    _db.query(Trade)
+                    .filter(Trade.status == TradeStatus.CLOSED)
+                    .order_by(Trade.exit_time.asc())
+                    .all()
+                )
+                open_qs = _db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
+                _open_trades = len(open_qs)
+
+                if closed:
+                    pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                    _total_pnl = round(sum(pnls), 2)
+                    _balance = round(starting + _total_pnl, 2)
+                    wins = [p for p in pnls if p > 0]
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+
+                    # Equity curve for drawdown + Sharpe
+                    eq_vals: list[float] = []
+                    running = starting
+                    for p in pnls:
+                        running += p
+                        eq_vals.append(running)
+
+                    peak = starting
+                    for v in eq_vals:
+                        peak = max(peak, v)
+                        dd = (peak - v) / peak if peak > 0 else 0.0
+                        _max_dd = max(_max_dd, dd)
+                    _max_dd = round(_max_dd * 100, 2)
+
+                    if len(pnls) >= 10:
+                        rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
+                        if rets:
+                            mean_r = sum(rets) / len(rets)
+                            var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
+                            std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
+                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+                            neg_rets = [r for r in rets if r < 0]
+                            if neg_rets:
+                                down_var = sum(r ** 2 for r in neg_rets) / len(neg_rets)
+                                down_std = _math.sqrt(down_var)
+                                _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                            sorted_rets = sorted(rets)
+                            cutoff = max(1, int(len(sorted_rets) * 0.05))
+                            _cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
+
+                # Daily P&L from trades closed today
+                today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                today_closed = [t for t in closed if t.exit_time and t.exit_time >= today_start]
+                _daily_pnl = round(sum(float(t.realized_pnl or 0.0) for t in today_closed), 2)
+
+                # Unrealized P&L from open trades
+                _unrealized = round(sum(float(t.unrealized_pnl or 0.0) for t in open_qs if hasattr(t, "unrealized_pnl")), 2)
+
+                # Open risk
+                equity_est = _balance + _unrealized
+                if open_qs and equity_est > 0:
+                    total_notional = sum(
+                        float(t.quantity or 0.0) * float(t.entry_price or 0.0)
+                        for t in open_qs
+                    )
+                    _open_risk_pct = round(total_notional / equity_est * 100, 2)
+            finally:
+                _db.close()
+        except Exception as _exc:
+            logger.debug("Paper account DB stats failed: %s", _exc)
+
+        _equity = round(_balance + _unrealized, 2)
+        _daily_pnl_pct = round((_daily_pnl / _balance * 100) if _balance > 0 else 0.0, 4)
+
+        # Kill switch state
+        _ks_active = False
+        try:
+            from app import kill_switch as _ks
+            active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
+            _ks_active = bool(active() if callable(active) else active)
+        except Exception:
+            pass
+
         return {
-            "account_id": user.sub,
-            "balance": starting,
-            "equity": starting,
-            "margin_used": 0.0,
-            "margin_free": starting,
-            "margin_level": 0.0,
-            "daily_pnl": 0.0,
-            "daily_pnl_pct": 0.0,
-            "total_pnl": 0.0,
-            "unrealized_pnl": 0.0,
-            "win_rate": 0.0,
-            "sharpe_ratio": 0.0,
-            "sortino_ratio": 0.0,
-            "max_drawdown": 0.0,
-            "open_trades": 0,
-            "open_risk_pct": 0.0,
-            "cvar_95": 0.0,
-            "kill_switch": False,
-            "currency": "USD",
+            "account_id":    user.sub,
+            "balance":       _balance,
+            "equity":        _equity,
+            "margin_used":   0.0,
+            "margin_free":   _equity,
+            "margin_level":  0.0,
+            "daily_pnl":     _daily_pnl,
+            "daily_pnl_pct": _daily_pnl_pct,
+            "total_pnl":     _total_pnl,
+            "unrealized_pnl": _unrealized,
+            "win_rate":      _win_rate,
+            "sharpe_ratio":  _sharpe,
+            "sortino_ratio": _sortino,
+            "max_drawdown":  _max_dd,
+            "open_trades":   _open_trades,
+            "open_risk_pct": _open_risk_pct,
+            "cvar_95":       _cvar_95,
+            "kill_switch":   _ks_active,
+            "currency":      "USD",
         }
 
     raw = await _broker_call("get_account_info")
