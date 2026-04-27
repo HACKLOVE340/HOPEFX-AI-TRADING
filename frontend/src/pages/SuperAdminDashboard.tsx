@@ -111,7 +111,7 @@ const SuperAdminDashboard: React.FC = () => {
 
   if (!user || !isSuperAdmin(user.role)) return null;
 
-  const activeTabDef = TABS.find(t => t.id === activeTab)!;
+  const activeTabDef = TABS.find(t => t.id === activeTab) ?? TABS[0]!;
 
   const renderSection = () => {
     switch (activeTab) {
