@@ -151,6 +151,7 @@ def register_routers(
     from api.settings_extended import router as settings_extended_router
     from api.settings_new_endpoints import router as settings_new_router
     from api.social_feed import _copy_router as social_copy_router
+    from api.social_feed import _copy_alias_router as social_copy_alias_router
     from api.social_feed import _lb_compat_router as social_lb_compat_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
@@ -159,6 +160,28 @@ def register_routers(
     from api.trading import router as trading_router
     from api.whitelabel_admin import router as whitelabel_router
     from auth.router import router as auth_router
+
+    # New routers added for full frontend coverage
+    try:
+        from api.notifications import router as notifications_router
+        _notifications_router = notifications_router
+    except Exception as _e:
+        logger.warning("Notifications router not loaded: %s", _e)
+        _notifications_router = None
+
+    try:
+        from api.community_chat import router as community_chat_router
+        _community_chat_router = community_chat_router
+    except Exception as _e:
+        logger.warning("Community chat router not loaded: %s", _e)
+        _community_chat_router = None
+
+    try:
+        from api.kyc import kyc_alias_router as _kyc_alias_router
+        _kyc_alias = _kyc_alias_router
+    except Exception as _e:
+        logger.warning("KYC alias router not loaded: %s", _e)
+        _kyc_alias = None
 
     for _router in [
         auth_router,
@@ -187,6 +210,7 @@ def register_routers(
         social_feed_router,
         social_leaderboard_router,
         social_copy_router,
+        social_copy_alias_router,
         social_lb_compat_router,
         mobile_router,
         whitelabel_router,
@@ -201,6 +225,19 @@ def register_routers(
         pages_router,
     ]:
         _include_router_deduped(app, _router)
+
+    # Register optional new routers
+    for _opt_router, _name in [
+        (_notifications_router, "Notifications"),
+        (_community_chat_router, "Community Chat"),
+        (_kyc_alias, "KYC alias"),
+    ]:
+        if _opt_router is not None:
+            try:
+                _include_router_deduped(app, _opt_router)
+                logger.info("%s router registered", _name)
+            except Exception as _re:
+                logger.warning("%s router registration failed: %s", _name, _re)
 
     logger.info("Health router registered (/api/health)")
     logger.info("Analysis router registered (/api/analysis)")

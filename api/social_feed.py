@@ -457,6 +457,55 @@ async def get_leaderboard(
     return []
 
 
+@leaderboard_router.get("/leaderboard/{trader_id}", summary="Trader leaderboard profile")
+async def get_leaderboard_profile(trader_id: str):
+    """Return a single trader's leaderboard profile."""
+    try:
+        from api.profiles import _manager
+        profile = _manager.get_profile(trader_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Trader not found")
+        return {
+            "id": trader_id,
+            "name": getattr(profile, "username", trader_id),
+            "return_3m": round(getattr(profile, "total_pnl", 0.0) / max(getattr(profile, "total_trades", 1), 1), 2),
+            "sharpe": round(getattr(profile, "sharpe_ratio", 0.0), 2),
+            "followers": getattr(profile, "total_followers", 0),
+            "win_rate": round(getattr(profile, "win_rate", 0.0), 1),
+            "trades": getattr(profile, "total_trades", 0),
+            "bio": getattr(profile, "bio", ""),
+            "avatar_url": getattr(profile, "avatar_url", None),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.debug("leaderboard profile lookup failed: %s", exc)
+        raise HTTPException(status_code=404, detail="Trader not found")
+
+
+@leaderboard_router.get("/leaderboard/{trader_id}/stats", summary="Trader leaderboard stats")
+async def get_leaderboard_stats(trader_id: str):
+    """Return detailed performance stats for a leaderboard trader."""
+    try:
+        from api.profiles import _manager
+        profile = _manager.get_profile(trader_id)
+        if not profile:
+            return {"trader_id": trader_id, "total_trades": 0, "win_rate": 0.0, "sharpe_ratio": 0.0}
+        return {
+            "trader_id": trader_id,
+            "total_trades": getattr(profile, "total_trades", 0),
+            "win_rate": getattr(profile, "win_rate", 0.0),
+            "sharpe_ratio": getattr(profile, "sharpe_ratio", 0.0),
+            "max_drawdown_pct": getattr(profile, "max_drawdown_pct", 0.0),
+            "total_return_pct": getattr(profile, "total_return_pct", 0.0),
+            "avg_trade_duration_h": getattr(profile, "avg_trade_duration_h", 0.0),
+            "followers": getattr(profile, "total_followers", 0),
+        }
+    except Exception as exc:
+        logger.debug("leaderboard stats lookup failed: %s", exc)
+        return {"trader_id": trader_id, "total_trades": 0, "win_rate": 0.0, "sharpe_ratio": 0.0}
+
+
 # ── Copy-trading router ───────────────────────────────────────────────────────
 # Mounted at /api/social so the frontend can call:
 #   POST   /api/social/copy/{trader_id}  — start copying a trader
@@ -766,3 +815,100 @@ async def copy_trader(
         "allocation_amount": req.allocation_amount,
         "message": f"Now copying trader {trader_id}. Signals will be mirrored automatically.",
     }
+
+
+
+# ── /api/copy/* alias router ──────────────────────────────────────────────────
+# Frontend calls /api/copy/* (without /social prefix).
+# These aliases forward to the same logic as _copy_router.
+
+_copy_alias_router = APIRouter(prefix="/api/copy", tags=["Copy Trading"])
+
+
+@_copy_alias_router.get("/active", summary="List active copy relationships")
+async def _copy_active_alias(user: TokenPayload = Depends(require_plan("professional"))):
+    copies = _user_copies(user.sub)
+    return [c for c in copies if c.get("status") == "active"]
+
+
+@_copy_alias_router.post("/{trader_id}", summary="Start copying a trader")
+async def _copy_start_alias(
+    trader_id: str,
+    req: CopyTradeRequest,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    return await copy_trader(trader_id, req, user)
+
+
+@_copy_alias_router.delete("/{trader_id}", summary="Stop copying a trader")
+async def _copy_stop_alias(
+    trader_id: str,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    copies = _user_copies(user.sub)
+    record = next(
+        (c for c in copies if c.get("trader_id") == trader_id and c.get("status") == "active"),
+        None,
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Copy relationship not found")
+    record["status"] = "stopped"
+    record["stopped_at"] = datetime.now(UTC).isoformat()
+    _save_copies(user.sub)
+    return {"status": "stopped", "trader_id": trader_id}
+
+
+@_copy_alias_router.patch("/{trader_id}/allocation", summary="Update copy allocation")
+async def _copy_update_allocation(
+    trader_id: str,
+    body: dict,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    copies = _user_copies(user.sub)
+    record = next(
+        (c for c in copies if c.get("trader_id") == trader_id and c.get("status") == "active"),
+        None,
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Copy relationship not found")
+    record["allocation_amount"] = body.get("allocation_amount", record.get("allocation_amount", 0))
+    _save_copies(user.sub)
+    return {"success": True, "trader_id": trader_id, "allocation_amount": record["allocation_amount"]}
+
+
+@_copy_alias_router.get("/history", summary="Copy trading history")
+async def _copy_history(
+    limit: int = 50,
+    user: TokenPayload = Depends(get_current_user),
+):
+    copies = _user_copies(user.sub)
+    stopped = sorted(
+        [c for c in copies if c.get("status") == "stopped"],
+        key=lambda x: x.get("stopped_at", ""),
+        reverse=True,
+    )
+    return {"history": stopped[:limit], "total": len(stopped)}
+
+
+@_copy_alias_router.get("/{trader_id}/performance", summary="Copy trader performance")
+async def _copy_performance(
+    trader_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    try:
+        from api.profiles import _manager
+        profile = _manager.get_profile(trader_id)
+        if not profile:
+            return {"trader_id": trader_id, "total_return_pct": 0.0, "win_rate": 0.0, "followers": 0}
+        return {
+            "trader_id": trader_id,
+            "total_return_pct": getattr(profile, "total_return_pct", 0.0),
+            "win_rate": getattr(profile, "win_rate", 0.0),
+            "sharpe_ratio": getattr(profile, "sharpe_ratio", 0.0),
+            "max_drawdown_pct": getattr(profile, "max_drawdown_pct", 0.0),
+            "followers": getattr(profile, "total_followers", 0),
+            "total_trades": getattr(profile, "total_trades", 0),
+        }
+    except Exception as exc:
+        logger.debug("copy performance lookup failed: %s", exc)
+        return {"trader_id": trader_id, "total_return_pct": 0.0, "win_rate": 0.0, "followers": 0}

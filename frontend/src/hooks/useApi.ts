@@ -355,13 +355,17 @@ export const abTestingApi = {
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 
 export const leaderboardApi = {
-  list: (period?: string) => api.get('/leaderboard', { params: period ? { period } : {} }),
+  list:    (period?: string) => api.get('/leaderboard', { params: period ? { period } : {} }),
+  profile: (traderId: string) => api.get(`/leaderboard/${traderId}`),
+  stats:   (traderId: string) => api.get(`/leaderboard/${traderId}/stats`),
 };
 
 // ── Performance ───────────────────────────────────────────────────────────────
 
 export const performanceApi = {
   summary:     ()  => api.get('/performance/public'),
+  // /api/trading/performance/summary is the authoritative endpoint
+  tradingSummary: () => api.get('/trading/performance/summary'),
   equity:      ()  => api.get('/performance/equity-curve'),
   equityCurve: ()  => api.get('/performance/equity-curve'),
   trades:      ()  => api.get('/trading/trades'),
@@ -699,7 +703,7 @@ export const superadminApi = {
   diagnosticsRemediationLog: (limit?: number)  => api.get('/superadmin/diagnostics/remediation-log', { params: limit ? { limit } : {} }),
 
   // ── Infrastructure extended ───────────────────────────────────────────────
-  infraScheduledJobs:  ()                      => api.get('/superadmin/system/scheduled-jobs'),
+  infraScheduledJobs:  ()                      => api.get('/superadmin/system/jobs'),
   infraBackups:        ()                      => api.get('/superadmin/system/backups'),
   infraTriggerBackup:  (type?: string)         => api.post('/superadmin/system/backups/trigger', { type: type ?? 'incremental' }),
   infraApiKeys:        ()                      => api.get('/superadmin/system/api-keys'),
@@ -1065,27 +1069,28 @@ export const affiliateApi = {
 };
 
 // ── Social / Signal Feed API ──────────────────────────────────────────────────
-// Backend: /api/social/*
+// Backend: /api/feed/* (signal feed), /api/copy/* (copy trading), /api/profiles/* (profiles)
+// Note: frontend historically used /api/social/* — all calls now route to correct backend paths.
 
 export const socialApi = {
-  feed:             (params?: Record<string, unknown>)        => api.get('/social/feed', { params }),
+  feed:             (params?: Record<string, unknown>)        => api.get('/feed', { params }),
   react:            (signalId: string, reaction: 'up' | 'down') =>
-                      api.post(`/social/signals/${signalId}/react`, { reaction }),
-  comments:         (signalId: string)                        => api.get(`/social/signals/${signalId}/comments`),
+                      api.post(`/feed/${signalId}/react`, { reaction }),
+  comments:         (signalId: string)                        => api.get(`/feed/${signalId}/comments`),
   addComment:       (signalId: string, text: string)          =>
-                      api.post(`/social/signals/${signalId}/comments`, { text }),
-  optIn:            ()                                        => api.post('/social/opt-in'),
-  optOut:           ()                                        => api.post('/social/opt-out'),
-  optStatus:        ()                                        => api.get('/social/opt-status'),
+                      api.post(`/feed/${signalId}/comment`, { text }),
+  optIn:            ()                                        => api.post('/feed/opt-in'),
+  optOut:           ()                                        => api.post('/feed/opt-out'),
+  optStatus:        ()                                        => api.get('/feed/status/me'),
   copyTrader:       (traderId: string, payload: Record<string, unknown>) =>
-                      api.post(`/social/copy/${traderId}`, payload),
-  stopCopy:         (traderId: string)                        => api.delete(`/social/copy/${traderId}`),
-  activeCopies:     ()                                        => api.get('/social/copy/active'),
+                      api.post(`/copy/${traderId}`, payload),
+  stopCopy:         (traderId: string)                        => api.delete(`/copy/${traderId}`),
+  activeCopies:     ()                                        => api.get('/copy/active'),
   updateAllocation: (traderId: string, amount: number)        =>
-                      api.patch(`/social/copy/${traderId}/allocation`, { allocation_amount: amount }),
-  profile:          (traderId: string)                        => api.get(`/social/traders/${traderId}`),
-  follow:           (traderId: string)                        => api.post(`/social/follow/${traderId}`),
-  unfollow:         (traderId: string)                        => api.delete(`/social/follow/${traderId}`),
+                      api.patch(`/copy/${traderId}/allocation`, { allocation_amount: amount }),
+  profile:          (traderId: string)                        => api.get(`/profiles/${traderId}`),
+  follow:           (traderId: string)                        => api.post(`/profiles/${traderId}/follow`),
+  unfollow:         (traderId: string)                        => api.delete(`/profiles/${traderId}/follow`),
 };
 
 // ── Notifications API ─────────────────────────────────────────────────────────
@@ -1103,30 +1108,33 @@ export const notificationsApi = {
 };
 
 // ── Profile API ───────────────────────────────────────────────────────────────
-// Backend: /api/profile/*
+// Backend: /api/profiles/* (note plural — matches router prefix)
 
 export const profileApi = {
   get:              (userId?: string)                         =>
-                      api.get(userId ? `/profile/${userId}` : '/profile/me'),
-  update:           (payload: Record<string, unknown>)        => api.patch('/profile/me', payload),
+                      api.get(userId ? `/profiles/${userId}` : '/profiles/me'),
+  update:           (payload: Record<string, unknown>)        => api.put('/profiles/me', payload),
   uploadAvatar:     (formData: FormData)                      =>
-                      api.post('/profile/me/avatar', formData, {
+                      api.post('/profiles/me/avatar', formData, {
                         headers: { 'Content-Type': 'multipart/form-data' },
                       }),
-  follow:           (userId: string)                          => api.post(`/profile/${userId}/follow`),
-  unfollow:         (userId: string)                          => api.delete(`/profile/${userId}/follow`),
-  followers:        (userId: string)                          => api.get(`/profile/${userId}/followers`),
-  following:        (userId: string)                          => api.get(`/profile/${userId}/following`),
+  follow:           (userId: string)                          => api.post(`/profiles/${userId}/follow`),
+  unfollow:         (userId: string)                          => api.delete(`/profiles/${userId}/follow`),
+  followers:        (userId: string)                          => api.get(`/profiles/${userId}/followers`),
+  following:        (userId: string)                          => api.get(`/profiles/${userId}/following`),
   signals:          (userId: string, params?: Record<string, unknown>) =>
-                      api.get(`/profile/${userId}/signals`, { params }),
-  strategies:       (userId: string)                          => api.get(`/profile/${userId}/strategies`),
-  stats:            (userId: string)                          => api.get(`/profile/${userId}/stats`),
+                      api.get(`/profiles/${userId}/signals`, { params }),
+  strategies:       (userId: string)                          => api.get(`/profiles/${userId}/strategies`),
+  stats:            (userId: string)                          => api.get(`/profiles/${userId}/stats`),
 };
 
 // ── Admin API ─────────────────────────────────────────────────────────────────
 // Backend: /api/admin/*
 
 export const adminApi = {
+  // Overview — /api/admin/dashboard-data is the real overview endpoint
+  overview:         ()                                        => api.get('/admin/dashboard-data'),
+  alerts:           ()                                        => api.get('/admin/status'),
   // Users
   users:            (params?: Record<string, unknown>)        => api.get('/admin/users', { params }),
   user:             (userId: string)                          => api.get(`/admin/users/${userId}`),
@@ -1140,16 +1148,16 @@ export const adminApi = {
   auditLog:         (params?: Record<string, unknown>)        => api.get('/admin/audit-log', { params }),
   auditExport:      ()                                        => api.get('/admin/audit-log/export', { responseType: 'blob' }),
   // Platform
-  platformConfig:   ()                                        => api.get('/admin/platform/config'),
-  updateConfig:     (payload: Record<string, unknown>)        => api.patch('/admin/platform/config', payload),
+  platformConfig:   ()                                        => api.get('/admin/settings'),
+  updateConfig:     (payload: Record<string, unknown>)        => api.post('/admin/settings', payload),
   maintenanceMode:  (enabled: boolean)                        =>
-                      api.post('/admin/platform/maintenance', { enabled }),
+                      api.post('/admin/pause', { enabled }),
   // KYC
-  kycList:          (params?: Record<string, unknown>)        => api.get('/admin/kyc', { params }),
-  kycApprove:       (userId: string)                          => api.post(`/admin/kyc/${userId}/approve`),
+  kycList:          (params?: Record<string, unknown>)        => api.get('/admin/kyc/pending', { params }),
+  kycApprove:       (userId: string)                          => api.post('/admin/kyc/decide', { user_id: userId, decision: 'approve' }),
   kycReject:        (userId: string, reason: string)          =>
-                      api.post(`/admin/kyc/${userId}/reject`, { reason }),
-  // Security
+                      api.post('/admin/kyc/decide', { user_id: userId, decision: 'reject', reason }),
+  // Security — /api/security/* router
   lockdown:         (enable: boolean)                         =>
                       api.post('/security/lockdown', { enable }),
   unblockIp:        (ip: string)                              => api.post('/security/unblock-ip', { ip }),
@@ -1182,20 +1190,20 @@ export const billingApi = {
 };
 
 // ── Copy Trading API ──────────────────────────────────────────────────────────
-// Backend: /api/social/copy/* and /api/leaderboard/*
+// Backend: /api/copy/* and /api/leaderboard/*
 
 export const copyTradingApi = {
   leaders:          (params?: Record<string, unknown>)        => api.get('/leaderboard', { params }),
   leaderProfile:    (traderId: string)                        => api.get(`/leaderboard/${traderId}`),
   leaderStats:      (traderId: string)                        => api.get(`/leaderboard/${traderId}/stats`),
   startCopy:        (traderId: string, payload: Record<string, unknown>) =>
-                      api.post(`/social/copy/${traderId}`, payload),
-  stopCopy:         (traderId: string)                        => api.delete(`/social/copy/${traderId}`),
-  activeSessions:   ()                                        => api.get('/social/copy/active'),
+                      api.post(`/copy/${traderId}`, payload),
+  stopCopy:         (traderId: string)                        => api.delete(`/copy/${traderId}`),
+  activeSessions:   ()                                        => api.get('/copy/active'),
   updateAllocation: (traderId: string, amount: number)        =>
-                      api.patch(`/social/copy/${traderId}/allocation`, { allocation_amount: amount }),
-  history:          (params?: Record<string, unknown>)        => api.get('/social/copy/history', { params }),
-  performance:      (traderId: string)                        => api.get(`/social/copy/${traderId}/performance`),
+                      api.patch(`/copy/${traderId}/allocation`, { allocation_amount: amount }),
+  history:          (params?: Record<string, unknown>)        => api.get('/copy/history', { params }),
+  performance:      (traderId: string)                        => api.get(`/copy/${traderId}/performance`),
 };
 
 // ── KYC API ───────────────────────────────────────────────────────────────────

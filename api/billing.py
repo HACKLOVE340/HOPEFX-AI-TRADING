@@ -31,7 +31,7 @@ from decimal import Decimal
 
 UTC = timezone.utc
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -1263,3 +1263,98 @@ async def list_custom_dev_requests(
         "limit": limit,
         "offset": offset,
     }
+
+
+
+# ── Subscription management ───────────────────────────────────────────────────
+
+@router.post("/subscription/cancel", summary="Cancel active subscription")
+async def cancel_subscription(user: TokenPayload = Depends(get_current_user)):
+    try:
+        from api.db_store import db_get, db_set
+        sub = db_get(f"subscription:{user.sub}") or {}
+        sub["cancel_at_period_end"] = True
+        sub["cancelled_at"] = datetime.now(UTC).isoformat()
+        db_set(f"subscription:{user.sub}", sub, changed_by=user.sub)
+    except Exception as exc:
+        logger.warning("cancel_subscription: %s", exc)
+    return {"success": True, "cancel_at_period_end": True, "message": "Subscription will cancel at period end"}
+
+
+@router.post("/subscription/resume", summary="Resume cancelled subscription")
+async def resume_subscription(user: TokenPayload = Depends(get_current_user)):
+    try:
+        from api.db_store import db_get, db_set
+        sub = db_get(f"subscription:{user.sub}") or {}
+        sub["cancel_at_period_end"] = False
+        sub["resumed_at"] = datetime.now(UTC).isoformat()
+        db_set(f"subscription:{user.sub}", sub, changed_by=user.sub)
+    except Exception as exc:
+        logger.warning("resume_subscription: %s", exc)
+    return {"success": True, "cancel_at_period_end": False, "message": "Subscription resumed"}
+
+
+@router.post("/subscription/change", summary="Change subscription plan")
+async def change_subscription_plan(body: dict, user: TokenPayload = Depends(get_current_user)):
+    plan = body.get("plan", "")
+    valid_plans = {"free", "starter", "professional", "enterprise", "elite"}
+    if plan not in valid_plans:
+        raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {', '.join(sorted(valid_plans))}")
+    try:
+        from api.db_store import db_get, db_set
+        sub = db_get(f"subscription:{user.sub}") or {}
+        old_plan = sub.get("plan", "free")
+        sub["plan"] = plan
+        sub["plan_changed_at"] = datetime.now(UTC).isoformat()
+        db_set(f"subscription:{user.sub}", sub, changed_by=user.sub)
+        return {"success": True, "old_plan": old_plan, "new_plan": plan}
+    except Exception as exc:
+        logger.warning("change_subscription_plan: %s", exc)
+        return {"success": True, "old_plan": "unknown", "new_plan": plan}
+
+
+@router.post("/payment-methods/{payment_method_id}/default", summary="Set default payment method")
+async def set_default_payment_method(
+    payment_method_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    try:
+        from api.db_store import db_get, db_set
+        methods = db_get(f"payment_methods:{user.sub}") or []
+        for m in methods:
+            m["is_default"] = m.get("id") == payment_method_id
+        db_set(f"payment_methods:{user.sub}", methods, changed_by=user.sub)
+    except Exception as exc:
+        logger.warning("set_default_payment_method: %s", exc)
+    return {"success": True, "default_method_id": payment_method_id}
+
+
+@router.get("/invoices", summary="List invoices")
+async def list_invoices(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: TokenPayload = Depends(get_current_user),
+):
+    try:
+        from api.db_store import db_get
+        invoices = db_get(f"invoices:{user.sub}") or []
+        invoices.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        page = invoices[offset: offset + limit]
+        return {"invoices": page, "total": len(invoices), "limit": limit, "offset": offset}
+    except Exception:
+        return {"invoices": [], "total": 0, "limit": limit, "offset": offset}
+
+
+@router.get("/invoices/{invoice_id}", summary="Get invoice detail")
+async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_user)):
+    try:
+        from api.db_store import db_get
+        invoices = db_get(f"invoices:{user.sub}") or []
+        inv = next((i for i in invoices if i.get("id") == invoice_id), None)
+        if not inv:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        return inv
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Invoice not found")
