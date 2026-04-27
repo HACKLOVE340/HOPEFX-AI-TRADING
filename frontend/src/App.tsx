@@ -384,11 +384,13 @@ const AppShell: React.FC = () => {
 
             {/* Trading */}
             {/* /ai-charts = AI Chart Bot (primary advanced terminal, professional+) */}
-            <Route path="/ai-charts"    element={wrap(gated('trading',      <ChartDashboard />))} />
+            <Route path="/ai-charts"          element={wrap(gated('trading',      <ChartDashboard />))} />
+            {/* /ai-chart-dashboard = AI Chart Dashboard (full AI analysis view) */}
+            <Route path="/ai-chart-dashboard" element={wrap(gated('trading',      <AIChartDashboard />))} />
             {/* /terminal = classic trading terminal (starter+) */}
-            <Route path="/terminal"     element={wrap(gated('terminal',     <TradingTerminal />))} />
+            <Route path="/terminal"           element={wrap(gated('terminal',     <TradingTerminal />))} />
             {/* /trading kept as alias for /ai-charts for backward compat */}
-            <Route path="/trading"      element={<Navigate to="/ai-charts" replace />} />
+            <Route path="/trading"            element={<Navigate to="/ai-charts" replace />} />
             <Route path="/nuclear"      element={wrap(gated('nuclear',      <NuclearDashboard />))} />
             <Route path="/geopolitical" element={wrap(gated('geopolitical', <GeopoliticalRiskPage />))} />
             <Route path="/journal"      element={wrap(gated('journal',      <TradeJournal />))} />
