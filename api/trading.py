@@ -1321,7 +1321,7 @@ async def get_ohlcv(
         ticker_sym = _YF_MAP.get(symbol, symbol)
         interval, period = _TF_MAP.get(timeframe, ("1h", "730d"))
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _fetch_yf():
             t = _yf.Ticker(ticker_sym)
@@ -1998,7 +1998,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     ohlcv_bars: list[dict] = []
     try:
         import yfinance as _yf
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _fetch():
             t = _yf.Ticker(ticker_sym)
@@ -2017,9 +2017,11 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
                 for _, r in df.iterrows()
             ]
 
-        ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=20.0)
+        ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
+    except asyncio.TimeoutError:
+        logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
     except Exception as exc:
-        logger.debug("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
+        logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
 
     # Use last close as price if not provided
     if price <= 0 and ohlcv_bars:
@@ -2214,7 +2216,7 @@ async def get_regime_status(
 
     try:
         import yfinance as _yf
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def _fetch():
             t = _yf.Ticker(ticker_sym)
@@ -2229,10 +2231,12 @@ async def get_regime_status(
             )
 
         closes, highs, lows = await asyncio.wait_for(
-            loop.run_in_executor(None, _fetch), timeout=20.0
+            loop.run_in_executor(None, _fetch), timeout=25.0
         )
+    except asyncio.TimeoutError:
+        logger.warning("regime: yfinance fetch timed out for %s", symbol_norm)
     except Exception as exc:
-        logger.debug("regime: yfinance fetch failed: %s", exc)
+        logger.warning("regime: yfinance fetch failed for %s: %s", symbol_norm, exc)
 
     # ── Regime detection ──────────────────────────────────────────────────────
     regime = "ranging"
