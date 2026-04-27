@@ -34,8 +34,10 @@ from pathlib import Path as _Path
 
 
 class EquityPoint(BaseModel):
-    time: float  # Unix timestamp (seconds)
-    value: float  # Equity in account currency
+    timestamp: str   # ISO-8601 datetime string, e.g. "2025-01-15T14:30:00"
+    equity:    float  # Equity in account currency
+    drawdown:  float  # Drawdown as negative fraction, e.g. -0.05 = -5%
+    balance:   float  # Balance (same as equity when no open positions)
 
 
 class PublicPerformance(BaseModel):
@@ -51,6 +53,25 @@ class PublicPerformance(BaseModel):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
+def _build_equity_points(equity_values: list[tuple], starting: float) -> list[EquityPoint]:
+    """Convert a list of (datetime_or_ts, equity_value) pairs into EquityPoint list with drawdown."""
+    import datetime as _dt
+    points: list[EquityPoint] = []
+    peak = starting
+    for ts_raw, eq_val in equity_values:
+        eq = float(eq_val)
+        peak = max(peak, eq)
+        dd = (eq - peak) / peak if peak > 0 else 0.0  # negative fraction
+        if hasattr(ts_raw, "isoformat"):
+            ts_str = ts_raw.isoformat()
+        elif isinstance(ts_raw, (int, float)):
+            ts_str = _dt.datetime.fromtimestamp(float(ts_raw), tz=_dt.timezone.utc).isoformat()
+        else:
+            ts_str = str(ts_raw)
+        points.append(EquityPoint(timestamp=ts_str, equity=round(eq, 4), drawdown=round(dd, 6), balance=round(eq, 4)))
+    return points
+
+
 def _load_equity_curve() -> list[EquityPoint]:
     """
     Load equity curve from the live engine or DB trade history.
@@ -61,6 +82,9 @@ def _load_equity_curve() -> list[EquityPoint]:
       3. Broker equity history (broker-reported snapshots)
       4. Empty list — frontend handles the empty case gracefully
     """
+    import os as _os
+    starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
+
     # ── 1. Live engine fill history ───────────────────────────────────────────
     try:
         from app import app_state as _app_state
@@ -69,21 +93,19 @@ def _load_equity_curve() -> list[EquityPoint]:
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
             if fills:
-                starting = float(getattr(engine, "_starting_equity", 10_000.0))
-                equity = starting
-                points: list[EquityPoint] = []
+                eng_start = float(getattr(engine, "_starting_equity", starting))
+                equity = eng_start
+                pairs = []
                 for f in sorted(fills, key=lambda x: x.filled_at):
                     equity += float(getattr(f, "pnl", 0.0) or 0.0)
-                    ts = f.filled_at.timestamp() if hasattr(f.filled_at, "timestamp") else float(f.filled_at)
-                    points.append(EquityPoint(time=ts, value=round(equity, 4)))
-                if points:
-                    return points
+                    pairs.append((f.filled_at, equity))
+                if pairs:
+                    return _build_equity_points(pairs, eng_start)
     except Exception as exc:
         logger.debug("engine fill history load failed: %s", exc)
 
     # ── 2. DB Trade table (closed trades) ────────────────────────────────────
     try:
-        import os as _os
         from database.connection import SessionLocal as _SL
         from database.models import Trade, TradeStatus
 
@@ -96,15 +118,13 @@ def _load_equity_curve() -> list[EquityPoint]:
                 .all()
             )
             if trades:
-                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
                 equity = starting
-                points = []
+                pairs = []
                 for t in trades:
                     equity += float(t.realized_pnl or 0.0)
-                    ts = t.exit_time.timestamp() if hasattr(t.exit_time, "timestamp") else 0.0
-                    points.append(EquityPoint(time=ts, value=round(equity, 4)))
-                if points:
-                    return points
+                    pairs.append((t.exit_time, equity))
+                if pairs:
+                    return _build_equity_points(pairs, starting)
         finally:
             db.close()
     except Exception as exc:
@@ -118,7 +138,7 @@ def _load_equity_curve() -> list[EquityPoint]:
         if broker and hasattr(broker, "get_equity_history"):
             history = broker.get_equity_history()
             if history:
-                return [EquityPoint(time=float(t), value=float(v)) for t, v in history]
+                return _build_equity_points(history, starting)
     except Exception as exc:
         logger.debug("broker equity history load failed: %s", exc)
 
@@ -159,16 +179,11 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
             ),
         )
 
-    values = [p.value for p in curve]
-    start = curve[0].value
+    values = [p.equity for p in curve]
+    start = curve[0].equity
 
-    # Max drawdown
-    peak = start
-    max_dd = 0.0
-    for v in values:
-        peak = max(peak, v)
-        dd = (peak - v) / peak if peak > 0 else 0.0
-        max_dd = max(max_dd, dd)
+    # Max drawdown — use pre-computed drawdown field if available
+    max_dd = abs(min((p.drawdown for p in curve), default=0.0))
 
     # Returns
     returns = []
@@ -187,9 +202,7 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
         if std_r > 0:
             sharpe = round((mean_r / std_r) * math.sqrt(252), 3)
 
-    import datetime
-
-    start_date = datetime.datetime.fromtimestamp(curve[0].time).strftime("%Y-%m-%d")
+    start_date = curve[0].timestamp[:10]  # ISO date portion
 
     note = (
         "Live paper trading results. Sharpe shown only after 50+ data points."

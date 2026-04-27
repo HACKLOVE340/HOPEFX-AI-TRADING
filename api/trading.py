@@ -1069,7 +1069,8 @@ async def get_account(
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
-                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+                    # win_rate as fraction 0-1 (frontend multiplies by 100 for display)
+                    _win_rate = round(len(wins) / len(pnls), 4) if pnls else 0.0
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -1083,7 +1084,8 @@ async def get_account(
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
                         _max_dd = max(_max_dd, dd)
-                    _max_dd = round(_max_dd * 100, 2)
+                    # max_drawdown as fraction 0-1 (frontend multiplies by 100 for display)
+                    _max_dd = round(_max_dd, 4)
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]

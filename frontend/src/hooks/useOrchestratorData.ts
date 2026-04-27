@@ -456,6 +456,38 @@ export function useDataFeeds() {
   });
 }
 
+// ── Risk snapshot (every 15s, no delay — critical for dashboard) ──────────────
+
+export function useRiskSnapshot() {
+  const setRiskSnapshot = useStore((s) => s.setRiskSnapshot);
+  const isAuth          = useStore(selectIsAuth);
+  const hydrated        = useHasHydrated();
+
+  const query = useQuery({
+    queryKey: ['trading', 'risk-snapshot'],
+    queryFn:  async () => {
+      const res = await tradingApi.riskMetrics();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth,
+    refetchInterval: 15_000,
+    staleTime:       10_000,
+  });
+
+  useEffect(() => {
+    if (!query.data) return;
+    const d = query.data as Record<string, unknown>;
+    setRiskSnapshot({
+      daily_loss_pct:     typeof d.daily_pnl === 'number' ? Math.abs(d.daily_pnl as number) : undefined,
+      max_drawdown_pct:   typeof d.max_drawdown === 'number' ? (d.max_drawdown as number) : undefined,
+      open_risk_pct:      typeof d.open_risk_pct === 'number' ? (d.open_risk_pct as number) : undefined,
+      kill_switch_active: typeof d.kill_switch === 'boolean' ? (d.kill_switch as boolean) : false,
+    });
+  }, [query.data, setRiskSnapshot]);
+
+  return query;
+}
+
 // ── Bootstrap all data on mount ───────────────────────────────────────────────
 
 export function useBootstrapData() {
@@ -475,4 +507,5 @@ export function useBootstrapData() {
   useMLHealth();
   useHighImpactCalendar();
   useDataFeeds();
+  useRiskSnapshot();
 }
