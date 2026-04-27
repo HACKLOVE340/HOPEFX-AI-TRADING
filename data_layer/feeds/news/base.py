@@ -129,6 +129,24 @@ class NewsFeedBase(ABC):
                     return await resp.json(content_type=None)
             except (TimeoutError, aiohttp.ClientError) as exc:
                 self._total_errors += 1
+                # DNS / connection-refused errors are permanent for this session;
+                # retrying will not help until the host is reachable again.
+                exc_str = str(exc)
+                is_permanent = (
+                    isinstance(exc, aiohttp.ClientConnectorError)
+                    and (
+                        "Could not contact DNS servers" in exc_str
+                        or "Name or service not known" in exc_str
+                        or "Connection refused" in exc_str
+                    )
+                )
+                if is_permanent:
+                    logger.debug(
+                        "%s unreachable (DNS/connection): %s — skipping retries",
+                        self.name.value,
+                        exc,
+                    )
+                    raise
                 wait = backoff + random.uniform(0, 0.5)  # nosec B311 - retry jitter, not cryptographic
                 logger.warning(
                     "%s HTTP error attempt=%d: %s — retry %.1fs",

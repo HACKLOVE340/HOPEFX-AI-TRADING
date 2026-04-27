@@ -89,6 +89,14 @@ if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
     )
 
 
+async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> None:
+    """Close a WebSocket, ignoring errors when it is already closed."""
+    try:
+        await websocket.close(code=code, reason=reason)
+    except RuntimeError:
+        pass  # already closed
+
+
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
     token = token.removeprefix("Bearer ")
@@ -1022,7 +1030,7 @@ async def ws_live(websocket: WebSocket) -> None:
                         "message": "First message must be {type: auth, token: ...}",
                     },
                 )
-                await websocket.close(code=4001)
+                await _safe_ws_close(websocket, code=4001)
                 _manager.disconnect(cid)
                 return
 
@@ -1036,7 +1044,7 @@ async def ws_live(websocket: WebSocket) -> None:
                         "message": "Invalid or expired token",
                     },
                 )
-                await websocket.close(code=4001)
+                await _safe_ws_close(websocket, code=4001)
                 _manager.disconnect(cid)
                 return
 
@@ -1060,7 +1068,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
                 },
             )
-            await websocket.close(code=4001)
+            await _safe_ws_close(websocket, code=4001)
             _manager.disconnect(cid)
             return
         except Exception:
@@ -1085,13 +1093,13 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
                 cid,
                 {"type": "error", "code": "AUTH_REQUIRED", "message": "First message must be {type: auth, token: ...}"},
             )
-            await websocket.close(code=4001)
+            await _safe_ws_close(websocket, code=4001)
             _manager.disconnect(cid)
             return False
         payload = _validate_ws_token(msg.get("token", ""))
         if payload is None:
             await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
-            await websocket.close(code=4001)
+            await _safe_ws_close(websocket, code=4001)
             _manager.disconnect(cid)
             return False
         user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
@@ -1102,7 +1110,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
-        await websocket.close(code=4001)
+        await _safe_ws_close(websocket, code=4001)
         _manager.disconnect(cid)
         return False
     except (WebSocketDisconnect, Exception) as exc:
@@ -1256,12 +1264,12 @@ async def ws_nuclear(websocket: WebSocket) -> None:
         msg = json.loads(raw)
     except (TimeoutError, json.JSONDecodeError):
         await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
-        await websocket.close()
+        await _safe_ws_close(websocket, code=4001)
         return
 
     if msg.get("type") != "auth":
         await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
-        await websocket.close()
+        await _safe_ws_close(websocket, code=4001)
         return
 
     payload = _validate_ws_token(msg.get("token", ""))
@@ -1269,7 +1277,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
         await websocket.send_text(
             json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
         )
-        await websocket.close()
+        await _safe_ws_close(websocket, code=4001)
         return
 
     user_id = str(payload.get("sub", "unknown"))

@@ -28,6 +28,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Rate-limit repeated "strategy decision timeout" warnings to once per 5 minutes.
+_DECISION_TIMEOUT_LOG_INTERVAL: float = 300.0
+_decision_timeout_last_logged: float = 0.0
+
 try:
     import numpy as np
 
@@ -858,7 +862,16 @@ class HOPEFXBrain:
             await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
         except TimeoutError:
-            logger.warning("Strategy decision timeout")
+            global _decision_timeout_last_logged
+            now = time.monotonic()
+            if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
+                logger.warning(
+                    "Strategy decision timeout (further timeouts suppressed for %.0f s)",
+                    _DECISION_TIMEOUT_LOG_INTERVAL,
+                )
+                _decision_timeout_last_logged = now
+            else:
+                logger.debug("Strategy decision timeout")
         except Exception as e:
             logger.error("Strategy decision error: %s", e)
 

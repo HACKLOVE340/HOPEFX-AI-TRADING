@@ -132,6 +132,46 @@ _ANOMALY_COUNTER_GAUGE = Gauge(
 )
 
 
+async def _polygon_recv_status(
+    ws,
+    expected: "str | tuple[str, ...]",
+    timeout: float = 10.0,
+) -> "dict | None":
+    """
+    Read frames from a Polygon WebSocket until one matches *expected* status.
+
+    Polygon sends a ``{"status": "connected"}`` frame immediately on connect,
+    before any auth or subscribe response.  This helper skips those preamble
+    frames so callers don't have to handle the ordering themselves.
+
+    Returns the matching status dict, or None on timeout.
+    """
+    if isinstance(expected, str):
+        expected = (expected,)
+    deadline = asyncio.get_event_loop().time() + timeout
+    while True:
+        remaining = deadline - asyncio.get_event_loop().time()
+        if remaining <= 0:
+            return None
+        try:
+            raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+        except (TimeoutError, asyncio.TimeoutError):
+            return None
+        frames = json.loads(raw)
+        if not isinstance(frames, list):
+            frames = [frames]
+        for frame in frames:
+            status = frame.get("status", "")
+            if status in expected:
+                return frame
+            # Skip known preamble frames silently.
+            if status == "connected":
+                logger.debug("Polygon: skipping 'connected' preamble frame")
+                continue
+            # Any other unexpected status — return it so the caller can raise.
+            return frame
+
+
 class NuclearStreamer:
     """
     Concurrent multi-source WebSocket price streamer for XAUUSD.
@@ -606,18 +646,22 @@ class NuclearStreamer:
             close_timeout=5,
         ) as ws:
             # Step 1: authenticate.
+            # Polygon sends a {"status":"connected"} frame immediately on connect
+            # before the auth response arrives.  Drain any such frames first so
+            # we don't mistake the connection ack for an auth failure.
             await ws.send(json.dumps({"action": "auth", "params": self._polygon_key}))
-            auth_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-            # auth_resp is a list; check the first element.
-            auth_msg = auth_resp[0] if isinstance(auth_resp, list) else auth_resp
+            auth_msg = await _polygon_recv_status(ws, expected="auth_success", timeout=10)
+            if auth_msg is None:
+                raise RuntimeError("Polygon auth timed out")
             if auth_msg.get("status") != "auth_success":
                 raise RuntimeError(f"Polygon auth failed: {auth_msg}")
             logger.info("Polygon: authenticated")
 
             # Step 2: subscribe.
             await ws.send(json.dumps({"action": "subscribe", "params": polygon_symbol}))
-            sub_resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
-            sub_msg = sub_resp[0] if isinstance(sub_resp, list) else sub_resp
+            sub_msg = await _polygon_recv_status(ws, expected=("success", "subscribed"), timeout=10)
+            if sub_msg is None:
+                raise RuntimeError("Polygon subscribe timed out")
             if sub_msg.get("status") not in ("success", "subscribed"):
                 raise RuntimeError(f"Polygon subscribe failed: {sub_msg}")
             logger.info("Polygon: subscribed to %s", polygon_symbol)
