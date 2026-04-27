@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { getWsBase } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
@@ -175,10 +176,9 @@ const AuditLog: React.FC = () => {
   // Real-time WS event injection — subscribe to /ws/audit-events
   useEffect(() => {
     if (!token) return;
-    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:8000';
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${wsBase}/ws/audit-events?token=${token}`);
+      ws = new WebSocket(`${getWsBase()}/ws/audit-events?token=${token}`);
       wsRef.current = ws;
       ws.onmessage = (ev) => {
         try {
