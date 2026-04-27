@@ -316,6 +316,7 @@ class HOPEFXBrain:
 
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")
+            raise
         except Exception as e:
             logger.critical("Brain critical error: %s", e, exc_info=True)
             await self._execute_emergency_stop()
@@ -389,10 +390,15 @@ class HOPEFXBrain:
         async with self._state_lock:
             self.state.cycle_time_ms = elapsed * 1000
 
-        # Sleep with shutdown check
+        # Sleep with shutdown check — suppress TimeoutError (normal) but let
+        # CancelledError propagate so the task can be cancelled cleanly.
         if sleep_time > 0:
-            with contextlib.suppress(TimeoutError):
+            try:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
+            except asyncio.CancelledError:
+                raise
+            except (TimeoutError, asyncio.TimeoutError):
+                pass
 
     @staticmethod
     async def _await_or_return(raw):
