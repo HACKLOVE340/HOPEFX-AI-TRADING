@@ -221,7 +221,10 @@ class HOPEFXBrain:
         self.regime_check_interval = self.config.get("regime_check_interval", 60)
         self._cycle_count = 0
         self._last_cycle_time = time.time()
-        self._target_cycle_time = 1.0  # 1 second per cycle
+        # In development use a 5s cycle to avoid hammering yfinance/thread pool.
+        import os as _brain_os
+        _dev = _brain_os.getenv("APP_ENV", "development").lower() in ("development", "dev")
+        self._target_cycle_time = float(_brain_os.getenv("BRAIN_CYCLE_SEC", "5.0" if _dev else "1.0"))
 
         # Performance tracking
         self._cycle_times: deque = deque(maxlen=60)  # Last 60 cycles
