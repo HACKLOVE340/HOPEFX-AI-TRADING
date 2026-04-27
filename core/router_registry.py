@@ -335,9 +335,17 @@ def register_routers(
         from api.nuclear import router as nuclear_router
         from api.nuclear_strategy import router as nuclear_strategy_router
 
-        _include_router_deduped(app, nuclear_router)
-        _include_router_deduped(app, nuclear_strategy_router)
-        logger.info("Nuclear routers registered")
+        _include_router_deduped(
+            app, nuclear_router,
+            prefix="/nuclear",
+            tags=["nuclear"],
+        )
+        _include_router_deduped(
+            app, nuclear_strategy_router,
+            prefix="/nuclear-strategy",
+            tags=["nuclear-strategy"],
+        )
+        logger.info("Nuclear routers registered (/nuclear, /nuclear-strategy)")
     except Exception as _nuc_err:
         logger.warning("Nuclear routers not registered: %s", _nuc_err)
 
