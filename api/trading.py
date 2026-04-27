@@ -1272,34 +1272,86 @@ async def get_ohlcv(
     symbol = symbol.replace("/", "").replace("%2F", "").upper()
     symbol = validate_order_symbol(symbol)
 
-    if not app_state or not app_state.price_engine:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Price engine not available",
-        )
+    # ── Try price engine first ────────────────────────────────────────────────
+    if app_state and app_state.price_engine:
+        try:
+            data = await asyncio.wait_for(
+                app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
+                timeout=25.0,
+            )
+            # Only use engine data if it has real price variation (not synthetic flat bars)
+            if data and len(data) >= 2:
+                prices = [d.close for d in data]
+                if max(prices) - min(prices) > 0.001:
+                    return [
+                        {
+                            "timestamp": d.timestamp,
+                            "open": d.open,
+                            "high": d.high,
+                            "low": d.low,
+                            "close": d.close,
+                            "volume": d.volume,
+                        }
+                        for d in data
+                    ]
+        except TimeoutError:
+            logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
+        except Exception as exc:
+            logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)
 
+    # ── Direct yfinance fallback ──────────────────────────────────────────────
+    # Used when price engine is unavailable or returns synthetic flat bars.
     try:
-        data = await asyncio.wait_for(
-            app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
-            timeout=25.0,  # yfinance fallback can be slow; 25s < frontend 30s timeout
-        )
-    except TimeoutError:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="OHLCV data fetch timed out — market data source is slow",
-        ) from None
+        import yfinance as _yf
+        import pandas as _pd
 
-    return [
-        {
-            "timestamp": d.timestamp,
-            "open": d.open,
-            "high": d.high,
-            "low": d.low,
-            "close": d.close,
-            "volume": d.volume,
+        _YF_MAP = {
+            "XAUUSD": "GC=F", "XAGUSD": "SI=F", "XPTUSD": "PL=F",
+            "EURUSD": "EURUSD=X", "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X",
+            "USDCHF": "CHF=X", "AUDUSD": "AUDUSD=X", "NZDUSD": "NZDUSD=X",
+            "USDCAD": "CAD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
+            "US30": "YM=F", "US500": "ES=F", "NAS100": "NQ=F",
+            "USOIL": "CL=F", "UKOIL": "BZ=F",
         }
-        for d in data
-    ]
+        _TF_MAP = {
+            "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
+            "30m": ("30m", "60d"), "1h": ("1h", "730d"), "4h": ("1h", "730d"),
+            "1d": ("1d", "5y"), "1w": ("1wk", "10y"),
+        }
+        ticker_sym = _YF_MAP.get(symbol, symbol)
+        interval, period = _TF_MAP.get(timeframe, ("1h", "730d"))
+
+        loop = asyncio.get_event_loop()
+
+        def _fetch_yf():
+            t = _yf.Ticker(ticker_sym)
+            df = t.history(period=period, interval=interval, auto_adjust=True)
+            if df.empty:
+                return []
+            df = df.tail(limit)
+            bars = []
+            for ts, row in df.iterrows():
+                bars.append({
+                    "timestamp": int(ts.timestamp()),
+                    "open":   round(float(row["Open"]),   5),
+                    "high":   round(float(row["High"]),   5),
+                    "low":    round(float(row["Low"]),    5),
+                    "close":  round(float(row["Close"]),  5),
+                    "volume": round(float(row.get("Volume", 0)), 2),
+                })
+            return bars
+
+        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=25.0)
+        if bars:
+            logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
+            return bars
+    except Exception as exc:
+        logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
+
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"No OHLCV data available for {symbol} — price engine offline and yfinance unavailable",
+    )
 
 
 @router.get("/signals", summary="Active trading signals from the signal engine")
@@ -1905,99 +1957,219 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
 @router.post("/ai-analysis", response_model=None, summary="AI chart-click analysis")
 async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_current_user)):
     """
-    Accept a ``ChartClickContext`` payload and return an ``AIAnalysis`` object.
+    Accept a ChartClickContext payload and return an AIAnalysis object.
 
-    Uses the signal engine and regime detector to produce a structured
-    analysis of the clicked chart point.  Falls back to a sensible default
-    when the ML stack is unavailable.
+    Fetches real OHLCV via yfinance for regime detection and ATR calculation.
+    Falls back gracefully when the ML stack is unavailable.
     """
+    import math as _math
     import uuid as _uuid
     import time as _time
 
     symbol: str = context.get("symbol", "XAUUSD")
+    # Normalise XAU/USD → XAUUSD
+    symbol_norm = symbol.replace("/", "").replace("%2F", "").upper()
     price: float = float(context.get("price", 0.0))
+    timeframe: str = context.get("timeframe", "1h")
     timestamp: int = int(context.get("timestamp", _time.time() * 1000))
 
-    # Attempt to get regime from the live regime router
+    # ── Fetch real OHLCV via yfinance for analysis ────────────────────────────
+    _YF_MAP = {
+        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X", "USDCHF": "CHF=X",
+        "AUDUSD": "AUDUSD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
+        "US500": "ES=F", "NAS100": "NQ=F", "USOIL": "CL=F",
+    }
+    _TF_MAP = {
+        "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
+        "1h": ("1h", "60d"), "4h": ("1h", "60d"), "1d": ("1d", "1y"),
+    }
+    ticker_sym = _YF_MAP.get(symbol_norm, symbol_norm)
+    interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
+
+    ohlcv_bars: list[dict] = []
+    try:
+        import yfinance as _yf
+        loop = asyncio.get_event_loop()
+
+        def _fetch():
+            t = _yf.Ticker(ticker_sym)
+            df = t.history(period=period, interval=interval, auto_adjust=True)
+            if df.empty:
+                return []
+            df = df.tail(100)
+            return [
+                {
+                    "open":   float(r["Open"]),
+                    "high":   float(r["High"]),
+                    "low":    float(r["Low"]),
+                    "close":  float(r["Close"]),
+                    "volume": float(r.get("Volume", 0)),
+                }
+                for _, r in df.iterrows()
+            ]
+
+        ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=20.0)
+    except Exception as exc:
+        logger.debug("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
+
+    # Use last close as price if not provided
+    if price <= 0 and ohlcv_bars:
+        price = ohlcv_bars[-1]["close"]
+
+    # ── ATR (14-period) ───────────────────────────────────────────────────────
+    atr_estimate = price * 0.005  # 0.5% fallback
+    if len(ohlcv_bars) >= 14:
+        trs = []
+        for i in range(1, min(15, len(ohlcv_bars))):
+            h = ohlcv_bars[-i]["high"]
+            l = ohlcv_bars[-i]["low"]
+            pc = ohlcv_bars[-i - 1]["close"] if i + 1 <= len(ohlcv_bars) else l
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        if trs:
+            atr_estimate = sum(trs) / len(trs)
+
+    # ── Regime detection from OHLCV ───────────────────────────────────────────
     regime = "ranging"
     regime_confidence = 0.5
-    try:
-        from strategies.regime_router import detect_regime as _detect_regime
+    volatility = "medium"
+    trend = "neutral"
 
-        # Fetch recent OHLCV from the live broker or app_state price engine
-        _ohlcv_df = None
-        try:
-            import pandas as _pd
+    if len(ohlcv_bars) >= 20:
+        closes = [b["close"] for b in ohlcv_bars]
+        # EMA-based trend
+        ema20 = closes[-1]
+        for c in reversed(closes[-20:]):
+            ema20 = ema20 * 0.9 + c * 0.1
+        ema50 = closes[-1]
+        for c in reversed(closes[-min(50, len(closes)):]):
+            ema50 = ema50 * 0.96 + c * 0.04
 
-            if app_state is not None and hasattr(app_state, "broker") and app_state.broker is not None:
-                import asyncio as _asyncio
+        price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
+        ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
 
-                _raw = app_state.broker.get_market_data(symbol, timeframe="1h", limit=100)
-                if _asyncio.iscoroutine(_raw):
-                    _raw = await _raw
-                if _raw:
-                    _ohlcv_df = _pd.DataFrame(_raw)
-        except Exception:  # noqa: BLE001 — OHLCV fetch is best-effort
-            pass
+        # Volatility: ATR as % of price
+        atr_pct = atr_estimate / price if price > 0 else 0
+        if atr_pct > 0.015:
+            volatility = "high"
+        elif atr_pct < 0.005:
+            volatility = "low"
 
-        if _ohlcv_df is not None and len(_ohlcv_df) >= 50:
-            _regime_label, _regime_conf = _detect_regime(_ohlcv_df)
-            regime = str(_regime_label)
-            regime_confidence = float(_regime_conf)
-    except Exception as exc:
-        logger.debug("ai-analysis: regime detection failed: %s", exc)
+        # Regime classification
+        if abs(ema_spread) > 0.005 and abs(price_vs_ema20) > 0.003:
+            if ema_spread > 0:
+                regime = "trending_up"
+                trend = "bullish"
+                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
+            else:
+                regime = "trending_down"
+                trend = "bearish"
+                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
+        else:
+            regime = "ranging"
+            trend = "neutral"
+            regime_confidence = 0.6
 
-    # Attempt to get latest signal for context
-    summary = f"AI analysis for {symbol} at {price:.5f}"
-    key_drivers: list[str] = []
+    # ── Signal / recommended action ───────────────────────────────────────────
     recommended_action = "hold"
     action_confidence = 0.5
+    key_drivers: list[str] = []
     warnings: list[str] = []
 
-    try:
-        from api.signals import _get_signal_service as _gss
+    if ohlcv_bars:
+        closes = [b["close"] for b in ohlcv_bars]
+        # RSI (14)
+        gains, losses = [], []
+        for i in range(1, min(15, len(closes))):
+            d = closes[-i] - closes[-i - 1]
+            (gains if d > 0 else losses).append(abs(d))
+        avg_gain = sum(gains) / 14 if gains else 0
+        avg_loss = sum(losses) / 14 if losses else 0.001
+        rsi = 100 - (100 / (1 + avg_gain / avg_loss))
 
-        svc = _gss()
-        if svc:
-            latest = svc.get_latest_signal(symbol)
-            if latest:
-                recommended_action = str(latest.get("direction", "hold")).lower()
-                action_confidence = float(latest.get("confidence", 0.5))
-                key_drivers = latest.get("drivers", [])
-                summary = latest.get("explanation", summary)
-    except Exception as exc:
-        logger.debug("ai-analysis: signal service unavailable: %s", exc)
+        if rsi < 35:
+            recommended_action = "buy"
+            action_confidence = round(0.5 + (35 - rsi) / 70, 3)
+            key_drivers.append(f"RSI oversold ({rsi:.1f})")
+        elif rsi > 65:
+            recommended_action = "sell"
+            action_confidence = round(0.5 + (rsi - 65) / 70, 3)
+            key_drivers.append(f"RSI overbought ({rsi:.1f})")
+        else:
+            key_drivers.append(f"RSI neutral ({rsi:.1f})")
 
-    # Price targets: simple ATR-based estimate
-    atr_estimate = price * 0.005  # 0.5% as fallback
-    try:
-        if hasattr(app_state, "price_engine") and app_state.price_engine:
-            ohlcv = await app_state.price_engine.get_ohlcv(symbol, "H1", 14)
-            if ohlcv and len(ohlcv) >= 2:
-                highs = [c[2] for c in ohlcv]
-                lows = [c[3] for c in ohlcv]
-                atr_estimate = sum(h - l for h, l in zip(highs, lows, strict=False)) / len(highs)
-    except Exception as exc:
-        logger.debug("ai-analysis: ATR estimation failed: %s", exc)
+        if regime in ("trending_up",):
+            key_drivers.append("Uptrend confirmed by EMA alignment")
+            if recommended_action == "hold":
+                recommended_action = "buy"
+                action_confidence = 0.6
+        elif regime in ("trending_down",):
+            key_drivers.append("Downtrend confirmed by EMA alignment")
+            if recommended_action == "hold":
+                recommended_action = "sell"
+                action_confidence = 0.6
+
+        key_drivers.append(f"ATR: {atr_estimate:.4f} ({atr_estimate/price*100:.2f}% of price)")
+        key_drivers.append(f"Volatility: {volatility}")
+
+        if volatility == "high":
+            warnings.append("High volatility — widen stops")
+
+    summary = (
+        f"{symbol} is in a {regime.replace('_', ' ')} regime "
+        f"({regime_confidence*100:.0f}% confidence). "
+        f"Trend: {trend}. "
+        f"Recommended: {recommended_action.upper()} at {price:.4f}."
+    )
+
+    # Map buy/sell/hold → long/short/neutral for frontend AIResult.direction
+    _dir_map = {"buy": "long", "sell": "short", "hold": "neutral"}
+    direction = _dir_map.get(recommended_action, "neutral")
+
+    sl = round(price - atr_estimate * 1.5, 5)
+    tp = round(price + atr_estimate * 2.5, 5)
+    if direction == "short":
+        sl = round(price + atr_estimate * 1.5, 5)
+        tp = round(price - atr_estimate * 2.5, 5)
 
     return {
         "id": str(_uuid.uuid4()),
         "timestamp": timestamp,
         "context": context,
-        "regime": regime,
+        # Fields expected by AIResult interface
+        "direction":   direction,
+        "confidence":  round(min(action_confidence, 0.95), 3),
+        "reasoning":   summary,
+        "regime":      regime,
+        "stop_loss":   sl,
+        "take_profit": tp,
+        "entry_zone":  [round(price - atr_estimate * 0.3, 5), round(price + atr_estimate * 0.3, 5)],
+        "key_levels":  [
+            round(price - atr_estimate * 2, 5),
+            round(price - atr_estimate, 5),
+            round(price + atr_estimate, 5),
+            round(price + atr_estimate * 2, 5),
+        ],
+        # Extended fields
         "regimeConfidence": round(regime_confidence, 3),
-        "summary": summary,
-        "keyDrivers": key_drivers,
-        "riskAssessment": f"ATR-based risk estimate: {atr_estimate:.5f}",
+        "volatility":       volatility,
+        "trend":            trend,
+        "summary":          summary,
+        "keyDrivers":       key_drivers,
+        "riskAssessment":   f"ATR({len(ohlcv_bars)}): {atr_estimate:.4f} | SL: {sl:.4f} | TP: {tp:.4f}",
         "recommendedAction": recommended_action,
-        "actionConfidence": round(action_confidence, 3),
+        "actionConfidence":  round(min(action_confidence, 0.95), 3),
         "priceTargets": {
-            "bull": round(price + atr_estimate * 2, 5),
-            "bear": round(price - atr_estimate * 2, 5),
-            "base": round(price + atr_estimate * (1 if recommended_action == "buy" else -1), 5),
+            "bull":        round(price + atr_estimate * 2, 5),
+            "bear":        round(price - atr_estimate * 2, 5),
+            "base":        round(price + atr_estimate * (1 if direction == "long" else -1), 5),
+            "stop_loss":   sl,
+            "take_profit": tp,
         },
-        "timeHorizon": "4H–1D",
-        "warnings": warnings,
+        "timeHorizon":   "4H–1D",
+        "warnings":      warnings,
+        "data_source":   "yfinance" if ohlcv_bars else "fallback",
+        "bars_analyzed": len(ohlcv_bars),
     }
 
 
@@ -2005,56 +2177,132 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 
 
 @router.get("/regime", response_model=None, summary="Current market regime and active strategy")
-async def get_regime_status(user: TokenPayload = Depends(get_current_user)):
+async def get_regime_status(
+    symbol: str = "XAUUSD",
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Return the current detected market regime, confidence score, and the
     strategy selected by the RegimeRouter for that regime.
 
-    Requires: any authenticated user.
-
-    Also returns recent regime transition history and per-regime backtest
-    performance from the manifest (if available).
+    Uses real OHLCV from yfinance for regime detection.
     """
+    import math as _math
+
+    # Normalise symbol
+    symbol_norm = symbol.replace("/", "").replace("%2F", "").upper()
+
+    _YF_MAP = {
+        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X", "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD", "US500": "ES=F", "NAS100": "NQ=F",
+    }
+    ticker_sym = _YF_MAP.get(symbol_norm, "GC=F")
+
+    closes: list[float] = []
+    highs: list[float] = []
+    lows: list[float] = []
+
     try:
-        from app import app_state
+        import yfinance as _yf
+        loop = asyncio.get_event_loop()
 
-        broker = getattr(app_state, "broker", None)
-        regime_router = getattr(app_state, "regime_router", None)
+        def _fetch():
+            t = _yf.Ticker(ticker_sym)
+            df = t.history(period="60d", interval="1h", auto_adjust=True)
+            if df.empty:
+                return [], [], []
+            df = df.tail(100)
+            return (
+                [float(r["Close"]) for _, r in df.iterrows()],
+                [float(r["High"])  for _, r in df.iterrows()],
+                [float(r["Low"])   for _, r in df.iterrows()],
+            )
 
-        # If no router on app_state, create a transient one for the response
-        if regime_router is None:
-            from strategies.manager import StrategyManager
-            from strategies.regime_router import RegimeRouter
-
-            sm = getattr(app_state, "strategy_manager", None) or StrategyManager()
-            regime_router = RegimeRouter(sm)
-
-        # Try to detect regime from live price data
-        if broker is not None and hasattr(broker, "get_ohlcv"):
-            import asyncio
-
-            import pandas as pd
-
-            _get = broker.get_ohlcv("XAUUSD", limit=100)
-            if asyncio.iscoroutine(_get):
-                ohlcv = await _get
-            else:
-                ohlcv = _get
-            if ohlcv:
-                df = pd.DataFrame(ohlcv)
-                regime_router.route(df)
-
-        return regime_router.status()
-
+        closes, highs, lows = await asyncio.wait_for(
+            loop.run_in_executor(None, _fetch), timeout=20.0
+        )
     except Exception as exc:
-        logger.warning("regime status error: %s", exc)
-        return {
-            "current_regime": "unknown",
-            "confidence": 0.0,
-            "selected_strategy": "TrendFollowing",
-            "manifest_entries": {},
-            "error": "Regime router unavailable — check server logs",
-        }
+        logger.debug("regime: yfinance fetch failed: %s", exc)
+
+    # ── Regime detection ──────────────────────────────────────────────────────
+    regime = "ranging"
+    confidence = 0.5
+    volatility = "medium"
+    trend = "neutral"
+    description = "Insufficient data for regime detection"
+
+    if len(closes) >= 20:
+        # EMA 20 and EMA 50
+        ema20 = closes[-1]
+        for c in reversed(closes[-20:]):
+            ema20 = ema20 * 0.9 + c * 0.1
+        ema50 = closes[-1]
+        for c in reversed(closes[-min(50, len(closes)):]):
+            ema50 = ema50 * 0.96 + c * 0.04
+
+        ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
+        price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
+
+        # ATR for volatility
+        trs = [max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+               for i in range(1, min(15, len(closes)))]
+        atr = sum(trs) / len(trs) if trs else closes[-1] * 0.005
+        atr_pct = atr / closes[-1] if closes[-1] > 0 else 0
+
+        if atr_pct > 0.015:
+            volatility = "high"
+        elif atr_pct < 0.005:
+            volatility = "low"
+
+        # Regime
+        if ema_spread > 0.005 and price_vs_ema20 > 0.002:
+            regime = "trending_up"
+            trend = "bullish"
+            confidence = min(0.90, 0.55 + abs(ema_spread) * 15)
+            description = f"Bullish trend: EMA20 ({ema20:.2f}) > EMA50 ({ema50:.2f}), price above EMA20"
+        elif ema_spread < -0.005 and price_vs_ema20 < -0.002:
+            regime = "trending_down"
+            trend = "bearish"
+            confidence = min(0.90, 0.55 + abs(ema_spread) * 15)
+            description = f"Bearish trend: EMA20 ({ema20:.2f}) < EMA50 ({ema50:.2f}), price below EMA20"
+        else:
+            regime = "ranging"
+            trend = "neutral"
+            confidence = 0.65
+            description = f"Ranging market: EMA spread {ema_spread*100:.2f}%, ATR {atr_pct*100:.2f}%"
+
+    # Try regime router if available
+    try:
+        from app import app_state as _as
+        rr = getattr(_as, "regime_router", None)
+        if rr is not None:
+            status_dict = rr.status()
+            if status_dict.get("current_regime", "unknown") != "unknown":
+                return {
+                    **status_dict,
+                    "regime": status_dict.get("current_regime", regime),
+                    "confidence": status_dict.get("confidence", confidence),
+                    "volatility": volatility,
+                    "trend": trend,
+                    "description": description,
+                    "data_source": "regime_router",
+                }
+    except Exception:
+        pass
+
+    return {
+        "regime": regime,
+        "current_regime": regime,
+        "confidence": round(confidence, 3),
+        "volatility": volatility,
+        "trend": trend,
+        "description": description,
+        "selected_strategy": "TrendFollowing" if "trending" in regime else "MeanReversion",
+        "manifest_entries": {},
+        "data_source": "yfinance" if closes else "fallback",
+        "bars_analyzed": len(closes),
+    }
 
 
 @router.get("/regime/history", response_model=None, summary="Recent regime transition history")
