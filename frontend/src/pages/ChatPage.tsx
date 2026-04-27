@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
+import { getWsBase } from '../lib/utils';
 
 interface ChatRoom {
   id: string;
@@ -93,10 +94,9 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     if (!activeRoom || !token) return;
     wsRef.current?.close();
-    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:8000';
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${wsBase}/ws/chat/${activeRoom.id}?token=${token}`);
+      ws = new WebSocket(`${getWsBase()}/ws/chat/${activeRoom.id}?token=${token}`);
       wsRef.current = ws;
       ws.onmessage = (ev) => {
         try {
