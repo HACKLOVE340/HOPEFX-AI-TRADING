@@ -1,24 +1,28 @@
 #!/usr/bin/env bash
 # Start the HOPEFX backend API server on port 8000 (development mode)
 set -a
-source .env 2>/dev/null || true
+# Load .env from repo root (secrets stay out of git)
+source "$(dirname "$0")/.env" 2>/dev/null || true
 set +a
 
-export DATABASE_URL="${DATABASE_URL:-sqlite:///hopefx.db}"
+# Defaults — .env values take precedence via set -a above
+export DATABASE_URL="${DATABASE_URL:-sqlite:///./hopefx.db}"
 export APP_ENV="${APP_ENV:-development}"
-export SECURITY_JWT_SECRET="${SECURITY_JWT_SECRET:-8b42590a4571b3b7a514d74910fc449a95fae63b5fc3fff1ba47e3a0782dc2ec}"
-export CONFIG_ENCRYPTION_KEY="${CONFIG_ENCRYPTION_KEY:-vN056AXHY33Lm6oymn8tJ6Ip2r6Y5Ul5tLw9WnHsBt1nZFSQ}"
+export JWT_SECRET_KEY="${JWT_SECRET_KEY:-$(python3 -c 'import secrets; print(secrets.token_hex(32))')}"
 export REDIS_DISABLED="${REDIS_DISABLED:-true}"
 export BROKER_TYPE="${BROKER_TYPE:-paper}"
+export PAPER_STARTING_BALANCE="${PAPER_STARTING_BALANCE:-100000}"
 export LOG_JSON="${LOG_JSON:-false}"
 export LOG_ASYNC="${LOG_ASYNC:-false}"
-export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
+export ALLOWED_ORIGINS="${ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
 export WEB_CONCURRENCY=1
 
 # Disable optional heavy background services in dev
 export ENABLE_GATEWAY="${ENABLE_GATEWAY:-false}"
 export ENABLE_L2_FEED="${ENABLE_L2_FEED:-false}"
 export ENABLE_NUCLEAR="${ENABLE_NUCLEAR:-false}"
+export ENABLE_GRAPHQL="${ENABLE_GRAPHQL:-false}"
+export ENABLE_CELERY="${ENABLE_CELERY:-false}"
 
 exec uvicorn app:app \
   --host 0.0.0.0 \

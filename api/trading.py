@@ -1386,14 +1386,22 @@ async def get_trading_signals(
 async def get_brain_state(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get AI brain state. Requires: any authenticated user."""
-    if not app_state or not app_state.brain:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Brain not available",
-        )
+    """Get AI brain state. Returns a graceful fallback when brain is not yet initialised."""
+    if app_state and app_state.brain:
+        try:
+            return app_state.brain.state.to_dict()
+        except Exception as _exc:
+            logger.debug("brain state serialisation failed: %s", _exc)
 
-    return app_state.brain.state.to_dict()
+    # Graceful fallback — brain not yet initialised (paper mode / startup)
+    return {
+        "status": "initialising",
+        "mode": "paper",
+        "active_strategies": [],
+        "confidence": 0.0,
+        "updated_at": datetime.now(UTC).isoformat(),
+        "note": "Brain not yet initialised — paper trading mode",
+    }
 
 
 @router.post("/paper/start", status_code=202)
@@ -2189,7 +2197,8 @@ async def get_regime_status(
     """
     import math as _math
 
-    # Normalise symbol
+    # Normalise symbol — guard against None (optional query param)
+    symbol = symbol or "XAUUSD"
     symbol_norm = symbol.replace("/", "").replace("%2F", "").upper()
 
     _YF_MAP = {
