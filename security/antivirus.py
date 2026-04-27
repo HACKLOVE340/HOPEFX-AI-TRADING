@@ -61,7 +61,7 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -825,47 +825,48 @@ async def start_av_scanner(app: FastAPI) -> None:
 # at request time so the live instance is used once start_av_scanner() runs.
 
 
+def _av_require_auth(request: Request) -> None:
+    """Verify Bearer JWT — used as Depends() on AV router read endpoints."""
+    try:
+        from auth.jwt import decode_access_token as _decode
+
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        _decode(token)
+    except HTTPException:
+        raise
+    except ImportError:  # nosec B110
+        logger.warning("AV router: auth.jwt unavailable, auth skipped")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+
+def _av_require_admin(request: Request) -> None:
+    """Verify Bearer JWT and require admin/superadmin — used as Depends() on mutating endpoints."""
+    try:
+        from auth.jwt import decode_access_token as _decode
+
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        payload = _decode(token)
+        role = (payload or {}).get("role", "")
+        if role not in ("admin", "superadmin"):
+            raise HTTPException(status_code=403, detail="Admin role required")
+    except HTTPException:
+        raise
+    except ImportError:  # nosec B110
+        logger.warning("AV router: auth.jwt unavailable, admin check skipped")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+
 def _build_eager_av_router() -> APIRouter:
-    # Use module-level Request/HTTPException imports so FastAPI's dependency
-    # injection resolves the type annotations correctly at route registration.
     r = APIRouter(prefix="/api/security/av", tags=["antivirus"])
 
-    def _eager_require_auth(request: Request) -> None:
-        try:
-            from auth.jwt import verify_token as _verify
-
-            token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-            if not token:
-                raise HTTPException(status_code=401, detail="Authentication required")
-            _verify(token, HTTPException(status_code=401, detail="Invalid or expired token"))
-        except HTTPException:
-            raise
-        except ImportError:  # nosec B110
-            logger.warning("AV eager router: auth.jwt unavailable, auth skipped")
-        except Exception as exc:
-            raise HTTPException(status_code=401, detail="Authentication failed") from exc
-
-    def _eager_require_admin(request: Request) -> None:
-        try:
-            from auth.jwt import verify_token as _verify
-
-            token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-            if not token:
-                raise HTTPException(status_code=401, detail="Authentication required")
-            payload = _verify(token, HTTPException(status_code=401, detail="Invalid or expired token"))
-            role = (payload or {}).get("role", "")
-            if role not in ("admin", "superadmin"):
-                raise HTTPException(status_code=403, detail="Admin role required")
-        except HTTPException:
-            raise
-        except ImportError:  # nosec B110
-            logger.warning("AV eager router: auth.jwt unavailable, admin check skipped")
-        except Exception as exc:
-            raise HTTPException(status_code=401, detail="Authentication failed") from exc
-
     @r.get("/status")
-    async def _av_status(request: Request):
-        _eager_require_auth(request)
+    async def _av_status(_: None = Depends(_av_require_auth)):
         s = get_scanner()
         return {
             "running": s._running,
@@ -876,21 +877,18 @@ def _build_eager_av_router() -> APIRouter:
         }
 
     @r.get("/threats")
-    async def _threats(request: Request, severity: str | None = None):
-        _eager_require_auth(request)
+    async def _threats(severity: str | None = None, _: None = Depends(_av_require_auth)):
         threats = get_scanner()._threats
         if severity:
             threats = [t for t in threats if t["severity"] == severity]
         return threats[-200:]
 
     @r.post("/scan")
-    async def _scan(request: Request):
-        _eager_require_admin(request)
+    async def _scan(_: None = Depends(_av_require_admin)):
         return await get_scanner().scan_project()
 
     @r.post("/quarantine")
-    async def _quarantine(request: Request, body: dict):
-        _eager_require_admin(request)
+    async def _quarantine(body: dict, _: None = Depends(_av_require_admin)):
         threat_id = body.get("threat_id", "")
         if not threat_id:
             raise HTTPException(status_code=400, detail="threat_id required")

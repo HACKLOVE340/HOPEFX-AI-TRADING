@@ -58,7 +58,7 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -2119,50 +2119,48 @@ async def start_healer(app: FastAPI) -> None:
 # at request time so the live instance is used once start_healer() runs.
 
 
+def _heal_require_auth(request: Request) -> None:
+    """Verify Bearer JWT — used as a Depends() on heal router read endpoints."""
+    try:
+        from auth.jwt import decode_access_token as _decode
+
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        _decode(token)
+    except HTTPException:
+        raise
+    except ImportError:  # nosec B110
+        logger.warning("SelfHealer router: auth.jwt unavailable, auth skipped")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+
+def _heal_require_admin(request: Request) -> None:
+    """Verify Bearer JWT and require admin/superadmin — used as Depends() on mutating endpoints."""
+    try:
+        from auth.jwt import decode_access_token as _decode
+
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        payload = _decode(token)
+        role = (payload or {}).get("role", "")
+        if role not in ("admin", "superadmin"):
+            raise HTTPException(status_code=403, detail="Admin role required")
+    except HTTPException:
+        raise
+    except ImportError:  # nosec B110
+        logger.warning("SelfHealer router: auth.jwt unavailable, admin check skipped")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+
 def _build_eager_heal_router() -> APIRouter:
-    # Use module-level APIRouter/Request/HTTPException so FastAPI's dependency
-    # injection resolves the type annotations correctly at route registration.
     r = APIRouter(prefix="/api/security/heal", tags=["self-healer"])
 
-    def _require_auth(request: Request) -> None:
-        """Verify Bearer JWT token on the eager heal router endpoints."""
-        try:
-            from auth.jwt import decode_access_token as _decode
-
-            token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-            if not token:
-                raise HTTPException(status_code=401, detail="Authentication required")
-            # decode_access_token raises jwt.InvalidTokenError on any failure.
-            _decode(token)
-        except HTTPException:
-            raise
-        except ImportError:  # nosec B110 — auth module not yet available during early startup
-            logger.warning("SelfHealer eager router: auth.jwt unavailable, auth skipped")
-        except Exception as exc:
-            raise HTTPException(status_code=401, detail="Authentication failed") from exc
-
-    def _require_admin(request: Request) -> None:
-        """Verify Bearer JWT token and require admin/superadmin role."""
-        try:
-            from auth.jwt import decode_access_token as _decode
-
-            token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
-            if not token:
-                raise HTTPException(status_code=401, detail="Authentication required")
-            payload = _decode(token)
-            role = (payload or {}).get("role", "")
-            if role not in ("admin", "superadmin"):
-                raise HTTPException(status_code=403, detail="Admin role required")
-        except HTTPException:
-            raise
-        except ImportError:  # nosec B110
-            logger.warning("SelfHealer eager router: auth.jwt unavailable, admin check skipped")
-        except Exception as exc:
-            raise HTTPException(status_code=401, detail="Authentication failed") from exc
-
     @r.get("/status")
-    async def _status(request: Request):
-        _require_auth(request)
+    async def _status(_: None = Depends(_heal_require_auth)):
         h = get_healer()
         applied = sum(1 for p in h._patch_history if p["success"])
         failed = sum(1 for p in h._patch_history if not p["success"])
@@ -2177,38 +2175,29 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.get("/drift")
-    async def _drift(request: Request, limit: int = 50):
-        _require_auth(request)
+    async def _drift(limit: int = 50, _: None = Depends(_heal_require_auth)):
         return get_healer()._drift_events[-limit:]
 
     @r.get("/patches")
-    async def _patches(request: Request, limit: int = 50):
-        _require_auth(request)
+    async def _patches(limit: int = 50, _: None = Depends(_heal_require_auth)):
         return get_healer()._patch_history[-limit:]
 
     @r.post("/baseline/rebuild")
-    async def _rebuild(request: Request):
-        _require_admin(request)
-        result = await get_healer().rebuild_baseline()
-        return result
+    async def _rebuild(_: None = Depends(_heal_require_admin)):
+        return await get_healer().rebuild_baseline()
 
     @r.post("/scan/now")
-    async def _scan_now(request: Request):
-        _require_admin(request)
+    async def _scan_now(_: None = Depends(_heal_require_admin)):
         h = get_healer()
         await h._scan_integrity()
         return {"triggered": True, "drift_events": len(h._drift_events)}
 
     @r.post("/code-analysis/now", summary="Trigger immediate deep code analysis scan")
-    async def _code_analysis_now(request: Request):
-        _require_admin(request)
-        h = get_healer()
-        result = await h.run_code_analysis_now()
-        return result
+    async def _code_analysis_now(_: None = Depends(_heal_require_admin)):
+        return await get_healer().run_code_analysis_now()
 
     @r.get("/code-analysis/issues", summary="Get latest code analysis issues")
-    async def _code_issues(request: Request, limit: int = 100):
-        _require_auth(request)
+    async def _code_issues(limit: int = 100, _: None = Depends(_heal_require_auth)):
         h = get_healer()
         issues = h.get_code_issues(limit=limit)
         return {
@@ -2221,15 +2210,11 @@ def _build_eager_heal_router() -> APIRouter:
         }
 
     @r.post("/log-analysis/now", summary="Trigger immediate log file analysis")
-    async def _log_analysis_now(request: Request):
-        _require_admin(request)
-        h = get_healer()
-        result = await h.run_log_analysis_now()
-        return result
+    async def _log_analysis_now(_: None = Depends(_heal_require_admin)):
+        return await get_healer().run_log_analysis_now()
 
     @r.get("/log-analysis/issues", summary="Get latest log analysis issues")
-    async def _log_issues(request: Request, limit: int = 100):
-        _require_auth(request)
+    async def _log_issues(limit: int = 100, _: None = Depends(_heal_require_auth)):
         h = get_healer()
         issues = h.get_log_issues(limit=limit)
         return {
@@ -2237,36 +2222,29 @@ def _build_eager_heal_router() -> APIRouter:
             "returned": len(issues),
             "issues": issues,
             "log_file": str(_LOG_FILE),
-            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat() if h._last_log_scan_ts else None,
+            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat()
+            if h._last_log_scan_ts
+            else None,
         }
 
     @r.get("/claude-queue", summary="Get pending Claude fix queue")
-    async def _claude_queue(request: Request):
-        _require_auth(request)
+    async def _claude_queue(_: None = Depends(_heal_require_auth)):
         h = get_healer()
-        return {
-            "depth": len(h._claude_fix_queue),
-            "items": h.get_claude_queue(),
-        }
+        return {"depth": len(h._claude_fix_queue), "items": h.get_claude_queue()}
 
     @r.delete("/claude-queue", summary="Clear the Claude fix queue")
-    async def _clear_claude_queue(request: Request):
-        _require_admin(request)
+    async def _clear_claude_queue(_: None = Depends(_heal_require_admin)):
         h = get_healer()
         count = len(h._claude_fix_queue)
         h._claude_fix_queue.clear()
         return {"cleared": count}
 
     @r.post("/diagnostics/now", summary="Trigger immediate full diagnostics run")
-    async def _diagnostics_now(request: Request):
-        _require_admin(request)
-        h = get_healer()
-        report = await h.run_diagnostics_now()
-        return report
+    async def _diagnostics_now(_: None = Depends(_heal_require_admin)):
+        return await get_healer().run_diagnostics_now()
 
     @r.get("/diagnostics/report", summary="Get the last diagnostics report")
-    async def _diagnostics_report(request: Request):
-        _require_auth(request)
+    async def _diagnostics_report(_: None = Depends(_heal_require_auth)):
         h = get_healer()
         report = h.get_last_diagnostic_report()
         if not report:
@@ -2274,17 +2252,12 @@ def _build_eager_heal_router() -> APIRouter:
         return report
 
     @r.get("/diagnostics/remediation-log", summary="Get diagnostics auto-remediation log")
-    async def _diagnostics_remediation_log(request: Request):
-        _require_auth(request)
+    async def _diagnostics_remediation_log(_: None = Depends(_heal_require_auth)):
         h = get_healer()
-        return {
-            "entries": h.get_diagnostics_remediation_log(),
-            "total": len(h._diag_remediation_log),
-        }
+        return {"entries": h.get_diagnostics_remediation_log(), "total": len(h._diag_remediation_log)}
 
     @r.get("/full-status", summary="Complete healer + diagnostics status")
-    async def _full_status(request: Request):
-        _require_auth(request)
+    async def _full_status(_: None = Depends(_heal_require_auth)):
         h = get_healer()
         status = h.get_full_status()
         status["last_diagnostic_report"] = h.get_last_diagnostic_report()
