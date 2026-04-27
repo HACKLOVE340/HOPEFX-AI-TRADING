@@ -1368,9 +1368,16 @@ async def get_ohlcv(
     The :path converter captures the full path segment including any '/' characters
     so that un-encoded slashes in the URL are handled gracefully.
     """
-    # Normalise XAU/USD → XAUUSD before validation so both forms are accepted.
-    symbol = symbol.replace("/", "").replace("%2F", "").upper()
-    symbol = validate_order_symbol(symbol)
+    # Normalise: XAU/USD, XAU_USD, xau_usd → XAUUSD
+    symbol = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
+    # Sanitise for read-only data endpoint — allow any alphanumeric symbol up to 12 chars.
+    # validate_order_symbol is reserved for order placement (smaller allowed set).
+    import re as _re
+    if not _re.match(r'^[A-Z0-9]{2,12}$', symbol):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid symbol format: '{symbol}'. Expected 2-12 alphanumeric characters.",
+        )
 
     # ── Try price engine first ────────────────────────────────────────────────
     if app_state and app_state.price_engine:
@@ -2075,8 +2082,8 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     import time as _time
 
     symbol: str = context.get("symbol", "XAUUSD")
-    # Normalise XAU/USD → XAUUSD
-    symbol_norm = symbol.replace("/", "").replace("%2F", "").upper()
+    # Normalise XAU/USD, XAU_USD → XAUUSD
+    symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
     price: float = float(context.get("price", 0.0))
     timeframe: str = context.get("timeframe", "1h")
     timestamp: int = int(context.get("timestamp", _time.time() * 1000))
@@ -2301,7 +2308,8 @@ async def get_regime_status(
 
     # Normalise symbol — guard against None (optional query param)
     symbol = symbol or "XAUUSD"
-    symbol_norm = symbol.replace("/", "").replace("%2F", "").upper()
+    # Normalise XAU/USD, XAU_USD → XAUUSD
+    symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
 
     _YF_MAP = {
         "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
