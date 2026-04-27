@@ -3,10 +3,9 @@
  * Features: opt-in/out toggle, real-time WS signal injection, pagination,
  * reactions (👍/👎), comments, copy counts.
  */
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { useWebSocket } from '../hooks/useWebSocket';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -35,7 +34,6 @@ const SocialFeed: React.FC = () => {
   const [comments, setComments]     = useState<Record<string, Comment[]>>({});
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const wsRef = useRef<ReturnType<typeof useWebSocket>|null>(null);
 
   // Load opt-in status
   useEffect(() => {
