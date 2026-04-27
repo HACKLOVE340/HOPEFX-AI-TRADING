@@ -11,6 +11,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { getWsBase } from '../lib/utils';
 
 interface Notification {
   id: string;
@@ -63,10 +64,9 @@ const NotificationsPage: React.FC = () => {
   // Real-time WS push
   useEffect(() => {
     if (!token) return;
-    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:8000';
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${wsBase}/ws/notifications?token=${token}`);
+      ws = new WebSocket(`${getWsBase()}/ws/notifications?token=${token}`);
       wsRef.current = ws;
       ws.onmessage = (ev) => {
         try {
