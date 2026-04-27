@@ -615,3 +615,59 @@ async def open_positions(
         )
 
     return result
+
+
+@router.get("/export", summary="Export P&L data as CSV or JSON")
+async def export_pnl(
+    format: str = "csv",
+    _user: TokenPayload = Depends(get_current_user),
+):
+    """Export full fill log as CSV or JSON."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse, JSONResponse
+
+    engine = _get_engine()
+    fills = list(getattr(engine, "_fill_history", [])) if engine else []
+
+    if format == "json":
+        data = [
+            {
+                "fill_id": getattr(f, "fill_id", str(i)),
+                "symbol": getattr(f, "symbol", ""),
+                "direction": getattr(f, "direction", ""),
+                "quantity": float(getattr(f, "quantity", 0.0)),
+                "fill_price": float(getattr(f, "fill_price", 0.0)),
+                "pnl": float(getattr(f, "pnl", 0.0) or 0.0),
+                "broker": getattr(f, "broker", ""),
+                "filled_at": str(getattr(f, "filled_at", "")),
+            }
+            for i, f in enumerate(fills)
+        ]
+        return JSONResponse(content={"fills": data, "total": len(data)})
+
+    output = io.StringIO()
+    fieldnames = ["fill_id", "symbol", "direction", "quantity", "fill_price",
+                  "expected_price", "slippage_bps", "pnl", "broker", "latency_ms", "filled_at"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for i, f in enumerate(fills):
+        writer.writerow({
+            "fill_id": getattr(f, "fill_id", str(i)),
+            "symbol": getattr(f, "symbol", ""),
+            "direction": getattr(f, "direction", ""),
+            "quantity": float(getattr(f, "quantity", 0.0)),
+            "fill_price": float(getattr(f, "fill_price", 0.0)),
+            "expected_price": float(getattr(f, "expected_price", 0.0)),
+            "slippage_bps": float(getattr(f, "slippage_bps", 0.0)),
+            "pnl": float(getattr(f, "pnl", 0.0) or 0.0),
+            "broker": getattr(f, "broker", ""),
+            "latency_ms": float(getattr(f, "latency_ms", 0.0)),
+            "filled_at": str(getattr(f, "filled_at", "")),
+        })
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=pnl_export.csv"},
+    )

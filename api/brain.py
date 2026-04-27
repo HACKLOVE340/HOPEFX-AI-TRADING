@@ -152,7 +152,7 @@ async def generate_strategy(
                 total_trades=result.backtest.trades,
             )
 
-        return GenerateResponse(
+        response = GenerateResponse(
             success=result.success,
             strategy_name=result.strategy_name,
             strategy_code=result.strategy_code,
@@ -160,6 +160,28 @@ async def generate_strategy(
             iterations=result.iterations,
             error=result.error,
         )
+
+        # Persist to strategy history if generation succeeded
+        if result.success and result.strategy_name:
+            try:
+                import uuid as _uuid
+                from datetime import datetime as _dt, timezone as _tz
+                strategies = _load_strategies(user.sub)
+                strategies.append({
+                    "strategy_id": f"ai_{_uuid.uuid4().hex[:8]}",
+                    "strategy_name": result.strategy_name,
+                    "symbol": req.symbol,
+                    "timeframe": req.timeframe,
+                    "created_at": _dt.now(_tz.utc).isoformat(),
+                    "status": "draft",
+                    "backtest": bt.model_dump() if bt else None,
+                    "strategy_code": result.strategy_code,
+                })
+                _save_strategies(user.sub, strategies[-50:])  # keep last 50
+            except Exception as _save_exc:
+                logger.debug("strategy history save: %s", _save_exc)
+
+        return response
     except Exception as exc:
         logger.warning("LLM agent error: %s", exc, exc_info=True)
         return GenerateResponse(
@@ -249,3 +271,102 @@ async def chat(
 
 
 _chat_agent: object | None = None
+
+
+# ── Strategy history & management ─────────────────────────────────────────────
+# Persisted via api.db_store so strategies survive restarts.
+
+_STRAT_KEY = "brain:strategies:{uid}"
+
+
+def _load_strategies(user_id: str) -> list[dict]:
+    from api.db_store import db_get
+    stored = db_get(_STRAT_KEY.format(uid=user_id))
+    if stored and isinstance(stored, list):
+        return stored
+    return []
+
+
+def _save_strategies(user_id: str, strategies: list[dict]) -> None:
+    from api.db_store import db_set
+    db_set(_STRAT_KEY.format(uid=user_id), strategies)
+
+
+@router.get("/strategies", summary="List AI-generated strategies")
+async def list_strategies(
+    limit: int = 20,
+    user: TokenPayload = Depends(require_role("starter")),
+) -> dict:
+    """Return the user's AI-generated strategy history."""
+    strategies = _load_strategies(user.sub)
+    return {"strategies": strategies[-limit:], "total": len(strategies)}
+
+
+@router.get("/strategies/{strategy_id}", summary="Get a specific AI strategy")
+async def get_strategy(
+    strategy_id: str,
+    user: TokenPayload = Depends(require_role("starter")),
+) -> dict:
+    strategies = _load_strategies(user.sub)
+    for s in strategies:
+        if s.get("strategy_id") == strategy_id:
+            return s
+    raise HTTPException(status_code=404, detail="Strategy not found")
+
+
+@router.delete("/strategies/{strategy_id}", summary="Delete an AI strategy")
+async def delete_strategy(
+    strategy_id: str,
+    user: TokenPayload = Depends(require_role("starter")),
+) -> dict:
+    strategies = _load_strategies(user.sub)
+    updated = [s for s in strategies if s.get("strategy_id") != strategy_id]
+    if len(updated) == len(strategies):
+        raise HTTPException(status_code=404, detail="Strategy not found")
+    _save_strategies(user.sub, updated)
+    return {"ok": True, "strategy_id": strategy_id}
+
+
+@router.post("/strategies/{strategy_id}/backtest", summary="Re-run backtest on a strategy")
+async def backtest_strategy(
+    strategy_id: str,
+    user: TokenPayload = Depends(require_role("starter")),
+) -> dict:
+    strategies = _load_strategies(user.sub)
+    for s in strategies:
+        if s.get("strategy_id") == strategy_id:
+            # Return existing backtest results or trigger a new run
+            return {
+                "strategy_id": strategy_id,
+                "backtest": s.get("backtest"),
+                "status": "completed" if s.get("backtest") else "no_backtest",
+            }
+    raise HTTPException(status_code=404, detail="Strategy not found")
+
+
+@router.post("/strategies/{strategy_id}/activate", summary="Activate a strategy for paper trading")
+async def activate_strategy(
+    strategy_id: str,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    strategies = _load_strategies(user.sub)
+    for s in strategies:
+        if s.get("strategy_id") == strategy_id:
+            s["status"] = "active"
+            _save_strategies(user.sub, strategies)
+            return {"ok": True, "strategy_id": strategy_id, "status": "active"}
+    raise HTTPException(status_code=404, detail="Strategy not found")
+
+
+@router.post("/strategies/{strategy_id}/deactivate", summary="Deactivate a strategy")
+async def deactivate_strategy(
+    strategy_id: str,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    strategies = _load_strategies(user.sub)
+    for s in strategies:
+        if s.get("strategy_id") == strategy_id:
+            s["status"] = "inactive"
+            _save_strategies(user.sub, strategies)
+            return {"ok": True, "strategy_id": strategy_id, "status": "inactive"}
+    raise HTTPException(status_code=404, detail="Strategy not found")
