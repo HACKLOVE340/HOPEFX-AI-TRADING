@@ -749,13 +749,10 @@ async def predict(
     response_model=FeatureImportancesResponse,
     summary="Feature importances for the active XGBoost model",
 )
-async def get_feature_importances(user: TokenPayload = Depends(require_role("admin"))):
+async def get_feature_importances(user: TokenPayload = Depends(require_role("trader"))):
     """
     Return feature importances for the active XGBoost model.
     Used by the explainability panel.
-
-    Requires: admin role. Raw feature importances reveal the model's
-    internal weighting structure and must not be publicly accessible.
     """
     import pathlib
 

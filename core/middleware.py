@@ -122,7 +122,10 @@ def setup_cors(app: FastAPI) -> None:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=[
+            "Accept",
+            "Accept-Language",
             "Authorization",
+            "Content-Language",
             "Content-Type",
             "X-Request-ID",
             "X-Webhook-Signature",

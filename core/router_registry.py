@@ -33,25 +33,37 @@ _registered_routes: set[tuple[str, str]] = set()
 
 def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     """
-    Include a router on *app*, skipping any routes whose (method, path) pair
-    is already registered.  This prevents duplicate route warnings and ensures
-    the first-registered handler wins (primary router takes precedence over
-    compat/alias routers).
+    Include a router on *app*, skipping any routes whose (method, full-path)
+    pair is already registered.
+
+    The dedup key uses the *full* path (router.prefix + route.path) so it
+    matches the paths that FastAPI stores on app.routes after include_router.
+    Using only route.path (the relative path) caused false misses when the
+    prefix was non-empty, allowing duplicate routes to slip through.
     """
     from fastapi.routing import APIRoute as _APIRoute
+
+    prefix = getattr(router, "prefix", "") or ""
+
+    def _full_path(route_path: str) -> str:
+        """Combine router prefix with route path, normalising slashes."""
+        if not prefix:
+            return route_path
+        return prefix.rstrip("/") + "/" + route_path.lstrip("/")
 
     skipped = 0
     for route in router.routes:
         if not isinstance(route, _APIRoute):
             continue
+        full = _full_path(route.path)
         for method in route.methods or {"GET"}:
-            key = (method.upper(), route.path)
+            key = (method.upper(), full)
             if key in _registered_routes:
                 skipped += 1
                 logger.debug(
                     "Router dedup: skipping duplicate %s %s (already registered)",
                     method,
-                    route.path,
+                    full,
                 )
 
     if skipped:
@@ -69,8 +81,9 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
                 # Non-API routes (WebSocket, Mount, etc.) — always include
                 filtered.routes.append(route)
                 continue
+            full = _full_path(route.path)
             methods = route.methods or {"GET"}
-            if any((m.upper(), route.path) in _registered_routes for m in methods):
+            if any((m.upper(), full) in _registered_routes for m in methods):
                 continue
             filtered.add_api_route(
                 route.path,
@@ -89,7 +102,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     else:
         app.include_router(router, **kwargs)
 
-    # Record all routes now on the app
+    # Record all routes now on the app (full paths as FastAPI stores them)
     for route in app.routes:
         if isinstance(route, _APIRoute):
             for method in route.methods or {"GET"}:

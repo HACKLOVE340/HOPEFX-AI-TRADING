@@ -50,7 +50,7 @@ vi.mock('../hooks/useApi', () => ({
   backtestApi: { run: vi.fn().mockResolvedValue({ data: { job_id: 'bt-1', status: 'queued' } }), results: vi.fn().mockResolvedValue({ data: { job_id: 'bt-1', status: 'completed', metrics: { total_return: 0.12, sharpe: 1.4, max_drawdown: 0.08, win_rate: 0.58 }, equity_curve: [] } }), list: vi.fn().mockResolvedValue({ data: { backtests: [] } }) },
   performanceApi: {
     summary:     vi.fn().mockResolvedValue({ data: {
-      total_trades: 42, win_rate: 0.65, avg_return_pct: 1.2,
+      total_trades: 42, win_rate: 0.65,
       total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
       max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
       best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,
@@ -264,7 +264,7 @@ describe('Portfolio page', () => {
     // Pre-populate store so PerformanceMetrics renders immediately
     act(() => {
       useStore.getState().setPerformanceSummary({
-        total_trades: 42, win_rate: 65, avg_return_pct: 1.2,
+        total_trades: 42, win_rate: 65,
         total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
         max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
         best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,
@@ -277,7 +277,7 @@ describe('Portfolio page', () => {
   it('renders sharpe ratio stat tile', async () => {
     act(() => {
       useStore.getState().setPerformanceSummary({
-        total_trades: 42, win_rate: 65, avg_return_pct: 1.2,
+        total_trades: 42, win_rate: 65,
         total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
         max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
         best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,
@@ -290,7 +290,7 @@ describe('Portfolio page', () => {
   it('renders max drawdown stat tile', async () => {
     act(() => {
       useStore.getState().setPerformanceSummary({
-        total_trades: 42, win_rate: 65, avg_return_pct: 1.2,
+        total_trades: 42, win_rate: 65,
         total_return_pct: 12.5, sharpe_ratio: 1.8, sortino_ratio: 2.1,
         max_drawdown_pct: 8.5, profit_factor: 1.6, avg_trade_pnl: 45.0,
         best_trade: 320.0, worst_trade: -180.0, cvar_95: -95.0,

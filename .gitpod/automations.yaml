@@ -1,0 +1,20 @@
+services:
+  backend:
+    name: FastAPI Backend
+    description: HOPEFX FastAPI backend on port 8000
+    commands:
+      start: cd /workspaces/HOPEFX-AI-TRADING && APP_ENV=development uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+      ready: curl -sf http://localhost:8000/health
+    ports:
+      - port: 8000
+        onOpen: ignore
+
+  frontend:
+    name: Vite Frontend
+    description: HOPEFX React/Vite frontend on port 5173
+    commands:
+      start: cd /workspaces/HOPEFX-AI-TRADING/frontend && npm run dev
+      ready: curl -sf http://localhost:5173
+    ports:
+      - port: 5173
+        onOpen: open-preview

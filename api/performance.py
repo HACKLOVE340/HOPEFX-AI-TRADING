@@ -294,7 +294,7 @@ async def generate_weekly_report(
     summary="Get the most recent weekly performance report",
 )
 async def get_latest_weekly_report(
-    _user: TokenPayload = Depends(require_role("admin")),
+    _user: TokenPayload = Depends(require_role("trader")),
 ):
     """
     Return the most recently generated weekly report as JSON.

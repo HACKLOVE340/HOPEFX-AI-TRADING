@@ -259,6 +259,7 @@ async def list_blocked_ips(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
             socket_connect_timeout=1,
+            socket_timeout=2,
             decode_responses=True,
         )
         # Try both the set key and the list key used by global_fortress
