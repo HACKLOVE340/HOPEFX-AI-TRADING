@@ -426,6 +426,8 @@ const AppShell: React.FC = () => {
             <Route path="/sub-accounts"    element={wrap(gated('sub-accounts', <SubAccounts />))} />
             <Route path="/elite"           element={wrap(gated('elite',        <EliteDashboard />))} />
             <Route path="/checkout"        element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
+            {/* /pricing inside AppShell so authenticated users keep the sidebar */}
+            <Route path="/pricing"         element={wrap(<PricingPage />)} />
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
