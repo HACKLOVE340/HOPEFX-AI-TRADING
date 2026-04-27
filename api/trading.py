@@ -1606,47 +1606,63 @@ def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> 
 
     Queries by Trade.user_id directly (preferred path).  Falls back to joining
     through Account when a trade was created before the user_id column existed.
+    Uses SessionLocal directly so it works in paper mode (no app_state.db_session_factory).
     """
     try:
-        from app import app_state as _state
+        from database.connection import SessionLocal as _SL
         from database.models import Account, Trade
 
-        if not _state or not _state.db_session_factory:
-            return []
-        with _state.db_session_factory() as session:  # pylint: disable=not-callable
+        session = _SL()
+        try:
             # Primary: trades with user_id set directly
             q_direct = session.query(Trade).filter(Trade.user_id == user_id)
             # Fallback: trades linked via Account.user_id (legacy rows)
-            q_via_account = (
-                session.query(Trade)
-                .join(Account, Trade.account_id == Account.id)
-                .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
-                .filter(Trade.user_id.is_(None))
-            )
-            combined = q_direct.union(q_via_account)
+            try:
+                q_via_account = (
+                    session.query(Trade)
+                    .join(Account, Trade.account_id == Account.id)
+                    .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
+                    .filter(Trade.user_id.is_(None))
+                )
+                combined = q_direct.union(q_via_account)
+            except Exception:
+                combined = q_direct
             if symbol:
                 combined = combined.filter(Trade.symbol == symbol.upper())
             combined = combined.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
             return combined.all()
+        finally:
+            session.close()
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
 
 
 def _trade_to_dict(t) -> dict:
+    raw_status = getattr(t, "status", "")
+    status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
+    entry_time = getattr(t, "entry_time", None)
+    exit_time  = getattr(t, "exit_time",  None)
+    # quantity: prefer entry_quantity (canonical column), fall back to size or quantity
+    qty = (
+        getattr(t, "entry_quantity", None)
+        or getattr(t, "size", None)
+        or getattr(t, "quantity", None)
+        or 0
+    )
     return {
-        "trade_id": getattr(t, "trade_id", str(getattr(t, "id", ""))),
-        "symbol": getattr(t, "symbol", ""),
-        "side": getattr(t, "side", ""),
-        "quantity": getattr(t, "quantity", 0),
-        "entry_price": getattr(t, "entry_price", 0),
-        "exit_price": getattr(t, "exit_price", None),
-        "realized_pnl": getattr(t, "realized_pnl", 0),
-        "commission": getattr(t, "commission", 0),
-        "status": getattr(t, "status", ""),
-        "strategy": getattr(t, "strategy", ""),
-        "entry_time": str(getattr(t, "entry_time", "")),
-        "exit_time": str(getattr(t, "exit_time", "") or ""),
+        "trade_id":    getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
+        "symbol":      getattr(t, "symbol", "") or "",
+        "side":        getattr(t, "side", "") or "",
+        "quantity":    float(qty or 0),
+        "entry_price": float(getattr(t, "entry_price", 0) or 0),
+        "exit_price":  float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None,
+        "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0),
+        "commission":  float(getattr(t, "commission", 0) or 0),
+        "status":      status_str,
+        "strategy":    getattr(t, "strategy", "") or "",
+        "entry_time":  entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or ""),
+        "exit_time":   exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or ""),
     }
 
 

@@ -83,30 +83,30 @@ def _load_equity_curve() -> list[EquityPoint]:
 
     # ── 2. DB Trade table (closed trades) ────────────────────────────────────
     try:
-        from app import app_state as _app_state_db
+        import os as _os
+        from database.connection import SessionLocal as _SL
         from database.models import Trade, TradeStatus
 
-        session_factory = getattr(_app_state_db, "db_session_factory", None)
-        if session_factory is not None:
-            db = session_factory()
-            try:
-                trades = (
-                    db.query(Trade)
-                    .filter(Trade.status == TradeStatus.CLOSED, Trade.exit_time.isnot(None))
-                    .order_by(Trade.exit_time.asc())
-                    .all()
-                )
-                if trades:
-                    equity = 10_000.0  # default starting equity
-                    points = []
-                    for t in trades:
-                        equity += float(t.realized_pnl or 0.0)
-                        ts = t.exit_time.timestamp() if hasattr(t.exit_time, "timestamp") else 0.0
-                        points.append(EquityPoint(time=ts, value=round(equity, 4)))
-                    if points:
-                        return points
-            finally:
-                db.close()
+        db = _SL()
+        try:
+            trades = (
+                db.query(Trade)
+                .filter(Trade.status == TradeStatus.CLOSED, Trade.exit_time.isnot(None))
+                .order_by(Trade.exit_time.asc())
+                .all()
+            )
+            if trades:
+                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
+                equity = starting
+                points = []
+                for t in trades:
+                    equity += float(t.realized_pnl or 0.0)
+                    ts = t.exit_time.timestamp() if hasattr(t.exit_time, "timestamp") else 0.0
+                    points.append(EquityPoint(time=ts, value=round(equity, 4)))
+                if points:
+                    return points
+        finally:
+            db.close()
     except Exception as exc:
         logger.debug("DB trade history load failed: %s", exc)
 
@@ -128,16 +128,14 @@ def _load_equity_curve() -> list[EquityPoint]:
 def _db_trade_count() -> int:
     """Return the count of closed trades from the DB, or 0 on any error."""
     try:
-        from app import app_state as _app_state_cnt
+        from database.connection import SessionLocal as _SL
         from database.models import Trade, TradeStatus
 
-        session_factory = getattr(_app_state_cnt, "db_session_factory", None)
-        if session_factory is not None:
-            db = session_factory()
-            try:
-                return db.query(Trade).filter(Trade.status == TradeStatus.CLOSED).count()
-            finally:
-                db.close()
+        db = _SL()
+        try:
+            return db.query(Trade).filter(Trade.status == TradeStatus.CLOSED).count()
+        finally:
+            db.close()
     except Exception as exc:
         logger.debug("DB trade count failed: %s", exc)
     return 0
@@ -219,14 +217,14 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
     summary="Equity curve time series",
 )
 async def equity_curve(
-    _user: TokenPayload = Depends(require_role("trader")),
+    _user: TokenPayload = Depends(require_role("user")),
 ):
     """
     Return the equity curve as a list of {time, value} points.
     Used by the dashboard equity chart and drawdown chart.
     Returns an empty list when no paper trading data is available yet.
 
-    Requires trader role — exposes live account equity values.
+    Requires any authenticated user.
     """
     return _load_equity_curve()
 
@@ -336,7 +334,7 @@ async def list_weekly_reports(
 # ── Additional endpoints required by frontend ─────────────────────────────────
 
 @router.get("/summary", summary="Performance summary (alias for /public)")
-async def performance_summary(_user: TokenPayload = Depends(require_role("trader"))):
+async def performance_summary(_user: TokenPayload = Depends(require_role("user"))):
     """
     Authenticated performance summary — same data as /public but requires auth.
     Used by Portfolio.tsx and other authenticated pages.
@@ -355,7 +353,7 @@ async def weekly_reports_list(_user: TokenPayload = Depends(require_role("trader
 
 @router.get("/trade-breakdown", summary="Trade breakdown by symbol, strategy, session")
 async def trade_breakdown(
-    _user: TokenPayload = Depends(require_role("trader")),
+    _user: TokenPayload = Depends(require_role("user")),
     symbol: str | None = None,
     strategy: str | None = None,
 ):
@@ -466,6 +464,7 @@ async def export_performance(
 
 def _load_trades() -> list[dict]:
     """Load trade history from engine or DB."""
+    # 1. Live engine fill history
     try:
         from app import app_state
         engine = getattr(app_state, "hopefx_engine", None)
@@ -492,13 +491,57 @@ def _load_trades() -> list[dict]:
     except Exception as exc:
         logger.debug("_load_trades engine: %s", exc)
 
-    # DB fallback
+    # 2. DB Trade table — primary persistent source
+    try:
+        from database.connection import SessionLocal as _SL
+        from database.models import Trade, TradeStatus
+
+        db = _SL()
+        try:
+            rows = (
+                db.query(Trade)
+                .order_by(Trade.entry_time.desc())
+                .limit(500)
+                .all()
+            )
+            if rows:
+                result = []
+                for t in rows:
+                    qty = (
+                        getattr(t, "entry_quantity", None)
+                        or getattr(t, "size", None)
+                        or getattr(t, "quantity", None)
+                        or 0.0
+                    )
+                    raw_status = getattr(t, "status", "open")
+                    status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "open")
+                    result.append({
+                        "trade_id":     getattr(t, "trade_id", None) or str(t.id),
+                        "symbol":       t.symbol or "UNKNOWN",
+                        "side":         t.side or "buy",
+                        "quantity":     float(qty or 0.0),
+                        "entry_price":  float(t.entry_price or 0.0),
+                        "exit_price":   float(t.exit_price) if t.exit_price is not None else None,
+                        "realized_pnl": float(t.realized_pnl or 0.0),
+                        "commission":   float(getattr(t, "commission", 0.0) or 0.0),
+                        "status":       status_str,
+                        "strategy":     t.strategy or "unknown",
+                        "entry_time":   t.entry_time.isoformat() if t.entry_time else "",
+                        "exit_time":    t.exit_time.isoformat() if t.exit_time else None,
+                    })
+                return result
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("_load_trades DB: %s", exc)
+
+    # 3. In-process db_store fallback
     try:
         from api.db_store import db_get
         stored = db_get("performance:trades")
         if stored and isinstance(stored, list):
             return stored
     except Exception as exc:
-        logger.debug("_load_trades db: %s", exc)
+        logger.debug("_load_trades db_store: %s", exc)
 
     return []
