@@ -37,6 +37,7 @@ Provides endpoints for:
 """
 
 import asyncio
+import concurrent.futures as _concurrent_futures
 import logging
 import os
 import platform
@@ -451,6 +452,13 @@ async def lifespan(_app: FastAPI):
     init_sentry()
     # Task 38: Redis-backed rate limiting
     setup_rate_limiting(_app)
+    # Increase the default thread pool so yfinance / blocking I/O calls
+    # don't starve when many background tasks are running.
+    _io_executor = _concurrent_futures.ThreadPoolExecutor(
+        max_workers=32, thread_name_prefix="hopefx-io"
+    )
+    asyncio.get_event_loop().set_default_executor(_io_executor)
+
     await kill_switch.start()
     await startup_event()
     # Start Sharpe circuit breaker as a top-level lifespan task so it always
