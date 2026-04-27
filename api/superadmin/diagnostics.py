@@ -118,9 +118,9 @@ def _get_healer():
 async def _load_report_from_redis() -> dict[str, Any] | None:
     """Load the last diagnostics report from Redis as a fallback."""
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_REDIS_REPORT_KEY)
             if raw:
@@ -133,9 +133,9 @@ async def _load_report_from_redis() -> dict[str, Any] | None:
 async def _load_remediation_log_from_redis() -> list[dict[str, Any]]:
     """Load the remediation log from Redis as a fallback."""
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_REDIS_REMEDIATION_KEY)
             if raw:

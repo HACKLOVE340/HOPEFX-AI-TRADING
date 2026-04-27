@@ -75,9 +75,9 @@ _DEFAULT_CONFIG: dict[str, Any] = {
 def _load_config() -> dict[str, Any]:
     # Redis first
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_REDIS_CONFIG_KEY)
             if raw:
@@ -105,9 +105,9 @@ def _save_config(cfg: dict[str, Any]) -> None:
         logger.warning("auto_healing: disk config save failed: %s", exc)
 
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(_REDIS_CONFIG_KEY, json.dumps(cfg))
     except Exception as exc:
@@ -179,9 +179,9 @@ async def get_auto_healing_status(
 
     # Redis fallback
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("security:self_healer:status")
             if raw:
@@ -310,9 +310,9 @@ async def get_drift_history(
         pass
     # Redis fallback
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("heal:drift_events")
             if raw:
@@ -337,9 +337,9 @@ async def get_patch_history(
     except Exception:  # nosec B110 — healer may not be running; fall through to Redis
         pass
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("heal:patch_history", -limit, -1)
             patches = [json.loads(r) for r in raw]
@@ -429,9 +429,9 @@ async def get_pending_approval(
 ) -> dict:
     """Return patches waiting for manual approval."""
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("heal:pending_approval", 0, -1)
             return {"patches": [json.loads(r) for r in raw]}
@@ -447,9 +447,9 @@ async def get_audit_log(
 ) -> dict:
     """Return the healer audit log (baseline rebuilds, manual actions)."""
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("heal:audit_log", -limit, -1)
             return {"entries": [json.loads(r) for r in raw]}
@@ -466,9 +466,9 @@ async def approve_patch(
     """Move a pending patch to fixes:approved queue."""
     _log_superadmin_action(user, "auto_healing_patch_approve", f"index={patch_index}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             entries = rc.lrange("heal:pending_approval", 0, -1)
             if patch_index < 0 or patch_index >= len(entries):

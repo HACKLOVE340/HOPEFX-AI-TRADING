@@ -73,9 +73,9 @@ async def set_feature_flag(
 async def get_user_flag_overrides(target_user_id: str, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     overrides = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.hgetall(f"feature_flags:user:{target_user_id}")
             for flag, val in raw.items():
@@ -98,9 +98,9 @@ async def set_user_flag_override(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.hset(f"feature_flags:user:{target_user_id}", flag_name, "1" if body.enabled else "0")
     except Exception as exc:

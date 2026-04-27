@@ -69,9 +69,9 @@ async def get_logs(
     try:
         import json as _json
 
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("app:logs", 0, limit - 1)
             for item in raw:

@@ -82,10 +82,10 @@ async def get_security_events(
 async def get_blocked_ips(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     blocked = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.hgetall(_BLOCKED_IPS_KEY)
             for ip, data in raw.items():
@@ -109,10 +109,10 @@ async def get_blocked_ips(user: TokenPayload = Depends(_require_superadmin)) -> 
 @router.post("/security/block-ip")
 async def block_ip(body: BlockIPBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             entry = {
                 "reason": body.reason,
@@ -129,9 +129,9 @@ async def block_ip(body: BlockIPBody, user: TokenPayload = Depends(_require_supe
 @router.delete("/security/blocked-ips/{ip}")
 async def unblock_ip(ip: str, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.hdel(_BLOCKED_IPS_KEY, ip)
     except Exception as exc:

@@ -543,10 +543,10 @@ async def set_maintenance_mode(body: MaintenanceBody, user: TokenPayload = Depen
 async def broadcast_message(body: BroadcastBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     _log_superadmin_action(user, "broadcast", f"[{body.type}] {body.title}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             msg = {"title": body.title, "body": body.body, "type": body.type, "ts": _utcnow().isoformat()}
             rc.lpush("platform:broadcasts", json.dumps(msg))
@@ -890,9 +890,9 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
     # ── Avg execution latency from Redis (written by order execution layer) ───
     try:
         import json as _json
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("engine:execution_stats")
             if raw:

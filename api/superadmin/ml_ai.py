@@ -75,9 +75,9 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
     # ── Drift score from drift monitor ────────────────────────────────────────
     try:
         import json as _json
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("ml:drift:status")
             if raw:
