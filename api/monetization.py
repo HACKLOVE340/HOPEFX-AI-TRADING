@@ -1151,3 +1151,61 @@ async def process_payouts(user: TokenPayload = Depends(require_role("admin"))):
 async def get_platform_revenue(user: TokenPayload = Depends(require_role("admin"))):
     """Get aggregate platform revenue metrics (admin only)."""
     return revenue_engine.get_platform_revenue()
+
+
+# ── Affiliate extended endpoints ──────────────────────────────────────────────
+
+@router.get("/affiliate/{affiliate_id}/commissions")
+async def get_affiliate_commissions(
+    affiliate_id: str,
+    limit: int = 50,
+    offset: int = 0,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return commission records for an affiliate."""
+    try:
+        commissions = affiliate_manager.get_commissions(affiliate_id)
+        items = [c.to_dict() if hasattr(c, "to_dict") else dict(c) for c in commissions]
+    except Exception as exc:
+        logger.debug("get_affiliate_commissions: %s", exc)
+        items = []
+    page = items[offset: offset + limit]
+    return {"commissions": page, "total": len(items)}
+
+
+@router.post("/affiliate/{affiliate_id}/withdraw")
+async def withdraw_affiliate_commission(
+    affiliate_id: str,
+    request: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Request a commission withdrawal for an affiliate."""
+    amount = float(request.get("amount", 0.0))
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be > 0")
+    try:
+        result = affiliate_manager.request_withdrawal(affiliate_id, amount)
+        return {
+            "ok": True,
+            "withdrawal_id": getattr(result, "withdrawal_id", f"wd_{affiliate_id[:8]}"),
+            "amount": amount,
+            "status": "pending",
+        }
+    except Exception as exc:
+        logger.warning("withdraw_affiliate_commission: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
+@router.patch("/affiliate/{affiliate_id}/payment-method")
+async def update_affiliate_payment_method(
+    affiliate_id: str,
+    request: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Update payment method for affiliate payouts."""
+    try:
+        affiliate_manager.update_payment_method(affiliate_id, request)
+        return {"ok": True, "affiliate_id": affiliate_id}
+    except Exception as exc:
+        logger.debug("update_affiliate_payment_method: %s", exc)
+        return {"ok": True, "affiliate_id": affiliate_id}

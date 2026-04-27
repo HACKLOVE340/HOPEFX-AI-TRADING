@@ -314,3 +314,27 @@ def push_notification(user_id: str, notif_type: str, title: str, message: str,
     }
     _save_notif(user_id, notif)
     return notif
+
+
+@router.post("/test", summary="Send a test notification to the current user")
+async def send_test_notification(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Push a test notification to verify the notification pipeline is working."""
+    from datetime import datetime, timezone
+    test_notif = {
+        "id": f"test_{int(__import__('time').time())}",
+        "type": "system",
+        "title": "Test Notification",
+        "message": "Your notification pipeline is working correctly.",
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Try to push via WebSocket event bus
+    try:
+        from core.event_bus import event_bus
+        await event_bus.publish(f"notifications:{user.sub}", test_notif)
+    except Exception as exc:
+        logger.debug("test notification event bus: %s", exc)
+
+    return {"ok": True, "notification": test_notif}

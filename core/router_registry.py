@@ -353,6 +353,15 @@ def register_routers(
     except Exception as _av_err:
         logger.warning("Antivirus router not registered: %s", _av_err)
 
+    # ── Custom Indicators (/api/indicators) ──────────────────────────────────
+    try:
+        from api.custom_indicators import router as custom_indicators_router
+
+        _include_router_deduped(app, custom_indicators_router)
+        logger.info("Custom indicators router registered (/api/indicators)")
+    except Exception as _ci_err:
+        logger.warning("Custom indicators router not registered: %s", _ci_err)
+
     # ── TCA (Transaction Cost Analysis) ──────────────────────────────────────
     try:
         from api.tca import router as tca_router
