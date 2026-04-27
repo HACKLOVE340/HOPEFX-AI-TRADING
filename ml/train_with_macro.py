@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import warnings
 from datetime import datetime, timedelta, timezone
@@ -448,9 +449,10 @@ def oos_eval(
     _n_neg3 = float(np.nan_to_num((y_train == 0).sum(), nan=1.0))
     _n_pos3 = float(np.nan_to_num((y_train == 1).sum(), nan=0.0))
     _spw3 = _n_neg3 / max(_n_pos3, 1.0)
+    _n_estimators = 20 if os.getenv("HOPEFX_CI") else 500
     if model_type == "xgb":
         model = xgb.XGBClassifier(
-            n_estimators=500,
+            n_estimators=_n_estimators,
             max_depth=4,
             learning_rate=0.03,
             subsample=0.8,
@@ -466,7 +468,7 @@ def oos_eval(
         )
     else:
         model = RandomForestClassifier(
-            n_estimators=500,
+            n_estimators=_n_estimators,
             max_depth=8,
             min_samples_leaf=5,
             max_features="sqrt",
