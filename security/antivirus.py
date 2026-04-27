@@ -826,45 +826,45 @@ async def start_av_scanner(app: FastAPI) -> None:
 
 
 def _build_eager_av_router() -> APIRouter:
-    from fastapi import APIRouter as _APIRouter, HTTPException as _HTTPException, Request as _Request
+    # Use module-level Request/HTTPException imports so FastAPI's dependency
+    # injection resolves the type annotations correctly at route registration.
+    r = APIRouter(prefix="/api/security/av", tags=["antivirus"])
 
-    r = _APIRouter(prefix="/api/security/av", tags=["antivirus"])
-
-    def _eager_require_auth(request: _Request) -> None:
+    def _eager_require_auth(request: Request) -> None:
         try:
             from auth.jwt import verify_token as _verify
 
             token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             if not token:
-                raise _HTTPException(status_code=401, detail="Authentication required")
-            _verify(token, _HTTPException(status_code=401, detail="Invalid or expired token"))
-        except _HTTPException:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            _verify(token, HTTPException(status_code=401, detail="Invalid or expired token"))
+        except HTTPException:
             raise
         except ImportError:  # nosec B110
             logger.warning("AV eager router: auth.jwt unavailable, auth skipped")
         except Exception as exc:
-            raise _HTTPException(status_code=401, detail="Authentication failed") from exc
+            raise HTTPException(status_code=401, detail="Authentication failed") from exc
 
-    def _eager_require_admin(request: _Request) -> None:
+    def _eager_require_admin(request: Request) -> None:
         try:
             from auth.jwt import verify_token as _verify
 
             token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
             if not token:
-                raise _HTTPException(status_code=401, detail="Authentication required")
-            payload = _verify(token, _HTTPException(status_code=401, detail="Invalid or expired token"))
+                raise HTTPException(status_code=401, detail="Authentication required")
+            payload = _verify(token, HTTPException(status_code=401, detail="Invalid or expired token"))
             role = (payload or {}).get("role", "")
             if role not in ("admin", "superadmin"):
-                raise _HTTPException(status_code=403, detail="Admin role required")
-        except _HTTPException:
+                raise HTTPException(status_code=403, detail="Admin role required")
+        except HTTPException:
             raise
         except ImportError:  # nosec B110
             logger.warning("AV eager router: auth.jwt unavailable, admin check skipped")
         except Exception as exc:
-            raise _HTTPException(status_code=401, detail="Authentication failed") from exc
+            raise HTTPException(status_code=401, detail="Authentication failed") from exc
 
     @r.get("/status")
-    async def _av_status(request: _Request):
+    async def _av_status(request: Request):
         _eager_require_auth(request)
         s = get_scanner()
         return {
@@ -876,7 +876,7 @@ def _build_eager_av_router() -> APIRouter:
         }
 
     @r.get("/threats")
-    async def _threats(request: _Request, severity: str | None = None):
+    async def _threats(request: Request, severity: str | None = None):
         _eager_require_auth(request)
         threats = get_scanner()._threats
         if severity:
@@ -884,22 +884,22 @@ def _build_eager_av_router() -> APIRouter:
         return threats[-200:]
 
     @r.post("/scan")
-    async def _scan(request: _Request):
+    async def _scan(request: Request):
         _eager_require_admin(request)
         return await get_scanner().scan_project()
 
     @r.post("/quarantine")
-    async def _quarantine(request: _Request, body: dict):
+    async def _quarantine(request: Request, body: dict):
         _eager_require_admin(request)
         threat_id = body.get("threat_id", "")
         if not threat_id:
-            raise _HTTPException(status_code=400, detail="threat_id required")
+            raise HTTPException(status_code=400, detail="threat_id required")
         try:
             return get_scanner().quarantine_threat(threat_id)
         except ValueError as exc:
-            raise _HTTPException(status_code=404, detail="Threat not found") from exc
+            raise HTTPException(status_code=404, detail="Threat not found") from exc
         except RuntimeError as exc:
-            raise _HTTPException(status_code=500, detail="Quarantine failed — check server logs") from exc
+            raise HTTPException(status_code=500, detail="Quarantine failed — check server logs") from exc
 
     return r
 
