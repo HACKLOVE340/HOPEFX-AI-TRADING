@@ -220,3 +220,12 @@ opentelemetry-instrumentation-redis>=0.45b0,<1.0.0
 opentelemetry-instrumentation-aiohttp-client>=0.45b0,<1.0.0
 # W3C trace context propagation
 opentelemetry-propagator-b3>=1.24.0,<2.0.0
+
+# ── Load testing ──────────────────────────────────────────────────────────────
+# Required by locust/load_tests.py
+locust>=2.24.0,<3.0.0
+
+# ── Notebook building ─────────────────────────────────────────────────────────
+# Required by examples/build_notebook.py
+nbformat>=5.9.0
+ipython>=8.12.0
