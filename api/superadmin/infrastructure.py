@@ -54,29 +54,56 @@ router = APIRouter()
 
 @router.get("/infra/health")
 async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) -> dict:
-    health: dict = {"db": "unknown", "redis": "unknown", "api": "healthy"}
+    import asyncio as _asyncio
+    import os as _os
+
+    # ── Service connectivity ──────────────────────────────────────────────────
+    svc: dict = {"db": "unknown", "redis": "unknown", "api": "healthy"}
     try:
         from database.connection import SessionLocal
-
         from sqlalchemy import text as _text
-
-        db = SessionLocal()
-        db.execute(_text("SELECT 1"))
-        db.close()
-        health["db"] = "healthy"
+        _db = SessionLocal()
+        _db.execute(_text("SELECT 1"))
+        _db.close()
+        svc["db"] = "healthy"
     except Exception:
-        health["db"] = "error"
+        svc["db"] = "error"
     try:
         from cache.redis_client import get_sync_redis_client
-
-        rc = get_sync_redis_client()
-        if rc and rc.ping():
-            health["redis"] = "healthy"
-        else:
-            health["redis"] = "error"
+        _rc = get_sync_redis_client()
+        svc["redis"] = "healthy" if (_rc and _rc.ping()) else "error"
     except Exception:
-        health["redis"] = "error"
-    return health
+        svc["redis"] = "error"
+
+    # ── System resources (run in thread to avoid blocking event loop) ─────────
+    def _read_sys() -> dict:
+        try:
+            import psutil
+            cpu   = psutil.cpu_percent(interval=0.1)
+            mem   = psutil.virtual_memory()
+            disk  = psutil.disk_usage("/")
+            net   = psutil.net_io_counters()
+            load  = psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0.0, 0.0, 0.0)
+            return {
+                "cpu_pct":           round(cpu, 1),
+                "mem_pct":           round(mem.percent, 1),
+                "disk_pct":          round(disk.percent, 1),
+                "network_in_mbps":   round(net.bytes_recv / 1_048_576, 2),
+                "network_out_mbps":  round(net.bytes_sent / 1_048_576, 2),
+                "load_avg_1m":       round(load[0], 2),
+                "load_avg_5m":       round(load[1], 2),
+                "load_avg_15m":      round(load[2], 2),
+            }
+        except Exception:
+            return {
+                "cpu_pct": 0.0, "mem_pct": 0.0, "disk_pct": 0.0,
+                "network_in_mbps": 0.0, "network_out_mbps": 0.0,
+                "load_avg_1m": 0.0, "load_avg_5m": 0.0, "load_avg_15m": 0.0,
+            }
+
+    _loop = _asyncio.get_event_loop()
+    sys_metrics = await _loop.run_in_executor(None, _read_sys)
+    return {**svc, **sys_metrics}
 
 
 @router.get("/infra/cache")
@@ -227,6 +254,7 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
                 "row_counts": row_counts,
                 "db_size_mb": db_size_mb,
                 "active_connections": active_connections,
+                "max_connections": 1 if is_sqlite else 100,
                 "query_time_avg_ms": 0,
                 "slow_queries": 0,
                 "deadlocks": 0,
