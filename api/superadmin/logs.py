@@ -130,10 +130,20 @@ async def get_log_levels(user: TokenPayload = Depends(_require_superadmin)) -> d
     import logging as _logging
 
     loggers: dict[str, str] = {}
-    for name, lgr in _logging.Logger.manager.loggerDict.items():
-        if isinstance(lgr, _logging.Logger):
-            loggers[name] = _logging.getLevelName(lgr.effective_level)
-    loggers["root"] = _logging.getLevelName(_logging.getLogger().level)
+    try:
+        for name, lgr in list(_logging.Logger.manager.loggerDict.items()):
+            try:
+                if isinstance(lgr, _logging.Logger):
+                    level_name = _logging.getLevelName(lgr.effective_level)
+                    loggers[str(name)] = str(level_name)
+            except Exception:
+                pass
+        root_level = _logging.getLogger().level
+        loggers["root"] = _logging.getLevelName(root_level if root_level else _logging.WARNING)
+    except Exception as exc:
+        logger.debug("get_log_levels: %s", exc)
+        loggers["root"] = "INFO"
+    # Return flat dict — frontend iterates Object.entries(data) directly
     return loggers
 
 
