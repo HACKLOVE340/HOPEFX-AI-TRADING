@@ -1498,7 +1498,46 @@ async def get_brain_state(
     """Get AI brain state. Returns a graceful fallback when brain is not yet initialised."""
     if app_state and app_state.brain:
         try:
-            return app_state.brain.state.to_dict()
+            raw = app_state.brain.state.to_dict()
+            # Normalise to the shape the frontend expects:
+            #   mode            — human-readable operating mode
+            #   status          — same as mode (alias)
+            #   active_strategies — list of active strategy names
+            #   confidence      — overall confidence score 0-1
+            #   updated_at      — ISO timestamp
+            system_state = raw.get("system_state", "running")
+            # Derive active strategies from brain if available
+            active_strategies: list[str] = []
+            try:
+                strats = getattr(app_state.brain, "active_strategies", None)
+                if strats:
+                    active_strategies = [
+                        getattr(s, "name", str(s)) for s in strats
+                    ] if not isinstance(strats, list) else [
+                        s if isinstance(s, str) else getattr(s, "name", str(s))
+                        for s in strats
+                    ]
+            except Exception:
+                pass
+            # Derive confidence from performance metrics
+            confidence = 0.0
+            try:
+                perf = raw.get("performance", {})
+                # Use inverse of latency as a proxy for confidence when no ML score
+                lat = perf.get("latency_ms", 0)
+                confidence = max(0.0, min(1.0, 1.0 - lat / 1000.0)) if lat > 0 else 0.75
+            except Exception:
+                pass
+            return {
+                **raw,
+                "mode": system_state,
+                "status": system_state,
+                "active_strategies": active_strategies,
+                "confidence": confidence,
+                "updated_at": datetime.fromtimestamp(
+                    raw.get("timestamp", 0), tz=UTC
+                ).isoformat() if raw.get("timestamp") else datetime.now(UTC).isoformat(),
+            }
         except Exception as _exc:
             logger.debug("brain state serialisation failed: %s", _exc)
 
