@@ -51,7 +51,10 @@ from strawberry.types import Info
 
 logger = logging.getLogger(__name__)
 
-_FEATURE_ENABLED = os.getenv("FEATURE_GRAPHQL_API", "false").lower() == "true"
+# Gating is enforced by core/router_registry.py (feature_flags.GRAPHQL_API).
+# The router is always built here so it is ready when the flag is on.
+# Default matches the FeatureFlags definition (default=True).
+_FEATURE_ENABLED = os.getenv("FEATURE_GRAPHQL_API", "true").lower() == "true"
 
 
 # ── Auth context ──────────────────────────────────────────────────────────────
