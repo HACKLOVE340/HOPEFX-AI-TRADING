@@ -2956,30 +2956,46 @@ async def trigger_integrity_scan(user: TokenPayload = Depends(_require_superadmi
 async def get_antivirus_status(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Antivirus scanner status and last scan summary."""
     try:
-        from security.antivirus import AntivirusScanner
+        # Use the module-level singleton so we get the live ClamAV connection
+        # state rather than a freshly-constructed (disconnected) instance.
+        from security.antivirus import get_scanner, CLAMD_AVAILABLE
 
-        scanner = AntivirusScanner()
-        if hasattr(scanner, "get_status"):
-            return scanner.get_status()
+        scanner = get_scanner()
+        clamav_connected = scanner._clamd is not None
+        # Re-attempt connection if daemon is now reachable but wasn't at startup
+        if CLAMD_AVAILABLE and not clamav_connected:
+            scanner._connect_clamd()
+            clamav_connected = scanner._clamd is not None
+        last = scanner._last_scan or {}
+        return {
+            "status": "running" if scanner._running else "stopped",
+            "last_scan": last,
+            "threats_found": len(scanner._threats),
+            "files_scanned": last.get("scanned_files", 0),
+            "clamav_available": clamav_connected,
+            "clamd_enabled": clamav_connected,
+            "yara_enabled": last.get("yara_enabled", False),
+            "yara_rules_loaded": 1 if scanner._yara_rules is not None else 0,
+        }
     except Exception as exc:
         logger.warning("AV status error: %s", exc)
+    # Probe ClamAV directly as a last resort
+    _clamav_live = False
     try:
-        from cache.redis_client import get_sync_redis_client
-        import json as _json
-
-        rc = get_sync_redis_client()
-        if rc:
-            raw = rc.get("security:av:status")
-            if raw:
-                return _json.loads(raw)
+        import clamd as _clamd_mod
+        _cd = _clamd_mod.ClamdUnixSocket()
+        _cd.ping()
+        _clamav_live = True
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        pass
     return {
         "status": "unknown",
         "last_scan": None,
         "threats_found": 0,
         "files_scanned": 0,
-        "clamav_available": False,
+        "clamav_available": _clamav_live,
+        "clamd_enabled": _clamav_live,
+        "yara_enabled": False,
         "yara_rules_loaded": 0,
     }
 

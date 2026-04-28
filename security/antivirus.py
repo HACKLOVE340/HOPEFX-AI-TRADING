@@ -379,13 +379,21 @@ rule SuspiciousImport {
         rules_file.write_text(rules_content.strip())
         logger.info("AV: wrote built-in YARA rules to %s", rules_file)
 
+    @property
+    def clamav_available(self) -> bool:
+        """True when the ClamAV daemon is connected and responding."""
+        return self._clamd is not None
+
     def _connect_clamd(self) -> None:
         if not CLAMD_AVAILABLE:
             return
-        # Try Unix socket first, then TCP
+        # Explicit socket path avoids relying on clamd's compiled-in default.
+        _socket_path = os.getenv("CLAMD_SOCKET", "/var/run/clamav/clamd.ctl")
+        _tcp_host = os.getenv("CLAMD_HOST", "127.0.0.1")
+        _tcp_port = int(os.getenv("CLAMD_PORT", "3310"))
         for attempt in [
-            clamd.ClamdUnixSocket,
-            lambda: clamd.ClamdNetworkSocket(host="127.0.0.1", port=3310),
+            lambda: clamd.ClamdUnixSocket(_socket_path),
+            lambda: clamd.ClamdNetworkSocket(host=_tcp_host, port=_tcp_port),
         ]:
             try:
                 cd = attempt()
