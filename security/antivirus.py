@@ -406,12 +406,27 @@ rule SuspiciousImport {
                 continue
         logger.info("AV: ClamAV daemon not reachable — ClamAV layer disabled")
 
+    def reconnect_clamd(self) -> bool:
+        """Re-attempt ClamAV connection (e.g. after daemon starts post-init).
+
+        Returns True if ClamAV is now connected.
+        """
+        self._clamd = None
+        self._connect_clamd()
+        return self._clamd is not None
+
     # ── Scan loop ─────────────────────────────────────────────────────────────
 
     async def _scan_loop(self) -> None:
         # Initial scan after 30s startup delay
         await asyncio.sleep(30)
         while self._running:
+            # Auto-reconnect ClamAV if it was unavailable at startup but is
+            # now running (e.g. daemon started after the scanner was created).
+            if self._clamd is None and CLAMD_AVAILABLE:
+                self._connect_clamd()
+                if self._clamd is not None:
+                    logger.info("AV: ClamAV reconnected in scan loop")
             try:
                 await self.scan_project()
             except Exception as exc:
@@ -906,6 +921,21 @@ def _build_eager_av_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="Threat not found") from exc
         except RuntimeError as exc:
             raise HTTPException(status_code=500, detail="Quarantine failed — check server logs") from exc
+
+    @r.post("/reconnect-clamd", summary="Re-attempt ClamAV daemon connection")
+    async def _reconnect_clamd(_: None = Depends(_av_require_admin)):
+        """Reconnect to the ClamAV daemon.
+
+        Use this when clamd was not running at server startup but has since
+        been started.  Returns the new connection status.
+        """
+        scanner = get_scanner()
+        connected = scanner.reconnect_clamd()
+        return {
+            "clamd_connected": connected,
+            "clamd_enabled": scanner._clamd is not None,
+            "clamav_available": CLAMD_AVAILABLE,
+        }
 
     return r
 
