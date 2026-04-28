@@ -87,7 +87,7 @@ def _load_equity_curve() -> list[EquityPoint]:
 
     # ── 1. Live engine fill history ───────────────────────────────────────────
     try:
-        from app import app_state as _app_state
+        from core.app_state import app_state as _app_state
 
         engine = getattr(_app_state, "hopefx_engine", None)
         if engine is not None:
@@ -132,7 +132,7 @@ def _load_equity_curve() -> list[EquityPoint]:
 
     # ── 3. Broker equity history ──────────────────────────────────────────────
     try:
-        from app import app_state as _app_state2
+        from core.app_state import app_state as _app_state2
 
         broker = getattr(_app_state2, "broker", None)
         if broker and hasattr(broker, "get_equity_history"):
@@ -479,7 +479,7 @@ def _load_trades() -> list[dict]:
     """Load trade history from engine or DB."""
     # 1. Live engine fill history
     try:
-        from app import app_state
+        from core.app_state import app_state
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))

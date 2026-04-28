@@ -171,7 +171,7 @@ async def get_my_kyc_status(user: TokenPayload = Depends(get_current_user)) -> d
 
         # Use the app-level compliance manager if available
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             cm = getattr(app_state, "compliance_manager", None)
         except ImportError:

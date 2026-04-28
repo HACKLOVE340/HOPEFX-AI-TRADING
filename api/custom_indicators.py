@@ -259,7 +259,7 @@ async def apply_indicator(
     # Fetch price data from the nuclear streamer / data feed
     closes: list[float] = []
     try:
-        from app import app_state
+        from core.app_state import app_state
         nuclear = getattr(app_state, "nuclear_streamer", None)
         if nuclear and hasattr(nuclear, "get_ohlcv"):
             candles = nuclear.get_ohlcv(symbol, timeframe, limit)

@@ -447,7 +447,7 @@ class Query:
 
         # DB fallback: read closed trades from the Trade table
         try:
-            from app import app_state as _gql_app_state
+            from core.app_state import app_state as _gql_app_state
             from database.models import Trade as DBTrade, TradeStatus
 
             sf = getattr(_gql_app_state, "db_session_factory", None)
@@ -626,7 +626,7 @@ class Query:
                 logger.debug("Performance fetch failed: %s", exc)
         # DB fallback: compute performance from closed Trade rows
         try:
-            from app import app_state as _gql_perf_state
+            from core.app_state import app_state as _gql_perf_state
             from database.models import Trade as DBTrade, TradeStatus
 
             sf = getattr(_gql_perf_state, "db_session_factory", None)

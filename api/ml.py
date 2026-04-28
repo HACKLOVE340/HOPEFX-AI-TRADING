@@ -181,7 +181,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
     if _os.getenv("APP_ENV", "development").lower() != "production":
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             broker = getattr(app_state, "broker", None)
             if broker and hasattr(broker, "get_market_data"):

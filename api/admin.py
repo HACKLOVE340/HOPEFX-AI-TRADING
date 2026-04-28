@@ -352,7 +352,7 @@ class KYCDecision(BaseModel):
 async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
     """List users with pending KYC submissions. Requires: role >= 'admin'."""
     try:
-        from app import app_state as _state
+        from core.app_state import app_state as _state
         from database.user_models import User
 
         if not _state or not _state.db_session_factory:
@@ -402,7 +402,7 @@ async def decide_kyc(
         )
 
     try:
-        from app import app_state as _state
+        from core.app_state import app_state as _state
         from database.user_models import User
 
         if not _state or not _state.db_session_factory:
@@ -484,7 +484,7 @@ async def get_kyc_status(
 ):
     """Get KYC status for a specific user. Requires: role >= 'admin'."""
     try:
-        from app import app_state as _state
+        from core.app_state import app_state as _state
         from database.user_models import User
 
         if not _state or not _state.db_session_factory:
@@ -931,7 +931,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
 
     # Trading stats from engine
     try:
-        from app import app_state as _as
+        from core.app_state import app_state as _as
         engine = getattr(_as, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -1014,7 +1014,7 @@ def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dic
 
     # Check engine health
     try:
-        from app import app_state as _as2
+        from core.app_state import app_state as _as2
         engine = getattr(_as2, "hopefx_engine", None)
         if engine is None:
             alerts.append({

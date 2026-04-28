@@ -136,7 +136,7 @@ def register_email_webhook(app: FastAPI) -> None:
             try:
                 from sqlalchemy.orm import sessionmaker
 
-                from app import app_state
+                from core.app_state import app_state
                 from database.models import EmailSuppression
 
                 if app_state.db_engine:

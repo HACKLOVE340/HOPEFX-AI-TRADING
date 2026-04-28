@@ -883,7 +883,7 @@ class LLMAgent:
         Returns an empty string when no live data is accessible.
         """
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             broker = getattr(app_state, "broker", None)
             if broker is None:

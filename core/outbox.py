@@ -237,7 +237,7 @@ class OutboxRelay:
 def _get_db_session():
     """Return a SQLAlchemy session from app_state, or None."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         if app_state and app_state.db_session_factory:
             return app_state.db_session_factory()  # pylint: disable=not-callable

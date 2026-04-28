@@ -381,7 +381,7 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
 
     # Paper broker fallback
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_market_data"):

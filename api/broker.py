@@ -285,7 +285,7 @@ async def broker_status():
     checked_at = datetime.now(UTC).isoformat()
 
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         broker = getattr(app_state, "broker", None)
 

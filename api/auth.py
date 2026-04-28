@@ -336,7 +336,7 @@ def require_kyc(
         # Resolve compliance_manager from the request's app state so that
         # test apps (which have no compliance_manager) bypass the check.
         from app import app as _main_app
-        from app import app_state
+        from core.app_state import app_state
 
         if request.app is not _main_app:
             return user  # not the main app — skip KYC (test / embedded app)

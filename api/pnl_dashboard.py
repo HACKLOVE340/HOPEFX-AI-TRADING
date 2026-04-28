@@ -104,7 +104,7 @@ class OpenPosition(BaseModel):
 def _get_engine() -> Any | None:
     """Return the live HopeFXEngine from app_state, or None if not started."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         return getattr(app_state, "hopefx_engine", None)
     except Exception:
@@ -217,7 +217,7 @@ def _compute_current_drawdown(equity_series: list[tuple[float, float]]) -> float
 def _get_db_session():
     """Return (session, session_factory) from app_state, or (None, None)."""
     try:
-        from app import app_state as _app_state_pnl
+        from core.app_state import app_state as _app_state_pnl
 
         sf = getattr(_app_state_pnl, "db_session_factory", None)
         if sf is not None:

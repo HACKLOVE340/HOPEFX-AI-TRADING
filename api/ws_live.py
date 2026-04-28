@@ -273,7 +273,7 @@ def _seed_from_broker() -> None:
     if _prices_seeded:
         return
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         broker = getattr(app_state, "broker", None)
         market_prices = getattr(broker, "market_prices", {}) if broker else {}
@@ -299,7 +299,7 @@ def _get_live_price(symbol: str) -> float | None:
     Returns None if neither is available.
     """
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         # 1. Price engine (real ticks)
         pe = getattr(app_state, "price_engine", None)

@@ -2042,44 +2042,69 @@ except Exception:  # nosec B110 — strategy sub-router registration failure is 
 # endpoint as /trading/risk-metrics inside the strategy sub-router.
 
 
-@router.get("/risk", response_model=None, summary="Risk metrics (alias for /risk-metrics)")
+@router.get("/risk", response_model=None, summary="Risk metrics snapshot")
 async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
     """
-    Alias for ``GET /api/trading/risk-metrics``.
-
-    Requires: any authenticated user.
-
-    Returns daily PnL, max drawdown, open position count, margin used, and
-    a composite risk score.  Delegates to the same implementation used by
-    the strategy sub-router endpoint.
+    Fast risk metrics snapshot — returns immediately from in-memory broker state.
+    No blocking I/O. Falls back to zeros when broker is not yet initialised.
     """
+    import math as _m
+
     try:
         broker = getattr(app_state, "broker", None)
         if broker is None:
             raise AttributeError("no broker")
-        account = broker.get_account_info()
-        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
-        daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
-        margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
-        max_dd = 0.0
-        if hasattr(broker, "get_equity_history"):
-            history = broker.get_equity_history()
-            if history:
-                from api.trading import _compute_max_drawdown
 
-                max_dd = _compute_max_drawdown([v for _, v in history])
+        # Use account info (always fast — in-memory for paper broker)
+        account = broker.get_account_info()
+        balance  = float(getattr(account, "balance",     100_000.0) or 100_000.0)
+        equity   = float(getattr(account, "equity",      balance)   or balance)
+        margin_used = float(getattr(account, "margin_used", 0.0)    or 0.0)
+        daily_pnl   = float(getattr(account, "daily_pnl",  0.0)     or 0.0)
+        open_risk_pct = (margin_used / equity * 100) if equity > 0 else 0.0
+
+        # Max drawdown from equity history (fast — list in memory)
+        max_dd = 0.0
+        try:
+            history = broker.get_equity_history() if hasattr(broker, "get_equity_history") else []
+            if len(history) >= 2:
+                values = [v for _, v in history]
+                peak = values[0]
+                for v in values:
+                    peak = max(peak, v)
+                    dd = (peak - v) / peak if peak > 0 else 0.0
+                    max_dd = max(max_dd, dd)
+        except Exception:
+            pass
+
+        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
         open_count = len(positions)
-        risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
+        kill_switch = False
+        try:
+            ks = _get_kill_switch()
+            kill_switch = bool(ks and ks.is_active())
+        except Exception:
+            pass
+
         return {
-            "daily_pnl": round(daily_pnl, 2),
-            "max_drawdown": round(max_dd * 100, 3),
+            "daily_pnl":      round(daily_pnl, 2),
+            "daily_pnl_pct":  round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4),
+            "max_drawdown":   round(max_dd * 100, 3),
             "open_positions": open_count,
-            "margin_used": round(margin_used, 2),
-            "risk_score": risk_score,
+            "margin_used":    round(margin_used, 2),
+            "open_risk_pct":  round(open_risk_pct, 3),
+            "kill_switch":    kill_switch,
+            "risk_score":     min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1)),
+            "balance":        round(balance, 2),
+            "equity":         round(equity, 2),
         }
     except Exception as exc:
         logger.debug("GET /trading/risk fallback: %s", exc)
-        return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0, "margin_used": 0.0, "risk_score": 0.0}
+        return {
+            "daily_pnl": 0.0, "daily_pnl_pct": 0.0, "max_drawdown": 0.0,
+            "open_positions": 0, "margin_used": 0.0, "open_risk_pct": 0.0,
+            "kill_switch": False, "risk_score": 0.0, "balance": 0.0, "equity": 0.0,
+        }
 
 
 # ── /trading/ai-analysis ──────────────────────────────────────────────────────
@@ -2413,7 +2438,7 @@ async def get_regime_status(
 
     # Try regime router if available
     try:
-        from app import app_state as _as
+        from core.app_state import app_state as _as
         rr = getattr(_as, "regime_router", None)
         if rr is not None:
             status_dict = rr.status()
@@ -2451,7 +2476,7 @@ async def get_regime_history(
 ):
     """Return the last N regime transitions with timestamps. Requires: any authenticated user."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         regime_router = getattr(app_state, "regime_router", None)
         if regime_router is None:
@@ -2541,7 +2566,7 @@ def _ohlcv_to_df(ohlcv_list: list):
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
     """Fetch OHLCV bars from the price engine for a given symbol."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         if app_state and app_state.price_engine:
             return await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
@@ -2750,7 +2775,7 @@ async def get_microstructure_alias(
 
     # Fallback: build from price engine tick data
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         if app_state and app_state.price_engine:
             norm = _normalise_symbol(symbol)

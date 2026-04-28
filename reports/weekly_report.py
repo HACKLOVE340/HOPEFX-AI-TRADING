@@ -576,7 +576,7 @@ async def _load_trade_data() -> tuple:
     data_source = _detect_data_source()
 
     try:
-        from app import app_state  # type: ignore[import]
+        from core.app_state import app_state  # type: ignore[import]
 
         broker = getattr(app_state, "broker", None)
         if broker is None:

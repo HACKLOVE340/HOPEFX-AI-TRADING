@@ -860,7 +860,7 @@ class RealTimePriceEngine:
         Each bar spans 1 hour; price is constant (no movement fabricated).
         """
         try:
-            from app import app_state  # type: ignore[import]
+            from core.app_state import app_state  # type: ignore[import]
 
             broker = getattr(app_state, "broker", None)
             market_prices = getattr(broker, "market_prices", {}) if broker else {}
@@ -906,7 +906,7 @@ class RealTimePriceEngine:
 
         # 3. Paper broker static prices
         try:
-            from app import app_state  # type: ignore[import]
+            from core.app_state import app_state  # type: ignore[import]
 
             broker = getattr(app_state, "broker", None)
             market_prices = getattr(broker, "market_prices", {}) if broker else {}

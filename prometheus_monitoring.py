@@ -223,7 +223,7 @@ def _sync_trading_gauges() -> None:
 
     try:
         # ── Broker connectivity ───────────────────────────────────────────────
-        from app import app_state as _app_state
+        from core.app_state import app_state as _app_state
 
         broker = getattr(_app_state, "broker", None)
         broker_gauge = _get_or_create_gauge(
@@ -238,7 +238,7 @@ def _sync_trading_gauges() -> None:
 
     try:
         # ── Risk manager drawdown ─────────────────────────────────────────────
-        from app import app_state as _app_state
+        from core.app_state import app_state as _app_state
 
         rm = getattr(_app_state, "risk_manager", None)
         if rm is not None:

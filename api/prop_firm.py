@@ -80,7 +80,7 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
     yet initialised (e.g. before first trade).
     """
     try:
-        from app import app_state
+        from core.app_state import app_state
         from risk.compliance import PropComplianceEngine, PropFirmConfig
 
         # Try to get the engine from app state first
@@ -197,7 +197,7 @@ def _get_challenges(user_id: str) -> list[dict]:
     # Derive from live engine if available
     challenges = []
     try:
-        from app import app_state
+        from core.app_state import app_state
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -237,7 +237,7 @@ def _get_daily_stats(user_id: str, days: int = 30) -> list[dict]:
     # Build from engine fill history
     stats: dict[str, dict] = {}
     try:
-        from app import app_state
+        from core.app_state import app_state
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -312,7 +312,7 @@ async def acknowledge_breach_alert(
 async def prop_firm_accounts(user: TokenPayload = Depends(get_current_user)) -> dict:
     accounts = []
     try:
-        from app import app_state
+        from core.app_state import app_state
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             starting = float(getattr(engine, "_starting_equity", 100_000.0))
