@@ -75,7 +75,7 @@ _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # Years of history to fetch on first run
 _HISTORY_YEARS = int(os.getenv("IMF_HISTORY_YEARS", "10"))
 
-_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=30.0)
+_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=float(os.getenv("IMF_HTTP_TIMEOUT_S", "8.0")))
 
 
 class IMFGoldFeed:

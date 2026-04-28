@@ -246,31 +246,45 @@ class MarketDataOrchestrator:
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: calendar engine error: %s", exc)
 
+        # Feed startup timeout — prevents blocking startup when external APIs
+        # are unreachable (CFTC, IMF, FRED, WGC, Yahoo).  Each feed has its
+        # own retry logic; the timeout here is a hard cap so the orchestrator
+        # never blocks the HTTP server from accepting connections.
+        _FEED_TIMEOUT = float(os.getenv("ORCHESTRATOR_FEED_TIMEOUT_S", "15.0"))
+
         # 6. FRED → MacroStore bridge
         try:
-            await self._macro_bridge.start()
+            await asyncio.wait_for(self._macro_bridge.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: MacroStoreBridge started")
+        except asyncio.TimeoutError:
+            logger.warning("MarketDataOrchestrator: MacroStoreBridge timed out after %.0fs — macro features degraded", _FEED_TIMEOUT)
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: macro bridge error: %s", exc)
 
         # 7. CFTC COT feed — real gold futures positioning (free, weekly)
         try:
-            await self._cot_feed.start()
+            await asyncio.wait_for(self._cot_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: CFTCCOTFeed started")
+        except asyncio.TimeoutError:
+            logger.warning("MarketDataOrchestrator: CFTCCOTFeed timed out after %.0fs — COT features zero-filled", _FEED_TIMEOUT)
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: COT feed error: %s", exc)
 
         # 8. IMF central bank gold reserves (free, monthly)
         try:
-            await self._imf_feed.start()
+            await asyncio.wait_for(self._imf_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: IMFGoldFeed started")
+        except asyncio.TimeoutError:
+            logger.warning("MarketDataOrchestrator: IMFGoldFeed timed out after %.0fs — IMF features zero-filled", _FEED_TIMEOUT)
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: IMF feed error: %s", exc)
 
         # 9. Yahoo Finance cross-asset macro (SPX, GLD, copper, oil, USDCNY)
         try:
-            await self._yahoo_macro.start()
+            await asyncio.wait_for(self._yahoo_macro.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: YahooMacroFeed started")
+        except asyncio.TimeoutError:
+            logger.warning("MarketDataOrchestrator: YahooMacroFeed timed out after %.0fs — Yahoo macro features zero-filled", _FEED_TIMEOUT)
         except Exception as exc:
             logger.warning("MarketDataOrchestrator: Yahoo macro feed error: %s", exc)
 

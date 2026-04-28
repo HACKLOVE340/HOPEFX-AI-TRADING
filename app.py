@@ -696,12 +696,20 @@ async def _start_data_layer_orchestrator(state) -> None:
     /api/data-layer/* endpoints returned 503. Awaiting directly ensures the
     orchestrator is fully initialised before startup_event() returns.
     """
+    _orch_timeout = float(os.getenv("ORCHESTRATOR_STARTUP_TIMEOUT_S", "60.0"))
     try:
         from data_layer.orchestrator import orchestrator
 
-        await orchestrator.start()
+        await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
         state.data_layer_orchestrator = orchestrator
         logger.info("Data layer orchestrator started")
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
+            "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "
+            "to increase the limit.",
+            _orch_timeout,
+        )
     except Exception as _exc:
         logger.warning("Data layer orchestrator failed to start (non-fatal): %s", _exc)
 
@@ -912,24 +920,31 @@ register_page_routes(app)  # mounts React dashboard LAST
 
 def run_server():
     """Run the API server."""
-    # Default to localhost for security; set API_HOST=0.0.0.0 in production.
-    host = os.getenv("API_HOST", "127.0.0.1")
+    # Default to 0.0.0.0 so the server is reachable inside containers/Gitpod.
+    # Override with API_HOST env var for production deployments.
+    host = os.getenv("API_HOST", "0.0.0.0")
     try:
         port = int(os.getenv("API_PORT", "8000"))
     except ValueError:
         port = 8000
-    reload = os.getenv("ENVIRONMENT", "development") == "development"
+
+    # Reload is controlled explicitly via UVICORN_RELOAD env var.
+    # Default: off — watchfiles reload causes restart loops when source files
+    # are written during startup (log files, .env, generated assets).
+    # Enable with UVICORN_RELOAD=true only when actively developing.
+    reload = os.getenv("UVICORN_RELOAD", "false").lower() == "true"
 
     # On Windows, uvicorn must use a single worker with SelectorEventLoop.
     # Multiple workers via fork() are not supported on Windows.
-    if platform.system() == "Windows":
+    # With reload=True, uvicorn ignores the workers flag (uses 1 internally).
+    if platform.system() == "Windows" or reload:
         workers = 1
-        loop = "asyncio"
+        loop = "asyncio" if platform.system() == "Windows" else "auto"
     else:
-        workers = int(os.getenv("API_WORKERS", "4"))
+        workers = int(os.getenv("API_WORKERS", "1"))
         loop = "auto"
 
-    logger.info("Starting API server on %s:%s (workers=%d)", host, port, workers)
+    logger.info("Starting API server on %s:%s (workers=%d, reload=%s)", host, port, workers, reload)
 
     uvicorn.run(
         "app:app",

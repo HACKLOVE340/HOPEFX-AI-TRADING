@@ -122,7 +122,7 @@ _WB_CB_INDICATOR = os.getenv("WGC_WB_CB_INDICATOR", "FI.RES.TOTL.CD")
 _WB_API_BASE = "https://api.worldbank.org/v2"
 
 # HTTP timeout for WGC requests
-_HTTP_TIMEOUT = 30.0
+_HTTP_TIMEOUT = float(os.getenv("WGC_HTTP_TIMEOUT_S", "8.0"))
 
 # Cache filenames
 _DEMAND_CACHE_FILE = "wgc_demand_quarterly.csv"
