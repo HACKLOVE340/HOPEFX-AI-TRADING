@@ -285,17 +285,32 @@ const SignalsPanel: React.FC = () => {
 
 // ─── ML accuracy card ─────────────────────────────────────────────────────────
 
-interface MlAccuracy { model: string; accuracy: number; auc: number; f1: number }
+interface AccuracyResponse {
+  model_id:      string;
+  accuracy:      number;
+  precision:     number;
+  recall:        number;
+  f1:            number;
+  sharpe:        number;
+  win_rate:      number;
+  total_signals: number;
+  evaluated_at:  string;
+  note?:         string;
+  thresholds?:   Record<string, number>;
+}
 
 const MlAccuracyCard: React.FC = () => {
-  const [models, setModels]   = useState<MlAccuracy[]>([]);
-  const [mlErr, setMlErr]     = useState<string | null>(null);
+  const [data, setData]   = useState<AccuracyResponse | null>(null);
+  const [mlErr, setMlErr] = useState<string | null>(null);
 
   useEffect(() => {
     mlApi.accuracy()
-      .then((r) => setModels((r.data as { models: MlAccuracy[] })?.models ?? []))
+      .then((r) => {
+        const raw = r.data as AccuracyResponse;
+        setData(raw);
+      })
       .catch((err: unknown) => {
-        setModels([]);
+        setData(null);
         setMlErr(err instanceof Error ? err.message : 'Failed to load model metrics.');
       });
   }, []);
@@ -303,36 +318,64 @@ const MlAccuracyCard: React.FC = () => {
   if (mlErr) {
     return <p style={{ color: '#f87171', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
   }
-  if (models.length === 0) {
-    return <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No model metrics available yet.</p>;
+  if (!data) {
+    return <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>Loading model metrics…</p>;
+  }
+  if (data.accuracy === 0 && data.total_signals === 0) {
+    return (
+      <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>
+        {data.note || 'No model metrics available yet.'}
+      </p>
+    );
   }
 
+  const metrics = [
+    { key: 'Accuracy',  val: (data.accuracy  * 100).toFixed(1) + '%', good: data.accuracy  >= 0.60 },
+    { key: 'Win Rate',  val: (data.win_rate   * 100).toFixed(1) + '%', good: data.win_rate  >= 0.55 },
+    { key: 'F1',        val: data.f1.toFixed(3),                        good: data.f1        >= 0.60 },
+    { key: 'Sharpe',    val: data.sharpe.toFixed(2),                    good: data.sharpe    >= 1.5  },
+    { key: 'Precision', val: (data.precision  * 100).toFixed(1) + '%', good: data.precision >= 0.60 },
+    { key: 'Recall',    val: (data.recall     * 100).toFixed(1) + '%', good: data.recall    >= 0.55 },
+  ];
+
   return (
-    <div style={s.mlGrid}>
-      {models.map((m) => (
-        <div key={m.model} style={s.mlCard}>
-          <div style={s.mlName}>{m.model}</div>
-          <div style={s.mlMetrics}>
-            <div style={s.mlMetric}>
-              <span style={s.mlKey}>Accuracy</span>
-              <span style={{ ...s.mlVal, color: m.accuracy >= 0.85 ? '#4ade80' : m.accuracy >= 0.70 ? '#fbbf24' : '#f87171' }}>
-                {(m.accuracy * 100).toFixed(1)}%
-              </span>
-            </div>
-            <div style={s.mlMetric}>
-              <span style={s.mlKey}>AUC</span>
-              <span style={s.mlVal}>{m.auc.toFixed(3)}</span>
-            </div>
-            <div style={s.mlMetric}>
-              <span style={s.mlKey}>F1</span>
-              <span style={s.mlVal}>{m.f1.toFixed(3)}</span>
-            </div>
-          </div>
-          <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 10 }}>
-            <div style={{ width: `${m.accuracy * 100}%`, height: 6, borderRadius: 4, background: m.accuracy >= 0.85 ? '#4ade80' : '#fbbf24', transition: 'width 0.6s ease' }} />
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{data.model_id}</div>
+          <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+            {data.total_signals.toLocaleString()} signals · evaluated {new Date(data.evaluated_at).toLocaleDateString()}
           </div>
         </div>
-      ))}
+        <div style={{
+          fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
+          background: data.accuracy >= 0.60 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)',
+          color: data.accuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          border: `1px solid ${data.accuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
+        }}>
+          {data.accuracy >= 0.60 ? '✅ GATE PASSED' : '⚠️ BELOW THRESHOLD'}
+        </div>
+      </div>
+      <div style={s.mlGrid}>
+        {metrics.map((m) => (
+          <div key={m.key} style={s.mlCard}>
+            <div style={s.mlMetric}>
+              <span style={s.mlKey}>{m.key}</span>
+              <span style={{ ...s.mlVal, color: m.good ? '#4ade80' : '#fbbf24' }}>{m.val}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {data.note && (
+        <div style={{ fontSize: 11, color: '#475569', marginTop: 10, fontStyle: 'italic' }}>{data.note}</div>
+      )}
+      <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 12 }}>
+        <div style={{
+          width: `${Math.min(data.accuracy * 100, 100)}%`, height: 6, borderRadius: 4,
+          background: data.accuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          transition: 'width 0.6s ease',
+        }} />
+      </div>
     </div>
   );
 };

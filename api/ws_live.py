@@ -1074,6 +1074,10 @@ async def ws_live(websocket: WebSocket) -> None:
         except Exception:
             _manager.disconnect(cid)
             return
+    else:
+        # Auth not required — mark connection as authenticated with a dev user_id
+        # so broadcast() delivers messages to this connection on all channels.
+        _manager.authenticate(cid, "dev_anonymous")
 
     try:
         await _ws_message_loop(cid, websocket)
