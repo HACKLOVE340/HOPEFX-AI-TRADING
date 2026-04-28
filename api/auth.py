@@ -44,8 +44,17 @@ except Exception as _router_import_err:  # pragma: no cover
 
 __all__ = ["TokenPayload", "get_current_user", "require_role", "router"]
 
-# Role hierarchy: higher index = more privileged
-_ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+# Role hierarchy: higher index = more privileged.
+# "starter" is the free-tier role — lowest privilege, below "user".
+# All roles must be listed here; any role absent from this map gets rank -1
+# (denied everywhere) which would silently block legitimate users.
+_ROLE_RANK: dict = {
+    "starter": 0,
+    "user": 1,
+    "trader": 2,
+    "admin": 3,
+    "superadmin": 4,
+}
 # Stable per-role dependency callables — same object identity on every call,
 # required for FastAPI dependency_overrides to work correctly in tests.
 _ROLE_DEPS: dict = {}
