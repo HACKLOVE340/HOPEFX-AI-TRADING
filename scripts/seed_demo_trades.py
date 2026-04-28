@@ -122,8 +122,10 @@ def generate_trades(n: int, base_time: datetime) -> list[dict]:
         commission = round(qty * rng.uniform(0.5, 2.0), 2)
         total_pnl = round(pnl - commission, 2)
 
-        # Deterministic client_order_id so re-runs don't duplicate
-        coid = f"demo-seed-{i:04d}"
+        # Deterministic client_order_id scoped to user so different users
+        # can each have their own set of seeded trades without collisions.
+        uid_short = DEMO_USER_ID[:8].replace("-", "")
+        coid = f"demo-{uid_short}-{i:04d}"
 
         trades.append(
             {
@@ -161,7 +163,17 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Seed demo trades into the database.")
     parser.add_argument("--trades", type=int, default=60, help="Number of trades to seed")
     parser.add_argument("--clear", action="store_true", help="Delete existing demo trades first")
+    parser.add_argument(
+        "--user-id",
+        default=None,
+        help="User ID to seed trades under (default: demo-seed-user). "
+             "Pass the real user UUID to make trades visible in /api/trading/history.",
+    )
     args = parser.parse_args()
+    # Allow --user-id to override the module-level constant
+    global DEMO_USER_ID  # noqa: PLW0603
+    if args.user_id:
+        DEMO_USER_ID = args.user_id
 
     # Import DB after env is set
     from sqlalchemy import create_engine, text

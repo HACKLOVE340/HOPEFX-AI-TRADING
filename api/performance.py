@@ -445,6 +445,13 @@ async def performance_attribution(_user: TokenPayload = Depends(require_role("tr
     }
 
 
+@router.get("/metrics", summary="Performance metrics (alias for /summary)")
+async def performance_metrics(_user: TokenPayload = Depends(require_role("user"))):
+    """Alias for /summary — used by frontend performanceApi.getMetrics()."""
+    curve = _load_equity_curve()
+    return _compute_public_stats(curve)
+
+
 @router.get("/export", summary="Export performance data as CSV or JSON")
 async def export_performance(
     format: str = "csv",

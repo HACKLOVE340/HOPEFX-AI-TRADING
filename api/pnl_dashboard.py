@@ -617,6 +617,21 @@ async def open_positions(
     return result
 
 
+@router.get("/history", summary="P&L trade history (closed trades)")
+async def pnl_history(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    symbol: str | None = Query(None),
+    _user: TokenPayload = Depends(get_current_user),
+):
+    """Return closed trade history for P&L pages.
+
+    Queries the DB Trade table directly so paper broker trades persisted
+    via _persist_trade_record are visible immediately.
+    """
+    return _trade_log_from_db(limit=limit, offset=offset, symbol=symbol)
+
+
 @router.get("/export", summary="Export P&L data as CSV or JSON")
 async def export_pnl(
     format: str = "csv",

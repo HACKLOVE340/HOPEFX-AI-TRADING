@@ -675,10 +675,15 @@ class PaperTradingBroker(BaseBroker):
 
             trade = Trade(
                 trade_id=str(uuid.uuid4()),
+                # user_id links this trade to the authenticated user so it
+                # appears in /api/trading/history, /api/pnl, /api/journal, etc.
+                user_id=self._user_id if self._user_id != "paper" else None,
                 symbol=record.get("symbol", ""),
                 side=side_enum,
                 entry_price=float(record.get("entry_price", 0)),
                 entry_quantity=qty,
+                size=qty,
+                trade_type="market",
                 exit_price=float(record.get("exit_price", 0)),
                 exit_quantity=qty,
                 realized_pnl=realized_pnl,
