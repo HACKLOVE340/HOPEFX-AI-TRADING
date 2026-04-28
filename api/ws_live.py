@@ -841,6 +841,59 @@ async def _chartbot_broadcaster() -> None:
             except Exception as _exc:
                 logger.debug("chartbot_broadcaster: equity error: %s", _exc)
 
+            # ── AI analysis broadcast (from Redis cache) ──────────────────────
+            # The /trading/ai-analysis REST endpoint caches its result in Redis
+            # under "ai_analysis:{symbol}". We broadcast it so chart-bot clients
+            # receive updates without polling.
+            try:
+                from cache.redis_client import get_sync_redis_client as _get_rc
+                import json as _json
+                _rc = _get_rc()
+                if _rc:
+                    for _sym in ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"):
+                        _raw = _rc.get(f"ai_analysis:{_sym}")
+                        if _raw:
+                            _analysis = _json.loads(_raw)
+                            await _manager.broadcast(
+                                "prices",
+                                {"type": "ai_analysis", "data": _analysis},
+                            )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: ai_analysis error: %s", _exc)
+
+            # ── Pattern detection broadcast ───────────────────────────────────
+            try:
+                from cache.redis_client import get_sync_redis_client as _get_rc2
+                import json as _json2
+                _rc2 = _get_rc2()
+                if _rc2:
+                    _praw = _rc2.get("chart_patterns:latest")
+                    if _praw:
+                        _patterns = _json2.loads(_praw)
+                        for _pat in (_patterns if isinstance(_patterns, list) else [_patterns])[:3]:
+                            await _manager.broadcast(
+                                "patterns",
+                                {"type": "pattern_detected", "data": _pat},
+                            )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: patterns error: %s", _exc)
+
+            # ── Support/resistance level updates ──────────────────────────────
+            try:
+                from cache.redis_client import get_sync_redis_client as _get_rc3
+                import json as _json3
+                _rc3 = _get_rc3()
+                if _rc3:
+                    _lraw = _rc3.get("sr_levels:latest")
+                    if _lraw:
+                        _levels = _json3.loads(_lraw)
+                        await _manager.broadcast(
+                            "levels",
+                            {"type": "level_update", "data": _levels},
+                        )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: levels error: %s", _exc)
+
         except Exception as exc:
             logger.debug("chartbot_broadcaster: outer error: %s", exc)
 
