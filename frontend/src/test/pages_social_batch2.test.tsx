@@ -507,7 +507,8 @@ describe('Leaderboard page', () => {
   it('shows empty leaderboard state', async () => {
     await renderLeaderboard();
     await waitFor(() => {
-      expect(document.body.textContent).toMatch(/no traders on the leaderboard yet/i);
+      // Component renders "No traders ranked yet" when the leaderboard is empty
+      expect(document.body.textContent).toMatch(/no traders ranked yet/i);
     }, { timeout: 3000 });
   });
 

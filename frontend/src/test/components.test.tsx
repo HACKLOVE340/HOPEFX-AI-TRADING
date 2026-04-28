@@ -158,6 +158,10 @@ vi.mock('../hooks/useApi', () => ({
     varMetrics:        vi.fn().mockResolvedValue({ data: {} }),
     tenants:           vi.fn().mockResolvedValue({ data: [] }),
   },
+  // CSRF helpers — imported by store/index.ts (resetCsrfCache) and settings pages
+  getCsrfToken:      vi.fn().mockResolvedValue('test-csrf-token'),
+  prefetchCsrfToken: vi.fn().mockResolvedValue(undefined),
+  resetCsrfCache:    vi.fn(),
   api: {
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: {

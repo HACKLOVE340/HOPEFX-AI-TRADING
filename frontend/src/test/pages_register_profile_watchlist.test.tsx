@@ -99,6 +99,14 @@ vi.mock('../hooks/useApi', () => ({
     run:  vi.fn().mockResolvedValue({ data: {} }),
   },
   leaderboardApi: { list: vi.fn().mockResolvedValue({ data: [] }) },
+  journalApi: {
+    trades:      vi.fn().mockResolvedValue({ data: [] }),
+    stats:       vi.fn().mockResolvedValue({ data: { total_trades: 0, win_rate: 0, avg_pnl: 0, best_trade_pnl: 0, worst_trade_pnl: 0, rule_deviation_count: 0, by_tag: [], by_emotion: [] } }),
+    mistakes:    vi.fn().mockResolvedValue({ data: [] }),
+    updateTrade: vi.fn().mockResolvedValue({ data: {} }),
+    tags:        vi.fn().mockResolvedValue({ data: [] }),
+    emotions:    vi.fn().mockResolvedValue({ data: [] }),
+  },
   watchlistApi: {
     list:   vi.fn().mockResolvedValue({ data: { items: [] } }),
     add:    vi.fn().mockResolvedValue({ data: {} }),
@@ -687,8 +695,8 @@ describe('TradeJournal page', () => {
   it('shows empty trades state when no trades', async () => {
     await renderTradeJournal();
     await waitFor(() => {
-      // loading=false → shows "No trades yet."
-      expect(document.body.textContent).toMatch(/no trades yet/i);
+      // Component renders "No journal entries yet" when trades array is empty
+      expect(document.body.textContent).toMatch(/no journal entries yet/i);
     }, { timeout: 5000 });
   });
 

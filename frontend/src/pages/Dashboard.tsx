@@ -321,7 +321,17 @@ const MlAccuracyCard: React.FC = () => {
   if (!data) {
     return <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>Loading model metrics…</p>;
   }
-  if (data.accuracy === 0 && data.total_signals === 0) {
+  // Guard against partial API responses — all numeric fields may be absent
+  // on first evaluation or when the model has not yet accumulated enough signals.
+  const safeAccuracy    = data.accuracy      ?? 0;
+  const safeWinRate     = data.win_rate      ?? 0;
+  const safeF1          = data.f1            ?? 0;
+  const safeSharpe      = data.sharpe        ?? 0;
+  const safePrecision   = data.precision     ?? 0;
+  const safeRecall      = data.recall        ?? 0;
+  const safeTotalSigs   = data.total_signals ?? 0;
+
+  if (safeAccuracy === 0 && safeTotalSigs === 0) {
     return (
       <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>
         {data.note || 'No model metrics available yet.'}
@@ -330,30 +340,34 @@ const MlAccuracyCard: React.FC = () => {
   }
 
   const metrics = [
-    { key: 'Accuracy',  val: (data.accuracy  * 100).toFixed(1) + '%', good: data.accuracy  >= 0.60 },
-    { key: 'Win Rate',  val: (data.win_rate   * 100).toFixed(1) + '%', good: data.win_rate  >= 0.55 },
-    { key: 'F1',        val: data.f1.toFixed(3),                        good: data.f1        >= 0.60 },
-    { key: 'Sharpe',    val: data.sharpe.toFixed(2),                    good: data.sharpe    >= 1.5  },
-    { key: 'Precision', val: (data.precision  * 100).toFixed(1) + '%', good: data.precision >= 0.60 },
-    { key: 'Recall',    val: (data.recall     * 100).toFixed(1) + '%', good: data.recall    >= 0.55 },
+    { key: 'Accuracy',  val: (safeAccuracy  * 100).toFixed(1) + '%', good: safeAccuracy  >= 0.60 },
+    { key: 'Win Rate',  val: (safeWinRate   * 100).toFixed(1) + '%', good: safeWinRate   >= 0.55 },
+    { key: 'F1',        val: safeF1.toFixed(3),                       good: safeF1        >= 0.60 },
+    { key: 'Sharpe',    val: safeSharpe.toFixed(2),                   good: safeSharpe    >= 1.5  },
+    { key: 'Precision', val: (safePrecision * 100).toFixed(1) + '%',  good: safePrecision >= 0.60 },
+    { key: 'Recall',    val: (safeRecall    * 100).toFixed(1) + '%',  good: safeRecall    >= 0.55 },
   ];
+
+  const evaluatedLabel = data.evaluated_at
+    ? new Date(data.evaluated_at).toLocaleDateString()
+    : '—';
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{data.model_id}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>{data.model_id ?? 'Model'}</div>
           <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
-            {data.total_signals.toLocaleString()} signals · evaluated {new Date(data.evaluated_at).toLocaleDateString()}
+            {safeTotalSigs.toLocaleString()} signals · evaluated {evaluatedLabel}
           </div>
         </div>
         <div style={{
           fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
-          background: data.accuracy >= 0.60 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)',
-          color: data.accuracy >= 0.60 ? '#4ade80' : '#fbbf24',
-          border: `1px solid ${data.accuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
+          background: safeAccuracy >= 0.60 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.12)',
+          color: safeAccuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          border: `1px solid ${safeAccuracy >= 0.60 ? '#4ade8044' : '#fbbf2444'}`,
         }}>
-          {data.accuracy >= 0.60 ? '✅ GATE PASSED' : '⚠️ BELOW THRESHOLD'}
+          {safeAccuracy >= 0.60 ? '✅ GATE PASSED' : '⚠️ BELOW THRESHOLD'}
         </div>
       </div>
       <div style={s.mlGrid}>
@@ -371,8 +385,8 @@ const MlAccuracyCard: React.FC = () => {
       )}
       <div style={{ background: '#0f172a', borderRadius: 4, height: 6, marginTop: 12 }}>
         <div style={{
-          width: `${Math.min(data.accuracy * 100, 100)}%`, height: 6, borderRadius: 4,
-          background: data.accuracy >= 0.60 ? '#4ade80' : '#fbbf24',
+          width: `${Math.min(safeAccuracy * 100, 100)}%`, height: 6, borderRadius: 4,
+          background: safeAccuracy >= 0.60 ? '#4ade80' : '#fbbf24',
           transition: 'width 0.6s ease',
         }} />
       </div>
