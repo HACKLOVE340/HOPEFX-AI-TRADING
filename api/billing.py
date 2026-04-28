@@ -218,17 +218,27 @@ async def get_subscription(user: TokenPayload = Depends(get_current_user)):
 
     tier_val = sub.tier.value if hasattr(sub.tier, "value") else str(sub.tier)
     status_val = sub.status.value if hasattr(sub.status, "value") else str(sub.status)
+    is_trial = status_val == "trial"
+
+    # Calculate days remaining for trial subscriptions
+    trial_days_remaining: int | None = None
+    if is_trial and sub.end_date:
+        from datetime import datetime, timezone as _tz
+        delta = sub.end_date - datetime.now(_tz.utc)
+        trial_days_remaining = max(0, delta.days)
 
     return {
         "tier": tier_val,
         "plan": tier_val,
         "status": status_val,
+        "trial": is_trial,
+        "trial_days_remaining": trial_days_remaining,
         "subscription_id": sub.subscription_id,
         "start_date": sub.start_date.isoformat() if sub.start_date else None,
         "end_date": sub.end_date.isoformat() if sub.end_date else None,
         "auto_renew": sub.auto_renew,
         "features": _tier_features(tier_val),
-        "upgrade_url": "/checkout" if tier_val == "free" else None,
+        "upgrade_url": "/pricing" if tier_val in ("free", "starter") else None,
     }
 
 
@@ -394,28 +404,46 @@ class FreeTierBody(BaseModel):
     ref_code: str | None = None  # optional referral code from signup URL
 
 
+_TRIAL_DAYS: int = int(os.getenv("NEW_USER_TRIAL_DAYS", "14"))
+
+
 @router.post("/auth/activate-free-tier", status_code=status.HTTP_201_CREATED)
 async def activate_free_tier(body: FreeTierBody):
     """
-    Called immediately after successful registration to assign the FREE tier.
+    Called immediately after successful registration.
 
-    - Creates a FREE subscription (paper trading enabled, no credit card)
+    Grants a 14-day Starter trial (configurable via NEW_USER_TRIAL_DAYS env var)
+    so new users can explore journal, performance, alerts, and wallet without
+    hitting upgrade walls on their first login.  After the trial expires the
+    account reverts to the Free tier automatically.
+
+    - Creates a STARTER trial subscription (no credit card required)
     - Tracks referral if ref_code is present
     - Returns tier info shown in the post-signup banner
     """
-    from monetization.subscription import SubscriptionTier
+    from monetization.subscription import SubscriptionStatus, SubscriptionTier
 
     mgr = _get_subscription_manager()
 
     existing = mgr.get_user_subscription(body.user_id)
     if existing:
+        tier_val = existing.tier.value if hasattr(existing.tier, "value") else str(existing.tier)
         return {
-            "tier": existing.tier.value if hasattr(existing.tier, "value") else str(existing.tier),
+            "tier": tier_val,
+            "trial": existing.status == SubscriptionStatus.TRIAL if hasattr(existing, "status") else False,
             "message": "Subscription already active.",
-            "features": ["paper_trading"],
+            "features": ["paper_trading", "journal", "performance", "alerts"],
         }
 
-    sub = mgr.create_subscription(body.user_id, SubscriptionTier.FREE)
+    # Create a STARTER trial — gives access to journal, performance, alerts, wallet
+    # without requiring a credit card.  Reverts to FREE after _TRIAL_DAYS.
+    sub = mgr.create_subscription(
+        body.user_id,
+        SubscriptionTier.STARTER,
+        duration_days=_TRIAL_DAYS,
+    )
+    # Mark as TRIAL so the billing page shows the correct status badge
+    sub.status = SubscriptionStatus.TRIAL
 
     if body.ref_code:
         try:
@@ -428,10 +456,15 @@ async def activate_free_tier(body: FreeTierBody):
             logger.debug("Referral tracking skipped: %s", exc)
 
     return {
-        "tier": sub.tier.value if hasattr(sub.tier, "value") else "free",
-        "message": "You're on the Free tier — upgrade for live trading + AI signals.",
-        "features": ["paper_trading"],
-        "upgrade_url": "/subscription",
+        "tier": "starter",
+        "trial": True,
+        "trial_days": _TRIAL_DAYS,
+        "message": (
+            f"Welcome! You have a {_TRIAL_DAYS}-day free trial of the Starter plan. "
+            "No credit card required."
+        ),
+        "features": ["paper_trading", "journal", "performance", "alerts", "wallet"],
+        "upgrade_url": "/pricing",
     }
 
 

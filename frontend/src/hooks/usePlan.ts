@@ -21,9 +21,11 @@ import { useStore, selectIsAuth, useHasHydrated } from '../store';
 import { normalisePlan } from '../lib/subscription';
 
 interface BillingResponse {
-  plan:   string;
-  tier?:  string;
-  status: string;
+  plan:                 string;
+  tier?:                string;
+  status:               string;
+  trial?:               boolean;
+  trial_days_remaining?: number | null;
 }
 
 export function usePlan(): void {
@@ -47,7 +49,11 @@ export function usePlan(): void {
       .then((r) => {
         if (cancelled) return;
         // Accept either 'plan' or 'tier' key from the API response
-        setPlan(normalisePlan(r.data.plan ?? r.data.tier));
+        setPlan(
+          normalisePlan(r.data.plan ?? r.data.tier),
+          r.data.trial ?? r.data.status === 'trial',
+          r.data.trial_days_remaining ?? null,
+        );
       })
       .catch((err: unknown) => {
         if (cancelled) return;

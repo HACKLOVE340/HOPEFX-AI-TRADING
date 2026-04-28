@@ -55,3 +55,4 @@ export { PositionsTable, PositionsTableGuarded, PositionsTableSkeleton } from '.
 export { OrderEntryForm, OrderEntryFormGuarded } from './panels/OrderEntryForm';
 export { MLModelPanel, MLModelPanelGuarded } from './panels/MLModelPanel';
 export { OrchestratorHealthGrid, OrchestratorHealthGridGuarded } from './panels/OrchestratorHealthGrid';
+export { default as TrialBanner } from './TrialBanner';

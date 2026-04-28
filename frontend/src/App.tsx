@@ -25,6 +25,7 @@ import AuthGuard from './components/AuthGuard';
 import AdminGuard from './components/AdminGuard';
 import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
+import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
@@ -362,7 +363,8 @@ const AppShell: React.FC = () => {
       color: 'var(--text, #f1f5f9)',
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     }}>
-      {/* Banner is in normal flow — pushes content down instead of overlapping it */}
+      {/* Banners are in normal flow — push content down instead of overlapping */}
+      <TrialBanner />
       <NoLiveFeedBanner />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
