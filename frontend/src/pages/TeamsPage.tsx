@@ -107,11 +107,17 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ['team-detail', team.team_id] });
       setInviteEmail('');
     },
+    onError: (err: unknown) => {
+      console.error('[TeamsPage] invite error:', err);
+    },
   });
 
   const removeMut = useMutation({
     mutationFn: (uid: string) => teamsApi.removeMember(team.team_id, uid),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team-detail', team.team_id] }),
+    onError: (err: unknown) => {
+      console.error('[TeamsPage] removeMember error:', err);
+    },
   });
 
   const members = detailData?.members ?? [];
@@ -148,24 +154,35 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
         <div>
           {/* Invite form (owner/manager only) */}
           {isOwner && (
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                placeholder="Email address"
-                style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-                  padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
-              <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
-                style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
-                  padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }}>
-                <option value="trader">Trader</option>
-                <option value="manager">Manager</option>
-                <option value="viewer">Viewer</option>
-              </select>
-              <button onClick={() => inviteMut.mutate()} disabled={!inviteEmail.trim() || inviteMut.isPending}
-                style={{ padding: '8px 14px', background: '#8b5cf6', color: '#fff', border: 'none',
-                  borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  opacity: (!inviteEmail.trim() || inviteMut.isPending) ? 0.5 : 1 }}>
-                Invite
-              </button>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="Email address"
+                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+                    padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
+                <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
+                  style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
+                    padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }}>
+                  <option value="trader">Trader</option>
+                  <option value="manager">Manager</option>
+                  <option value="viewer">Viewer</option>
+                </select>
+                <button onClick={() => inviteMut.mutate()} disabled={!inviteEmail.trim() || inviteMut.isPending}
+                  style={{ padding: '8px 14px', background: '#8b5cf6', color: '#fff', border: 'none',
+                    borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    opacity: (!inviteEmail.trim() || inviteMut.isPending) ? 0.5 : 1 }}>
+                  Invite
+                </button>
+              </div>
+              {inviteMut.isError && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#f87171' }}>
+                  ⚠ {(inviteMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                    ?? (inviteMut.error instanceof Error ? inviteMut.error.message : 'Invite failed')}
+                </div>
+              )}
+              {inviteMut.isSuccess && (
+                <div style={{ marginTop: 6, fontSize: 12, color: '#4ade80' }}>Invitation sent.</div>
+              )}
             </div>
           )}
 
@@ -253,11 +270,17 @@ const TeamsPage: React.FC = () => {
       setNewDesc('');
       setSelected(res.data as Team);
     },
+    onError: (err: unknown) => {
+      console.error('[TeamsPage] createTeam error:', err);
+    },
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => teamsApi.delete(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teams'] }); setSelected(null); },
+    onError: (err: unknown) => {
+      console.error('[TeamsPage] deleteTeam error:', err);
+    },
   });
 
   const teams = data?.teams ?? [];
@@ -292,7 +315,7 @@ const TeamsPage: React.FC = () => {
               style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6,
                 padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => createMut.mutate()} disabled={!newName.trim() || createMut.isPending}
               style={{ padding: '8px 16px', background: '#06b6d4', color: '#fff', border: 'none',
                 borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -304,6 +327,12 @@ const TeamsPage: React.FC = () => {
                 borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>
               Cancel
             </button>
+            {createMut.isError && (
+              <span style={{ fontSize: 12, color: '#f87171' }}>
+                ⚠ {(createMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                  ?? (createMut.error instanceof Error ? createMut.error.message : 'Failed to create team')}
+              </span>
+            )}
           </div>
         </div>
       )}

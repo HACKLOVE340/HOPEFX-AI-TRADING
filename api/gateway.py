@@ -101,8 +101,8 @@ class APIGateway:
             CORSMiddleware,
             allow_origins=["https://hopefx.com", "https://app.hopefx.com"],
             allow_credentials=True,
-            allow_methods=["GET", "POST"],
-            allow_headers=["*"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"],
         )
 
         # Compression

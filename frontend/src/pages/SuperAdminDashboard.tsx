@@ -14,11 +14,47 @@
  * Wired via /superadmin route behind SuperAdminGuard.
  */
 
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, Suspense, lazy, Component } from 'react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import type { SuperAdminTab } from './superadmin/types';
 import { SAStyles, Spinner } from './superadmin/ui';
+
+// ── Section error boundary ────────────────────────────────────────────────────
+
+class SectionErrorBoundary extends Component<
+  { children: React.ReactNode; tab: string },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode; tab: string }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '32px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <span style={{ color: '#f87171', fontWeight: 600 }}>
+            ⚠ Section "{this.props.tab}" failed to load
+          </span>
+          <span style={{ color: '#64748b', fontSize: 13 }}>{this.state.message}</span>
+          <button
+            onClick={() => this.setState({ hasError: false, message: '' })}
+            style={{ alignSelf: 'flex-start', padding: '6px 14px', background: '#1e293b',
+              border: '1px solid #334155', borderRadius: 6, color: '#94a3b8',
+              cursor: 'pointer', fontSize: 13 }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ── Lazy-load every section ───────────────────────────────────────────────────
 const OverviewSection        = lazy(() => import('./superadmin/OverviewSection'));
@@ -228,11 +264,13 @@ const SuperAdminDashboard: React.FC = () => {
             </div>
 
             {/* Section content */}
-            <Suspense fallback={<SectionFallback />}>
-              <div key={activeTab} style={{ animation: 'sa-fadein 0.2s ease' }}>
-                {renderSection()}
-              </div>
-            </Suspense>
+            <SectionErrorBoundary key={activeTab} tab={activeTabDef.label}>
+              <Suspense fallback={<SectionFallback />}>
+                <div style={{ animation: 'sa-fadein 0.2s ease' }}>
+                  {renderSection()}
+                </div>
+              </Suspense>
+            </SectionErrorBoundary>
           </main>
         </div>
       </div>

@@ -316,8 +316,8 @@ def _configure_middleware(app, allowed_origins, BaseHTTPMiddleware, StarletteReq
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "DELETE", "PUT"],
-        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+        allow_methods=["GET", "POST", "DELETE", "PUT", "PATCH", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"],
     )
 
     class _SecurityHeaders(BaseHTTPMiddleware):
