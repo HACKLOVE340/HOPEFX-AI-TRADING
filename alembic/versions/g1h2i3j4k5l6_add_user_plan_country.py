@@ -33,22 +33,33 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    def _col_exists(table: str, col: str) -> bool:
+        try:
+            return col in {c["name"] for c in inspector.get_columns(table)}
+        except Exception:
+            return False
+
     # Add ``plan`` with a server-side default so existing rows are back-filled
     # without a full table scan in application code.
-    op.add_column(
-        "users",
-        sa.Column(
-            "plan",
-            sa.String(30),
-            nullable=False,
-            server_default="free",
-        ),
-    )
+    if not _col_exists("users", "plan"):
+        op.add_column(
+            "users",
+            sa.Column(
+                "plan",
+                sa.String(30),
+                nullable=False,
+                server_default="free",
+            ),
+        )
     # Add ``country`` as nullable — we cannot infer it for existing accounts.
-    op.add_column(
-        "users",
-        sa.Column("country", sa.String(2), nullable=True),
-    )
+    if not _col_exists("users", "country"):
+        op.add_column(
+            "users",
+            sa.Column("country", sa.String(2), nullable=True),
+        )
 
 
 def downgrade() -> None:

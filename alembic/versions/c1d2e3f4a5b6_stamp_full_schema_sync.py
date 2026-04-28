@@ -42,11 +42,44 @@ def _table_exists(table_name: str) -> bool:
 
 
 def upgrade() -> None:
+
+    # ── Idempotency helpers ───────────────────────────────────────────────────
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _existing_tables = set(inspector.get_table_names())
+
+    def _tbl(name, *args, **kwargs):
+        """Create table only if it does not already exist."""
+        if name not in _existing_tables:
+            op.create_table(name, *args, **kwargs)
+
+    def _idx(index_name, table_name, *args, **kwargs):
+        """Create index only if it does not already exist."""
+        if table_name not in _existing_tables:
+            return
+        try:
+            existing = {i["name"] for i in inspector.get_indexes(table_name)}
+        except Exception:
+            existing = set()
+        if index_name not in existing:
+            op.create_index(index_name, table_name, *args, **kwargs)
+
+    def _col(table_name, col_name, *args, **kwargs):
+        """Add column only if it does not already exist."""
+        try:
+            existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+        except Exception:
+            existing_cols = set()
+        if col_name not in existing_cols:
+            op.add_column(table_name, *args, **kwargs)
+
+    # ── End idempotency helpers ───────────────────────────────────────────────
+
     """Create all tables that are in the ORM but not yet in the DB."""
 
     # ── chargebacks ───────────────────────────────────────────────────────────
     if not _table_exists("chargebacks"):
-        op.create_table(
+        _tbl(
             "chargebacks",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
             sa.Column("chargeback_id", sa.String(100), nullable=False),
@@ -70,14 +103,14 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("chargeback_id", name="uq_chargebacks_chargeback_id"),
         )
-        op.create_index("ix_chargebacks_chargeback_id", "chargebacks", ["chargeback_id"], unique=True)
-        op.create_index("ix_chargebacks_payment_id", "chargebacks", ["payment_id"], unique=False)
-        op.create_index("ix_chargebacks_user_id", "chargebacks", ["user_id"], unique=False)
-        op.create_index("ix_chargebacks_status", "chargebacks", ["status"], unique=False)
+        _idx("ix_chargebacks_chargeback_id", "chargebacks", ["chargeback_id"], unique=True)
+        _idx("ix_chargebacks_payment_id", "chargebacks", ["payment_id"], unique=False)
+        _idx("ix_chargebacks_user_id", "chargebacks", ["user_id"], unique=False)
+        _idx("ix_chargebacks_status", "chargebacks", ["status"], unique=False)
 
     # ── tax_reports ───────────────────────────────────────────────────────────
     if not _table_exists("tax_reports"):
-        op.create_table(
+        _tbl(
             "tax_reports",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
             sa.Column("report_id", sa.String(100), nullable=False),
@@ -102,12 +135,12 @@ def upgrade() -> None:
             sa.UniqueConstraint("report_id", name="uq_tax_reports_report_id"),
             sa.UniqueConstraint("period", "jurisdiction", name="uq_tax_report_period_jurisdiction"),
         )
-        op.create_index("ix_tax_reports_report_id", "tax_reports", ["report_id"], unique=True)
-        op.create_index("ix_tax_reports_status", "tax_reports", ["status"], unique=False)
+        _idx("ix_tax_reports_report_id", "tax_reports", ["report_id"], unique=True)
+        _idx("ix_tax_reports_status", "tax_reports", ["status"], unique=False)
 
     # ── reconciliation_records ────────────────────────────────────────────────
     if not _table_exists("reconciliation_records"):
-        op.create_table(
+        _tbl(
             "reconciliation_records",
             sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
             sa.Column("recon_id", sa.String(100), nullable=False),
@@ -132,12 +165,12 @@ def upgrade() -> None:
             sa.UniqueConstraint("recon_id", name="uq_recon_records_recon_id"),
             sa.UniqueConstraint("period", "provider", name="uq_recon_period_provider"),
         )
-        op.create_index("ix_recon_records_recon_id", "reconciliation_records", ["recon_id"], unique=True)
-        op.create_index("ix_recon_records_status", "reconciliation_records", ["status"], unique=False)
+        _idx("ix_recon_records_recon_id", "reconciliation_records", ["recon_id"], unique=True)
+        _idx("ix_recon_records_status", "reconciliation_records", ["status"], unique=False)
 
     # ── api_keys ──────────────────────────────────────────────────────────────
     if not _table_exists("api_keys"):
-        op.create_table(
+        _tbl(
             "api_keys",
             sa.Column("id", sa.String(36), nullable=False),
             sa.Column("user_id", sa.String(36), nullable=False),
@@ -158,12 +191,12 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("key_hash", name="uq_api_keys_key_hash"),
         )
-        op.create_index("idx_api_keys_user", "api_keys", ["user_id"], unique=False)
-        op.create_index("idx_api_keys_hash", "api_keys", ["key_hash"], unique=False)
+        _idx("idx_api_keys_user", "api_keys", ["user_id"], unique=False)
+        _idx("idx_api_keys_hash", "api_keys", ["key_hash"], unique=False)
 
     # ── aml_alerts ────────────────────────────────────────────────────────────
     if not _table_exists("aml_alerts"):
-        op.create_table(
+        _tbl(
             "aml_alerts",
             sa.Column("id", sa.String(36), nullable=False),
             sa.Column("user_id", sa.String(36), nullable=False),
@@ -185,13 +218,13 @@ def upgrade() -> None:
             ),
             sa.PrimaryKeyConstraint("id"),
         )
-        op.create_index("idx_aml_alerts_user", "aml_alerts", ["user_id"], unique=False)
-        op.create_index("idx_aml_alerts_status", "aml_alerts", ["status"], unique=False)
-        op.create_index("idx_aml_alerts_severity", "aml_alerts", ["severity"], unique=False)
+        _idx("idx_aml_alerts_user", "aml_alerts", ["user_id"], unique=False)
+        _idx("idx_aml_alerts_status", "aml_alerts", ["status"], unique=False)
+        _idx("idx_aml_alerts_severity", "aml_alerts", ["severity"], unique=False)
 
     # ── broker_connections ────────────────────────────────────────────────────
     if not _table_exists("broker_connections"):
-        op.create_table(
+        _tbl(
             "broker_connections",
             sa.Column("id", sa.String(36), nullable=False),
             sa.Column("broker_name", sa.String(100), nullable=False),
@@ -212,7 +245,7 @@ def upgrade() -> None:
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
             sa.PrimaryKeyConstraint("id"),
         )
-        op.create_index("idx_broker_conn_name", "broker_connections", ["broker_name"], unique=False)
+        _idx("idx_broker_conn_name", "broker_connections", ["broker_name"], unique=False)
 
 
 def downgrade() -> None:

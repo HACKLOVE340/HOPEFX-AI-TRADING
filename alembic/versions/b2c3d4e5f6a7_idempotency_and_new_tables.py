@@ -41,33 +41,65 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     """Apply schema changes."""
 
+    # ── Idempotency helpers ───────────────────────────────────────────────────
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _existing_tables = set(inspector.get_table_names())
+
+    def _tbl(name, *args, **kwargs):
+        """Create table only if it does not already exist."""
+        if name not in _existing_tables:
+            op.create_table(name, *args, **kwargs)
+
+    def _idx(index_name, table_name, *args, **kwargs):
+        """Create index only if it does not already exist."""
+        if table_name not in _existing_tables:
+            return
+        try:
+            existing = {i["name"] for i in inspector.get_indexes(table_name)}
+        except Exception:
+            existing = set()
+        if index_name not in existing:
+            op.create_index(index_name, table_name, *args, **kwargs)
+
+    def _col_exists(table_name, col_name):
+        try:
+            return col_name in {c["name"] for c in inspector.get_columns(table_name)}
+        except Exception:
+            return False
+
+    # ── End idempotency helpers ───────────────────────────────────────────────
+
     # ── 1. client_order_id on trades ─────────────────────────────────────────
     # Use batch_alter_table for SQLite compatibility (ALTER COLUMN not supported).
-    with op.batch_alter_table("trades", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "client_order_id",
-                sa.String(length=100),
-                nullable=True,
+    # Only run if the column doesn't already exist (idempotent).
+    if not _col_exists("trades", "client_order_id"):
+        with op.batch_alter_table("trades", schema=None) as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    "client_order_id",
+                    sa.String(length=100),
+                    nullable=True,
+                )
             )
-        )
-        batch_op.create_unique_constraint("uq_trades_client_order_id", ["client_order_id"])
-        batch_op.create_index("ix_trades_client_order_id", ["client_order_id"], unique=True)
+            batch_op.create_unique_constraint("uq_trades_client_order_id", ["client_order_id"])
+            batch_op.create_index("ix_trades_client_order_id", ["client_order_id"], unique=True)
 
     # ── 2. client_order_id on orders ─────────────────────────────────────────
-    with op.batch_alter_table("orders", schema=None) as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "client_order_id",
-                sa.String(length=100),
-                nullable=True,
+    if "orders" in _existing_tables and not _col_exists("orders", "client_order_id"):
+        with op.batch_alter_table("orders", schema=None) as batch_op:
+            batch_op.add_column(
+                sa.Column(
+                    "client_order_id",
+                    sa.String(length=100),
+                    nullable=True,
+                )
             )
-        )
-        batch_op.create_unique_constraint("uq_orders_client_order_id", ["client_order_id"])
-        batch_op.create_index("ix_orders_client_order_id", ["client_order_id"], unique=True)
+            batch_op.create_unique_constraint("uq_orders_client_order_id", ["client_order_id"])
+            batch_op.create_index("ix_orders_client_order_id", ["client_order_id"], unique=True)
 
     # ── 3. crypto_payments table ──────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "crypto_payments",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("payment_id", sa.String(length=100), nullable=False),
@@ -101,13 +133,13 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("payment_id", name="uq_crypto_payments_payment_id"),
     )
-    op.create_index("ix_crypto_payments_payment_id", "crypto_payments", ["payment_id"], unique=True)
-    op.create_index("ix_crypto_payments_user_id", "crypto_payments", ["user_id"], unique=False)
-    op.create_index("ix_crypto_payments_status", "crypto_payments", ["status"], unique=False)
-    op.create_index("ix_crypto_payments_created_at", "crypto_payments", ["created_at"], unique=False)
+    _idx("ix_crypto_payments_payment_id", "crypto_payments", ["payment_id"], unique=True)
+    _idx("ix_crypto_payments_user_id", "crypto_payments", ["user_id"], unique=False)
+    _idx("ix_crypto_payments_status", "crypto_payments", ["status"], unique=False)
+    _idx("ix_crypto_payments_created_at", "crypto_payments", ["created_at"], unique=False)
 
     # ── 4. outbox_events table ────────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "outbox_events",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("event_type", sa.String(length=100), nullable=False),
@@ -124,8 +156,8 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_outbox_event_type", "outbox_events", ["event_type"], unique=False)
-    op.create_index(
+    _idx("ix_outbox_event_type", "outbox_events", ["event_type"], unique=False)
+    _idx(
         "idx_outbox_unpublished",
         "outbox_events",
         ["published_at", "created_at"],
@@ -133,7 +165,7 @@ def upgrade() -> None:
     )
 
     # ── 5. config_store table ─────────────────────────────────────────────────
-    op.create_table(
+    _tbl(
         "config_store",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("key", sa.String(length=200), nullable=False),
@@ -148,7 +180,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("key", name="uq_config_store_key"),
     )
-    op.create_index("ix_config_store_key", "config_store", ["key"], unique=True)
+    _idx("ix_config_store_key", "config_store", ["key"], unique=True)
 
 
 def downgrade() -> None:
