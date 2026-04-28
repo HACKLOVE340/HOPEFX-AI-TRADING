@@ -471,7 +471,16 @@ async def lifespan(_app: FastAPI):
     asyncio.get_event_loop().set_default_executor(_io_executor)
 
     await kill_switch.start()
-    await startup_event()
+    # Run startup_event as a background task so the lifespan yields immediately
+    # and uvicorn starts accepting HTTP requests without waiting for all feeds
+    # (FRED, CFTC, IMF, Yahoo, gold) to connect.  The server returns 503 on
+    # data-dependent endpoints until app_state.initialized is True.
+    _startup_task = asyncio.create_task(startup_event(), name="startup_event")
+    _startup_task.add_done_callback(
+        lambda t: logger.error("startup_event failed: %s", t.exception())
+        if not t.cancelled() and t.exception()
+        else None
+    )
     # Start Sharpe circuit breaker as a top-level lifespan task so it always
     # runs even if startup_event() raises before reaching the call inside it.
     # Mirrors the pattern used for Prometheus, WS broadcasters, and nuclear engine.
