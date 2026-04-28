@@ -677,7 +677,7 @@ def create_decision_router(engine: HOPEFXDecisionEngine):
     from fastapi import APIRouter
     from pydantic import BaseModel
 
-    router = APIRouter(prefix="/decision", tags=["Decision Engine"])
+    router = APIRouter(prefix="/api/decision", tags=["Decision Engine"])
 
     class TickRequest(BaseModel):
         symbol: str = "XAUUSD"

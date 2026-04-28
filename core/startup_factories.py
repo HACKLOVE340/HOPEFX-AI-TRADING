@@ -106,6 +106,30 @@ async def init_env(s: Any) -> bool:
             "Set CONFIG_ENCRYPTION_KEY in .env before deploying to production."
         )
 
+    # ── STRIPE_SECRET_KEY ─────────────────────────────────────────────────────
+    stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
+    stripe_webhook = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    if not stripe_key:
+        logger.warning(
+            "STRIPE_SECRET_KEY not set — wallet, billing, subscriptions, and payments "
+            "will run in simulation mode. Set STRIPE_SECRET_KEY=sk_live_... in .env "
+            "to enable real Stripe charges."
+        )
+    if not stripe_webhook:
+        logger.warning(
+            "STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification "
+            "is disabled. Set STRIPE_WEBHOOK_SECRET=whsec_... from the Stripe dashboard."
+        )
+
+    # ── SMTP ──────────────────────────────────────────────────────────────────
+    smtp_host = os.getenv("SMTP_HOST", "")
+    if not smtp_host:
+        logger.warning(
+            "SMTP_HOST not set — email notifications and SuperAdmin → Platform → "
+            "Test SMTP will fail. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD "
+            "in .env to enable outbound email."
+        )
+
     # ── Run full env validator ────────────────────────────────────────────────
     try:
         from core.env_validator import validate_and_report

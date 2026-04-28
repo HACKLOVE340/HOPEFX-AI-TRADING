@@ -256,7 +256,7 @@ _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
 
-# ── Decision Engine router (/decision) ───────────────────────────────────────
+# ── Decision Engine router (/api/decision) ───────────────────────────────────
 try:
     from core.decision.HOPEFXDecisionEngine import create_decision_router
     from core.app_state import app_state as _app_state
@@ -264,7 +264,7 @@ try:
     _decision_engine = getattr(_app_state, "decision_engine", None)
     if _decision_engine is not None:
         app.include_router(create_decision_router(_decision_engine))
-        logger.info("Decision engine router registered at /decision")
+        logger.info("Decision engine router registered at /api/decision")
     else:
         # Engine not yet initialised at import time (startup not complete).
         # Register a deferred router that resolves the engine from app_state
@@ -282,7 +282,7 @@ try:
             low: float
             volume: float = 0.0
 
-        _decision_deferred = _APIRouter(prefix="/decision", tags=["Decision Engine"])
+        _decision_deferred = _APIRouter(prefix="/api/decision", tags=["Decision Engine"])
 
         @_decision_deferred.get("/status", summary="Decision engine health and metrics")
         async def _decision_status():
@@ -319,7 +319,7 @@ try:
             return {"reset": True}
 
         app.include_router(_decision_deferred)
-        logger.info("Decision engine deferred router registered at /decision (engine pending init)")
+        logger.info("Decision engine deferred router registered at /api/decision (engine pending init)")
 except Exception as _decision_router_err:
     logger.warning("Decision engine router failed to register: %s", _decision_router_err)
 
