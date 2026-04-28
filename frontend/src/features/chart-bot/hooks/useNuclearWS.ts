@@ -75,14 +75,15 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
     }
 
     switch (msg.type) {
-      case 'nuclear_chart_update':
-        // Guard against null data — backend sends null when the nuclear
-        // supervisor is unavailable, which would crash any component reading
-        // msg.data.severity etc.
-        if ((msg as NuclearChartState).data != null) {
-          setChartState(msg as NuclearChartState);
+      case 'nuclear_chart_update': {
+        // Guard against null nuclear state — backend may send a partial
+        // update when the nuclear supervisor is initialising.
+        const chartMsg = msg as NuclearChartState;
+        if (chartMsg.nuclear != null) {
+          setChartState(chartMsg);
         }
         break;
+      }
 
       case 'nuclear_alert': {
         const alert = msg as NuclearAlertMessage;
