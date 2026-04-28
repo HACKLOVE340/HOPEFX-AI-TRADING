@@ -1340,6 +1340,28 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     user_id = str(payload.get("sub", "unknown"))
     await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
 
+    # ── Nuclear availability check ────────────────────────────────────────────
+    # If the charting engine failed to load at startup, tell the client
+    # immediately instead of silently streaming null state every 2 seconds.
+    try:
+        from app import app as _app  # noqa: PLC0415
+
+        _nuclear_ok = getattr(_app.state, "nuclear_available", True)
+    except Exception:
+        _nuclear_ok = True  # assume available if we can't check
+
+    if not _nuclear_ok:
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "nuclear_unavailable",
+                    "message": "Nuclear engine did not load at startup — check server logs.",
+                }
+            )
+        )
+        await _safe_ws_close(websocket, code=1001)
+        return
+
     # ── Stream loop ───────────────────────────────────────────────────────────
     last_heartbeat = asyncio.get_running_loop().time()
     last_severity = -1

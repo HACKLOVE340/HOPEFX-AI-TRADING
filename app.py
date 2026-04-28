@@ -531,6 +531,7 @@ async def lifespan(_app: FastAPI):
         logger.warning("Live WS broadcasters not started: %s", _ws_err)
 
     # Mount nuclear dashboard WebSocket + REST routes (/ws/nuclear, /api/nuclear/*)
+    app.state.nuclear_available = False
     try:
         from charting.nuclear_ai_chart_engine import (
             get_chart_engine as _get_chart_engine,
@@ -541,9 +542,15 @@ async def lifespan(_app: FastAPI):
         mount_nuclear_routes(app, _nuclear_engine)
         _t = asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
         _t.add_done_callback(lambda _: None)
+        app.state.nuclear_available = True
         logger.info("[OK] Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
     except Exception as _nuclear_err:
-        logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
+        logger.warning(
+            "Nuclear dashboard routes not mounted — /ws/nuclear will send "
+            "'nuclear_unavailable' to clients instead of silently returning null data. "
+            "Cause: %s",
+            _nuclear_err,
+        )
 
     # Warm up leaderboard cache so GET /api/leaderboard serves data immediately
     # rather than returning an empty list until the first 15-minute scheduler tick.
