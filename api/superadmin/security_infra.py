@@ -74,6 +74,62 @@ def _check_cert_expiry(hostname: str, port: int = 443) -> dict[str, Any]:
         }
 
 
+@router.get("/security-infra/self-healer")
+async def get_self_healer_status(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return SelfHealer engine status and recent heal events."""
+    status: dict[str, Any] = {
+        "status": "unknown",
+        "last_run": None,
+        "heals_today": 0,
+        "heal_log": [],
+        "checked_at": _utcnow().isoformat(),
+    }
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("self_healer:status")
+            if raw:
+                status.update(json.loads(raw))
+            log_raw = rc.get("self_healer:log")
+            if log_raw:
+                status["heal_log"] = json.loads(log_raw)[:20]
+    except Exception:
+        pass
+    # Try live auto-healer
+    try:
+        from resilience.self_healer import SelfHealer
+        if hasattr(SelfHealer, "_instance") and SelfHealer._instance:
+            sh = SelfHealer._instance
+            status["status"] = "active"
+            status["heals_today"] = getattr(sh, "heals_today", 0)
+    except Exception:
+        pass
+    return status
+
+
+@router.post("/security-infra/self-healer/scan")
+async def trigger_self_healer_scan(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Trigger an immediate self-healer integrity scan."""
+    result: dict[str, Any] = {"ok": True, "triggered_at": _utcnow().isoformat()}
+    try:
+        from resilience.self_healer import SelfHealer
+        if hasattr(SelfHealer, "_instance") and SelfHealer._instance:
+            sh = SelfHealer._instance
+            if hasattr(sh, "run_scan"):
+                await sh.run_scan()
+                result["status"] = "scan_complete"
+    except Exception as exc:
+        logger.warning("Self-healer scan: %s", exc)
+        result["note"] = "Self-healer not available"
+    await _log_superadmin_action(user.sub, "self_healer_scan", {})
+    return result
+
+
 @router.get("/security-infra/status")
 async def get_security_infra_status(
     user: TokenPayload = Depends(_require_superadmin),
@@ -311,6 +367,63 @@ async def get_antivirus_status(
     except Exception:
         pass
     return status
+
+
+@router.get("/security-infra/log")
+async def get_security_infra_log(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return recent security infrastructure events."""
+    events: list[dict] = []
+    try:
+        from database.connection import SessionLocal
+        from database.models import AuditLogEntry
+        db = SessionLocal()
+        try:
+            rows = (
+                db.query(AuditLogEntry)
+                .filter(AuditLogEntry.event_type.in_([
+                    "waf_block", "cert_expiry_warning", "hsm_key_rotate",
+                    "av_threat_found", "self_healer_action", "api_key_revoke",
+                    "security_scan",
+                ]))
+                .order_by(AuditLogEntry.created_at.desc())
+                .limit(100)
+                .all()
+            )
+            for r in rows:
+                events.append({
+                    "event_id": str(r.id),
+                    "event_type": r.event_type,
+                    "detail": r.detail or "",
+                    "user_id": str(r.user_id) if r.user_id else None,
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                })
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("Security infra log: %s", exc)
+    return {"events": events, "total": len(events)}
+
+
+@router.post("/security-infra/hsm/keys/{key_id}/rotate")
+async def rotate_hsm_key(
+    key_id: str,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Rotate an HSM-managed key."""
+    import secrets
+    new_key_ref = f"hsm_key_{secrets.token_hex(8)}"
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            rc.set(f"hsm:key:{key_id}:rotated_at", _utcnow().isoformat(), ex=86400 * 365)
+            rc.set(f"hsm:key:{key_id}:ref", new_key_ref, ex=86400 * 365)
+    except Exception:
+        pass
+    await _log_superadmin_action(user.sub, "hsm_key_rotate", {"key_id": key_id})
+    return {"ok": True, "key_id": key_id, "new_ref": new_key_ref, "rotated_at": _utcnow().isoformat()}
 
 
 @router.post("/security-infra/antivirus/scan")

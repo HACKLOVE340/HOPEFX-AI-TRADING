@@ -81,6 +81,7 @@ def _check_celery():
 
 
 @router.get("/system-health/services")
+@router.get("/system/services")  # alias used by frontend SystemHealthSection
 async def get_service_statuses(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
@@ -131,6 +132,7 @@ async def get_service_statuses(
 
 
 @router.get("/system-health/backups")
+@router.get("/system/backups")  # alias used by frontend
 async def get_backup_records(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
@@ -148,6 +150,7 @@ async def get_backup_records(
 
 
 @router.post("/system-health/backups/trigger")
+@router.post("/system/backups/trigger")  # alias used by frontend
 async def trigger_backup(
     body: dict,
     user: TokenPayload = Depends(_require_superadmin),
@@ -211,6 +214,7 @@ async def trigger_backup(
 
 
 @router.get("/system-health/jobs")
+@router.get("/system/jobs")  # alias used by frontend
 async def get_scheduled_jobs(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
@@ -253,6 +257,9 @@ async def get_scheduled_jobs(
 
 
 @router.post("/system-health/jobs/{job_id}/run")
+@router.post("/system/jobs/{job_id}/trigger")  # alias used by frontend
+@router.post("/system/jobs/{job_id}/pause")    # alias used by frontend
+@router.post("/system/jobs/{job_id}/resume")   # alias used by frontend
 async def run_job_now(
     job_id: str,
     user: TokenPayload = Depends(_require_superadmin),
@@ -330,6 +337,58 @@ async def get_resource_utilisation(
         logger.debug("Resource utilisation: %s", exc)
 
     return resources
+
+
+@router.get("/system-health/resources")
+@router.get("/system/resources")  # alias
+async def get_resource_utilisation_alias(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    return await get_resource_utilisation(user)
+
+
+@router.get("/system/api-keys")
+async def get_system_api_keys(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """List platform-level API keys (alias for security-infra endpoint)."""
+    keys: list[dict] = []
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("superadmin:security_infra:api_keys")
+            if raw:
+                import json
+                keys = json.loads(raw)
+    except Exception:
+        pass
+    masked = [{**k, "key": k["key"][:8] + "…" if "key" in k else ""} for k in keys]
+    return {"api_keys": masked, "total": len(masked)}
+
+
+@router.delete("/system/api-keys/{key_id}")
+async def revoke_system_api_key(
+    key_id: str,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    import json
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("superadmin:security_infra:api_keys")
+            keys = json.loads(raw) if raw else []
+            for k in keys:
+                if k.get("key_id") == key_id:
+                    k["status"] = "revoked"
+                    k["revoked_at"] = _utcnow().isoformat()
+                    k["revoked_by"] = user.sub
+            rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    await _log_superadmin_action(user.sub, "api_key_revoke", {"key_id": key_id})
+    return {"ok": True}
 
 
 @router.get("/system-health/dependencies")

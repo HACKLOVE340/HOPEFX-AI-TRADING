@@ -258,6 +258,7 @@ async def test_alert_rule(
 
 
 @router.get("/alerting/history")
+@router.get("/alerting/fired")  # alias used by frontend AlertingSection
 async def get_alert_history(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
@@ -271,7 +272,52 @@ async def get_alert_history(
                 history = json.loads(raw)
     except Exception:
         pass
-    return {"history": history, "total": len(history)}
+    return {"history": history, "fired": history, "total": len(history)}
+
+
+@router.get("/alerting/prometheus")
+async def get_prometheus_status(
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return Prometheus scrape status and alert manager connectivity."""
+    import os
+    prom_url = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
+    am_url   = os.getenv("ALERTMANAGER_URL", "http://localhost:9093")
+
+    prom_ok = False
+    am_ok   = False
+    prom_version = "unknown"
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=3) as client:
+            r = await client.get(f"{prom_url}/api/v1/status/buildinfo")
+            if r.status_code == 200:
+                prom_ok = True
+                prom_version = r.json().get("data", {}).get("version", "unknown")
+    except Exception:
+        pass
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=3) as client:
+            r = await client.get(f"{am_url}/-/healthy")
+            am_ok = r.status_code == 200
+    except Exception:
+        pass
+
+    return {
+        "prometheus": {
+            "url": prom_url,
+            "status": "ok" if prom_ok else "unavailable",
+            "version": prom_version,
+        },
+        "alertmanager": {
+            "url": am_url,
+            "status": "ok" if am_ok else "unavailable",
+        },
+        "checked_at": _utcnow().isoformat(),
+    }
 
 
 @router.get("/alerting/channels")

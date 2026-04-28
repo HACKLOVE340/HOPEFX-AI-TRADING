@@ -136,6 +136,7 @@ async def get_report_templates(
 
 
 @router.get("/reporting/reports")
+@router.get("/reports")  # alias used by frontend ReportingSection
 async def list_reports(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
@@ -144,6 +145,7 @@ async def list_reports(
 
 
 @router.post("/reporting/reports/generate")
+@router.post("/reports/generate")  # alias used by frontend
 async def generate_report(
     body: dict,
     user: TokenPayload = Depends(_require_superadmin),
@@ -201,6 +203,7 @@ async def generate_report(
 
 
 @router.get("/reporting/reports/{report_id}/download")
+@router.get("/reports/{report_id}/download")  # alias used by frontend
 async def download_report(
     report_id: str,
     user: TokenPayload = Depends(_require_superadmin),
@@ -234,3 +237,27 @@ async def download_report(
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=report_{report_id}.csv"},
     )
+
+
+@router.delete("/reporting/reports/{report_id}")
+@router.delete("/reports/{report_id}")  # alias used by frontend
+async def delete_report(
+    report_id: str,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    reports = _load_reports()
+    before = len(reports)
+    reports = [r for r in reports if r["report_id"] != report_id]
+    if len(reports) == before:
+        raise HTTPException(status_code=404, detail="Report not found")
+    _save_reports(reports)
+    # Also delete cached CSV
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            rc.delete(f"superadmin:report:data:{report_id}")
+    except Exception:
+        pass
+    await _log_superadmin_action(user.sub, "report_delete", {"report_id": report_id})
+    return {"ok": True}

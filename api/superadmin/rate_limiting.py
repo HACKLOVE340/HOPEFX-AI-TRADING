@@ -66,6 +66,7 @@ def _save_rules(rules: list[dict]) -> None:
 
 
 @router.get("/rate-limits")
+@router.get("/rate-limits/rules")  # alias used by frontend RateLimitingSection
 async def get_rate_limit_rules(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
@@ -85,6 +86,7 @@ async def get_rate_limit_rules(
 
 
 @router.post("/rate-limits")
+@router.post("/rate-limits/rules")  # alias used by frontend
 async def create_rate_limit_rule(
     body: dict,
     user: TokenPayload = Depends(_require_superadmin),
@@ -109,6 +111,7 @@ async def create_rate_limit_rule(
 
 
 @router.patch("/rate-limits/{rule_id}")
+@router.patch("/rate-limits/rules/{rule_id}")  # alias used by frontend
 async def update_rate_limit_rule(
     rule_id: str,
     body: dict,
@@ -128,6 +131,7 @@ async def update_rate_limit_rule(
 
 
 @router.delete("/rate-limits/{rule_id}")
+@router.delete("/rate-limits/rules/{rule_id}")  # alias used by frontend
 async def delete_rate_limit_rule(
     rule_id: str,
     user: TokenPayload = Depends(_require_superadmin),
@@ -176,3 +180,37 @@ async def reset_rate_limit_counter(
         pass
     await _log_superadmin_action(user.sub, "rate_limit_reset", {"rule_id": rule_id})
     return {"ok": True, "rule_id": rule_id}
+
+
+@router.get("/rate-limits/violations")
+async def get_rate_limit_violations(
+    limit: int = 50,
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Return recent rate-limit violation events from the audit log."""
+    violations: list[dict] = []
+    try:
+        from database.connection import SessionLocal
+        from database.models import AuditLogEntry
+        db = SessionLocal()
+        try:
+            rows = (
+                db.query(AuditLogEntry)
+                .filter(AuditLogEntry.event_type == "rate_limit_exceeded")
+                .order_by(AuditLogEntry.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            for r in rows:
+                violations.append({
+                    "violation_id": str(r.id),
+                    "user_id": str(r.user_id) if r.user_id else None,
+                    "ip_address": getattr(r, "ip_address", None),
+                    "endpoint": r.detail or "",
+                    "created_at": r.created_at.isoformat() if r.created_at else None,
+                })
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("Rate limit violations: %s", exc)
+    return {"violations": violations, "total": len(violations)}
