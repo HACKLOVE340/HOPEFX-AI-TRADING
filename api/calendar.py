@@ -171,10 +171,13 @@ async def get_upcoming(
     try:
         cal = _get_live_calendar()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from None
+        # No API key configured — return empty list so the frontend degrades
+        # gracefully instead of showing an error banner.
+        logger.info("Calendar: %s — returning empty event list", exc)
+        return []
     except Exception as exc:
         logger.error("Calendar fetch error: %s", exc)
-        raise HTTPException(status_code=503, detail="Economic calendar unavailable") from None
+        return []
 
     min_imp = None
     if importance:
