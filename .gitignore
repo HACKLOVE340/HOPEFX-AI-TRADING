@@ -207,6 +207,7 @@ data/*_M30.csv
 data/*_H1.csv
 data/*_H4.csv
 data/*_D.csv
+data/*_W.csv
 data/av_last_scan.json
 data/macro/*.csv
 frontend/coverage/
