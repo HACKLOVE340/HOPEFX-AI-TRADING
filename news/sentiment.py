@@ -340,6 +340,36 @@ class FinancialSentimentAnalyzer:
         entities = self.extract_entities(f"{title} {text}")
         return sentiment, entities
 
+    def analyze_batch(self, texts: list[str]) -> SentimentScore:
+        """
+        Analyze a list of texts and return an aggregated SentimentScore.
+
+        Scores are averaged across all texts.  Returns a neutral score when
+        the list is empty.  Used by the /api/news/sentiment/{symbol} endpoint
+        to aggregate multiple search-term results into a single signal.
+        """
+        if not texts:
+            return SentimentScore(
+                polarity=0.0,
+                subjectivity=0.5,
+                confidence=0.0,
+                label=SentimentLabel.NEUTRAL,
+            )
+
+        scores = [self.analyze(t) for t in texts]
+        avg_polarity = sum(s.polarity for s in scores) / len(scores)
+        avg_subjectivity = sum(s.subjectivity for s in scores) / len(scores)
+        avg_confidence = sum(s.confidence for s in scores) / len(scores)
+        avg_compound = sum(s.compound_score or 0.0 for s in scores) / len(scores)
+
+        return SentimentScore(
+            polarity=avg_polarity,
+            subjectivity=avg_subjectivity,
+            confidence=avg_confidence,
+            label=self._get_label(avg_polarity),
+            compound_score=avg_compound,
+        )
+
 
 # Global analyzer instances
 _sentiment_analyzer = None
