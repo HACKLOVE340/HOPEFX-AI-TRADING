@@ -382,6 +382,17 @@ try:
 except Exception as _otel_err:
     logger.debug("OpenTelemetry setup skipped: %s", _otel_err)
 
+# Register TracingMiddleware so every HTTP request is captured in the
+# in-memory span ring buffer (_SPAN_BUFFER) and X-Trace-ID / X-Span-ID
+# headers are injected into every response.
+try:
+    from api.tracing import TracingMiddleware as _TracingMiddleware
+
+    app.add_middleware(_TracingMiddleware)
+    logger.info("TracingMiddleware registered — span buffer active")
+except Exception as _tm_err:
+    logger.warning("TracingMiddleware registration failed: %s", _tm_err)
+
 
 # AppState extracted to core/app_state.py — re-exported here for backwards compat
 from core.app_state import app_state
