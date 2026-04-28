@@ -617,7 +617,7 @@ async def startup_event():
         apply_persisted_risk_settings()
         _tasks_done.append("risk_settings")
 
-        _start_data_layer_orchestrator(app_state)
+        await _start_data_layer_orchestrator(app_state)
         _tasks_done.append("data_layer_orchestrator")
 
         _init_kyc_gateway(app_state)
@@ -681,14 +681,20 @@ def _push_state_to_api_modules(state) -> None:
             logger.warning("Failed to push state to %s: %s", _mod_name, _e)
 
 
-def _start_data_layer_orchestrator(state) -> None:
-    """Start the data layer orchestrator as a background task (non-fatal)."""
+async def _start_data_layer_orchestrator(state) -> None:
+    """Await the data layer orchestrator startup (non-fatal).
+
+    Previously used asyncio.create_task() which fire-and-forgot the coroutine,
+    meaning _started was never set before the health check ran and all
+    /api/data-layer/* endpoints returned 503. Awaiting directly ensures the
+    orchestrator is fully initialised before startup_event() returns.
+    """
     try:
         from data_layer.orchestrator import orchestrator
 
-        _t = asyncio.create_task(orchestrator.start(), name="data_layer_orchestrator")
-        _t.add_done_callback(lambda _: None)
-        logger.info("Data layer orchestrator starting in background")
+        await orchestrator.start()
+        state.data_layer_orchestrator = orchestrator
+        logger.info("Data layer orchestrator started")
     except Exception as _exc:
         logger.warning("Data layer orchestrator failed to start (non-fatal): %s", _exc)
 
