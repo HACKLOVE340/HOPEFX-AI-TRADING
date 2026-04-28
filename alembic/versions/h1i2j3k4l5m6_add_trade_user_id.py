@@ -16,11 +16,22 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("trades") as batch_op:
-        batch_op.add_column(
-            sa.Column("user_id", sa.String(100), nullable=True, index=True)
-        )
-    op.create_index("ix_trades_user_id", "trades", ["user_id"], unique=False)
+    # Add user_id column if it doesn't already exist (idempotent).
+    # The column may have been created by a prior bootstrap or manual migration.
+    from sqlalchemy import inspect as _inspect
+    bind = op.get_bind()
+    inspector = _inspect(bind)
+    existing_cols = {c["name"] for c in inspector.get_columns("trades")}
+    if "user_id" not in existing_cols:
+        with op.batch_alter_table("trades") as batch_op:
+            batch_op.add_column(
+                sa.Column("user_id", sa.String(100), nullable=True)
+            )
+
+    # Create index only when it doesn't already exist.
+    existing_indexes = {idx["name"] for idx in inspector.get_indexes("trades")}
+    if "ix_trades_user_id" not in existing_indexes:
+        op.create_index("ix_trades_user_id", "trades", ["user_id"], unique=False)
 
 
 def downgrade() -> None:
