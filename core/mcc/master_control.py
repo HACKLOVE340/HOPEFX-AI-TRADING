@@ -565,3 +565,6 @@ class MasterControlCore:
             self.deactivate_strategy(name, "shutdown")
 
         logger.info("All strategies deactivated")
+
+# Alias for backward compatibility
+MasterControlCentre = MasterControlCore
