@@ -127,6 +127,7 @@ def _check_ip_rate_limit(ip: str) -> None:
             port=int(os.getenv("REDIS_PORT", "6379")),
             password=os.getenv("REDIS_PASSWORD") or None,
             socket_connect_timeout=0.5,
+            socket_timeout=0.5,
             decode_responses=True,
             retry_on_error=[],
             retry=None,
