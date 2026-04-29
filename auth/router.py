@@ -108,52 +108,83 @@ def _get_client_ip(request: Request) -> str:
     return direct_ip
 
 
+# Module-level Redis client for rate limiting.
+# Probed once at import time; set to None if Redis is unreachable so every
+# subsequent call skips the TCP round-trip and uses the in-memory fallback.
+_rl_redis = None
+_rl_redis_probed = False
+
+
+def _get_rl_redis():
+    """Return a live Redis client for rate limiting, or None if unavailable."""
+    global _rl_redis, _rl_redis_probed
+    if _rl_redis_probed:
+        return _rl_redis
+    _rl_redis_probed = True
+    try:
+        import redis as _redis
+        r = _redis.Redis(
+            host=os.getenv("REDIS_HOST", "localhost"),
+            port=int(os.getenv("REDIS_PORT", "6379")),
+            password=os.getenv("REDIS_PASSWORD") or None,
+            socket_connect_timeout=0.3,
+            socket_timeout=0.3,
+            decode_responses=True,
+            retry_on_error=[],
+            retry=None,
+        )
+        r.ping()  # single probe — if this fails Redis is down
+        _rl_redis = r
+        logger.info("Auth rate limiter: using Redis backend")
+    except Exception as _exc:
+        logger.info("Auth rate limiter: Redis unavailable (%s), using in-memory fallback", _exc)
+        _rl_redis = None
+    return _rl_redis
+
+
 def _check_ip_rate_limit(ip: str) -> None:
     """Raise HTTP 429 if the IP has exceeded the auth rate limit.
 
     Limits are read dynamically from the environment at call time so that
     test modules can override AUTH_RATE_LIMIT_REQUESTS via os.environ even
     after this module has been imported.
+
+    Uses a module-level Redis client (probed once at startup) to avoid
+    per-request TCP connection overhead when Redis is unavailable.
     """
     limit = _get_rate_limit()
     window = _get_rate_window()
 
-    # Try Redis first
-    try:
-        import redis as _redis
+    # Try Redis (reuses existing connection — no per-call TCP overhead)
+    r = _get_rl_redis()
+    if r is not None:
+        try:
+            key = f"auth_rl:{ip}"
+            pipe = r.pipeline()
+            now = time.time()
+            pipe.zremrangebyscore(key, 0, now - window)
+            pipe.zadd(key, {str(now): now})
+            pipe.zcard(key)
+            pipe.expire(key, window + 1)
+            results = pipe.execute()
+            count = results[2]
+            if count > limit:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Too many auth attempts. Try again in {window}s.",
+                    headers={"Retry-After": str(window)},
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception as _exc:
+            logger.debug("Redis rate limit check failed, falling back to in-memory: %s", _exc)
+            # Mark Redis as unavailable so next call skips it immediately
+            global _rl_redis, _rl_redis_probed
+            _rl_redis = None
+            _rl_redis_probed = False  # allow re-probe on next startup
 
-        r = _redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_PASSWORD") or None,
-            socket_connect_timeout=0.5,
-            socket_timeout=0.5,
-            decode_responses=True,
-            retry_on_error=[],
-            retry=None,
-        )
-        key = f"auth_rl:{ip}"
-        pipe = r.pipeline()
-        now = time.time()
-        pipe.zremrangebyscore(key, 0, now - window)
-        pipe.zadd(key, {str(now): now})
-        pipe.zcard(key)
-        pipe.expire(key, window + 1)
-        results = pipe.execute()
-        count = results[2]
-        if count > limit:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"Too many auth attempts. Try again in {window}s.",
-                headers={"Retry-After": str(window)},
-            )
-        return
-    except HTTPException:
-        raise
-    except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)  # Redis unavailable — fall through to in-memory
-
-    # In-memory fallback
+    # In-memory fallback (single-process only, sufficient for dev/single-node)
     now = time.time()
     cutoff = now - window
     timestamps = [t for t in _ip_windows[ip] if t > cutoff]
@@ -173,9 +204,12 @@ def set_auth_service(service) -> None:
 
 
 def reset_rate_limit_state() -> None:
-    """Clear the in-memory rate-limit window. Call this in test teardown to
-    prevent cross-module state leakage when running the full test suite."""
+    """Clear the in-memory rate-limit window and reset the Redis probe.
+    Call this in test teardown to prevent cross-module state leakage."""
+    global _rl_redis, _rl_redis_probed
     _ip_windows.clear()
+    _rl_redis = None
+    _rl_redis_probed = False
 
 
 def _svc():
