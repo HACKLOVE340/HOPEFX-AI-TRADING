@@ -672,6 +672,81 @@ async def _price_broadcaster_live_only() -> None:
             await asyncio.sleep(9)
 
 
+_YF_SYMBOL_MAP: dict[str, str] = {
+    "XAU/USD": "GC=F",
+    "EUR/USD": "EURUSD=X",
+    "GBP/USD": "GBPUSD=X",
+    "USD/JPY": "USDJPY=X",
+    "BTC/USD": "BTC-USD",
+}
+
+# Cache last yfinance prices so we can broadcast change_pct correctly
+_yf_last_prices: dict[str, float] = {}
+
+
+async def _yfinance_price_broadcaster() -> None:
+    """
+    Broadcast real market prices fetched from yfinance every 15 seconds.
+
+    Used when no broker or EventBus is available (API-only / dev mode).
+    Sends genuine price_tick messages — no synthetic or mock data.
+    """
+    import time as _time
+    _POLL_INTERVAL = 15  # seconds between yfinance fetches
+
+    while True:
+        await asyncio.sleep(_POLL_INTERVAL)
+        if _manager.connection_count == 0:
+            continue
+        try:
+            import yfinance as _yf
+            tickers = list(_YF_SYMBOL_MAP.values())
+            data = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _yf.download, tickers, period="1d", interval="1m",
+                    progress=False, auto_adjust=True,
+                ),
+                timeout=12.0,
+            )
+            now_ms = int(_time.time() * 1000)
+            for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items():
+                try:
+                    if hasattr(data.columns, "levels"):
+                        col = ("Close", yf_ticker)
+                        if col not in data.columns:
+                            continue
+                        series = data[col].dropna()
+                    else:
+                        series = data["Close"].dropna()
+                    if series.empty:
+                        continue
+                    price = float(series.iloc[-1])
+                    if price <= 0:
+                        continue
+                    cfg = _SYMBOLS.get(ws_sym, {"spread": price * 0.0002})
+                    spread = cfg.get("spread", price * 0.0002)
+                    prev = _yf_last_prices.get(ws_sym, price)
+                    change_pct = ((price - prev) / prev * 100) if prev > 0 else 0.0
+                    _yf_last_prices[ws_sym] = price
+                    tick = {
+                        "type": "price_tick",
+                        "data": {
+                            "symbol": ws_sym,
+                            "bid": round(price - spread / 2, 5),
+                            "ask": round(price + spread / 2, 5),
+                            "mid": round(price, 5),
+                            "spread": spread,
+                            "timestamp": now_ms,
+                            "change_pct": round(change_pct, 4),
+                        },
+                    }
+                    await _manager.broadcast("prices", tick)
+                except Exception as _sym_exc:
+                    logger.debug("yfinance tick for %s failed: %s", ws_sym, _sym_exc)
+        except Exception as exc:
+            logger.warning("yfinance price broadcaster error: %s", exc)
+
+
 async def _price_broadcaster() -> None:
     """
     Broadcast price ticks.
@@ -679,7 +754,8 @@ async def _price_broadcaster() -> None:
     Priority:
     1. EventBus (hopefx:tick) — real ticks from connected broker
     2. Direct broker poll     — paper broker market_prices
-    3. no_live_feed status    — when neither source has data
+    3. yfinance real prices   — when no broker is connected (dev/API-only mode)
+    4. no_live_feed status    — when yfinance also fails
     """
     try:
         # If EventBus connects successfully it takes over; on failure we fall
@@ -691,7 +767,14 @@ async def _price_broadcaster() -> None:
             exc,
         )
     # EventBus unavailable — poll broker directly (real prices only, no GBM)
-    await _price_broadcaster_live_only()
+    # Run both the live-only broadcaster and the yfinance broadcaster concurrently.
+    # The live-only broadcaster sends no_live_feed per-symbol when broker prices
+    # are absent; the yfinance broadcaster fills those gaps with real market data.
+    await asyncio.gather(
+        _price_broadcaster_live_only(),
+        _yfinance_price_broadcaster(),
+        return_exceptions=True,
+    )
 
 
 async def _heartbeat_broadcaster() -> None:

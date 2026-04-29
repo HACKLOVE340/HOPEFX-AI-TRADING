@@ -1347,10 +1347,63 @@ async def get_prices(
                 }
         return prices
 
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Price engine not available",
-    )
+    # Path 3: yfinance real-time fallback (no broker required)
+    # Maps internal symbol → yfinance ticker. Only used when no broker/engine
+    # is running (API-only mode). Returns real market prices, not synthetic data.
+    _YF_MAP = {
+        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X", "USDJPY": "USDJPY=X", "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD", "USDCAD": "USDCAD=X", "AUDUSD": "AUDUSD=X",
+        "USDCHF": "USDCHF=X", "NZDUSD": "NZDUSD=X",
+    }
+    _SPREAD_MAP = {
+        "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
+        "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+        "ETHUSD": 1.0, "USDCAD": 0.0002, "AUDUSD": 0.0001,
+        "USDCHF": 0.0001, "NZDUSD": 0.0001,
+    }
+    try:
+        import time as _time
+        import yfinance as _yf
+        tickers = list(_YF_MAP.values())
+        data = await asyncio.wait_for(
+            asyncio.to_thread(_yf.download, tickers, period="1d", interval="1m",
+                              progress=False, auto_adjust=True),
+            timeout=10.0,
+        )
+        now = _time.time()
+        for sym, yf_ticker in _YF_MAP.items():
+            try:
+                if hasattr(data.columns, "levels"):
+                    close_col = ("Close", yf_ticker)
+                    if close_col in data.columns:
+                        series = data[close_col].dropna()
+                    else:
+                        continue
+                else:
+                    series = data["Close"].dropna()
+                if series.empty:
+                    continue
+                price = float(series.iloc[-1])
+                if price <= 0:
+                    continue
+                spread = _SPREAD_MAP.get(sym, price * 0.0002)
+                prices[sym] = {
+                    "bid": round(price - spread / 2, 5),
+                    "ask": round(price + spread / 2, 5),
+                    "last": round(price, 5),
+                    "timestamp": now,
+                }
+            except Exception:
+                continue
+        if prices:
+            return prices
+    except Exception as _yf_exc:
+        logger.warning("yfinance price fallback failed: %s", _yf_exc)
+
+    # All paths exhausted — return empty dict (not 503) so the frontend
+    # REST poll doesn't hang and can show the no_live_feed banner instead.
+    return {}
 
 
 @router.get(
