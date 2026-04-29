@@ -103,12 +103,20 @@ export function useWebSocket(enabled = true) {
             if (!token) {
               try {
                 const res = await fetch('/api/auth/refresh', {
-                  method: 'POST', credentials: 'include',
+                  method: 'POST',
+                  credentials: 'include',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: '{}',
                 });
                 if (res.ok) {
                   const data = await res.json() as { access_token?: string; user?: import('../types').User };
-                  if (data.access_token && data.user) {
-                    getState().setAuth(data.access_token, data.user);
+                  if (data.access_token) {
+                    // Refresh response may not include user — use persisted user from store.
+                    const existingUser = getState().user;
+                    const user = data.user ?? existingUser;
+                    if (user) {
+                      getState().setAuth(data.access_token, user);
+                    }
                     token = data.access_token;
                   }
                 }

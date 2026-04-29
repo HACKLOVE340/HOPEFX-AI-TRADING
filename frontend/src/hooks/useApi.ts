@@ -182,11 +182,25 @@ async function _silentRefresh(): Promise<string | null> {
       // Send with credentials so the browser includes the httpOnly
       // hopefx_refresh_token cookie scoped to /api/auth/refresh.
       const res = await axios.post(`${BASE_URL}/auth/refresh`, {}, { withCredentials: true });
-      const { access_token } = res.data;
+      const { access_token } = res.data as { access_token: string };
+      if (!access_token) return null;
+
+      // Use persisted user from store; if missing, fetch from /me.
+      let { user } = useStore.getState();
+      if (!user) {
+        try {
+          const meRes = await axios.get(`${BASE_URL}/auth/me`, {
+            headers: { Authorization: `Bearer ${access_token}` },
+          });
+          user = meRes.data as import('../store').User;
+        } catch {
+          // /me failed — can't restore session without user profile
+          return null;
+        }
+      }
       // Store in Zustand memory only — never in localStorage.
-      const { user } = useStore.getState();
-      if (user) useStore.getState().setAuth(access_token, user);
-      return access_token as string;
+      useStore.getState().setAuth(access_token, user);
+      return access_token;
     } catch {
       return null;
     } finally {
