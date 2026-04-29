@@ -372,10 +372,14 @@ const AppShell: React.FC = () => {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
       <main style={{
-        flex: 1, overflowY: 'auto', overflowX: 'hidden',
+        flex: 1, overflow: 'hidden',
         background: 'var(--bg, #0f172a)',
-        height: '100%', minHeight: 0,
+        display: 'flex', flexDirection: 'column',
       }}>
+        {/* PageScroller: scrollable wrapper for all non-terminal pages.
+            Terminal pages (TradingDashboard, ChartDashboard) manage their own
+            overflow internally and use flex:1 to fill this container. */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Core */}
@@ -464,6 +468,7 @@ const AppShell: React.FC = () => {
             />
           </Routes>
         </Suspense>
+        </div>
       </main>
       </div>
     </div>
