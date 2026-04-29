@@ -164,10 +164,13 @@ interface AlertsSlice {
 // ─── WebSocket slice ──────────────────────────────────────────────────────────
 
 interface WsSlice {
-  wsStatus:      WsStatus;
-  lastHeartbeat: number | null;
-  setWsStatus:   (status: WsStatus) => void;
-  setHeartbeat:  (ts: number) => void;
+  wsStatus:        WsStatus;
+  lastHeartbeat:   number | null;
+  noLiveFeed:      boolean;
+  noLiveFeedMsg:   string | null;
+  setWsStatus:     (status: WsStatus) => void;
+  setHeartbeat:    (ts: number) => void;
+  setNoLiveFeed:   (active: boolean, msg?: string) => void;
 }
 
 // ─── System Event slice ───────────────────────────────────────────────────────
@@ -377,12 +380,17 @@ export const useStore = create<AppStore>()(
         // ── WebSocket ─────────────────────────────────────────────────────────
         wsStatus:      'disconnected',
         lastHeartbeat: null,
+        noLiveFeed:    false,
+        noLiveFeedMsg: null,
 
         setWsStatus: (wsStatus) =>
           set({ wsStatus }, false, 'ws/setStatus'),
 
         setHeartbeat: (ts) =>
           set({ lastHeartbeat: ts }, false, 'ws/heartbeat'),
+
+        setNoLiveFeed: (active, msg) =>
+          set({ noLiveFeed: active, noLiveFeedMsg: msg ?? null }, false, 'ws/noLiveFeed'),
 
         // ── System Events ──────────────────────────────────────────────────────
         systemAlert: null,
@@ -431,6 +439,7 @@ export const selectPositions          = (s: AppStore) => s.positions;
 export const selectSignals            = (s: AppStore) => s.signals;
 export const selectAccount            = (s: AppStore) => s.account;
 export const selectWsStatus           = (s: AppStore) => s.wsStatus;
+export const selectNoLiveFeed         = (s: AppStore) => ({ active: s.noLiveFeed, msg: s.noLiveFeedMsg });
 export const selectOrchestratorHealth = (s: AppStore) => s.orchestratorHealth;
 export const selectQualityReport      = (s: AppStore) => s.qualityReport;
 export const selectMicrostructure     = (s: AppStore) => s.microstructure;

@@ -252,12 +252,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 
 // ── No-live-feed banner ───────────────────────────────────────────────────────
 const NoLiveFeedBanner: React.FC = () => {
-  const status    = useStore((s) => s.wsStatus);
-  const isAuth    = useStore(selectIsAuth);
+  const status       = useStore((s) => s.wsStatus);
+  const noLiveFeed   = useStore((s) => s.noLiveFeed);
+  const noLiveFeedMsg = useStore((s) => s.noLiveFeedMsg);
+  const isAuth       = useStore(selectIsAuth);
   const [dismissed, setDismissed]   = React.useState(false);
-  // Only show the banner after the WS has had at least one connection attempt.
-  // This prevents a flash of "No live feed" on initial page load before the
-  // WebSocket has had a chance to connect.
   const [attempted, setAttempted]   = React.useState(false);
 
   React.useEffect(() => {
@@ -265,15 +264,19 @@ const NoLiveFeedBanner: React.FC = () => {
   }, [status]);
 
   React.useEffect(() => {
-    if (status === 'connected') setDismissed(false);
-  }, [status]);
+    // Re-show banner on reconnect if server still reports no live feed.
+    if (status === 'connected' && !noLiveFeed) setDismissed(false);
+  }, [status, noLiveFeed]);
 
-  // Don't show until: authenticated, at least one attempt made, not connected, not dismissed
-  if (!isAuth || !attempted || status === 'connected' || dismissed) return null;
+  // Show when: authenticated, attempted, and either WS is down OR server sent no_live_feed
+  const showWsDown    = isAuth && attempted && status !== 'connected' && !dismissed;
+  const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
+  if (!showWsDown && !showNoFeed) return null;
 
   const label =
+    showNoFeed          ? (noLiveFeedMsg ?? 'No live broker feed — prices may be delayed.') :
     status === 'connecting' ? 'Connecting to live feed…' :
-    status === 'error'      ? 'Live feed error — using REST fallback' :
+    status === 'error'      ? 'Live feed error — using REST fallback (30 s polling)' :
                               'No live feed — using REST fallback (prices may be delayed)';
 
   const bg     = status === 'connecting' ? '#78350f' : '#450a0a';
@@ -371,6 +374,7 @@ const AppShell: React.FC = () => {
       <main style={{
         flex: 1, overflowY: 'auto', overflowX: 'hidden',
         background: 'var(--bg, #0f172a)',
+        height: '100%', minHeight: 0,
       }}>
         <Suspense fallback={<PageFallback />}>
           <Routes>

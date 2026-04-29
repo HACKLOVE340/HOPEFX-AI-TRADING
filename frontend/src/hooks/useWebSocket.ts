@@ -13,6 +13,10 @@ import { tradingApi } from './useApi';
 import type { PriceTick, Position, Signal, AccountMetrics, MicrostructureSnapshot } from '../types';
 import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAlert } from '../store';
 
+// Module-level map: symbol → last known mid price, used to compute change_pct
+// when the server sends 0 or omits the field.
+const _lastMid: Record<string, number> = {};
+
 const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -86,6 +90,7 @@ export function useWebSocket(enabled = true) {
       upsertPosition, removePosition, addSignal, setAccount,
       setMicrostructure, setVolumeDelta, setSentiment,
       setRiskSnapshot, setEquitySnapshot, addNewsItem, setSystemAlert,
+      setNoLiveFeed,
     } = getState();
 
     switch (msg.type) {
@@ -128,6 +133,8 @@ export function useWebSocket(enabled = true) {
       case 'auth_ok':
         authedRef.current = true;
         setWsStatus('connected');
+        // Clear stale no-live-feed banner on successful reconnect.
+        setNoLiveFeed(false);
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
@@ -135,9 +142,23 @@ export function useWebSocket(enabled = true) {
         }));
         break;
 
-      case 'price_tick':
-        setPrice(msg.data as PriceTick);
+      case 'price_tick': {
+        const tick = msg.data as PriceTick;
+        // Compute change_pct from previous mid if server sends 0 or omits it.
+        // _lastMid is a module-level map so it persists across reconnects.
+        if (!tick.change_pct) {
+          const prev = _lastMid[tick.symbol];
+          const mid  = tick.mid ?? ((tick.bid + tick.ask) / 2);
+          tick.change_pct = prev != null && prev !== 0
+            ? ((mid - prev) / prev) * 100
+            : 0;
+          _lastMid[tick.symbol] = mid;
+        }
+        setPrice(tick);
+        // Clear the no-live-feed banner once real ticks arrive.
+        if (getState().noLiveFeed) setNoLiveFeed(false);
         break;
+      }
 
       case 'position_update':
         upsertPosition(msg.data as Position);
@@ -221,7 +242,7 @@ export function useWebSocket(enabled = true) {
         break;
 
       case 'no_live_feed':
-        console.info('[WS] No live broker feed:', msg.message);
+        getState().setNoLiveFeed(true, msg.message ?? 'No live broker feed — prices may be delayed.');
         break;
 
       case 'error':
@@ -283,7 +304,12 @@ export function useWebSocket(enabled = true) {
       const now = Date.now();
       for (const [rawSymbol, raw] of Object.entries(res.data)) {
         const symbol = normaliseSymbol(rawSymbol);
-        const mid = (raw.bid + raw.ask) / 2;
+        const mid    = (raw.bid + raw.ask) / 2;
+        const prev   = _lastMid[symbol];
+        const change_pct = prev != null && prev !== 0
+          ? ((mid - prev) / prev) * 100
+          : (raw.change_pct ?? 0);
+        _lastMid[symbol] = mid;
         setPrice({
           symbol,
           bid:        raw.bid,
@@ -291,7 +317,7 @@ export function useWebSocket(enabled = true) {
           mid,
           spread:     raw.ask - raw.bid,
           timestamp:  raw.timestamp ? raw.timestamp * 1000 : now,
-          change_pct: 0,
+          change_pct,
         });
       }
     } catch {
