@@ -239,7 +239,8 @@ async def equity_curve(
 
     Requires any authenticated user.
     """
-    return _load_equity_curve()
+    import asyncio as _asyncio
+    return await _asyncio.to_thread(_load_equity_curve)
 
 
 @router.get(
@@ -253,7 +254,8 @@ async def public_performance():
     Sharpe ratio is only computed after 50+ data points to prevent
     misleading statistics from small samples.
     """
-    curve = _load_equity_curve()
+    import asyncio as _asyncio
+    curve = await _asyncio.to_thread(_load_equity_curve)
     return _compute_public_stats(curve)
 
 
@@ -352,7 +354,8 @@ async def performance_summary(_user: TokenPayload = Depends(require_role("user")
     Authenticated performance summary — same data as /public but requires auth.
     Used by Portfolio.tsx and other authenticated pages.
     """
-    curve = _load_equity_curve()
+    import asyncio as _asyncio
+    curve = await _asyncio.to_thread(_load_equity_curve)
     return _compute_public_stats(curve)
 
 
@@ -371,8 +374,8 @@ async def trade_breakdown(
     strategy: str | None = None,
 ):
     """Return trade counts and P&L grouped by symbol and strategy."""
-    from fastapi import Query as _Q
-    trades = _load_trades()
+    import asyncio as _asyncio
+    trades = await _asyncio.to_thread(_load_trades)
     by_symbol: dict = {}
     by_strategy: dict = {}
     by_session: dict = {"london": {"trades": 0, "pnl": 0.0}, "new_york": {"trades": 0, "pnl": 0.0}, "asian": {"trades": 0, "pnl": 0.0}}
@@ -427,7 +430,8 @@ async def trade_breakdown(
 @router.get("/attribution", summary="P&L attribution by factor")
 async def performance_attribution(_user: TokenPayload = Depends(require_role("trader"))):
     """Return P&L attribution broken down by signal source, regime, and macro factor."""
-    trades = _load_trades()
+    import asyncio as _asyncio
+    trades = await _asyncio.to_thread(_load_trades)
     total_pnl = sum(float(t.get("realized_pnl", 0.0) or 0.0) for t in trades)
     return {
         "total_pnl": round(total_pnl, 2),
@@ -448,7 +452,8 @@ async def performance_attribution(_user: TokenPayload = Depends(require_role("tr
 @router.get("/metrics", summary="Performance metrics (alias for /summary)")
 async def performance_metrics(_user: TokenPayload = Depends(require_role("user"))):
     """Alias for /summary — used by frontend performanceApi.getMetrics()."""
-    curve = _load_equity_curve()
+    import asyncio as _asyncio
+    curve = await _asyncio.to_thread(_load_equity_curve)
     return _compute_public_stats(curve)
 
 
@@ -458,11 +463,12 @@ async def export_performance(
     _user: TokenPayload = Depends(require_role("trader")),
 ):
     """Export full trade history as CSV or JSON blob."""
+    import asyncio as _asyncio
     import csv
     import io
     from fastapi.responses import StreamingResponse, JSONResponse
 
-    trades = _load_trades()
+    trades = await _asyncio.to_thread(_load_trades)
     if format == "json":
         return JSONResponse(content={"trades": trades, "total": len(trades)})
 

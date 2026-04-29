@@ -394,10 +394,11 @@ async def pnl_summary(
     Sharpe ratio is only shown after _MIN_FILLS_FOR_SHARPE fills to prevent
     misleading statistics from small samples.
     """
+    import asyncio as _asyncio
     engine = _get_engine()
     if engine is None:
         # DB fallback: compute summary from closed Trade rows
-        return _pnl_summary_from_db()
+        return await _asyncio.to_thread(_pnl_summary_from_db)
 
     fills = list(getattr(engine, "_fill_history", []))
     starting = float(getattr(engine, "_starting_equity", 10_000.0))
@@ -509,10 +510,14 @@ async def trade_log(
     The fill_id and lineage_id fields link each fill to the lineage store
     for full audit trail (signal → fill → outcome).
     """
+    import asyncio as _asyncio
+    import functools as _functools
     engine = _get_engine()
     if engine is None:
         # DB fallback: serve closed trades from the Trade table
-        return _trade_log_from_db(limit=limit, offset=offset, symbol=symbol, direction=direction)
+        return await _asyncio.to_thread(
+            _functools.partial(_trade_log_from_db, limit=limit, offset=offset, symbol=symbol, direction=direction)
+        )
 
     fills = list(getattr(engine, "_fill_history", []))
     # Sort newest-first
@@ -629,7 +634,11 @@ async def pnl_history(
     Queries the DB Trade table directly so paper broker trades persisted
     via _persist_trade_record are visible immediately.
     """
-    return _trade_log_from_db(limit=limit, offset=offset, symbol=symbol)
+    import asyncio as _asyncio
+    import functools as _functools
+    return await _asyncio.to_thread(
+        _functools.partial(_trade_log_from_db, limit=limit, offset=offset, symbol=symbol)
+    )
 
 
 @router.get("/export", summary="Export P&L data as CSV or JSON")
