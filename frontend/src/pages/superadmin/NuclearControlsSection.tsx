@@ -57,7 +57,7 @@ const NuclearControlsSection: React.FC = () => {
         superadminApi.nuclearLog(),
       ]);
       setStatus(sRes.data);
-      setLog(lRes.data.entries ?? []);
+      setLog(lRes.data.log ?? lRes.data.entries ?? []);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load nuclear status');
     } finally { setLoading(false); }

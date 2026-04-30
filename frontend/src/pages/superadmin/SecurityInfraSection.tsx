@@ -84,7 +84,7 @@ const SecurityInfraSection: React.FC = () => {
       setHealer(hRes.data);
       setAv(aRes.data);
       setHsm(hsmRes.data);
-      setInfraLog(lRes.data.entries ?? []);
+      setInfraLog(lRes.data.entries ?? lRes.data.events ?? []);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load security infrastructure data');
     } finally { setLoading(false); }
@@ -99,7 +99,7 @@ const SecurityInfraSection: React.FC = () => {
     if (tab !== 'threat') return;
     setThreatLoading(true);
     superadminApi.threatIntel()
-      .then(r => setThreatIntel(r.data.indicators ?? r.data ?? []))
+      .then(r => setThreatIntel(r.data.indicators ?? r.data.threats ?? r.data ?? []))
       .catch(() => setThreatIntel([]))
       .finally(() => setThreatLoading(false));
   }, [tab]);
@@ -313,7 +313,7 @@ const SecurityInfraSection: React.FC = () => {
           actions={<ActionBtn label="Refresh" onClick={() => {
             setThreatLoading(true);
             superadminApi.threatIntel()
-              .then(r => setThreatIntel(r.data.indicators ?? r.data ?? []))
+              .then(r => setThreatIntel(r.data.indicators ?? r.data.threats ?? r.data ?? []))
               .catch(() => setThreatIntel([]))
               .finally(() => setThreatLoading(false));
           }} loading={threatLoading} icon="🔄" size="sm" />}>

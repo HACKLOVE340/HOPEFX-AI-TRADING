@@ -45,7 +45,7 @@ const AlertingSection: React.FC = () => {
         superadminApi.prometheusStatus(),
       ]);
       setRules(rRes.data.rules ?? rRes.data);
-      setFired(fRes.data.alerts ?? fRes.data);
+      setFired(fRes.data.alerts ?? fRes.data.fired ?? fRes.data.history ?? fRes.data);
       setPromStatus(pRes.data);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load alerting data');

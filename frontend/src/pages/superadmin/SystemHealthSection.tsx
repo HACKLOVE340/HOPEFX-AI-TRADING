@@ -60,7 +60,7 @@ const SystemHealthSection: React.FC = () => {
       setServices(sRes.data.services ?? sRes.data);
       setBackups(bRes.data.backups ?? bRes.data);
       setJobs(jRes.data.jobs ?? jRes.data);
-      setApiKeys(kRes.data.keys ?? kRes.data);
+      setApiKeys(kRes.data.api_keys ?? kRes.data.keys ?? kRes.data);
     } catch (e: unknown) {
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load system health data');
     } finally { setLoading(false); }
