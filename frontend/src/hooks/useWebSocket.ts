@@ -151,17 +151,18 @@ export function useWebSocket(enabled = true) {
         break;
 
       case 'price_tick': {
-        const tick = msg.data as PriceTick;
+        const raw = msg.data as PriceTick;
         // Compute change_pct from previous mid if server sends 0 or omits it.
         // _lastMid is a module-level map so it persists across reconnects.
-        if (!tick.change_pct) {
-          const prev = _lastMid[tick.symbol];
-          const mid  = tick.mid ?? ((tick.bid + tick.ask) / 2);
-          tick.change_pct = prev != null && prev !== 0
+        const mid = raw.mid ?? ((raw.bid + raw.ask) / 2);
+        const prev = _lastMid[raw.symbol];
+        const computed_change_pct = raw.change_pct
+          ? raw.change_pct
+          : prev != null && prev !== 0
             ? ((mid - prev) / prev) * 100
             : 0;
-          _lastMid[tick.symbol] = mid;
-        }
+        _lastMid[raw.symbol] = mid;
+        const tick: PriceTick = { ...raw, change_pct: computed_change_pct };
         setPrice(tick);
         // Clear the no-live-feed banner once real ticks arrive.
         if (getState().noLiveFeed) setNoLiveFeed(false);
@@ -314,9 +315,10 @@ export function useWebSocket(enabled = true) {
         const symbol = normaliseSymbol(rawSymbol);
         const mid    = (raw.bid + raw.ask) / 2;
         const prev   = _lastMid[symbol];
+        const rawAny = raw as Record<string, unknown>;
         const change_pct = prev != null && prev !== 0
           ? ((mid - prev) / prev) * 100
-          : (raw.change_pct ?? 0);
+          : (typeof rawAny['change_pct'] === 'number' ? (rawAny['change_pct'] as number) : 0);
         _lastMid[symbol] = mid;
         setPrice({
           symbol,
