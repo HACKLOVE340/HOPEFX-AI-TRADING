@@ -7,7 +7,7 @@
  *   GET  /api/mobile/sessions       — active mobile sessions
  *   DELETE /api/mobile/sessions/:id — revoke mobile session
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../hooks/useApi';
 
 interface MobileConfig {
@@ -36,6 +36,12 @@ const MobilePage: React.FC = () => {
   const [pushToken, setPushToken] = useState('');
   const [tokenMsg, setTokenMsg]   = useState('');
   const [registering, setRegistering] = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,13 +50,14 @@ const MobilePage: React.FC = () => {
         api.get<MobileConfig>('/mobile/config'),
         api.get<MobileSession[] | { sessions?: MobileSession[] }>('/mobile/sessions'),
       ]);
+      if (!mountedRef.current) return;
       if (cfgRes.status === 'fulfilled') setConfig(cfgRes.value.data);
       if (sessRes.status === 'fulfilled') {
         const d = sessRes.value.data;
         setSessions(Array.isArray(d) ? d : (d.sessions ?? []));
       }
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

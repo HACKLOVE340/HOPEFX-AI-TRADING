@@ -8,7 +8,7 @@
  * - Preview branded dashboard
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -261,18 +261,26 @@ const WhitelabelAdmin: React.FC = () => {
   const [preview,    setPreview]    = useState<Tenant | null>(null);
   const [apiKeyMsg,  setApiKeyMsg]  = useState('');
   const [filter,     setFilter]     = useState('all');
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadErr(null);
     try {
       const res = await api.get('/whitelabel/tenants');
+      if (!mountedRef.current) return;
       setTenants(res.data.tenants || []);
     } catch (err) {
+      if (!mountedRef.current) return;
       setTenants([]);
       setLoadErr(extractErrorMessage(err, 'Failed to load tenants. Ensure the whitelabel API is running.'));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

@@ -2,7 +2,7 @@
  * Affiliate Program — full 4-tab dashboard.
  * Tabs: Overview · Referrals · Commissions · Leaderboard
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
 
@@ -33,6 +33,7 @@ const Affiliate:React.FC=()=>{
   const [subErrors,setSubErrors]=useState<Record<string,string>>({});
   const [copied,setCopied]=useState(false);
   const copiedTimerRef=React.useRef<ReturnType<typeof setTimeout>|null>(null);
+  const mountedRef=useRef(true);
   const [signupLoading,setSignupLoading]=useState(false);
   const [activeTab,setActiveTab]=useState<Tab>('overview');
   const [withdrawAmt,setWithdrawAmt]=useState('');
@@ -42,15 +43,19 @@ const Affiliate:React.FC=()=>{
   // Cleanup copy timer on unmount
   React.useEffect(()=>()=>{if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);},[]);
 
+  useEffect(()=>{mountedRef.current=true;return()=>{mountedRef.current=false;};},[]);
+
   const loadData=useCallback(async()=>{
     if(!userId)return; setLoading(true); setApiError(null); setSubErrors({});
     try{
       const res=await affiliateApi.account(userId);
+      if(!mountedRef.current)return;
       const data=res.data as {has_affiliate_account:boolean;affiliate:AffiliateAccount;metrics:AffiliateMetrics};
       if(data.has_affiliate_account){
         setAccount(data.affiliate); setMetrics(data.metrics);
         const affId=data.affiliate.affiliate_id;
         const [rRes,cRes,lRes]=await Promise.allSettled([affiliateApi.referrals(affId),affiliateApi.commissions(affId),affiliateApi.leaderboard({limit:10})]);
+        if(!mountedRef.current)return;
         if(rRes.status==='fulfilled'){const rd=rRes.value.data as {referrals?:Referral[]}|Referral[];setReferrals(Array.isArray(rd)?rd:(rd.referrals??[]));}
         else setSubErrors(p=>({...p,referrals:extractErr(rRes.reason,'Failed to load referrals')}));
         if(cRes.status==='fulfilled'){const cd=cRes.value.data as {commissions?:Commission[]}|Commission[];setCommissions(Array.isArray(cd)?cd:(cd.commissions??[]));}
@@ -58,10 +63,13 @@ const Affiliate:React.FC=()=>{
         if(lRes.status==='fulfilled'){const ld=lRes.value.data as {leaderboard?:LeaderboardEntry[]}|LeaderboardEntry[];setLeaderboard(Array.isArray(ld)?ld:(ld.leaderboard??[]));}
         else setSubErrors(p=>({...p,leaderboard:extractErr(lRes.reason,'Failed to load leaderboard')}));
       } else {
-        affiliateApi.leaderboard({limit:10}).then(r=>{const ld=r.data as {leaderboard?:LeaderboardEntry[]}|LeaderboardEntry[];setLeaderboard(Array.isArray(ld)?ld:(ld.leaderboard??[]));}).catch(()=>{});
+        affiliateApi.leaderboard({limit:10}).then(r=>{if(!mountedRef.current)return;const ld=r.data as {leaderboard?:LeaderboardEntry[]}|LeaderboardEntry[];setLeaderboard(Array.isArray(ld)?ld:(ld.leaderboard??[]));}).catch(()=>{});
       }
-    }catch(err){setApiError(extractErr(err,'Failed to load affiliate data.'));}
-    finally{setLoading(false);}
+    }catch(err){
+      if(!mountedRef.current)return;
+      setApiError(extractErr(err,'Failed to load affiliate data.'));
+    }
+    finally{if(mountedRef.current)setLoading(false);}
   },[userId]);
 
   useEffect(()=>{loadData();},[loadData]);
