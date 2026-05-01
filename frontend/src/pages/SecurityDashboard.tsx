@@ -12,7 +12,7 @@
  * All data polled from /api/security/* (HOPEFXBrain sub-router).
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
@@ -98,6 +98,12 @@ const SecurityDashboard: React.FC = () => {
   const [unblockingIp, setUnblockingIp]         = useState<string | null>(null);
   const [unblockErr, setUnblockErr]             = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const loadAll = useCallback(async () => {
     try {
       const [a, l, b, al] = await Promise.all([
@@ -106,15 +112,17 @@ const SecurityDashboard: React.FC = () => {
         fetchBlockedIPs(),
         fetchAlerts(),
       ]);
+      if (!mountedRef.current) return;
       setAttacks(a);
       setLockdown(l);
       setBlockedIPs(b);
       setAlerts(al);
       setError(null);
     } catch (err) {
+      if (!mountedRef.current) return;
       setError('Failed to load security data — backend may be offline');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

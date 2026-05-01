@@ -142,7 +142,13 @@ const AuditLog: React.FC = () => {
   const [exporting, setExporting]     = useState(false);
   const [liveCount, setLiveCount]     = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const mountedRef = useRef(true);
   const token = useStore(s => s.token);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const fetchAudit = useCallback(async (pg: number, uid: string, etype: string) => {
     setLoading(true);
@@ -153,16 +159,18 @@ const AuditLog: React.FC = () => {
       if (etype.trim()) params.event_type = etype.trim();
 
       const res = await adminApi.auditLog(params);
+      if (!mountedRef.current) return;
       const d = res.data as AuditResponse;
       setEvents(d.events ?? []);
       setTotal(d.total ?? 0);
       setPage(d.page ?? pg);
       setPages(d.pages ?? 1);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       const msg = e instanceof Error ? e.message : 'Failed to load audit log';
       setError(msg);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

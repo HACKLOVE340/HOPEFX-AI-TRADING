@@ -39,15 +39,18 @@ const Leaderboard: React.FC = () => {
   const [sortBy, setSortBy]   = useState<'return' | 'sharpe' | 'win_rate' | 'followers'>('return');
 
   useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setLoadErr('');
-    api.get<Trader[]>(`/leaderboard?period=${period}`)
+    api.get<Trader[]>(`/leaderboard?period=${period}`, { signal: controller.signal })
       .then((r) => { setTraders(Array.isArray(r.data) ? r.data : []); })
       .catch((err: unknown) => {
+        if ((err as { name?: string }).name === 'CanceledError') return;
         setLoadErr(extractApiError(err, 'Failed to load leaderboard.'));
         setTraders([]);
       })
       .finally(() => setLoading(false));
+    return () => controller.abort();
   }, [period]);
 
   const sorted = [...traders].sort((a, b) => {

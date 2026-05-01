@@ -3,7 +3,7 @@
  * Features: opt-in/out toggle, real-time WS signal injection, pagination,
  * reactions (👍/👎), comments, copy counts.
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -36,25 +36,36 @@ const SocialFeed: React.FC = () => {
   const [commentText, setCommentText] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   // Load opt-in status
   useEffect(() => {
+    let mounted = true;
     socialApi.optStatus()
-      .then(r => { const d = r.data as {opted_in?: boolean}; setOptedIn(d.opted_in ?? false); })
-      .catch(() => setOptedIn(false));
+      .then(r => {
+        if (!mounted) return;
+        const d = r.data as {opted_in?: boolean}; setOptedIn(d.opted_in ?? false);
+      })
+      .catch(() => { if (mounted) setOptedIn(false); });
+    return () => { mounted = false; };
   }, []);
 
   const loadFeed = useCallback(async (pg: number, replace = false) => {
     setLoading(true); setError(null);
     try {
       const res = await socialApi.feed({ page: pg, limit: PAGE_SIZE });
+      if (!mountedRef.current) return;
       const d = res.data as { signals?: FeedItem[]; items?: FeedItem[] } | FeedItem[];
       const fetched: FeedItem[] = Array.isArray(d) ? d : (d.signals ?? d.items ?? []);
       setItems(prev => replace ? fetched : [...prev, ...fetched]);
       setHasMore(fetched.length === PAGE_SIZE);
     } catch (err) {
+      if (!mountedRef.current) return;
+      if ((err as {name?:string}).name === 'CanceledError') return;
       setError(extractErr(err, 'Failed to load signal feed.'));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
