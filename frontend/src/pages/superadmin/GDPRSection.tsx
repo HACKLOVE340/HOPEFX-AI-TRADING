@@ -1,6 +1,6 @@
 // superadmin/GDPRSection.tsx
 // Data subject requests, erasure, consent log, retention policies
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -41,6 +41,9 @@ const GDPRSection: React.FC = () => {
   const [eraseConfirm, setEraseConfirm] = useState(false);
   const [tab, setTab]               = useState<'requests' | 'policies' | 'consent'>('requests');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -51,6 +54,7 @@ const GDPRSection: React.FC = () => {
         superadminApi.gdprRequests(params),
         superadminApi.retentionPolicies(),
       ]);
+      if (!mountedRef.current) return;
       setRequests(rRes.data.requests ?? rRes.data);
       const p: RetentionPolicy[] = pRes.data.policies ?? pRes.data;
       setPolicies(p);
@@ -59,8 +63,9 @@ const GDPRSection: React.FC = () => {
       p.forEach(pol => { edits[pol.data_type] = pol.retention_days; });
       setPolicyEdits(edits);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load GDPR data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [statusFilter, typeFilter]);
 
   useEffect(() => { load(); }, [load]);

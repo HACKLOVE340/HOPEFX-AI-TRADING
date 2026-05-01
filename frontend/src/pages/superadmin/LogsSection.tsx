@@ -28,6 +28,8 @@ const LogsSection: React.FC = () => {
   const [savingLevel, setSavingLevel] = useState<string | null>(null);
   const [msg, setMsg]           = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -40,11 +42,13 @@ const LogsSection: React.FC = () => {
         superadminApi.logs(params),
         superadminApi.logLevels(),
       ]);
+      if (!mountedRef.current) return;
       setLogs(logRes.data.logs ?? logRes.data);
       setLogLevels(lvlRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load logs');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [levelFilter, loggerFilter, search]);
 
   useEffect(() => { load(); }, [load]);

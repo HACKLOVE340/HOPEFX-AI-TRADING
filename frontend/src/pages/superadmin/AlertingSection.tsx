@@ -1,6 +1,6 @@
 // superadmin/AlertingSection.tsx
 // Alert rules, fired alerts, Prometheus status, silence controls
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -36,6 +36,9 @@ const AlertingSection: React.FC = () => {
   const [silenceDuration, setSilenceDuration] = useState('60');
   const [newRule, setNewRule]   = useState({ name: '', condition: '', severity: 'warning', channels: 'slack' });
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -44,12 +47,14 @@ const AlertingSection: React.FC = () => {
         superadminApi.firedAlerts(),
         superadminApi.prometheusStatus(),
       ]);
+      if (!mountedRef.current) return;
       setRules(rRes.data.rules ?? rRes.data);
       setFired(fRes.data.alerts ?? fRes.data.fired ?? fRes.data.history ?? fRes.data);
       setPromStatus(pRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load alerting data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

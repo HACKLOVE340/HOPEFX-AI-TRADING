@@ -1,6 +1,6 @@
 // superadmin/FinancialSection.tsx — revenue, subscriptions, payments,
 //   chargebacks, tax reports, reconciliation, affiliates
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -106,15 +106,19 @@ const ChargebacksPanel: React.FC = () => {
   const [statusFilter, setSF] = useState('all');
   const [busy, setBusy]     = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoad(true); setError('');
     try {
       const params: Record<string, string> = {};
       if (statusFilter !== 'all') params['status'] = statusFilter;
       const res = await superadminApi.chargebacks(params);
+      if (!mountedRef.current) return;
       setItems(res.data.chargebacks ?? res.data ?? []);
-    } catch (e) { setError(apiErr(e, 'Failed to load chargebacks')); }
-    finally { setLoad(false); }
+    } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load chargebacks')); }
+    finally { if (mountedRef.current) setLoad(false); }
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
@@ -215,13 +219,17 @@ const TaxReportsPanel: React.FC = () => {
   const [newPeriod, setNewPeriod]  = useState('');
   const [newJurisdiction, setNewJurisdiction] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoad(true); setError('');
     try {
       const res = await superadminApi.taxReports();
+      if (!mountedRef.current) return;
       setReports(res.data.reports ?? res.data ?? []);
-    } catch (e) { setError(apiErr(e, 'Failed to load tax reports')); }
-    finally { setLoad(false); }
+    } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load tax reports')); }
+    finally { if (mountedRef.current) setLoad(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -332,15 +340,19 @@ const ReconciliationPanel: React.FC = () => {
   const [provider, setProvider] = useState('all');
   const [notes, setNotes]     = useState<Record<string, string>>({});
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoad(true); setError('');
     try {
       const params: Record<string, string> = {};
       if (provider !== 'all') params['provider'] = provider;
       const res = await superadminApi.reconciliationRecords(params);
+      if (!mountedRef.current) return;
       setRecords(res.data.records ?? res.data ?? []);
-    } catch (e) { setError(apiErr(e, 'Failed to load reconciliation records')); }
-    finally { setLoad(false); }
+    } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load reconciliation records')); }
+    finally { if (mountedRef.current) setLoad(false); }
   }, [provider]);
 
   useEffect(() => { load(); }, [load]);
@@ -449,13 +461,17 @@ const AffiliatePanel: React.FC = () => {
   const [loading, setLoad] = useState(true);
   const [error, setError] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoad(true); setError('');
     try {
       const res = await superadminApi.affiliateStats();
+      if (!mountedRef.current) return;
       setStats(res.data);
-    } catch (e) { setError(apiErr(e, 'Failed to load affiliate data')); }
-    finally { setLoad(false); }
+    } catch (e) { if (mountedRef.current) setError(apiErr(e, 'Failed to load affiliate data')); }
+    finally { if (mountedRef.current) setLoad(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -547,6 +563,9 @@ const FinancialSection: React.FC = () => {
   const [busy, setBusy]         = useState(false);
   const [msg, setMsg]           = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -555,12 +574,14 @@ const FinancialSection: React.FC = () => {
         superadminApi.paymentHistory({ period }),
         superadminApi.subscriptionStats(),
       ]);
+      if (!mountedRef.current) return;
       setRevenue(revRes.data);
       setPayments(payRes.data.payments ?? payRes.data);
       setSubStats(subRes.data);
     } catch (e) {
+      if (!mountedRef.current) return;
       setError(apiErr(e, 'Failed to load financial data'));
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [period]);
 
   useEffect(() => { if (activeTab === 'overview') load(); }, [load, activeTab]);

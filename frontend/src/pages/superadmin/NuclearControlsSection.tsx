@@ -1,6 +1,6 @@
 // superadmin/NuclearControlsSection.tsx
 // Emergency halt, hedge activation, max-risk override, nuclear log
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -49,6 +49,9 @@ const NuclearControlsSection: React.FC = () => {
   const [riskFraction, setRiskFraction] = useState('0.5');
   const [confirm, setConfirm]   = useState<{ action: string; label: string; danger?: boolean } | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -56,11 +59,13 @@ const NuclearControlsSection: React.FC = () => {
         superadminApi.nuclearStatus(),
         superadminApi.nuclearLog(),
       ]);
+      if (!mountedRef.current) return;
       setStatus(sRes.data);
       setLog(lRes.data.log ?? lRes.data.entries ?? []);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load nuclear status');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -276,6 +281,9 @@ const PropFirmBreachPanel: React.FC = () => {
   const [drawdown, setDrawdown] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]   = useState(false);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -283,10 +291,11 @@ const PropFirmBreachPanel: React.FC = () => {
         superadminApi.propBreaches(),
         superadminApi.drawdownStats(),
       ]);
+      if (!mountedRef.current) return;
       if (b.status === 'fulfilled') setBreaches(b.value.data.breaches ?? b.value.data ?? []);
       if (d.status === 'fulfilled') setDrawdown(d.value.data);
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

@@ -1,6 +1,6 @@
 // superadmin/BrokerManagementSection.tsx
 // Broker health, TCA, execution quality, routing controls
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -55,6 +55,9 @@ const BrokerManagementSection: React.FC = () => {
   const [editRouting, setEditRouting] = useState(false);
   const [routingDraft, setRoutingDraft] = useState<RoutingRule[]>([]);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -63,12 +66,14 @@ const BrokerManagementSection: React.FC = () => {
         superadminApi.tcaMetrics(),
         superadminApi.brokerRouting(),
       ]);
+      if (!mountedRef.current) return;
       setBrokers(bRes.data.brokers ?? bRes.data);
       setTca(tRes.data.metrics ?? tRes.data);
       setRouting(rRes.data.rules ?? rRes.data ?? []);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load broker data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

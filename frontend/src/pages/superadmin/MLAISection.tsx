@@ -1,5 +1,5 @@
 // superadmin/MLAISection.tsx — ML model management, RL agent control, metrics
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -65,6 +65,9 @@ const MLAISection: React.FC = () => {
   const [confirm, setConfirm]     = useState<{ model: string; action: string } | null>(null);
   const [deployTarget, setDeployTarget] = useState<{ model: string; version: string } | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -74,13 +77,15 @@ const MLAISection: React.FC = () => {
         superadminApi.rlAgentStatus(),
         superadminApi.mlStatus(),
       ]);
+      if (!mountedRef.current) return;
       setModels(mRes.data.models ?? mRes.data);
       setMetrics(meRes.data);
       setRlStatus(rlRes.data);
       setMlStatus(stRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load ML data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -264,6 +269,9 @@ const MLSubsystemsPanel: React.FC = () => {
   const [loading, setLoading]           = useState(false);
   const [tab, setTab]                   = useState<'filter' | 'online' | 'features'>('filter');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -271,10 +279,11 @@ const MLSubsystemsPanel: React.FC = () => {
         superadminApi.mlFilterStats ? superadminApi.mlFilterStats() : Promise.reject('no method'),
         superadminApi.mlOnlineLearnerStatus ? superadminApi.mlOnlineLearnerStatus() : Promise.reject('no method'),
       ]);
+      if (!mountedRef.current) return;
       if (f.status === 'fulfilled') setFilterStats(f.value.data);
       if (o.status === 'fulfilled') setOnlineStatus(o.value.data);
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
