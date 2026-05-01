@@ -627,6 +627,8 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
       last_signal_direction, last_signal_confidence  — from HopeFXEngine._get_status()
       decision_engine_cycles, decision_engine_executed, decision_engine_blocked,
       decision_engine_errors, decision_engine_execution_rate  — from HOPEFXDecisionEngine.status()
+
+    Note: uptime_seconds defaults to 0 if api.admin._start_time is unavailable.
     """
     cfg = _load_engine_config()
 
