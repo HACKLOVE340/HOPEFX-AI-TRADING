@@ -1,6 +1,6 @@
 // superadmin/ReportingSection.tsx
 // Report list, generate, download, delete — weekly + custom reports
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -29,14 +29,19 @@ const ReportingSection: React.FC = () => {
   const [genType, setGenType]   = useState('weekly');
   const [genPeriod, setGenPeriod] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const res = await superadminApi.reportList();
+      if (!mountedRef.current) return;
       setReports(res.data.reports ?? res.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load reports');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

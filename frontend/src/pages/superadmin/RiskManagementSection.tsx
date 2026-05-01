@@ -1,6 +1,6 @@
 // superadmin/RiskManagementSection.tsx
 // Circuit breakers, VaR/ES, stress tests, prop firm breach tracking, drawdown tracker
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -53,6 +53,9 @@ const RiskManagementSection: React.FC = () => {
   const [confirm, setConfirm]     = useState<{ name: string; action: string } | null>(null);
   const [breachFilter, setBreachFilter] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -63,14 +66,16 @@ const RiskManagementSection: React.FC = () => {
         superadminApi.propBreaches(),
         superadminApi.drawdownStats(),
       ]);
+      if (!mountedRef.current) return;
       setBreakers(cbRes.data.circuit_breakers ?? cbRes.data.breakers ?? cbRes.data);
       setVarMetrics(varRes.data);
       setStressTests(stRes.data.results ?? stRes.data);
       setPropBreaches(pbRes.data.breaches ?? pbRes.data);
       setDrawdown(ddRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load risk data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

@@ -1,5 +1,5 @@
 // superadmin/TradingEngineSection.tsx — engine config, kill switch, metrics
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -55,6 +55,9 @@ const TradingEngineSection: React.FC = () => {
   const [msg, setMsg]         = useState('');
   const [confirm, setConfirm] = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -63,12 +66,14 @@ const TradingEngineSection: React.FC = () => {
         superadminApi.engineMetrics(),
         superadminApi.engineStatus(),
       ]);
+      if (!mountedRef.current) return;
       setCfg(cfgRes.data);
       setMetrics(metRes.data);
       setStatus(stRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load engine data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -286,13 +291,17 @@ const DecisionEnginePanel: React.FC = () => {
   const [status, setStatus] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await superadminApi.engineStatus();
+      if (!mountedRef.current) return;
       setStatus(res.data);
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

@@ -1,6 +1,6 @@
 // superadmin/SecurityInfraSection.tsx
 // SelfHealer integrity monitor, Antivirus scanner, HSM Vault key management
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -72,6 +72,9 @@ const SecurityInfraSection: React.FC = () => {
   const [rotateConfirm, setRotateConfirm] = useState<string | null>(null);
   const [tab, setTab]           = useState<'healer' | 'av' | 'hsm' | 'log' | 'threat'>('healer');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -81,13 +84,15 @@ const SecurityInfraSection: React.FC = () => {
         superadminApi.hsmStatus(),
         superadminApi.securityInfraLog(),
       ]);
+      if (!mountedRef.current) return;
       setHealer(hRes.data);
       setAv(aRes.data);
       setHsm(hsmRes.data);
       setInfraLog(lRes.data.entries ?? lRes.data.events ?? []);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load security infrastructure data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

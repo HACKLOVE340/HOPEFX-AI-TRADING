@@ -1,5 +1,5 @@
 // SystemReliabilitySection.tsx — Super Admin only
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
 import { Card, SectionHeader, Button, StatusBadge } from '../settings/ui';
@@ -145,6 +145,9 @@ const HealthEnginePanel: React.FC = () => {
   const [customName, setCustomName] = useState('');
   const [registerMsg, setRegisterMsg] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -153,11 +156,12 @@ const HealthEnginePanel: React.FC = () => {
         superadminApi.healthEngineProbes(),
         superadminApi.healthEngineHistory(5),
       ]);
+      if (!mountedRef.current) return;
       if (r.status === 'fulfilled') setReport(r.value.data as HeReport);
       if (p.status === 'fulfilled') setProbes((p.value.data as { probes: string[] }).probes ?? []);
       if (h.status === 'fulfilled') setHistory((h.value.data as { entries: HeReport[] }).entries ?? []);
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -339,6 +343,9 @@ const DiagnosticsPanel: React.FC = () => {
   const [msg, setMsg]         = useState('');
   const [tab, setTab]         = useState<'summary' | 'report' | 'checks' | 'remediation'>('summary');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     try {
       const [s, c, r] = await Promise.allSettled([
@@ -346,6 +353,7 @@ const DiagnosticsPanel: React.FC = () => {
         superadminApi.diagnosticsChecks(),
         superadminApi.diagnosticsRemediationLog(20),
       ]);
+      if (!mountedRef.current) return;
       if (s.status === 'fulfilled') setSummary(s.value.data);
       if (c.status === 'fulfilled') setChecks(c.value.data.checks ?? []);
       if (r.status === 'fulfilled') setRemLog(r.value.data.entries ?? []);
@@ -544,13 +552,17 @@ const RoutesPanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter]   = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await superadminApi.reliabilityRoutes();
+      if (!mountedRef.current) return;
       setRoutes(res.data.routes ?? res.data ?? []);
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -751,17 +763,22 @@ const SystemReliabilitySection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const fetchStatus = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await superadminApi.reliabilityStatus();
+      if (!mountedRef.current) return;
       setStatus(res.data);
       setLastRefresh(new Date().toLocaleTimeString());
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to fetch reliability status');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 
@@ -769,17 +786,19 @@ const SystemReliabilitySection: React.FC = () => {
     setTracesLoading(true);
     try {
       const res = await superadminApi.reliabilityTraces(50);
+      if (!mountedRef.current) return;
       setTraces(res.data.spans || []);
     } catch {
       // non-fatal
     } finally {
-      setTracesLoading(false);
+      if (mountedRef.current) setTracesLoading(false);
     }
   }, []);
 
   const fetchMetrics = useCallback(async () => {
     try {
       const res = await superadminApi.reliabilityMetrics();
+      if (!mountedRef.current) return;
       setMetrics(res.data);
     } catch {
       // non-fatal
@@ -789,6 +808,7 @@ const SystemReliabilitySection: React.FC = () => {
   const fetchEnv = useCallback(async () => {
     try {
       const res = await superadminApi.reliabilityEnv();
+      if (!mountedRef.current) return;
       setEnvAudit(res.data);
     } catch {
       // non-fatal
@@ -799,11 +819,12 @@ const SystemReliabilitySection: React.FC = () => {
     setHistoryLoading(true);
     try {
       const res = await superadminApi.reliabilityHistory(100);
+      if (!mountedRef.current) return;
       setStatusHistory(res.data.history || []);
     } catch {
       // non-fatal
     } finally {
-      setHistoryLoading(false);
+      if (mountedRef.current) setHistoryLoading(false);
     }
   }, []);
 
