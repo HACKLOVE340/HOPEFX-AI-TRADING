@@ -198,6 +198,8 @@ class Position:
     current_price: float
     unrealized_pnl: float
     realized_pnl: float = 0.0
+    stop_loss: float | None = None
+    take_profit: float | None = None
     timestamp: datetime | None = None
     id: str = ""  # position identifier (defaults to symbol if empty)
 
