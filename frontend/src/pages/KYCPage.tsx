@@ -44,15 +44,23 @@ const KYCPage: React.FC = () => {
   const [uploading, setUploading]   = useState<string | null>(null);
   const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
     try {
       const res = await kycApi.status();
+      if (!mountedRef.current) return;
       setKycState(res.data as KYCState);
     } catch {
+      if (!mountedRef.current) return;
       setKycState({ status: 'not_started', submitted_at: null, reviewed_at: null, rejection_reason: null, documents: [] });
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);

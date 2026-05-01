@@ -93,10 +93,12 @@ function AccountManagerCard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     eliteApi.accountManager()
-      .then(r => setAm(r.data as AccountManager))
-      .catch(() => setAm(null))
-      .finally(() => setLoading(false));
+      .then(r => { if (mounted) setAm(r.data as AccountManager); })
+      .catch(() => { if (mounted) setAm(null); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, []);
 
   return (
@@ -259,11 +261,13 @@ function TicketList({ refresh }: { refresh: number }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     setLoading(true);
     eliteApi.listTickets()
-      .then(r => setTickets((r.data as { tickets: Ticket[] }).tickets ?? []))
-      .catch(() => setTickets([]))
-      .finally(() => setLoading(false));
+      .then(r => { if (mounted) setTickets((r.data as { tickets: Ticket[] }).tickets ?? []); })
+      .catch(() => { if (mounted) setTickets([]); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, [refresh]);
 
   return (
@@ -445,11 +449,13 @@ function CustomDevList({ refresh }: { refresh: number }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
     setLoading(true);
     eliteApi.listCustomDevReqs()
-      .then(r => setReqs((r.data as { requests: DevRequest[] }).requests ?? []))
-      .catch(() => setReqs([]))
-      .finally(() => setLoading(false));
+      .then(r => { if (mounted) setReqs((r.data as { requests: DevRequest[] }).requests ?? []); })
+      .catch(() => { if (mounted) setReqs([]); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, [refresh]);
 
   return (

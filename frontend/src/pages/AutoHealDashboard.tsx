@@ -8,7 +8,7 @@
  *   - FixApprovalQueue: LLM-generated code fix review
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
@@ -274,6 +274,12 @@ const AutoHealDashboard: React.FC = () => {
   const [avProgress, setAvProgress]     = useState(0);
   const [rebuilding, setRebuilding]     = useState(false);
   const [quarantining, setQuarantining] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const loadAll = useCallback(async () => {
     try {
@@ -284,6 +290,7 @@ const AutoHealDashboard: React.FC = () => {
         fetchAvStatus(),
         fetchThreats(),
       ]);
+      if (!mountedRef.current) return;
       if (hs.status === 'fulfilled') setHealStatus(hs.value);
       if (dr.status === 'fulfilled') setDrift(dr.value);
       if (pt.status === 'fulfilled') setPatches(pt.value);
@@ -291,9 +298,10 @@ const AutoHealDashboard: React.FC = () => {
       if (th.status === 'fulfilled') setThreats(th.value);
       setError(null);
     } catch {
+      if (!mountedRef.current) return;
       setError('Failed to load auto-heal data — backend may be offline');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

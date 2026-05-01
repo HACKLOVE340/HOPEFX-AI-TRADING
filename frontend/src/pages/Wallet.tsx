@@ -96,8 +96,10 @@ const Wallet: React.FC = () => {
   const [msg, setMsg]                   = useState('');
 
   useEffect(() => {
+    const controller = new AbortController();
+
     // Balance
-    api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance')
+    api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance', { signal: controller.signal })
       .then((r) => {
         setBalance(r.data?.balance ?? 0);
         setFrozen(r.data?.frozen ?? 0);
@@ -105,15 +107,17 @@ const Wallet: React.FC = () => {
         setBalanceErr('');
       })
       .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'CanceledError') return;
         console.warn('[Wallet] Failed to load balance:', err);
         setBalanceErr(extractApiError(err, 'Failed to load balance.'));
       })
       .finally(() => setBalanceLoading(false));
 
     // Transactions
-    api.get<{ transactions: Transaction[] }>('/billing/transactions')
+    api.get<{ transactions: Transaction[] }>('/billing/transactions', { signal: controller.signal })
       .then((r) => { setTxs(r.data?.transactions ?? []); setTxErr(''); })
       .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'CanceledError') return;
         console.warn('[Wallet] Failed to load transactions:', err);
         setTxErr(extractApiError(err, 'Failed to load transactions.'));
         setTxs([]);
@@ -121,9 +125,10 @@ const Wallet: React.FC = () => {
       .finally(() => setTxLoading(false));
 
     // Subscription
-    api.get<Subscription>('/billing/subscription')
+    api.get<Subscription>('/billing/subscription', { signal: controller.signal })
       .then((r) => { setSub(r.data ?? null); setSubErr(''); })
       .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'CanceledError') return;
         console.warn('[Wallet] Failed to load subscription:', err);
         setSubErr(extractApiError(err, 'Failed to load subscription.'));
         setSub(null);
@@ -131,18 +136,21 @@ const Wallet: React.FC = () => {
       .finally(() => setSubLoading(false));
 
     // Payment methods
-    api.get<{ methods: PaymentMethod[] } | PaymentMethod[]>('/billing/payment-methods')
+    api.get<{ methods: PaymentMethod[] } | PaymentMethod[]>('/billing/payment-methods', { signal: controller.signal })
       .then((r) => {
         const data = Array.isArray(r.data) ? r.data : (r.data as { methods: PaymentMethod[] }).methods ?? [];
         setPMs(data);
         setPmErr('');
       })
       .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'CanceledError') return;
         console.warn('[Wallet] Failed to load payment methods:', err);
         setPmErr(extractApiError(err, 'Failed to load payment methods.'));
         setPMs([]);
       })
       .finally(() => setPmLoading(false));
+
+    return () => controller.abort();
   }, []);
 
   const handleDeposit = async () => {

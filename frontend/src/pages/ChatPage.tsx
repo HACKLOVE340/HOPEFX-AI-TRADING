@@ -53,20 +53,29 @@ const ChatPage: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef  = useRef<HTMLInputElement | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Load rooms
   useEffect(() => {
+    let mounted = true;
     (async () => {
       setLoadingRooms(true);
       try {
         const res = await chatApi.rooms();
+        if (!mounted) return;
         const d = res.data as ChatRoom[] | { rooms?: ChatRoom[] };
         const r = Array.isArray(d) ? d : (d.rooms ?? []);
         setRooms(r);
         if (r.length > 0) setActiveRoom(r[0]);
-      } catch { setRooms([]); }
-      finally { setLoadingRooms(false); }
+      } catch { if (mounted) setRooms([]); }
+      finally { if (mounted) setLoadingRooms(false); }
     })();
+    return () => { mounted = false; };
   }, []);
 
   // Load messages when room changes
@@ -74,10 +83,11 @@ const ChatPage: React.FC = () => {
     setLoadingMsgs(true);
     try {
       const res = await chatApi.messages(roomId, { limit: 50 });
+      if (!mountedRef.current) return;
       const d = res.data as ChatMessage[] | { messages?: ChatMessage[] };
       setMessages(Array.isArray(d) ? d : (d.messages ?? []));
-    } catch { setMessages([]); }
-    finally { setLoadingMsgs(false); }
+    } catch { if (mountedRef.current) setMessages([]); }
+    finally { if (mountedRef.current) setLoadingMsgs(false); }
   }, []);
 
   useEffect(() => {
