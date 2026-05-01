@@ -617,8 +617,63 @@ def _save_engine_config(cfg: dict) -> None:
 
 @router.get("/engine/status")
 async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Rich engine status: config + live app_state engine attributes.
+
+    Returns all fields expected by the frontend TradingEngineSection:
+      running, uptime_seconds, last_signal_at, positions_open,
+      heartbeat_ok, mode, status, kill_switch_active.
+    """
     cfg = _load_engine_config()
-    return {"status": cfg.get("engine_status", "unknown"), "kill_switch_active": cfg.get("kill_switch_active", False)}
+
+    result: dict = {
+        "status": cfg.get("engine_status", "running"),
+        "kill_switch_active": cfg.get("kill_switch_active", False),
+        # Frontend EngineStatus interface fields
+        "running": cfg.get("engine_status", "running") not in ("stopped", "paused"),
+        "uptime_seconds": 0,
+        "last_signal_at": None,
+        "positions_open": 0,
+        "heartbeat_ok": True,
+        "mode": "paper" if cfg.get("paper_trading_mode", True) else "live",
+    }
+
+    # Override with live data from app_state engine if available
+    try:
+        from api.admin import app_state, _start_time  # type: ignore[attr-defined]
+
+        result["uptime_seconds"] = max(0, int(time.time() - _start_time))
+
+        if app_state and hasattr(app_state, "engine"):
+            eng = app_state.engine
+            result["running"] = bool(getattr(eng, "_running", result["running"]))
+            result["status"] = getattr(eng, "status", result["status"])
+            result["positions_open"] = len(getattr(eng, "positions", {})) or result["positions_open"]
+            result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
+
+            # last_signal_at: try Redis first, then engine attr
+            last_sig = getattr(eng, "_last_signal_at", None)
+            if last_sig is not None:
+                result["last_signal_at"] = (
+                    last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
+                )
+    except Exception:
+        logger.debug("engine/status: app_state unavailable", exc_info=False)
+
+    # Fallback: last_signal_at from Redis
+    if result["last_signal_at"] is None:
+        try:
+            from cache.redis_client import get_sync_redis_client
+            import json as _json
+
+            rc = get_sync_redis_client()
+            if rc:
+                raw = rc.get("engine:last_signal_at")
+                if raw:
+                    result["last_signal_at"] = raw.decode() if isinstance(raw, bytes) else raw
+        except Exception:
+            logger.debug("engine/status: Redis last_signal_at unavailable", exc_info=False)
+
+    return result
 
 
 @router.get("/engine/config")
