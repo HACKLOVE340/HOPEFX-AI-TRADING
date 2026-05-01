@@ -290,13 +290,13 @@ const TradeJournal: React.FC = () => {
           </div>
 
           <h3 style={s.sectionTitle}>Win Rate by Tag</h3>
-          {stats.by_tag.map((t) => <TagRow key={t.tag} stat={t} />)}
+          {(stats.by_tag ?? []).map((t) => <TagRow key={t.tag} stat={t} />)}
 
           <h3 style={s.sectionTitle}>Win Rate by Emotion</h3>
-          {stats.by_emotion.length > 0 && (
+          {(stats.by_emotion ?? []).length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={stats.by_emotion.map(e => ({
+                <BarChart data={(stats.by_emotion ?? []).map(e => ({
                   name: `${EMOTION_EMOJI[e.tag] ?? ''} ${e.tag}`,
                   win_rate: e.win_rate,
                   avg_pnl: e.avg_pnl,
@@ -309,7 +309,7 @@ const TradeJournal: React.FC = () => {
                     formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, 'Win Rate']}
                   />
                   <Bar dataKey="win_rate" radius={[4, 4, 0, 0]}>
-                    {stats.by_emotion.map((e, i) => (
+                    {(stats.by_emotion ?? []).map((e, i) => (
                       <Cell key={i} fill={e.win_rate >= 50 ? '#4ade80' : '#f87171'} />
                     ))}
                   </Bar>
@@ -317,7 +317,7 @@ const TradeJournal: React.FC = () => {
               </ResponsiveContainer>
             </div>
           )}
-          {stats.by_emotion.map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
+          {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
         </div>
       )}
 
