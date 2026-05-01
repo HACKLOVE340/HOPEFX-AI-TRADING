@@ -1764,19 +1764,46 @@ def _trade_to_dict(t) -> dict:
         or getattr(t, "quantity", None)
         or 0
     )
+    trade_id_val = getattr(t, "trade_id", None) or str(getattr(t, "id", ""))
+    entry_time_str = entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or "")
+    exit_time_str  = exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or "")
+    qty_float = float(qty or 0)
+
+    # Duration in minutes between entry and exit
+    duration_minutes: int | None = None
+    try:
+        import datetime as _dt
+        _e = entry_time if hasattr(entry_time, "timestamp") else _dt.datetime.fromisoformat(entry_time_str) if entry_time_str else None
+        _x = exit_time  if hasattr(exit_time,  "timestamp") else _dt.datetime.fromisoformat(exit_time_str)  if exit_time_str  else None
+        if _e and _x:
+            duration_minutes = max(0, int((_x - _e).total_seconds() / 60))
+    except Exception:
+        pass
+
     return {
-        "trade_id":    getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
+        # Canonical keys (backend / CSV)
+        "trade_id":    trade_id_val,
         "symbol":      getattr(t, "symbol", "") or "",
         "side":        getattr(t, "side", "") or "",
-        "quantity":    float(qty or 0),
+        "quantity":    qty_float,
         "entry_price": float(getattr(t, "entry_price", 0) or 0),
         "exit_price":  float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None,
         "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0),
         "commission":  float(getattr(t, "commission", 0) or 0),
         "status":      status_str,
         "strategy":    getattr(t, "strategy", "") or "",
-        "entry_time":  entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or ""),
-        "exit_time":   exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or ""),
+        "entry_time":  entry_time_str,
+        "exit_time":   exit_time_str,
+        # Frontend-expected aliases — kept alongside the canonical keys for
+        # backward compatibility.  Trade.tsx uses `id`, `size`, `opened_at`,
+        # `closed_at`; Trading.tsx uses `size`; Portfolio.tsx uses `id`,
+        # `opened_at`, `closed_at`.  Removing either set would break one of
+        # those pages, so both are emitted here.
+        "id":          trade_id_val,
+        "size":        qty_float,
+        "opened_at":   entry_time_str,
+        "closed_at":   exit_time_str,
+        "duration_minutes": duration_minutes,
     }
 
 

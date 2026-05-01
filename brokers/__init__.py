@@ -194,6 +194,9 @@ class BaseBroker(abc.ABC):
         symbol: str,
         side: str,
         quantity: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        **kwargs,
     ) -> Order:
         """Submit a market order and return the filled Order object."""
 
@@ -430,6 +433,9 @@ class PaperTradingBroker(BaseBroker):
         symbol: str,
         side: str,
         quantity: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        **kwargs,
     ) -> Order:
         """
         Place a market order with realistic paper-trading simulation.

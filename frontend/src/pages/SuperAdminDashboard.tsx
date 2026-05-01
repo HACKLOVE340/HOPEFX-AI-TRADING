@@ -159,7 +159,7 @@ function useEngineHealth(): EngineHealth | null {
     return () => { mountedRef.current = false; };
   }, []);
 
-  const fetch = useCallback(async () => {
+  const fetchHealth = useCallback(async () => {
     try {
       const res = await superadminApi.engineStatus();
       if (mountedRef.current) setHealth(res.data as EngineHealth);
@@ -168,16 +168,16 @@ function useEngineHealth(): EngineHealth | null {
     }
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => { fetchHealth(); }, [fetchHealth]);
 
   // Poll every 20 s while tab is visible
   useEffect(() => {
     if (document.hidden) return;
-    const id = setInterval(() => { if (!document.hidden) fetch(); }, 20_000);
-    const onVis = () => { if (!document.hidden) fetch(); };
+    const id = setInterval(() => { if (!document.hidden) fetchHealth(); }, 20_000);
+    const onVis = () => { if (!document.hidden) fetchHealth(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
-  }, [fetch]);
+  }, [fetchHealth]);
 
   return health;
 }
