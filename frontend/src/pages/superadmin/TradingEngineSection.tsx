@@ -43,6 +43,9 @@ interface EngineStatus {
   positions_open: number;
   heartbeat_ok: boolean;
   mode: string;
+  // Optional live fields from HopeFXEngine._get_status()
+  last_signal_direction?: string;
+  last_signal_confidence?: number;
 }
 
 const TradingEngineSection: React.FC = () => {
@@ -142,16 +145,46 @@ const TradingEngineSection: React.FC = () => {
             <span style={{ fontSize: 12, color: '#475569', marginLeft: 4 }}>{status.mode}</span>
           </div>
           {[
-            { label: 'Uptime',        value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
+            { label: 'Uptime',         value: `${Math.floor(status.uptime_seconds / 3600)}h ${Math.floor((status.uptime_seconds % 3600) / 60)}m` },
             { label: 'Open Positions', value: status.positions_open },
-            { label: 'Last Signal',   value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
-            { label: 'Heartbeat',     value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
+            { label: 'Last Signal',    value: status.last_signal_at ? new Date(status.last_signal_at).toLocaleTimeString() : 'N/A' },
+            { label: 'Heartbeat',      value: status.heartbeat_ok ? '✅ OK' : '❌ Miss' },
           ].map(s => (
             <div key={s.label} style={{ fontSize: 12, color: '#94a3b8' }}>
               <span style={{ color: '#475569' }}>{s.label}: </span>
               <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{s.value}</span>
             </div>
           ))}
+
+          {/* Last-signal direction chip + confidence bar (shown when live engine data available) */}
+          {status.last_signal_direction && status.last_signal_direction !== 'hold' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4 }}>
+              <span style={{
+                fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 4,
+                background: status.last_signal_direction === 'buy' ? '#052e1688' : '#450a0a88',
+                color: status.last_signal_direction === 'buy' ? '#4ade80' : '#f87171',
+                border: `1px solid ${status.last_signal_direction === 'buy' ? '#16a34a' : '#dc2626'}`,
+                textTransform: 'uppercase' as const,
+              }}>
+                {status.last_signal_direction === 'buy' ? '▲' : '▼'} {status.last_signal_direction}
+              </span>
+              {typeof status.last_signal_confidence === 'number' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <div style={{ width: 60, height: 5, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${Math.round(status.last_signal_confidence * 100)}%`,
+                      height: '100%',
+                      background: status.last_signal_confidence >= 0.7 ? '#4ade80' : status.last_signal_confidence >= 0.55 ? '#fbbf24' : '#f87171',
+                      borderRadius: 3,
+                    }} />
+                  </div>
+                  <span style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                    {Math.round(status.last_signal_confidence * 100)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -622,6 +622,11 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
     Returns all fields expected by the frontend TradingEngineSection:
       running, uptime_seconds, last_signal_at, positions_open,
       heartbeat_ok, mode, status, kill_switch_active.
+
+    Optional fields (present when live data is available):
+      last_signal_direction, last_signal_confidence  — from HopeFXEngine._get_status()
+      decision_engine_cycles, decision_engine_executed, decision_engine_blocked,
+      decision_engine_errors, decision_engine_execution_rate  — from HOPEFXDecisionEngine.status()
     """
     cfg = _load_engine_config()
 
@@ -639,9 +644,14 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
 
     # Override with live data from app_state engine if available
     try:
-        from api.admin import app_state, _start_time  # type: ignore[attr-defined]
+        import api.admin as _admin_mod
 
-        result["uptime_seconds"] = max(0, int(time.time() - _start_time))
+        # _start_time is a module-level float set at process start; fall back to 0
+        _start_time = getattr(_admin_mod, "_start_time", None)
+        if _start_time is not None:
+            result["uptime_seconds"] = max(0, int(time.time() - _start_time))
+
+        app_state = getattr(_admin_mod, "app_state", None)
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
