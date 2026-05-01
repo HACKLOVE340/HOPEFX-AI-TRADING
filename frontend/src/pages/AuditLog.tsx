@@ -16,7 +16,6 @@ import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
-import { EmptyState } from '../components/EmptyState';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -274,14 +273,7 @@ const AuditLog: React.FC = () => {
         />
       )}
 
-      {!loading && events.length === 0 && !error ? (
-        <EmptyState
-          icon="🔍"
-          title="No audit events found"
-          description="Try adjusting your filters or check back after some activity."
-        />
-      ) : (
-        <DataTable<AuditEvent>
+      <DataTable<AuditEvent>
           columns={COLUMNS}
           data={events}
           rowKey={(r) => r.event_id}
@@ -289,7 +281,6 @@ const AuditLog: React.FC = () => {
           pageSize={PAGE_SIZE}
           emptyMessage="No events match your filters"
         />
-      )}
 
       {/* Manual pagination (server-side) */}
       {pages > 1 && !loading && (
