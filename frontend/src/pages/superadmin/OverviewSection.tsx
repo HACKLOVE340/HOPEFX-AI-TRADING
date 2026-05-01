@@ -1,5 +1,5 @@
 // superadmin/OverviewSection.tsx — platform-wide KPI overview
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -111,20 +111,25 @@ const OverviewSection: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [infraMsg, setInfraMsg] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     setError('');
     try {
       const res = await superadminApi.overview();
+      if (!mountedRef.current) return;
       setData(res.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       const msg = (e as { response?: { data?: { detail?: string } }; message?: string })
         ?.response?.data?.detail ?? (e as { message?: string })?.message ?? 'Failed to load overview';
       setError(msg);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mountedRef.current) setLoading(false);
+      if (mountedRef.current) setRefreshing(false);
     }
   }, []);
 
@@ -137,6 +142,7 @@ const OverviewSection: React.FC = () => {
         superadminApi.dbStats(),
         superadminApi.queueStats(),
       ]);
+      if (!mountedRef.current) return;
       setInfra({
         health: hRes.status === 'fulfilled' ? hRes.value.data : null,
         cache:  cRes.status === 'fulfilled' ? cRes.value.data : null,
@@ -144,7 +150,7 @@ const OverviewSection: React.FC = () => {
         queues: qRes.status === 'fulfilled' ? (qRes.value.data.queues ?? qRes.value.data ?? []) : [],
       });
     } finally {
-      setInfraLoading(false);
+      if (mountedRef.current) setInfraLoading(false);
     }
   }, []);
 

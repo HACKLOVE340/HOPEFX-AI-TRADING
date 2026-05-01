@@ -1,6 +1,6 @@
 // superadmin/SystemHealthSection.tsx
 // Service health, backups, scheduled jobs, API key audit
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -48,6 +48,9 @@ const SystemHealthSection: React.FC = () => {
   const [backupType, setBackupType] = useState<'full' | 'incremental' | 'snapshot'>('incremental');
   const [revokeConfirm, setRevokeConfirm] = useState<string | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -57,13 +60,15 @@ const SystemHealthSection: React.FC = () => {
         superadminApi.scheduledJobs(),
         superadminApi.apiKeyAudit(),
       ]);
+      if (!mountedRef.current) return;
       setServices(sRes.data.services ?? sRes.data);
       setBackups(bRes.data.backups ?? bRes.data);
       setJobs(jRes.data.jobs ?? jRes.data);
       setApiKeys(kRes.data.api_keys ?? kRes.data.keys ?? kRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load system health data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

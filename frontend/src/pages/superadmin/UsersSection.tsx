@@ -1,5 +1,5 @@
 // superadmin/UsersSection.tsx — full user management with bulk operations
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -319,6 +319,9 @@ const UsersSection: React.FC = () => {
   const [bulkResult, setBulkResult]   = useState<BulkUserResult | null>(null);
   const [bulkConfirm, setBulkConfirm] = useState<{ action: string; label: string } | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -330,12 +333,14 @@ const UsersSection: React.FC = () => {
       params.page      = String(page);
       params.page_size = String(PAGE_SIZE);
       const res = await superadminApi.users(params);
+      if (!mountedRef.current) return;
       setUsers(res.data.users ?? res.data);
       setCheckedIds(new Set());
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load users');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [search, roleFilter, planFilter, statusFilter, page]);
 

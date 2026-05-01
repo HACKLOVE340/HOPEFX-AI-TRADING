@@ -1,5 +1,5 @@
 // superadmin/PlatformSection.tsx — platform config, maintenance, broadcast
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -37,14 +37,19 @@ const PlatformSection: React.FC = () => {
   const [confirm, setConfirm] = useState<string | null>(null);
   const [broadcast, setBroadcast] = useState({ title: '', body: '', type: 'info' });
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const res = await superadminApi.platformConfig();
+      if (!mountedRef.current) return;
       setCfg(res.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load config');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
