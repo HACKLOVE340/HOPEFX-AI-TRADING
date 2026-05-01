@@ -235,15 +235,6 @@ vi.mock('../hooks/useApi', () => ({
     patch:  vi.fn().mockResolvedValue({ data: {} }),
     delete: vi.fn().mockResolvedValue({ data: {} }),
   },
-  affiliateApi: {
-    account:        vi.fn().mockResolvedValue({ data: { has_affiliate_account: false } }),
-    signup:         vi.fn().mockResolvedValue({ data: {} }),
-    referrals:      vi.fn().mockResolvedValue({ data: { referrals: [] } }),
-    leaderboard:    vi.fn().mockResolvedValue({ data: { leaderboard: [] } }),
-    withdraw:       vi.fn().mockResolvedValue({ data: {} }),
-    commissions:    vi.fn().mockResolvedValue({ data: { commissions: [] } }),
-    updatePayment:  vi.fn().mockResolvedValue({ data: {} }),
-  },
   socialApi: {
     feed:             vi.fn().mockResolvedValue({ data: { items: [], total: 0, page: 1 } }),
     react:            vi.fn().mockResolvedValue({ data: {} }),
@@ -315,16 +306,13 @@ vi.mock('../hooks/useApi', () => ({
     trades:       vi.fn().mockResolvedValue({ data: { trades: [], total: 0 } }),
     trade:        vi.fn().mockResolvedValue({ data: {} }),
     updateTrade:  vi.fn().mockResolvedValue({ data: {} }),
-    stats:        vi.fn().mockResolvedValue({ data: {} }),
+    stats:        vi.fn().mockResolvedValue({ data: { total_trades: 0, win_rate: 0, avg_pnl: 0, best_trade_pnl: 0, worst_trade_pnl: 0, rule_deviation_count: 0, by_tag: [], by_emotion: [] } }),
     mistakes:     vi.fn().mockResolvedValue({ data: { mistakes: [] } }),
     emotionStats: vi.fn().mockResolvedValue({ data: {} }),
     weeklyReport: vi.fn().mockResolvedValue({ data: {} }),
     export:       vi.fn().mockResolvedValue({ data: {} }),
     tags:         vi.fn().mockResolvedValue({ data: [] }),
   },
-  resetCsrfCache:    vi.fn(),
-  getCsrfToken:      vi.fn().mockResolvedValue(null),
-  prefetchCsrfToken: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

@@ -185,6 +185,20 @@ vi.mock('../hooks/useApi', () => ({
     patch:  vi.fn().mockResolvedValue({ data: {} }),
     delete: vi.fn().mockResolvedValue({ data: {} }),
   },
+  journalApi: {
+    trades:       vi.fn().mockResolvedValue({ data: { trades: [], total: 0 } }),
+    trade:        vi.fn().mockResolvedValue({ data: {} }),
+    updateTrade:  vi.fn().mockResolvedValue({ data: {} }),
+    stats:        vi.fn().mockResolvedValue({ data: { total_trades: 0, win_rate: 0, avg_pnl: 0, best_trade_pnl: 0, worst_trade_pnl: 0, rule_deviation_count: 0, by_tag: [], by_emotion: [] } }),
+    mistakes:     vi.fn().mockResolvedValue({ data: { mistakes: [] } }),
+    emotionStats: vi.fn().mockResolvedValue({ data: {} }),
+    weeklyReport: vi.fn().mockResolvedValue({ data: {} }),
+    export:       vi.fn().mockResolvedValue({ data: {} }),
+    tags:         vi.fn().mockResolvedValue({ data: [] }),
+  },
+  getCsrfToken:      vi.fn().mockResolvedValue('test-csrf-token'),
+  prefetchCsrfToken: vi.fn().mockResolvedValue(undefined),
+  resetCsrfCache:    vi.fn(),
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
