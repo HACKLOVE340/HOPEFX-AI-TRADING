@@ -130,6 +130,28 @@ async def _probe_broker() -> dict[str, Any]:
 
 async def _probe_ml_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
+    # Prefer app_state.inference_engine (full MTF pipeline)
+    try:
+        from api.admin import app_state
+
+        if app_state:
+            for attr in ("inference_engine", "brain", "strategy_brain"):
+                engine = getattr(app_state, attr, None)
+                if engine is not None:
+                    ready = getattr(engine, "is_ready", None)
+                    if callable(ready):
+                        ready = ready()
+                    else:
+                        ready = getattr(engine, "_ready", True)
+                    return {
+                        "status": "ok" if ready else "warning",
+                        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                        "detail": f"{attr} ready={ready}",
+                        "component": attr,
+                    }
+    except Exception:
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+    # Redis fallback
     try:
         from cache.redis_client import get_sync_redis_client
 
@@ -148,6 +170,7 @@ async def _probe_ml_engine() -> dict[str, Any]:
                 }
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+    # Module-level fallback
     try:
         from ml.predictor import get_predictor
 
@@ -290,6 +313,25 @@ async def _probe_data_feed() -> dict[str, Any]:
 
 async def _probe_risk_manager() -> dict[str, Any]:
     t0 = time.perf_counter()
+    # Prefer app_state.risk_manager
+    try:
+        from api.admin import app_state
+
+        if app_state and hasattr(app_state, "risk_manager") and app_state.risk_manager is not None:
+            rm = app_state.risk_manager
+            active = getattr(rm, "_active", True)
+            breached = getattr(rm, "_daily_loss_breached", False)
+            detail = f"risk_manager active={active} daily_loss_breached={breached}"
+            return {
+                "status": "warning" if breached else ("ok" if active else "warning"),
+                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "detail": detail,
+                "active": active,
+                "daily_loss_breached": breached,
+            }
+    except Exception:
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+    # Module-level fallback
     try:
         from risk.manager import get_risk_manager
 

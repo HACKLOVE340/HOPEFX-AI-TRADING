@@ -957,8 +957,14 @@ const SystemReliabilitySection: React.FC = () => {
       </Card>
 
       {error && (
-        <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 13, color: '#fca5a5' }}>
-          ❌ {error}
+        <div style={{ background: '#450a0a', border: '1px solid #dc2626', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 13, color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span>❌ {error}</span>
+          <button
+            onClick={fetchStatus}
+            style={{ padding: '4px 12px', borderRadius: 6, border: '1px solid #dc2626', background: 'transparent', color: '#fca5a5', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}
+          >
+            Retry
+          </button>
         </div>
       )}
 
