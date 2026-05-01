@@ -8,7 +8,7 @@
  *           GET    /api/watchlist/prices
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -94,16 +94,20 @@ const WatchlistPage: React.FC = () => {
     history: item.history ?? [],
   });
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const fetchWatchlist = useCallback(async () => {
     try {
       const res = await watchlistApi.list() as { data: { items: Array<Omit<WatchlistItem, 'history'> & { history?: number[] }> } };
+      if (!mountedRef.current) return;
       if (res.data.items?.length) {
         setItems(res.data.items.map(normalise));
       }
     } catch {
       // API unavailable — show empty list; no fake data
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

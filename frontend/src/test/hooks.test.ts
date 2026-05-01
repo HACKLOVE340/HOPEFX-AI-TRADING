@@ -37,7 +37,7 @@ describe('useApi', () => {
 
   it('api has correct timeout', async () => {
     const { api } = await import('../hooks/useApi');
-    expect(api.defaults.timeout).toBe(15_000);
+    expect(api.defaults.timeout).toBe(8_000);
   });
 
   it('api has JSON content-type header', async () => {

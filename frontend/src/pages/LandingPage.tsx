@@ -275,23 +275,29 @@ function usePricingPlans(annual: boolean) {
     setLoading(true);
     setError(false);
 
+    const deadlineId = setTimeout(() => {
+      if (!cancelled) { cancelled = true; setError(true); setLoading(false); }
+    }, 8_000);
+
     const load = async () => {
       try {
         const cycle = annual ? 'annual' : 'monthly';
         const res = await fetch(`/api/pricing/plans?billing_cycle=${cycle}`);
-        if (!res.ok || cancelled) { setError(true); setLoading(false); return; }
+        if (!res.ok || cancelled) { clearTimeout(deadlineId); setError(true); setLoading(false); return; }
         const data = await res.json() as { plans: ApiPlan[] };
         if (!cancelled) {
+          clearTimeout(deadlineId);
           setPlans(data.plans ?? []);
           setLoading(false);
         }
       } catch {
+        clearTimeout(deadlineId);
         if (!cancelled) { setError(true); setLoading(false); }
       }
     };
 
     load();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(deadlineId); };
   }, [annual]);
 
   return { plans, loading, error };
