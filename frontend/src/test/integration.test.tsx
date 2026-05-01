@@ -250,16 +250,13 @@ vi.mock('../hooks/useApi', () => ({
     trades:       vi.fn().mockResolvedValue({ data: { trades: [], total: 0 } }),
     trade:        vi.fn().mockResolvedValue({ data: {} }),
     updateTrade:  vi.fn().mockResolvedValue({ data: {} }),
-    stats:        vi.fn().mockResolvedValue({ data: {} }),
+    stats:        vi.fn().mockResolvedValue({ data: { total_trades: 0, win_rate: 0, avg_pnl: 0, best_trade_pnl: 0, worst_trade_pnl: 0, rule_deviation_count: 0, by_tag: [], by_emotion: [] } }),
     mistakes:     vi.fn().mockResolvedValue({ data: { mistakes: [] } }),
     emotionStats: vi.fn().mockResolvedValue({ data: {} }),
     weeklyReport: vi.fn().mockResolvedValue({ data: {} }),
     export:       vi.fn().mockResolvedValue({ data: {} }),
     tags:         vi.fn().mockResolvedValue({ data: [] }),
   },
-  resetCsrfCache:    vi.fn(),
-  getCsrfToken:      vi.fn().mockResolvedValue(null),
-  prefetchCsrfToken: vi.fn().mockResolvedValue(undefined),
 }));
 
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
