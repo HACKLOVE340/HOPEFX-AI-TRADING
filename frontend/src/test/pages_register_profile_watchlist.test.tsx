@@ -251,25 +251,6 @@ vi.mock('../hooks/useApi', () => ({
     follow:           vi.fn().mockResolvedValue({ data: {} }),
     unfollow:         vi.fn().mockResolvedValue({ data: {} }),
   },
-  profileApi: {
-    get: vi.fn().mockResolvedValue({ data: {
-      user_id: '1', username: 'trader1', display_name: 'Trader One', bio: 'Test bio',
-      avatar_url: null, country: null, joined_at: '2024-01-01T00:00:00Z',
-      followers_count: 5, following_count: 3, is_following: false,
-      stats: { total_trades: 40, win_rate: 62.5, avg_pnl: 37.5, sharpe_ratio: 1.4, total_return_pct: 12.0 },
-      strategies: [],
-      recent_signals: [],
-    }}),
-    update:       vi.fn().mockResolvedValue({ data: {} }),
-    uploadAvatar: vi.fn().mockResolvedValue({ data: {} }),
-    follow:       vi.fn().mockResolvedValue({ data: {} }),
-    unfollow:     vi.fn().mockResolvedValue({ data: {} }),
-    followers:    vi.fn().mockResolvedValue({ data: [] }),
-    following:    vi.fn().mockResolvedValue({ data: [] }),
-    signals:      vi.fn().mockResolvedValue({ data: [] }),
-    strategies:   vi.fn().mockResolvedValue({ data: [] }),
-    stats:        vi.fn().mockResolvedValue({ data: {} }),
-  },
   adminApi: {
     users:           vi.fn().mockResolvedValue({ data: { users: [], total: 0 } }),
     user:            vi.fn().mockResolvedValue({ data: {} }),
@@ -301,17 +282,6 @@ vi.mock('../hooks/useApi', () => ({
     reviews:         vi.fn().mockResolvedValue({ data: { reviews: [] } }),
     unsubscribe:     vi.fn().mockResolvedValue({ data: {} }),
     mySubscriptions: vi.fn().mockResolvedValue({ data: [] }),
-  },
-  journalApi: {
-    trades:       vi.fn().mockResolvedValue({ data: { trades: [], total: 0 } }),
-    trade:        vi.fn().mockResolvedValue({ data: {} }),
-    updateTrade:  vi.fn().mockResolvedValue({ data: {} }),
-    stats:        vi.fn().mockResolvedValue({ data: { total_trades: 0, win_rate: 0, avg_pnl: 0, best_trade_pnl: 0, worst_trade_pnl: 0, rule_deviation_count: 0, by_tag: [], by_emotion: [] } }),
-    mistakes:     vi.fn().mockResolvedValue({ data: { mistakes: [] } }),
-    emotionStats: vi.fn().mockResolvedValue({ data: {} }),
-    weeklyReport: vi.fn().mockResolvedValue({ data: {} }),
-    export:       vi.fn().mockResolvedValue({ data: {} }),
-    tags:         vi.fn().mockResolvedValue({ data: [] }),
   },
 }));
 
