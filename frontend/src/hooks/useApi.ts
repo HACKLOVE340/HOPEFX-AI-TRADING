@@ -290,6 +290,8 @@ export const tradingApi = {
   placeOrder:     (order: object) => api.post('/trading/orders', order),
   closePosition:  (id: string)    => api.delete(`/trading/positions/${id}`),
   closeAllPositions: ()           => api.delete('/trading/positions'),
+  orders:         (params?: { status?: string; limit?: number; offset?: number }) =>
+    api.get('/trading/orders', { params }),
   trades:         (params?: { symbol?: string; limit?: number } | number) => {
     const limit  = typeof params === 'number' ? params : (params?.limit ?? 100);
     const symbol = typeof params === 'object' ? params?.symbol : undefined;

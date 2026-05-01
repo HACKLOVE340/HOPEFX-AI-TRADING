@@ -281,6 +281,16 @@ export function useAccount() {
 // not on initial subscription — without this, positions shows empty until
 // the first trade event.
 
+/** Normalize a raw backend position to match the frontend Position type.
+ *  Backend sends `quantity`; the Position type expects `size`. */
+function normalizePosition(raw: Record<string, unknown>): Position {
+  return {
+    ...raw,
+    size: (raw.size as number) ?? (raw.quantity as number) ?? 0,
+    realized_pnl: (raw.realized_pnl as number) ?? 0,
+  } as Position;
+}
+
 export function usePositions() {
   const setPositions = useStore((s) => s.setPositions);
   const wsStatus     = useStore((s) => s.wsStatus);
@@ -292,8 +302,9 @@ export function usePositions() {
     queryFn:  async () => {
       const res = await tradingApi.positions();
       // Backend may return { positions: [...] } or a bare array
-      const raw = res.data as Position[] | { positions: Position[] };
-      return Array.isArray(raw) ? raw : (raw?.positions ?? []);
+      const raw = res.data as Record<string, unknown>[] | { positions: Record<string, unknown>[] };
+      const arr = Array.isArray(raw) ? raw : (raw?.positions ?? []);
+      return arr.map(normalizePosition);
     },
     enabled:         hydrated && isAuth,
     refetchInterval: wsStatus === 'connected' ? false : 10_000,
