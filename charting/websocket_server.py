@@ -393,12 +393,15 @@ def create_standalone_app() -> Any:
         raise RuntimeError("FastAPI is required for standalone mode")
 
     app = FastAPI(title="HOPEFX Nuclear Dashboard WS", version="1.0.0")
+    _ws_origins = [o.strip() for o in os.getenv(
+        "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    ).split(",") if o.strip()]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_ws_origins,
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
 
     engine = get_chart_engine()

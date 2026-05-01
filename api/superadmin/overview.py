@@ -147,9 +147,9 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
     # 1. Redis key written by the inference engine on each evaluation cycle.
     # 2. Evaluation JSON files written by the training pipeline.
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("ml:model:accuracy")
             if raw:
@@ -182,9 +182,9 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
     # ── Error rate + avg response time ────────────────────────────────────────
     # Written by the request-timing middleware into Redis key "metrics:request_stats".
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("metrics:request_stats")
             if raw:
@@ -223,9 +223,9 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
 
     # ── Redis memory ──────────────────────────────────────────────────────────
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             info = rc.info("memory")
             overview["redis_memory_mb"] = round(info.get("used_memory", 0) / 1_048_576, 1)
@@ -234,10 +234,16 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
 
     # ── System resources ──────────────────────────────────────────────────────
     try:
+        import asyncio as _asyncio
         import psutil
 
-        overview["cpu_pct"] = psutil.cpu_percent(interval=0.1)
-        overview["memory_pct"] = psutil.virtual_memory().percent
+        def _read_sys():
+            return psutil.cpu_percent(interval=0.1), psutil.virtual_memory().percent
+
+        _loop = _asyncio.get_running_loop()
+        _cpu, _mem = await _loop.run_in_executor(None, _read_sys)
+        overview["cpu_pct"] = round(_cpu, 1)
+        overview["memory_pct"] = round(_mem, 1)
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 

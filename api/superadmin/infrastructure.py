@@ -54,51 +54,120 @@ router = APIRouter()
 
 @router.get("/infra/health")
 async def get_infra_health(user: TokenPayload = Depends(_require_superadmin)) -> dict:
-    health: dict = {"db": "unknown", "redis": "unknown", "api": "healthy"}
+    import asyncio as _asyncio
+    import os as _os
+
+    # ── Service connectivity ──────────────────────────────────────────────────
+    svc: dict = {"db": "unknown", "redis": "unknown", "api": "healthy"}
     try:
         from database.connection import SessionLocal
-
         from sqlalchemy import text as _text
-
-        db = SessionLocal()
-        db.execute(_text("SELECT 1"))
-        db.close()
-        health["db"] = "healthy"
+        _db = SessionLocal()
+        _db.execute(_text("SELECT 1"))
+        _db.close()
+        svc["db"] = "healthy"
     except Exception:
-        health["db"] = "error"
+        svc["db"] = "error"
     try:
-        from cache.redis_client import get_redis_client
-
-        rc = get_redis_client()
-        if rc and rc.ping():
-            health["redis"] = "healthy"
-        else:
-            health["redis"] = "error"
+        from cache.redis_client import get_sync_redis_client
+        _rc = get_sync_redis_client()
+        svc["redis"] = "healthy" if (_rc and _rc.ping()) else "error"
     except Exception:
-        health["redis"] = "error"
-    return health
+        svc["redis"] = "error"
+
+    # ── System resources (run in thread to avoid blocking event loop) ─────────
+    def _read_sys() -> dict:
+        try:
+            import psutil
+            cpu   = psutil.cpu_percent(interval=0.1)
+            mem   = psutil.virtual_memory()
+            disk  = psutil.disk_usage("/")
+            net   = psutil.net_io_counters()
+            load  = psutil.getloadavg() if hasattr(psutil, "getloadavg") else (0.0, 0.0, 0.0)
+            return {
+                "cpu_pct":           round(cpu, 1),
+                "mem_pct":           round(mem.percent, 1),
+                "disk_pct":          round(disk.percent, 1),
+                "network_in_mbps":   round(net.bytes_recv / 1_048_576, 2),
+                "network_out_mbps":  round(net.bytes_sent / 1_048_576, 2),
+                "load_avg_1m":       round(load[0], 2),
+                "load_avg_5m":       round(load[1], 2),
+                "load_avg_15m":      round(load[2], 2),
+            }
+        except Exception:
+            return {
+                "cpu_pct": 0.0, "mem_pct": 0.0, "disk_pct": 0.0,
+                "network_in_mbps": 0.0, "network_out_mbps": 0.0,
+                "load_avg_1m": 0.0, "load_avg_5m": 0.0, "load_avg_15m": 0.0,
+            }
+
+    _loop = _asyncio.get_running_loop()
+    sys_metrics = await _loop.run_in_executor(None, _read_sys)
+    return {**svc, **sys_metrics}
 
 
 @router.get("/infra/cache")
 async def get_cache_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    # Try Redis first
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            info = rc.info()
+            hits = info.get("keyspace_hits", 0)
+            misses = info.get("keyspace_misses", 0)
+            total = hits + misses
+            hit_rate = round(hits / total * 100, 1) if total > 0 else 0.0
+            # Count total keys across all DBs
+            total_keys = sum(
+                int(v.get("keys", 0))
+                for v in (info.get(k, {}) for k in info if k.startswith("db"))
+                if isinstance(v, dict)
+            )
+            return {
+                "available": True,
+                "backend": "redis",
+                "hit_rate_pct": hit_rate,
+                "total_keys": total_keys,
+                "memory_used_mb": round(info.get("used_memory", 0) / 1_048_576, 2),
+                "evictions": info.get("evicted_keys", 0),
+                "connected_clients": info.get("connected_clients", 0),
+                "ops_per_sec": info.get("instantaneous_ops_per_sec", 0),
+                "uptime_seconds": info.get("uptime_in_seconds", 0),
+                "redis_version": info.get("redis_version", "?"),
+            }
+    except Exception:
+        pass
 
-        rc = get_redis_client()
-        if not rc:
-            return {"available": False}
-        info = rc.info()
+    # Fallback: in-process db_store stats
+    try:
+        from api.db_store import _store  # type: ignore[attr-defined]
+        key_count = len(_store) if hasattr(_store, "__len__") else 0
         return {
             "available": True,
-            "used_memory_mb": round(info.get("used_memory", 0) / 1_048_576, 2),
-            "connected_clients": info.get("connected_clients", 0),
-            "total_commands": info.get("total_commands_processed", 0),
-            "keyspace_hits": info.get("keyspace_hits", 0),
-            "keyspace_misses": info.get("keyspace_misses", 0),
-            "uptime_seconds": info.get("uptime_in_seconds", 0),
+            "backend": "in-process",
+            "hit_rate_pct": 0.0,
+            "total_keys": key_count,
+            "memory_used_mb": 0.0,
+            "evictions": 0,
+            "connected_clients": 0,
+            "ops_per_sec": 0,
+            "note": "Redis unavailable — using in-process fallback",
         }
-    except Exception as exc:
-        return {"available": False, "error": type(exc).__name__}
+    except Exception:
+        pass
+
+    return {
+        "available": False,
+        "backend": "none",
+        "hit_rate_pct": 0.0,
+        "total_keys": 0,
+        "memory_used_mb": 0.0,
+        "evictions": 0,
+        "connected_clients": 0,
+        "ops_per_sec": 0,
+        "note": "No cache backend available",
+    }
 
 
 @router.post("/infra/cache/flush")
@@ -108,9 +177,9 @@ async def flush_cache(
 ) -> dict:
     _log_superadmin_action(user, "flush_cache", pattern or "ALL")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if not rc:
             raise HTTPException(status_code=503, detail="Redis unavailable")
         if pattern:
@@ -129,34 +198,131 @@ async def flush_cache(
 
 @router.get("/infra/db")
 async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    import os as _os
     try:
-        from database.connection import SessionLocal
-        from sqlalchemy import text
+        from database.connection import SessionLocal, _get_or_init_manager
+        from sqlalchemy import inspect as _inspect, text
 
         db = SessionLocal()
         try:
-            result = db.execute(text("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'"))
-            table_count = result.scalar() or 0
-            return {"available": True, "table_count": table_count}
+            db_url = _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+            is_sqlite = "sqlite" in db_url
+
+            # Table count — works on both SQLite and PostgreSQL
+            mgr = _get_or_init_manager()
+            inspector = _inspect(mgr._engine)
+            tables = inspector.get_table_names()
+            table_count = len(tables)
+
+            # Row counts for key tables
+            row_counts: dict = {}
+            for tbl in ["users", "trades", "orders", "signals", "audit_log"]:
+                if tbl in tables:
+                    try:
+                        from sqlalchemy.sql import quoted_name
+                        safe = quoted_name(tbl, quote=True)
+                        row_counts[tbl] = db.execute(text(f"SELECT COUNT(*) FROM {safe}")).scalar() or 0  # nosec B608
+                    except Exception:
+                        row_counts[tbl] = 0
+
+            # DB file size for SQLite
+            db_size_mb = 0.0
+            if is_sqlite:
+                db_path = db_url.replace("sqlite:///", "")
+                if not db_path.startswith("/"):
+                    db_path = _os.path.join(_os.getcwd(), db_path)
+                try:
+                    db_size_mb = round(_os.path.getsize(db_path) / 1_048_576, 2)
+                except Exception:
+                    pass
+
+            # Active connections (PostgreSQL only)
+            active_connections = 0
+            if not is_sqlite:
+                try:
+                    active_connections = db.execute(
+                        text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
+                    ).scalar() or 0
+                except Exception:
+                    pass
+
+            return {
+                "available": True,
+                "engine": "sqlite" if is_sqlite else "postgresql",
+                "table_count": table_count,
+                "tables": tables,
+                "row_counts": row_counts,
+                "db_size_mb": db_size_mb,
+                "active_connections": active_connections,
+                "max_connections": 1 if is_sqlite else 100,
+                "query_time_avg_ms": 0,
+                "slow_queries": 0,
+                "deadlocks": 0,
+            }
         finally:
             db.close()
     except Exception as exc:
-        return {"available": False, "error": type(exc).__name__}
+        return {"available": False, "error": type(exc).__name__, "detail": str(exc)[:200]}
 
 
 @router.get("/infra/queues")
 async def get_queue_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
-    queues: dict = {}
-    try:
-        from cache.redis_client import get_redis_client
+    import os as _os
+    queue_names = ["app:logs", "platform:broadcasts", "ml:retrain_queue", "signals:queue",
+                   "celery", "hopefx:tasks", "hopefx:priority"]
+    queues: list[dict] = []
 
-        rc = get_redis_client()
+    # Try Redis queue lengths
+    redis_available = False
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
         if rc:
-            for q in ["app:logs", "platform:broadcasts", "ml:retrain_queue", "signals:queue"]:
-                queues[q] = rc.llen(q)
-    except Exception:  # noqa: BLE001 — Redis queue stats are optional
-        logger.debug("Celery inspect unavailable — using Redis lengths only")
-    return {"queues": queues}
+            redis_available = True
+            for q in queue_names:
+                length = rc.llen(q)
+                queues.append({
+                    "name": q,
+                    "pending": length,
+                    "processing": 0,
+                    "failed": 0,
+                    "workers": 0,
+                })
+    except Exception:
+        pass
+
+    # Try Celery inspect if available
+    try:
+        from celery_app import celery_app as _celery
+        inspect = _celery.control.inspect(timeout=1.0)
+        active = inspect.active() or {}
+        reserved = inspect.reserved() or {}
+        total_active = sum(len(v) for v in active.values())
+        total_reserved = sum(len(v) for v in reserved.values())
+        if not queues:
+            queues.append({
+                "name": "celery",
+                "pending": total_reserved,
+                "processing": total_active,
+                "failed": 0,
+                "workers": len(active),
+            })
+    except Exception:
+        pass
+
+    if not queues:
+        # No Redis, no Celery — show placeholder with real worker count
+        worker_count = _os.cpu_count() or 1
+        queues = [
+            {"name": "default", "pending": 0, "processing": 0, "failed": 0, "workers": worker_count},
+        ]
+
+    return {
+        "queues": queues,
+        "redis_available": redis_available,
+        "total_pending": sum(q["pending"] for q in queues),
+        "total_processing": sum(q["processing"] for q in queues),
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -288,9 +454,9 @@ async def get_aml_alerts(
     """AML alerts from the AMLGate and transaction monitoring."""
     alerts: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("compliance:aml:alerts", 0, 499)
             for item in raw:
@@ -383,9 +549,9 @@ async def get_sanctions_hits(
     """Sanctions screening hits from Refinitiv/SDN screeners."""
     hits: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             import json as _json
 
@@ -410,10 +576,10 @@ async def clear_sanctions_hit(
 ) -> dict:
     _log_superadmin_action(user, "sanctions_clear", f"hit={hit_id}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("compliance:sanctions:hits", 0, 199)
             updated = []
@@ -616,10 +782,10 @@ async def get_circuit_breakers(user: TokenPayload = Depends(_require_superadmin)
                 )
         except (ImportError, AttributeError):
             # Fallback: read from Redis
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_sync_redis_client
             import json as _json
 
-            rc = get_redis_client()
+            rc = get_sync_redis_client()
             if rc:
                 raw = rc.get("risk:circuit_breakers")
                 if raw:
@@ -662,10 +828,10 @@ async def reset_circuit_breaker(
     except Exception as exc:
         logger.warning("Circuit breaker reset error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.hset(
                 "risk:cb_overrides",
@@ -692,10 +858,10 @@ async def force_open_circuit_breaker(
     except Exception as exc:
         logger.warning("Circuit breaker force open error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.hset(
                 "risk:cb_overrides",
@@ -711,10 +877,10 @@ async def force_open_circuit_breaker(
 async def get_var_metrics(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Platform-wide VaR/ES metrics from risk/analytics.py."""
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             cached = rc.get("risk:var_metrics")
             if cached:
@@ -750,10 +916,10 @@ async def get_stress_test_results(user: TokenPayload = Depends(_require_superadm
     """Most recent stress test results."""
     results: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("risk:stress_test_results")
             if raw:
@@ -796,10 +962,10 @@ async def run_stress_test(
         # Get current portfolio value from DB/cache
         portfolio_value = 100_000.0
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_sync_redis_client
             import json as _json
 
-            rc = get_redis_client()
+            rc = get_sync_redis_client()
             if rc:
                 pv = rc.get("portfolio:total_value")
                 if pv:
@@ -818,10 +984,10 @@ async def run_stress_test(
         }
         # Cache result
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_sync_redis_client
             import json as _json
 
-            rc = get_redis_client()
+            rc = get_sync_redis_client()
             if rc:
                 existing = _json.loads(rc.get("risk:stress_test_results") or "[]")
                 existing = [r for r in existing if r.get("scenario") != body.scenario]
@@ -847,10 +1013,10 @@ async def get_prop_breaches(
     """Prop firm rule breach history from PropEnforcer."""
     breaches: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("prop:breaches", 0, 499)
             for item in raw:
@@ -879,10 +1045,10 @@ async def get_drawdown_stats(user: TokenPayload = Depends(_require_superadmin)) 
     except Exception as exc:
         logger.warning("Drawdown stats error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("risk:drawdown_stats")
             if raw:
@@ -902,10 +1068,10 @@ async def get_broker_health(user: TokenPayload = Depends(_require_superadmin)) -
     """Per-broker health: latency, fill rate, connection status."""
     brokers: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("brokers:health")
             if raw:
@@ -1004,10 +1170,10 @@ async def get_tca_metrics(
         logger.warning("TCA metrics error: %s", exc)
     if not metrics:
         try:
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_sync_redis_client
             import json as _json
 
-            rc = get_redis_client()
+            rc = get_sync_redis_client()
             if rc:
                 raw = rc.get(f"tca:summary:{period}")
                 if raw:
@@ -1098,9 +1264,9 @@ def _get_tenant_store() -> dict:
             db.close()
     # Redis fallback
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("whitelabel:tenants")
             if raw:
@@ -1113,9 +1279,9 @@ def _get_tenant_store() -> dict:
 def _save_tenant_store(store: dict) -> None:
     """Sync Redis cache from the in-memory store dict (DB writes happen per-endpoint)."""
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set("whitelabel:tenants", _json.dumps(store), ex=3600)
     except Exception as exc:
@@ -1456,10 +1622,10 @@ async def get_tenant_usage(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get(f"whitelabel:usage:{tenant_id}")
             if raw:
@@ -1512,9 +1678,9 @@ def _gdpr_store() -> dict:
             db.close()
     # Redis fallback
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("gdpr:requests")
             if raw:
@@ -1529,9 +1695,9 @@ def _gdpr_save(store: dict) -> None:
     # DB is the source of truth — individual saves happen in the endpoint.
     # This function keeps Redis in sync for fast reads.
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set("gdpr:requests", _json.dumps(store), ex=86400)
     except Exception as exc:
@@ -1819,10 +1985,10 @@ async def get_consent_log(
     """Consent log — records of user consent grants/revocations."""
     entries: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("gdpr:consent_log", 0, 999)
             for item in raw:
@@ -1917,10 +2083,10 @@ async def get_nuclear_status(user: TokenPayload = Depends(_require_superadmin)) 
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("nuclear:status")
             if raw:
@@ -1952,10 +2118,10 @@ async def nuclear_halt(
     except Exception as exc:
         logger.warning("Kill switch activate error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(
                 "nuclear:status",
@@ -2002,10 +2168,10 @@ async def nuclear_resume(user: TokenPayload = Depends(_require_superadmin)) -> d
     except Exception as exc:
         logger.warning("Kill switch deactivate error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(
                 "nuclear:status",
@@ -2041,10 +2207,10 @@ async def activate_hedge(
 ) -> dict:
     _log_superadmin_action(user, "nuclear_hedge_activate", f"ratio={body.hedge_ratio} instrument={body.instrument}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(
                 "nuclear:hedge",
@@ -2080,10 +2246,10 @@ async def activate_hedge(
 async def deactivate_hedge(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     _log_superadmin_action(user, "nuclear_hedge_deactivate")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set("nuclear:hedge", _json.dumps({"active": False, "deactivated_at": _utcnow().isoformat()}))
     except Exception as exc:
@@ -2098,10 +2264,10 @@ async def nuclear_risk_override(
 ) -> dict:
     _log_superadmin_action(user, "nuclear_risk_override", f"fraction={body.max_risk_fraction}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(
                 "nuclear:risk_override",
@@ -2127,10 +2293,10 @@ async def get_nuclear_log(
 ) -> dict:
     entries: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("nuclear:log", -limit, -1)
             for item in reversed(raw):
@@ -2152,10 +2318,10 @@ _RATE_LIMIT_RULES_KEY = "superadmin:rate_limit_rules"
 
 def _load_rate_limit_rules() -> list[dict]:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_RATE_LIMIT_RULES_KEY)
             if raw:
@@ -2223,10 +2389,10 @@ def _load_rate_limit_rules() -> list[dict]:
 
 def _save_rate_limit_rules(rules: list[dict]) -> None:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(_RATE_LIMIT_RULES_KEY, _json.dumps(rules))
     except Exception as exc:
@@ -2238,9 +2404,9 @@ async def get_rate_limit_rules(user: TokenPayload = Depends(_require_superadmin)
     rules = _load_rate_limit_rules()
     # Enrich with live hit counts from Redis
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             for rule in rules:
                 key = f"rl:hits:{rule['rule_id']}"
@@ -2319,10 +2485,10 @@ async def delete_rate_limit_rule(
 async def get_rate_limit_stats(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     stats: dict = {"total_requests": 0, "blocked_requests": 0, "top_endpoints": [], "top_violators": []}
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("rl:stats")
             if raw:
@@ -2340,10 +2506,10 @@ async def get_rate_limit_violations(
 ) -> dict:
     violations: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("rl:violations", 0, 499)
             for item in raw:
@@ -2367,10 +2533,10 @@ _ALERT_RULES_KEY = "superadmin:alert_rules"
 
 def _load_alert_rules() -> list[dict]:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_ALERT_RULES_KEY)
             if raw:
@@ -2443,10 +2609,10 @@ def _load_alert_rules() -> list[dict]:
 
 def _save_alert_rules(rules: list[dict]) -> None:
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.set(_ALERT_RULES_KEY, _json.dumps(rules))
     except Exception as exc:
@@ -2527,9 +2693,9 @@ async def silence_alert(
 ) -> dict:
     _log_superadmin_action(user, "alert_silence", f"rule={rule_id} duration={body.duration_minutes}m")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.setex(f"alert:silenced:{rule_id}", body.duration_minutes * 60, user.sub)
     except Exception as exc:
@@ -2546,10 +2712,10 @@ async def get_fired_alerts(
 ) -> dict:
     fired: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("alerts:fired", 0, 499)
             for item in raw:
@@ -2625,10 +2791,10 @@ async def list_reports(user: TokenPayload = Depends(_require_superadmin)) -> dic
         logger.warning("Report list error: %s", exc)
     # Also check Redis for in-progress reports
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("reports:queue", 0, 49)
             for item in raw:
@@ -2661,10 +2827,10 @@ async def generate_report(
                 asyncio.create_task(gen.generate(period=body.period))
         else:
             # Queue for background generation
-            from cache.redis_client import get_redis_client
+            from cache.redis_client import get_sync_redis_client
             import json as _json
 
-            rc = get_redis_client()
+            rc = get_sync_redis_client()
             if rc:
                 rc.rpush(
                     "reports:queue",
@@ -2748,10 +2914,10 @@ async def get_self_healer_status(user: TokenPayload = Depends(_require_superadmi
     except Exception as exc:
         logger.warning("SelfHealer status error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("security:self_healer:status")
             if raw:
@@ -2776,9 +2942,9 @@ async def trigger_integrity_scan(user: TokenPayload = Depends(_require_superadmi
     except Exception as exc:
         logger.warning("Integrity scan trigger error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.rpush("security:scan_queue", "integrity_scan")
     except Exception:
@@ -2790,30 +2956,46 @@ async def trigger_integrity_scan(user: TokenPayload = Depends(_require_superadmi
 async def get_antivirus_status(user: TokenPayload = Depends(_require_superadmin)) -> dict:
     """Antivirus scanner status and last scan summary."""
     try:
-        from security.antivirus import AntivirusScanner
+        # Use the module-level singleton so we get the live ClamAV connection
+        # state rather than a freshly-constructed (disconnected) instance.
+        from security.antivirus import get_scanner, CLAMD_AVAILABLE
 
-        scanner = AntivirusScanner()
-        if hasattr(scanner, "get_status"):
-            return scanner.get_status()
+        scanner = get_scanner()
+        clamav_connected = scanner._clamd is not None
+        # Re-attempt connection if daemon is now reachable but wasn't at startup
+        if CLAMD_AVAILABLE and not clamav_connected:
+            scanner._connect_clamd()
+            clamav_connected = scanner._clamd is not None
+        last = scanner._last_scan or {}
+        return {
+            "status": "running" if scanner._running else "stopped",
+            "last_scan": last,
+            "threats_found": len(scanner._threats),
+            "files_scanned": last.get("scanned_files", 0),
+            "clamav_available": clamav_connected,
+            "clamd_enabled": clamav_connected,
+            "yara_enabled": last.get("yara_enabled", False),
+            "yara_rules_loaded": 1 if scanner._yara_rules is not None else 0,
+        }
     except Exception as exc:
         logger.warning("AV status error: %s", exc)
+    # Probe ClamAV directly as a last resort
+    _clamav_live = False
     try:
-        from cache.redis_client import get_redis_client
-        import json as _json
-
-        rc = get_redis_client()
-        if rc:
-            raw = rc.get("security:av:status")
-            if raw:
-                return _json.loads(raw)
+        import clamd as _clamd_mod
+        _cd = _clamd_mod.ClamdUnixSocket()
+        _cd.ping()
+        _clamav_live = True
     except Exception:
-        logger.debug("Suppressed exception (no detail) in %s", __name__)
+        pass
     return {
         "status": "unknown",
         "last_scan": None,
         "threats_found": 0,
         "files_scanned": 0,
-        "clamav_available": False,
+        "clamav_available": _clamav_live,
+        "clamd_enabled": _clamav_live,
+        "yara_enabled": False,
         "yara_rules_loaded": 0,
     }
 
@@ -2901,10 +3083,10 @@ async def get_security_infra_log(
 ) -> dict:
     entries: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("security:infra:log", -limit, -1)
             for item in reversed(raw):
@@ -2957,9 +3139,11 @@ async def _check_db_service() -> dict:
     start = time.time()
     db = None
     try:
+        from sqlalchemy import text
+
         db = next(_get_db())
         if db:
-            db.execute("SELECT 1")
+            db.execute(text("SELECT 1"))
             return {
                 "status": "healthy",
                 "latency_ms": round((time.time() - start) * 1000),
@@ -2976,9 +3160,9 @@ async def _check_db_service() -> dict:
 async def _check_redis_service() -> dict:
     start = time.time()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.ping()
             return {
@@ -2988,15 +3172,15 @@ async def _check_redis_service() -> dict:
             }
     except Exception as exc:
         return {"status": "down", "latency_ms": 0, "last_check": _utcnow().isoformat(), "error": str(exc)}
-    return {"status": "unknown", "latency_ms": 0, "last_check": _utcnow().isoformat()}
+    return {"status": "down", "latency_ms": 0, "last_check": _utcnow().isoformat(), "error": "Redis not configured"}
 
 
 async def _check_broker_service() -> dict:
     start = time.time()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             status = rc.get("broker:connection_status")
             if status:
@@ -3013,9 +3197,9 @@ async def _check_broker_service() -> dict:
 async def _check_ml_service() -> dict:
     start = time.time()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             status = rc.get("ml:engine_status")
             if status:
@@ -3032,9 +3216,9 @@ async def _check_ml_service() -> dict:
 async def _check_ws_service() -> dict:
     start = time.time()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             conn_count = rc.get("ws:connection_count")
             return {
@@ -3051,15 +3235,16 @@ async def _check_ws_service() -> dict:
 async def _check_celery_service() -> dict:
     start = time.time()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             workers_raw = rc.get("celery:active_workers")
             worker_count = int(workers_raw or 0)
             # Also try the Celery inspect API for a live count
             try:
                 from celery_app import app as _celery_app
+
                 inspect = _celery_app.control.inspect(timeout=1.0)
                 active = inspect.active()
                 if active is not None:
@@ -3107,10 +3292,10 @@ async def list_backups(user: TokenPayload = Depends(_require_superadmin)) -> dic
     except Exception as exc:
         logger.warning("Backup list error: %s", exc)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.lrange("system:backups", 0, 49)
             for item in raw:
@@ -3133,10 +3318,10 @@ async def trigger_backup(
     _log_superadmin_action(user, "backup_trigger", f"type={body.type}")
     backup_id = f"backup_{body.type}_{_utcnow().strftime('%Y%m%d_%H%M%S')}"
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.rpush(
                 "system:backup_queue",
@@ -3167,10 +3352,10 @@ async def list_scheduled_jobs(user: TokenPayload = Depends(_require_superadmin))
     """Scheduled job registry — cron status, last/next run."""
     jobs: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("system:scheduled_jobs")
             if raw:
@@ -3262,10 +3447,10 @@ async def trigger_job(
 ) -> dict:
     _log_superadmin_action(user, "job_trigger", f"job={job_id}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json as _json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.rpush(
                 "system:job_queue",
@@ -3303,9 +3488,9 @@ async def pause_job(
 ) -> dict:
     _log_superadmin_action(user, "job_pause", f"job={job_id}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.hset("system:job_states", job_id, "paused")
     except Exception:
@@ -3320,9 +3505,9 @@ async def resume_job(
 ) -> dict:
     _log_superadmin_action(user, "job_resume", f"job={job_id}")
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.hset("system:job_states", job_id, "active")
     except Exception:

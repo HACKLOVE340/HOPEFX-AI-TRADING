@@ -385,31 +385,68 @@ def _build_docstring_lines(lines: list[str]) -> set[int]:
 
     This prevents the regex scanner from flagging code examples in docstrings
     (e.g. shift(-1) in a docstring showing what NOT to do).
+
+    Uses a character-level scan to correctly handle:
+    - Triple-quoted strings that open and close on the same line
+    - Nested single/double quotes inside triple-quoted strings
+    - Escaped quotes (backslash-prefixed)
+    - Both \"\"\" and ''' delimiters
     """
-    in_docstring = False
-    fence: str = ""
     docstring_lines: set[int] = set()
-    for i, raw in enumerate(lines, start=1):
-        stripped = raw.strip()
-        if not in_docstring:
-            # Detect opening triple-quote (may open and close on same line)
-            for q in ('"""', "'''"):
-                if q in stripped:
-                    count = stripped.count(q)
-                    if count >= 2:
-                        # Opens and closes on same line — mark and move on
-                        docstring_lines.add(i)
-                        break
-                    else:
-                        in_docstring = True
-                        fence = q
-                        docstring_lines.add(i)
-                        break
-        else:
-            docstring_lines.add(i)
-            if fence in stripped:
-                in_docstring = False
+    in_triple: bool = False
+    fence: str = ""
+    # Reconstruct the full source so we can scan character by character
+    # across line boundaries, then map positions back to line numbers.
+    source = "\n".join(lines)
+    pos = 0
+    length = len(source)
+    # Build a position→line-number map (1-based)
+    line_of: list[int] = []
+    lineno = 1
+    for ch in source:
+        line_of.append(lineno)
+        if ch == "\n":
+            lineno += 1
+    line_of.append(lineno)  # sentinel for end-of-file
+
+    while pos < length:
+        ch = source[pos]
+        if in_triple:
+            docstring_lines.add(line_of[pos])
+            if source[pos:pos + 3] == fence:
+                # Closing triple-quote — mark all three chars and exit
+                docstring_lines.add(line_of[pos + 1])
+                docstring_lines.add(line_of[pos + 2])
+                pos += 3
+                in_triple = False
                 fence = ""
+            elif ch == "\\":
+                pos += 2  # skip escaped character
+            else:
+                pos += 1
+        else:
+            # Check for triple-quote opening
+            if source[pos:pos + 3] in ('"""', "'''"):
+                fence = source[pos:pos + 3]
+                in_triple = True
+                docstring_lines.add(line_of[pos])
+                pos += 3
+            elif ch in ('"', "'"):
+                # Single-quoted string — skip to closing quote
+                quote = ch
+                pos += 1
+                while pos < length and source[pos] != quote:
+                    if source[pos] == "\\":
+                        pos += 1  # skip escaped char
+                    pos += 1
+                pos += 1  # skip closing quote
+            elif ch == "#":
+                # Comment — skip to end of line
+                while pos < length and source[pos] != "\n":
+                    pos += 1
+            else:
+                pos += 1
+
     return docstring_lines
 
 

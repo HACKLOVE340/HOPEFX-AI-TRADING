@@ -36,7 +36,11 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
   // Load full tenant detail on mount
   useEffect(() => {
     superadminApi.getTenant(initial.tenant_id)
-      .then(r => { setTenant(r.data); setForm({ ...r.data.branding, status: r.data.status, plan: r.data.plan }); })
+      .then(r => {
+        const t = r.data.tenant ?? r.data;
+        setTenant(t);
+        setForm({ ...t.branding, status: t.status, plan: t.plan });
+      })
       .catch(() => {});
   }, [initial.tenant_id]);
 
@@ -45,7 +49,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
     if (tab !== 'keys') return;
     setKeysLoading(true);
     superadminApi.tenantApiKeys(tenant.tenant_id)
-      .then(r => setKeys(r.data.keys ?? r.data ?? []))
+      .then(r => setKeys(r.data.api_keys ?? r.data.keys ?? r.data ?? []))
       .catch(() => setKeys([]))
       .finally(() => setKeysLoading(false));
   }, [tab, tenant.tenant_id]);
@@ -114,7 +118,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       // Reload keys
       setKeysLoading(true);
       superadminApi.tenantApiKeys(tenant.tenant_id)
-        .then(r => setKeys(r.data.keys ?? r.data ?? []))
+        .then(r => setKeys(r.data.api_keys ?? r.data.keys ?? r.data ?? []))
         .catch(() => {})
         .finally(() => setKeysLoading(false));
     } catch (e: unknown) {

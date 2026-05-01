@@ -85,7 +85,14 @@ const Leaderboard: React.FC = () => {
       ) : loadErr ? (
         <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : traders.length === 0 ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders on the leaderboard yet.</p>
+        <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🏆</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No traders ranked yet</div>
+          <div style={{ fontSize: 13, color: '#64748b', maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
+            The leaderboard populates once traders have closed positions.
+            Start trading on the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to appear here.
+          </div>
+        </div>
       ) : (
         <>
           {/* Podium — top 3 */}

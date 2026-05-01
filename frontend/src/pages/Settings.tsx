@@ -14,6 +14,7 @@
  */
 
 import React, { useState, Suspense, lazy } from 'react';
+import { Link } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
@@ -198,13 +199,13 @@ const UpgradeNotice: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => 
     <div style={{ fontSize: 14, color: '#64748b', maxWidth: 360, margin: '0 auto 20px' }}>
       Upgrade your subscription to unlock this feature.
     </div>
-    <a href="/billing" style={{
+    <Link to="/pricing" style={{
       display: 'inline-block', padding: '10px 24px',
       background: '#3b82f6', color: '#fff', borderRadius: 8,
       fontWeight: 600, fontSize: 14, textDecoration: 'none',
     }}>
       View Plans
-    </a>
+    </Link>
   </div>
 );
 

@@ -52,9 +52,10 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/status',       label: 'System Status',  icon: '🟢', group: 'core',      plan: 'free',    featureKey: 'status'       },
 
   // ── Trading ───────────────────────────────────────────────────────────────
-  { path: '/ai-charts',    label: 'AI Chart Bot',   icon: '🧠', group: 'trading',   plan: 'professional', featureKey: 'trading'      },
-  { path: '/terminal',     label: 'Terminal',       icon: '🖥️', group: 'trading',   plan: 'starter',      featureKey: 'terminal'     },
-  { path: '/nuclear',      label: 'Nuclear AI',     icon: '☢️', group: 'trading',   plan: 'professional', featureKey: 'nuclear'      },
+  { path: '/ai-charts',          label: 'AI Chart Bot',     icon: '🧠', group: 'trading', plan: 'professional', featureKey: 'trading'           },
+  { path: '/ai-chart-dashboard', label: 'AI Chart Dashboard', icon: '📊', group: 'trading', plan: 'professional', featureKey: 'trading'          },
+  { path: '/terminal',           label: 'Terminal',         icon: '🖥️', group: 'trading', plan: 'starter',      featureKey: 'terminal'          },
+  { path: '/nuclear',            label: 'Nuclear AI',       icon: '☢️', group: 'trading', plan: 'professional', featureKey: 'nuclear'           },
   { path: '/journal',      label: 'Trade Journal',  icon: '📓', group: 'trading',   plan: 'starter',      featureKey: 'journal'      },
   { path: '/prop-firm',    label: 'Prop Firm',      icon: '🛡️', group: 'trading',   plan: 'professional', featureKey: 'prop-firm'    },
   { path: '/copy-trading', label: 'Copy Trading',   icon: '🔁', group: 'trading',   plan: 'professional', featureKey: 'copy-trading' },

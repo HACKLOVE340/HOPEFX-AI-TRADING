@@ -44,9 +44,9 @@ def _get_engine():
 
 def _redis():
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        return get_redis_client()
+        return get_sync_redis_client()
     except Exception:
         return None
 

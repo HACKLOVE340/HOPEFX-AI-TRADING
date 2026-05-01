@@ -146,6 +146,27 @@ export function fmtRelative(iso: string | number | null | undefined): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+// ── WebSocket ─────────────────────────────────────────────────────────────────
+
+/**
+ * Returns the WebSocket base URL for the current environment.
+ *
+ * Priority:
+ *   1. VITE_WS_URL env var (set in .env / docker-compose)
+ *   2. Derived from window.location — wss:// on HTTPS, ws:// on HTTP.
+ *      This avoids mixed-content errors on production HTTPS deployments
+ *      where a hardcoded ws:// fallback would be blocked by the browser.
+ *
+ * Usage:
+ *   const ws = new WebSocket(`${getWsBase()}/ws/notifications?token=${token}`);
+ */
+export function getWsBase(): string {
+  const envUrl = import.meta.env.VITE_WS_URL as string | undefined;
+  if (envUrl) return envUrl;
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${window.location.host}`;
+}
+
 // ── Misc ──────────────────────────────────────────────────────────────────────
 
 /** Clamp a value between min and max */

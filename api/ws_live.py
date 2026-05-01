@@ -89,6 +89,14 @@ if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
     )
 
 
+async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> None:
+    """Close a WebSocket, ignoring errors when it is already closed."""
+    try:
+        await websocket.close(code=code, reason=reason)
+    except RuntimeError:
+        pass  # already closed
+
+
 def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
     token = token.removeprefix("Bearer ")
@@ -265,7 +273,7 @@ def _seed_from_broker() -> None:
     if _prices_seeded:
         return
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         broker = getattr(app_state, "broker", None)
         market_prices = getattr(broker, "market_prices", {}) if broker else {}
@@ -291,7 +299,7 @@ def _get_live_price(symbol: str) -> float | None:
     Returns None if neither is available.
     """
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         # 1. Price engine (real ticks)
         pe = getattr(app_state, "price_engine", None)
@@ -664,6 +672,81 @@ async def _price_broadcaster_live_only() -> None:
             await asyncio.sleep(9)
 
 
+_YF_SYMBOL_MAP: dict[str, str] = {
+    "XAU/USD": "GC=F",
+    "EUR/USD": "EURUSD=X",
+    "GBP/USD": "GBPUSD=X",
+    "USD/JPY": "USDJPY=X",
+    "BTC/USD": "BTC-USD",
+}
+
+# Cache last yfinance prices so we can broadcast change_pct correctly
+_yf_last_prices: dict[str, float] = {}
+
+
+async def _yfinance_price_broadcaster() -> None:
+    """
+    Broadcast real market prices fetched from yfinance every 15 seconds.
+
+    Used when no broker or EventBus is available (API-only / dev mode).
+    Sends genuine price_tick messages — no synthetic or mock data.
+    """
+    import time as _time
+    _POLL_INTERVAL = 15  # seconds between yfinance fetches
+
+    while True:
+        await asyncio.sleep(_POLL_INTERVAL)
+        if _manager.connection_count == 0:
+            continue
+        try:
+            import yfinance as _yf
+            tickers = list(_YF_SYMBOL_MAP.values())
+            data = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _yf.download, tickers, period="1d", interval="1m",
+                    progress=False, auto_adjust=True,
+                ),
+                timeout=12.0,
+            )
+            now_ms = int(_time.time() * 1000)
+            for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items():
+                try:
+                    if hasattr(data.columns, "levels"):
+                        col = ("Close", yf_ticker)
+                        if col not in data.columns:
+                            continue
+                        series = data[col].dropna()
+                    else:
+                        series = data["Close"].dropna()
+                    if series.empty:
+                        continue
+                    price = float(series.iloc[-1])
+                    if price <= 0:
+                        continue
+                    cfg = _SYMBOLS.get(ws_sym, {"spread": price * 0.0002})
+                    spread = cfg.get("spread", price * 0.0002)
+                    prev = _yf_last_prices.get(ws_sym, price)
+                    change_pct = ((price - prev) / prev * 100) if prev > 0 else 0.0
+                    _yf_last_prices[ws_sym] = price
+                    tick = {
+                        "type": "price_tick",
+                        "data": {
+                            "symbol": ws_sym,
+                            "bid": round(price - spread / 2, 5),
+                            "ask": round(price + spread / 2, 5),
+                            "mid": round(price, 5),
+                            "spread": spread,
+                            "timestamp": now_ms,
+                            "change_pct": round(change_pct, 4),
+                        },
+                    }
+                    await _manager.broadcast("prices", tick)
+                except Exception as _sym_exc:
+                    logger.debug("yfinance tick for %s failed: %s", ws_sym, _sym_exc)
+        except Exception as exc:
+            logger.warning("yfinance price broadcaster error: %s", exc)
+
+
 async def _price_broadcaster() -> None:
     """
     Broadcast price ticks.
@@ -671,7 +754,8 @@ async def _price_broadcaster() -> None:
     Priority:
     1. EventBus (hopefx:tick) — real ticks from connected broker
     2. Direct broker poll     — paper broker market_prices
-    3. no_live_feed status    — when neither source has data
+    3. yfinance real prices   — when no broker is connected (dev/API-only mode)
+    4. no_live_feed status    — when yfinance also fails
     """
     try:
         # If EventBus connects successfully it takes over; on failure we fall
@@ -683,7 +767,14 @@ async def _price_broadcaster() -> None:
             exc,
         )
     # EventBus unavailable — poll broker directly (real prices only, no GBM)
-    await _price_broadcaster_live_only()
+    # Run both the live-only broadcaster and the yfinance broadcaster concurrently.
+    # The live-only broadcaster sends no_live_feed per-symbol when broker prices
+    # are absent; the yfinance broadcaster fills those gaps with real market data.
+    await asyncio.gather(
+        _price_broadcaster_live_only(),
+        _yfinance_price_broadcaster(),
+        return_exceptions=True,
+    )
 
 
 async def _heartbeat_broadcaster() -> None:
@@ -832,6 +923,59 @@ async def _chartbot_broadcaster() -> None:
                         )
             except Exception as _exc:
                 logger.debug("chartbot_broadcaster: equity error: %s", _exc)
+
+            # ── AI analysis broadcast (from Redis cache) ──────────────────────
+            # The /trading/ai-analysis REST endpoint caches its result in Redis
+            # under "ai_analysis:{symbol}". We broadcast it so chart-bot clients
+            # receive updates without polling.
+            try:
+                from cache.redis_client import get_sync_redis_client as _get_rc
+                import json as _json
+                _rc = _get_rc()
+                if _rc:
+                    for _sym in ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"):
+                        _raw = _rc.get(f"ai_analysis:{_sym}")
+                        if _raw:
+                            _analysis = _json.loads(_raw)
+                            await _manager.broadcast(
+                                "prices",
+                                {"type": "ai_analysis", "data": _analysis},
+                            )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: ai_analysis error: %s", _exc)
+
+            # ── Pattern detection broadcast ───────────────────────────────────
+            try:
+                from cache.redis_client import get_sync_redis_client as _get_rc2
+                import json as _json2
+                _rc2 = _get_rc2()
+                if _rc2:
+                    _praw = _rc2.get("chart_patterns:latest")
+                    if _praw:
+                        _patterns = _json2.loads(_praw)
+                        for _pat in (_patterns if isinstance(_patterns, list) else [_patterns])[:3]:
+                            await _manager.broadcast(
+                                "patterns",
+                                {"type": "pattern_detected", "data": _pat},
+                            )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: patterns error: %s", _exc)
+
+            # ── Support/resistance level updates ──────────────────────────────
+            try:
+                from cache.redis_client import get_sync_redis_client as _get_rc3
+                import json as _json3
+                _rc3 = _get_rc3()
+                if _rc3:
+                    _lraw = _rc3.get("sr_levels:latest")
+                    if _lraw:
+                        _levels = _json3.loads(_lraw)
+                        await _manager.broadcast(
+                            "levels",
+                            {"type": "level_update", "data": _levels},
+                        )
+            except Exception as _exc:
+                logger.debug("chartbot_broadcaster: levels error: %s", _exc)
 
         except Exception as exc:
             logger.debug("chartbot_broadcaster: outer error: %s", exc)
@@ -1022,7 +1166,7 @@ async def ws_live(websocket: WebSocket) -> None:
                         "message": "First message must be {type: auth, token: ...}",
                     },
                 )
-                await websocket.close(code=4001)
+                await _safe_ws_close(websocket, code=4001)
                 _manager.disconnect(cid)
                 return
 
@@ -1036,7 +1180,7 @@ async def ws_live(websocket: WebSocket) -> None:
                         "message": "Invalid or expired token",
                     },
                 )
-                await websocket.close(code=4001)
+                await _safe_ws_close(websocket, code=4001)
                 _manager.disconnect(cid)
                 return
 
@@ -1060,12 +1204,16 @@ async def ws_live(websocket: WebSocket) -> None:
                     "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s",
                 },
             )
-            await websocket.close(code=4001)
+            await _safe_ws_close(websocket, code=4001)
             _manager.disconnect(cid)
             return
         except Exception:
             _manager.disconnect(cid)
             return
+    else:
+        # Auth not required — mark connection as authenticated with a dev user_id
+        # so broadcast() delivers messages to this connection on all channels.
+        _manager.authenticate(cid, "dev_anonymous")
 
     try:
         await _ws_message_loop(cid, websocket)
@@ -1085,13 +1233,13 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
                 cid,
                 {"type": "error", "code": "AUTH_REQUIRED", "message": "First message must be {type: auth, token: ...}"},
             )
-            await websocket.close(code=4001)
+            await _safe_ws_close(websocket, code=4001)
             _manager.disconnect(cid)
             return False
         payload = _validate_ws_token(msg.get("token", ""))
         if payload is None:
             await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
-            await websocket.close(code=4001)
+            await _safe_ws_close(websocket, code=4001)
             _manager.disconnect(cid)
             return False
         user_id = str(payload.get("sub", payload.get("user_id", "unknown")))
@@ -1102,7 +1250,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
-        await websocket.close(code=4001)
+        await _safe_ws_close(websocket, code=4001)
         _manager.disconnect(cid)
         return False
     except (WebSocketDisconnect, Exception) as exc:
@@ -1256,12 +1404,12 @@ async def ws_nuclear(websocket: WebSocket) -> None:
         msg = json.loads(raw)
     except (TimeoutError, json.JSONDecodeError):
         await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
-        await websocket.close()
+        await _safe_ws_close(websocket, code=4001)
         return
 
     if msg.get("type") != "auth":
         await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
-        await websocket.close()
+        await _safe_ws_close(websocket, code=4001)
         return
 
     payload = _validate_ws_token(msg.get("token", ""))
@@ -1269,11 +1417,33 @@ async def ws_nuclear(websocket: WebSocket) -> None:
         await websocket.send_text(
             json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
         )
-        await websocket.close()
+        await _safe_ws_close(websocket, code=4001)
         return
 
     user_id = str(payload.get("sub", "unknown"))
     await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
+
+    # ── Nuclear availability check ────────────────────────────────────────────
+    # If the charting engine failed to load at startup, tell the client
+    # immediately instead of silently streaming null state every 2 seconds.
+    try:
+        from app import app as _app  # noqa: PLC0415
+
+        _nuclear_ok = getattr(_app.state, "nuclear_available", True)
+    except Exception:
+        _nuclear_ok = True  # assume available if we can't check
+
+    if not _nuclear_ok:
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "nuclear_unavailable",
+                    "message": "Nuclear engine did not load at startup — check server logs.",
+                }
+            )
+        )
+        await _safe_ws_close(websocket, code=1001)
+        return
 
     # ── Stream loop ───────────────────────────────────────────────────────────
     last_heartbeat = asyncio.get_running_loop().time()

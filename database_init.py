@@ -40,7 +40,7 @@ def initialize_database(db_url: str | None = None) -> None:
     if db_url is None:
         db_url = os.getenv("DATABASE_URL", "")
         if not db_url:
-            db_url = "sqlite:///trading.db"
+            db_url = "sqlite:///hopefx.db"
             logger.warning(
                 "DATABASE_URL is not set — using SQLite fallback (%s). "
                 "SQLite does not support concurrent writes and will corrupt "

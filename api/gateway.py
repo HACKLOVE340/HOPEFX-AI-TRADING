@@ -101,8 +101,8 @@ class APIGateway:
             CORSMiddleware,
             allow_origins=["https://hopefx.com", "https://app.hopefx.com"],
             allow_credentials=True,
-            allow_methods=["GET", "POST"],
-            allow_headers=["*"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"],
         )
 
         # Compression
@@ -245,7 +245,7 @@ class APIGateway:
             if quantity <= 0:
                 raise HTTPException(status_code=400, detail=f"quantity must be > 0, got {quantity}")
             try:
-                from app import app_state
+                from core.app_state import app_state
 
                 trade_executor = getattr(app_state, "trade_executor", None)
                 if trade_executor is None:
@@ -416,7 +416,7 @@ def build_gateway_app():
             app.mount("/gateway", _gw)
     """
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         mcc = getattr(app_state, "mcc", None)
         orchestra = getattr(app_state, "orchestra", None)

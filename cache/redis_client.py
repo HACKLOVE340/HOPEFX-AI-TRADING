@@ -380,11 +380,24 @@ async def get_redis(
     if not _no_config_warned:
         logger.warning(
             "Redis: no connection configured (REDIS_CLUSTER_HOSTS / "
-            "REDIS_SENTINEL_HOSTS / REDIS_URL) — running in degraded mode"
+            "REDIS_SENTINEL_HOSTS / REDIS_URL) — trying fakeredis fallback"
         )
         _no_config_warned = True
     else:
-        logger.debug("Redis: still unconfigured — degraded mode (suppressed repeat)")
+        logger.debug("Redis: still unconfigured — trying fakeredis (suppressed repeat)")
+
+    # Async fakeredis fallback — keeps all cache-dependent code paths working
+    # in development/CI environments without a real Redis server.
+    try:
+        import fakeredis.aioredis as _fake_aio  # type: ignore[import]
+        if _redis_instance is None:
+            _redis_instance = _fake_aio.FakeRedis(decode_responses=decode_responses)
+            _connection_mode = "fakeredis"
+            logger.info("Using fakeredis async in-process Redis substitute")
+        return _redis_instance
+    except ImportError:
+        pass
+
     _connection_mode = "none"
     return None
 
@@ -486,6 +499,20 @@ def get_connection_mode() -> str:
     return _connection_mode
 
 
+# Module-level fakeredis singleton — shared across all callers so state is
+# consistent within a single process (same as a real Redis server would be).
+_fakeredis_instance: Any | None = None
+
+
+def _get_or_create_fakeredis() -> Any:
+    """Return the process-wide fakeredis instance, creating it on first call."""
+    global _fakeredis_instance
+    if _fakeredis_instance is None:
+        import fakeredis as _fakeredis  # type: ignore[import]
+        _fakeredis_instance = _fakeredis.FakeRedis(decode_responses=True)
+    return _fakeredis_instance
+
+
 def get_sync_redis() -> Any | None:
     """
     Return a synchronous Redis client using the same env-var configuration as
@@ -522,8 +549,18 @@ def get_sync_redis() -> Any | None:
         client.ping()
         return client
     except Exception as exc:
-        logger.debug("Sync Redis connection failed: %s", exc)
-        return None
+        logger.debug("Sync Redis connection failed: %s — trying fakeredis fallback", exc)
+        # In development/CI environments without a real Redis server, use
+        # fakeredis as an in-process drop-in so all cache-dependent code paths
+        # work correctly without requiring a running Redis instance.
+        try:
+            import fakeredis as _fakeredis  # type: ignore[import]
+            _fake = _get_or_create_fakeredis()
+            logger.info("Using fakeredis in-process Redis substitute (no real Redis available)")
+            return _fake
+        except ImportError:
+            logger.debug("fakeredis not installed — Redis unavailable")
+            return None
 
 
 # ── Aliases ───────────────────────────────────────────────────────────────────

@@ -37,16 +37,26 @@ const CorrelationDashboard: React.FC = () => {
   const [corr, setCorr]   = useState<CorrelationData | null>(null);
   const [cot,  setCot]    = useState<COTData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [window, setWindow]   = useState(30);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadErr(null);
     const [corrRes, cotRes] = await Promise.allSettled([
       api.get('/advanced/correlation', { params: { window } }),
       api.get('/advanced/cot-sentiment'),
     ]);
-    setCorr(corrRes.status === 'fulfilled' ? corrRes.value.data : null);
-    setCot(cotRes.status === 'fulfilled' ? cotRes.value.data : null);
+    const corrOk = corrRes.status === 'fulfilled';
+    const cotOk  = cotRes.status  === 'fulfilled';
+    setCorr(corrOk ? corrRes.value.data : null);
+    setCot(cotOk  ? cotRes.value.data  : null);
+    if (!corrOk && !cotOk) {
+      const msg = (corrRes as PromiseRejectedResult).reason instanceof Error
+        ? (corrRes as PromiseRejectedResult).reason.message
+        : 'Failed to load correlation data';
+      setLoadErr(msg);
+    }
     setLoading(false);
   }, [window]);
 
@@ -67,7 +77,12 @@ const CorrelationDashboard: React.FC = () => {
         </div>
       </div>
 
-      {loading ? <div style={s.dim}>Loading…</div> : (!corr && !cot) ? (
+      {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
+        <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={{ color: '#f87171' }}>⚠ {loadErr}</span>
+          <button onClick={load} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
+        </div>
+      ) : (!corr && !cot) ? (
         <div style={s.dim}>Correlation data unavailable. Ensure the data layer is running.</div>
       ) : (
         <div style={s.grid}>

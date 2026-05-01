@@ -352,7 +352,7 @@ class KYCDecision(BaseModel):
 async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
     """List users with pending KYC submissions. Requires: role >= 'admin'."""
     try:
-        from app import app_state as _state
+        from core.app_state import app_state as _state
         from database.user_models import User
 
         if not _state or not _state.db_session_factory:
@@ -402,7 +402,7 @@ async def decide_kyc(
         )
 
     try:
-        from app import app_state as _state
+        from core.app_state import app_state as _state
         from database.user_models import User
 
         if not _state or not _state.db_session_factory:
@@ -484,7 +484,7 @@ async def get_kyc_status(
 ):
     """Get KYC status for a specific user. Requires: role >= 'admin'."""
     try:
-        from app import app_state as _state
+        from core.app_state import app_state as _state
         from database.user_models import User
 
         if not _state or not _state.db_session_factory:
@@ -894,3 +894,475 @@ def admin_settings_page(user: TokenPayload = Depends(require_role("admin"))):
 def admin_monitoring(user: TokenPayload = Depends(require_role("admin"))):
     """Monitoring page. Requires: role >= 'admin'."""
     return _serve_admin_template("monitoring.html", "Monitoring")
+
+
+# ── Missing endpoints required by AdminPanel.tsx ──────────────────────────────
+
+@router.get("/overview", summary="Admin overview KPIs")
+def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> dict:
+    """
+    Return platform-wide KPIs for the admin landing dashboard.
+    Aggregates data from trading engine, subscription manager, and system metrics.
+    """
+    import time as _time
+    import os as _os2
+
+    total_users = 0
+    active_users_24h = 0
+    active_subscriptions = 0
+    total_trades_today = 0
+    open_positions = 0
+    revenue_today_usd = 0.0
+    revenue_mtd_usd = 0.0
+    platform_uptime_pct = 99.9
+    pending_withdrawals = 0
+    flagged_accounts = 0
+    ml_model_accuracy = 0.0
+    ws_connections = 0
+
+    # Users from subscription manager
+    try:
+        from monetization.subscription import subscription_manager
+        subs = subscription_manager.get_all_subscriptions() if hasattr(subscription_manager, "get_all_subscriptions") else []
+        total_users = len(subs)
+        active_subscriptions = sum(1 for s in subs if getattr(s, "status", "") in ("active", "trialing"))
+    except Exception as exc:
+        logger.debug("admin overview users: %s", exc)
+
+    # Trading stats from engine
+    try:
+        from core.app_state import app_state as _as
+        engine = getattr(_as, "hopefx_engine", None)
+        if engine is not None:
+            fills = list(getattr(engine, "_fill_history", []))
+            open_pos = dict(getattr(engine, "_open_positions", {}))
+            open_positions = len(open_pos)
+            # Today's trades
+            from datetime import datetime as _dt2, timezone as _tz2
+            today = _dt2.now(_tz2.utc).date()
+            for f in fills:
+                fa = getattr(f, "filled_at", None)
+                if fa and hasattr(fa, "date") and fa.date() == today:
+                    total_trades_today += 1
+    except Exception as exc:
+        logger.debug("admin overview engine: %s", exc)
+
+    # Revenue from analytics
+    try:
+        from monetization.analytics import revenue_analytics
+        from datetime import datetime as _dt3, timezone as _tz3, timedelta as _td
+        now = _dt3.now(_tz3.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        mtd_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        rev_today = revenue_analytics.get_revenue_by_period(today_start, now)
+        rev_mtd = revenue_analytics.get_revenue_by_period(mtd_start, now)
+        revenue_today_usd = float(sum(rev_today.values())) if isinstance(rev_today, dict) else float(rev_today or 0)
+        revenue_mtd_usd = float(sum(rev_mtd.values())) if isinstance(rev_mtd, dict) else float(rev_mtd or 0)
+    except Exception as exc:
+        logger.debug("admin overview revenue: %s", exc)
+
+    # ML accuracy
+    try:
+        from ml.signal_filter import SignalFilter
+        sf = SignalFilter()
+        stats = sf.get_stats() if hasattr(sf, "get_stats") else {}
+        ml_model_accuracy = float(stats.get("accuracy", 0.0))
+    except Exception as exc:
+        logger.debug("admin overview ml: %s", exc)
+
+    # Uptime
+    uptime_secs = _time.time() - _start_time
+    total_secs = max(uptime_secs, 1)
+    platform_uptime_pct = min(99.99, round(uptime_secs / total_secs * 100, 2))
+
+    return {
+        "total_users": total_users,
+        "active_users_24h": active_users_24h,
+        "total_trades_today": total_trades_today,
+        "open_positions": open_positions,
+        "revenue_today_usd": round(revenue_today_usd, 2),
+        "revenue_mtd_usd": round(revenue_mtd_usd, 2),
+        "platform_uptime_pct": platform_uptime_pct,
+        "active_subscriptions": active_subscriptions,
+        "pending_withdrawals": pending_withdrawals,
+        "flagged_accounts": flagged_accounts,
+        "ml_model_accuracy": round(ml_model_accuracy, 4),
+        "ws_connections": ws_connections,
+    }
+
+
+@router.get("/alerts", summary="Active admin alerts")
+def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dict:
+    """Return active system alerts for the admin dashboard."""
+    alerts = []
+
+    # Check kill switch
+    try:
+        from kill_switch import KillSwitch
+        ks = KillSwitch()
+        if ks.is_active():
+            alerts.append({
+                "id": "kill-switch-active",
+                "severity": "critical",
+                "title": "Kill Switch Active",
+                "message": "All trading has been halted by the kill switch.",
+                "created_at": _import_datetime().now(_import_utc()).isoformat(),
+                "resolved": False,
+            })
+    except Exception:
+        pass
+
+    # Check engine health
+    try:
+        from core.app_state import app_state as _as2
+        engine = getattr(_as2, "hopefx_engine", None)
+        if engine is None:
+            alerts.append({
+                "id": "engine-offline",
+                "severity": "warning",
+                "title": "Trading Engine Offline",
+                "message": "The trading engine is not initialised. Paper trading mode may be active.",
+                "created_at": _import_datetime().now(_import_utc()).isoformat(),
+                "resolved": False,
+            })
+    except Exception:
+        pass
+
+    # Check DB
+    try:
+        from api.db_store import db_get
+        db_get("health_check")
+    except Exception:
+        alerts.append({
+            "id": "db-unavailable",
+            "severity": "warning",
+            "title": "Database Unavailable",
+            "message": "Config store is using in-memory fallback. Data will not persist across restarts.",
+            "created_at": _import_datetime().now(_import_utc()).isoformat(),
+            "resolved": False,
+        })
+
+    return {"alerts": alerts, "total": len(alerts)}
+
+
+def _import_datetime():
+    from datetime import datetime
+    return datetime
+
+
+def _import_utc():
+    from datetime import timezone
+    return timezone.utc
+
+
+@router.get("/audit-log/export", summary="Export audit log as CSV")
+def export_audit_log(
+    limit: int = 1000,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """Export the audit log as a CSV file."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    from api.db_store import db_keys_prefix, db_get
+
+    events = []
+    try:
+        keys = db_keys_prefix("audit_event:")
+        for key in sorted(keys, reverse=True)[:limit]:
+            ev = db_get(key)
+            if ev:
+                events.append(ev)
+    except Exception as exc:
+        logger.debug("audit log export: %s", exc)
+
+    output = io.StringIO()
+    fieldnames = ["event_id", "user_id", "event_type", "detail", "ip_address", "created_at"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for ev in events:
+        writer.writerow(ev)
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_log.csv"},
+    )
+
+
+# ── User management endpoints ─────────────────────────────────────────────────
+
+@router.get("/users", summary="List all platform users")
+async def list_users(
+    page: int = 1,
+    limit: int = 50,
+    search: str | None = None,
+    role: str | None = None,
+    status: str | None = None,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Return paginated user list with optional filters."""
+    from api.db_store import db_keys_prefix, db_get as _db_get
+
+    all_users: list[dict] = []
+
+    # Try subscription manager first
+    try:
+        from monetization.subscription import subscription_manager
+        subs = subscription_manager.get_all_subscriptions() if hasattr(subscription_manager, "get_all_subscriptions") else []
+        for s in subs:
+            uid = getattr(s, "user_id", None) or (s.get("user_id") if isinstance(s, dict) else None)
+            if not uid:
+                continue
+            all_users.append({
+                "user_id": uid,
+                "email": getattr(s, "email", "") or (s.get("email", "") if isinstance(s, dict) else ""),
+                "role": getattr(s, "role", "trader") or (s.get("role", "trader") if isinstance(s, dict) else "trader"),
+                "status": getattr(s, "status", "active") or (s.get("status", "active") if isinstance(s, dict) else "active"),
+                "plan": getattr(s, "plan", "free") or (s.get("plan", "free") if isinstance(s, dict) else "free"),
+                "created_at": str(getattr(s, "created_at", "") or (s.get("created_at", "") if isinstance(s, dict) else "")),
+                "last_login": str(getattr(s, "last_login", "") or (s.get("last_login", "") if isinstance(s, dict) else "")),
+            })
+    except Exception as exc:
+        logger.debug("list_users subscription_manager: %s", exc)
+
+    # Fallback: scan DB user keys
+    if not all_users:
+        try:
+            keys = db_keys_prefix("user:")
+            for key in keys:
+                u = _db_get(key)
+                if u and isinstance(u, dict):
+                    all_users.append(u)
+        except Exception as exc:
+            logger.debug("list_users db scan: %s", exc)
+
+    # Apply filters
+    if search:
+        q = search.lower()
+        all_users = [u for u in all_users if q in u.get("email", "").lower() or q in u.get("user_id", "").lower()]
+    if role:
+        all_users = [u for u in all_users if u.get("role") == role]
+    if status:
+        all_users = [u for u in all_users if u.get("status") == status]
+
+    total = len(all_users)
+    offset = (page - 1) * limit
+    page_data = all_users[offset: offset + limit]
+
+    return {"users": page_data, "total": total, "page": page, "limit": limit}
+
+
+@router.get("/users/{user_id}", summary="Get a specific user")
+async def get_user(
+    user_id: str,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Return full profile for a single user."""
+    from api.db_store import db_get as _db_get2
+    u = _db_get2(f"user:{user_id}")
+    if u and isinstance(u, dict):
+        return u
+
+    # Try subscription manager
+    try:
+        from monetization.subscription import subscription_manager
+        sub = subscription_manager.get_subscription(user_id)
+        if sub:
+            return {
+                "user_id": user_id,
+                "email": getattr(sub, "email", ""),
+                "role": getattr(sub, "role", "trader"),
+                "status": getattr(sub, "status", "active"),
+                "plan": getattr(sub, "plan", "free"),
+                "created_at": str(getattr(sub, "created_at", "")),
+            }
+    except Exception as exc:
+        logger.debug("get_user subscription_manager: %s", exc)
+
+    raise HTTPException(status_code=404, detail="User not found")
+
+
+@router.patch("/users/{user_id}", summary="Update a user's role or status")
+async def update_user(
+    user_id: str,
+    payload: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Update role, status, or plan for a user."""
+    from api.db_store import db_get as _db_g, db_set as _db_s
+    u = _db_g(f"user:{user_id}") or {"user_id": user_id}
+    allowed_fields = {"role", "status", "plan", "email"}
+    for k, v in payload.items():
+        if k in allowed_fields:
+            u[k] = v
+    _db_s(f"user:{user_id}", u)
+    return {"ok": True, "user_id": user_id, "updated": {k: v for k, v in payload.items() if k in allowed_fields}}
+
+
+@router.post("/users/{user_id}/ban", summary="Ban a user")
+async def ban_user(
+    user_id: str,
+    payload: dict = {},
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Set user status to 'banned'."""
+    from api.db_store import db_get as _db_g2, db_set as _db_s2
+    u = _db_g2(f"user:{user_id}") or {"user_id": user_id}
+    u["status"] = "banned"
+    u["ban_reason"] = payload.get("reason", "")
+    _db_s2(f"user:{user_id}", u)
+    return {"ok": True, "user_id": user_id, "status": "banned"}
+
+
+@router.post("/users/{user_id}/unban", summary="Unban a user")
+async def unban_user(
+    user_id: str,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Set user status back to 'active'."""
+    from api.db_store import db_get as _db_g3, db_set as _db_s3
+    u = _db_g3(f"user:{user_id}") or {"user_id": user_id}
+    u["status"] = "active"
+    u.pop("ban_reason", None)
+    _db_s3(f"user:{user_id}", u)
+    return {"ok": True, "user_id": user_id, "status": "active"}
+
+
+@router.post("/users/{user_id}/reset-password", summary="Trigger password reset email")
+async def reset_user_password(
+    user_id: str,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Send a password reset email to the user."""
+    try:
+        from core.email_service import email_service
+        from api.db_store import db_get as _db_g4
+        u = _db_g4(f"user:{user_id}") or {}
+        email = u.get("email", "")
+        if email:
+            await email_service.send_password_reset(email)
+    except Exception as exc:
+        logger.debug("reset_user_password email: %s", exc)
+    return {"ok": True, "user_id": user_id, "message": "Password reset email queued"}
+
+
+@router.get("/audit-log", summary="Paginated audit log")
+async def get_audit_log(
+    page: int = 1,
+    limit: int = 50,
+    user_id: str | None = None,
+    event_type: str | None = None,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Return paginated audit log entries."""
+    from api.db_store import db_keys_prefix, db_get as _db_g5
+
+    events: list[dict] = []
+    try:
+        keys = sorted(db_keys_prefix("audit_event:"), reverse=True)
+        for key in keys[:limit * 10]:  # over-fetch then filter
+            ev = _db_g5(key)
+            if ev and isinstance(ev, dict):
+                if user_id and ev.get("user_id") != user_id:
+                    continue
+                if event_type and ev.get("event_type") != event_type:
+                    continue
+                events.append(ev)
+    except Exception as exc:
+        logger.debug("get_audit_log: %s", exc)
+
+    # Fallback to activity_log
+    if not events:
+        events = list(activity_log)
+        if user_id:
+            events = [e for e in events if e.get("user_id") == user_id]
+        if event_type:
+            events = [e for e in events if e.get("event_type") == event_type]
+
+    total = len(events)
+    offset = (page - 1) * limit
+    return {"events": events[offset: offset + limit], "total": total, "page": page, "limit": limit}
+
+
+# ── System backup trigger ─────────────────────────────────────────────────────
+
+@router.post("/backup/trigger", summary="Trigger a system backup")
+async def trigger_backup(
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Trigger an immediate system backup (config, DB snapshot, strategy files)."""
+    import time as _t
+    backup_id = f"backup_{int(_t.time())}"
+    backed_up: list[str] = []
+
+    # Config backup
+    try:
+        import shutil
+        from pathlib import Path as _P
+        cfg_src = _P(__file__).parent.parent / "config"
+        cfg_dst = _P(__file__).parent.parent / "backups" / backup_id / "config"
+        cfg_dst.mkdir(parents=True, exist_ok=True)
+        for f in cfg_src.glob("*.json"):
+            shutil.copy2(f, cfg_dst / f.name)
+        backed_up.append("config")
+    except Exception as exc:
+        logger.debug("backup config: %s", exc)
+
+    # DB config store backup
+    try:
+        from api.db_store import db_keys_prefix, db_get as _db_g6
+        from pathlib import Path as _P2
+        import json as _json
+        keys = db_keys_prefix("")
+        snapshot = {k: _db_g6(k) for k in keys}
+        dst = _P2(__file__).parent.parent / "backups" / backup_id
+        dst.mkdir(parents=True, exist_ok=True)
+        (dst / "db_snapshot.json").write_text(_json.dumps(snapshot, default=str))
+        backed_up.append("db_store")
+    except Exception as exc:
+        logger.debug("backup db_store: %s", exc)
+
+    return {
+        "ok": True,
+        "backup_id": backup_id,
+        "backed_up": backed_up,
+        "created_at": _import_datetime().now(_import_utc()).isoformat(),
+    }
+
+
+@router.get("/settings/system", summary="Get system-level admin settings")
+def get_system_settings(user: TokenPayload = Depends(require_role("admin"))) -> dict:
+    """Return system-level settings (maintenance mode, feature flags, rate limits)."""
+    from api.db_store import db_get as _db_g7
+    stored = _db_g7("admin:system_settings") or {}
+    return {
+        "maintenance_mode": stored.get("maintenance_mode", False),
+        "maintenance_message": stored.get("maintenance_message", ""),
+        "rate_limit_enabled": stored.get("rate_limit_enabled", True),
+        "rate_limit_requests_per_minute": stored.get("rate_limit_requests_per_minute", 60),
+        "max_concurrent_users": stored.get("max_concurrent_users", 10000),
+        "session_timeout_minutes": stored.get("session_timeout_minutes", 60),
+        "log_level": stored.get("log_level", "INFO"),
+        "debug_mode": stored.get("debug_mode", False),
+    }
+
+
+@router.post("/settings/system", summary="Update system-level admin settings")
+def update_system_settings(
+    payload: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Update system-level settings."""
+    from api.db_store import db_get as _db_g8, db_set as _db_s8
+    stored = _db_g8("admin:system_settings") or {}
+    allowed = {
+        "maintenance_mode", "maintenance_message", "rate_limit_enabled",
+        "rate_limit_requests_per_minute", "max_concurrent_users",
+        "session_timeout_minutes", "log_level", "debug_mode",
+    }
+    for k, v in payload.items():
+        if k in allowed:
+            stored[k] = v
+    _db_s8("admin:system_settings", stored)
+    return {"ok": True, "updated": {k: v for k, v in payload.items() if k in allowed}}

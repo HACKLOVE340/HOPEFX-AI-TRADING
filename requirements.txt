@@ -20,7 +20,7 @@ asyncpg>=0.29.0
 psycopg2-binary>=2.9.0
 
 # ── Caching ───────────────────────────────────────────────────────────────────
-redis>=5.0.0
+redis[asyncio]>=5.0.0
 kubernetes-asyncio>=29.0.0   # K8s ConfigMap fallback for kill switch cross-pod propagation
 kubernetes>=29.0.0            # sync K8s client (used when no event loop is running)
 
@@ -220,3 +220,12 @@ opentelemetry-instrumentation-redis>=0.45b0,<1.0.0
 opentelemetry-instrumentation-aiohttp-client>=0.45b0,<1.0.0
 # W3C trace context propagation
 opentelemetry-propagator-b3>=1.24.0,<2.0.0
+
+# ── Load testing ──────────────────────────────────────────────────────────────
+# Required by locust/load_tests.py
+locust>=2.24.0,<3.0.0
+
+# ── Notebook building ─────────────────────────────────────────────────────────
+# Required by examples/build_notebook.py
+nbformat>=5.9.0
+ipython>=8.12.0

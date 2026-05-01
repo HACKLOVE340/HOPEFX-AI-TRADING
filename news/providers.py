@@ -283,16 +283,39 @@ class RSSFeedProvider(NewsProvider):
     Supports: Forex Factory, Trading Economics, Reuters, Bloomberg, etc.
     """
 
+    # Publicly accessible RSS feeds for financial/forex news.
+    # Feeds are tried in order; failures are logged and skipped gracefully.
+    # Override individual feeds via RSS_FEED_<NAME>=<url> env vars, e.g.:
+    #   RSS_FEED_REUTERS=https://feeds.reuters.com/reuters/businessNews
     DEFAULT_FEEDS = {
-        "forex_factory": "https://www.forexfactory.com/feed",
-        "trading_economics": "https://tradingeconomics.com/rss/news.aspx",
-        "reuters": "https://www.reutersagency.com/feed/",
-        "bloomberg": "https://www.bloomberg.com/feed/podcast/etf-report.xml",
+        "reuters_business": "https://feeds.reuters.com/reuters/businessNews",
+        "reuters_markets": "https://feeds.reuters.com/reuters/UKmarkets",
+        "investing_com": "https://www.investing.com/rss/news.rss",
+        "marketwatch": "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines",
+        "ft_markets": "https://www.ft.com/markets?format=rss",
+        "yahoo_finance": "https://finance.yahoo.com/news/rssindex",
+        "cnbc_finance": "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
+        "seeking_alpha": "https://seekingalpha.com/market_currents.xml",
     }
 
     def __init__(self):
         super().__init__()
+        # Allow per-feed URL overrides via environment variables.
+        # RSS_FEED_REUTERS=https://... overrides the "reuters_business" feed, etc.
         self.feeds = self.DEFAULT_FEEDS.copy()
+        import os as _os
+        for name in list(self.feeds.keys()):
+            env_key = f"RSS_FEED_{name.upper()}"
+            override = _os.getenv(env_key, "")
+            if override:
+                self.feeds[name] = override
+                logger.info("RSS feed '%s' overridden via %s", name, env_key)
+        # Allow adding entirely new feeds via RSS_FEED_EXTRA_<NAME>=<url>
+        for key, val in _os.environ.items():
+            if key.startswith("RSS_FEED_EXTRA_") and val:
+                feed_name = key[len("RSS_FEED_EXTRA_"):].lower()
+                self.feeds[feed_name] = val
+                logger.info("RSS feed '%s' added via %s", feed_name, key)
 
     def add_feed(self, name: str, url: str):
         """Add a custom RSS feed"""

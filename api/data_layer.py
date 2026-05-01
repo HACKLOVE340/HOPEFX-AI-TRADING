@@ -63,11 +63,47 @@ async def data_layer_health(user: TokenPayload = Depends(get_current_user)) -> d
 async def get_latest_tick(
     symbol: str = Query("XAU_USD"), user: TokenPayload = Depends(get_current_user)
 ) -> dict[str, Any]:
-    """Latest validated consensus tick."""
+    """Latest validated consensus tick.
+
+    Returns the most recent tick from the live feed when available.
+    When no live feed is running (e.g. dev environment without API keys),
+    returns a 200 with ``available: false`` rather than a 503 so callers
+    can distinguish "feed not started" from "service down".
+    """
     orch = _get_orchestrator()
     tick = orch.get_latest_tick(symbol)
     if tick is None:
-        raise HTTPException(status_code=503, detail="No live tick available")
+        # Try to get a price from yfinance as a fallback for dev environments
+        fallback_price: float | None = None
+        try:
+            import yfinance as _yf
+            _ticker = _yf.Ticker("GC=F" if symbol in ("XAU_USD", "XAUUSD") else symbol)
+            _info = _ticker.fast_info
+            fallback_price = float(_info.last_price) if hasattr(_info, "last_price") and _info.last_price else None
+        except Exception:
+            pass
+
+        if fallback_price is not None:
+            return {
+                "symbol": symbol,
+                "timestamp": datetime.now(UTC).isoformat(),
+                "bid": round(fallback_price - 0.10, 5),
+                "ask": round(fallback_price + 0.10, 5),
+                "mid": fallback_price,
+                "spread": 0.20,
+                "source": "yfinance_fallback",
+                "quality": "low",
+                "confidence": 0.5,
+                "lineage_id": None,
+                "available": True,
+                "note": "Live feed not started — using yfinance fallback price",
+            }
+        return {
+            "symbol": symbol,
+            "available": False,
+            "note": "Live feed not started. Start the orchestrator or configure GOLDAPI_KEY.",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     return {
         "symbol": tick.symbol,
         "timestamp": tick.timestamp.isoformat(),
@@ -79,6 +115,7 @@ async def get_latest_tick(
         "quality": tick.quality.value,
         "confidence": tick.confidence,
         "lineage_id": tick.lineage_id,
+        "available": True,
     }
 
 

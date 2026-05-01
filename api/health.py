@@ -597,7 +597,8 @@ async def _check_master_control() -> ComponentStatus:
     """Check whether the master control centre (MCC) is wired and running."""
     t0 = time.perf_counter()
     try:
-        from core.mcc.master_control import MasterControlCentre  # type: ignore[import]
+        # MasterControlCore is the actual class name (MasterControlCentre is an alias)
+        from core.mcc.master_control import MasterControlCore  # type: ignore[import]
         from core.app_state import app_state as _app_state  # type: ignore[import]
 
         mcc = getattr(_app_state, "mcc", None)

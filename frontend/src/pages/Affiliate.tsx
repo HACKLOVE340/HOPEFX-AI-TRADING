@@ -32,11 +32,15 @@ const Affiliate:React.FC=()=>{
   const [apiError,setApiError]=useState<string|null>(null);
   const [subErrors,setSubErrors]=useState<Record<string,string>>({});
   const [copied,setCopied]=useState(false);
+  const copiedTimerRef=React.useRef<ReturnType<typeof setTimeout>|null>(null);
   const [signupLoading,setSignupLoading]=useState(false);
   const [activeTab,setActiveTab]=useState<Tab>('overview');
   const [withdrawAmt,setWithdrawAmt]=useState('');
   const [withdrawing,setWithdrawing]=useState(false);
   const [withdrawMsg,setWithdrawMsg]=useState('');
+
+  // Cleanup copy timer on unmount
+  React.useEffect(()=>()=>{if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);},[]);
 
   const loadData=useCallback(async()=>{
     if(!userId)return; setLoading(true); setApiError(null); setSubErrors({});
@@ -84,7 +88,7 @@ const Affiliate:React.FC=()=>{
 
   const copyLink=()=>{
     if(!account)return;
-    navigator.clipboard.writeText(`${window.location.origin}/?ref=${account.code}`).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2500);});
+    navigator.clipboard.writeText(`${window.location.origin}/?ref=${account.code}`).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
   };
 
   if(!userId)return(<div style={st.page}><p style={{color:'#94a3b8'}}>Please log in to view your affiliate dashboard.</p></div>);

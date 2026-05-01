@@ -37,6 +37,7 @@ Provides endpoints for:
 """
 
 import asyncio
+import concurrent.futures as _concurrent_futures
 import logging
 import os
 import platform
@@ -255,7 +256,7 @@ _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
 
-# ── Decision Engine router (/decision) ───────────────────────────────────────
+# ── Decision Engine router (/api/decision) ───────────────────────────────────
 try:
     from core.decision.HOPEFXDecisionEngine import create_decision_router
     from core.app_state import app_state as _app_state
@@ -263,7 +264,7 @@ try:
     _decision_engine = getattr(_app_state, "decision_engine", None)
     if _decision_engine is not None:
         app.include_router(create_decision_router(_decision_engine))
-        logger.info("Decision engine router registered at /decision")
+        logger.info("Decision engine router registered at /api/decision")
     else:
         # Engine not yet initialised at import time (startup not complete).
         # Register a deferred router that resolves the engine from app_state
@@ -281,7 +282,7 @@ try:
             low: float
             volume: float = 0.0
 
-        _decision_deferred = _APIRouter(prefix="/decision", tags=["Decision Engine"])
+        _decision_deferred = _APIRouter(prefix="/api/decision", tags=["Decision Engine"])
 
         @_decision_deferred.get("/status", summary="Decision engine health and metrics")
         async def _decision_status():
@@ -318,7 +319,7 @@ try:
             return {"reset": True}
 
         app.include_router(_decision_deferred)
-        logger.info("Decision engine deferred router registered at /decision (engine pending init)")
+        logger.info("Decision engine deferred router registered at /api/decision (engine pending init)")
 except Exception as _decision_router_err:
     logger.warning("Decision engine router failed to register: %s", _decision_router_err)
 
@@ -380,6 +381,17 @@ try:
     _setup_tracing(app)
 except Exception as _otel_err:
     logger.debug("OpenTelemetry setup skipped: %s", _otel_err)
+
+# Register TracingMiddleware so every HTTP request is captured in the
+# in-memory span ring buffer (_SPAN_BUFFER) and X-Trace-ID / X-Span-ID
+# headers are injected into every response.
+try:
+    from api.tracing import TracingMiddleware as _TracingMiddleware
+
+    app.add_middleware(_TracingMiddleware)
+    logger.info("TracingMiddleware registered — span buffer active")
+except Exception as _tm_err:
+    logger.warning("TracingMiddleware registration failed: %s", _tm_err)
 
 
 # AppState extracted to core/app_state.py — re-exported here for backwards compat
@@ -451,8 +463,24 @@ async def lifespan(_app: FastAPI):
     init_sentry()
     # Task 38: Redis-backed rate limiting
     setup_rate_limiting(_app)
+    # Increase the default thread pool so yfinance / blocking I/O calls
+    # don't starve when many background tasks are running.
+    _io_executor = _concurrent_futures.ThreadPoolExecutor(
+        max_workers=32, thread_name_prefix="hopefx-io"
+    )
+    asyncio.get_event_loop().set_default_executor(_io_executor)
+
     await kill_switch.start()
-    await startup_event()
+    # Run startup_event as a background task so the lifespan yields immediately
+    # and uvicorn starts accepting HTTP requests without waiting for all feeds
+    # (FRED, CFTC, IMF, Yahoo, gold) to connect.  The server returns 503 on
+    # data-dependent endpoints until app_state.initialized is True.
+    _startup_task = asyncio.create_task(startup_event(), name="startup_event")
+    _startup_task.add_done_callback(
+        lambda t: logger.error("startup_event failed: %s", t.exception())
+        if not t.cancelled() and t.exception()
+        else None
+    )
     # Start Sharpe circuit breaker as a top-level lifespan task so it always
     # runs even if startup_event() raises before reaching the call inside it.
     # Mirrors the pattern used for Prometheus, WS broadcasters, and nuclear engine.
@@ -512,6 +540,7 @@ async def lifespan(_app: FastAPI):
         logger.warning("Live WS broadcasters not started: %s", _ws_err)
 
     # Mount nuclear dashboard WebSocket + REST routes (/ws/nuclear, /api/nuclear/*)
+    app.state.nuclear_available = False
     try:
         from charting.nuclear_ai_chart_engine import (
             get_chart_engine as _get_chart_engine,
@@ -522,9 +551,15 @@ async def lifespan(_app: FastAPI):
         mount_nuclear_routes(app, _nuclear_engine)
         _t = asyncio.create_task(_nuclear_engine.start(), name="nuclear-chart-engine")
         _t.add_done_callback(lambda _: None)
+        app.state.nuclear_available = True
         logger.info("[OK] Nuclear dashboard routes mounted (/ws/nuclear, /api/nuclear/*)")
     except Exception as _nuclear_err:
-        logger.warning("Nuclear dashboard routes not mounted: %s", _nuclear_err)
+        logger.warning(
+            "Nuclear dashboard routes not mounted — /ws/nuclear will send "
+            "'nuclear_unavailable' to clients instead of silently returning null data. "
+            "Cause: %s",
+            _nuclear_err,
+        )
 
     # Warm up leaderboard cache so GET /api/leaderboard serves data immediately
     # rather than returning an empty list until the first 15-minute scheduler tick.
@@ -598,7 +633,7 @@ async def startup_event():
         apply_persisted_risk_settings()
         _tasks_done.append("risk_settings")
 
-        _start_data_layer_orchestrator(app_state)
+        await _start_data_layer_orchestrator(app_state)
         _tasks_done.append("data_layer_orchestrator")
 
         _init_kyc_gateway(app_state)
@@ -662,14 +697,28 @@ def _push_state_to_api_modules(state) -> None:
             logger.warning("Failed to push state to %s: %s", _mod_name, _e)
 
 
-def _start_data_layer_orchestrator(state) -> None:
-    """Start the data layer orchestrator as a background task (non-fatal)."""
+async def _start_data_layer_orchestrator(state) -> None:
+    """Await the data layer orchestrator startup (non-fatal).
+
+    Previously used asyncio.create_task() which fire-and-forgot the coroutine,
+    meaning _started was never set before the health check ran and all
+    /api/data-layer/* endpoints returned 503. Awaiting directly ensures the
+    orchestrator is fully initialised before startup_event() returns.
+    """
+    _orch_timeout = float(os.getenv("ORCHESTRATOR_STARTUP_TIMEOUT_S", "60.0"))
     try:
         from data_layer.orchestrator import orchestrator
 
-        _t = asyncio.create_task(orchestrator.start(), name="data_layer_orchestrator")
-        _t.add_done_callback(lambda _: None)
-        logger.info("Data layer orchestrator starting in background")
+        await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
+        state.data_layer_orchestrator = orchestrator
+        logger.info("Data layer orchestrator started")
+    except asyncio.TimeoutError:
+        logger.warning(
+            "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
+            "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "
+            "to increase the limit.",
+            _orch_timeout,
+        )
     except Exception as _exc:
         logger.warning("Data layer orchestrator failed to start (non-fatal): %s", _exc)
 
@@ -880,24 +929,31 @@ register_page_routes(app)  # mounts React dashboard LAST
 
 def run_server():
     """Run the API server."""
-    # Default to localhost for security; set API_HOST=0.0.0.0 in production.
-    host = os.getenv("API_HOST", "127.0.0.1")
+    # Default to 0.0.0.0 so the server is reachable inside containers/Gitpod.
+    # Override with API_HOST env var for production deployments.
+    host = os.getenv("API_HOST", "0.0.0.0")
     try:
         port = int(os.getenv("API_PORT", "8000"))
     except ValueError:
         port = 8000
-    reload = os.getenv("ENVIRONMENT", "development") == "development"
+
+    # Reload is controlled explicitly via UVICORN_RELOAD env var.
+    # Default: off — watchfiles reload causes restart loops when source files
+    # are written during startup (log files, .env, generated assets).
+    # Enable with UVICORN_RELOAD=true only when actively developing.
+    reload = os.getenv("UVICORN_RELOAD", "false").lower() == "true"
 
     # On Windows, uvicorn must use a single worker with SelectorEventLoop.
     # Multiple workers via fork() are not supported on Windows.
-    if platform.system() == "Windows":
+    # With reload=True, uvicorn ignores the workers flag (uses 1 internally).
+    if platform.system() == "Windows" or reload:
         workers = 1
-        loop = "asyncio"
+        loop = "asyncio" if platform.system() == "Windows" else "auto"
     else:
-        workers = int(os.getenv("API_WORKERS", "4"))
+        workers = int(os.getenv("API_WORKERS", "1"))
         loop = "auto"
 
-    logger.info("Starting API server on %s:%s (workers=%d)", host, port, workers)
+    logger.info("Starting API server on %s:%s (workers=%d, reload=%s)", host, port, workers, reload)
 
     uvicorn.run(
         "app:app",

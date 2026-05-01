@@ -110,7 +110,7 @@ _COL_MAP = {
 _CACHE_DIR = Path(os.getenv("COT_CACHE_DIR", "data/macro"))
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=60.0)
+_HTTP_TIMEOUT = aiohttp.ClientTimeout(total=float(os.getenv("CFTC_HTTP_TIMEOUT_S", "10.0")))
 
 # How many years of history to fetch on first run
 _HISTORY_YEARS = int(os.getenv("COT_HISTORY_YEARS", "5"))

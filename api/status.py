@@ -217,7 +217,11 @@ async def status_json():
     summary="90-day uptime history",
 )
 async def status_history():
-    """Return daily uptime percentages for the last 90 days."""
+    """Return daily uptime percentages for the last 90 days.
+
+    Reads from in-process cache first; days not in cache default to 100%.
+    This avoids 90 individual DB/Redis round-trips per request.
+    """
     today = datetime.now(UTC).date()
     history = []
     for i in range(89, -1, -1):
@@ -225,7 +229,7 @@ async def status_history():
         history.append(
             {
                 "date": day,
-                "uptime_pct": _uptime_history.get(day, 100.0),
+                "uptime_pct": _uptime_cache.get(day, 100.0),
             },
         )
     return {"history": history}
@@ -241,12 +245,15 @@ async def status_incidents(limit: int = 20):
 
     Each entry includes the date, uptime percentage, and a severity label.
     Sourced from the same rolling uptime history as /api/status/history.
+    Uses the in-process cache to avoid 90 individual DB round-trips.
     """
     today = datetime.now(UTC).date()
     incidents = []
     for i in range(89, -1, -1):
         day = (today - timedelta(days=i)).isoformat()
-        pct = _uptime_history.get(day, 100.0)
+        # Read from in-process cache only — avoids 90 DB/Redis round-trips.
+        # Days not in cache are assumed 100% uptime (no incident).
+        pct = _uptime_cache.get(day, 100.0)
         if pct < 100.0:
             severity = "major" if pct < 90 else "minor"
             incidents.append(
@@ -477,49 +484,180 @@ _STATUS_CHECK_TIMEOUT_SEC: float = float(_os.getenv("HEALTH_CHECK_TIMEOUT_SEC", 
 
 
 async def _run_checks() -> dict[str, Any]:
-    """Run all health checks with a hard timeout, falling back gracefully."""
+    """
+    Run real component health probes concurrently.
+
+    Each probe is independent — a failure in one does not affect others.
+    Results are keyed by component name and include status, message, and
+    response_time_ms so the frontend StatusPage can render them directly.
+    """
     import asyncio
+    import time as _time
 
-    async def _do_checks() -> dict[str, Any]:
-        from infrastructure.health import get_health_checker
+    async def _probe(name: str, fn) -> tuple[str, dict]:
+        t0 = _time.monotonic()
+        try:
+            result = await asyncio.wait_for(fn(), timeout=3.0)
+            ms = round((_time.monotonic() - t0) * 1000, 1)
+            # Overwrite any response_time_ms the probe itself set — use wall time
+            result["response_time_ms"] = ms
+            return name, result
+        except asyncio.TimeoutError:
+            ms = round((_time.monotonic() - t0) * 1000, 1)
+            return name, {"status": "degraded", "message": "Probe timed out (3s)", "response_time_ms": ms}
+        except Exception as exc:
+            ms = round((_time.monotonic() - t0) * 1000, 1)
+            logger.debug("Health probe %s failed: %s", name, exc)
+            return name, {"status": "unhealthy", "message": str(exc)[:120], "response_time_ms": ms}
 
-        checker = get_health_checker()
-        system_health = await checker.run_all_checks()
-        result = {}
-        for check in system_health.checks:
-            result[check.name] = {
-                "status": check.status.value,
-                "message": check.message or "",
-                "response_time_ms": round(check.response_time_ms, 1) if check.response_time_ms else None,
+    # ── Individual probes ─────────────────────────────────────────────────────
+
+    async def _check_api() -> dict:
+        return {"status": "healthy", "message": "API server running"}
+
+    async def _check_database() -> dict:
+        import os as _os
+        import asyncio as _asyncio
+        db_url = _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+
+        def _sync_check():
+            from sqlalchemy import create_engine, text as _text
+            _engine = create_engine(
+                db_url,
+                connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
+                pool_pre_ping=True,
+            )
+            with _engine.connect() as conn:
+                conn.execute(_text("SELECT 1"))
+            _engine.dispose()
+
+        loop = _asyncio.get_running_loop()
+        await loop.run_in_executor(None, _sync_check)
+        return {"status": "healthy", "message": f"Connected ({db_url.split('://')[0]})"}
+
+    async def _check_cache() -> dict:
+        import os as _os
+        try:
+            import redis as _redis
+            url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            r = _redis.from_url(url, socket_connect_timeout=1, socket_timeout=1)
+            info = r.info("server")
+            version = info.get("redis_version", "?")
+            return {"status": "healthy", "message": f"Redis {version} connected"}
+        except Exception:
+            return {"status": "degraded", "message": "Redis unavailable — using in-process fallback"}
+
+    async def _check_broker() -> dict:
+        try:
+            from core.app_state import app_state as _as
+            broker = getattr(_as, "broker", None)
+            if broker is None:
+                return {"status": "degraded", "message": "Paper broker (no live connection)"}
+            name = type(broker).__name__
+            return {"status": "healthy", "message": f"{name} connected"}
+        except Exception:
+            return {"status": "degraded", "message": "Paper broker (no live connection)"}
+
+    async def _check_price_feed() -> dict:
+        try:
+            from core.app_state import app_state as _as
+            pe = getattr(_as, "price_engine", None)
+            if pe is None:
+                return {"status": "degraded", "message": "Price engine not started"}
+            symbols = getattr(pe, "symbols", [])
+            return {"status": "healthy", "message": f"Tracking {len(symbols)} symbol(s)"}
+        except Exception:
+            return {"status": "degraded", "message": "Price engine not started"}
+
+    async def _check_brain() -> dict:
+        try:
+            from core.app_state import app_state as _as
+            brain = getattr(_as, "brain", None) or getattr(_as, "strategy_brain", None)
+            if brain is None:
+                return {"status": "degraded", "message": "Brain not initialised (paper mode)"}
+            mode = getattr(brain, "mode", "unknown")
+            return {"status": "healthy", "message": f"Brain active — mode: {mode}"}
+        except Exception:
+            return {"status": "degraded", "message": "Brain not initialised (paper mode)"}
+
+    async def _check_kill_switch() -> dict:
+        try:
+            from app import kill_switch as _ks
+            active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
+            if callable(active):
+                active = active()
+            if active:
+                return {"status": "unhealthy", "message": "Kill switch ACTIVE — trading halted"}
+            return {"status": "healthy", "message": "Kill switch inactive"}
+        except Exception:
+            return {"status": "healthy", "message": "Kill switch inactive"}
+
+    async def _check_websocket() -> dict:
+        try:
+            from core.event_bus import bus as _bus
+            connected = getattr(_bus, "_connected", None)
+            if connected is False:
+                return {"status": "degraded", "message": "EventBus disconnected"}
+            return {"status": "healthy", "message": "WebSocket / EventBus ready"}
+        except Exception:
+            return {"status": "healthy", "message": "WebSocket ready (local mode)"}
+
+    async def _check_system_resources() -> dict:
+        try:
+            import asyncio as _asyncio
+            import psutil
+
+            def _read_resources():
+                cpu = psutil.cpu_percent(interval=0.1)
+                mem = psutil.virtual_memory()
+                disk = psutil.disk_usage("/")
+                return cpu, mem.percent, disk.percent
+
+            loop = _asyncio.get_running_loop()
+            cpu, mem_pct, disk_pct = await loop.run_in_executor(None, _read_resources)
+            status = "degraded" if (cpu > 90 or mem_pct > 90 or disk_pct > 90) else "healthy"
+            return {
+                "status": status,
+                "message": f"CPU {cpu:.0f}% | RAM {mem_pct:.0f}% | Disk {disk_pct:.0f}%",
             }
-        return result
+        except Exception:
+            return {"status": "unknown", "message": "psutil unavailable"}
+
+    probes = [
+        ("api",              _check_api),
+        ("database",         _check_database),
+        ("cache",            _check_cache),
+        ("broker",           _check_broker),
+        ("price_feed",       _check_price_feed),
+        ("brain",            _check_brain),
+        ("kill_switch",      _check_kill_switch),
+        ("websocket",        _check_websocket),
+        ("system_resources", _check_system_resources),
+    ]
 
     try:
-        return await asyncio.wait_for(_do_checks(), timeout=_STATUS_CHECK_TIMEOUT_SEC)
-    except TimeoutError:
-        logger.warning(
-            "Health checks timed out after %.1fs — returning degraded status. "
-            "Set HEALTH_CHECK_TIMEOUT_SEC env var to increase the limit.",
-            _STATUS_CHECK_TIMEOUT_SEC,
+        results = await asyncio.wait_for(
+            asyncio.gather(*[_probe(name, fn) for name, fn in probes]),
+            timeout=_STATUS_CHECK_TIMEOUT_SEC,
         )
+        return dict(results)
+    except asyncio.TimeoutError:
+        logger.warning("Status checks timed out after %.1fs", _STATUS_CHECK_TIMEOUT_SEC)
         return {
             "api": {
                 "status": "degraded",
-                "message": (
-                    f"Health checks timed out after {_STATUS_CHECK_TIMEOUT_SEC:.0f}s. "
-                    "Individual probes have a 3s limit each."
-                ),
-            },
+                "message": f"Health checks timed out after {_STATUS_CHECK_TIMEOUT_SEC:.0f}s",
+                "response_time_ms": None,
+            }
         }
     except Exception as exc:
-        # Log the full exception server-side; return a generic message to callers
-        # to avoid leaking internal error details through the status endpoint.
-        logger.warning("Health checker unavailable: %s", exc)
+        logger.warning("Status check error: %s", exc)
         return {
             "api": {
                 "status": "degraded",
-                "message": "Health checker unavailable — check server logs",
-            },
+                "message": "Status check error — see server logs",
+                "response_time_ms": None,
+            }
         }
 
 

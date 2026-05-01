@@ -83,10 +83,12 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   marketplace:  'free',
   affiliate:    'free',
   status:       'free',
+  // Journal and performance are core trading tools — available on free tier
+  // so new users can track their paper trades from day one.
+  journal:      'free',
+  performance:  'free',
 
   // ── Starter ───────────────────────────────────────────────────────────────
-  journal:      'starter',
-  performance:  'starter',
   alerts:       'starter',
   'risk-calc':  'starter',
   wallet:       'starter',

@@ -177,7 +177,16 @@ const TradeJournal: React.FC = () => {
           </div>
 
           {loading ? <div style={s.empty}>Loading…</div> :
-           trades.length === 0 ? <div style={s.empty}>No trades yet.</div> :
+           trades.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📓</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No journal entries yet</div>
+              <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
+                Journal entries are created automatically when you close a trade.
+                Head to the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to make your first trade.
+              </div>
+            </div>
+           ) :
            trades.map((entry) => (
             <div key={entry.trade_id} style={s.tradeCard}>
               {/* Header row */}

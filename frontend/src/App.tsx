@@ -25,6 +25,7 @@ import AuthGuard from './components/AuthGuard';
 import AdminGuard from './components/AdminGuard';
 import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
+import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
@@ -251,12 +252,11 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, EBState> {
 
 // ── No-live-feed banner ───────────────────────────────────────────────────────
 const NoLiveFeedBanner: React.FC = () => {
-  const status    = useStore((s) => s.wsStatus);
-  const isAuth    = useStore(selectIsAuth);
+  const status       = useStore((s) => s.wsStatus);
+  const noLiveFeed   = useStore((s) => s.noLiveFeed);
+  const noLiveFeedMsg = useStore((s) => s.noLiveFeedMsg);
+  const isAuth       = useStore(selectIsAuth);
   const [dismissed, setDismissed]   = React.useState(false);
-  // Only show the banner after the WS has had at least one connection attempt.
-  // This prevents a flash of "No live feed" on initial page load before the
-  // WebSocket has had a chance to connect.
   const [attempted, setAttempted]   = React.useState(false);
 
   React.useEffect(() => {
@@ -264,15 +264,19 @@ const NoLiveFeedBanner: React.FC = () => {
   }, [status]);
 
   React.useEffect(() => {
-    if (status === 'connected') setDismissed(false);
-  }, [status]);
+    // Re-show banner on reconnect if server still reports no live feed.
+    if (status === 'connected' && !noLiveFeed) setDismissed(false);
+  }, [status, noLiveFeed]);
 
-  // Don't show until: authenticated, at least one attempt made, not connected, not dismissed
-  if (!isAuth || !attempted || status === 'connected' || dismissed) return null;
+  // Show when: authenticated, attempted, and either WS is down OR server sent no_live_feed
+  const showWsDown    = isAuth && attempted && status !== 'connected' && !dismissed;
+  const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
+  if (!showWsDown && !showNoFeed) return null;
 
   const label =
+    showNoFeed          ? (noLiveFeedMsg ?? 'No live broker feed — prices may be delayed.') :
     status === 'connecting' ? 'Connecting to live feed…' :
-    status === 'error'      ? 'Live feed error — using REST fallback' :
+    status === 'error'      ? 'Live feed error — using REST fallback (30 s polling)' :
                               'No live feed — using REST fallback (prices may be delayed)';
 
   const bg     = status === 'connecting' ? '#78350f' : '#450a0a';
@@ -362,14 +366,20 @@ const AppShell: React.FC = () => {
       color: 'var(--text, #f1f5f9)',
       fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
     }}>
-      {/* Banner is in normal flow — pushes content down instead of overlapping it */}
+      {/* Banners are in normal flow — push content down instead of overlapping */}
+      <TrialBanner />
       <NoLiveFeedBanner />
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
       <main style={{
-        flex: 1, overflowY: 'auto', overflowX: 'hidden',
+        flex: 1, overflow: 'hidden',
         background: 'var(--bg, #0f172a)',
+        display: 'flex', flexDirection: 'column',
       }}>
+        {/* PageScroller: scrollable wrapper for all non-terminal pages.
+            Terminal pages (TradingDashboard, ChartDashboard) manage their own
+            overflow internally and use flex:1 to fill this container. */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Core */}
@@ -384,11 +394,13 @@ const AppShell: React.FC = () => {
 
             {/* Trading */}
             {/* /ai-charts = AI Chart Bot (primary advanced terminal, professional+) */}
-            <Route path="/ai-charts"    element={wrap(gated('trading',      <ChartDashboard />))} />
+            <Route path="/ai-charts"          element={wrap(gated('trading',      <ChartDashboard />))} />
+            {/* /ai-chart-dashboard = AI Chart Dashboard (full AI analysis view) */}
+            <Route path="/ai-chart-dashboard" element={wrap(gated('trading',      <AIChartDashboard />))} />
             {/* /terminal = classic trading terminal (starter+) */}
-            <Route path="/terminal"     element={wrap(gated('terminal',     <TradingTerminal />))} />
+            <Route path="/terminal"           element={wrap(gated('terminal',     <TradingTerminal />))} />
             {/* /trading kept as alias for /ai-charts for backward compat */}
-            <Route path="/trading"      element={<Navigate to="/ai-charts" replace />} />
+            <Route path="/trading"            element={<Navigate to="/ai-charts" replace />} />
             <Route path="/nuclear"      element={wrap(gated('nuclear',      <NuclearDashboard />))} />
             <Route path="/geopolitical" element={wrap(gated('geopolitical', <GeopoliticalRiskPage />))} />
             <Route path="/journal"      element={wrap(gated('journal',      <TradeJournal />))} />
@@ -424,6 +436,8 @@ const AppShell: React.FC = () => {
             <Route path="/sub-accounts"    element={wrap(gated('sub-accounts', <SubAccounts />))} />
             <Route path="/elite"           element={wrap(gated('elite',        <EliteDashboard />))} />
             <Route path="/checkout"        element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
+            {/* /pricing inside AppShell so authenticated users keep the sidebar */}
+            <Route path="/pricing"         element={wrap(<PricingPage />)} />
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
@@ -454,6 +468,7 @@ const AppShell: React.FC = () => {
             />
           </Routes>
         </Suspense>
+        </div>
       </main>
       </div>
     </div>

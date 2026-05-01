@@ -1014,35 +1014,160 @@ async def close_all_positions(
     return {"status": "success", "closed_positions": closed}
 
 
-@router.get("/account", response_model=None, summary="Get broker account snapshot")
+@router.get("/account", response_model=None, summary="Get full AccountMetrics snapshot")
 async def get_account(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Get account information. Requires: any authenticated user.
+    Return a complete AccountMetrics payload for the authenticated user.
 
-    Returns a normalised dict compatible with the mobile app Account type:
-      account_id, balance, equity, margin_used, margin_available,
-      unrealized_pnl, daily_pnl, daily_pnl_pct, currency
+    Fields returned (all required by the frontend AccountMetrics type):
+      balance, equity, margin_used, margin_free, margin_level,
+      daily_pnl, daily_pnl_pct, total_pnl, win_rate, sharpe_ratio,
+      sortino_ratio, max_drawdown, open_trades, open_risk_pct,
+      cvar_95, kill_switch, unrealized_pnl, currency, account_id
     """
+    import math as _math
+    import os as _os
+
+    # ── Broker account info ───────────────────────────────────────────────────
     if not app_state or not app_state.broker:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
-        )
+        # Paper mode: seed balance from env, enrich with real DB trade stats
+        starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
+
+        # Pull real trade stats from DB even in paper mode
+        _win_rate = 0.0
+        _sharpe = 0.0
+        _sortino = 0.0
+        _max_dd = 0.0
+        _total_pnl = 0.0
+        _open_trades = 0
+        _open_risk_pct = 0.0
+        _cvar_95 = 0.0
+        _unrealized = 0.0
+        _daily_pnl = 0.0
+        _balance = starting
+
+        try:
+            from database.connection import SessionLocal as _SL
+            from database.models import Trade, TradeStatus
+            import datetime as _dt
+
+            _db = _SL()
+            try:
+                closed = (
+                    _db.query(Trade)
+                    .filter(Trade.status == TradeStatus.CLOSED)
+                    .order_by(Trade.exit_time.asc())
+                    .all()
+                )
+                open_qs = _db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
+                _open_trades = len(open_qs)
+
+                if closed:
+                    pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                    _total_pnl = round(sum(pnls), 2)
+                    _balance = round(starting + _total_pnl, 2)
+                    wins = [p for p in pnls if p > 0]
+                    # win_rate as fraction 0-1 (frontend multiplies by 100 for display)
+                    _win_rate = round(len(wins) / len(pnls), 4) if pnls else 0.0
+
+                    # Equity curve for drawdown + Sharpe
+                    eq_vals: list[float] = []
+                    running = starting
+                    for p in pnls:
+                        running += p
+                        eq_vals.append(running)
+
+                    peak = starting
+                    for v in eq_vals:
+                        peak = max(peak, v)
+                        dd = (peak - v) / peak if peak > 0 else 0.0
+                        _max_dd = max(_max_dd, dd)
+                    # max_drawdown as fraction 0-1 (frontend multiplies by 100 for display)
+                    _max_dd = round(_max_dd, 4)
+
+                    if len(pnls) >= 10:
+                        rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
+                        if rets:
+                            mean_r = sum(rets) / len(rets)
+                            var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
+                            std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
+                            _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+                            neg_rets = [r for r in rets if r < 0]
+                            if neg_rets:
+                                down_var = sum(r ** 2 for r in neg_rets) / len(neg_rets)
+                                down_std = _math.sqrt(down_var)
+                                _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+                            sorted_rets = sorted(rets)
+                            cutoff = max(1, int(len(sorted_rets) * 0.05))
+                            _cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
+
+                # Daily P&L from trades closed today
+                today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+                today_closed = [t for t in closed if t.exit_time and t.exit_time >= today_start]
+                _daily_pnl = round(sum(float(t.realized_pnl or 0.0) for t in today_closed), 2)
+
+                # Unrealized P&L from open trades
+                _unrealized = round(sum(float(t.unrealized_pnl or 0.0) for t in open_qs if hasattr(t, "unrealized_pnl")), 2)
+
+                # Open risk
+                equity_est = _balance + _unrealized
+                if open_qs and equity_est > 0:
+                    total_notional = sum(
+                        float(t.quantity or 0.0) * float(t.entry_price or 0.0)
+                        for t in open_qs
+                    )
+                    _open_risk_pct = round(total_notional / equity_est * 100, 2)
+            finally:
+                _db.close()
+        except Exception as _exc:
+            logger.debug("Paper account DB stats failed: %s", _exc)
+
+        _equity = round(_balance + _unrealized, 2)
+        _daily_pnl_pct = round((_daily_pnl / _balance * 100) if _balance > 0 else 0.0, 4)
+
+        # Kill switch state
+        _ks_active = False
+        try:
+            from app import kill_switch as _ks
+            active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
+            _ks_active = bool(active() if callable(active) else active)
+        except Exception:
+            pass
+
+        return {
+            "account_id":    user.sub,
+            "balance":       _balance,
+            "equity":        _equity,
+            "margin_used":   0.0,
+            "margin_free":   _equity,
+            "margin_level":  0.0,
+            "daily_pnl":     _daily_pnl,
+            "daily_pnl_pct": _daily_pnl_pct,
+            "total_pnl":     _total_pnl,
+            "unrealized_pnl": _unrealized,
+            "win_rate":      _win_rate,
+            "sharpe_ratio":  _sharpe,
+            "sortino_ratio": _sortino,
+            "max_drawdown":  _max_dd,
+            "open_trades":   _open_trades,
+            "open_risk_pct": _open_risk_pct,
+            "cvar_95":       _cvar_95,
+            "kill_switch":   _ks_active,
+            "currency":      "USD",
+        }
 
     raw = await _broker_call("get_account_info")
 
-    # Normalise to a consistent dict regardless of broker implementation
     def _f(obj, *keys, default=0.0):
-        """Extract first matching attribute/key from obj, return default if missing."""
         for k in keys:
             v = getattr(obj, k, None) if not isinstance(obj, dict) else obj.get(k)
             if v is not None:
                 try:
                     return float(v)
                 except (TypeError, ValueError):
-                    ...  # nosec B110
+                    pass
         return default
 
     def _s(obj, *keys, default=""):
@@ -1052,24 +1177,127 @@ async def get_account(
                 return str(v)
         return default
 
-    balance = _f(raw, "balance", "nav", "net_liquidation")
-    equity = _f(raw, "equity", "balance", "nav") or balance
-    margin_used = _f(raw, "margin_used", "margin", "used_margin")
-    margin_avail = _f(raw, "margin_available", "free_margin", "available_margin") or (equity - margin_used)
-    unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
-    daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
-    daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
+    balance      = _f(raw, "balance", "nav", "net_liquidation")
+    equity       = _f(raw, "equity", "balance", "nav") or balance
+    margin_used  = _f(raw, "margin_used", "margin", "used_margin")
+    margin_free  = _f(raw, "margin_available", "free_margin", "available_margin") or max(equity - margin_used, 0.0)
+    margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+    unrealized   = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
+    daily_pnl    = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
+    daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
+
+    # ── Trade statistics from DB ──────────────────────────────────────────────
+    win_rate = 0.0
+    sharpe_ratio = 0.0
+    sortino_ratio = 0.0
+    max_drawdown = 0.0
+    total_pnl = 0.0
+    open_trades = 0
+    open_risk_pct = 0.0
+    cvar_95 = 0.0
+
+    try:
+        from database.connection import get_db as _get_db
+        from database.models import Trade, TradeStatus
+
+        db = next(_get_db())
+        try:
+            # Closed trades for stats
+            closed = (
+                db.query(Trade)
+                .filter(Trade.status == TradeStatus.CLOSED)
+                .order_by(Trade.exit_time.asc())
+                .all()
+            )
+            # Open trades count
+            open_qs = db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
+            open_trades = len(open_qs)
+
+            if closed:
+                pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                total_pnl = round(sum(pnls), 2)
+                wins = [p for p in pnls if p > 0]
+                win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
+
+                # Equity curve for drawdown + Sharpe
+                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+                eq_vals: list[float] = []
+                running = starting
+                for p in pnls:
+                    running += p
+                    eq_vals.append(running)
+
+                # Max drawdown
+                peak = starting
+                for v in eq_vals:
+                    peak = max(peak, v)
+                    dd = (peak - v) / peak if peak > 0 else 0.0
+                    max_drawdown = max(max_drawdown, dd)
+                max_drawdown = round(max_drawdown * 100, 2)  # as %
+
+                # Sharpe (annualised, daily returns)
+                if len(pnls) >= 10:
+                    rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
+                    if rets:
+                        mean_r = sum(rets) / len(rets)
+                        var_r = sum((r - mean_r) ** 2 for r in rets) / len(rets)
+                        std_r = _math.sqrt(var_r) if var_r > 0 else 0.0
+                        sharpe_ratio = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
+
+                        # Sortino (downside deviation only)
+                        neg_rets = [r for r in rets if r < 0]
+                        if neg_rets:
+                            down_var = sum(r ** 2 for r in neg_rets) / len(neg_rets)
+                            down_std = _math.sqrt(down_var)
+                            sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
+
+                        # CVaR 95% (average of worst 5% returns)
+                        sorted_rets = sorted(rets)
+                        cutoff = max(1, int(len(sorted_rets) * 0.05))
+                        cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
+
+            # Open risk: sum of (quantity × entry_price) / equity
+            if open_qs and equity > 0:
+                total_notional = sum(
+                    float(t.quantity or 0.0) * float(t.entry_price or 0.0)
+                    for t in open_qs
+                )
+                open_risk_pct = round(total_notional / equity * 100, 2)
+
+        finally:
+            db.close()
+    except Exception as _exc:
+        logger.debug("Account stats from DB failed: %s", _exc)
+
+    # ── Kill switch state ─────────────────────────────────────────────────────
+    kill_switch_active = False
+    try:
+        from app import kill_switch as _ks
+        active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
+        kill_switch_active = bool(active() if callable(active) else active)
+    except Exception:
+        pass
 
     return {
-        "account_id": _s(raw, "account_id", "id", "accountId", default=user.sub),
-        "balance": round(balance, 2),
-        "equity": round(equity, 2),
-        "margin_used": round(margin_used, 2),
-        "margin_available": round(margin_avail, 2),
+        "account_id":    _s(raw, "account_id", "id", "accountId", default=user.sub),
+        "balance":       round(balance, 2),
+        "equity":        round(equity, 2),
+        "margin_used":   round(margin_used, 2),
+        "margin_free":   round(margin_free, 2),
+        "margin_level":  margin_level,
+        "daily_pnl":     round(daily_pnl, 2),
+        "daily_pnl_pct": daily_pnl_pct,
+        "total_pnl":     total_pnl,
         "unrealized_pnl": round(unrealized, 2),
-        "daily_pnl": round(daily_pnl, 2),
-        "daily_pnl_pct": round(daily_pnl_pct, 4),
-        "currency": _s(raw, "currency", "base_currency", default="USD"),
+        "win_rate":      win_rate,
+        "sharpe_ratio":  sharpe_ratio,
+        "sortino_ratio": sortino_ratio,
+        "max_drawdown":  max_drawdown,
+        "open_trades":   open_trades,
+        "open_risk_pct": open_risk_pct,
+        "cvar_95":       cvar_95,
+        "kill_switch":   kill_switch_active,
+        "currency":      _s(raw, "currency", "base_currency", default="USD"),
     }
 
 
@@ -1119,10 +1347,63 @@ async def get_prices(
                 }
         return prices
 
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Price engine not available",
-    )
+    # Path 3: yfinance real-time fallback (no broker required)
+    # Maps internal symbol → yfinance ticker. Only used when no broker/engine
+    # is running (API-only mode). Returns real market prices, not synthetic data.
+    _YF_MAP = {
+        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X", "USDJPY": "USDJPY=X", "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD", "USDCAD": "USDCAD=X", "AUDUSD": "AUDUSD=X",
+        "USDCHF": "USDCHF=X", "NZDUSD": "NZDUSD=X",
+    }
+    _SPREAD_MAP = {
+        "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
+        "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+        "ETHUSD": 1.0, "USDCAD": 0.0002, "AUDUSD": 0.0001,
+        "USDCHF": 0.0001, "NZDUSD": 0.0001,
+    }
+    try:
+        import time as _time
+        import yfinance as _yf
+        tickers = list(_YF_MAP.values())
+        data = await asyncio.wait_for(
+            asyncio.to_thread(_yf.download, tickers, period="1d", interval="1m",
+                              progress=False, auto_adjust=True),
+            timeout=10.0,
+        )
+        now = _time.time()
+        for sym, yf_ticker in _YF_MAP.items():
+            try:
+                if hasattr(data.columns, "levels"):
+                    close_col = ("Close", yf_ticker)
+                    if close_col in data.columns:
+                        series = data[close_col].dropna()
+                    else:
+                        continue
+                else:
+                    series = data["Close"].dropna()
+                if series.empty:
+                    continue
+                price = float(series.iloc[-1])
+                if price <= 0:
+                    continue
+                spread = _SPREAD_MAP.get(sym, price * 0.0002)
+                prices[sym] = {
+                    "bid": round(price - spread / 2, 5),
+                    "ask": round(price + spread / 2, 5),
+                    "last": round(price, 5),
+                    "timestamp": now,
+                }
+            except Exception:
+                continue
+        if prices:
+            return prices
+    except Exception as _yf_exc:
+        logger.warning("yfinance price fallback failed: %s", _yf_exc)
+
+    # All paths exhausted — return empty dict (not 503) so the frontend
+    # REST poll doesn't hang and can show the no_live_feed banner instead.
+    return {}
 
 
 @router.get(
@@ -1142,38 +1423,97 @@ async def get_ohlcv(
     The :path converter captures the full path segment including any '/' characters
     so that un-encoded slashes in the URL are handled gracefully.
     """
-    # Normalise XAU/USD → XAUUSD before validation so both forms are accepted.
-    symbol = symbol.replace("/", "").replace("%2F", "").upper()
-    symbol = validate_order_symbol(symbol)
-
-    if not app_state or not app_state.price_engine:
+    # Normalise: XAU/USD, XAU_USD, xau_usd → XAUUSD
+    symbol = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
+    # Sanitise for read-only data endpoint — allow any alphanumeric symbol up to 12 chars.
+    # validate_order_symbol is reserved for order placement (smaller allowed set).
+    import re as _re
+    if not _re.match(r'^[A-Z0-9]{2,12}$', symbol):
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Price engine not available",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid symbol format: '{symbol}'. Expected 2-12 alphanumeric characters.",
         )
 
+    # ── Try price engine first ────────────────────────────────────────────────
+    if app_state and app_state.price_engine:
+        try:
+            data = await asyncio.wait_for(
+                app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
+                timeout=25.0,
+            )
+            # Only use engine data if it has real price variation (not synthetic flat bars)
+            if data and len(data) >= 2:
+                prices = [d.close for d in data]
+                if max(prices) - min(prices) > 0.001:
+                    return [
+                        {
+                            "timestamp": d.timestamp,
+                            "open": d.open,
+                            "high": d.high,
+                            "low": d.low,
+                            "close": d.close,
+                            "volume": d.volume,
+                        }
+                        for d in data
+                    ]
+        except TimeoutError:
+            logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
+        except Exception as exc:
+            logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)
+
+    # ── Direct yfinance fallback ──────────────────────────────────────────────
+    # Used when price engine is unavailable or returns synthetic flat bars.
     try:
-        data = await asyncio.wait_for(
-            app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
-            timeout=25.0,  # yfinance fallback can be slow; 25s < frontend 30s timeout
-        )
-    except TimeoutError:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="OHLCV data fetch timed out — market data source is slow",
-        ) from None
+        import yfinance as _yf
+        import pandas as _pd
 
-    return [
-        {
-            "timestamp": d.timestamp,
-            "open": d.open,
-            "high": d.high,
-            "low": d.low,
-            "close": d.close,
-            "volume": d.volume,
+        _YF_MAP = {
+            "XAUUSD": "GC=F", "XAGUSD": "SI=F", "XPTUSD": "PL=F",
+            "EURUSD": "EURUSD=X", "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X",
+            "USDCHF": "CHF=X", "AUDUSD": "AUDUSD=X", "NZDUSD": "NZDUSD=X",
+            "USDCAD": "CAD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
+            "US30": "YM=F", "US500": "ES=F", "NAS100": "NQ=F",
+            "USOIL": "CL=F", "UKOIL": "BZ=F",
         }
-        for d in data
-    ]
+        _TF_MAP = {
+            "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
+            "30m": ("30m", "60d"), "1h": ("1h", "730d"), "4h": ("1h", "730d"),
+            "1d": ("1d", "5y"), "1w": ("1wk", "10y"),
+        }
+        ticker_sym = _YF_MAP.get(symbol, symbol)
+        interval, period = _TF_MAP.get(timeframe, ("1h", "730d"))
+
+        loop = asyncio.get_running_loop()
+
+        def _fetch_yf():
+            t = _yf.Ticker(ticker_sym)
+            df = t.history(period=period, interval=interval, auto_adjust=True)
+            if df.empty:
+                return []
+            df = df.tail(limit)
+            bars = []
+            for ts, row in df.iterrows():
+                bars.append({
+                    "timestamp": int(ts.timestamp()),
+                    "open":   round(float(row["Open"]),   5),
+                    "high":   round(float(row["High"]),   5),
+                    "low":    round(float(row["Low"]),    5),
+                    "close":  round(float(row["Close"]),  5),
+                    "volume": round(float(row.get("Volume", 0)), 2),
+                })
+            return bars
+
+        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=25.0)
+        if bars:
+            logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
+            return bars
+    except Exception as exc:
+        logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
+
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail=f"No OHLCV data available for {symbol} — price engine offline and yfinance unavailable",
+    )
 
 
 @router.get("/signals", summary="Active trading signals from the signal engine")
@@ -1208,14 +1548,61 @@ async def get_trading_signals(
 async def get_brain_state(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get AI brain state. Requires: any authenticated user."""
-    if not app_state or not app_state.brain:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Brain not available",
-        )
+    """Get AI brain state. Returns a graceful fallback when brain is not yet initialised."""
+    if app_state and app_state.brain:
+        try:
+            raw = app_state.brain.state.to_dict()
+            # Normalise to the shape the frontend expects:
+            #   mode            — human-readable operating mode
+            #   status          — same as mode (alias)
+            #   active_strategies — list of active strategy names
+            #   confidence      — overall confidence score 0-1
+            #   updated_at      — ISO timestamp
+            system_state = raw.get("system_state", "running")
+            # Derive active strategies from brain if available
+            active_strategies: list[str] = []
+            try:
+                strats = getattr(app_state.brain, "active_strategies", None)
+                if strats:
+                    active_strategies = [
+                        getattr(s, "name", str(s)) for s in strats
+                    ] if not isinstance(strats, list) else [
+                        s if isinstance(s, str) else getattr(s, "name", str(s))
+                        for s in strats
+                    ]
+            except Exception:
+                pass
+            # Derive confidence from performance metrics
+            confidence = 0.0
+            try:
+                perf = raw.get("performance", {})
+                # Use inverse of latency as a proxy for confidence when no ML score
+                lat = perf.get("latency_ms", 0)
+                confidence = max(0.0, min(1.0, 1.0 - lat / 1000.0)) if lat > 0 else 0.75
+            except Exception:
+                pass
+            return {
+                **raw,
+                "mode": system_state,
+                "status": system_state,
+                "active_strategies": active_strategies,
+                "confidence": confidence,
+                "updated_at": datetime.fromtimestamp(
+                    raw.get("timestamp", 0), tz=UTC
+                ).isoformat() if raw.get("timestamp") else datetime.now(UTC).isoformat(),
+            }
+        except Exception as _exc:
+            logger.debug("brain state serialisation failed: %s", _exc)
 
-    return app_state.brain.state.to_dict()
+    # Graceful fallback — brain not yet initialised (paper mode / startup)
+    return {
+        "status": "initialising",
+        "mode": "paper",
+        "active_strategies": [],
+        "confidence": 0.0,
+        "updated_at": datetime.now(UTC).isoformat(),
+        "note": "Brain not yet initialised — paper trading mode",
+    }
 
 
 @router.post("/paper/start", status_code=202)
@@ -1313,47 +1700,63 @@ def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> 
 
     Queries by Trade.user_id directly (preferred path).  Falls back to joining
     through Account when a trade was created before the user_id column existed.
+    Uses SessionLocal directly so it works in paper mode (no app_state.db_session_factory).
     """
     try:
-        from app import app_state as _state
+        from database.connection import SessionLocal as _SL
         from database.models import Account, Trade
 
-        if not _state or not _state.db_session_factory:
-            return []
-        with _state.db_session_factory() as session:  # pylint: disable=not-callable
+        session = _SL()
+        try:
             # Primary: trades with user_id set directly
             q_direct = session.query(Trade).filter(Trade.user_id == user_id)
             # Fallback: trades linked via Account.user_id (legacy rows)
-            q_via_account = (
-                session.query(Trade)
-                .join(Account, Trade.account_id == Account.id)
-                .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
-                .filter(Trade.user_id.is_(None))
-            )
-            combined = q_direct.union(q_via_account)
+            try:
+                q_via_account = (
+                    session.query(Trade)
+                    .join(Account, Trade.account_id == Account.id)
+                    .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
+                    .filter(Trade.user_id.is_(None))
+                )
+                combined = q_direct.union(q_via_account)
+            except Exception:
+                combined = q_direct
             if symbol:
                 combined = combined.filter(Trade.symbol == symbol.upper())
             combined = combined.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
             return combined.all()
+        finally:
+            session.close()
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
 
 
 def _trade_to_dict(t) -> dict:
+    raw_status = getattr(t, "status", "")
+    status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
+    entry_time = getattr(t, "entry_time", None)
+    exit_time  = getattr(t, "exit_time",  None)
+    # quantity: prefer entry_quantity (canonical column), fall back to size or quantity
+    qty = (
+        getattr(t, "entry_quantity", None)
+        or getattr(t, "size", None)
+        or getattr(t, "quantity", None)
+        or 0
+    )
     return {
-        "trade_id": getattr(t, "trade_id", str(getattr(t, "id", ""))),
-        "symbol": getattr(t, "symbol", ""),
-        "side": getattr(t, "side", ""),
-        "quantity": getattr(t, "quantity", 0),
-        "entry_price": getattr(t, "entry_price", 0),
-        "exit_price": getattr(t, "exit_price", None),
-        "realized_pnl": getattr(t, "realized_pnl", 0),
-        "commission": getattr(t, "commission", 0),
-        "status": getattr(t, "status", ""),
-        "strategy": getattr(t, "strategy", ""),
-        "entry_time": str(getattr(t, "entry_time", "")),
-        "exit_time": str(getattr(t, "exit_time", "") or ""),
+        "trade_id":    getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
+        "symbol":      getattr(t, "symbol", "") or "",
+        "side":        getattr(t, "side", "") or "",
+        "quantity":    float(qty or 0),
+        "entry_price": float(getattr(t, "entry_price", 0) or 0),
+        "exit_price":  float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None,
+        "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0),
+        "commission":  float(getattr(t, "commission", 0) or 0),
+        "status":      status_str,
+        "strategy":    getattr(t, "strategy", "") or "",
+        "entry_time":  entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or ""),
+        "exit_time":   exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or ""),
     }
 
 
@@ -1731,44 +2134,69 @@ except Exception:  # nosec B110 — strategy sub-router registration failure is 
 # endpoint as /trading/risk-metrics inside the strategy sub-router.
 
 
-@router.get("/risk", response_model=None, summary="Risk metrics (alias for /risk-metrics)")
+@router.get("/risk", response_model=None, summary="Risk metrics snapshot")
 async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
     """
-    Alias for ``GET /api/trading/risk-metrics``.
-
-    Requires: any authenticated user.
-
-    Returns daily PnL, max drawdown, open position count, margin used, and
-    a composite risk score.  Delegates to the same implementation used by
-    the strategy sub-router endpoint.
+    Fast risk metrics snapshot — returns immediately from in-memory broker state.
+    No blocking I/O. Falls back to zeros when broker is not yet initialised.
     """
+    import math as _m
+
     try:
         broker = getattr(app_state, "broker", None)
         if broker is None:
             raise AttributeError("no broker")
-        account = broker.get_account_info()
-        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
-        daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
-        margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
-        max_dd = 0.0
-        if hasattr(broker, "get_equity_history"):
-            history = broker.get_equity_history()
-            if history:
-                from api.trading import _compute_max_drawdown
 
-                max_dd = _compute_max_drawdown([v for _, v in history])
+        # Use account info (always fast — in-memory for paper broker)
+        account = broker.get_account_info()
+        balance  = float(getattr(account, "balance",     100_000.0) or 100_000.0)
+        equity   = float(getattr(account, "equity",      balance)   or balance)
+        margin_used = float(getattr(account, "margin_used", 0.0)    or 0.0)
+        daily_pnl   = float(getattr(account, "daily_pnl",  0.0)     or 0.0)
+        open_risk_pct = (margin_used / equity * 100) if equity > 0 else 0.0
+
+        # Max drawdown from equity history (fast — list in memory)
+        max_dd = 0.0
+        try:
+            history = broker.get_equity_history() if hasattr(broker, "get_equity_history") else []
+            if len(history) >= 2:
+                values = [v for _, v in history]
+                peak = values[0]
+                for v in values:
+                    peak = max(peak, v)
+                    dd = (peak - v) / peak if peak > 0 else 0.0
+                    max_dd = max(max_dd, dd)
+        except Exception:
+            pass
+
+        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
         open_count = len(positions)
-        risk_score = min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1))
+        kill_switch = False
+        try:
+            ks = _get_kill_switch()
+            kill_switch = bool(ks and ks.is_active())
+        except Exception:
+            pass
+
         return {
-            "daily_pnl": round(daily_pnl, 2),
-            "max_drawdown": round(max_dd * 100, 3),
+            "daily_pnl":      round(daily_pnl, 2),
+            "daily_pnl_pct":  round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4),
+            "max_drawdown":   round(max_dd * 100, 3),
             "open_positions": open_count,
-            "margin_used": round(margin_used, 2),
-            "risk_score": risk_score,
+            "margin_used":    round(margin_used, 2),
+            "open_risk_pct":  round(open_risk_pct, 3),
+            "kill_switch":    kill_switch,
+            "risk_score":     min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1)),
+            "balance":        round(balance, 2),
+            "equity":         round(equity, 2),
         }
     except Exception as exc:
         logger.debug("GET /trading/risk fallback: %s", exc)
-        return {"daily_pnl": 0.0, "max_drawdown": 0.0, "open_positions": 0, "margin_used": 0.0, "risk_score": 0.0}
+        return {
+            "daily_pnl": 0.0, "daily_pnl_pct": 0.0, "max_drawdown": 0.0,
+            "open_positions": 0, "margin_used": 0.0, "open_risk_pct": 0.0,
+            "kill_switch": False, "risk_score": 0.0, "balance": 0.0, "equity": 0.0,
+        }
 
 
 # ── /trading/ai-analysis ──────────────────────────────────────────────────────
@@ -1779,99 +2207,221 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
 @router.post("/ai-analysis", response_model=None, summary="AI chart-click analysis")
 async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_current_user)):
     """
-    Accept a ``ChartClickContext`` payload and return an ``AIAnalysis`` object.
+    Accept a ChartClickContext payload and return an AIAnalysis object.
 
-    Uses the signal engine and regime detector to produce a structured
-    analysis of the clicked chart point.  Falls back to a sensible default
-    when the ML stack is unavailable.
+    Fetches real OHLCV via yfinance for regime detection and ATR calculation.
+    Falls back gracefully when the ML stack is unavailable.
     """
+    import math as _math
     import uuid as _uuid
     import time as _time
 
     symbol: str = context.get("symbol", "XAUUSD")
+    # Normalise XAU/USD, XAU_USD → XAUUSD
+    symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
     price: float = float(context.get("price", 0.0))
+    timeframe: str = context.get("timeframe", "1h")
     timestamp: int = int(context.get("timestamp", _time.time() * 1000))
 
-    # Attempt to get regime from the live regime router
+    # ── Fetch real OHLCV via yfinance for analysis ────────────────────────────
+    _YF_MAP = {
+        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X", "USDCHF": "CHF=X",
+        "AUDUSD": "AUDUSD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
+        "US500": "ES=F", "NAS100": "NQ=F", "USOIL": "CL=F",
+    }
+    _TF_MAP = {
+        "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
+        "1h": ("1h", "60d"), "4h": ("1h", "60d"), "1d": ("1d", "1y"),
+    }
+    ticker_sym = _YF_MAP.get(symbol_norm, symbol_norm)
+    interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
+
+    ohlcv_bars: list[dict] = []
+    try:
+        import yfinance as _yf
+        loop = asyncio.get_running_loop()
+
+        def _fetch():
+            t = _yf.Ticker(ticker_sym)
+            df = t.history(period=period, interval=interval, auto_adjust=True)
+            if df.empty:
+                return []
+            df = df.tail(100)
+            return [
+                {
+                    "open":   float(r["Open"]),
+                    "high":   float(r["High"]),
+                    "low":    float(r["Low"]),
+                    "close":  float(r["Close"]),
+                    "volume": float(r.get("Volume", 0)),
+                }
+                for _, r in df.iterrows()
+            ]
+
+        ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
+    except asyncio.TimeoutError:
+        logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
+    except Exception as exc:
+        logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
+
+    # Use last close as price if not provided
+    if price <= 0 and ohlcv_bars:
+        price = ohlcv_bars[-1]["close"]
+
+    # ── ATR (14-period) ───────────────────────────────────────────────────────
+    atr_estimate = price * 0.005  # 0.5% fallback
+    if len(ohlcv_bars) >= 14:
+        trs = []
+        for i in range(1, min(15, len(ohlcv_bars))):
+            h = ohlcv_bars[-i]["high"]
+            l = ohlcv_bars[-i]["low"]
+            pc = ohlcv_bars[-i - 1]["close"] if i + 1 <= len(ohlcv_bars) else l
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        if trs:
+            atr_estimate = sum(trs) / len(trs)
+
+    # ── Regime detection from OHLCV ───────────────────────────────────────────
     regime = "ranging"
     regime_confidence = 0.5
-    try:
-        from strategies.regime_router import detect_regime as _detect_regime
+    volatility = "medium"
+    trend = "neutral"
 
-        # Fetch recent OHLCV from the live broker or app_state price engine
-        _ohlcv_df = None
-        try:
-            import pandas as _pd
+    if len(ohlcv_bars) >= 20:
+        closes = [b["close"] for b in ohlcv_bars]
+        # EMA-based trend
+        ema20 = closes[-1]
+        for c in reversed(closes[-20:]):
+            ema20 = ema20 * 0.9 + c * 0.1
+        ema50 = closes[-1]
+        for c in reversed(closes[-min(50, len(closes)):]):
+            ema50 = ema50 * 0.96 + c * 0.04
 
-            if app_state is not None and hasattr(app_state, "broker") and app_state.broker is not None:
-                import asyncio as _asyncio
+        price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
+        ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
 
-                _raw = app_state.broker.get_market_data(symbol, timeframe="1h", limit=100)
-                if _asyncio.iscoroutine(_raw):
-                    _raw = await _raw
-                if _raw:
-                    _ohlcv_df = _pd.DataFrame(_raw)
-        except Exception:  # noqa: BLE001 — OHLCV fetch is best-effort
-            pass
+        # Volatility: ATR as % of price
+        atr_pct = atr_estimate / price if price > 0 else 0
+        if atr_pct > 0.015:
+            volatility = "high"
+        elif atr_pct < 0.005:
+            volatility = "low"
 
-        if _ohlcv_df is not None and len(_ohlcv_df) >= 50:
-            _regime_label, _regime_conf = _detect_regime(_ohlcv_df)
-            regime = str(_regime_label)
-            regime_confidence = float(_regime_conf)
-    except Exception as exc:
-        logger.debug("ai-analysis: regime detection failed: %s", exc)
+        # Regime classification
+        if abs(ema_spread) > 0.005 and abs(price_vs_ema20) > 0.003:
+            if ema_spread > 0:
+                regime = "trending_up"
+                trend = "bullish"
+                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
+            else:
+                regime = "trending_down"
+                trend = "bearish"
+                regime_confidence = min(0.85, 0.5 + abs(ema_spread) * 20)
+        else:
+            regime = "ranging"
+            trend = "neutral"
+            regime_confidence = 0.6
 
-    # Attempt to get latest signal for context
-    summary = f"AI analysis for {symbol} at {price:.5f}"
-    key_drivers: list[str] = []
+    # ── Signal / recommended action ───────────────────────────────────────────
     recommended_action = "hold"
     action_confidence = 0.5
+    key_drivers: list[str] = []
     warnings: list[str] = []
 
-    try:
-        from api.signals import _get_signal_service as _gss
+    if ohlcv_bars:
+        closes = [b["close"] for b in ohlcv_bars]
+        # RSI (14)
+        gains, losses = [], []
+        for i in range(1, min(15, len(closes))):
+            d = closes[-i] - closes[-i - 1]
+            (gains if d > 0 else losses).append(abs(d))
+        avg_gain = sum(gains) / 14 if gains else 0
+        avg_loss = sum(losses) / 14 if losses else 0.001
+        rsi = 100 - (100 / (1 + avg_gain / avg_loss))
 
-        svc = _gss()
-        if svc:
-            latest = svc.get_latest_signal(symbol)
-            if latest:
-                recommended_action = str(latest.get("direction", "hold")).lower()
-                action_confidence = float(latest.get("confidence", 0.5))
-                key_drivers = latest.get("drivers", [])
-                summary = latest.get("explanation", summary)
-    except Exception as exc:
-        logger.debug("ai-analysis: signal service unavailable: %s", exc)
+        if rsi < 35:
+            recommended_action = "buy"
+            action_confidence = round(0.5 + (35 - rsi) / 70, 3)
+            key_drivers.append(f"RSI oversold ({rsi:.1f})")
+        elif rsi > 65:
+            recommended_action = "sell"
+            action_confidence = round(0.5 + (rsi - 65) / 70, 3)
+            key_drivers.append(f"RSI overbought ({rsi:.1f})")
+        else:
+            key_drivers.append(f"RSI neutral ({rsi:.1f})")
 
-    # Price targets: simple ATR-based estimate
-    atr_estimate = price * 0.005  # 0.5% as fallback
-    try:
-        if hasattr(app_state, "price_engine") and app_state.price_engine:
-            ohlcv = await app_state.price_engine.get_ohlcv(symbol, "H1", 14)
-            if ohlcv and len(ohlcv) >= 2:
-                highs = [c[2] for c in ohlcv]
-                lows = [c[3] for c in ohlcv]
-                atr_estimate = sum(h - l for h, l in zip(highs, lows, strict=False)) / len(highs)
-    except Exception as exc:
-        logger.debug("ai-analysis: ATR estimation failed: %s", exc)
+        if regime in ("trending_up",):
+            key_drivers.append("Uptrend confirmed by EMA alignment")
+            if recommended_action == "hold":
+                recommended_action = "buy"
+                action_confidence = 0.6
+        elif regime in ("trending_down",):
+            key_drivers.append("Downtrend confirmed by EMA alignment")
+            if recommended_action == "hold":
+                recommended_action = "sell"
+                action_confidence = 0.6
+
+        key_drivers.append(f"ATR: {atr_estimate:.4f} ({atr_estimate/price*100:.2f}% of price)")
+        key_drivers.append(f"Volatility: {volatility}")
+
+        if volatility == "high":
+            warnings.append("High volatility — widen stops")
+
+    summary = (
+        f"{symbol} is in a {regime.replace('_', ' ')} regime "
+        f"({regime_confidence*100:.0f}% confidence). "
+        f"Trend: {trend}. "
+        f"Recommended: {recommended_action.upper()} at {price:.4f}."
+    )
+
+    # Map buy/sell/hold → long/short/neutral for frontend AIResult.direction
+    _dir_map = {"buy": "long", "sell": "short", "hold": "neutral"}
+    direction = _dir_map.get(recommended_action, "neutral")
+
+    sl = round(price - atr_estimate * 1.5, 5)
+    tp = round(price + atr_estimate * 2.5, 5)
+    if direction == "short":
+        sl = round(price + atr_estimate * 1.5, 5)
+        tp = round(price - atr_estimate * 2.5, 5)
 
     return {
         "id": str(_uuid.uuid4()),
         "timestamp": timestamp,
         "context": context,
-        "regime": regime,
+        # Fields expected by AIResult interface
+        "direction":   direction,
+        "confidence":  round(min(action_confidence, 0.95), 3),
+        "reasoning":   summary,
+        "regime":      regime,
+        "stop_loss":   sl,
+        "take_profit": tp,
+        "entry_zone":  [round(price - atr_estimate * 0.3, 5), round(price + atr_estimate * 0.3, 5)],
+        "key_levels":  [
+            round(price - atr_estimate * 2, 5),
+            round(price - atr_estimate, 5),
+            round(price + atr_estimate, 5),
+            round(price + atr_estimate * 2, 5),
+        ],
+        # Extended fields
         "regimeConfidence": round(regime_confidence, 3),
-        "summary": summary,
-        "keyDrivers": key_drivers,
-        "riskAssessment": f"ATR-based risk estimate: {atr_estimate:.5f}",
+        "volatility":       volatility,
+        "trend":            trend,
+        "summary":          summary,
+        "keyDrivers":       key_drivers,
+        "riskAssessment":   f"ATR({len(ohlcv_bars)}): {atr_estimate:.4f} | SL: {sl:.4f} | TP: {tp:.4f}",
         "recommendedAction": recommended_action,
-        "actionConfidence": round(action_confidence, 3),
+        "actionConfidence":  round(min(action_confidence, 0.95), 3),
         "priceTargets": {
-            "bull": round(price + atr_estimate * 2, 5),
-            "bear": round(price - atr_estimate * 2, 5),
-            "base": round(price + atr_estimate * (1 if recommended_action == "buy" else -1), 5),
+            "bull":        round(price + atr_estimate * 2, 5),
+            "bear":        round(price - atr_estimate * 2, 5),
+            "base":        round(price + atr_estimate * (1 if direction == "long" else -1), 5),
+            "stop_loss":   sl,
+            "take_profit": tp,
         },
-        "timeHorizon": "4H–1D",
-        "warnings": warnings,
+        "timeHorizon":   "4H–1D",
+        "warnings":      warnings,
+        "data_source":   "yfinance" if ohlcv_bars else "fallback",
+        "bars_analyzed": len(ohlcv_bars),
     }
 
 
@@ -1879,56 +2429,136 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 
 
 @router.get("/regime", response_model=None, summary="Current market regime and active strategy")
-async def get_regime_status(user: TokenPayload = Depends(get_current_user)):
+async def get_regime_status(
+    symbol: str = "XAUUSD",
+    user: TokenPayload = Depends(get_current_user),
+):
     """
     Return the current detected market regime, confidence score, and the
     strategy selected by the RegimeRouter for that regime.
 
-    Requires: any authenticated user.
-
-    Also returns recent regime transition history and per-regime backtest
-    performance from the manifest (if available).
+    Uses real OHLCV from yfinance for regime detection.
     """
+    import math as _math
+
+    # Normalise symbol — guard against None (optional query param)
+    symbol = symbol or "XAUUSD"
+    # Normalise XAU/USD, XAU_USD → XAUUSD
+    symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
+
+    _YF_MAP = {
+        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X", "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD", "US500": "ES=F", "NAS100": "NQ=F",
+    }
+    ticker_sym = _YF_MAP.get(symbol_norm, "GC=F")
+
+    closes: list[float] = []
+    highs: list[float] = []
+    lows: list[float] = []
+
     try:
-        from app import app_state
+        import yfinance as _yf
+        loop = asyncio.get_running_loop()
 
-        broker = getattr(app_state, "broker", None)
-        regime_router = getattr(app_state, "regime_router", None)
+        def _fetch():
+            t = _yf.Ticker(ticker_sym)
+            df = t.history(period="60d", interval="1h", auto_adjust=True)
+            if df.empty:
+                return [], [], []
+            df = df.tail(100)
+            return (
+                [float(r["Close"]) for _, r in df.iterrows()],
+                [float(r["High"])  for _, r in df.iterrows()],
+                [float(r["Low"])   for _, r in df.iterrows()],
+            )
 
-        # If no router on app_state, create a transient one for the response
-        if regime_router is None:
-            from strategies.manager import StrategyManager
-            from strategies.regime_router import RegimeRouter
-
-            sm = getattr(app_state, "strategy_manager", None) or StrategyManager()
-            regime_router = RegimeRouter(sm)
-
-        # Try to detect regime from live price data
-        if broker is not None and hasattr(broker, "get_ohlcv"):
-            import asyncio
-
-            import pandas as pd
-
-            _get = broker.get_ohlcv("XAUUSD", limit=100)
-            if asyncio.iscoroutine(_get):
-                ohlcv = await _get
-            else:
-                ohlcv = _get
-            if ohlcv:
-                df = pd.DataFrame(ohlcv)
-                regime_router.route(df)
-
-        return regime_router.status()
-
+        closes, highs, lows = await asyncio.wait_for(
+            loop.run_in_executor(None, _fetch), timeout=25.0
+        )
+    except asyncio.TimeoutError:
+        logger.warning("regime: yfinance fetch timed out for %s", symbol_norm)
     except Exception as exc:
-        logger.warning("regime status error: %s", exc)
-        return {
-            "current_regime": "unknown",
-            "confidence": 0.0,
-            "selected_strategy": "TrendFollowing",
-            "manifest_entries": {},
-            "error": "Regime router unavailable — check server logs",
-        }
+        logger.warning("regime: yfinance fetch failed for %s: %s", symbol_norm, exc)
+
+    # ── Regime detection ──────────────────────────────────────────────────────
+    regime = "ranging"
+    confidence = 0.5
+    volatility = "medium"
+    trend = "neutral"
+    description = "Insufficient data for regime detection"
+
+    if len(closes) >= 20:
+        # EMA 20 and EMA 50
+        ema20 = closes[-1]
+        for c in reversed(closes[-20:]):
+            ema20 = ema20 * 0.9 + c * 0.1
+        ema50 = closes[-1]
+        for c in reversed(closes[-min(50, len(closes)):]):
+            ema50 = ema50 * 0.96 + c * 0.04
+
+        ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
+        price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
+
+        # ATR for volatility
+        trs = [max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+               for i in range(1, min(15, len(closes)))]
+        atr = sum(trs) / len(trs) if trs else closes[-1] * 0.005
+        atr_pct = atr / closes[-1] if closes[-1] > 0 else 0
+
+        if atr_pct > 0.015:
+            volatility = "high"
+        elif atr_pct < 0.005:
+            volatility = "low"
+
+        # Regime
+        if ema_spread > 0.005 and price_vs_ema20 > 0.002:
+            regime = "trending_up"
+            trend = "bullish"
+            confidence = min(0.90, 0.55 + abs(ema_spread) * 15)
+            description = f"Bullish trend: EMA20 ({ema20:.2f}) > EMA50 ({ema50:.2f}), price above EMA20"
+        elif ema_spread < -0.005 and price_vs_ema20 < -0.002:
+            regime = "trending_down"
+            trend = "bearish"
+            confidence = min(0.90, 0.55 + abs(ema_spread) * 15)
+            description = f"Bearish trend: EMA20 ({ema20:.2f}) < EMA50 ({ema50:.2f}), price below EMA20"
+        else:
+            regime = "ranging"
+            trend = "neutral"
+            confidence = 0.65
+            description = f"Ranging market: EMA spread {ema_spread*100:.2f}%, ATR {atr_pct*100:.2f}%"
+
+    # Try regime router if available
+    try:
+        from core.app_state import app_state as _as
+        rr = getattr(_as, "regime_router", None)
+        if rr is not None:
+            status_dict = rr.status()
+            if status_dict.get("current_regime", "unknown") != "unknown":
+                return {
+                    **status_dict,
+                    "regime": status_dict.get("current_regime", regime),
+                    "confidence": status_dict.get("confidence", confidence),
+                    "volatility": volatility,
+                    "trend": trend,
+                    "description": description,
+                    "data_source": "regime_router",
+                }
+    except Exception:
+        pass
+
+    return {
+        "regime": regime,
+        "current_regime": regime,
+        "confidence": round(confidence, 3),
+        "volatility": volatility,
+        "trend": trend,
+        "description": description,
+        "selected_strategy": "TrendFollowing" if "trending" in regime else "MeanReversion",
+        "manifest_entries": {},
+        "data_source": "yfinance" if closes else "fallback",
+        "bars_analyzed": len(closes),
+    }
 
 
 @router.get("/regime/history", response_model=None, summary="Recent regime transition history")
@@ -1938,7 +2568,7 @@ async def get_regime_history(
 ):
     """Return the last N regime transitions with timestamps. Requires: any authenticated user."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         regime_router = getattr(app_state, "regime_router", None)
         if regime_router is None:
@@ -2028,7 +2658,7 @@ def _ohlcv_to_df(ohlcv_list: list):
 async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int = 200) -> list:
     """Fetch OHLCV bars from the price engine for a given symbol."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         if app_state and app_state.price_engine:
             return await app_state.price_engine.get_ohlcv(symbol, timeframe, limit)
@@ -2237,7 +2867,7 @@ async def get_microstructure_alias(
 
     # Fallback: build from price engine tick data
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         if app_state and app_state.price_engine:
             norm = _normalise_symbol(symbol)

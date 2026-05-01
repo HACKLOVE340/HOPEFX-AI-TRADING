@@ -181,7 +181,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
     if _os.getenv("APP_ENV", "development").lower() != "production":
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             broker = getattr(app_state, "broker", None)
             if broker and hasattr(broker, "get_market_data"):
@@ -460,19 +460,32 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                 note = data.get("note") or data.get("validation_notes") or data.get("sharpe_note") or ""
 
                 # If accuracy is still 0 try to derive from InferenceEngine counters
+                # Use a short timeout so a slow model load doesn't block the endpoint.
                 if accuracy == 0.0:
                     try:
-                        from ml.inference_engine import get_inference_engine
+                        import asyncio
+                        import concurrent.futures as _cf
 
-                        eng = get_inference_engine()
-                        h = eng.health()
-                        total = h.get("predict_count", 0)
-                        fallback = h.get("fallback_count", 0)
-                        if total > 0:
-                            accuracy = round(1.0 - fallback / total, 4)
-                            win_rate = accuracy
-                            total_signals = total
-                            note = note or "Accuracy derived from live predict/fallback ratio"
+                        def _engine_health() -> dict:
+                            from ml.inference_engine import get_inference_engine
+                            return get_inference_engine().health()
+
+                        loop = asyncio.get_event_loop()
+                        with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
+                            try:
+                                h = await asyncio.wait_for(
+                                    loop.run_in_executor(_pool, _engine_health),
+                                    timeout=3.0,
+                                )
+                                total = h.get("predict_count", 0)
+                                fallback = h.get("fallback_count", 0)
+                                if total > 0:
+                                    accuracy = round(1.0 - fallback / total, 4)
+                                    win_rate = accuracy
+                                    total_signals = total
+                                    note = note or "Accuracy derived from live predict/fallback ratio"
+                            except (asyncio.TimeoutError, Exception) as _exc:
+                                logger.debug("InferenceEngine health timed out or failed: %s", _exc)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
 
@@ -491,28 +504,40 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
             except Exception as exc:
                 logger.debug("Could not parse eval file %s: %s", p, exc)
 
-    # ── Live engine counters as last resort ───────────────────────────────────
+    # ── Live engine counters as last resort (with timeout) ────────────────────
     try:
-        from ml.inference_engine import get_inference_engine
+        import asyncio
+        import concurrent.futures as _cf
 
-        eng = get_inference_engine()
-        h = eng.health()
-        total = h.get("predict_count", 0)
-        fallback = h.get("fallback_count", 0)
-        if total > 0:
-            live_accuracy = round(1.0 - fallback / total, 4)
-            return AccuracyResponse(
-                model_id=h.get("model_version", "inference_engine"),
-                accuracy=live_accuracy,
-                precision=0.0,
-                recall=0.0,
-                f1=0.0,
-                sharpe=0.0,
-                win_rate=live_accuracy,
-                total_signals=total,
-                evaluated_at=datetime.now(UTC).isoformat(),
-                note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
-            )
+        def _engine_health_fallback() -> dict:
+            from ml.inference_engine import get_inference_engine
+            return get_inference_engine().health()
+
+        loop = asyncio.get_event_loop()
+        with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
+            try:
+                h = await asyncio.wait_for(
+                    loop.run_in_executor(_pool, _engine_health_fallback),
+                    timeout=3.0,
+                )
+                total = h.get("predict_count", 0)
+                fallback = h.get("fallback_count", 0)
+                if total > 0:
+                    live_accuracy = round(1.0 - fallback / total, 4)
+                    return AccuracyResponse(
+                        model_id=h.get("model_version", "inference_engine"),
+                        accuracy=live_accuracy,
+                        precision=0.0,
+                        recall=0.0,
+                        f1=0.0,
+                        sharpe=0.0,
+                        win_rate=live_accuracy,
+                        total_signals=total,
+                        evaluated_at=datetime.now(UTC).isoformat(),
+                        note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
+                    )
+            except (asyncio.TimeoutError, Exception) as _exc:
+                logger.debug("InferenceEngine health fallback timed out: %s", _exc)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
@@ -749,13 +774,10 @@ async def predict(
     response_model=FeatureImportancesResponse,
     summary="Feature importances for the active XGBoost model",
 )
-async def get_feature_importances(user: TokenPayload = Depends(require_role("admin"))):
+async def get_feature_importances(user: TokenPayload = Depends(require_role("trader"))):
     """
     Return feature importances for the active XGBoost model.
     Used by the explainability panel.
-
-    Requires: admin role. Raw feature importances reveal the model's
-    internal weighting structure and must not be publicly accessible.
     """
     import pathlib
 

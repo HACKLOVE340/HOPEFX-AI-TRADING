@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store';
-import { aiStrategyApi } from '../hooks/useApi';
+import { aiStrategyApi, llmApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -67,6 +67,20 @@ const AIStrategyGenerator: React.FC = () => {
   const [history, setHistory]       = useState<StrategyRecord[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   const [activeTab, setActiveTab]   = useState<'generate' | 'history'>('generate');
+  const [llmStatus, setLlmStatus]   = useState<'checking' | 'ok' | 'unavailable'>('checking');
+  const [llmBackend, setLlmBackend] = useState<string>('');
+
+  // Pre-flight LLM health check — shows a clear banner when no LLM is configured
+  // instead of letting the user wait 3 minutes for a timeout.
+  useEffect(() => {
+    llmApi.health()
+      .then((res) => {
+        const d = res.data as { status?: string; backend?: string };
+        setLlmStatus(d?.status === 'ok' ? 'ok' : 'unavailable');
+        setLlmBackend(d?.backend ?? '');
+      })
+      .catch(() => setLlmStatus('unavailable'));
+  }, []);
 
   const loadHistory = useCallback(async () => {
     setHistLoading(true);
@@ -135,6 +149,23 @@ const AIStrategyGenerator: React.FC = () => {
 
   return (
     <div style={s.page}>
+      {/* LLM health banner — shown while checking and when unavailable */}
+      {llmStatus === 'checking' && (
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#94a3b8' }}>
+          Checking AI backend availability…
+        </div>
+      )}
+      {llmStatus === 'unavailable' && (
+        <div style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#fca5a5' }}>
+          <strong>AI backend not configured.</strong> Set <code>ANTHROPIC_API_KEY</code> or <code>OPENAI_API_KEY</code> in your <code>.env</code> file to enable strategy generation.
+          Strategy generation will return an error until an LLM backend is available.
+        </div>
+      )}
+      {llmStatus === 'ok' && llmBackend && (
+        <div style={{ background: '#052e16', border: '1px solid #166534', borderRadius: 8, padding: '8px 16px', marginBottom: 16, fontSize: 12, color: '#86efac' }}>
+          AI backend: <strong>{llmBackend}</strong> — ready
+        </div>
+      )}
       <div style={s.header}>
         <div>
           <h1 style={s.title}>AI Strategy Generator</h1>

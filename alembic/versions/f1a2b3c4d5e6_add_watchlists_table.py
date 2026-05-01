@@ -34,8 +34,41 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+
+    # ── Idempotency helpers ───────────────────────────────────────────────────
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _existing_tables = set(inspector.get_table_names())
+
+    def _tbl(name, *args, **kwargs):
+        """Create table only if it does not already exist."""
+        if name not in _existing_tables:
+            op.create_table(name, *args, **kwargs)
+
+    def _idx(index_name, table_name, *args, **kwargs):
+        """Create index only if it does not already exist."""
+        if table_name not in _existing_tables:
+            return
+        try:
+            existing = {i["name"] for i in inspector.get_indexes(table_name)}
+        except Exception:
+            existing = set()
+        if index_name not in existing:
+            op.create_index(index_name, table_name, *args, **kwargs)
+
+    def _col(table_name, col_name, *args, **kwargs):
+        """Add column only if it does not already exist."""
+        try:
+            existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+        except Exception:
+            existing_cols = set()
+        if col_name not in existing_cols:
+            op.add_column(table_name, *args, **kwargs)
+
+    # ── End idempotency helpers ───────────────────────────────────────────────
+
     """Create the watchlists table."""
-    op.create_table(
+    _tbl(
         "watchlists",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("user_id", sa.String(length=128), nullable=False),
@@ -51,7 +84,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("user_id", "symbol", name="uq_watchlist_user_symbol"),
     )
     # Fast lookup of all symbols for a given user
-    op.create_index(
+    _idx(
         "ix_watchlists_user_id",
         "watchlists",
         ["user_id"],

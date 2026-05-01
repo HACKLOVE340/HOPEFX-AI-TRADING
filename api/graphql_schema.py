@@ -51,7 +51,10 @@ from strawberry.types import Info
 
 logger = logging.getLogger(__name__)
 
-_FEATURE_ENABLED = os.getenv("FEATURE_GRAPHQL_API", "false").lower() == "true"
+# Gating is enforced by core/router_registry.py (feature_flags.GRAPHQL_API).
+# The router is always built here so it is ready when the flag is on.
+# Default matches the FeatureFlags definition (default=True).
+_FEATURE_ENABLED = os.getenv("FEATURE_GRAPHQL_API", "true").lower() == "true"
 
 
 # ── Auth context ──────────────────────────────────────────────────────────────
@@ -447,7 +450,7 @@ class Query:
 
         # DB fallback: read closed trades from the Trade table
         try:
-            from app import app_state as _gql_app_state
+            from core.app_state import app_state as _gql_app_state
             from database.models import Trade as DBTrade, TradeStatus
 
             sf = getattr(_gql_app_state, "db_session_factory", None)
@@ -626,7 +629,7 @@ class Query:
                 logger.debug("Performance fetch failed: %s", exc)
         # DB fallback: compute performance from closed Trade rows
         try:
-            from app import app_state as _gql_perf_state
+            from core.app_state import app_state as _gql_perf_state
             from database.models import Trade as DBTrade, TradeStatus
 
             sf = getattr(_gql_perf_state, "db_session_factory", None)

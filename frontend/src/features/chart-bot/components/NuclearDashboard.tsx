@@ -69,13 +69,15 @@ function injectDashboardCSS() {
 
 const WsStatusBar = memo(({ status }: { status: string }) => {
   const color =
-    status === 'connected'    ? '#00ff88' :
-    status === 'connecting'   ? '#fbbf24' :
-    status === 'error'        ? '#ff0033' : '#475569';
+    status === 'connected'     ? '#00ff88' :
+    status === 'connecting'    ? '#fbbf24' :
+    status === 'error'         ? '#ff0033' :
+    status === 'unavailable'   ? '#f97316' : '#475569';
   const label =
-    status === 'connected'    ? 'LIVE' :
-    status === 'connecting'   ? 'CONNECTING…' :
-    status === 'error'        ? 'ERROR' : 'OFFLINE';
+    status === 'connected'     ? 'LIVE' :
+    status === 'connecting'    ? 'CONNECTING…' :
+    status === 'error'         ? 'ERROR' :
+    status === 'unavailable'   ? 'UNAVAILABLE' : 'OFFLINE';
 
   return (
     <div style={s.wsBar}>
@@ -84,7 +86,10 @@ const WsStatusBar = memo(({ status }: { status: string }) => {
         style={{ ...s.wsDot, background: color, boxShadow: `0 0 6px ${color}` }}
       />
       <span style={{ ...s.wsLabel, color }}>NUCLEAR WS: {label}</span>
-      <span style={s.wsNote}>XAU/USD · OANDA · Paper Mode</span>
+      {status === 'unavailable'
+        ? <span style={{ ...s.wsNote, color: '#f97316' }}>Nuclear engine not loaded — restart server</span>
+        : <span style={s.wsNote}>XAU/USD · OANDA · Paper Mode</span>
+      }
     </div>
   );
 });
@@ -106,16 +111,14 @@ const NuclearDashboard = memo(() => {
   const isAuth  = useStore((s) => s.token !== null);
   const isMobile = useIsMobile();
 
-  // Connect to /ws/nuclear
+  // Connect to /ws/nuclear — must be called unconditionally (Rules of Hooks)
   const { status, lastAlert } = useNuclearWS(isAuth);
 
-  // Render mobile layout on small screens
-  if (isMobile) return <NuclearMobileView />;
-
-  const protectedView      = useNuclearStore((s) => s.protectedView);
-  const showExplainPanel   = useNuclearStore((s) => s.showExplainPanel);
+  // All store reads must be unconditional — called before any early return
+  const protectedView       = useNuclearStore((s) => s.protectedView);
+  const showExplainPanel    = useNuclearStore((s) => s.showExplainPanel);
   const setShowExplainPanel = useNuclearStore((s) => s.setShowExplainPanel);
-  const setNuclearAlert    = useNuclearStore((s) => s.setNuclearAlert);
+  const setNuclearAlert     = useNuclearStore((s) => s.setNuclearAlert);
 
   useEffect(() => { injectDashboardCSS(); }, []);
 
@@ -127,6 +130,8 @@ const NuclearDashboard = memo(() => {
   const handleExplainToggle = useCallback(() => {
     setShowExplainPanel(!showExplainPanel);
   }, [showExplainPanel, setShowExplainPanel]);
+
+  if (isMobile) return <NuclearMobileView />;
 
   return (
     <div style={s.root}>

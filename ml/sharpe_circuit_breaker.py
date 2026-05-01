@@ -346,7 +346,7 @@ class SharpeCircuitBreaker:
 
         # Also send alert
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             ae = getattr(app_state, "alert_engine", None)
             if ae and hasattr(ae, "send_alert"):

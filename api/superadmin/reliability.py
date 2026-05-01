@@ -70,20 +70,31 @@ async def _probe_database() -> dict[str, Any]:
 async def _probe_redis() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client, get_connection_mode
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc is None:
             return {"status": "error", "latency_ms": 0, "detail": "Redis client not initialised"}
         pong = rc.ping()
-        info = rc.info("server")
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        mode = get_connection_mode()
+        # Try INFO server — fakeredis may not support it, degrade gracefully
+        version = "unknown"
+        uptime = 0
+        try:
+            info = rc.info("server")
+            version = info.get("redis_version", "unknown")
+            uptime = info.get("uptime_in_seconds", 0)
+        except Exception:
+            # fakeredis or stripped Redis — ping succeeded so still "ok"
+            version = "fakeredis" if mode == "fakeredis" else "unknown"
         return {
             "status": "ok" if pong else "error",
             "latency_ms": latency_ms,
-            "detail": f"PONG={pong}",
-            "version": info.get("redis_version", "unknown"),
-            "uptime_seconds": info.get("uptime_in_seconds", 0),
+            "detail": f"PONG={pong} mode={mode}",
+            "version": version,
+            "uptime_seconds": uptime,
+            "mode": mode,
         }
     except Exception as exc:
         return {"status": "error", "latency_ms": round((time.perf_counter() - t0) * 1000, 2), "detail": str(exc)}
@@ -120,9 +131,9 @@ async def _probe_broker() -> dict[str, Any]:
 async def _probe_ml_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("ml:model:status")
             if raw:
@@ -197,9 +208,9 @@ async def _probe_self_healer() -> dict[str, Any]:
 async def _probe_websocket_server() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             clients = rc.scard("ws:connected_clients") or 0
             return {
@@ -238,9 +249,9 @@ async def _probe_otel_tracing() -> dict[str, Any]:
 async def _probe_data_feed() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             tick = rc.get("tick:XAU_USD") or rc.get("price:XAUUSD") or rc.get("tick:XAUUSD")
             if tick:
@@ -621,9 +632,9 @@ async def get_reliability_status(
 
     # Persist to history ring in Redis (non-blocking best-effort)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))
             rc.ltrim(_RELIABILITY_HISTORY_KEY, 0, _RELIABILITY_HISTORY_MAX - 1)
@@ -745,10 +756,10 @@ async def validate_setting_persisted(
 
     # Check Redis
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
         import json
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("superadmin_platform_config")
             if raw:
@@ -909,9 +920,9 @@ async def validate_toggle_persisted(
     # Layer 1: Redis config store
     try:
         import json as _json
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw = rc.get("superadmin_platform_config")
             if raw:
@@ -990,18 +1001,32 @@ async def get_reliability_metrics(
 
     redis_info: dict = {}
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client, get_connection_mode
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
-            info = rc.info()
-            redis_info = {
-                "connected_clients": info.get("connected_clients", 0),
-                "used_memory_mb": round(info.get("used_memory", 0) / 1e6, 2),
-                "total_commands_processed": info.get("total_commands_processed", 0),
-                "keyspace_hits": info.get("keyspace_hits", 0),
-                "keyspace_misses": info.get("keyspace_misses", 0),
-            }
+            mode = get_connection_mode()
+            try:
+                info = rc.info()
+                redis_info = {
+                    "connected_clients": info.get("connected_clients", 0),
+                    "used_memory_mb": round(info.get("used_memory", 0) / 1e6, 2),
+                    "total_commands_processed": info.get("total_commands_processed", 0),
+                    "keyspace_hits": info.get("keyspace_hits", 0),
+                    "keyspace_misses": info.get("keyspace_misses", 0),
+                    "mode": mode,
+                }
+            except Exception:
+                # fakeredis or stripped Redis — provide basic info
+                redis_info = {
+                    "connected_clients": 1,
+                    "used_memory_mb": 0,
+                    "total_commands_processed": 0,
+                    "keyspace_hits": 0,
+                    "keyspace_misses": 0,
+                    "mode": mode,
+                    "note": "INFO command not supported by this Redis variant",
+                }
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
 
@@ -1032,9 +1057,9 @@ async def get_reliability_history(
     limit = max(1, min(limit, _RELIABILITY_HISTORY_MAX))
     items: list[dict] = []
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             raw_list = rc.lrange(_RELIABILITY_HISTORY_KEY, 0, limit - 1)
             for raw in raw_list:
@@ -1059,9 +1084,9 @@ async def record_reliability_snapshot(
     """
     snapshot = await get_reliability_status(user=user)
     try:
-        from cache.redis_client import get_redis_client
+        from cache.redis_client import get_sync_redis_client
 
-        rc = get_redis_client()
+        rc = get_sync_redis_client()
         if rc:
             rc.lpush(_RELIABILITY_HISTORY_KEY, json.dumps(snapshot))
             rc.ltrim(_RELIABILITY_HISTORY_KEY, 0, _RELIABILITY_HISTORY_MAX - 1)

@@ -25,6 +25,7 @@ import hashlib
 import logging
 import os
 import secrets
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -42,38 +43,55 @@ class _TokenBlacklist:
     """
     Thin wrapper around Redis for access-token revocation.
     Falls back to an in-memory set when Redis is unavailable.
+
+    Connection is attempted lazily on first use and retried at most once
+    every _RETRY_INTERVAL_S seconds so a Redis restart is picked up without
+    requiring an application restart.
     """
+
+    _RETRY_INTERVAL_S: float = 30.0
 
     def __init__(self):
         self._redis = None
         self._mem: set = set()
-        self._connected: bool = False  # lazy — connect on first use
+        self._last_attempt: float = 0.0  # epoch of last connection attempt
 
     def _try_connect(self):
-        if self._connected:
-            return
-        self._connected = True  # only attempt once
+        now = time.monotonic()
+        if self._redis is not None:
+            return  # already connected
+        if now - self._last_attempt < self._RETRY_INTERVAL_S:
+            return  # back-off: don't hammer a down Redis
+        self._last_attempt = now
         try:
             import redis as _redis_lib
 
             host = os.getenv("REDIS_HOST", "localhost")
             port = int(os.getenv("REDIS_PORT", "6379"))
             password = os.getenv("REDIS_PASSWORD") or None
-            self._redis = _redis_lib.Redis(
+            client = _redis_lib.Redis(
                 host=host,
                 port=port,
                 password=password,
                 socket_connect_timeout=0.5,
+                socket_timeout=1.0,  # cap ping/op time, not just TCP handshake
                 decode_responses=True,
                 retry_on_error=[],
                 retry=None,
             )
-            self._redis.ping()
+            client.ping()
+            self._redis = client
             logger.info("Token blacklist: Redis connected at %s:%s", host, port)
-        except Exception:
+        except Exception as exc:
+            # Log the error detail at DEBUG — the traceback adds no actionable
+            # information beyond the exception message itself.
+            logger.debug("Token blacklist: Redis connect failed: %s", exc)
+            # Emit the WARNING once per retry window (i.e. only when we actually
+            # attempted a connection, not when we skipped due to back-off).
             logger.warning(
-                "Token blacklist: Redis unavailable — using in-memory fallback (not suitable for multi-process)",
-                exc_info=True,
+                "Token blacklist: Redis unavailable — using in-memory fallback "
+                "(not suitable for multi-process). Will retry in %.0fs.",
+                self._RETRY_INTERVAL_S,
             )
             self._redis = None
 

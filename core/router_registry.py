@@ -33,25 +33,37 @@ _registered_routes: set[tuple[str, str]] = set()
 
 def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     """
-    Include a router on *app*, skipping any routes whose (method, path) pair
-    is already registered.  This prevents duplicate route warnings and ensures
-    the first-registered handler wins (primary router takes precedence over
-    compat/alias routers).
+    Include a router on *app*, skipping any routes whose (method, full-path)
+    pair is already registered.
+
+    The dedup key uses the *full* path (router.prefix + route.path) so it
+    matches the paths that FastAPI stores on app.routes after include_router.
+    Using only route.path (the relative path) caused false misses when the
+    prefix was non-empty, allowing duplicate routes to slip through.
     """
     from fastapi.routing import APIRoute as _APIRoute
+
+    prefix = getattr(router, "prefix", "") or ""
+
+    def _full_path(route_path: str) -> str:
+        """Combine router prefix with route path, normalising slashes."""
+        if not prefix:
+            return route_path
+        return prefix.rstrip("/") + "/" + route_path.lstrip("/")
 
     skipped = 0
     for route in router.routes:
         if not isinstance(route, _APIRoute):
             continue
+        full = _full_path(route.path)
         for method in route.methods or {"GET"}:
-            key = (method.upper(), route.path)
+            key = (method.upper(), full)
             if key in _registered_routes:
                 skipped += 1
                 logger.debug(
                     "Router dedup: skipping duplicate %s %s (already registered)",
                     method,
-                    route.path,
+                    full,
                 )
 
     if skipped:
@@ -69,8 +81,9 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
                 # Non-API routes (WebSocket, Mount, etc.) — always include
                 filtered.routes.append(route)
                 continue
+            full = _full_path(route.path)
             methods = route.methods or {"GET"}
-            if any((m.upper(), route.path) in _registered_routes for m in methods):
+            if any((m.upper(), full) in _registered_routes for m in methods):
                 continue
             filtered.add_api_route(
                 route.path,
@@ -89,7 +102,7 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     else:
         app.include_router(router, **kwargs)
 
-    # Record all routes now on the app
+    # Record all routes now on the app (full paths as FastAPI stores them)
     for route in app.routes:
         if isinstance(route, _APIRoute):
             for method in route.methods or {"GET"}:
@@ -138,6 +151,7 @@ def register_routers(
     from api.settings_extended import router as settings_extended_router
     from api.settings_new_endpoints import router as settings_new_router
     from api.social_feed import _copy_router as social_copy_router
+    from api.social_feed import _copy_alias_router as social_copy_alias_router
     from api.social_feed import _lb_compat_router as social_lb_compat_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
@@ -146,6 +160,28 @@ def register_routers(
     from api.trading import router as trading_router
     from api.whitelabel_admin import router as whitelabel_router
     from auth.router import router as auth_router
+
+    # New routers added for full frontend coverage
+    try:
+        from api.notifications import router as notifications_router
+        _notifications_router = notifications_router
+    except Exception as _e:
+        logger.warning("Notifications router not loaded: %s", _e)
+        _notifications_router = None
+
+    try:
+        from api.community_chat import router as community_chat_router
+        _community_chat_router = community_chat_router
+    except Exception as _e:
+        logger.warning("Community chat router not loaded: %s", _e)
+        _community_chat_router = None
+
+    try:
+        from api.kyc import kyc_alias_router as _kyc_alias_router
+        _kyc_alias = _kyc_alias_router
+    except Exception as _e:
+        logger.warning("KYC alias router not loaded: %s", _e)
+        _kyc_alias = None
 
     for _router in [
         auth_router,
@@ -174,6 +210,7 @@ def register_routers(
         social_feed_router,
         social_leaderboard_router,
         social_copy_router,
+        social_copy_alias_router,
         social_lb_compat_router,
         mobile_router,
         whitelabel_router,
@@ -188,6 +225,19 @@ def register_routers(
         pages_router,
     ]:
         _include_router_deduped(app, _router)
+
+    # Register optional new routers
+    for _opt_router, _name in [
+        (_notifications_router, "Notifications"),
+        (_community_chat_router, "Community Chat"),
+        (_kyc_alias, "KYC alias"),
+    ]:
+        if _opt_router is not None:
+            try:
+                _include_router_deduped(app, _opt_router)
+                logger.info("%s router registered", _name)
+            except Exception as _re:
+                logger.warning("%s router registration failed: %s", _name, _re)
 
     logger.info("Health router registered (/api/health)")
     logger.info("Analysis router registered (/api/analysis)")
@@ -303,6 +353,15 @@ def register_routers(
     except Exception as _av_err:
         logger.warning("Antivirus router not registered: %s", _av_err)
 
+    # ── Custom Indicators (/api/indicators) ──────────────────────────────────
+    try:
+        from api.custom_indicators import router as custom_indicators_router
+
+        _include_router_deduped(app, custom_indicators_router)
+        logger.info("Custom indicators router registered (/api/indicators)")
+    except Exception as _ci_err:
+        logger.warning("Custom indicators router not registered: %s", _ci_err)
+
     # ── TCA (Transaction Cost Analysis) ──────────────────────────────────────
     try:
         from api.tca import router as tca_router
@@ -335,9 +394,17 @@ def register_routers(
         from api.nuclear import router as nuclear_router
         from api.nuclear_strategy import router as nuclear_strategy_router
 
-        _include_router_deduped(app, nuclear_router)
-        _include_router_deduped(app, nuclear_strategy_router)
-        logger.info("Nuclear routers registered")
+        _include_router_deduped(
+            app, nuclear_router,
+            prefix="/nuclear",
+            tags=["nuclear"],
+        )
+        _include_router_deduped(
+            app, nuclear_strategy_router,
+            prefix="/nuclear-strategy",
+            tags=["nuclear-strategy"],
+        )
+        logger.info("Nuclear routers registered (/nuclear, /nuclear-strategy)")
     except Exception as _nuc_err:
         logger.warning("Nuclear routers not registered: %s", _nuc_err)
 

@@ -326,7 +326,7 @@ def _get_shared_orchestra() -> "StrategyOrchestra | None":
         return _shared_orchestra
     # Fallback: try to get it from app_state
     try:
-        from app import app_state  # type: ignore[import]
+        from core.app_state import app_state  # type: ignore[import]
 
         return getattr(app_state, "orchestra", None)
     except Exception as _exc:

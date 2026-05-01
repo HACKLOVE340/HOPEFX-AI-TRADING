@@ -27,54 +27,72 @@ depends_on = None
 
 def upgrade() -> None:
     # ── audit_log ─────────────────────────────────────────────────────────────
-    with op.batch_alter_table("audit_log") as batch_op:
-        batch_op.add_column(
-            sa.Column("created_at", sa.DateTime(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("event_type", sa.String(100), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("user_id", sa.String(100), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("detail", sa.Text(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("ip_address", sa.String(45), nullable=True)
-        )
+
+    # ── Idempotency helpers ───────────────────────────────────────────────────
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _existing_tables = set(inspector.get_table_names())
+
+    def _tbl(name, *args, **kwargs):
+        """Create table only if it does not already exist."""
+        if name not in _existing_tables:
+            op.create_table(name, *args, **kwargs)
+
+    def _idx(index_name, table_name, *args, **kwargs):
+        """Create index only if it does not already exist."""
+        if table_name not in _existing_tables:
+            return
+        try:
+            existing = {i["name"] for i in inspector.get_indexes(table_name)}
+        except Exception:
+            existing = set()
+        if index_name not in existing:
+            op.create_index(index_name, table_name, *args, **kwargs)
+
+    def _col(table_name, col_name, *args, **kwargs):
+        """Add column only if it does not already exist."""
+        try:
+            existing_cols = {c["name"] for c in inspector.get_columns(table_name)}
+        except Exception:
+            existing_cols = set()
+        if col_name not in existing_cols:
+            op.add_column(table_name, *args, **kwargs)
+
+    # ── End idempotency helpers ───────────────────────────────────────────────
+
+    def _batch_add_col(table, col_name, col_def):
+        """Add a column via batch_alter_table only if it doesn't exist."""
+        try:
+            existing = {c["name"] for c in inspector.get_columns(table)}
+        except Exception:
+            existing = set()
+        if col_name not in existing:
+            with op.batch_alter_table(table) as batch_op:
+                batch_op.add_column(col_def)
+
+    _batch_add_col("audit_log", "created_at", sa.Column("created_at", sa.DateTime(), nullable=True))
+    _batch_add_col("audit_log", "event_type", sa.Column("event_type", sa.String(100), nullable=True))
+    _batch_add_col("audit_log", "user_id", sa.Column("user_id", sa.String(100), nullable=True))
+    _batch_add_col("audit_log", "detail", sa.Column("detail", sa.Text(), nullable=True))
+    _batch_add_col("audit_log", "ip_address", sa.Column("ip_address", sa.String(45), nullable=True))
 
     # Back-fill created_at from timestamp for existing rows.
     op.execute("UPDATE audit_log SET created_at = timestamp WHERE created_at IS NULL")
 
     # Create indexes for the new columns.
-    op.create_index("idx_audit_event_type", "audit_log", ["event_type"])
-    op.create_index("idx_audit_user_id", "audit_log", ["user_id"])
-    op.create_index("idx_audit_created_at", "audit_log", ["created_at"])
+    _idx("idx_audit_event_type", "audit_log", ["event_type"])
+    _idx("idx_audit_user_id", "audit_log", ["user_id"])
+    _idx("idx_audit_created_at", "audit_log", ["created_at"])
 
     # ── users ─────────────────────────────────────────────────────────────────
-    with op.batch_alter_table("users") as batch_op:
-        batch_op.add_column(
-            sa.Column("kyc_submitted_at", sa.DateTime(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("kyc_reviewed_at", sa.DateTime(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("kyc_reviewer_id", sa.String(100), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("kyc_rejection_reason", sa.Text(), nullable=True)
-        )
-        batch_op.add_column(
-            sa.Column("kyc_document_type", sa.String(50), nullable=True)
-        )
+    _batch_add_col("users", "kyc_submitted_at", sa.Column("kyc_submitted_at", sa.DateTime(), nullable=True))
+    _batch_add_col("users", "kyc_reviewed_at", sa.Column("kyc_reviewed_at", sa.DateTime(), nullable=True))
+    _batch_add_col("users", "kyc_reviewer_id", sa.Column("kyc_reviewer_id", sa.String(100), nullable=True))
+    _batch_add_col("users", "kyc_rejection_reason", sa.Column("kyc_rejection_reason", sa.Text(), nullable=True))
+    _batch_add_col("users", "kyc_document_type", sa.Column("kyc_document_type", sa.String(50), nullable=True))
 
     # ── user_sessions ─────────────────────────────────────────────────────────
-    with op.batch_alter_table("user_sessions") as batch_op:
-        batch_op.add_column(
-            sa.Column("last_active_at", sa.DateTime(), nullable=True)
-        )
+    _batch_add_col("user_sessions", "last_active_at", sa.Column("last_active_at", sa.DateTime(), nullable=True))
 
 
 def downgrade() -> None:

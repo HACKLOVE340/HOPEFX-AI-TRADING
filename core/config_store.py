@@ -93,7 +93,7 @@ class ConfigStore:
     def _db_session(self):
         """Return a SQLAlchemy session, or None if DB unavailable."""
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             if app_state and app_state.db_session_factory:
                 return app_state.db_session_factory()  # pylint: disable=not-callable

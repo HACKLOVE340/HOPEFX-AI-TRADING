@@ -78,7 +78,7 @@ const AuditTrailSection: React.FC = () => {
       const params: Record<string, string> = { page: String(p), limit: '100' };
       if (categoryFilter) params.category = categoryFilter;
       const res = await superadminApi.immutableAuditLog(params);
-      setRecords(res.data.records ?? res.data);
+      setRecords(res.data.records ?? res.data.events ?? res.data);
       setTotal(res.data.total ?? 0);
       setPage(p);
     } catch (e: unknown) {

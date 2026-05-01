@@ -169,21 +169,35 @@ const ReplayPage: React.FC = () => {
       setSelected(res.data as ReplaySession);
       setShowCreate(false);
     },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+        ?? (err instanceof Error ? err.message : 'Failed to create session');
+      console.error('[ReplayPage] createSession error:', msg);
+    },
   });
 
   const stepMut = useMutation({
     mutationFn: (id: string) => replayApi.stepSession(id),
     onSuccess: (res) => setSelected(res.data as ReplaySession),
+    onError: (err: unknown) => {
+      console.error('[ReplayPage] stepSession error:', err);
+    },
   });
 
   const runMut = useMutation({
     mutationFn: ({ id, bars }: { id: string; bars: number }) => replayApi.runSession(id, bars),
     onSuccess: (res) => setSelected(res.data as ReplaySession),
+    onError: (err: unknown) => {
+      console.error('[ReplayPage] runSession error:', err);
+    },
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => replayApi.deleteSession(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['replay-sessions'] }); setSelected(null); },
+    onError: (err: unknown) => {
+      console.error('[ReplayPage] deleteSession error:', err);
+    },
   });
 
   const toggleAutoPlay = useCallback(() => {
@@ -253,7 +267,7 @@ const ReplayPage: React.FC = () => {
                   border: '1px solid #334155', borderRadius: 6, padding: '8px 10px', color: '#e2e8f0', fontSize: 13 }} />
             </label>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => createMut.mutate()} disabled={createMut.isPending}
               style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none',
                 borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
@@ -263,6 +277,12 @@ const ReplayPage: React.FC = () => {
             <button onClick={() => setShowCreate(false)}
               style={{ padding: '8px 14px', background: '#334155', color: '#94a3b8', border: 'none',
                 borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            {createMut.isError && (
+              <span style={{ fontSize: 12, color: '#f87171' }}>
+                ⚠ {(createMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+                  ?? (createMut.error instanceof Error ? createMut.error.message : 'Failed to create session')}
+              </span>
+            )}
           </div>
         </div>
       )}

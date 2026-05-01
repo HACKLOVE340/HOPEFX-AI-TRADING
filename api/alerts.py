@@ -69,7 +69,7 @@ def _get_engine(request: Request):
 
     # 1. app_state (primary — set by startup_factories.init_alert_engine)
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         engine = getattr(app_state, "alert_engine", None)
         if engine is not None:

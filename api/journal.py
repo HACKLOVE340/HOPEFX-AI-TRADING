@@ -136,20 +136,88 @@ def _save_entry(entry: dict) -> None:
 
 
 def _load_all_entries() -> dict[str, dict]:
-    """Load all journal entries from DB into the in-memory cache."""
-    if _entries:
-        return _entries
-    keys = db_keys_prefix(f"{_JOURNAL_PREFIX}:")
-    for key in keys:
-        val = db_get(key)
-        if isinstance(val, dict) and "trade_id" in val:
-            _entries[val["trade_id"]] = val
+    """Load journal entries, merging db_store entries with DB Trade rows.
+
+    Explicit journal entries (created via POST /api/journal/trades) take
+    precedence over auto-synthesised entries from the Trade table so user
+    notes/tags/emotions are never overwritten.
+    """
+    # Load explicit journal entries from db_store first
+    if not _entries:
+        keys = db_keys_prefix(f"{_JOURNAL_PREFIX}:")
+        for key in keys:
+            val = db_get(key)
+            if isinstance(val, dict) and "trade_id" in val:
+                _entries[val["trade_id"]] = val
+
+    # Merge closed Trade rows from the DB as synthesised journal entries.
+    # Trades that already have an explicit journal entry are skipped.
+    try:
+        from database.connection import SessionLocal as _SL
+        from database.models import Trade, TradeStatus
+
+        db = _SL()
+        try:
+            rows = (
+                db.query(Trade)
+                .filter(Trade.status == TradeStatus.CLOSED)
+                .order_by(Trade.entry_time.desc())
+                .limit(500)
+                .all()
+            )
+            for t in rows:
+                tid = getattr(t, "trade_id", None) or str(t.id)
+                if tid in _entries:
+                    continue  # explicit entry takes precedence
+                qty = (
+                    getattr(t, "entry_quantity", None)
+                    or getattr(t, "size", None)
+                    or 0.0
+                )
+                raw_side = getattr(t, "side", "buy")
+                side_str = raw_side.value if hasattr(raw_side, "value") else str(raw_side or "buy")
+                entry_time = t.entry_time
+                exit_time = t.exit_time
+                # Parse emotion/tags from notes field (seed script stores them there)
+                notes_raw = getattr(t, "notes", "") or ""
+                emotion: str | None = None
+                tags: list[str] = []
+                for part in notes_raw.split():
+                    if part.startswith("emotion:"):
+                        emotion = part.split(":", 1)[1]
+                    elif part not in ("demo_seed",):
+                        tags.append(part)
+                _entries[tid] = {
+                    "trade_id": tid,
+                    "symbol": t.symbol or "UNKNOWN",
+                    "side": side_str,
+                    "entry_price": float(t.entry_price or 0.0),
+                    "exit_price": float(t.exit_price) if t.exit_price is not None else None,
+                    "size": float(qty or 0.0),
+                    "pnl": float(t.realized_pnl or 0.0),
+                    "opened_at": entry_time.isoformat() if entry_time else "",
+                    "closed_at": exit_time.isoformat() if exit_time else None,
+                    "notes": notes_raw,
+                    "tags": tags,
+                    "emotion": emotion,
+                    "followed_rules": True,
+                    "rule_deviation": None,
+                    "screenshot_url": None,
+                    "created_at": entry_time.isoformat() if entry_time else datetime.now(UTC).isoformat(),
+                    "updated_at": exit_time.isoformat() if exit_time else datetime.now(UTC).isoformat(),
+                }
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("journal _load_all_entries DB merge failed: %s", exc)
+
     return _entries
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
+@router.get("", response_model=list[JournalEntry], summary="List journal entries (root alias)")
 @router.get("/trades", response_model=list[JournalEntry])
 async def list_trades(
     limit: int = Query(50, ge=1, le=200),
@@ -286,3 +354,99 @@ async def get_mistakes(
     entries = _load_all_entries()
     mistakes = [e for e in entries.values() if not e.get("followed_rules", True)]
     return [JournalEntry(**e) for e in mistakes]
+
+
+# ── Extended analytics endpoints ──────────────────────────────────────────────
+
+
+@router.get("/tags", summary="List all tags used across journal entries")
+async def get_tags(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return every unique tag used in journal entries with usage counts."""
+    entries = _load_all_entries()
+    counts: dict[str, int] = {}
+    for entry in entries.values():
+        for tag in entry.get("tags") or []:
+            counts[tag] = counts.get(tag, 0) + 1
+    tags = [{"tag": t, "count": c} for t, c in sorted(counts.items(), key=lambda x: -x[1])]
+    return {"tags": tags, "total": len(tags)}
+
+
+@router.get("/emotion-stats", summary="Emotion breakdown across journal entries")
+async def get_emotion_stats(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return win rate and average PnL grouped by emotion tag."""
+    entries = list(_load_all_entries().values())
+    closed = [e for e in entries if e.get("pnl") is not None]
+
+    emotion_map: dict[str, list[float]] = {}
+    for entry in closed:
+        em = entry.get("emotion")
+        if em:
+            emotion_map.setdefault(em, []).append(float(entry["pnl"]))
+
+    stats = []
+    for emotion, pnls in emotion_map.items():
+        wins = [p for p in pnls if p > 0]
+        stats.append(
+            {
+                "emotion": emotion,
+                "count": len(pnls),
+                "win_rate": round(len(wins) / len(pnls) * 100, 1) if pnls else 0,
+                "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
+                "total_pnl": round(sum(pnls), 2),
+            }
+        )
+
+    stats.sort(key=lambda x: x["count"], reverse=True)
+    return {"emotion_stats": stats, "total_emotions": len(stats)}
+
+
+@router.get("/weekly-report", summary="Weekly performance summary from journal")
+async def get_weekly_report(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return a summary of trades closed in the current calendar week."""
+    from datetime import date, timedelta  # noqa: PLC0415
+
+    today = date.today()
+    week_start = today - timedelta(days=today.weekday())  # Monday
+    week_start_iso = week_start.isoformat()
+
+    entries = list(_load_all_entries().values())
+    this_week = [
+        e for e in entries
+        if e.get("pnl") is not None and (e.get("closed_at") or e.get("created_at") or "") >= week_start_iso
+    ]
+
+    pnls = [float(e["pnl"]) for e in this_week]
+    wins = [p for p in pnls if p > 0]
+    losses = [p for p in pnls if p <= 0]
+
+    # Collect all tags and emotions from this week
+    all_tags: dict[str, int] = {}
+    all_emotions: dict[str, int] = {}
+    for e in this_week:
+        for t in e.get("tags") or []:
+            all_tags[t] = all_tags.get(t, 0) + 1
+        em = e.get("emotion")
+        if em:
+            all_emotions[em] = all_emotions.get(em, 0) + 1
+
+    return {
+        "week_start": week_start_iso,
+        "week_end": (week_start + timedelta(days=6)).isoformat(),
+        "total_trades": len(this_week),
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": round(len(wins) / len(this_week) * 100, 1) if this_week else 0,
+        "total_pnl": round(sum(pnls), 2),
+        "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
+        "best_trade": max(pnls) if pnls else 0,
+        "worst_trade": min(pnls) if pnls else 0,
+        "top_tags": sorted(all_tags.items(), key=lambda x: -x[1])[:5],
+        "top_emotions": sorted(all_emotions.items(), key=lambda x: -x[1])[:5],
+        "rule_deviations": sum(1 for e in this_week if not e.get("followed_rules", True)),
+    }

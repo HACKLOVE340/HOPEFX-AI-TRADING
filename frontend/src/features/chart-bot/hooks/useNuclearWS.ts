@@ -35,7 +35,7 @@ const NUCLEAR_ALERT_SEVERITY = 7;
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
-export type NuclearWsStatus = 'connecting' | 'connected' | 'disconnected' | 'error';
+export type NuclearWsStatus = 'connecting' | 'connected' | 'disconnected' | 'error' | 'unavailable';
 
 export interface UseNuclearWSReturn {
   status: NuclearWsStatus;
@@ -75,9 +75,15 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
     }
 
     switch (msg.type) {
-      case 'nuclear_chart_update':
-        setChartState(msg as NuclearChartState);
+      case 'nuclear_chart_update': {
+        // Guard against null nuclear state — backend may send a partial
+        // update when the nuclear supervisor is initialising.
+        const chartMsg = msg as NuclearChartState;
+        if (chartMsg.nuclear != null) {
+          setChartState(chartMsg);
+        }
         break;
+      }
 
       case 'nuclear_alert': {
         const alert = msg as NuclearAlertMessage;
@@ -93,6 +99,16 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
       case 'nuclear_resume':
         setNuclearAlert(null);
         setLastAlert(null);
+        break;
+
+      case 'nuclear_unavailable':
+        // Server sent this because the charting engine failed to load at
+        // startup. Stop reconnecting — retrying won't help until the server
+        // is restarted with the charting module available.
+        setStatus('unavailable');
+        setStoreStatus('unavailable');
+        wsRef.current?.close();
+        clearTimeout(reconnectTimer.current!);
         break;
 
       case 'heartbeat':
@@ -167,11 +183,14 @@ export function useNuclearWS(enabled = true): UseNuclearWSReturn {
 
   const scheduleReconnect = useCallback(() => {
     if (!mountedRef.current) return;
+    // Don't reconnect if the server told us the nuclear engine is unavailable.
+    // Retrying endlessly would spam the server logs with no benefit.
+    if (status === 'unavailable') return;
     reconnectTimer.current = setTimeout(() => {
       reconnectDelay.current = Math.min(reconnectDelay.current * 2, MAX_RECONNECT_MS);
       connect();
     }, reconnectDelay.current);
-  }, [connect]);
+  }, [connect, status]);
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 

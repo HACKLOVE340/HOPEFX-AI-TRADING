@@ -223,7 +223,7 @@ class MobileAPIServer:
         if self.broker is not None:
             return self.broker
         try:
-            from app import app_state as _state
+            from core.app_state import app_state as _state
             return getattr(_state, "broker", None)
         except Exception:
             return None
@@ -452,7 +452,7 @@ class MobileAPIServer:
                 if quote_getter is None:
                     # Fall back to price engine via app_state
                     try:
-                        from app import app_state as _state
+                        from core.app_state import app_state as _state
                         pe = getattr(_state, "price_engine", None)
                         if pe:
                             tick = pe.get_last_price(symbol)

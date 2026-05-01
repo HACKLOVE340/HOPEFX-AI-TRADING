@@ -314,6 +314,15 @@ const Performance: React.FC = () => {
         <>
           {publicQ.isLoading && <div style={{ padding: 24 }}><PanelSkeleton rows={4} /></div>}
           {publicQ.isError && <div style={s.errorBox}>Failed to load performance data</div>}
+          {!publicQ.isLoading && !publicQ.isError && !pub && (
+            <div style={{ textAlign: 'center', padding: '48px 24px', color: '#475569' }}>
+              <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No performance data yet</div>
+              <div style={{ fontSize: 13, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
+                Make your first trade on the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to start tracking performance metrics, equity curve, and Sharpe ratio.
+              </div>
+            </div>
+          )}
           {pub && (
             <>
               <div style={s.statsGrid}>

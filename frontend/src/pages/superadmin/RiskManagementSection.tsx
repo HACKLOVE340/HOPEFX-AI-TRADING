@@ -63,7 +63,7 @@ const RiskManagementSection: React.FC = () => {
         superadminApi.propBreaches(),
         superadminApi.drawdownStats(),
       ]);
-      setBreakers(cbRes.data.breakers ?? cbRes.data);
+      setBreakers(cbRes.data.circuit_breakers ?? cbRes.data.breakers ?? cbRes.data);
       setVarMetrics(varRes.data);
       setStressTests(stRes.data.results ?? stRes.data);
       setPropBreaches(pbRes.data.breaches ?? pbRes.data);

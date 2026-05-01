@@ -259,6 +259,7 @@ async def list_blocked_ips(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
             socket_connect_timeout=1,
+            socket_timeout=2,
             decode_responses=True,
         )
         # Try both the set key and the list key used by global_fortress
@@ -523,3 +524,87 @@ async def quarantine_threat(
         "quarantined_by": user.sub,
         "quarantined_at": datetime.now(UTC).isoformat(),
     }
+
+
+# ── Security status summary ───────────────────────────────────────────────────
+
+@router.get("/status", response_model=None, summary="Security system status summary")
+async def get_security_status(user: TokenPayload = Depends(require_role("admin"))):
+    """Consolidated security status for the SecurityDashboard page."""
+    lockdown_active = False
+    try:
+        from api.db_store import db_get
+        ld = db_get("lockdown_status") or {}
+        lockdown_active = bool(ld.get("active", False))
+    except Exception:
+        pass
+
+    blocked_count = len(_blocked_ips)
+    attack_count = len(_attack_log)
+    pending_fixes = 0
+    try:
+        from api.security.fixes import _fix_store
+        pending_fixes = sum(1 for f in _fix_store.values() if f.get("status") == "pending")
+    except Exception:
+        pass
+
+    return {
+        "status": "lockdown" if lockdown_active else "healthy",
+        "lockdown_active": lockdown_active,
+        "blocked_ips": blocked_count,
+        "total_attacks": attack_count,
+        "pending_fixes": pending_fixes,
+        "last_updated": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.post("/unblock-ip", response_model=None, summary="Unblock an IP address")
+async def unblock_ip_address(
+    body: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """Unblock a previously blocked IP address."""
+    ip = body.get("ip", "").strip()
+    if not ip:
+        raise HTTPException(status_code=400, detail="ip is required")
+    if ip in _blocked_ips:
+        _blocked_ips.remove(ip)
+    try:
+        from api.db_store import db_get, db_set
+        blocked = db_get("blocked_ips") or []
+        blocked = [b for b in blocked if b.get("ip") != ip]
+        db_set("blocked_ips", blocked, changed_by=user.sub)
+    except Exception:
+        pass
+    logger.info("IP unblocked: %s by %s", ip, user.sub)
+    return {"success": True, "ip": ip, "action": "unblocked"}
+
+
+@router.post("/block-ip", response_model=None, summary="Block an IP address")
+async def block_ip_address(
+    body: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """Block an IP address from accessing the platform."""
+    ip = body.get("ip", "").strip()
+    reason = body.get("reason", "Manual block")
+    if not ip:
+        raise HTTPException(status_code=400, detail="ip is required")
+    if ip not in _blocked_ips:
+        _blocked_ips.append(ip)
+    try:
+        from api.db_store import db_get, db_set
+        blocked = db_get("blocked_ips") or []
+        if not any(b.get("ip") == ip for b in blocked):
+            blocked.append({
+                "ip": ip,
+                "reason": reason,
+                "blocked_by": user.sub,
+                "blocked_at": datetime.now(UTC).isoformat(),
+            })
+        db_set("blocked_ips", blocked, changed_by=user.sub)
+    except Exception:
+        pass
+    logger.warning("IP blocked: %s reason=%s by %s", ip, reason, user.sub)
+    return {"success": True, "ip": ip, "reason": reason, "action": "blocked"}
+

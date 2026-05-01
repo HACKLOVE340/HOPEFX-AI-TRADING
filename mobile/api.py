@@ -197,8 +197,8 @@ class MobileAPIServer:
             CORSMiddleware,
             allow_origins=_allowed_origins,
             allow_credentials=False,  # never True with a dynamic/wildcard list
-            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-CSRF-Token"],
         )
 
         self._setup_routes()

@@ -622,3 +622,147 @@ async def resolve_reconciliation(
     except Exception as exc:
         logger.error("resolve_reconciliation error: %s", exc)
         raise HTTPException(status_code=500, detail="Failed to resolve reconciliation record") from None
+
+
+# ── Wallets ───────────────────────────────────────────────────────────────────
+
+@router.get("/financial/wallets")
+async def list_wallets(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Platform wallet balances and transaction summaries."""
+    try:
+        from database.connection import get_db_manager
+        mgr = get_db_manager()
+        if mgr:
+            with mgr.session() as db:
+                from database.models import WalletTransaction
+                offset = (page - 1) * page_size
+                rows = (
+                    db.query(WalletTransaction)
+                    .order_by(WalletTransaction.created_at.desc())
+                    .offset(offset)
+                    .limit(page_size)
+                    .all()
+                )
+                total = db.query(WalletTransaction).count()
+                wallets = [
+                    {
+                        "id": str(r.id),
+                        "user_id": str(r.user_id) if r.user_id else None,
+                        "currency": r.currency or "USD",
+                        "amount": float(r.amount or 0),
+                        "type": r.transaction_type or "unknown",
+                        "status": r.status or "completed",
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "reference": r.reference or "",
+                    }
+                    for r in rows
+                ]
+                return {"wallets": wallets, "total": total, "page": page, "page_size": page_size}
+    except Exception as exc:
+        logger.debug("wallets db: %s", exc)
+    return {"wallets": [], "total": 0, "page": page, "page_size": page_size}
+
+
+@router.get("/financial/payouts")
+async def list_payouts(
+    status: str = Query("all"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    user: TokenPayload = Depends(_require_superadmin),
+) -> dict:
+    """Affiliate and withdrawal payout queue."""
+    try:
+        from database.connection import get_db_manager
+        mgr = get_db_manager()
+        if mgr:
+            with mgr.session() as db:
+                from database.models import WalletTransaction
+                q = db.query(WalletTransaction).filter(
+                    WalletTransaction.transaction_type == "payout"
+                )
+                if status != "all":
+                    q = q.filter(WalletTransaction.status == status)
+                total = q.count()
+                offset = (page - 1) * page_size
+                rows = q.order_by(WalletTransaction.created_at.desc()).offset(offset).limit(page_size).all()
+                payouts = [
+                    {
+                        "id": str(r.id),
+                        "user_id": str(r.user_id) if r.user_id else None,
+                        "amount": float(r.amount or 0),
+                        "currency": r.currency or "USD",
+                        "status": r.status or "pending",
+                        "method": r.metadata.get("method", "bank_transfer") if r.metadata else "bank_transfer",
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "processed_at": r.metadata.get("processed_at") if r.metadata else None,
+                    }
+                    for r in rows
+                ]
+                return {"payouts": payouts, "total": total, "page": page, "page_size": page_size}
+    except Exception as exc:
+        logger.debug("payouts db: %s", exc)
+    return {"payouts": [], "total": 0, "page": page, "page_size": page_size}
+
+
+@router.get("/financial/fee-config")
+async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Platform-wide fee configuration."""
+    try:
+        from config.config_manager import ConfigManager
+        cfg = ConfigManager()
+        fees = cfg.get("fees", {})
+        if fees:
+            return {"fees": fees}
+    except Exception as exc:
+        logger.debug("fee_config config_manager: %s", exc)
+    # Fallback: read from DB Configuration table
+    try:
+        from database.connection import get_db_manager
+        mgr = get_db_manager()
+        if mgr:
+            with mgr.session() as db:
+                from database.models import Configuration
+                row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
+                if row and row.value:
+                    import json as _json
+                    return {"fees": _json.loads(row.value) if isinstance(row.value, str) else row.value}
+    except Exception as exc:
+        logger.debug("fee_config db: %s", exc)
+    return {
+        "fees": {
+            "trading_commission_pct": 0.1,
+            "spread_markup_pips": 0.5,
+            "withdrawal_flat_usd": 5.0,
+            "inactivity_monthly_usd": 10.0,
+            "overnight_swap_pct": 0.02,
+            "affiliate_revenue_share_pct": 30.0,
+        }
+    }
+
+
+@router.patch("/financial/fee-config")
+async def update_fee_config(body: dict, user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Update platform fee configuration."""
+    _log_superadmin_action(user, "fee_config_update", str(body))
+    try:
+        from database.connection import get_db_manager
+        import json as _json
+        mgr = get_db_manager()
+        if mgr:
+            with mgr.session() as db:
+                from database.models import Configuration
+                row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
+                if row:
+                    row.value = _json.dumps(body)
+                    row.updated_at = datetime.now(timezone.utc)
+                else:
+                    row = Configuration(key="fee_config", value=_json.dumps(body))
+                    db.add(row)
+                db.commit()
+    except Exception as exc:
+        logger.debug("fee_config update: %s", exc)
+    return {"ok": True, "fees": body}

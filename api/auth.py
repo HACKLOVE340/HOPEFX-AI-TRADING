@@ -44,8 +44,17 @@ except Exception as _router_import_err:  # pragma: no cover
 
 __all__ = ["TokenPayload", "get_current_user", "require_role", "router"]
 
-# Role hierarchy: higher index = more privileged
-_ROLE_RANK: dict = {"user": 0, "trader": 1, "admin": 2, "superadmin": 3}
+# Role hierarchy: higher index = more privileged.
+# "starter" is the free-tier role — lowest privilege, below "user".
+# All roles must be listed here; any role absent from this map gets rank -1
+# (denied everywhere) which would silently block legitimate users.
+_ROLE_RANK: dict = {
+    "starter": 0,
+    "user": 1,
+    "trader": 2,
+    "admin": 3,
+    "superadmin": 4,
+}
 # Stable per-role dependency callables — same object identity on every call,
 # required for FastAPI dependency_overrides to work correctly in tests.
 _ROLE_DEPS: dict = {}
@@ -336,7 +345,7 @@ def require_kyc(
         # Resolve compliance_manager from the request's app state so that
         # test apps (which have no compliance_manager) bypass the check.
         from app import app as _main_app
-        from app import app_state
+        from core.app_state import app_state
 
         if request.app is not _main_app:
             return user  # not the main app — skip KYC (test / embedded app)

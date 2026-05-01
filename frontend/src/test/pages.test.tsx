@@ -68,6 +68,26 @@ vi.mock('../hooks/useApi', () => ({
     me:     vi.fn(),
   },
   backtestApi: { run: vi.fn(), results: vi.fn(), list: vi.fn() },
+  marketplaceApi: {
+    list:           vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+    get:            vi.fn().mockResolvedValue({ data: {} }),
+    purchase:       vi.fn().mockResolvedValue({ data: {} }),
+    publish:        vi.fn().mockResolvedValue({ data: {} }),
+    unpublish:      vi.fn().mockResolvedValue({ data: {} }),
+    reviews:        vi.fn().mockResolvedValue({ data: [] }),
+    addReview:      vi.fn().mockResolvedValue({ data: {} }),
+    myItems:        vi.fn().mockResolvedValue({ data: [] }),
+    // Methods used directly by Marketplace.tsx
+    stats:          vi.fn().mockResolvedValue({ data: { total_strategies: 0, total_subscribers: 0 } }),
+    strategies:     vi.fn().mockResolvedValue({ data: { strategies: [], total: 0 } }),
+    myStrategies:   vi.fn().mockResolvedValue({ data: { strategies: [] } }),
+    strategy:       vi.fn().mockResolvedValue({ data: { strategy: {}, reviews: [] } }),
+    review:         vi.fn().mockResolvedValue({ data: {} }),
+  },
+  // CSRF helpers — imported by DangerSection, SecuritySection, TwoFactorSetup
+  getCsrfToken:       vi.fn().mockResolvedValue('test-csrf-token'),
+  prefetchCsrfToken:  vi.fn().mockResolvedValue(undefined),
+  resetCsrfCache:     vi.fn(),
   api: {
     defaults: { baseURL: '/api', timeout: 15000, headers: { 'Content-Type': 'application/json' } },
     interceptors: { request: { handlers: [{}], use: vi.fn() }, response: { handlers: [{}], use: vi.fn() } },
@@ -274,7 +294,9 @@ describe('Dashboard page', () => {
 
   it('renders Max Drawdown stat', async () => {
     await renderDashboard();
-    expect(screen.getByText('Max Drawdown')).toBeInTheDocument();
+    // Dashboard renders "Max Drawdown" in both the stats grid and the risk strip.
+    // Use getAllByText to handle both occurrences.
+    expect(screen.getAllByText('Max Drawdown').length).toBeGreaterThan(0);
   });
 
   it('renders Open Trades stat', async () => {

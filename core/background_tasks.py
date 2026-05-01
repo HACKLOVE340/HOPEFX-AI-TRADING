@@ -101,7 +101,7 @@ async def price_stream_loop(ws_manager: Any) -> None:
     Reads the broker's in-memory price table (populated by nuclear_price_bridge)
     and pushes updates to ws_manager at PRICE_STREAM_INTERVAL seconds.
     """
-    from app import app_state
+    from core.app_state import app_state
 
     _STREAM_SYMBOLS = [s.strip().upper() for s in os.getenv("SIGNAL_ENGINE_SYMBOLS", "XAUUSD").split(",") if s.strip()]
     _POLL_INTERVAL = float(os.getenv("PRICE_STREAM_INTERVAL", "1.0"))

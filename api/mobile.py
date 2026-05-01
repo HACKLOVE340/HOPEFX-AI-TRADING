@@ -185,3 +185,96 @@ async def update_notification_prefs(
     _save_notif_prefs(user.sub, current)
     logger.info("Notification prefs updated: user=%s prefs=%s", user.sub, current)
     return current
+
+
+# ── Mobile app config ─────────────────────────────────────────────────────────
+
+@router.get("/config", summary="Mobile app configuration")
+async def get_mobile_config(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return mobile app configuration: minimum version, download links,
+    feature flags, and API base URL.
+    """
+    import os as _os
+    return {
+        "min_version": "1.0.0",
+        "latest_version": "1.0.0",
+        "api_base_url": _os.getenv("APP_BASE_URL", "http://localhost:8000"),
+        "ws_url": _os.getenv("APP_BASE_URL", "http://localhost:8000").replace("http", "ws"),
+        "app_store_url": "https://apps.apple.com/app/hopefx",
+        "play_store_url": "https://play.google.com/store/apps/details?id=io.hopefx",
+        "features": {
+            "copy_trading": True,
+            "push_notifications": True,
+            "biometric_auth": True,
+            "dark_mode": True,
+        },
+        "maintenance": False,
+        "maintenance_message": None,
+    }
+
+
+# ── Mobile sessions ───────────────────────────────────────────────────────────
+
+@router.get("/sessions", summary="Active mobile sessions")
+async def list_mobile_sessions(user: TokenPayload = Depends(get_current_user)):
+    """Return active mobile sessions for the authenticated user."""
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import UserSession
+        db = SessionLocal()
+        try:
+            sessions = (
+                db.query(UserSession)
+                .filter(
+                    UserSession.user_id == user.sub,
+                    UserSession.is_active.is_(True),
+                )
+                .order_by(UserSession.created_at.desc())
+                .limit(20)
+                .all()
+            )
+            return [
+                {
+                    "id": str(s.id),
+                    "device": getattr(s, "device_info", "Mobile"),
+                    "ip_address": getattr(s, "ip_address", None),
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                    "last_active": s.last_active_at.isoformat() if getattr(s, "last_active_at", None) else None,
+                }
+                for s in sessions
+            ]
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("Mobile sessions DB query failed: %s", exc)
+        return []
+
+
+@router.delete("/sessions/{session_id}", summary="Revoke a mobile session")
+async def revoke_mobile_session(
+    session_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Revoke a specific mobile session for the authenticated user."""
+    try:
+        from database.connection import SessionLocal
+        from database.user_models import UserSession
+        db = SessionLocal()
+        try:
+            session = (
+                db.query(UserSession)
+                .filter(UserSession.id == session_id, UserSession.user_id == user.sub)
+                .first()
+            )
+            if not session:
+                from fastapi import HTTPException as _HTTPException
+                raise _HTTPException(status_code=404, detail="Session not found")
+            session.is_active = False
+            db.commit()
+            return {"revoked": True, "session_id": session_id}
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.debug("Mobile session revoke failed: %s", exc)
+        return {"revoked": False, "error": str(exc)}

@@ -56,7 +56,7 @@ UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user, require_role
 
@@ -575,68 +575,10 @@ async def export_audit_log(admin: TokenPayload = Depends(_require_admin_dep)):
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Task 39 — API Key Management
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-class CreateApiKeyBody(BaseModel):
-    name: str = Field(..., min_length=1, max_length=60)
-    scopes: list[str] = Field(default_factory=lambda: ["read"])
-
-
-@router.get("/api/settings/api-keys")
-async def list_api_keys(user: TokenPayload = Depends(get_current_user)):
-    """List all API keys for the current user (never returns raw key)."""
-    keys = _api_keys_for_user(user.sub)
-    return {"api_keys": keys}
-
-
-@router.post("/api/settings/api-keys", status_code=status.HTTP_201_CREATED)
-async def create_api_key(
-    body: CreateApiKeyBody,
-    request: Request,
-    user: TokenPayload = Depends(get_current_user),
-):
-    """Create a named API key. Raw key shown once — stored as SHA-256 hash."""
-    raw_key = f"hfx_{secrets.token_urlsafe(32)}"
-    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-    key_id = str(uuid.uuid4())[:12]
-
-    key_data = {
-        "key_id": key_id,
-        "user_id": user.sub,
-        "name": body.name,
-        "scopes": body.scopes,
-        "key_prefix": raw_key[:10] + "…",
-        "created_at": datetime.now(UTC).isoformat(),
-        "last_used": None,
-        "revoked": False,
-    }
-    _api_key_set(key_id, key_data)
-    _api_key_hash_set(key_hash, key_id)
-    _log_audit(user.sub, "api_key.created", f"API key '{body.name}' created", ip=_client_ip(request))
-
-    return {
-        "key_id": key_id,
-        "api_key": raw_key,
-        "name": body.name,
-        "scopes": body.scopes,
-        "note": "Store this key securely — it will not be shown again.",
-    }
-
-
-@router.delete("/api/settings/api-keys/{key_id}")
-async def revoke_api_key(key_id: str, request: Request, user: TokenPayload = Depends(get_current_user)):
-    """Revoke an API key."""
-    key = _api_key_get(key_id)
-    if not key or key["user_id"] != user.sub:
-        raise HTTPException(status_code=404, detail="API key not found")
-    key["revoked"] = True
-    key["revoked_at"] = datetime.now(UTC).isoformat()
-    _api_key_set(key_id, key)
-    _log_audit(user.sub, "api_key.revoked", f"API key '{key['name']}' revoked", ip=_client_ip(request))
-    return {"revoked": True, "key_id": key_id}
+# NOTE: GET/POST /api/settings/api-keys and DELETE /api/settings/api-keys/{key_id}
+# are handled by api/settings_new_endpoints.py, which is registered before this
+# router. These handlers were dead code (silently dropped by the dedup guard).
+# Canonical implementations live in settings_new_endpoints.py.
 
 
 # ─────────────────────────────────────────────────────────────────────────────

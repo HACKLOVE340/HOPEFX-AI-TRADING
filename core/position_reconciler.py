@@ -277,7 +277,7 @@ class PositionReconciler:
 
         # Instruct risk manager to halt if available
         try:
-            from app import app_state
+            from core.app_state import app_state
 
             rm = getattr(app_state, "risk_manager", None)
             if rm is not None and hasattr(rm, "_halt_trading"):

@@ -12,29 +12,33 @@ Exposes the full pipeline (analyze, signal, backtest, status, history)
 as authenticated REST endpoints. All data from internal Redis streams —
 no broker APIs are called from these endpoints.
 
+This router carries no prefix — the prefix "/nuclear-strategy" is supplied
+by core/router_registry.py at mount time:
+
+    _include_router_deduped(app, nuclear_strategy_router,
+                            prefix="/nuclear-strategy",
+                            tags=["nuclear-strategy"])
+
 Endpoints
 ---------
-GET  /nuclear-strategy/status          Agent + reader status snapshot
-GET  /nuclear-strategy/analyze         Run full pipeline, return AnalysisResult
-GET  /nuclear-strategy/signal          Latest NuclearSignal (or 204 if none)
-GET  /nuclear-strategy/backtest        Latest BacktestResult
-GET  /nuclear-strategy/regime          Current regime + history
-GET  /nuclear-strategy/cone            Latest ITOS cone (merged multi-TF)
-GET  /nuclear-strategy/history         Last N approved signals
-POST /nuclear-strategy/analyze/force   Force a fresh pipeline run (admin)
-POST /nuclear-strategy/agent/start     Start the Redis stream reader (admin)
-POST /nuclear-strategy/agent/stop      Stop the Redis stream reader (admin)
+GET    /nuclear-strategy/status          Agent + reader status snapshot
+GET    /nuclear-strategy/analyze         Run full pipeline, return AnalysisResult
+GET    /nuclear-strategy/signal          Latest NuclearSignal (or 204 if none)
+GET    /nuclear-strategy/backtest        Latest BacktestResult
+GET    /nuclear-strategy/regime          Current regime + history
+GET    /nuclear-strategy/cone            Latest ITOS cone (merged multi-TF)
+GET    /nuclear-strategy/history         Last N approved signals
+GET    /nuclear-strategy/features        Latest multi-TF feature set
+GET    /nuclear-strategy/stream/status   Redis stream reader status
+POST   /nuclear-strategy/analyze/force   Force a fresh pipeline run (admin)
+POST   /nuclear-strategy/agent/start     Start the Redis stream reader (admin)
+POST   /nuclear-strategy/agent/stop      Stop the Redis stream reader (admin)
+DELETE /nuclear-strategy/history         Clear approved signal history (admin)
 
 Auth
 ----
 Read endpoints: require "trader" role
 Mutating endpoints: require "admin" role
-
-Mount with:
-    from api.nuclear_strategy import router as nuclear_strategy_router
-    app.include_router(nuclear_strategy_router,
-                       prefix="/nuclear-strategy",
-                       tags=["nuclear-strategy"])
 """
 
 from __future__ import annotations

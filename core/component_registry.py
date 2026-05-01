@@ -38,12 +38,35 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Yield between every component start so the event loop can process pending
+# I/O and HTTP requests during the startup sequence.
+# Override with STARTUP_TASK_DELAY_MS env var (default 200 ms).
+_INTER_COMPONENT_DELAY: float = float(os.getenv("STARTUP_TASK_DELAY_MS", "200")) / 1000.0
+
+# CPU-heavy components get an extra pause after they start so their background
+# loops can settle before the next component launches.
+_HEAVY_COMPONENTS: frozenset[str] = frozenset(
+    {
+        "hopefx_brain",
+        "price_engine",
+        "signal_engine",
+        "master_control",
+        "data_layer_orchestrator",
+        "ml_engine",
+        "rl_agent",
+        "feature_engineer",
+        "online_learner",
+    }
+)
+_HEAVY_EXTRA_DELAY: float = float(os.getenv("STARTUP_HEAVY_DELAY_MS", "500")) / 1000.0
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,6 +141,10 @@ class ComponentRegistry:
         for name in order:
             comp = self._components[name]
 
+            # Yield to the event loop before every component so HTTP requests
+            # and I/O callbacks are not starved during the startup sequence.
+            await asyncio.sleep(_INTER_COMPONENT_DELAY)
+
             # Check if any dependency failed or was skipped
             failed_dep = next(
                 (
@@ -165,6 +192,17 @@ class ComponentRegistry:
                         f"Required component '{name}' failed: {exc}",
                     ) from exc
                 logger.warning("[WARN] %-30s %.0f ms -- %s", name, comp.elapsed_ms, exc)
+                continue
+
+            # CPU-heavy components get an extra pause after launch so their
+            # background loops can settle before the next component starts.
+            if name in _HEAVY_COMPONENTS:
+                logger.debug(
+                    "startup: extra %.0f ms yield after heavy component '%s'",
+                    _HEAVY_EXTRA_DELAY * 1000,
+                    name,
+                )
+                await asyncio.sleep(_HEAVY_EXTRA_DELAY)
 
         return self._components
 

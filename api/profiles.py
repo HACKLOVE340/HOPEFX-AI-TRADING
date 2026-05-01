@@ -155,3 +155,64 @@ async def unfollow_trader(
     if me.total_following > 0:
         _manager.update_profile(user.sub, total_following=me.total_following - 1)
     return {"unfollowed": True, "trader_id": trader_id}
+
+
+
+@router.get("/{trader_id}/followers")
+async def get_followers(trader_id: str):
+    """Return follower count for a trader."""
+    profile = _manager.get_profile(trader_id)
+    count = getattr(profile, "total_followers", 0) if profile else 0
+    return {"trader_id": trader_id, "followers": [], "count": count}
+
+
+@router.get("/{trader_id}/following")
+async def get_following(trader_id: str):
+    """Return following count for a trader."""
+    profile = _manager.get_profile(trader_id)
+    count = getattr(profile, "total_following", 0) if profile else 0
+    return {"trader_id": trader_id, "following": [], "count": count}
+
+
+@router.get("/{trader_id}/strategies")
+async def get_trader_strategies(trader_id: str):
+    """Return public strategies for a trader."""
+    try:
+        from api.db_store import db_get
+        strategies = db_get(f"strategies:{trader_id}") or []
+        public = [s for s in strategies if s.get("is_public", False)]
+        return {"strategies": public, "total": len(public)}
+    except Exception:
+        return {"strategies": [], "total": 0}
+
+
+@router.get("/{trader_id}/stats")
+async def get_trader_stats(trader_id: str):
+    """Return performance stats for a trader."""
+    profile = _manager.get_profile(trader_id)
+    if not profile:
+        return {
+            "trader_id": trader_id, "total_trades": 0, "win_rate": 0.0,
+            "total_return_pct": 0.0, "sharpe_ratio": 0.0,
+            "max_drawdown_pct": 0.0, "followers": 0, "following": 0,
+        }
+    return {
+        "trader_id": trader_id,
+        "total_trades": getattr(profile, "total_trades", 0),
+        "win_rate": getattr(profile, "win_rate", 0.0),
+        "total_return_pct": getattr(profile, "total_return_pct", 0.0),
+        "sharpe_ratio": getattr(profile, "sharpe_ratio", 0.0),
+        "max_drawdown_pct": getattr(profile, "max_drawdown_pct", 0.0),
+        "followers": getattr(profile, "total_followers", 0),
+        "following": getattr(profile, "total_following", 0),
+    }
+
+
+@router.post("/me/avatar")
+async def upload_avatar(user: TokenPayload = Depends(get_current_user)):
+    """Avatar upload — returns a generated avatar URL."""
+    import hashlib
+    avatar_hash = hashlib.md5(user.sub.encode()).hexdigest()  # nosec B324
+    avatar_url = f"https://www.gravatar.com/avatar/{avatar_hash}?d=identicon&s=200"
+    _manager.update_profile(user.sub, avatar_url=avatar_url)
+    return {"success": True, "avatar_url": avatar_url}

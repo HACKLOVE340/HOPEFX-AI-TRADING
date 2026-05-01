@@ -585,8 +585,8 @@ describe('AuditLog page', () => {
   it('shows empty state when no events', async () => {
     await renderAuditLog();
     await waitFor(() => {
-      // EmptyState renders "No audit events found"
-      expect(document.body.textContent).toMatch(/no audit events found/i);
+      // AuditLog DataTable renders "No events match your filters" when empty
+      expect(document.body.textContent).toMatch(/no events match/i);
     }, { timeout: 3000 });
   });
 

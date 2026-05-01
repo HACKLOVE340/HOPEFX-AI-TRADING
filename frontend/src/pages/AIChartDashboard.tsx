@@ -14,7 +14,7 @@
  *   - tradingApi.regime() + brainState() for the header strip
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AIChart } from '../components/charts/AIChart';
 import { cn } from '../lib/utils';
@@ -180,6 +180,38 @@ function TfSelector({ value, onChange }: { value: TF; onChange: (tf: TF) => void
   );
 }
 
+// ── Error boundary ────────────────────────────────────────────────────────────
+
+class ChartErrorBoundary extends React.Component<
+  { children: React.ReactNode; label: string },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode; label: string }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[300px] bg-[#0d1421] border border-[#1e2d3d] rounded-lg gap-2">
+          <span className="text-[#ff1744] text-xs font-semibold">{this.props.label} failed to load</span>
+          <span className="text-slate-600 text-[10px]">{this.state.message}</span>
+          <button
+            className="mt-2 px-3 py-1 text-[11px] bg-[#1e2d3d] text-slate-400 rounded hover:bg-[#263548]"
+            onClick={() => this.setState({ hasError: false, message: '' })}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AIChartDashboard() {
@@ -199,20 +231,23 @@ export default function AIChartDashboard() {
       </div>
 
       {/* ── Regime / brain strip ───────────────────────────────────── */}
-      <RegimeStrip />
+      <ChartErrorBoundary label="Regime Strip">
+        <RegimeStrip />
+      </ChartErrorBoundary>
 
       {/* ── Charts grid ────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 overflow-y-auto p-2">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {SYMBOLS.map((sym) => (
-            <AIChart
-              key={`${sym}-${timeframe}`}
-              symbol={sym}
-              timeframe={timeframe}
-              height={300}
-              autoAnalyze
-              showBranding={false}
-            />
+            <ChartErrorBoundary key={`${sym}-${timeframe}`} label={sym}>
+              <AIChart
+                symbol={sym}
+                timeframe={timeframe}
+                height={300}
+                autoAnalyze
+                showBranding={false}
+              />
+            </ChartErrorBoundary>
           ))}
         </div>
       </div>

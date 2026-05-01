@@ -104,7 +104,7 @@ class OpenPosition(BaseModel):
 def _get_engine() -> Any | None:
     """Return the live HopeFXEngine from app_state, or None if not started."""
     try:
-        from app import app_state
+        from core.app_state import app_state
 
         return getattr(app_state, "hopefx_engine", None)
     except Exception:
@@ -217,7 +217,7 @@ def _compute_current_drawdown(equity_series: list[tuple[float, float]]) -> float
 def _get_db_session():
     """Return (session, session_factory) from app_state, or (None, None)."""
     try:
-        from app import app_state as _app_state_pnl
+        from core.app_state import app_state as _app_state_pnl
 
         sf = getattr(_app_state_pnl, "db_session_factory", None)
         if sf is not None:
@@ -394,10 +394,11 @@ async def pnl_summary(
     Sharpe ratio is only shown after _MIN_FILLS_FOR_SHARPE fills to prevent
     misleading statistics from small samples.
     """
+    import asyncio as _asyncio
     engine = _get_engine()
     if engine is None:
         # DB fallback: compute summary from closed Trade rows
-        return _pnl_summary_from_db()
+        return await _asyncio.to_thread(_pnl_summary_from_db)
 
     fills = list(getattr(engine, "_fill_history", []))
     starting = float(getattr(engine, "_starting_equity", 10_000.0))
@@ -509,10 +510,14 @@ async def trade_log(
     The fill_id and lineage_id fields link each fill to the lineage store
     for full audit trail (signal → fill → outcome).
     """
+    import asyncio as _asyncio
+    import functools as _functools
     engine = _get_engine()
     if engine is None:
         # DB fallback: serve closed trades from the Trade table
-        return _trade_log_from_db(limit=limit, offset=offset, symbol=symbol, direction=direction)
+        return await _asyncio.to_thread(
+            _functools.partial(_trade_log_from_db, limit=limit, offset=offset, symbol=symbol, direction=direction)
+        )
 
     fills = list(getattr(engine, "_fill_history", []))
     # Sort newest-first
@@ -615,3 +620,78 @@ async def open_positions(
         )
 
     return result
+
+
+@router.get("/history", summary="P&L trade history (closed trades)")
+async def pnl_history(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    symbol: str | None = Query(None),
+    _user: TokenPayload = Depends(get_current_user),
+):
+    """Return closed trade history for P&L pages.
+
+    Queries the DB Trade table directly so paper broker trades persisted
+    via _persist_trade_record are visible immediately.
+    """
+    import asyncio as _asyncio
+    import functools as _functools
+    return await _asyncio.to_thread(
+        _functools.partial(_trade_log_from_db, limit=limit, offset=offset, symbol=symbol)
+    )
+
+
+@router.get("/export", summary="Export P&L data as CSV or JSON")
+async def export_pnl(
+    format: str = "csv",
+    _user: TokenPayload = Depends(get_current_user),
+):
+    """Export full fill log as CSV or JSON."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse, JSONResponse
+
+    engine = _get_engine()
+    fills = list(getattr(engine, "_fill_history", [])) if engine else []
+
+    if format == "json":
+        data = [
+            {
+                "fill_id": getattr(f, "fill_id", str(i)),
+                "symbol": getattr(f, "symbol", ""),
+                "direction": getattr(f, "direction", ""),
+                "quantity": float(getattr(f, "quantity", 0.0)),
+                "fill_price": float(getattr(f, "fill_price", 0.0)),
+                "pnl": float(getattr(f, "pnl", 0.0) or 0.0),
+                "broker": getattr(f, "broker", ""),
+                "filled_at": str(getattr(f, "filled_at", "")),
+            }
+            for i, f in enumerate(fills)
+        ]
+        return JSONResponse(content={"fills": data, "total": len(data)})
+
+    output = io.StringIO()
+    fieldnames = ["fill_id", "symbol", "direction", "quantity", "fill_price",
+                  "expected_price", "slippage_bps", "pnl", "broker", "latency_ms", "filled_at"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for i, f in enumerate(fills):
+        writer.writerow({
+            "fill_id": getattr(f, "fill_id", str(i)),
+            "symbol": getattr(f, "symbol", ""),
+            "direction": getattr(f, "direction", ""),
+            "quantity": float(getattr(f, "quantity", 0.0)),
+            "fill_price": float(getattr(f, "fill_price", 0.0)),
+            "expected_price": float(getattr(f, "expected_price", 0.0)),
+            "slippage_bps": float(getattr(f, "slippage_bps", 0.0)),
+            "pnl": float(getattr(f, "pnl", 0.0) or 0.0),
+            "broker": getattr(f, "broker", ""),
+            "latency_ms": float(getattr(f, "latency_ms", 0.0)),
+            "filled_at": str(getattr(f, "filled_at", "")),
+        })
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=pnl_export.csv"},
+    )

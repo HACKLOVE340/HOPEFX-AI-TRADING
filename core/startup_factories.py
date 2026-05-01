@@ -106,6 +106,30 @@ async def init_env(s: Any) -> bool:
             "Set CONFIG_ENCRYPTION_KEY in .env before deploying to production."
         )
 
+    # ── STRIPE_SECRET_KEY ─────────────────────────────────────────────────────
+    stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
+    stripe_webhook = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+    if not stripe_key:
+        logger.warning(
+            "STRIPE_SECRET_KEY not set — wallet, billing, subscriptions, and payments "
+            "will run in simulation mode. Set STRIPE_SECRET_KEY=sk_live_... in .env "
+            "to enable real Stripe charges."
+        )
+    if not stripe_webhook:
+        logger.warning(
+            "STRIPE_WEBHOOK_SECRET not set — Stripe webhook signature verification "
+            "is disabled. Set STRIPE_WEBHOOK_SECRET=whsec_... from the Stripe dashboard."
+        )
+
+    # ── SMTP ──────────────────────────────────────────────────────────────────
+    smtp_host = os.getenv("SMTP_HOST", "")
+    if not smtp_host:
+        logger.warning(
+            "SMTP_HOST not set — email notifications and SuperAdmin → Platform → "
+            "Test SMTP will fail. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD "
+            "in .env to enable outbound email."
+        )
+
     # ── Run full env validator ────────────────────────────────────────────────
     try:
         from core.env_validator import validate_and_report
@@ -1484,18 +1508,26 @@ async def init_macro_store(s: Any) -> Any:
     # Architecture rule: never import data_layer sub-modules directly.
     # The orchestrator is the single entry point for all data layer components.
     fred_loaded = 0
+    # In dev/CI environments without FRED keys the bridge will time out on
+    # every retry.  Cap the total wait so startup is not blocked for >60s.
+    _bridge_timeout = float(os.getenv("MACRO_BRIDGE_TOTAL_TIMEOUT_S", "30.0"))
     try:
         from data_layer.orchestrator import orchestrator
 
         macro_store_bridge = orchestrator._macro_bridge
 
-        await macro_store_bridge.start()
+        await asyncio.wait_for(macro_store_bridge.start(), timeout=_bridge_timeout)
         fred_loaded = macro_store_bridge._series_loaded
         s.macro_store_bridge = macro_store_bridge
         logger.info(
             "MacroStoreBridge: %d/%d FRED series loaded into MacroStore",
             fred_loaded,
             9,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "MacroStoreBridge: timed out after %.0fs — falling back to CSV bootstrap",
+            _bridge_timeout,
         )
     except Exception as exc:
         logger.warning(
@@ -1526,15 +1558,21 @@ async def init_macro_store(s: Any) -> Any:
     # Series injected: wgc_total_demand, wgc_investment, wgc_central_bank,
     #                  wgc_jewellery, wgc_etf_flow (and proxy variants).
     wgc_injected = 0
+    _wgc_timeout = float(os.getenv("WGC_STARTUP_TIMEOUT_S", "20.0"))
     try:
         from data_layer.feeds.macro.wgc import wgc_feed
 
-        wgc_status = await wgc_feed.fetch_and_inject()
+        wgc_status = await asyncio.wait_for(wgc_feed.fetch_and_inject(), timeout=_wgc_timeout)
         wgc_injected = wgc_status.get("series_injected", 0)
         logger.info(
             "WGC: %d series injected into MacroStore (fetched: %s)",
             wgc_injected,
             wgc_status.get("series_fetched", []),
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "WGC startup download timed out after %.0fs — gold demand series unavailable",
+            _wgc_timeout,
         )
     except Exception as exc:
         logger.warning("WGC startup download failed (%s) — gold demand series unavailable", exc)

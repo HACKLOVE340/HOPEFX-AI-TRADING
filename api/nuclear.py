@@ -12,9 +12,15 @@ NuclearHopeFXSupervisor and RiskOrchestrator.
 All state-mutating endpoints require the "admin" role.
 Read-only status endpoints require the "trader" role.
 
-Mount with:
-    from api.nuclear import router as nuclear_router
-    app.include_router(nuclear_router, prefix="/nuclear", tags=["nuclear"])
+This router carries no prefix — the prefix "/nuclear" is supplied by
+core/router_registry.py at mount time:
+
+    _include_router_deduped(app, nuclear_router,
+                            prefix="/nuclear", tags=["nuclear"])
+
+Resulting paths: /nuclear/status, /nuclear/resume, /nuclear/set_risk,
+/nuclear/hedge/activate, /nuclear/hedge/deactivate, /nuclear/history,
+/nuclear/kill_switch/activate, /nuclear/kill_switch/deactivate
 """
 
 from __future__ import annotations

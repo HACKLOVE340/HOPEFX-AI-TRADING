@@ -192,6 +192,7 @@ export type NuclearWsMessage =
   | { type: 'subscribed'; channels: string[]; ts: number }
   | { type: 'event_scored'; result: NuclearState; ts: number }
   | { type: 'nuclear_history'; events: NuclearEvent[]; ts: number }
+  | { type: 'nuclear_unavailable'; reason?: string; ts: number }
   | { type: 'error'; message: string };
 
 // OHLCVBar is imported at the top of this file and re-exported there.

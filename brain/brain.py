@@ -28,6 +28,10 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Rate-limit repeated "strategy decision timeout" warnings to once per 5 minutes.
+_DECISION_TIMEOUT_LOG_INTERVAL: float = 300.0
+_decision_timeout_last_logged: float = 0.0
+
 try:
     import numpy as np
 
@@ -217,7 +221,10 @@ class HOPEFXBrain:
         self.regime_check_interval = self.config.get("regime_check_interval", 60)
         self._cycle_count = 0
         self._last_cycle_time = time.time()
-        self._target_cycle_time = 1.0  # 1 second per cycle
+        # In development use a 5s cycle to avoid hammering yfinance/thread pool.
+        import os as _brain_os
+        _dev = _brain_os.getenv("APP_ENV", "development").lower() in ("development", "dev")
+        self._target_cycle_time = float(_brain_os.getenv("BRAIN_CYCLE_SEC", "5.0" if _dev else "1.0"))
 
         # Performance tracking
         self._cycle_times: deque = deque(maxlen=60)  # Last 60 cycles
@@ -312,6 +319,7 @@ class HOPEFXBrain:
 
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")
+            raise
         except Exception as e:
             logger.critical("Brain critical error: %s", e, exc_info=True)
             await self._execute_emergency_stop()
@@ -385,10 +393,15 @@ class HOPEFXBrain:
         async with self._state_lock:
             self.state.cycle_time_ms = elapsed * 1000
 
-        # Sleep with shutdown check
+        # Sleep with shutdown check — suppress TimeoutError (normal) but let
+        # CancelledError propagate so the task can be cancelled cleanly.
         if sleep_time > 0:
-            with contextlib.suppress(TimeoutError):
+            try:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
+            except asyncio.CancelledError:
+                raise
+            except (TimeoutError, asyncio.TimeoutError):
+                pass
 
     @staticmethod
     async def _await_or_return(raw):
@@ -858,7 +871,16 @@ class HOPEFXBrain:
             await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
         except TimeoutError:
-            logger.warning("Strategy decision timeout")
+            global _decision_timeout_last_logged
+            now = time.monotonic()
+            if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
+                logger.warning(
+                    "Strategy decision timeout (further timeouts suppressed for %.0f s)",
+                    _DECISION_TIMEOUT_LOG_INTERVAL,
+                )
+                _decision_timeout_last_logged = now
+            else:
+                logger.debug("Strategy decision timeout")
         except Exception as e:
             logger.error("Strategy decision error: %s", e)
 

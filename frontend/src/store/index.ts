@@ -45,7 +45,9 @@ interface AuthSlice {
   user:            User | null;
   isAuthenticated: boolean;
   plan:            import('../lib/subscription').Plan;
-  setPlan:         (plan: import('../lib/subscription').Plan) => void;
+  trial:           boolean;
+  trialDaysRemaining: number | null;
+  setPlan:         (plan: import('../lib/subscription').Plan, trial?: boolean, trialDaysRemaining?: number | null) => void;
   setAuth:         (token: string, user: User) => void;
   clearAuth:       () => void;
 }
@@ -162,10 +164,13 @@ interface AlertsSlice {
 // ─── WebSocket slice ──────────────────────────────────────────────────────────
 
 interface WsSlice {
-  wsStatus:      WsStatus;
-  lastHeartbeat: number | null;
-  setWsStatus:   (status: WsStatus) => void;
-  setHeartbeat:  (ts: number) => void;
+  wsStatus:        WsStatus;
+  lastHeartbeat:   number | null;
+  noLiveFeed:      boolean;
+  noLiveFeedMsg:   string | null;
+  setWsStatus:     (status: WsStatus) => void;
+  setHeartbeat:    (ts: number) => void;
+  setNoLiveFeed:   (active: boolean, msg?: string) => void;
 }
 
 // ─── System Event slice ───────────────────────────────────────────────────────
@@ -221,10 +226,12 @@ export const useStore = create<AppStore>()(
     persist(
       (set) => ({
         // ── Auth ──────────────────────────────────────────────────────────────
-        token:           null,
-        user:            null,
-        isAuthenticated: false,
-        plan:            'free' as import('../lib/subscription').Plan,
+        token:              null,
+        user:               null,
+        isAuthenticated:    false,
+        plan:               'free' as import('../lib/subscription').Plan,
+        trial:              false,
+        trialDaysRemaining: null,
 
         setAuth: (token, user) =>
           set({ token, user, isAuthenticated: true }, false, 'auth/setAuth'),
@@ -233,11 +240,11 @@ export const useStore = create<AppStore>()(
           // Invalidate the in-memory CSRF cache so the next request fetches a
           // fresh token rather than sending a stale one the server has expired.
           resetCsrfCache();
-          set({ token: null, user: null, isAuthenticated: false, plan: 'free' }, false, 'auth/clearAuth');
+          set({ token: null, user: null, isAuthenticated: false, plan: 'free', trial: false, trialDaysRemaining: null }, false, 'auth/clearAuth');
         },
 
-        setPlan: (plan) =>
-          set({ plan }, false, 'auth/setPlan'),
+        setPlan: (plan, trial = false, trialDaysRemaining = null) =>
+          set({ plan, trial, trialDaysRemaining }, false, 'auth/setPlan'),
 
         // ── Prices ────────────────────────────────────────────────────────────
         prices:       {},
@@ -373,12 +380,17 @@ export const useStore = create<AppStore>()(
         // ── WebSocket ─────────────────────────────────────────────────────────
         wsStatus:      'disconnected',
         lastHeartbeat: null,
+        noLiveFeed:    false,
+        noLiveFeedMsg: null,
 
         setWsStatus: (wsStatus) =>
           set({ wsStatus }, false, 'ws/setStatus'),
 
         setHeartbeat: (ts) =>
           set({ lastHeartbeat: ts }, false, 'ws/heartbeat'),
+
+        setNoLiveFeed: (active, msg) =>
+          set({ noLiveFeed: active, noLiveFeedMsg: msg ?? null }, false, 'ws/noLiveFeed'),
 
         // ── System Events ──────────────────────────────────────────────────────
         systemAlert: null,
@@ -396,12 +408,14 @@ export const useStore = create<AppStore>()(
           // On page refresh the silent-refresh interceptor (useApi.ts) uses
           // the httpOnly refresh-token cookie to obtain a new access token
           // before the first authenticated request fires.
-          user:            state.user,
-          isAuthenticated: state.isAuthenticated,
-          // Persist plan so SubscriptionGate doesn't flash the upgrade wall
-          // on every page load while usePlan waits for the billing API.
-          // usePlan will overwrite this with the authoritative server value.
-          plan:            state.plan,
+          user:               state.user,
+          isAuthenticated:    state.isAuthenticated,
+          // Persist plan/trial so SubscriptionGate doesn't flash the upgrade
+          // wall on every page load while usePlan waits for the billing API.
+          // usePlan will overwrite these with the authoritative server values.
+          plan:               state.plan,
+          trial:              state.trial,
+          trialDaysRemaining: state.trialDaysRemaining,
         }),
         onRehydrateStorage: () => () => {
           // Called once localStorage rehydration is complete.
@@ -425,6 +439,7 @@ export const selectPositions          = (s: AppStore) => s.positions;
 export const selectSignals            = (s: AppStore) => s.signals;
 export const selectAccount            = (s: AppStore) => s.account;
 export const selectWsStatus           = (s: AppStore) => s.wsStatus;
+export const selectNoLiveFeed         = (s: AppStore) => ({ active: s.noLiveFeed, msg: s.noLiveFeedMsg });
 export const selectOrchestratorHealth = (s: AppStore) => s.orchestratorHealth;
 export const selectQualityReport      = (s: AppStore) => s.qualityReport;
 export const selectMicrostructure     = (s: AppStore) => s.microstructure;
@@ -444,6 +459,8 @@ export const selectNewsItems          = (s: AppStore) => s.newsItems;
 export const selectDataQualityScore   = (s: AppStore) =>
   s.orchestratorHealth?.quality_score ?? null;
 export const selectPlan               = (s: AppStore) => s.plan;
+export const selectTrial              = (s: AppStore) => s.trial;
+export const selectTrialDaysRemaining = (s: AppStore) => s.trialDaysRemaining;
 export const selectSystemAlert        = (s: AppStore) => s.systemAlert;
 
 // ─── Hydration hook ───────────────────────────────────────────────────────────

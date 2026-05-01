@@ -80,6 +80,7 @@ const Wallet: React.FC = () => {
   const [balance, setBalance]           = useState(0);
   const [frozen, setFrozen]             = useState(0);
   const [pending, setPending]           = useState(0);
+  const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceErr, setBalanceErr]     = useState('');
   const [txErr, setTxErr]               = useState('');
   const [subscription, setSub]          = useState<Subscription | null>(null);
@@ -106,7 +107,8 @@ const Wallet: React.FC = () => {
       .catch((err: unknown) => {
         console.warn('[Wallet] Failed to load balance:', err);
         setBalanceErr(extractApiError(err, 'Failed to load balance.'));
-      });
+      })
+      .finally(() => setBalanceLoading(false));
 
     // Transactions
     api.get<{ transactions: Transaction[] }>('/billing/transactions')
@@ -172,6 +174,20 @@ const Wallet: React.FC = () => {
   const totalDeposited  = transactions.filter((t) => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
   const totalWithdrawn  = Math.abs(transactions.filter((t) => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));
   const totalFees       = Math.abs(transactions.filter((t) => ['subscription', 'copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
+
+  // Show a full-page spinner until the balance (the primary data) is loaded
+  if (balanceLoading) {
+    return (
+      <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 32, height: 32, border: '3px solid #334155', borderTopColor: '#f59e0b',
+            borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ color: '#64748b', fontSize: 14 }}>Loading wallet…</span>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={s.page}>

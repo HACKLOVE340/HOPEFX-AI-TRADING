@@ -661,10 +661,18 @@ class DataScheduler:
             self.timeframes,
             self.interval_secs,
         )
+        # In development, stagger the first run by 60s so the server is fully
+        # responsive before the yfinance batch fetch saturates the thread pool.
+        import os as _os
+        if _os.getenv("APP_ENV", "development").lower() in ("development", "dev"):
+            logger.info("DataScheduler: deferring first run by 60s (dev mode)")
+            await asyncio.sleep(60)
         while self._running:
             try:
                 results = await self.run_once()
                 logger.info("DataScheduler update: %s", results)
+            except asyncio.CancelledError:
+                raise
             except Exception:
                 logger.exception("DataScheduler update failed: %s")
             await asyncio.sleep(self.interval_secs)

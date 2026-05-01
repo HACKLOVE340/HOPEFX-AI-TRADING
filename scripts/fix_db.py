@@ -46,7 +46,7 @@ import sqlite3
 
 conn = sqlite3.connect(str(db_path))
 
-# Required columns per table — derived from database/user_models.py ORM definitions
+# Required columns per table — derived from database/models.py ORM definitions
 REQUIRED = {
     "users": [
         "id", "email", "username", "hashed_password", "role", "status",
@@ -57,20 +57,41 @@ REQUIRED = {
         "kyc_reviewer_id", "kyc_rejection_reason", "kyc_document_type",
         "plan", "country",
         "created_at", "updated_at", "last_login_at", "last_login_ip",
+        # Extended user profile fields
+        "is_banned", "ban_reason", "ban_expires_at",
+        "failed_login_attempts", "locked_until",
+        "stripe_customer_id", "referral_code", "affiliate_id",
+        "phone", "full_name", "avatar_url",
     ],
     "user_sessions": [
         "id", "user_id", "refresh_token_hash", "device_info", "ip_address",
         "created_at", "expires_at", "revoked_at", "is_revoked", "last_active_at",
+        "location",
     ],
     "login_attempts": [
         "id", "user_id", "email", "ip_address", "success",
         "failure_reason", "attempted_at",
     ],
+    "trades": [
+        "id", "trade_id", "symbol", "side", "entry_time", "entry_price",
+        "entry_quantity", "exit_time", "exit_price", "exit_quantity",
+        "realized_pnl", "unrealized_pnl", "commission", "swap", "total_pnl",
+        "stop_loss", "take_profit", "risk_reward_ratio", "strategy",
+        "signal_source", "signal_strength", "status", "is_open",
+        "created_at", "updated_at", "notes", "client_order_id",
+        "user_id", "account_id",
+    ],
+    "orders": [
+        "id", "account_id", "user_id",
+    ],
+    "positions": [
+        "id", "account_id",
+    ],
 }
 
 # Column definitions for ADD COLUMN statements
 COL_DEFS = {
-    # users
+    # users — core
     "kyc_submitted_at":      "DATETIME",
     "kyc_reviewed_at":       "DATETIME",
     "kyc_reviewer_id":       "VARCHAR(100)",
@@ -89,13 +110,29 @@ COL_DEFS = {
     "password_reset_token":  "VARCHAR(255)",
     "password_reset_expires":"DATETIME",
     "updated_at":            "DATETIME",
+    # users — extended
+    "is_banned":             "BOOLEAN DEFAULT 0",
+    "ban_reason":            "TEXT",
+    "ban_expires_at":        "DATETIME",
+    "failed_login_attempts": "INTEGER DEFAULT 0",
+    "locked_until":          "DATETIME",
+    "stripe_customer_id":    "VARCHAR(100)",
+    "referral_code":         "VARCHAR(50)",
+    "affiliate_id":          "VARCHAR(100)",
+    "phone":                 "VARCHAR(30)",
+    "full_name":             "VARCHAR(200)",
+    "avatar_url":            "TEXT",
     # user_sessions
     "device_info":           "VARCHAR(255)",
     "revoked_at":            "DATETIME",
     "is_revoked":            "BOOLEAN DEFAULT 0",
     "last_active_at":        "DATETIME",
+    "location":              "TEXT",
     # login_attempts
     "failure_reason":        "VARCHAR(100)",
+    # trades / orders / positions
+    "account_id":            "INTEGER",
+    "user_id":               "VARCHAR(100)",
 }
 
 fixed = []

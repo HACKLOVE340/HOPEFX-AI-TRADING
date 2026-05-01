@@ -835,11 +835,18 @@ class DiagnosticsEngine:
                 stale_feeds: list[str] = []
                 for pattern in ["market:tick:*", "feed:ohlcv:*", "data:live:*"]:
                     try:
-                        keys = await asyncio.wait_for(client.keys(pattern), timeout=3)
-                        for key in keys[:5]:
-                            ttl = await client.ttl(key)
+                        # Use SCAN (non-blocking, O(1) per call) instead of KEYS
+                        # (blocking O(N)) to avoid stalling Redis during the check.
+                        # Collect at most 5 keys per pattern — enough for a health signal.
+                        collected: list[str] = []
+                        async for key in client.scan_iter(pattern, count=10):
+                            collected.append(key)
+                            if len(collected) >= 5:
+                                break
+                        for key in collected:
+                            ttl = await asyncio.wait_for(client.ttl(key), timeout=2)
                             (found_feeds if ttl != 0 else stale_feeds).append(key)
-                    except TimeoutError:  # nosec B110 — Redis key scan timed out; skip this pattern
+                    except TimeoutError:  # nosec B110 — Redis TTL check timed out; skip key
                         pass
                 dur = (time.monotonic() - t0) * 1000
                 if stale_feeds:
@@ -1026,24 +1033,38 @@ class DiagnosticsEngine:
                         proc.kill()
                         action["action"] = "npm run build (timed out)"
             elif check == "import_chain":
-                for item in result.details.get("broken", [])[:3]:
-                    pkg = item.get("package", "").split(".")[0]
-                    if pkg and re.match(r"^[a-zA-Z0-9_\-]+$", pkg):
-                        proc = await asyncio.create_subprocess_exec(
-                            sys.executable,
-                            "-m",
-                            "pip",
-                            "install",
-                            pkg,
-                            stdout=asyncio.subprocess.PIPE,
-                            stderr=asyncio.subprocess.PIPE,
-                        )
-                        try:
-                            await asyncio.wait_for(proc.communicate(), timeout=60)
-                            action["action"] = f"pip install {pkg}"
-                            action["success"] = proc.returncode == 0
-                        except TimeoutError:
-                            proc.kill()
+                # _CORE_PACKAGES contains internal project modules (api.auth,
+                # security.self_healer, core.router_registry, …).  Their top-level
+                # names ("api", "security", "core", "risk", "execution", "app") are
+                # all real PyPI packages unrelated to this project — pip-installing
+                # them would pull in arbitrary third-party code.  Import failures
+                # for internal modules indicate a code or environment problem, not a
+                # missing dependency; log them for operator attention instead.
+                _INTERNAL_NAMESPACES: frozenset[str] = frozenset(
+                    {
+                        "api", "app", "auth", "brain", "brokers", "cache",
+                        "charting", "config", "core", "data_feed", "data_layer",
+                        "database", "execution", "features", "health", "market_data",
+                        "ml", "monitoring", "nuclear", "risk", "security",
+                        "strategies", "strategy", "utils",
+                    }
+                )
+                broken_internal = [
+                    item for item in result.details.get("broken", [])
+                    if item.get("package", "").split(".")[0] in _INTERNAL_NAMESPACES
+                ]
+                if broken_internal:
+                    action["action"] = "logged_internal_import_failures"
+                    action["success"] = False
+                    action["detail"] = (
+                        f"{len(broken_internal)} internal module(s) failed to import — "
+                        "check for circular imports or missing __init__.py files: "
+                        + ", ".join(i.get("package", "") for i in broken_internal[:5])
+                    )
+                    logger.warning(
+                        "DiagnosticsEngine: internal import failures (not pip-installable): %s",
+                        [i.get("package") for i in broken_internal],
+                    )
             elif check.startswith("log_pattern_"):
                 try:
                     from security.self_healer import get_healer

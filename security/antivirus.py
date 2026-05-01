@@ -61,7 +61,7 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
@@ -379,13 +379,21 @@ rule SuspiciousImport {
         rules_file.write_text(rules_content.strip())
         logger.info("AV: wrote built-in YARA rules to %s", rules_file)
 
+    @property
+    def clamav_available(self) -> bool:
+        """True when the ClamAV daemon is connected and responding."""
+        return self._clamd is not None
+
     def _connect_clamd(self) -> None:
         if not CLAMD_AVAILABLE:
             return
-        # Try Unix socket first, then TCP
+        # Explicit socket path avoids relying on clamd's compiled-in default.
+        _socket_path = os.getenv("CLAMD_SOCKET", "/var/run/clamav/clamd.ctl")
+        _tcp_host = os.getenv("CLAMD_HOST", "127.0.0.1")
+        _tcp_port = int(os.getenv("CLAMD_PORT", "3310"))
         for attempt in [
-            clamd.ClamdUnixSocket,
-            lambda: clamd.ClamdNetworkSocket(host="127.0.0.1", port=3310),
+            lambda: clamd.ClamdUnixSocket(_socket_path),
+            lambda: clamd.ClamdNetworkSocket(host=_tcp_host, port=_tcp_port),
         ]:
             try:
                 cd = attempt()
@@ -398,12 +406,27 @@ rule SuspiciousImport {
                 continue
         logger.info("AV: ClamAV daemon not reachable — ClamAV layer disabled")
 
+    def reconnect_clamd(self) -> bool:
+        """Re-attempt ClamAV connection (e.g. after daemon starts post-init).
+
+        Returns True if ClamAV is now connected.
+        """
+        self._clamd = None
+        self._connect_clamd()
+        return self._clamd is not None
+
     # ── Scan loop ─────────────────────────────────────────────────────────────
 
     async def _scan_loop(self) -> None:
         # Initial scan after 30s startup delay
         await asyncio.sleep(30)
         while self._running:
+            # Auto-reconnect ClamAV if it was unavailable at startup but is
+            # now running (e.g. daemon started after the scanner was created).
+            if self._clamd is None and CLAMD_AVAILABLE:
+                self._connect_clamd()
+                if self._clamd is not None:
+                    logger.info("AV: ClamAV reconnected in scan loop")
             try:
                 await self.scan_project()
             except Exception as exc:
@@ -561,7 +584,15 @@ rule SuspiciousImport {
                 logger.debug("AV: ClamAV scan error on %s: %s", path, exc)
 
         # Layer 3: Entropy (text files only)
-        if path.suffix.lower() in SCAN_EXTENSIONS:
+        # Minified JS/TS build artefacts have naturally high entropy due to
+        # identifier mangling and whitespace removal — skip them to avoid
+        # false positives on legitimate frontend build output.
+        _is_minified = (
+            ".min." in path.name
+            or path.stem.endswith(".chunk")
+            or any(seg in path.parts for seg in ("dist", "build", ".next", "out", "static"))
+        )
+        if path.suffix.lower() in SCAN_EXTENSIONS and not _is_minified:
             entropy = _shannon_entropy(raw)
             if entropy > 7.2:
                 threats.append(
@@ -817,13 +848,48 @@ async def start_av_scanner(app: FastAPI) -> None:
 # at request time so the live instance is used once start_av_scanner() runs.
 
 
-def _build_eager_av_router() -> APIRouter:
-    from fastapi import APIRouter as _APIRouter, HTTPException as _HTTPException
+def _av_require_auth(request: Request) -> None:
+    """Verify Bearer JWT — used as Depends() on AV router read endpoints."""
+    try:
+        from auth.jwt import decode_access_token as _decode
 
-    r = _APIRouter(prefix="/api/security/av", tags=["antivirus"])
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        _decode(token)
+    except HTTPException:
+        raise
+    except ImportError:  # nosec B110
+        logger.warning("AV router: auth.jwt unavailable, auth skipped")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+
+def _av_require_admin(request: Request) -> None:
+    """Verify Bearer JWT and require admin/superadmin — used as Depends() on mutating endpoints."""
+    try:
+        from auth.jwt import decode_access_token as _decode
+
+        token = request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        if not token:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        payload = _decode(token)
+        role = (payload or {}).get("role", "")
+        if role not in ("admin", "superadmin"):
+            raise HTTPException(status_code=403, detail="Admin role required")
+    except HTTPException:
+        raise
+    except ImportError:  # nosec B110
+        logger.warning("AV router: auth.jwt unavailable, admin check skipped")
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail="Authentication failed") from exc
+
+
+def _build_eager_av_router() -> APIRouter:
+    r = APIRouter(prefix="/api/security/av", tags=["antivirus"])
 
     @r.get("/status")
-    async def _av_status():
+    async def _av_status(_: None = Depends(_av_require_auth)):
         s = get_scanner()
         return {
             "running": s._running,
@@ -834,27 +900,42 @@ def _build_eager_av_router() -> APIRouter:
         }
 
     @r.get("/threats")
-    async def _threats(severity: str | None = None):
+    async def _threats(severity: str | None = None, _: None = Depends(_av_require_auth)):
         threats = get_scanner()._threats
         if severity:
             threats = [t for t in threats if t["severity"] == severity]
         return threats[-200:]
 
     @r.post("/scan")
-    async def _scan():
+    async def _scan(_: None = Depends(_av_require_admin)):
         return await get_scanner().scan_project()
 
     @r.post("/quarantine")
-    async def _quarantine(body: dict):
+    async def _quarantine(body: dict, _: None = Depends(_av_require_admin)):
         threat_id = body.get("threat_id", "")
         if not threat_id:
-            raise _HTTPException(status_code=400, detail="threat_id required")
+            raise HTTPException(status_code=400, detail="threat_id required")
         try:
             return get_scanner().quarantine_threat(threat_id)
         except ValueError as exc:
-            raise _HTTPException(status_code=404, detail="Threat not found") from exc
+            raise HTTPException(status_code=404, detail="Threat not found") from exc
         except RuntimeError as exc:
-            raise _HTTPException(status_code=500, detail="Quarantine failed — check server logs") from exc
+            raise HTTPException(status_code=500, detail="Quarantine failed — check server logs") from exc
+
+    @r.post("/reconnect-clamd", summary="Re-attempt ClamAV daemon connection")
+    async def _reconnect_clamd(_: None = Depends(_av_require_admin)):
+        """Reconnect to the ClamAV daemon.
+
+        Use this when clamd was not running at server startup but has since
+        been started.  Returns the new connection status.
+        """
+        scanner = get_scanner()
+        connected = scanner.reconnect_clamd()
+        return {
+            "clamd_connected": connected,
+            "clamd_enabled": scanner._clamd is not None,
+            "clamav_available": CLAMD_AVAILABLE,
+        }
 
     return r
 
