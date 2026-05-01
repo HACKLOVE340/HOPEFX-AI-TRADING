@@ -646,16 +646,44 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
             result["running"] = bool(getattr(eng, "_running", result["running"]))
-            result["status"] = getattr(eng, "status", result["status"])
-            result["positions_open"] = len(getattr(eng, "positions", {})) or result["positions_open"]
             result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
 
-            # last_signal_at: try Redis first, then engine attr
+            # Prefer _get_status() for live positions / signals
+            if callable(getattr(eng, "_get_status", None)):
+                try:
+                    snap = eng._get_status()
+                    result["positions_open"] = int(snap.get("open_positions", 0))
+                    last_sig_block = snap.get("last_signal")
+                    if isinstance(last_sig_block, dict):
+                        # Store direction+confidence in extra field for DecisionEnginePanel
+                        result["last_signal_direction"] = last_sig_block.get("direction", "hold")
+                        result["last_signal_confidence"] = last_sig_block.get("confidence", 0)
+                    result["mode"] = snap.get("mode", result["mode"])
+                except Exception:
+                    logger.debug("engine/status: _get_status() failed", exc_info=False)
+            else:
+                result["positions_open"] = len(getattr(eng, "positions", {})) or result["positions_open"]
+
+            # last_signal_at: try engine attr
             last_sig = getattr(eng, "_last_signal_at", None)
             if last_sig is not None:
                 result["last_signal_at"] = (
                     last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
                 )
+
+        # Decision engine counters (cycles, executed, blocked, errors, execution_rate)
+        if app_state and hasattr(app_state, "decision_engine"):
+            de = app_state.decision_engine
+            if callable(getattr(de, "status", None)):
+                try:
+                    de_status = de.status()
+                    result["decision_engine_cycles"] = de_status.get("cycles_total", 0)
+                    result["decision_engine_executed"] = de_status.get("executed", 0)
+                    result["decision_engine_blocked"] = de_status.get("blocked", 0)
+                    result["decision_engine_errors"] = de_status.get("errors", 0)
+                    result["decision_engine_execution_rate"] = de_status.get("execution_rate", 0.0)
+                except Exception:
+                    logger.debug("engine/status: decision_engine.status() failed", exc_info=False)
     except Exception:
         logger.debug("engine/status: app_state unavailable", exc_info=False)
 
@@ -901,9 +929,17 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
-            metrics["open_positions"] = len(getattr(eng, "positions", {}))
             metrics["rejected_orders"] = int(getattr(eng, "rejected_orders", 0))
             metrics["kill_switch_triggers"] = int(getattr(eng, "kill_switch_triggers", 0))
+            # Use _get_status() for live open_positions (no eng.positions dict)
+            if callable(getattr(eng, "_get_status", None)):
+                try:
+                    snap = eng._get_status()
+                    metrics["open_positions"] = int(snap.get("open_positions", 0))
+                except Exception:
+                    logger.debug("engine/metrics: _get_status() failed", exc_info=False)
+            else:
+                metrics["open_positions"] = len(getattr(eng, "positions", {}))
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 
