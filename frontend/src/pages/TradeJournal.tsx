@@ -12,7 +12,7 @@
  *           PATCH /api/journal/trades/{id}
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -91,6 +91,12 @@ const TradeJournal: React.FC = () => {
   const [saveErr, setSaveErr]     = useState<string | null>(null);
   const [filterTag, setFilterTag] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -101,6 +107,7 @@ const TradeJournal: React.FC = () => {
         journalApi.stats(),
         journalApi.mistakes(),
       ]);
+      if (!mountedRef.current) return;
       if (tradesRes.status === 'fulfilled') {
         const d = tradesRes.value.data as JournalEntry[] | { trades?: JournalEntry[] };
         setTrades(Array.isArray(d) ? d : (d.trades ?? []));
@@ -113,7 +120,7 @@ const TradeJournal: React.FC = () => {
         setMistakes(Array.isArray(d) ? d : (d.mistakes ?? []));
       } else { setMistakes([]); }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [filterTag]);
 

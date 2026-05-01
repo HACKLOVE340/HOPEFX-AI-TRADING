@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 
@@ -111,6 +111,12 @@ const StatusPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -119,6 +125,7 @@ const StatusPage: React.FC = () => {
         api.get<{ history?: HistoryDay[] }>('/status/history'),
         api.get<{ incidents: Incident[] }>('/status/incidents'),
       ]);
+      if (!mountedRef.current) return;
       if (statusRes.status === 'fulfilled') {
         setData(statusRes.value.data);
       } else {
@@ -136,10 +143,10 @@ const StatusPage: React.FC = () => {
           : []
       );
     } catch (err) {
+      if (!mountedRef.current) return;
       setError('Status API unavailable.');
     }
-    setLoading(false);
-    setLastRefresh(new Date());
+    if (mountedRef.current) { setLoading(false); setLastRefresh(new Date()); }
   }, []);
 
   useEffect(() => {

@@ -7,7 +7,7 @@
  *   POST/PATCH/DELETE     /api/accounts/teams/{id}/members
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
@@ -199,6 +199,12 @@ const SubAccounts: React.FC = () => {
   const [inviteRole, setInviteRole]     = useState('trader');
   const [saving, setSaving]             = useState(false);
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -207,15 +213,17 @@ const SubAccounts: React.FC = () => {
         api.get<{ accounts: SubAccount[] }>('/accounts/sub-accounts'),
         api.get<{ teams: Team[] }>('/accounts/teams'),
       ]);
+      if (!mountedRef.current) return;
       setAccounts(accRes.data.accounts);
       setTeams(teamRes.data.teams);
       if (teamRes.data.teams.length > 0 && !selectedTeam) {
         setSelectedTeam(teamRes.data.teams[0]!);
       }
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError(e instanceof Error ? e.message : 'Failed to load accounts');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [selectedTeam]);
 
