@@ -1,6 +1,6 @@
 // superadmin/ComplianceSection.tsx
 // KYC queue, AML alerts, sanctions screening, regulatory reporting
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -61,6 +61,9 @@ const ComplianceSection: React.FC = () => {
   const [regPeriod, setRegPeriod] = useState('');
   const [consentUserId, setConsentUserId] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -70,20 +73,24 @@ const ComplianceSection: React.FC = () => {
         superadminApi.sanctionsHits(),
         superadminApi.regulatoryReports(),
       ]);
+      if (!mountedRef.current) return;
       setKyc(kycRes.data.records ?? kycRes.data);
       setAml(amlRes.data.alerts ?? amlRes.data);
       setSanctions(sanRes.data.hits ?? sanRes.data);
       setRegReports(repRes.data.reports ?? repRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError(apiErr(e, 'Failed to load compliance data'));
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [kycFilter]);
 
   const loadConsent = useCallback(async () => {
     try {
       const res = await superadminApi.consentLog(consentUserId || undefined);
+      if (!mountedRef.current) return;
       setConsentLog(res.data.entries ?? res.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setMsg(apiErr(e, 'Failed to load consent log'));
     }
   }, [consentUserId]);

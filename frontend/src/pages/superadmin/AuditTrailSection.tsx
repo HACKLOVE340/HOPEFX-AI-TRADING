@@ -1,6 +1,6 @@
 // superadmin/AuditTrailSection.tsx
 // Immutable hash-chained audit trail (ImmutableAuditLog) — SEC/CFTC compliant
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 
 import {
@@ -72,18 +72,23 @@ const AuditTrailSection: React.FC = () => {
   const [sysPage, setSysPage]         = useState(1);
   const [sysTotal, setSysTotal]       = useState(0);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async (p = 1) => {
     setLoading(true); setError('');
     try {
       const params: Record<string, string> = { page: String(p), limit: '100' };
       if (categoryFilter) params.category = categoryFilter;
       const res = await superadminApi.immutableAuditLog(params);
+      if (!mountedRef.current) return;
       setRecords(res.data.records ?? res.data.events ?? res.data);
       setTotal(res.data.total ?? 0);
       setPage(p);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load audit trail');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [categoryFilter]);
 
   useEffect(() => { load(1); }, [load]);
@@ -108,12 +113,14 @@ const AuditTrailSection: React.FC = () => {
       const params: Record<string, string> = { page: String(p), limit: '50' };
       if (sysSearch) params.search = sysSearch;
       const res = await superadminApi.auditLog(params);
+      if (!mountedRef.current) return;
       setSysEntries(res.data.entries ?? res.data ?? []);
       setSysTotal(res.data.total ?? 0);
       setSysPage(p);
     } catch {
+      if (!mountedRef.current) return;
       setSysEntries([]);
-    } finally { setSysLoading(false); }
+    } finally { if (mountedRef.current) setSysLoading(false); }
   }, [sysSearch]);
 
   useEffect(() => {
