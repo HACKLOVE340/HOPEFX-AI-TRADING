@@ -175,20 +175,6 @@ const Wallet: React.FC = () => {
   const totalWithdrawn  = Math.abs(transactions.filter((t) => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));
   const totalFees       = Math.abs(transactions.filter((t) => ['subscription', 'copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
 
-  // Show a full-page spinner until the balance (the primary data) is loaded
-  if (balanceLoading) {
-    return (
-      <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 32, height: 32, border: '3px solid #334155', borderTopColor: '#f59e0b',
-            borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          <span style={{ color: '#64748b', fontSize: 14 }}>Loading wallet…</span>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div style={s.page}>
       <h1 style={s.title}>Wallet & Payments</h1>
@@ -197,14 +183,23 @@ const Wallet: React.FC = () => {
         <div style={s.errBanner}>⚠️ {balanceErr}</div>
       )}
 
-      {/* Balance card */}
+      {/* Balance card — shows action buttons immediately; numbers filled in after load */}
       <div style={s.balanceCard}>
         <div>
           <div style={s.balanceLabel}>Available Balance</div>
-          <div style={s.balanceValue}>${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-          <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-            Frozen: ${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })} · Pending: ${pending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-          </div>
+          {balanceLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ width: 160, height: 36, borderRadius: 6, background: '#1e293b', animation: 'pulse 1.5s ease-in-out infinite' }} />
+              <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
+            </div>
+          ) : (
+            <>
+              <div style={s.balanceValue}>${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+                Frozen: ${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })} · Pending: ${pending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+            </>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => { setShowDeposit(true); setShowWithdraw(false); setMsg(''); }} style={s.depositBtn}>
