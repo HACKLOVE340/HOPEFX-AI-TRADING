@@ -169,9 +169,16 @@ export function useWebSocket(enabled = true) {
         break;
       }
 
-      case 'position_update':
-        upsertPosition(msg.data as Position);
+      case 'position_update': {
+        const raw = msg.data as Record<string, unknown>;
+        const pos: Position = {
+          ...raw,
+          size: (raw.size as number) ?? (raw.quantity as number) ?? 0,
+          realized_pnl: (raw.realized_pnl as number) ?? 0,
+        } as Position;
+        upsertPosition(pos);
         break;
+      }
 
       case 'position_close':
         removePosition((msg.data as { id: string }).id);

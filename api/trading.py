@@ -248,7 +248,9 @@ class OrderRequest(BaseModel):
     side: str = Field(..., pattern="^(buy|sell)$")
     quantity: float = Field(..., gt=0)
     order_type: str = Field("market", pattern="^(market|limit|stop)$")
-    price: float | None = Field(None, gt=0)
+    price:       float | None = Field(None, gt=0)
+    stop_loss:   float | None = Field(None, gt=0, description="Stop-loss price (optional)")
+    take_profit: float | None = Field(None, gt=0, description="Take-profit price (optional)")
 
     @field_validator("symbol")
     @classmethod
@@ -266,12 +268,17 @@ class PositionResponse(BaseModel):
     symbol: str
     side: str
     quantity: float
+    # `size` mirrors `quantity` — the frontend Position type uses `size`
+    size: float = 0.0
     entry_price: float
     current_price: float
     unrealized_pnl: float
+    realized_pnl: float = 0.0
     # Extended fields for mobile app
     unrealized_pnl_pct: float = 0.0
     opened_at: str = ""
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 class OrderResponse(BaseModel):
@@ -485,11 +492,17 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     Raises HTTP 400 on broker rejection or unexpected error.
     """
     try:
+        kwargs: dict[str, Any] = {}
+        if order.stop_loss is not None:
+            kwargs["stop_loss"] = order.stop_loss
+        if order.take_profit is not None:
+            kwargs["take_profit"] = order.take_profit
         result = await _broker_call(
             "place_market_order",
             symbol=order.symbol,
             side=order.side,
             quantity=order.quantity,
+            **kwargs,
         )
         return result
     except HTTPException:
@@ -915,17 +928,24 @@ async def get_positions(
         pnl_pct = ((current - entry) / entry * 100) if entry > 0 else 0.0
         opened_at = getattr(p, "opened_at", None) or getattr(p, "created_at", None)
         opened_at_str = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at or "")
+        sl = getattr(p, "stop_loss", None) or getattr(p, "sl_price", None) or getattr(p, "stop_price", None)
+        tp = getattr(p, "take_profit", None) or getattr(p, "tp_price", None) or getattr(p, "take_profit_price", None)
+        realized = float(getattr(p, "realized_pnl", 0) or 0)
         result.append(
             PositionResponse(
                 id=p.id,
                 symbol=p.symbol,
                 side=p.side.value if hasattr(p.side, "value") else str(p.side),
                 quantity=p.quantity,
+                size=p.quantity,
                 entry_price=entry,
                 current_price=current,
                 unrealized_pnl=pnl,
+                realized_pnl=realized,
                 unrealized_pnl_pct=round(pnl_pct, 4),
                 opened_at=opened_at_str,
+                stop_loss=float(sl) if sl is not None else None,
+                take_profit=float(tp) if tp is not None else None,
             )
         )
     return result
