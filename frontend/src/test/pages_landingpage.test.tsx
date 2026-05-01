@@ -77,9 +77,26 @@ const mockFetch = vi.fn();
 beforeEach(() => {
   vi.stubGlobal('WebSocket', MockWebSocket);
   vi.stubGlobal('fetch', mockFetch);
-  mockFetch.mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve({ symbol: 'XAU_USD', bid: 2340.5, ask: 2341.0, mid: 2340.75, change_pct: 0.42 }),
+  mockFetch.mockImplementation((url: string | URL) => {
+    const urlStr = typeof url === 'string' ? url : url.toString();
+    if (urlStr.includes('/api/pricing/plans')) {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          plans: [
+            { id: 'free',         name: 'Free',         tagline: 'Get started',   price_usd_monthly: 0,     price_usd_annual: 0,     annual_savings_pct: 0,  commission_rate: 0, commission_label: '', badge: null,           cta: 'Get started',      cta_href: '/register',              highlights: ['Up to 3 alerts', 'Basic signals', 'Paper trading'],           features: {}, limits: {} },
+            { id: 'starter',      name: 'Starter',      tagline: 'For traders',          price_usd_monthly: 1800,  price_usd_annual: 12600, annual_savings_pct: 17, commission_rate: 0, commission_label: '', badge: null,           cta: 'Get started',      cta_href: '/register?plan=starter',    highlights: ['Unlimited alerts', 'Live signals', 'Basic analytics'],                        features: {}, limits: {} },
+            { id: 'professional', name: 'Professional', tagline: 'Best for active traders', price_usd_monthly: 4500,  price_usd_annual: 31500, annual_savings_pct: 30, commission_rate: 0, commission_label: '', badge: 'Most popular', cta: 'Start free trial', cta_href: '/register?plan=professional', highlights: ['All Starter features', 'AI signals', 'Marketplace access'],            features: {}, limits: {} },
+            { id: 'enterprise',   name: 'Enterprise',   tagline: 'For teams',              price_usd_monthly: 0,     price_usd_annual: 0,     annual_savings_pct: 0,  commission_rate: 0, commission_label: '', badge: null,           cta: 'Contact sales',    cta_href: '/contact',               highlights: ['Custom pricing', 'Dedicated support', 'SLA'],                              features: {}, limits: {} },
+            { id: 'elite',        name: 'Elite',        tagline: 'Maximum power',          price_usd_monthly: 10000, price_usd_annual: 70000, annual_savings_pct: 30, commission_rate: 0, commission_label: '', badge: null,           cta: 'Contact sales',    cta_href: '/register?plan=elite',      highlights: ['Everything in Professional', 'VIP support', 'White-label option'],        features: {}, limits: {} },
+          ],
+        }),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve({ symbol: 'XAU_USD', bid: 2340.5, ask: 2341.0, mid: 2340.75, change_pct: 0.42 }),
+    });
   });
 });
 
@@ -93,15 +110,19 @@ const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
 async function renderLanding() {
   const LandingPage = (await import('../pages/LandingPage')).default;
-  return render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route path="*" element={<LandingPage />} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>
-  );
+  let result!: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route path="*" element={<LandingPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+  });
+  return result;
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -170,7 +170,7 @@ const PriceAlerts: React.FC = () => {
     <div style={s.page}>
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>🔔 Price Alerts</h1>
+          <h1 style={s.title}>Price Alerts</h1>
           <p style={s.subtitle}>Get notified via Discord, Telegram, or email when price conditions are met.</p>
         </div>
         <button onClick={() => setShowForm(!showForm)} style={s.createBtn}>

@@ -112,7 +112,7 @@ const Profile: React.FC = () => {
         <div style={s.avatarWrap}>
           {profile.avatar_url
             ? <img src={profile.avatar_url} alt="avatar" style={s.avatar}/>
-            : <div style={s.avatarPlaceholder}>{(profile.display_name || profile.username).charAt(0).toUpperCase()}</div>
+            : <div style={s.avatarPlaceholder}>{((profile.display_name || profile.username) ?? '?').charAt(0).toUpperCase()}</div>
           }
           {isOwn && (
             <>
@@ -171,7 +171,7 @@ const Profile: React.FC = () => {
           {label:'Win Rate',     value:`${st.win_rate?.toFixed(1) ?? '—'}%`, positive: (st.win_rate ?? 0) >= 50},
           {label:'Avg P&L',      value:`$${st.avg_pnl?.toFixed(2) ?? '—'}`, positive: (st.avg_pnl ?? 0) >= 0},
           {label:'Sharpe Ratio', value:st.sharpe_ratio?.toFixed(2) ?? '—', positive: (st.sharpe_ratio ?? 0) >= 1},
-          {label:'Total Return', value:`${st.total_return_pct >= 0 ? '+' : ''}${st.total_return_pct?.toFixed(1) ?? '—'}%`, positive: (st.total_return_pct ?? 0) >= 0},
+          {label:'Total P&L',    value:`${st.total_return_pct >= 0 ? '+' : ''}${st.total_return_pct?.toFixed(1) ?? '—'}%`, positive: (st.total_return_pct ?? 0) >= 0},
         ].map(({label,value,positive})=>(
           <div key={label} style={s.statCard}>
             <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>{label}</div>

@@ -553,7 +553,7 @@ const Dashboard: React.FC = () => {
         <StatCard label="Total P&L"    value={acc ? fmtUSD(acc.total_pnl)                     : '—'} positive={acc ? acc.total_pnl >= 0 : null} />
         <StatCard label="Win Rate"     value={acc ? (acc.win_rate * 100).toFixed(1) + '%'     : '—'} positive={acc ? acc.win_rate >= 0.55 : null} />
         <StatCard label="Sharpe"       value={acc ? acc.sharpe_ratio.toFixed(2)               : '—'} positive={acc ? acc.sharpe_ratio >= 1.5 : null} />
-        <StatCard label="Max Drawdown" value={acc ? (acc.max_drawdown * 100).toFixed(2) + '%' : '—'} positive={acc ? acc.max_drawdown < 0.1 : null} />
+        <StatCard label="Account DD"   value={acc ? (acc.max_drawdown * 100).toFixed(2) + '%' : '—'} positive={acc ? acc.max_drawdown < 0.1 : null} />
         <StatCard label="Open Trades"  value={acc ? String(acc.open_trades)                   : '—'} />
       </div>
 

@@ -1072,7 +1072,7 @@ function Footer() {
               ['/status',     'System status'],
               ['/docs',       'Documentation'],
               ['/terms',      'Terms of service'],
-              ['/privacy',    'Privacy policy'],
+              ['/privacy',    'Legal'],
             ] as [string, string][]).map(([h, l]) => (
               <a key={l} href={h} className="block text-sm text-slate-500 hover:text-slate-300 transition-colors mb-2.5">{l}</a>
             ))}

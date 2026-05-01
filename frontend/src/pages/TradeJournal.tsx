@@ -67,8 +67,8 @@ const EMOTION_EMOJI: Record<string, string> = {
   hesitant: '😟', overconfident: '😎', fearful: '😨',
 };
 
-function fmt(n: number | null, d = 2): string {
-  if (n === null) return '—';
+function fmt(n: number | null | undefined, d = 2): string {
+  if (n == null) return '—';
   return n.toFixed(d);
 }
 

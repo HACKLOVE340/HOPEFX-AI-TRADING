@@ -65,7 +65,7 @@ const Leaderboard: React.FC = () => {
       {/* Header */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>🥇 Leaderboard</h1>
+          <h1 style={s.title}>Global Leaderboard</h1>
           <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
             Top traders ranked by performance. Click a trader to copy their strategy.
           </p>

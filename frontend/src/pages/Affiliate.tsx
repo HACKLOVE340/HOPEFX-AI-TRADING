@@ -139,7 +139,7 @@ const Affiliate:React.FC=()=>{
           </div>
           <div style={st.card}>
             <h3 style={st.cardTitle}>Request Commission Withdrawal</h3>
-            <p style={{color:'#64748b',fontSize:13,marginBottom:12}}>Available balance: <strong style={{color:'#4ade80'}}>{fmtUSD(metrics.pending_commissions)}</strong></p>
+            <p style={{color:'#64748b',fontSize:13,marginBottom:12}}>Minimum withdrawal: <strong style={{color:'#94a3b8'}}>$50.00</strong></p>
             <div style={{display:'flex',gap:10,alignItems:'center'}}>
               <input type="number" min="0" step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
               <button onClick={handleWithdraw} disabled={withdrawing||!withdrawAmt} style={{...st.primaryBtn,opacity:withdrawing||!withdrawAmt?0.6:1}}>{withdrawing?'Processing…':'Withdraw'}</button>
@@ -160,7 +160,7 @@ const Affiliate:React.FC=()=>{
 
       {activeTab==='referrals'&&(
         <div style={st.card}>
-          <h3 style={st.cardTitle}>Referral history ({referrals.length})</h3>
+          <h3 style={st.cardTitle}>Referral history</h3>
           {subErrors.referrals&&<div style={st.subError}>{subErrors.referrals}</div>}
           {referrals.length===0&&!subErrors.referrals?(<p style={{color:'#64748b',fontSize:14}}>No referrals yet. Share your link to get started.</p>):(
             <table style={st.table}><thead><tr><th style={st.th}>User ID</th><th style={st.th}>Status</th><th style={st.th}>Referred</th><th style={st.th}>Converted</th><th style={st.th}>Commission</th></tr></thead>

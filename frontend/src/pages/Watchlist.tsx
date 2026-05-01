@@ -175,7 +175,7 @@ const WatchlistPage: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.title}>👁️ Watchlist</h1>
+        <h1 style={s.title}>Watchlist</h1>
         <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
       </div>
 
@@ -195,7 +195,7 @@ const WatchlistPage: React.FC = () => {
       {loading ? (
         <div style={s.empty}>Loading…</div>
       ) : enrichedItems.length === 0 ? (
-        <div style={s.empty}>Your watchlist is empty. Add symbols above.</div>
+        <div style={s.empty}>Your watchlist is empty. Use the dropdown above to start tracking.</div>
       ) : (
         <div style={s.table}>
           <div style={s.tableHeader}>

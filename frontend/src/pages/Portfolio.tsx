@@ -123,25 +123,17 @@ const PerformanceMetrics: React.FC = () => {
   usePerformanceSummary();
   const perf = useStore(selectPerformanceSummary);
 
-  if (!perf) {
-    return (
-      <Panel title="Performance">
-        <PanelSkeleton rows={3} />
-      </Panel>
-    );
-  }
-
-  const totalReturn   = perf.total_return_pct  ?? 0;
-  const sharpe        = perf.sharpe_ratio       ?? 0;
-  const sortino       = perf.sortino_ratio      ?? 0;
-  const maxDD         = perf.max_drawdown_pct   ?? 0;
-  const winRate       = perf.win_rate           ?? 0;
-  const profitFactor  = perf.profit_factor      ?? 0;
-  const totalTrades   = perf.total_trades       ?? 0;
-  const avgPnl        = perf.avg_trade_pnl      ?? 0;
-  const bestTrade     = perf.best_trade         ?? 0;
-  const worstTrade    = perf.worst_trade        ?? 0;
-  const cvar          = perf.cvar_95            ?? 0;
+  const totalReturn   = perf?.total_return_pct  ?? 0;
+  const sharpe        = perf?.sharpe_ratio       ?? 0;
+  const sortino       = perf?.sortino_ratio      ?? 0;
+  const maxDD         = perf?.max_drawdown_pct   ?? 0;
+  const winRate       = perf?.win_rate           ?? 0;
+  const profitFactor  = perf?.profit_factor      ?? 0;
+  const totalTrades   = perf?.total_trades       ?? 0;
+  const avgPnl        = perf?.avg_trade_pnl      ?? 0;
+  const bestTrade     = perf?.best_trade         ?? 0;
+  const worstTrade    = perf?.worst_trade        ?? 0;
+  const cvar          = perf?.cvar_95            ?? 0;
 
   const metrics: { label: string; value: string; positive?: boolean | null }[] = [
     { label: 'Total Return',   value: fmtPct(totalReturn),            positive: totalReturn >= 0 },
@@ -365,7 +357,7 @@ const Portfolio: React.FC = () => {
       {/* Page header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[18px] font-bold text-slate-100">💼 Portfolio</h1>
+          <h1 className="text-[18px] font-bold text-slate-100">Portfolio</h1>
           <p className="text-[12px] text-slate-500 mt-0.5">
             Balances, equity curve, allocation, and trade history
           </p>

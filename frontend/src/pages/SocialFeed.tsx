@@ -143,11 +143,23 @@ const SocialFeed: React.FC = () => {
     loadFeed(next, false);
   };
 
+  const SYMBOLS = ['All', 'XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+  const [symbolFilter, setSymbolFilter] = React.useState('All');
+  const [sortBy, setSortBy] = React.useState<'confidence'|'return'|'recent'>('confidence');
+
+  const filteredItems = items.filter(item =>
+    symbolFilter === 'All' || item.symbol === symbolFilter
+  ).sort((a, b) => {
+    if (sortBy === 'confidence') return b.confidence - a.confidence;
+    if (sortBy === 'return')     return b.pnl - a.pnl;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
   return (
     <div style={s.page}>
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Signal Feed</h1>
+          <h1 style={s.title}>Community Signal Feed</h1>
           <p style={s.subtitle}>High-confidence AI signals from the community (≥70% confidence)</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -166,14 +178,40 @@ const SocialFeed: React.FC = () => {
         </div>
       </div>
 
+      {/* Symbol filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        {SYMBOLS.map(sym => (
+          <button
+            key={sym}
+            onClick={() => setSymbolFilter(sym)}
+            style={{
+              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
+              background: symbolFilter === sym ? '#3b82f6' : '#1e293b',
+              color: symbolFilter === sym ? '#fff' : '#94a3b8',
+            }}
+          >
+            {sym}
+          </button>
+        ))}
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as typeof sortBy)}
+          style={{ marginLeft: 'auto', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+        >
+          <option value="confidence">Sort: Confidence</option>
+          <option value="return">Sort: Return</option>
+          <option value="recent">Sort: Recent</option>
+        </select>
+      </div>
+
       {error && <div style={s.errorBox}>{error}</div>}
 
-      {items.length === 0 && !loading && !error && (
+      {filteredItems.length === 0 && !loading && !error && (
         <div style={s.empty}>No signals yet. Check back soon or opt in to share yours.</div>
       )}
 
       <div style={s.feed}>
-        {items.map(item => (
+        {filteredItems.map(item => (
           <div key={item.signal_id} style={s.card}>
             <div style={s.cardTop}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

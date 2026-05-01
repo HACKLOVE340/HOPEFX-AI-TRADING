@@ -293,6 +293,14 @@ const CopyTrading: React.FC = () => {
       {/* ── Browse Tab ── */}
       {activeTab === 'browse' && (
       <>
+      {/* Sort controls */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} style={s.select}>
+          <option value="return">Sort by Return</option>
+          <option value="sharpe">Sort by Sharpe</option>
+          <option value="followers">Sort by Followers</option>
+        </select>
+      </div>
       {/* Leader cards */}
       {loading ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>Loading traders…</p>

@@ -103,7 +103,7 @@ export function EquityCurveChart() {
     <Panel title="Equity Curve" headerRight={headerRight} noPad bodyClass="p-0">
       {chartData.length === 0 ? (
         <div className="flex items-center justify-center h-full text-slate-600 text-sm">
-          Awaiting performance data…
+          Awaiting equity data…
         </div>
       ) : (
         <div className="flex flex-col h-full">
