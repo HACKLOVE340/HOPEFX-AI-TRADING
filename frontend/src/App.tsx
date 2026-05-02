@@ -502,8 +502,8 @@ const App: React.FC = () => (
             <Route path="/reset-password"  element={<ResetPassword />} />
             <Route path="/onboarding"      element={<Onboarding />} />
             {/* Public pages — no auth required */}
-            {/* /upgrade is the canonical plan upgrade page; /pricing is a public alias */}
-            <Route path="/upgrade"         element={<PricingPage />} />
+            {/* /pricing = public marketing pricing page for unauthenticated visitors */}
+            {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
             <Route path="/pricing"         element={<PricingPage />} />
             <Route path="/docs"            element={<DocsPage />} />
             <Route path="/terms"           element={<TermsAndRiskDisclosure />} />

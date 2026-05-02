@@ -108,7 +108,7 @@ except Exception as _log_setup_err:
     logging.getLogger(__name__).warning("HOPEFXLogger setup failed (using basicConfig fallback): %s", _log_setup_err)
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.routing import APIRouter as _APIRouter
 from pydantic import BaseModel
@@ -906,14 +906,21 @@ _register_health_routes(app, app_state, kill_switch)
 # external clients, dashboards, and integration tests. Each delegates to the
 # canonical API layer or returns structured data for endpoints without a
 # canonical equivalent (e.g. /api/dashboard/stats aggregates from trading data).
+# All endpoints that return data require authentication.
+# Redirect-only endpoints rely on the target endpoint's own auth guards.
+
+from api.auth import TokenPayload  # noqa: E402 — intentional late import
+from api.auth import get_current_user as _get_current_user
+from api.auth import require_role as _require_role
 
 _compat = _APIRouter(prefix="/api", tags=["Convenience Aliases"])
 
 
 @_compat.get("/dashboard/stats", summary="Trading dashboard summary stats")
-async def _dashboard_stats():
-    """Aggregate stats for the main trading dashboard."""
+async def _dashboard_stats(user: TokenPayload = Depends(_get_current_user)):
+    """Aggregate stats for the main trading dashboard — requires authentication."""
     return {
+        "user_id": user.sub,
         "total_trades": 1_248,
         "win_rate": 0.673,
         "total_pnl": 18_432.50,
@@ -929,14 +936,14 @@ async def _dashboard_stats():
 
 
 @_compat.get("/trades", summary="Recent trade history (alias for /trading/trades)")
-async def _trades_alias(limit: int = 50):
+async def _trades_alias(limit: int = 50, user: TokenPayload = Depends(_get_current_user)):
     """Return recent closed trades — delegates to /api/trading/trades."""
     return RedirectResponse(url=f"/api/trading/trades?limit={limit}", status_code=307)
 
 
 @_compat.get("/market-data/live", summary="Live XAU/USD market data")
-async def _market_data_live():
-    """Return live or last-known XAU/USD price data."""
+async def _market_data_live(user: TokenPayload = Depends(_get_current_user)):
+    """Return live or last-known XAU/USD price data — requires authentication."""
     _base = 2_340.00 + _random.uniform(-15, 15)
     _spread = 0.30
     return {
@@ -953,14 +960,14 @@ async def _market_data_live():
 
 
 @_compat.get("/ai/signals", summary="AI trading signals (alias for /trading/signals)")
-async def _ai_signals_alias():
+async def _ai_signals_alias(user: TokenPayload = Depends(_get_current_user)):
     """Return active AI trading signals — delegates to /api/trading/signals."""
     return RedirectResponse(url="/api/trading/signals", status_code=307)
 
 
 @_compat.get("/nuclear/status", summary="Nuclear AI engine status")
-async def _nuclear_status():
-    """Return Nuclear AI engine status."""
+async def _nuclear_status(user: TokenPayload = Depends(_get_current_user)):
+    """Return Nuclear AI engine status — requires authentication."""
     return {
         "active": True,
         "mode": "adaptive",
@@ -973,38 +980,39 @@ async def _nuclear_status():
 
 @_compat.get("/system/health", summary="System health overview (alias for /api/health/live)")
 async def _system_health_alias():
-    """Return system health status — delegates to /api/health/live."""
+    """Return system health status — delegates to /api/health/live (public)."""
     return RedirectResponse(url="/api/health/live", status_code=307)
 
 
 @_compat.get("/risk/metrics", summary="Risk metrics snapshot (alias for /trading/risk)")
-async def _risk_metrics_alias():
+async def _risk_metrics_alias(user: TokenPayload = Depends(_get_current_user)):
     """Return current risk metrics — delegates to /api/trading/risk."""
     return RedirectResponse(url="/api/trading/risk", status_code=307)
 
 
 @_compat.get("/performance/metrics", summary="Performance metrics (alias for /performance/metrics)")
-async def _perf_metrics_alias():
+async def _perf_metrics_alias(user: TokenPayload = Depends(_get_current_user)):
     """Return performance metrics — delegates to /api/performance/metrics."""
     return RedirectResponse(url="/api/performance/metrics", status_code=307)
 
 
 @_compat.get("/calendar/events", summary="Economic calendar events (alias for /calendar)")
-async def _calendar_events_alias():
+async def _calendar_events_alias(user: TokenPayload = Depends(_get_current_user)):
     """Return upcoming economic calendar events — delegates to /api/calendar."""
     return RedirectResponse(url="/api/calendar", status_code=307)
 
 
 @_compat.get("/marketplace/items", summary="Marketplace strategies and items")
-async def _marketplace_items():
+async def _marketplace_items(user: TokenPayload = Depends(_get_current_user)):
     """Return featured marketplace items — delegates to /api/monetization/marketplace/featured."""
     return RedirectResponse(url="/api/monetization/marketplace/featured", status_code=307)
 
 
 @_compat.get("/prop-firm/status", summary="Prop firm challenge status")
-async def _prop_firm_status():
-    """Return active prop firm challenge status."""
+async def _prop_firm_status(user: TokenPayload = Depends(_get_current_user)):
+    """Return active prop firm challenge status — requires authentication."""
     return {
+        "user_id": user.sub,
         "active_challenge": True,
         "firm": "FTMO",
         "account_size": 100_000,
@@ -1022,9 +1030,10 @@ async def _prop_firm_status():
 
 
 @_compat.get("/copy-trading/status", summary="Copy trading status")
-async def _copy_trading_status():
-    """Return copy trading configuration and status."""
+async def _copy_trading_status(user: TokenPayload = Depends(_get_current_user)):
+    """Return copy trading configuration and status — requires authentication."""
     return {
+        "user_id": user.sub,
         "enabled": False,
         "copying_from": None,
         "followers": 0,
@@ -1036,14 +1045,14 @@ async def _copy_trading_status():
 
 
 @_compat.get("/admin/users", summary="Admin: list users (alias for /admin/all-users)")
-async def _admin_users_alias():
-    """Return user list — admin only; delegates to /api/admin/all-users."""
+async def _admin_users_alias(_user: TokenPayload = Depends(_require_role("admin"))):
+    """Return user list — admin role required; delegates to /api/admin/all-users."""
     return RedirectResponse(url="/api/admin/all-users", status_code=307)
 
 
 @_compat.get("/superadmin/overview", summary="Super-admin platform overview")
-async def _superadmin_overview_alias():
-    """Return platform overview for super-admin — delegates to /api/superadmin/overview."""
+async def _superadmin_overview_alias(_user: TokenPayload = Depends(_require_role("superadmin"))):
+    """Return platform overview for super-admin — superadmin role required."""
     return RedirectResponse(url="/api/superadmin/overview", status_code=307)
 
 
