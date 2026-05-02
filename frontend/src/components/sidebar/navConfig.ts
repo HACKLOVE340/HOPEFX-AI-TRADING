@@ -70,6 +70,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/ai-strategy',  label: 'AI Strategy',    icon: '🤖', group: 'analytics', plan: 'professional', featureKey: 'ai-strategy'  },
   { path: '/correlation',  label: 'Correlation',    icon: '🔗', group: 'analytics', plan: 'professional', featureKey: 'correlation'  },
   { path: '/indicators',   label: 'Indicators',     icon: '📐', group: 'analytics', plan: 'professional', featureKey: 'indicators'   },
+  { path: '/pattern-detector', label: 'Pattern Detector', icon: '🔍', group: 'analytics', plan: 'professional', featureKey: 'pattern-detector' },
   { path: '/walk-forward', label: 'Walk-Forward',   icon: '📈', group: 'analytics', plan: 'professional', featureKey: 'walk-forward' },
   { path: '/ab-testing',   label: 'A/B Testing',    icon: '⚗️', group: 'analytics', plan: 'professional', featureKey: 'ab-testing'   },
   { path: '/tca',          label: 'TCA',            icon: '📊', group: 'analytics', plan: 'professional', featureKey: 'tca'          },
