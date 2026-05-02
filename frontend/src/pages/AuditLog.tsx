@@ -277,7 +277,7 @@ const AuditLog: React.FC = () => {
       {!loading && events.length === 0 && !error ? (
         <EmptyState
           icon="🔍"
-          title="No audit events found"
+          title="No events match your filters"
           description="Try adjusting your filters or check back after some activity."
         />
       ) : (

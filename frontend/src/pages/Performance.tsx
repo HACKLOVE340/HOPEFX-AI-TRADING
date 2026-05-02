@@ -409,7 +409,7 @@ const Performance: React.FC = () => {
       {tab === 'weekly' && (
         <div style={s.card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={s.cardTitle}>Weekly Report</h3>
+            <h3 style={s.cardTitle}>Weekly Performance Report</h3>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => handleExport('csv')} disabled={exporting} style={s.refreshBtn}>⬇ Export CSV</button>
               <button onClick={() => handleExport('pdf')} disabled={exporting} style={s.refreshBtn}>⬇ Export PDF</button>
