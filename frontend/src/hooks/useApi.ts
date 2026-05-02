@@ -304,6 +304,8 @@ export const tradingApi = {
   aiAnalysis:     (payload: { symbol: string; price?: number; timeframe?: string }) =>
     api.post('/trading/ai-analysis', payload, { timeout: 30_000 }),
   riskMetrics:    ()              => api.get('/trading/risk'),
+  patterns: (symbol: string, timeframe = '1h', limit = 200, minConfidence = 0.5) =>
+    api.get('/trading/patterns', { params: { symbol, timeframe, limit, min_confidence: minConfidence }, timeout: 30_000 }),
 };
 
 // ── Backtesting ───────────────────────────────────────────────────────────────

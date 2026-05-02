@@ -77,6 +77,7 @@ const CustomIndicators     = React.lazy(() => import('./pages/CustomIndicators')
 const WalkForward          = React.lazy(() => import('./pages/WalkForward'));
 const ABTesting            = React.lazy(() => import('./pages/ABTesting'));
 const TCADashboard         = React.lazy(() => import('./pages/TCADashboard'));
+const PatternDetector      = React.lazy(() => import('./pages/PatternDetector'));
 
 // ── Community ─────────────────────────────────────────────────────────────────
 const Leaderboard  = React.lazy(() => import('./pages/Leaderboard'));
@@ -420,8 +421,9 @@ const AppShell: React.FC = () => {
             <Route path="/pnl"          element={wrap(gated('performance',  <PnLDashboard />))} />
             <Route path="/ai-strategy"  element={wrap(gated('ai-strategy',  <AIStrategyGenerator />))} />
             <Route path="/correlation"  element={wrap(gated('correlation',  <CorrelationDashboard />))} />
-            <Route path="/indicators"   element={wrap(gated('indicators',   <CustomIndicators />))} />
-            <Route path="/walk-forward" element={wrap(gated('walk-forward', <WalkForward />))} />
+            <Route path="/indicators"        element={wrap(gated('indicators',        <CustomIndicators />))} />
+            <Route path="/pattern-detector"  element={wrap(gated('pattern-detector',  <PatternDetector />))} />
+            <Route path="/walk-forward"      element={wrap(gated('walk-forward',      <WalkForward />))} />
             <Route path="/ab-testing"   element={wrap(gated('ab-testing',   <ABTesting />))} />
             <Route path="/tca"          element={wrap(gated('tca',          <TCADashboard />))} />
 
