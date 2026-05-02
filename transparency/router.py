@@ -147,11 +147,11 @@ async def get_best_execution():
 
 
 @router.get("/slippage", summary="Slippage distribution (alias)")
-async def get_slippage_alias():
+async def get_slippage_alias(days: int = 30):
     """Slippage distribution — alias for /slippage/distribution."""
     engine = _get_transparency_engine()
     try:
-        return engine.get_slippage_distribution()
+        return engine.get_slippage_distribution(days=days)
     except Exception:
         return {"distribution": [], "mean_bps": 0, "p95_bps": 0}
 
