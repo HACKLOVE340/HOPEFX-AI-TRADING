@@ -390,23 +390,30 @@ const AppShell: React.FC = () => {
             <Route path="/watchlist"    element={wrap(gated('watchlist',    <WatchlistPage />))} />
             <Route path="/calendar"     element={wrap(gated('calendar',     <EconomicCalendar />))} />
             <Route path="/alerts"       element={wrap(gated('alerts',       <PriceAlerts />))} />
-            <Route path="/status"       element={wrap(<StatusPage />)} />
+            {/* /system-status is the canonical route; /status kept as backward-compat alias */}
+            <Route path="/system-status" element={wrap(<StatusPage />)} />
+            <Route path="/status"        element={<Navigate to="/system-status" replace />} />
 
             {/* Trading */}
-            {/* /ai-charts = AI Chart Bot (primary advanced terminal, professional+) */}
-            <Route path="/ai-charts"          element={wrap(gated('trading',      <ChartDashboard />))} />
+            {/* /ai-chart = AI Chart Bot (canonical); /ai-charts kept as alias */}
+            <Route path="/ai-chart"           element={wrap(gated('ai-chart',     <ChartDashboard />))} />
+            <Route path="/ai-charts"          element={<Navigate to="/ai-chart" replace />} />
             {/* /ai-chart-dashboard = AI Chart Dashboard (full AI analysis view) */}
-            <Route path="/ai-chart-dashboard" element={wrap(gated('trading',      <AIChartDashboard />))} />
-            {/* /terminal = classic trading terminal (starter+) */}
+            <Route path="/ai-chart-dashboard" element={wrap(gated('ai-chart',     <AIChartDashboard />))} />
+            {/* /terminal = classic trading terminal */}
             <Route path="/terminal"           element={wrap(gated('terminal',     <TradingTerminal />))} />
-            {/* /trading kept as alias for /ai-charts for backward compat */}
-            <Route path="/trading"            element={<Navigate to="/ai-charts" replace />} />
+            {/* /trading kept as alias for backward compat */}
+            <Route path="/trading"            element={<Navigate to="/ai-chart" replace />} />
             <Route path="/nuclear"      element={wrap(gated('nuclear',      <NuclearDashboard />))} />
             <Route path="/geopolitical" element={wrap(gated('geopolitical', <GeopoliticalRiskPage />))} />
-            <Route path="/journal"      element={wrap(gated('journal',      <TradeJournal />))} />
-            <Route path="/prop-firm"    element={wrap(gated('prop-firm',    <PropFirmTracker />))} />
-            <Route path="/copy-trading" element={wrap(gated('copy-trading', <CopyTrading />))} />
-            <Route path="/risk-calc"    element={wrap(gated('risk-calc',    <RiskCalculator />))} />
+
+            {/* Tools */}
+            <Route path="/journal"           element={wrap(gated('journal',         <TradeJournal />))} />
+            <Route path="/prop-firm"         element={wrap(gated('prop-firm',       <PropFirmTracker />))} />
+            <Route path="/copy-trading"      element={wrap(gated('copy-trading',    <CopyTrading />))} />
+            {/* /risk-calculator = canonical; /risk-calc kept as alias */}
+            <Route path="/risk-calculator"   element={wrap(gated('risk-calculator', <RiskCalculator />))} />
+            <Route path="/risk-calc"         element={<Navigate to="/risk-calculator" replace />} />
 
             {/* Analytics */}
             <Route path="/performance"  element={wrap(gated('performance',  <Performance />))} />
@@ -420,7 +427,9 @@ const AppShell: React.FC = () => {
 
             {/* Community */}
             <Route path="/leaderboard"  element={wrap(gated('leaderboard',  <Leaderboard />))} />
-            <Route path="/feed"         element={wrap(gated('feed',         <SocialFeed />))} />
+            {/* /signals = canonical Signal Feed; /feed kept as alias */}
+            <Route path="/signals"      element={wrap(gated('signals',      <SocialFeed />))} />
+            <Route path="/feed"         element={<Navigate to="/signals" replace />} />
             <Route path="/marketplace"  element={wrap(gated('marketplace',  <Marketplace />))} />
             <Route path="/affiliate"    element={wrap(gated('affiliate',    <Affiliate />))} />
 
@@ -436,8 +445,9 @@ const AppShell: React.FC = () => {
             <Route path="/sub-accounts"    element={wrap(gated('sub-accounts', <SubAccounts />))} />
             <Route path="/elite"           element={wrap(gated('elite',        <EliteDashboard />))} />
             <Route path="/checkout"        element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
-            {/* /pricing inside AppShell so authenticated users keep the sidebar */}
-            <Route path="/pricing"         element={wrap(<PricingPage />)} />
+            {/* /upgrade = canonical Upgrade Plan; /pricing kept as alias */}
+            <Route path="/upgrade"         element={wrap(<PricingPage />)} />
+            <Route path="/pricing"         element={<Navigate to="/upgrade" replace />} />
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
@@ -445,17 +455,19 @@ const AppShell: React.FC = () => {
             <Route path="/chat"            element={wrap(<AuthGuard><ChatPage /></AuthGuard>)} />
             <Route path="/mobile"          element={wrap(<AuthGuard><MobilePage /></AuthGuard>)} />
 
-            {/* Legacy admin routes — redirect to /superadmin (single system) */}
-            {/* /admin → /audit for admin role; superadmin users see /superadmin in their sidebar */}
+            {/* Admin */}
             <Route path="/admin"        element={wrap(adminOnly(<AdminPanel />))} />
             <Route path="/audit"        element={wrap(adminOnly(<AuditLog />))} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
 
-            {/* Superadmin-only */}
-            <Route path="/superadmin"          element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
-            <Route path="/system-reliability"  element={wrap(superAdminOnly(<SystemReliability />))} />
+            {/* Superadmin-only — /master-control canonical; /superadmin kept as alias */}
+            <Route path="/master-control"      element={wrap(superAdminOnly(<SuperAdminDashboard />))} />
+            <Route path="/superadmin"          element={<Navigate to="/master-control" replace />} />
+            {/* /reliability canonical; /system-reliability kept as alias */}
+            <Route path="/reliability"         element={wrap(superAdminOnly(<SystemReliability />))} />
+            <Route path="/system-reliability"  element={<Navigate to="/reliability" replace />} />
 
             {/* Fallback — authenticated users see 404 page, others redirect to /login */}
             <Route
@@ -490,6 +502,8 @@ const App: React.FC = () => (
             <Route path="/reset-password"  element={<ResetPassword />} />
             <Route path="/onboarding"      element={<Onboarding />} />
             {/* Public pages — no auth required */}
+            {/* /upgrade is the canonical plan upgrade page; /pricing is a public alias */}
+            <Route path="/upgrade"         element={<PricingPage />} />
             <Route path="/pricing"         element={<PricingPage />} />
             <Route path="/docs"            element={<DocsPage />} />
             <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
