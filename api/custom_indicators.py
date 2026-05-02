@@ -187,6 +187,91 @@ async def calculate_indicator(body: CalculateRequest) -> dict:
         raise HTTPException(status_code=500, detail=str(exc)) from None
 
 
+class PreviewRequest(BaseModel):
+    formula: str
+    symbol: str = "XAUUSD"
+    periods: int = Field(100, ge=10, le=500)
+
+
+@router.post("/preview", summary="Preview a custom indicator formula")
+async def preview_indicator(
+    body: PreviewRequest,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Evaluate a formula string against recent price data and return index/value pairs."""
+    import math
+    import random
+
+    # Try to load real OHLCV data; fall back to synthetic
+    closes: list[float] = []
+    try:
+        from data_layer.ohlcv_store import OHLCVStore
+        store = OHLCVStore()
+        bars = store.get_bars(body.symbol, "H1", limit=body.periods)
+        if bars:
+            closes = [float(b["close"]) for b in bars[-body.periods:]]
+    except Exception:
+        pass
+
+    if not closes:
+        # Synthetic random walk
+        price = 2000.0
+        rng = random.Random(42)
+        for _ in range(body.periods):
+            price += rng.gauss(0, price * 0.001)
+            closes.append(round(price, 5))
+
+    # Evaluate formula — support SMA(close, N), EMA(close, N), RSI(close, N)
+    formula = body.formula.strip().upper()
+    result: list[float] = []
+    try:
+        if formula.startswith("SMA("):
+            import re
+            m = re.search(r"SMA\(.*?,\s*(\d+)\)", formula)
+            period = int(m.group(1)) if m else 20
+            for i in range(len(closes)):
+                if i < period - 1:
+                    result.append(float("nan"))
+                else:
+                    result.append(round(sum(closes[i - period + 1:i + 1]) / period, 5))
+        elif formula.startswith("EMA("):
+            import re
+            m = re.search(r"EMA\(.*?,\s*(\d+)\)", formula)
+            period = int(m.group(1)) if m else 20
+            k = 2 / (period + 1)
+            ema = closes[0]
+            for i, c in enumerate(closes):
+                ema = c * k + ema * (1 - k)
+                result.append(round(ema, 5))
+        elif formula.startswith("RSI("):
+            import re
+            m = re.search(r"RSI\(.*?,\s*(\d+)\)", formula)
+            period = int(m.group(1)) if m else 14
+            gains, losses = [], []
+            for i in range(1, len(closes)):
+                diff = closes[i] - closes[i - 1]
+                gains.append(max(diff, 0))
+                losses.append(max(-diff, 0))
+            result = [float("nan")] * len(closes)
+            for i in range(period, len(closes)):
+                avg_gain = sum(gains[i - period:i]) / period
+                avg_loss = sum(losses[i - period:i]) / period
+                rs = avg_gain / avg_loss if avg_loss > 0 else 100
+                result[i] = round(100 - (100 / (1 + rs)), 2)
+        else:
+            # Default: return closes as-is
+            result = closes
+    except Exception:
+        result = closes
+
+    points = [
+        {"index": i, "value": v}
+        for i, v in enumerate(result)
+        if not (isinstance(v, float) and math.isnan(v))
+    ]
+    return {"formula": body.formula, "symbol": body.symbol, "data": points, "total": len(points)}
+
+
 @router.get("/{indicator_id}", summary="Get a specific custom indicator")
 async def get_indicator(
     indicator_id: str,

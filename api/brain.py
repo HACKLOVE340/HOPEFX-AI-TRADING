@@ -111,7 +111,7 @@ class ChatResponse(BaseModel):
 @router.post("/generate-strategy", response_model=GenerateResponse)
 async def generate_strategy(
     req: GenerateRequest,
-    user: TokenPayload = Depends(require_role("admin")),
+    user: TokenPayload = Depends(require_role("trader")),
 ) -> GenerateResponse:
     """
     Generate a trading strategy from a plain-English prompt.
@@ -197,7 +197,7 @@ async def generate_strategy(
 @router.post("/deploy-strategy", response_model=DeployResponse)
 async def deploy_strategy(
     req: DeployRequest,
-    user: TokenPayload = Depends(require_role("admin")),
+    user: TokenPayload = Depends(require_role("trader")),
 ) -> DeployResponse:
     """
     Deploy a generated strategy to paper/live trading.
