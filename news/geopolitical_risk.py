@@ -4,19 +4,6 @@
 # All modifications must be shared under the same license.
 # No commercial use without explicit permission.
 """
-
-# ── Module constants ─────────────────────────────────────────────────────────
-_RISK_HIGH = 70
-_RISK_MEDIUM = 50
-_RISK_LOW = 30
-_RISK_VERY_LOW = 60
-_EVENT_WEIGHT_MAJOR = 6
-_EVENT_WEIGHT_MODERATE = 4
-_EVENT_WEIGHT_MINOR = 5
-_EVENT_WEIGHT_MICRO = 3
-_BULLISH_RATIO_STRONG = 2
-_BLACKOUT_MINUTES = 60
-
 Geopolitical Risk Intelligence Module
 
 Integrates World Monitor data for geopolitical risk assessment in trading:
@@ -37,6 +24,18 @@ This module is particularly valuable for XAU/USD (Gold) trading since:
 
 Author: HOPEFX Development Team
 """
+
+# ── Module constants ─────────────────────────────────────────────────────────
+_RISK_HIGH             = 70
+_RISK_MEDIUM           = 50
+_RISK_LOW              = 30
+_RISK_VERY_LOW         = 20   # corrected: base global risk when no events are present
+_EVENT_WEIGHT_MAJOR    = 6
+_EVENT_WEIGHT_MODERATE = 4
+_EVENT_WEIGHT_MINOR    = 5
+_EVENT_WEIGHT_MICRO    = 3
+_BULLISH_RATIO_STRONG  = 2
+_BLACKOUT_MINUTES      = 60
 
 import asyncio
 import contextlib
@@ -416,11 +415,14 @@ class GeopoliticalRiskProvider:
 
     async def _refresh_cache(self) -> None:
         """Fetch fresh events and update the internal cache. Called by the poll loop."""
-        if os.getenv("HOPEFX_CI") or os.getenv("ENVIRONMENT", "").lower() in (
-            "testing",
-            "test",
-            "ci",
-        ):
+        _env = os.getenv("ENVIRONMENT", "").lower()
+        if os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci"):
+            logger.debug(
+                "GeopoliticalRiskProvider: cache refresh skipped in CI/test environment "
+                "(HOPEFX_CI=%s ENVIRONMENT=%s)",
+                os.getenv("HOPEFX_CI", ""),
+                os.getenv("ENVIRONMENT", ""),
+            )
             return
 
         try:
@@ -1162,7 +1164,7 @@ class GeopoliticalRiskProvider:
     def _calculate_global_risk(self, events: list[GeopoliticalEvent]) -> float:
         """Calculate overall global risk score"""
         if not events:
-            return 20.0  # Base risk level
+            return float(_RISK_VERY_LOW)
 
         # Sum weighted risk scores
         total_risk = sum(e.risk_score for e in events)
@@ -1192,13 +1194,13 @@ class GeopoliticalRiskProvider:
         bearish_count = sum(1 for e in events if e.gold_impact in [GoldImpact.BEARISH, GoldImpact.STRONGLY_BEARISH])
 
         # Consider global risk level
-        if global_risk >= 70:
+        if global_risk >= _RISK_HIGH:
             return GoldImpact.STRONGLY_BULLISH
-        if global_risk >= 50 and bullish_count > bearish_count:
+        if global_risk >= _RISK_MEDIUM and bullish_count > bearish_count:
             return GoldImpact.BULLISH
 
         # Default based on event balance
-        if bullish_count > bearish_count * 2:
+        if bullish_count > bearish_count * _BULLISH_RATIO_STRONG:
             return GoldImpact.STRONGLY_BULLISH
         if bullish_count > bearish_count:
             return GoldImpact.BULLISH
@@ -1219,7 +1221,7 @@ class GeopoliticalRiskProvider:
         sorted_regions = sorted(region_scores.items(), key=lambda x: -x[1])
 
         # Return top 5 high-risk regions
-        return [region for region, score in sorted_regions[:5] if score >= 30]
+        return [region for region, score in sorted_regions[:5] if score >= _RISK_LOW]
 
     def _get_country_risks(self, events: list[GeopoliticalEvent]) -> dict[str, CountryRisk]:
         """Calculate risk for individual countries"""
@@ -1261,10 +1263,10 @@ class GeopoliticalRiskProvider:
         recommendations = []
 
         # Risk-based recommendations
-        if global_risk >= 70:
+        if global_risk >= _RISK_HIGH:
             recommendations.append("HIGH ALERT: Elevated geopolitical risk - Consider increasing gold allocation")
             recommendations.append("Reduce exposure to risk assets during heightened uncertainty")
-        elif global_risk >= 50:
+        elif global_risk >= _RISK_MEDIUM:
             recommendations.append("MODERATE RISK: Monitor developing situations - Gold as portfolio hedge")
         else:
             recommendations.append("LOW RISK: Geopolitical environment relatively stable")
@@ -1734,11 +1736,11 @@ class WorldMonitorAPIClient:
 
         final_score = total_score / total_weight if total_weight > 0 else 0
 
-        if final_score >= 70:
+        if final_score >= _RISK_HIGH:
             outlook = GoldImpact.STRONGLY_BULLISH
-        elif final_score >= 50:
+        elif final_score >= _RISK_MEDIUM:
             outlook = GoldImpact.BULLISH
-        elif final_score >= 30:
+        elif final_score >= _RISK_LOW:
             outlook = GoldImpact.NEUTRAL
         else:
             outlook = GoldImpact.BEARISH
