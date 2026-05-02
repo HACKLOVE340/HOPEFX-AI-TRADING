@@ -493,26 +493,34 @@ async def factor_risk_report(
 async def get_portfolio_positions(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    """Return current open positions from the broker / execution engine."""
+    """Return current open positions from the broker / execution engine.
+
+    Handles both synchronous brokers (Alpaca, Binance, ByBit, CCXT, CME) and
+    asynchronous brokers (OANDA, IBKR, AsyncEngine) transparently.
+    """
+    import inspect
+
     positions: list[dict] = []
     try:
         from core.app_state import app_state
 
         broker = getattr(app_state, "broker", None)
         if broker and hasattr(broker, "get_positions"):
-            raw = broker.get_positions()
+            raw_result = broker.get_positions()
+            # Await if the broker returns a coroutine (async brokers: OANDA, IBKR)
+            raw = await raw_result if inspect.iscoroutine(raw_result) else raw_result
             positions = [
                 {
-                    "symbol": getattr(p, "symbol", "XAUUSD"),
-                    "side": getattr(p, "side", "long"),
-                    "quantity": float(getattr(p, "quantity", 0)),
-                    "entry_price": float(getattr(p, "entry_price", 0)),
-                    "current_price": float(getattr(p, "current_price", 0)),
-                    "unrealized_pnl": float(getattr(p, "unrealized_pnl", 0)),
-                    "margin_used": float(getattr(p, "margin_used", 0)),
-                    "opened_at": str(getattr(p, "opened_at", "")),
+                    "symbol": getattr(p, "symbol", "XAUUSD") if not isinstance(p, dict) else p.get("symbol", "XAUUSD"),
+                    "side": getattr(p, "side", "long") if not isinstance(p, dict) else p.get("side", "long"),
+                    "quantity": float(getattr(p, "quantity", 0) if not isinstance(p, dict) else p.get("quantity", 0)),
+                    "entry_price": float(getattr(p, "entry_price", 0) if not isinstance(p, dict) else p.get("entry_price", 0)),
+                    "current_price": float(getattr(p, "current_price", 0) if not isinstance(p, dict) else p.get("current_price", 0)),
+                    "unrealized_pnl": float(getattr(p, "unrealized_pnl", 0) if not isinstance(p, dict) else p.get("unrealized_pnl", 0)),
+                    "margin_used": float(getattr(p, "margin_used", 0) if not isinstance(p, dict) else p.get("margin_used", 0)),
+                    "opened_at": str(getattr(p, "opened_at", "") if not isinstance(p, dict) else p.get("opened_at", "")),
                 }
-                for p in raw
+                for p in (raw or [])
             ]
     except Exception as exc:
         logger.debug("portfolio positions: %s", exc)
@@ -523,24 +531,51 @@ async def get_portfolio_positions(
 async def get_portfolio_summary(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
-    """Return a high-level portfolio summary: equity, PnL, positions count, and win rate."""
+    """Return a high-level portfolio summary: equity, PnL, positions count.
+
+    Handles both synchronous brokers (Alpaca, Binance, ByBit, CCXT, CME) and
+    asynchronous brokers (OANDA, IBKR, AsyncEngine) transparently.
+    """
+    import inspect
+
     try:
         from core.app_state import app_state
 
         broker = getattr(app_state, "broker", None)
         if broker is None:
             raise AttributeError("no broker")
-        account = broker.get_account_info() if hasattr(broker, "get_account_info") else None
-        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
-        equity = float(getattr(account, "equity", 0)) if account else 0.0
-        balance = float(getattr(account, "balance", 0)) if account else 0.0
-        unrealized = sum(float(getattr(p, "unrealized_pnl", 0)) for p in positions)
-        margin_used = float(getattr(account, "margin_used", 0)) if account else 0.0
+
+        # Fetch account info — await if async broker
+        if hasattr(broker, "get_account_info"):
+            acct_result = broker.get_account_info()
+            account = await acct_result if inspect.iscoroutine(acct_result) else acct_result
+        else:
+            account = None
+
+        # Fetch positions — await if async broker
+        if hasattr(broker, "get_positions"):
+            pos_result = broker.get_positions()
+            positions = await pos_result if inspect.iscoroutine(pos_result) else pos_result
+        else:
+            positions = []
+
+        def _float(obj, key: str) -> float:
+            if obj is None:
+                return 0.0
+            return float(obj.get(key, 0) if isinstance(obj, dict) else getattr(obj, key, 0))
+
+        equity = _float(account, "equity")
+        balance = _float(account, "balance")
+        margin_used = _float(account, "margin_used")
+        unrealized = sum(
+            float(p.get("unrealized_pnl", 0) if isinstance(p, dict) else getattr(p, "unrealized_pnl", 0))
+            for p in (positions or [])
+        )
         return {
             "equity": round(equity, 2),
             "balance": round(balance, 2),
             "unrealized_pnl": round(unrealized, 2),
-            "open_positions": len(positions),
+            "open_positions": len(positions or []),
             "margin_used": round(margin_used, 2),
             "margin_free": round(equity - margin_used, 2),
         }
