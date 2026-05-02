@@ -1343,6 +1343,12 @@ async def push_position_close(position_id: str, user_id: str | None = None) -> N
 async def push_signal(signal: dict) -> None:
     """Signals are broadcast to all subscribers (not user-specific)."""
     await _manager.broadcast("signals", {"type": "signal", "data": signal})
+    # Also forward to /ws/social-feed subscribers
+    try:
+        from api.social_feed import _social_feed_broadcast as _sf_broadcast
+        await _sf_broadcast(signal)
+    except Exception:
+        pass
 
 
 async def push_account_update(account: dict, user_id: str | None = None) -> None:

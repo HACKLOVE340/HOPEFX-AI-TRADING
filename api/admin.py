@@ -992,6 +992,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
 
 
 @router.get("/alerts", summary="Active admin alerts")
+@router.get("/status", summary="Active admin alerts (alias for /alerts used by frontend adminApi)")
 def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return active system alerts for the admin dashboard."""
     alerts = []
