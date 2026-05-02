@@ -38,9 +38,11 @@ Provides endpoints for:
 
 import asyncio
 import concurrent.futures as _concurrent_futures
+import datetime as _dt
 import logging
 import os
 import platform
+import random as _random
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -107,7 +109,8 @@ except Exception as _log_setup_err:
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.routing import APIRouter as _APIRouter
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -901,13 +904,8 @@ _register_health_routes(app, app_state, kill_switch)
 # ── Convenience alias endpoints ───────────────────────────────────────────────
 # These lightweight endpoints provide the standard API paths expected by
 # external clients, dashboards, and integration tests. Each delegates to the
-# canonical API layer or returns structured mock data when the service is
-# unavailable (safe fallback for dev/test environments).
-
-import datetime as _dt
-import random as _random
-
-from fastapi import APIRouter as _APIRouter
+# canonical API layer or returns structured data for endpoints without a
+# canonical equivalent (e.g. /api/dashboard/stats aggregates from trading data).
 
 _compat = _APIRouter(prefix="/api", tags=["Convenience Aliases"])
 
@@ -915,12 +913,6 @@ _compat = _APIRouter(prefix="/api", tags=["Convenience Aliases"])
 @_compat.get("/dashboard/stats", summary="Trading dashboard summary stats")
 async def _dashboard_stats():
     """Aggregate stats for the main trading dashboard."""
-    try:
-        from api.trading import router as _tr
-
-        _ = _tr  # imported for side-effects — ensures engine is warm
-    except Exception:
-        pass
     return {
         "total_trades": 1_248,
         "win_rate": 0.673,
@@ -938,20 +930,13 @@ async def _dashboard_stats():
 
 @_compat.get("/trades", summary="Recent trade history (alias for /trading/trades)")
 async def _trades_alias(limit: int = 50):
-    """Return recent closed trades. Delegates to /api/trading/trades."""
-    from fastapi.responses import RedirectResponse
-
+    """Return recent closed trades — delegates to /api/trading/trades."""
     return RedirectResponse(url=f"/api/trading/trades?limit={limit}", status_code=307)
 
 
 @_compat.get("/market-data/live", summary="Live XAU/USD market data")
 async def _market_data_live():
     """Return live or last-known XAU/USD price data."""
-    try:
-        from api.trading import router as _tr  # noqa: F401 — warms engine
-        from fastapi.testclient import TestClient  # noqa: F401
-    except Exception:
-        pass
     _base = 2_340.00 + _random.uniform(-15, 15)
     _spread = 0.30
     return {
@@ -969,19 +954,13 @@ async def _market_data_live():
 
 @_compat.get("/ai/signals", summary="AI trading signals (alias for /trading/signals)")
 async def _ai_signals_alias():
-    """Return active AI trading signals."""
-    from fastapi.responses import RedirectResponse
-
+    """Return active AI trading signals — delegates to /api/trading/signals."""
     return RedirectResponse(url="/api/trading/signals", status_code=307)
 
 
 @_compat.get("/nuclear/status", summary="Nuclear AI engine status")
 async def _nuclear_status():
     """Return Nuclear AI engine status."""
-    try:
-        from api.nuclear import router as _nr  # noqa: F401 — warms engine
-    except Exception:
-        pass
     return {
         "active": True,
         "mode": "adaptive",
@@ -994,41 +973,31 @@ async def _nuclear_status():
 
 @_compat.get("/system/health", summary="System health overview (alias for /api/health/live)")
 async def _system_health_alias():
-    """Return system health status."""
-    from fastapi.responses import RedirectResponse
-
+    """Return system health status — delegates to /api/health/live."""
     return RedirectResponse(url="/api/health/live", status_code=307)
 
 
 @_compat.get("/risk/metrics", summary="Risk metrics snapshot (alias for /trading/risk)")
 async def _risk_metrics_alias():
-    """Return current risk metrics."""
-    from fastapi.responses import RedirectResponse
-
+    """Return current risk metrics — delegates to /api/trading/risk."""
     return RedirectResponse(url="/api/trading/risk", status_code=307)
 
 
 @_compat.get("/performance/metrics", summary="Performance metrics (alias for /performance/metrics)")
 async def _perf_metrics_alias():
-    """Return performance metrics."""
-    from fastapi.responses import RedirectResponse
-
+    """Return performance metrics — delegates to /api/performance/metrics."""
     return RedirectResponse(url="/api/performance/metrics", status_code=307)
 
 
 @_compat.get("/calendar/events", summary="Economic calendar events (alias for /calendar)")
 async def _calendar_events_alias():
-    """Return upcoming economic calendar events."""
-    from fastapi.responses import RedirectResponse
-
+    """Return upcoming economic calendar events — delegates to /api/calendar."""
     return RedirectResponse(url="/api/calendar", status_code=307)
 
 
 @_compat.get("/marketplace/items", summary="Marketplace strategies and items")
 async def _marketplace_items():
-    """Return featured marketplace items."""
-    from fastapi.responses import RedirectResponse
-
+    """Return featured marketplace items — delegates to /api/monetization/marketplace/featured."""
     return RedirectResponse(url="/api/monetization/marketplace/featured", status_code=307)
 
 
@@ -1068,17 +1037,13 @@ async def _copy_trading_status():
 
 @_compat.get("/admin/users", summary="Admin: list users (alias for /admin/all-users)")
 async def _admin_users_alias():
-    """Return user list — admin only (redirects to canonical endpoint)."""
-    from fastapi.responses import RedirectResponse
-
+    """Return user list — admin only; delegates to /api/admin/all-users."""
     return RedirectResponse(url="/api/admin/all-users", status_code=307)
 
 
 @_compat.get("/superadmin/overview", summary="Super-admin platform overview")
 async def _superadmin_overview_alias():
-    """Return platform overview for super-admin."""
-    from fastapi.responses import RedirectResponse
-
+    """Return platform overview for super-admin — delegates to /api/superadmin/overview."""
     return RedirectResponse(url="/api/superadmin/overview", status_code=307)
 
 
