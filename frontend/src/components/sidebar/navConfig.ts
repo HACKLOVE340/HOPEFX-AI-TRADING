@@ -49,7 +49,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/trade',        label: 'Trade',          icon: '⚡', group: 'core',      plan: 'free',    featureKey: 'trade'        },
   { path: '/portfolio',    label: 'Portfolio',      icon: '💼', group: 'core',      plan: 'free',    featureKey: 'portfolio'    },
   { path: '/watchlist',    label: 'Watchlist',      icon: '👁️', group: 'core',      plan: 'free',    featureKey: 'watchlist'    },
-  { path: '/calendar',     label: 'Economic Cal.',  icon: '📅', group: 'core',      plan: 'free',    featureKey: 'calendar'     },
+  { path: '/calendar',     label: 'Economic Calendar', icon: '📅', group: 'core',      plan: 'free',    featureKey: 'calendar'     },
   { path: '/alerts',       label: 'Price Alerts',   icon: '🔔', group: 'core',      plan: 'starter', featureKey: 'alerts'       },
   { path: '/system-status', label: 'System Status', icon: '🟢', group: 'core',      plan: 'free',    featureKey: 'status'       },
 
@@ -73,7 +73,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/walk-forward', label: 'Walk-Forward',   icon: '📈', group: 'analytics', plan: 'professional', featureKey: 'walk-forward' },
   { path: '/ab-testing',   label: 'A/B Testing',    icon: '⚗️', group: 'analytics', plan: 'professional', featureKey: 'ab-testing'   },
   { path: '/tca',          label: 'TCA',            icon: '📊', group: 'analytics', plan: 'professional', featureKey: 'tca'          },
-  { path: '/geopolitical', label: 'Geopolitical',   icon: '🌍', group: 'analytics', plan: 'professional', featureKey: 'geopolitical' },
+  { path: '/geopolitical', label: 'Geopolitical Research', icon: '🌍', group: 'analytics', plan: 'professional', featureKey: 'geopolitical' },
   { path: '/research',     label: 'Research',       icon: '🔬', group: 'analytics', plan: 'enterprise',   featureKey: 'research'     },
   { path: '/replay',       label: 'Market Replay',  icon: '⏪', group: 'analytics', plan: 'enterprise',   featureKey: 'replay'       },
 
@@ -99,7 +99,7 @@ export const NAV_ITEMS: NavItem[] = [
   // ── Admin (admin + superadmin) ────────────────────────────────────────────
   { path: '/admin',      label: 'Admin Panel',     icon: '🔧', group: 'admin', adminOnly: true },
   { path: '/audit',      label: 'Audit Log',       icon: '🔍', group: 'admin', adminOnly: true },
-  { path: '/security',   label: 'Security Ops',    icon: '🛡️', group: 'admin', adminOnly: true },
+  { path: '/security',   label: 'Security Operations', icon: '🛡️', group: 'admin', adminOnly: true },
   { path: '/auto-heal',  label: 'Auto-Heal',       icon: '🩺', group: 'admin', adminOnly: true },
   { path: '/whitelabel', label: 'Whitelabel',      icon: '🏷️', group: 'admin', adminOnly: true },
 

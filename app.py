@@ -715,7 +715,7 @@ async def _start_data_layer_orchestrator(state) -> None:
         await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
         state.data_layer_orchestrator = orchestrator
         logger.info("Data layer orchestrator started")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
             "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "
@@ -909,7 +909,7 @@ _register_health_routes(app, app_state, kill_switch)
 # All endpoints that return data require authentication.
 # Redirect-only endpoints rely on the target endpoint's own auth guards.
 
-from api.auth import TokenPayload  # noqa: E402 — intentional late import
+from api.auth import TokenPayload
 from api.auth import get_current_user as _get_current_user
 from api.auth import require_role as _require_role
 
