@@ -36,20 +36,29 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     Include a router on *app*, skipping any routes whose (method, full-path)
     pair is already registered.
 
-    The dedup key uses the *full* path (router.prefix + route.path) so it
+    The dedup key uses the *full* path (effective_prefix + route.path) so it
     matches the paths that FastAPI stores on app.routes after include_router.
-    Using only route.path (the relative path) caused false misses when the
-    prefix was non-empty, allowing duplicate routes to slip through.
+    The effective prefix is the mount-time prefix kwarg (if supplied) combined
+    with the router's own prefix, to correctly handle routers that carry no
+    built-in prefix (e.g. the nuclear router mounted at /api/nuclear).
     """
     from fastapi.routing import APIRoute as _APIRoute
 
-    prefix = getattr(router, "prefix", "") or ""
+    # The full effective prefix is the kwarg mount-prefix PLUS the router's
+    # own prefix.  Either may be empty — we combine both to get the real path
+    # that FastAPI will expose for each route.
+    mount_prefix = kwargs.get("prefix", "") or ""
+    router_prefix = getattr(router, "prefix", "") or ""
+    if mount_prefix and router_prefix:
+        effective_prefix = mount_prefix.rstrip("/") + "/" + router_prefix.lstrip("/")
+    else:
+        effective_prefix = mount_prefix or router_prefix
 
     def _full_path(route_path: str) -> str:
-        """Combine router prefix with route path, normalising slashes."""
-        if not prefix:
+        """Combine effective prefix with route path, normalising slashes."""
+        if not effective_prefix:
             return route_path
-        return prefix.rstrip("/") + "/" + route_path.lstrip("/")
+        return effective_prefix.rstrip("/") + "/" + route_path.lstrip("/")
 
     skipped = 0
     for route in router.routes:
@@ -396,15 +405,15 @@ def register_routers(
 
         _include_router_deduped(
             app, nuclear_router,
-            prefix="/nuclear",
+            prefix="/api/nuclear",
             tags=["nuclear"],
         )
         _include_router_deduped(
             app, nuclear_strategy_router,
-            prefix="/nuclear-strategy",
+            prefix="/api/nuclear-strategy",
             tags=["nuclear-strategy"],
         )
-        logger.info("Nuclear routers registered (/nuclear, /nuclear-strategy)")
+        logger.info("Nuclear routers registered (/api/nuclear, /api/nuclear-strategy)")
     except Exception as _nuc_err:
         logger.warning("Nuclear routers not registered: %s", _nuc_err)
 
