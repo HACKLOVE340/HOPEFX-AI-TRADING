@@ -180,10 +180,13 @@ def register_routers(
 
     try:
         from api.community_chat import router as community_chat_router
+        from api.community_chat import ws_router as community_chat_ws_router
         _community_chat_router = community_chat_router
+        _community_chat_ws_router = community_chat_ws_router
     except Exception as _e:
         logger.warning("Community chat router not loaded: %s", _e)
         _community_chat_router = None
+        _community_chat_ws_router = None
 
     try:
         from api.kyc import kyc_alias_router as _kyc_alias_router
@@ -238,7 +241,8 @@ def register_routers(
     # Register optional new routers
     for _opt_router, _name in [
         (_notifications_router, "Notifications"),
-        (_community_chat_router, "Community Chat"),
+        (_community_chat_router, "Community Chat REST"),
+        (_community_chat_ws_router, "Community Chat WS"),
         (_kyc_alias, "KYC alias"),
     ]:
         if _opt_router is not None:
