@@ -207,6 +207,36 @@ async def get_lockdown_status(
     }
 
 
+class LockdownRequest(BaseModel):
+    reason: str = "Manual lockdown by admin"
+
+
+@router.post("/lockdown", response_model=None, summary="Activate platform lockdown (admin)")
+async def activate_lockdown(
+    req: LockdownRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """
+    Activate a platform-wide lockdown, halting all trading and disabling
+    new API sessions.  Requires admin or superadmin role.
+    """
+    global _lockdown_state
+    activated_at = datetime.now(UTC).isoformat()
+    try:
+        from security.lockdown import get_lockdown_manager
+
+        mgr = get_lockdown_manager()
+        mgr.activate(reason=req.reason, activated_by=user.sub)
+        logger.warning("Lockdown ACTIVATED by admin: user=%s reason=%s", user.sub, req.reason)
+        return {"status": "active", "reason": req.reason, "activated_by": user.sub, "activated_at": activated_at}
+    except Exception as _exc:
+        logger.debug("Lockdown manager unavailable, using in-memory: %s", _exc)
+
+    _lockdown_state = {"active": True, "reason": req.reason, "activated_at": activated_at}
+    logger.warning("Lockdown ACTIVATED (in-memory): user=%s reason=%s", user.sub, req.reason)
+    return {"status": "active", "reason": req.reason, "activated_by": user.sub, "activated_at": activated_at}
+
+
 @router.post(
     "/lockdown/clear",
     response_model=None,

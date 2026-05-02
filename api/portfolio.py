@@ -484,3 +484,73 @@ async def factor_risk_report(
         "rebalancer": rebalancer_section,
         "tick_feed": tick_section,
     }
+
+
+# ── Portfolio overview endpoints (used by Portfolio.tsx) ──────────────────────
+
+
+@router.get("/positions", response_model=None, summary="Current open positions")
+async def get_portfolio_positions(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return current open positions from the broker / execution engine."""
+    positions: list[dict] = []
+    try:
+        from core.app_state import app_state
+
+        broker = getattr(app_state, "broker", None)
+        if broker and hasattr(broker, "get_positions"):
+            raw = broker.get_positions()
+            positions = [
+                {
+                    "symbol": getattr(p, "symbol", "XAUUSD"),
+                    "side": getattr(p, "side", "long"),
+                    "quantity": float(getattr(p, "quantity", 0)),
+                    "entry_price": float(getattr(p, "entry_price", 0)),
+                    "current_price": float(getattr(p, "current_price", 0)),
+                    "unrealized_pnl": float(getattr(p, "unrealized_pnl", 0)),
+                    "margin_used": float(getattr(p, "margin_used", 0)),
+                    "opened_at": str(getattr(p, "opened_at", "")),
+                }
+                for p in raw
+            ]
+    except Exception as exc:
+        logger.debug("portfolio positions: %s", exc)
+    return {"positions": positions, "count": len(positions)}
+
+
+@router.get("/summary", response_model=None, summary="Portfolio summary metrics")
+async def get_portfolio_summary(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return a high-level portfolio summary: equity, PnL, positions count, and win rate."""
+    try:
+        from core.app_state import app_state
+
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            raise AttributeError("no broker")
+        account = broker.get_account_info() if hasattr(broker, "get_account_info") else None
+        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+        equity = float(getattr(account, "equity", 0)) if account else 0.0
+        balance = float(getattr(account, "balance", 0)) if account else 0.0
+        unrealized = sum(float(getattr(p, "unrealized_pnl", 0)) for p in positions)
+        margin_used = float(getattr(account, "margin_used", 0)) if account else 0.0
+        return {
+            "equity": round(equity, 2),
+            "balance": round(balance, 2),
+            "unrealized_pnl": round(unrealized, 2),
+            "open_positions": len(positions),
+            "margin_used": round(margin_used, 2),
+            "margin_free": round(equity - margin_used, 2),
+        }
+    except Exception as exc:
+        logger.debug("portfolio summary: %s", exc)
+    return {
+        "equity": 0.0,
+        "balance": 0.0,
+        "unrealized_pnl": 0.0,
+        "open_positions": 0,
+        "margin_used": 0.0,
+        "margin_free": 0.0,
+    }

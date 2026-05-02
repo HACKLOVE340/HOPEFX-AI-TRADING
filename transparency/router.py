@@ -123,3 +123,62 @@ def _get_transparency_engine():
 
 
 router = create_transparency_router(_get_transparency_engine())
+
+
+# ── Frontend-expected aliases ──────────────────────────────────────────────────
+# TCADashboard.tsx calls /transparency/best-execution, /slippage, /summary, /venues.
+# Map these to the canonical engine routes.
+
+@router.get("/best-execution", summary="Best-execution report (alias)")
+async def get_best_execution():
+    """Best-execution report — alias for /report with frontend-expected key names."""
+    engine = _get_transparency_engine()
+    try:
+        report = engine.get_transparency_report()
+        return {
+            "best_execution_score": report.get("best_execution_score", 0),
+            "avg_slippage_bps": report.get("avg_slippage_bps", 0),
+            "fill_rate": report.get("fill_rate", 1.0),
+            "venues": report.get("venues", []),
+            "executions": report.get("executions", []),
+        }
+    except Exception:
+        return {"best_execution_score": 0, "avg_slippage_bps": 0, "fill_rate": 1.0, "venues": [], "executions": []}
+
+
+@router.get("/slippage", summary="Slippage distribution (alias)")
+async def get_slippage_alias():
+    """Slippage distribution — alias for /slippage/distribution."""
+    engine = _get_transparency_engine()
+    try:
+        return engine.get_slippage_distribution()
+    except Exception:
+        return {"distribution": [], "mean_bps": 0, "p95_bps": 0}
+
+
+@router.get("/summary", summary="Execution transparency summary")
+async def get_transparency_summary():
+    """High-level transparency summary combining report, slippage, and venue stats."""
+    engine = _get_transparency_engine()
+    try:
+        report = engine.get_transparency_report()
+        return {
+            "total_executions": report.get("total_executions", 0),
+            "avg_slippage_bps": report.get("avg_slippage_bps", 0),
+            "best_execution_score": report.get("best_execution_score", 0),
+            "fill_rate": report.get("fill_rate", 1.0),
+            "period_days": report.get("period_days", 30),
+        }
+    except Exception:
+        return {"total_executions": 0, "avg_slippage_bps": 0, "best_execution_score": 0, "fill_rate": 1.0, "period_days": 30}
+
+
+@router.get("/venues", summary="Trading venue performance")
+async def get_venues():
+    """Return per-venue execution quality metrics."""
+    engine = _get_transparency_engine()
+    try:
+        report = engine.get_transparency_report()
+        return {"venues": report.get("venues", [])}
+    except Exception:
+        return {"venues": []}
