@@ -106,6 +106,92 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         """Get execution audit trail, optionally filtered by order ID."""
         return engine.get_execution_audit_trail(order_id=order_id, limit=limit)
 
+    @router.get("/summary")
+    async def get_summary(days: int = 30):
+        """High-level execution quality summary for the last N days."""
+        from datetime import datetime, timedelta
+
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        report = engine.generate_report(start, end)
+        total = len(engine.executions) if hasattr(engine, "executions") else 0
+        if report is None:
+            return {
+                "total_executions": total,
+                "avg_slippage": 0.0,
+                "avg_latency_ms": 0.0,
+                "avg_fill_ratio": 1.0,
+                "overall_quality": "no_data",
+                "period_days": days,
+            }
+        return {
+            "total_executions": report.total_executions,
+            "avg_slippage": report.avg_slippage,
+            "max_slippage": report.max_slippage,
+            "avg_latency_ms": report.avg_latency_ms,
+            "avg_fill_ratio": report.avg_fill_ratio,
+            "overall_quality": report.execution_quality.value,
+            "period_days": days,
+            "period_start": report.period_start.isoformat(),
+            "period_end": report.period_end.isoformat(),
+        }
+
+    @router.get("/orders/{order_id}")
+    async def get_order_execution(order_id: str):
+        """Get execution details for a specific order."""
+        records = engine.get_execution_audit_trail(order_id=order_id, limit=1)
+        if not records:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail=f"No execution found for order {order_id}")
+        return records[0]
+
+    @router.get("/best-execution")
+    async def get_best_execution(days: int = 30):
+        """Best-execution compliance metrics for the last N days."""
+        from datetime import datetime, timedelta
+
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        dist = engine.get_slippage_distribution(start, end)
+        trend = engine.get_latency_trend(start, end)
+        return {
+            "slippage_distribution": dist,
+            "latency_trend": trend,
+            "period_days": days,
+        }
+
+    @router.get("/slippage")
+    async def get_slippage(days: int = 30):
+        """Slippage report for the last N days (alias for /slippage/distribution)."""
+        from datetime import datetime, timedelta
+
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        return engine.get_slippage_distribution(start, end)
+
+    @router.get("/venues")
+    async def get_venue_analysis():
+        """Per-venue execution quality breakdown."""
+        records = engine.get_execution_audit_trail(limit=1000)
+        venues: dict[str, dict] = {}
+        for r in records:
+            broker = r.get("broker", "unknown")
+            if broker not in venues:
+                venues[broker] = {"executions": 0, "total_slippage": 0.0, "total_latency": 0.0}
+            venues[broker]["executions"] += 1
+            venues[broker]["total_slippage"] += float(r.get("slippage", 0.0))
+            venues[broker]["total_latency"] += float(r.get("latency_ms", 0.0))
+        result = []
+        for name, stats in venues.items():
+            n = stats["executions"] or 1
+            result.append({
+                "venue": name,
+                "executions": stats["executions"],
+                "avg_slippage": stats["total_slippage"] / n,
+                "avg_latency_ms": stats["total_latency"] / n,
+            })
+        return result
+
     return router
 
 

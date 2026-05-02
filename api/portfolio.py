@@ -484,3 +484,103 @@ async def factor_risk_report(
         "rebalancer": rebalancer_section,
         "tick_feed": tick_section,
     }
+
+
+# ── Portfolio summary & positions convenience endpoints ───────────────────────
+# These provide a unified portfolio view consumed by the frontend allocatorApi.
+
+
+@router.get(
+    "/summary",
+    summary="Portfolio summary",
+    tags=["Portfolio"],
+)
+async def portfolio_summary(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return portfolio equity, P&L, and rebalancer weights as a single summary."""
+    s = _get_app_state()
+    broker = getattr(s, "broker", None) if s else None
+
+    equity = 0.0
+    balance = 0.0
+    unrealised_pnl = 0.0
+    realised_pnl = 0.0
+    open_positions = 0
+    weights: dict[str, float] = {}
+
+    try:
+        if broker is not None:
+            if hasattr(broker, "get_account"):
+                acct = await broker.get_account()
+                equity = float(getattr(acct, "equity", 0.0))
+                balance = float(getattr(acct, "balance", 0.0))
+                unrealised_pnl = float(getattr(acct, "unrealised_pnl", 0.0))
+                realised_pnl = float(getattr(acct, "realised_pnl", 0.0))
+            if hasattr(broker, "get_positions"):
+                positions = await broker.get_positions()
+                open_positions = len(positions)
+    except Exception as exc:
+        logger.debug("portfolio_summary: broker fetch failed: %s", exc)
+
+    rb = _get_rebalancer()
+    if rb is not None:
+        try:
+            rb_status = rb.status()
+            weights = rb_status.get("weights", {})
+        except Exception as exc:
+            logger.debug("portfolio_summary: rebalancer fetch failed: %s", exc)
+
+    return {
+        "equity": equity,
+        "balance": balance,
+        "unrealised_pnl": unrealised_pnl,
+        "realised_pnl": realised_pnl,
+        "open_positions": open_positions,
+        "weights": weights,
+        "rebalancer_available": rb is not None,
+    }
+
+
+@router.get(
+    "/positions",
+    summary="Portfolio positions with weights",
+    tags=["Portfolio"],
+)
+async def portfolio_positions(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return open positions list with market values and rebalancer target weights."""
+    s = _get_app_state()
+    broker = getattr(s, "broker", None) if s else None
+
+    positions_list: list[dict[str, Any]] = []
+    try:
+        if broker is not None and hasattr(broker, "get_positions"):
+            raw = await broker.get_positions()
+            for p in raw:
+                positions_list.append({
+                    "symbol": getattr(p, "symbol", ""),
+                    "side": getattr(p, "side", "long"),
+                    "quantity": float(getattr(p, "quantity", 0.0)),
+                    "entry_price": float(getattr(p, "entry_price", 0.0)),
+                    "current_price": float(getattr(p, "current_price", 0.0)),
+                    "unrealised_pnl": float(getattr(p, "unrealised_pnl", 0.0)),
+                    "market_value": float(getattr(p, "market_value", 0.0)),
+                })
+    except Exception as exc:
+        logger.debug("portfolio_positions: broker fetch failed: %s", exc)
+
+    target_weights: dict[str, float] = {}
+    rb = _get_rebalancer()
+    if rb is not None:
+        try:
+            target_weights = rb.status().get("weights", {})
+        except Exception as exc:
+            logger.debug("portfolio_positions: rebalancer fetch failed: %s", exc)
+
+    return {
+        "positions": positions_list,
+        "total": len(positions_list),
+        "target_weights": target_weights,
+    }

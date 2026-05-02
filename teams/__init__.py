@@ -724,6 +724,7 @@ def create_teams_router(manager: "TeamManager"):
         new_role: str
         changed_by: str
 
+    @router.get("")
     @router.get("/")
     async def list_teams(user_id: str | None = None):
         """List all teams, optionally filtered by user membership."""
