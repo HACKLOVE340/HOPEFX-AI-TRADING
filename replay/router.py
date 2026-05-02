@@ -113,7 +113,11 @@ def create_replay_router(engine: "ChartReplayEngine"):
 
     @router.post("/sessions/{session_id}/resume")
     async def resume(session_id: str):
-        """Resume a paused replay session."""
+        """Resume a paused replay session (or start it if not yet started).
+
+        Delegates to engine.play() which handles both initial start and
+        resume-from-pause transitions.
+        """
         success = engine.play(session_id)
         if not success:
             raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
