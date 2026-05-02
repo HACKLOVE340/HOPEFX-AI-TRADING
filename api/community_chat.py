@@ -181,7 +181,11 @@ class SendMessageBody(BaseModel):
 
     @property
     def message_text(self) -> str:
-        return self.content or self.text or ""
+        return (self.content or self.text or "").strip()
+
+    def validate_non_empty(self) -> None:
+        if not self.message_text:
+            raise HTTPException(status_code=422, detail="Message content must not be empty")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -236,6 +240,7 @@ async def send_message(
     body: SendMessageBody,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
+    body.validate_non_empty()
     _seed_default_rooms()
     rooms = _get_rooms()
     if room_id not in rooms:
@@ -303,6 +308,7 @@ async def send_dm(
     body: SendMessageBody,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
+    body.validate_non_empty()
     msg = {
         "id": str(uuid.uuid4()),
         "from_user_id": user.sub,
