@@ -56,9 +56,9 @@ const SystemHealthSection: React.FC = () => {
     try {
       const [sRes, bRes, jRes, kRes] = await Promise.all([
         superadminApi.serviceStatuses(),
-        superadminApi.backupList(),
-        superadminApi.scheduledJobs(),
-        superadminApi.apiKeyAudit(),
+        superadminApi.infraBackups(),
+        superadminApi.infraScheduledJobs(),
+        superadminApi.infraApiKeys(),
       ]);
       if (!mountedRef.current) return;
       setServices(sRes.data.services ?? sRes.data);
@@ -78,7 +78,7 @@ const SystemHealthSection: React.FC = () => {
   const triggerBackup = async () => {
     setBusy('backup'); setMsg('');
     try {
-      await superadminApi.triggerBackup(backupType);
+      await superadminApi.infraTriggerBackup(backupType);
       setMsg(`${backupType} backup triggered`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
@@ -102,7 +102,7 @@ const SystemHealthSection: React.FC = () => {
   const revokeKey = async (keyId: string) => {
     setBusy(keyId); setMsg('');
     try {
-      await superadminApi.revokeApiKey(keyId);
+      await superadminApi.infraRevokeApiKey(keyId, 'Revoked by superadmin');
       setApiKeys(prev => prev.map(k => k.key_id === keyId ? { ...k, active: false } : k));
       setMsg('API key revoked');
     } catch (e: unknown) {

@@ -93,6 +93,17 @@ const RiskManagementSection: React.FC = () => {
     } finally { setBusy(null); setConfirm(null); }
   };
 
+  const forceOpenBreaker = async (name: string) => {
+    setBusy(`open-${name}`); setMsg('');
+    try {
+      await superadminApi.forceOpenBreaker(name);
+      setMsg(`Circuit breaker "${name}" force-opened`);
+      load();
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Force-open failed');
+    } finally { setBusy(null); setConfirm(null); }
+  };
+
   const runStressTest = async (scenario: string) => {
     setBusy(`stress-${scenario}`); setMsg('');
     try {
@@ -126,11 +137,15 @@ const RiskManagementSection: React.FC = () => {
 
       {confirm && (
         <ConfirmDialog
-          title={`Reset Circuit Breaker: ${confirm.name}`}
-          message="This will force the circuit breaker back to CLOSED state. Only do this after confirming the underlying issue is resolved."
-          confirmLabel="Reset to Closed"
-          variant="warning"
-          onConfirm={() => resetBreaker(confirm.name)}
+          title={confirm.action === 'open'
+            ? `Force-Open Circuit Breaker: ${confirm.name}`
+            : `Reset Circuit Breaker: ${confirm.name}`}
+          message={confirm.action === 'open'
+            ? 'This will force the circuit breaker to OPEN state, blocking all requests to this service. Use for emergency isolation only.'
+            : 'This will force the circuit breaker back to CLOSED state. Only do this after confirming the underlying issue is resolved.'}
+          confirmLabel={confirm.action === 'open' ? 'Force Open' : 'Reset to Closed'}
+          variant={confirm.action === 'open' ? 'danger' : 'warning'}
+          onConfirm={() => confirm.action === 'open' ? forceOpenBreaker(confirm.name) : resetBreaker(confirm.name)}
           onCancel={() => setConfirm(null)}
         />
       )}
@@ -225,6 +240,9 @@ const RiskManagementSection: React.FC = () => {
                   </div>
                   {b.state !== 'closed' && (
                     <ActionBtn label="Reset to Closed" onClick={() => setConfirm({ name: b.name, action: 'reset' })} variant="warning" size="sm" loading={busy === `reset-${b.name}`} />
+                  )}
+                  {b.state === 'closed' && (
+                    <ActionBtn label="Force Open" onClick={() => setConfirm({ name: b.name, action: 'open' })} variant="danger" size="sm" loading={busy === `open-${b.name}`} />
                   )}
                 </div>
               );
