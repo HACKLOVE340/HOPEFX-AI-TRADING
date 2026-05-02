@@ -67,18 +67,22 @@ const ABTesting: React.FC = () => {
   const [symbol, setSymbol]     = useState('XAU/USD');
   const [days, setDays]         = useState('30');
   const [running, setRunning]   = useState(false);
+  const [loadingTests, setLoadingTests] = useState(true);
   const [runError, setRunError] = useState<string | null>(null);
   const [loadErr, setLoadErr]   = useState<string | null>(null);
   const [selected, setSelected] = useState<ABResult | null>(null);
 
   const load = useCallback(async () => {
     setLoadErr(null);
+    setLoadingTests(true);
     try {
       const res = await api.get('/advanced/ab-tests');
       setTests(res.data.tests || res.data || []);
     } catch (err) {
       setTests([]);
       setLoadErr(extractErrorMessage(err, 'Failed to load test history. Ensure the API is running.'));
+    } finally {
+      setLoadingTests(false);
     }
   }, []);
 
@@ -172,6 +176,11 @@ const ABTesting: React.FC = () => {
       </div>
 
       {/* History */}
+      {loadingTests && (
+        <div style={{ ...s.card, textAlign: 'center', color: '#64748b', padding: 24 }}>
+          Loading test history…
+        </div>
+      )}
       {loadErr && (
         <div style={{ ...s.card }}>
           <div style={s.errorBox}>{loadErr}</div>
