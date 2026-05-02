@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone as _tz
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -28,6 +29,9 @@ from api.auth import TokenPayload, get_current_user, require_role
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/brain", tags=["AI Brain"])
+
+# Small epsilon to prevent division by zero in RSI calculation when avg_loss == 0
+_RSI_EPSILON = 1e-9
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -548,3 +552,252 @@ async def brain_embed(
         status_code=503,
         detail="No LLM backend configured. Set OPENAI_API_KEY or OLLAMA_BASE_URL.",
     )
+
+
+# ── Market Analysis & Insights ────────────────────────────────────────────────
+
+
+@router.get("/status", summary="AI Brain system status")
+async def brain_status(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return overall AI brain system status including LLM backend availability."""
+    backend, model = _detect_llm_backend()
+    strategy_count = len(_load_strategies(user.sub))
+    return {
+        "llm_available": backend is not None,
+        "backend": backend,
+        "model": model,
+        "strategies_saved": strategy_count,
+        "features": {
+            "generate_strategy": backend is not None,
+            "market_analysis": True,
+            "insights": True,
+            "chat": backend is not None,
+            "embeddings": backend == "openai",
+        },
+    }
+
+
+class AnalyzeRequest(BaseModel):
+    symbol: str = Field("XAU_USD")
+    timeframe: str = Field("H1")
+    candle_count: int = Field(200, ge=50, le=2000)
+    indicators: list[str] = Field(default_factory=list)
+
+
+@router.post("/analyze", summary="Run AI analysis on a symbol/timeframe")
+async def analyze_market(
+    req: AnalyzeRequest,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """
+    Fetch recent OHLCV data and return structured market analysis:
+    trend, momentum, key support/resistance levels, and a directional signal.
+    Uses live price data when available via the nuclear streamer.
+    """
+    closes: list[float] = []
+    highs: list[float] = []
+    lows: list[float] = []
+    try:
+        from core.app_state import app_state
+        nuclear = getattr(app_state, "nuclear_streamer", None)
+        if nuclear and hasattr(nuclear, "get_ohlcv"):
+            candles = nuclear.get_ohlcv(req.symbol, req.timeframe, req.candle_count)
+            closes = [float(c["close"]) for c in candles if "close" in c]
+            highs = [float(c["high"]) for c in candles if "high" in c]
+            lows = [float(c["low"]) for c in candles if "low" in c]
+    except Exception as exc:
+        logger.debug("analyze_market data fetch: %s", exc)
+
+    if len(closes) < 20:
+        return {
+            "symbol": req.symbol,
+            "timeframe": req.timeframe,
+            "status": "insufficient_data",
+            "message": "Connect a live data feed to enable AI market analysis.",
+        }
+
+    n = len(closes)
+    sma20 = sum(closes[-20:]) / 20
+    sma50 = sum(closes[-50:]) / 50 if n >= 50 else None
+    current = closes[-1]
+
+    # RSI-14
+    gains, losses = [], []
+    for i in range(max(1, n - 15), n):
+        diff = closes[i] - closes[i - 1]
+        gains.append(max(diff, 0))
+        losses.append(max(-diff, 0))
+    avg_gain = sum(gains) / len(gains) if gains else 0
+    avg_loss = sum(losses) / len(losses) if losses else _RSI_EPSILON
+    rsi = 100 - (100 / (1 + avg_gain / avg_loss))
+
+    # ATR-14
+    atr_vals = []
+    for i in range(max(1, n - 14), n):
+        tr = max(
+            highs[i] - lows[i] if (highs and lows) else 0,
+            abs(highs[i] - closes[i - 1]) if highs else 0,
+            abs(lows[i] - closes[i - 1]) if lows else 0,
+        )
+        atr_vals.append(tr)
+    atr = sum(atr_vals) / len(atr_vals) if atr_vals else 0
+
+    trend = "bullish" if current > sma20 else "bearish"
+    if sma50 is not None:
+        if current > sma20 > sma50:
+            trend = "strong_bullish"
+        elif current < sma20 < sma50:
+            trend = "strong_bearish"
+
+    momentum = "overbought" if rsi > 70 else ("oversold" if rsi < 30 else "neutral")
+    resistance = max(highs[-20:]) if highs else round(current * 1.005, 2)
+    support = min(lows[-20:]) if lows else round(current * 0.995, 2)
+
+    if trend.endswith("bullish") and momentum != "overbought":
+        signal = "BUY"
+    elif trend.endswith("bearish") and momentum != "oversold":
+        signal = "SELL"
+    else:
+        signal = "NEUTRAL"
+
+    return {
+        "symbol": req.symbol,
+        "timeframe": req.timeframe,
+        "current_price": round(current, 5),
+        "trend": trend,
+        "momentum": momentum,
+        "signal": signal,
+        "indicators": {
+            "sma_20": round(sma20, 5),
+            "sma_50": round(sma50, 5) if sma50 is not None else None,
+            "rsi_14": round(rsi, 2),
+            "atr_14": round(atr, 5),
+        },
+        "key_levels": {
+            "resistance": round(resistance, 5),
+            "support": round(support, 5),
+        },
+        "bars_analyzed": n,
+    }
+
+
+@router.get("/market-analysis", summary="Current market analysis for XAU/USD")
+async def get_market_analysis(
+    symbol: str = "XAU_USD",
+    timeframe: str = "H1",
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Return the latest market analysis for the requested symbol/timeframe."""
+    return await analyze_market(
+        AnalyzeRequest(symbol=symbol, timeframe=timeframe, candle_count=200),
+        user=user,
+    )
+
+
+_INSIGHTS_KEY = "brain:insights:{uid}"
+
+
+@router.get("/insights", summary="AI-generated trading insights")
+async def get_insights(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """
+    Return AI-generated insights based on the user's strategy history and
+    recent market conditions. Results are cached for 5 minutes per user.
+    """
+    from api.db_store import db_get, db_set
+
+    cached = db_get(_INSIGHTS_KEY.format(uid=user.sub))
+    if cached and isinstance(cached, dict):
+        ts = cached.get("generated_at", "")
+        try:
+            stored_dt = datetime.fromisoformat(ts)
+            # Ensure timezone-aware comparison
+            if stored_dt.tzinfo is None:
+                stored_dt = stored_dt.replace(tzinfo=_tz.utc)
+            age_s = (datetime.now(_tz.utc) - stored_dt).total_seconds()
+            if age_s < 300:
+                return cached
+        except Exception:
+            pass
+
+    strategies = _load_strategies(user.sub)
+    backend, _ = _detect_llm_backend()
+    insights: list[dict] = []
+
+    if strategies:
+        recent = strategies[-10:]
+        winning = [
+            s for s in recent
+            if s.get("backtest") and s["backtest"].get("total_return_pct", 0) > 0
+        ]
+        win_rate = len(winning) / len(recent) if recent else 0
+
+        if win_rate >= 0.6:
+            insights.append({
+                "type": "performance",
+                "severity": "positive",
+                "title": "Strong Strategy Win Rate",
+                "message": f"{round(win_rate * 100)}% of your recent strategies are profitable.",
+                "action": "Consider deploying your best-performing strategy.",
+            })
+        elif win_rate < 0.4:
+            insights.append({
+                "type": "performance",
+                "severity": "warning",
+                "title": "Low Strategy Win Rate",
+                "message": f"Only {round(win_rate * 100)}% of recent strategies are profitable.",
+                "action": "Review your prompts — try adding risk management constraints.",
+            })
+
+        dd_vals = [
+            abs(s["backtest"].get("max_drawdown_pct", 0))
+            for s in recent if s.get("backtest")
+        ]
+        if dd_vals:
+            avg_dd = sum(dd_vals) / len(dd_vals)
+            if avg_dd > 15:
+                insights.append({
+                    "type": "risk",
+                    "severity": "warning",
+                    "title": "High Average Drawdown",
+                    "message": f"Average max drawdown across recent strategies: {round(avg_dd, 1)}%.",
+                    "action": "Add 'max_drawdown < 10%' constraints to your strategy prompts.",
+                })
+
+    try:
+        analysis = await get_market_analysis(user=user)
+        signal = analysis.get("signal", "NEUTRAL")
+        trend = analysis.get("trend", "unknown")
+        rsi = analysis.get("indicators", {}).get("rsi_14")
+        if signal != "NEUTRAL":
+            insights.append({
+                "type": "market",
+                "severity": "info",
+                "title": f"XAU/USD Market Signal: {signal}",
+                "message": f"Current trend is {trend.replace('_', ' ')}."
+                + (f" RSI at {round(rsi, 1)}." if rsi else ""),
+                "action": f"Consider generating a {signal.lower()} strategy for XAU/USD H1.",
+            })
+    except Exception as exc:
+        logger.debug("insights market analysis: %s", exc)
+
+    if not insights:
+        insights.append({
+            "type": "onboarding",
+            "severity": "info",
+            "title": "Get Started",
+            "message": "Generate your first AI strategy using the strategy generator.",
+            "action": "Click 'Generate Strategy' and describe your trading idea.",
+        })
+
+    result = {
+        "insights": insights,
+        "total": len(insights),
+        "generated_at": datetime.now(_tz.utc).isoformat(),
+        "llm_enhanced": backend is not None,
+    }
+    db_set(_INSIGHTS_KEY.format(uid=user.sub), result)
+    return result

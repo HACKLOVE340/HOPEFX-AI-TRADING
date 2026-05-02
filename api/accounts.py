@@ -12,8 +12,10 @@ Endpoints
 ---------
 GET    /api/accounts/sub-accounts          — list sub-accounts for current user
 POST   /api/accounts/sub-accounts          — create sub-account
+GET    /api/accounts/sub-accounts/{id}     — get a specific sub-account
 DELETE /api/accounts/sub-accounts/{id}     — remove sub-account
 PATCH  /api/accounts/sub-accounts/{id}     — update label / role
+POST   /api/accounts/sub-accounts/{id}/transfer — transfer balance between sub-accounts
 GET    /api/accounts/teams                 — list teams the user belongs to
 POST   /api/accounts/teams                 — create team
 POST   /api/accounts/teams/{id}/members    — invite member
@@ -263,6 +265,77 @@ async def delete_sub_account(
         )
     del existing[account_id]
     _save_sub_accounts(user.sub, existing)
+
+
+@router.get("/sub-accounts/{account_id}", summary="Get a specific sub-account")
+async def get_sub_account(
+    account_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return details of a single sub-account owned by the current user."""
+    existing = _load_sub_accounts(user.sub)
+    acc = existing.get(account_id)
+    if not acc or acc["owner_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Sub-account not found")
+    return acc
+
+
+class TransferRequest(BaseModel):
+    to_account_id: str
+    amount: float = Field(..., gt=0)
+    note: str = Field("", max_length=200)
+
+
+@router.post("/sub-accounts/{account_id}/transfer", summary="Transfer balance between sub-accounts")
+async def transfer_between_sub_accounts(
+    account_id: str,
+    req: TransferRequest,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Transfer funds from one sub-account to another within the same user.
+    Both accounts must belong to the authenticated user.
+    """
+    if account_id == req.to_account_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source and destination accounts must be different",
+        )
+    existing = _load_sub_accounts(user.sub)
+    src = existing.get(account_id)
+    dst = existing.get(req.to_account_id)
+    if not src or src["owner_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Source sub-account not found")
+    if not dst or dst["owner_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Destination sub-account not found")
+    if src.get("balance", 0) < req.amount:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Insufficient balance. Available: {src.get('balance', 0):.2f}",
+        )
+    src["balance"] = round(src.get("balance", 0) - req.amount, 2)
+    src["equity"] = round(src.get("equity", src["balance"]) - req.amount, 2)
+    dst["balance"] = round(dst.get("balance", 0) + req.amount, 2)
+    dst["equity"] = round(dst.get("equity", dst["balance"]) + req.amount, 2)
+    existing[account_id] = src
+    existing[req.to_account_id] = dst
+    _save_sub_accounts(user.sub, existing)
+    logger.info(
+        "Transfer %.2f from %s to %s by user %s",
+        req.amount,
+        account_id,
+        req.to_account_id,
+        user.sub,
+    )
+    return {
+        "ok": True,
+        "from_account_id": account_id,
+        "to_account_id": req.to_account_id,
+        "amount": req.amount,
+        "from_balance": src["balance"],
+        "to_balance": dst["balance"],
+        "note": req.note,
+    }
 
 
 # ── Team endpoints ────────────────────────────────────────────────────────────
