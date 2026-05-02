@@ -90,13 +90,12 @@ export const PLAN_FEATURES: Record<string, Plan> = {
 
   // ── Starter ───────────────────────────────────────────────────────────────
   alerts:             'starter',
-  'risk-calc':        'starter',
-  'risk-calculator':  'starter',  // alias for risk-calc
+  'risk-calculator':  'starter',
   wallet:             'starter',
 
   // ── Professional ──────────────────────────────────────────────────────────
   trading:        'professional',   // advanced AI charting terminal (ChartDashboard)
-  'ai-chart':     'professional',   // alias for trading (AI Chart Bot)
+  'ai-chart':     'professional',   // AI Chart Bot (same gate as 'trading')
   terminal:       'professional',   // classic trading terminal (TradingTerminal)
   geopolitical:   'professional',   // geopolitical risk intelligence
   'ai-strategy':  'professional',
