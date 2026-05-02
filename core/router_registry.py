@@ -161,6 +161,7 @@ def register_routers(
     from api.settings_new_endpoints import router as settings_new_router
     from api.social_feed import _copy_router as social_copy_router
     from api.social_feed import _copy_alias_router as social_copy_alias_router
+    from api.social_feed import _social_feed_ws_router as social_feed_ws_router
     from api.social_feed import _lb_compat_router as social_lb_compat_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
@@ -223,6 +224,7 @@ def register_routers(
         social_leaderboard_router,
         social_copy_router,
         social_copy_alias_router,
+        social_feed_ws_router,
         social_lb_compat_router,
         mobile_router,
         whitelabel_router,
