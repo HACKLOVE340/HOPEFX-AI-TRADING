@@ -339,7 +339,7 @@ async def get_resource_utilisation(
     return resources
 
 
-@router.get("/system/resources")  # alias for /system-health/resources
+@router.get("/system/resources")  # alias — /system-health/resources is the canonical route
 async def get_resource_utilisation_alias(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:

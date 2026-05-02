@@ -581,9 +581,13 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     class CreateNotebookRequest(BaseModel):
         title: str
-        description: str
+        description: str = ""
         author: str = "user"
         tags: list[str] = []
+        # Extra fields accepted from the frontend (stored as metadata)
+        template: str | None = None
+        symbol: str | None = None
+        timeframe: str | None = None
 
     class AddCellRequest(BaseModel):
         cell_type: str = "code"
@@ -591,8 +595,16 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     @router.get("/notebooks")
     async def list_notebooks(query: str | None = None, author: str | None = None):
-        """list all research notebooks (excluding templates)."""
-        return engine.search_notebooks(query=query, author=author)
+        """List all research notebooks (excluding templates)."""
+        notebooks = engine.search_notebooks(query=query, author=author)
+        # Enrich with status field expected by the frontend
+        for nb in notebooks:
+            nb.setdefault("status", "draft")
+            nb.setdefault("template", "custom")
+            nb.setdefault("symbol", "XAUUSD")
+            nb.setdefault("timeframe", "H1")
+            nb.setdefault("updated_at", nb.get("created_at", ""))
+        return {"notebooks": notebooks}
 
     @router.post("/notebooks")
     async def create_notebook(req: CreateNotebookRequest):
@@ -608,7 +620,12 @@ def create_research_router(engine: "ResearchNotebookEngine"):
             "title": nb.title,
             "description": nb.description,
             "author": nb.author,
+            "status": "draft",
+            "template": req.template or "custom",
+            "symbol": req.symbol or "XAUUSD",
+            "timeframe": req.timeframe or "H1",
             "created_at": nb.created_at.isoformat(),
+            "updated_at": nb.updated_at.isoformat(),
         }
 
     @router.post("/notebooks/{notebook_id}/cells")
@@ -650,6 +667,16 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         nb = engine.notebooks.get(notebook_id)
         if nb is None:
             raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        cells = nb.cells
+        # Determine overall status from cells
+        if any(c.status.value == "error" for c in cells):
+            nb_status = "error"
+        elif all(c.status.value == "completed" for c in cells) and cells:
+            nb_status = "completed"
+        elif any(c.status.value == "running" for c in cells):
+            nb_status = "running"
+        else:
+            nb_status = "draft"
         return {
             "notebook_id": nb.notebook_id,
             "title": nb.title,
@@ -657,6 +684,10 @@ def create_research_router(engine: "ResearchNotebookEngine"):
             "author": nb.author,
             "tags": nb.tags,
             "version": nb.version,
+            "status": nb_status,
+            "template": "custom",
+            "symbol": "XAUUSD",
+            "timeframe": "H1",
             "created_at": nb.created_at.isoformat(),
             "updated_at": nb.updated_at.isoformat(),
             "cells": [
@@ -669,7 +700,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
                     "execution_count": c.execution_count,
                     "created_at": c.created_at.isoformat(),
                 }
-                for c in nb.cells
+                for c in cells
             ],
         }
 
@@ -690,7 +721,42 @@ def create_research_router(engine: "ResearchNotebookEngine"):
     ):
         """Execute all cells in a notebook (alias for /execute). Requires: role >= 'trader'."""
         results = engine.execute_all(notebook_id)
-        return {"notebook_id": notebook_id, "results": results}
+        nb = engine.notebooks.get(notebook_id)
+        if nb is None:
+            raise HTTPException(status_code=404, detail=f"Notebook {notebook_id} not found")
+        cells = nb.cells
+        nb_status = "completed" if all(r.get("status") == "completed" for r in results) else "error"
+        return {
+            "notebook_id": notebook_id,
+            "title": nb.title,
+            "description": nb.description,
+            "author": nb.author,
+            "status": nb_status,
+            "template": "custom",
+            "symbol": "XAUUSD",
+            "timeframe": "H1",
+            "created_at": nb.created_at.isoformat(),
+            "updated_at": nb.updated_at.isoformat(),
+            "results": {
+                "summary": f"Executed {len(results)} cells",
+                "signals": [],
+                "charts": [],
+                "metrics": {"cells_run": len(results), "cells_ok": sum(1 for r in results if r.get("status") == "completed")},
+                "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+            },
+            "cells": [
+                {
+                    "cell_id": c.cell_id,
+                    "cell_type": c.cell_type.value,
+                    "content": c.content,
+                    "output": c.output,
+                    "status": c.status.value,
+                    "execution_count": c.execution_count,
+                    "created_at": c.created_at.isoformat(),
+                }
+                for c in cells
+            ],
+        }
 
     @router.get("/notebooks/{notebook_id}/export")
     async def export_notebook(notebook_id: str, export_format: str = "json"):
@@ -703,7 +769,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
     @router.get("/templates")
     async def list_templates():
         """List available notebook templates."""
-        return engine.get_templates()
+        return {"templates": engine.get_templates()}
 
     @router.post("/notebooks/from-template/{template_id}")
     async def create_from_template(template_id: str, req: CreateNotebookRequest):

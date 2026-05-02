@@ -159,11 +159,11 @@ class StrategyPurchaseRequest(BaseModel):
 class ReviewRequest(BaseModel):
     """Add review request"""
 
-    user_id: str
-    strategy_id: str
+    user_id: str = ""
+    strategy_id: str = ""
     rating: int = Field(..., ge=1, le=5)
-    title: str
-    content: str
+    title: str = ""
+    content: str = ""
 
 
 class PartnerSignupRequest(BaseModel):
@@ -710,6 +710,39 @@ async def add_review(request: ReviewRequest, user: TokenPayload = Depends(get_cu
         )
 
     return {"success": True, "review": review.to_dict()}
+
+
+@router.post("/marketplace/strategies/{strategy_id}/reviews")
+async def add_review_by_strategy(
+    strategy_id: str,
+    request: ReviewRequest,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Add a review for a strategy — alias matching frontend URL pattern."""
+    review = strategy_marketplace.add_review(
+        user_id=request.user_id or user.sub,
+        strategy_id=strategy_id,
+        rating=request.rating,
+        title=request.title,
+        content=request.content,
+    )
+    if not review:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to add review. Strategy may not exist.",
+        )
+    return {"success": True, "review": review.to_dict()}
+
+
+@router.get("/marketplace/strategies/{strategy_id}/reviews")
+async def get_strategy_reviews(
+    strategy_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Get reviews for a specific strategy."""
+    reviews = strategy_marketplace.get_strategy_reviews(strategy_id, limit=limit)
+    return {"reviews": [r.to_dict() for r in reviews], "total": len(reviews)}
 
 
 @router.get("/marketplace/featured")

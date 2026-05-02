@@ -850,11 +850,13 @@ export const propFirmApi = {
 
 export const tcaApi = {
   report:       (params?: object)              => api.get('/tca/report', { params }),
+  reports:      (n?: number)                   => api.get('/tca/report', { params: n ? { last_n: n } : {} }),
   brokerReport: (broker: string)               => api.get(`/tca/report/${broker}`),
-  records:      (params?: object)              => api.get('/tca/records', { params }),
+  records:      (n?: number)                   => api.get('/tca/records', { params: n ? { n } : {} }),
   alerts:       ()                             => api.get('/tca/alerts'),
-  stats:        (params?: object)              => api.get('/tca/stats', { params }),
+  stats:        (n?: number)                   => api.get('/tca/stats', { params: n ? { n } : {} }),
   flushRecords: ()                             => api.delete('/tca/records'),
+  flush:        ()                             => api.delete('/tca/records'),
 };
 
 // ── Regime ────────────────────────────────────────────────────────────────────

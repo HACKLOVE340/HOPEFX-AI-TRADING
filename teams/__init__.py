@@ -702,18 +702,21 @@ def create_teams_router(manager: "TeamManager"):
     from fastapi import APIRouter, HTTPException
     from pydantic import BaseModel
 
+    from api.auth import TokenPayload, get_current_user as _get_current_user
+
     router = APIRouter(prefix="/api/teams", tags=["Teams"])
 
     class CreateTeamRequest(BaseModel):
         name: str
-        owner_email: str
-        owner_name: str
+        description: str = ""
+        owner_email: str = ""
+        owner_name: str = ""
         owner_id: str | None = None
 
     class InviteRequest(BaseModel):
         email: str
         role: str = "trader"
-        invited_by: str
+        invited_by: str = "admin"
 
     class AcceptInviteRequest(BaseModel):
         invitation_token: str
@@ -722,7 +725,7 @@ def create_teams_router(manager: "TeamManager"):
 
     class ChangeRoleRequest(BaseModel):
         new_role: str
-        changed_by: str
+        changed_by: str = "admin"
 
     @router.get("/")
     async def list_teams(user_id: str | None = None):
@@ -742,20 +745,27 @@ def create_teams_router(manager: "TeamManager"):
                     "created_at": team.created_at.isoformat(),
                 }
             )
-        return teams
+        return {"teams": teams, "total": len(teams)}
 
     @router.post("/")
-    async def create_team(req: CreateTeamRequest):
+    async def create_team(req: CreateTeamRequest, user: TokenPayload = Depends(_get_current_user)):
         """Create a new team."""
         team = manager.create_team(
             name=req.name,
-            owner_email=req.owner_email,
-            owner_name=req.owner_name,
-            owner_id=req.owner_id,
+            owner_email=req.owner_email or getattr(user, "email", "") or user.sub,
+            owner_name=req.owner_name or getattr(user, "username", "") or user.sub,
+            owner_id=req.owner_id or user.sub,
         )
+        # Store description in settings
+        if req.description:
+            team.settings["description"] = req.description
         return {
             "team_id": team.team_id,
             "name": team.name,
+            "description": team.settings.get("description", ""),
+            "owner_id": team.owner_id,
+            "member_count": len(team.members),
+            "status": team.settings.get("status", "active"),
             "created_at": team.created_at.isoformat(),
         }
 
@@ -768,7 +778,7 @@ def create_teams_router(manager: "TeamManager"):
         return summary
 
     @router.post("/{team_id}/invite")
-    async def invite_member(team_id: str, req: InviteRequest):
+    async def invite_member(team_id: str, req: InviteRequest, user: TokenPayload = Depends(_get_current_user)):
         """Invite a user to the team."""
         try:
             role = UserRole(req.role)
@@ -778,7 +788,7 @@ def create_teams_router(manager: "TeamManager"):
             team_id=team_id,
             email=req.email,
             role=role,
-            invited_by=req.invited_by,
+            invited_by=req.invited_by or user.sub,
         )
         if invitation is None:
             raise HTTPException(status_code=400, detail="Could not create invitation")
@@ -869,13 +879,13 @@ def create_teams_router(manager: "TeamManager"):
         }
 
     @router.post("/{team_id}/members")
-    async def invite_member_by_email(team_id: str, req: InviteRequest):
+    async def invite_member_by_email(team_id: str, req: InviteRequest, user: TokenPayload = Depends(_get_current_user)):
         """Invite a member to the team (alias for /invite using members path)."""
         try:
             role = UserRole(req.role)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid role '{req.role}'") from None
-        invitation = manager.invite_member(team_id, req.email, role, req.invited_by)
+        invitation = manager.invite_member(team_id, req.email, role, req.invited_by or user.sub)
         if invitation is None:
             raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
         return {
@@ -888,13 +898,13 @@ def create_teams_router(manager: "TeamManager"):
         }
 
     @router.patch("/{team_id}/members/{user_id}")
-    async def update_member(team_id: str, user_id: str, req: ChangeRoleRequest):
+    async def update_member(team_id: str, user_id: str, req: ChangeRoleRequest, user: TokenPayload = Depends(_get_current_user)):
         """Update a member's role (PATCH alias for PUT /{team_id}/members/{user_id}/role)."""
         try:
             new_role = UserRole(req.new_role)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid role '{req.new_role}'") from None
-        success = manager.change_role(team_id, user_id, new_role, req.changed_by)
+        success = manager.change_role(team_id, user_id, new_role, req.changed_by or user.sub)
         if not success:
             raise HTTPException(status_code=404, detail="Team or member not found")
         return {"status": "updated", "role": new_role.value}
