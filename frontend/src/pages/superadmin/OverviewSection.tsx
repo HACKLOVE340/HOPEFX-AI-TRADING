@@ -7,6 +7,7 @@ import {
   Spinner, ErrorState, LoadingRows,
 } from './ui';
 import type { PlatformOverview } from './types';
+import { useSuperAdminNav } from './types';
 
 // ── Infra detail types ────────────────────────────────────────────────────────
 interface InfraHealth {
@@ -102,6 +103,7 @@ const AlertRow: React.FC<AlertRowProps> = ({ level, message }) => {
 };
 
 const OverviewSection: React.FC = () => {
+  const { navigateTo } = useSuperAdminNav();
   const [data, setData]         = useState<PlatformOverview | null>(null);
   const [infra, setInfra]       = useState<InfraData>({ health: null, cache: null, db: null, queues: [] });
   const [infraLoading, setInfraLoading] = useState(true);
@@ -110,6 +112,8 @@ const OverviewSection: React.FC = () => {
   const [error, setError]       = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [infraMsg, setInfraMsg] = useState('');
+  const [actionBusy, setActionBusy] = useState<'kill-switch' | 'maintenance' | null>(null);
+  const [actionMsg, setActionMsg]   = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -163,6 +167,34 @@ const OverviewSection: React.FC = () => {
     } catch (e: unknown) {
       setInfraMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Cache flush failed');
     } finally { setFlushing(false); }
+  };
+
+  // Toggle kill-switch — calls POST /superadmin/engine/kill-switch
+  const toggleKillSwitch = async () => {
+    if (!data) return;
+    const enabling = !data.kill_switch_active;
+    setActionBusy('kill-switch'); setActionMsg('');
+    try {
+      await superadminApi.killSwitch(enabling);
+      setActionMsg(enabling ? '🛑 Kill switch activated — trading halted' : '▶️ Kill switch deactivated — trading resumed');
+      load(true);
+    } catch (e: unknown) {
+      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Kill-switch toggle failed');
+    } finally { if (mountedRef.current) setActionBusy(null); }
+  };
+
+  // Toggle maintenance mode — calls POST /superadmin/platform/maintenance
+  const toggleMaintenance = async () => {
+    if (!data) return;
+    const enabling = !data.maintenance_mode;
+    setActionBusy('maintenance'); setActionMsg('');
+    try {
+      await superadminApi.maintenanceMode(enabling, enabling ? 'Maintenance started from Overview' : undefined);
+      setActionMsg(enabling ? '🔧 Maintenance mode enabled' : '✅ Maintenance mode disabled');
+      load(true);
+    } catch (e: unknown) {
+      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Maintenance toggle failed');
+    } finally { if (mountedRef.current) setActionBusy(null); }
   };
 
   useEffect(() => { load(); loadInfra(); }, [load, loadInfra]);
@@ -266,19 +298,28 @@ const OverviewSection: React.FC = () => {
       {/* Quick actions */}
       <SectionCard title="Quick Actions" icon="⚡" accent="#ef4444"
         subtitle="Immediate platform controls — use with caution">
+        {actionMsg && (
+          <div style={{
+            padding: '8px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13, fontWeight: 600,
+            background: actionMsg.includes('failed') ? '#450a0a' : '#052e16',
+            color: actionMsg.includes('failed') ? '#f87171' : '#4ade80',
+          }}>
+            {actionMsg}
+          </div>
+        )}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          <ActionBtn label="View All Users"     onClick={() => {}} icon="👥" variant="primary" />
-          <ActionBtn label="Feature Flags"      onClick={() => {}} icon="🚩" variant="primary" />
-          <ActionBtn label="System Logs"        onClick={() => {}} icon="📋" variant="ghost" />
-          <ActionBtn label="ML Models"          onClick={() => {}} icon="🧠" variant="ghost" />
-          <ActionBtn label="Security Events"    onClick={() => {}} icon="🛡️" variant="ghost" />
+          <ActionBtn label="View All Users"     onClick={() => navigateTo('users')}           icon="👥" variant="primary" />
+          <ActionBtn label="Feature Flags"      onClick={() => navigateTo('feature-flags')}   icon="🚩" variant="primary" />
+          <ActionBtn label="System Logs"        onClick={() => navigateTo('logs')}             icon="📋" variant="ghost" />
+          <ActionBtn label="ML Models"          onClick={() => navigateTo('ml-ai')}            icon="🧠" variant="ghost" />
+          <ActionBtn label="Security Events"    onClick={() => navigateTo('security')}         icon="🛡️" variant="ghost" />
           {data.kill_switch_active
-            ? <ActionBtn label="Resume Trading" onClick={() => {}} icon="▶️" variant="success" />
-            : <ActionBtn label="Kill Switch"    onClick={() => {}} icon="🛑" variant="danger" />
+            ? <ActionBtn label="Resume Trading" onClick={toggleKillSwitch} loading={actionBusy === 'kill-switch'} icon="▶️" variant="success" />
+            : <ActionBtn label="Kill Switch"    onClick={toggleKillSwitch} loading={actionBusy === 'kill-switch'} icon="🛑" variant="danger" />
           }
           {data.maintenance_mode
-            ? <ActionBtn label="Disable Maintenance" onClick={() => {}} icon="✅" variant="success" />
-            : <ActionBtn label="Maintenance Mode"    onClick={() => {}} icon="🔧" variant="warning" />
+            ? <ActionBtn label="Disable Maintenance" onClick={toggleMaintenance} loading={actionBusy === 'maintenance'} icon="✅" variant="success" />
+            : <ActionBtn label="Maintenance Mode"    onClick={toggleMaintenance} loading={actionBusy === 'maintenance'} icon="🔧" variant="warning" />
           }
         </div>
       </SectionCard>

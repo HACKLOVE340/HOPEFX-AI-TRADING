@@ -18,6 +18,7 @@ import React, { useState, Suspense, lazy, Component, useEffect, useCallback, use
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import type { SuperAdminTab } from './superadmin/types';
+import { SuperAdminNavContext } from './superadmin/types';
 import { SAStyles, Spinner } from './superadmin/ui';
 import { superadminApi } from '../hooks/useApi';
 
@@ -196,6 +197,9 @@ const SuperAdminDashboard: React.FC = () => {
   if (!user || !isSuperAdmin(user.role)) return null;
 
   const activeTabDef = TABS.find(t => t.id === activeTab) ?? TABS[0]!;
+
+  // Stable nav context value — sections use this to switch tabs without prop-drilling
+  const navCtx = { navigateTo: setActiveTab };
 
   const renderSection = () => {
     switch (activeTab) {
@@ -376,9 +380,11 @@ const SuperAdminDashboard: React.FC = () => {
             {/* Section content */}
             <SectionErrorBoundary key={activeTab} tab={activeTabDef.label}>
               <Suspense fallback={<SectionFallback />}>
-                <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-                  {renderSection()}
-                </div>
+                <SuperAdminNavContext.Provider value={navCtx}>
+                  <div style={{ animation: 'sa-fadein 0.2s ease' }}>
+                    {renderSection()}
+                  </div>
+                </SuperAdminNavContext.Provider>
               </Suspense>
             </SectionErrorBoundary>
           </main>
