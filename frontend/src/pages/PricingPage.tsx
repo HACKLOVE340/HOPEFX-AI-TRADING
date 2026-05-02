@@ -93,9 +93,13 @@ function fmtLimit(v: number): string {
   return v === -1 ? 'Unlimited' : v.toString();
 }
 
-function fmtPrice(cents: number, annual: boolean): string {
-  if (cents === 0) return 'Free';
-  const monthly = annual ? Math.round((cents * 10) / 12) : cents;
+function fmtPrice(plan: PlanData, annual: boolean): string {
+  if (plan.price_usd_monthly === 0) return 'Free';
+  // Annual: show effective per-month rate (annual total / 12) to highlight savings.
+  // e.g. Starter: $18,000/yr ÷ 12 = $1,500/mo vs $1,800/mo monthly → save 17%.
+  const monthly = annual && plan.price_usd_annual > 0
+    ? Math.round(plan.price_usd_annual / 12)
+    : plan.price_usd_monthly;
   return `$${monthly.toLocaleString()}`;
 }
 
@@ -110,7 +114,7 @@ interface PlanCardProps {
 
 function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
   const accent  = PLAN_ACCENTS[plan.id] ?? '#475569';
-  const badge   = PLAN_BADGES[plan.id];
+  const badge   = plan.badge ?? PLAN_BADGES[plan.id] ?? null;
   const isFree  = plan.price_usd_monthly === 0;
 
   return (
@@ -161,15 +165,15 @@ function PlanCard({ plan, annual, isActive, onSelect }: PlanCardProps) {
       {/* Price */}
       <div style={{ marginBottom: 4 }}>
         <span style={{ fontSize: 36, fontWeight: 800, color: '#f1f5f9' }}>
-          {fmtPrice(plan.price_usd_monthly, annual)}
+          {fmtPrice(plan, annual)}
         </span>
         {!isFree && (
           <span style={{ fontSize: 13, color: '#64748b', marginLeft: 4 }}>/mo</span>
         )}
       </div>
-      {!isFree && annual && (
+      {!isFree && annual && plan.price_usd_annual > 0 && (
         <div style={{ fontSize: 11, color: '#22c55e', marginBottom: 4 }}>
-          Billed annually — 2 months free
+          Billed ${plan.price_usd_annual.toLocaleString()}/yr — 2 months free
         </div>
       )}
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 20 }}>
