@@ -116,6 +116,53 @@ def _get_kill_switch():
 
 
 @router.get(
+    "/snapshot",
+    summary="Real-time NuclearChartState snapshot (HTTP polling fallback)",
+    response_model=dict[str, Any],
+)
+async def get_nuclear_chart_snapshot():
+    """
+    Return the current NuclearChartState from the charting engine.
+    Use this as an HTTP fallback when the /ws/nuclear WebSocket is unavailable.
+    """
+    try:
+        from charting.nuclear_ai_chart_engine import get_chart_engine
+        engine = get_chart_engine()
+        return engine.get_snapshot()
+    except Exception:
+        return {"status": "unavailable", "nuclear_level": 0}
+
+
+@router.post(
+    "/event",
+    summary="Inject a news event for immediate nuclear scoring",
+    response_model=dict[str, Any],
+)
+async def inject_nuclear_event(
+    body: dict[str, Any],
+    _user: TokenPayload = Depends(require_role("admin")),
+):
+    """
+    Inject a news event into the nuclear chart engine for immediate scoring.
+    Body: { "text": "...", "volatility": 1.0, "sentiment": 0.0 }
+    """
+    text = body.get("text", "")
+    if not text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="text is required")
+    try:
+        from charting.nuclear_ai_chart_engine import get_chart_engine
+        engine = get_chart_engine()
+        result = engine.inject_news_event(
+            text,
+            float(body.get("volatility", 1.0)),
+            float(body.get("sentiment", 0.0)),
+        )
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Event injection failed — check server logs") from exc
+
+
+@router.get(
     "/status",
     summary="Nuclear supervisor + risk orchestrator status",
     response_model=dict[str, Any],

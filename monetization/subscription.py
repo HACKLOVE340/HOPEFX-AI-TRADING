@@ -944,7 +944,16 @@ def require_plan(minimum_plan: str):
 
 
 def _resolve_plan_and_raise(user: Any, minimum_plan: str) -> None:
-    """Check the user's active subscription tier and raise 403 if insufficient."""
+    """Check the user's active subscription tier and raise 403 if insufficient.
+
+    Admin and superadmin roles bypass all plan gates — they always have full
+    feature access regardless of their subscription tier.
+    """
+    # Admin / superadmin bypass all plan restrictions.
+    user_role = getattr(user, "role", "") or ""
+    if user_role in ("admin", "superadmin"):
+        return
+
     user_id = getattr(user, "sub", "") if user else ""
     current_plan = "free"
     if user_id:
