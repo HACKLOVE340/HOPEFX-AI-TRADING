@@ -133,7 +133,7 @@ async def reset_circuit_breaker(
             _reg[name].reset()
     except Exception:
         pass
-    await _log_superadmin_action(user.sub, "circuit_breaker_reset", {"name": name})
+    _log_superadmin_action(user, "circuit_breaker_reset", {"name": name})
     return {"ok": True, "name": name, "new_state": "closed"}
 
 
@@ -159,7 +159,7 @@ async def force_open_circuit_breaker(
             _reg[name].force_open()
     except Exception:
         pass
-    await _log_superadmin_action(user.sub, "circuit_breaker_force_open", {"name": name})
+    _log_superadmin_action(user, "circuit_breaker_force_open", {"name": name})
     return {"ok": True, "name": name, "new_state": "open"}
 
 
@@ -340,7 +340,7 @@ async def run_stress_test(
         except Exception:
             pass
 
-        await _log_superadmin_action(user.sub, "stress_test_run", {"scenario": scenario})
+        _log_superadmin_action(user, "stress_test_run", {"scenario": scenario})
         return {
             "ok": True,
             "scenario": scenario,

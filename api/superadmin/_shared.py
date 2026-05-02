@@ -97,14 +97,33 @@ def _get_config_store():
         return None
 
 
-def _log_superadmin_action(user: TokenPayload, action: str, detail: str = "") -> None:
+def _log_superadmin_action(
+    user: "TokenPayload | str",
+    action: str,
+    detail: "str | dict | object" = "",
+) -> None:
     """Write a superadmin action to the AuditLogEntry table with hash-chain integrity.
 
     Each row's hash_chain is SHA-256(prev_hash + sequence_number + actor + action + detail + timestamp),
     forming a tamper-evident linked chain.  Falls back to logger-only on any DB error
     so that superadmin operations are never blocked by audit failures.
+
+    Accepts either a TokenPayload object or a bare user-id string for ``user``.
+    ``detail`` may be a string, dict, or any JSON-serialisable object; it is
+    normalised to a string internally.
     """
-    logger.warning("SUPERADMIN [%s] %s %s", user.sub, action, detail)
+    # Normalise user to a TokenPayload-like accessor
+    actor_id: str = user if isinstance(user, str) else user.sub  # type: ignore[assignment,union-attr]
+    # Normalise detail to a string so the DB column always receives a str
+    if isinstance(detail, str):
+        detail_str = detail
+    else:
+        try:
+            detail_str = json.dumps(detail)
+        except Exception:
+            detail_str = str(detail)
+
+    logger.warning("SUPERADMIN [%s] %s %s", actor_id, action, detail_str)
     try:
         from database.connection import SessionLocal
         from database.models import AuditLogEntry
@@ -122,7 +141,7 @@ def _log_superadmin_action(user: TokenPayload, action: str, detail: str = "") ->
             prev_hash = last.hash_chain if last else "0" * 64
 
             # Build the hash: chain previous hash + this entry's fields.
-            chain_input = f"{prev_hash}:{seq}:{user.sub}:{action}:{detail}:{now.isoformat()}"
+            chain_input = f"{prev_hash}:{seq}:{actor_id}:{action}:{detail_str}:{now.isoformat()}"
             new_hash = hashlib.sha256(chain_input.encode()).hexdigest()
 
             entry = AuditLogEntry(
@@ -131,14 +150,14 @@ def _log_superadmin_action(user: TokenPayload, action: str, detail: str = "") ->
                 created_at=now,
                 level="COMPLIANCE",
                 category="SUPERADMIN",
-                actor=user.sub,
+                actor=actor_id,
                 action=action,
-                data_json=json.dumps({"detail": detail}) if detail else None,
+                data_json=json.dumps({"detail": detail_str}) if detail_str else None,
                 hash_chain=new_hash,
                 # New columns added by migration k1l2m3n4o5p6
                 event_type=f"superadmin.{action}",
-                user_id=user.sub,
-                detail=detail or None,
+                user_id=actor_id,
+                detail=detail_str or None,
                 ip_address=None,  # IP not available in this context; set by callers that have it
             )
             db.add(entry)

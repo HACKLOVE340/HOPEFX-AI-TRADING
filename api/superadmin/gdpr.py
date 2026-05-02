@@ -138,7 +138,7 @@ async def process_gdpr_request(
             "notes": notes,
         })
     _save_gdpr_requests(reqs)
-    await _log_superadmin_action(user.sub, f"gdpr_request_{action}", {"req_id": req_id, "notes": notes})
+    _log_superadmin_action(user, f"gdpr_request_{action}", {"req_id": req_id, "notes": notes})
     return {"ok": True, "req_id": req_id, "status": "completed" if action == "approve" else "rejected"}
 
 
@@ -180,7 +180,7 @@ async def export_user_data(
             db.close()
     except Exception as exc:
         logger.warning("GDPR export error: %s", exc)
-    await _log_superadmin_action(user.sub, "gdpr_user_export", {"user_id": user_id})
+    _log_superadmin_action(user, "gdpr_user_export", {"user_id": user_id})
     return {"ok": True, "data": export_data}
 
 
@@ -210,7 +210,7 @@ async def erase_user_data(
     except Exception as exc:
         logger.error("GDPR erase error: %s", exc)
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "gdpr_user_erase", {"user_id": user_id, "reason": reason})
+    _log_superadmin_action(user, "gdpr_user_erase", {"user_id": user_id, "reason": reason})
     return {"ok": True, "erased": erased, "user_id": user_id}
 
 
@@ -292,5 +292,5 @@ async def update_retention_policies(
             rc.set(_RETENTION_KEY, json.dumps(policies), ex=86400 * 365)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "gdpr_retention_update", body)
+    _log_superadmin_action(user, "gdpr_retention_update", body)
     return {"ok": True}

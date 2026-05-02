@@ -133,7 +133,7 @@ async def reconnect_broker(
                 await broker.connect()
     except Exception as exc:
         logger.warning("Broker reconnect: %s", exc)
-    await _log_superadmin_action(user.sub, "broker_reconnect", {"broker_id": broker_id})
+    _log_superadmin_action(user, "broker_reconnect", {"broker_id": broker_id})
     return {"ok": True, "broker_id": broker_id}
 
 
@@ -150,7 +150,7 @@ async def disconnect_broker(
                 await broker.disconnect()
     except Exception as exc:
         logger.warning("Broker disconnect: %s", exc)
-    await _log_superadmin_action(user.sub, "broker_disconnect", {"broker_id": broker_id})
+    _log_superadmin_action(user, "broker_disconnect", {"broker_id": broker_id})
     return {"ok": True, "broker_id": broker_id}
 
 
@@ -253,5 +253,5 @@ async def update_broker_routing(
             rc.set(_BROKER_ROUTING_KEY, json.dumps(config), ex=86400 * 30)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "broker_routing_update", body)
+    _log_superadmin_action(user, "broker_routing_update", body)
     return {"ok": True}

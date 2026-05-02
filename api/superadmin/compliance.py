@@ -103,7 +103,7 @@ async def approve_kyc(
             db.commit()
         finally:
             db.close()
-        await _log_superadmin_action(user.sub, "kyc_approve", {"user_id": user_id})
+        _log_superadmin_action(user, "kyc_approve", {"user_id": user_id})
         return {"ok": True}
     except Exception as exc:
         logger.error("KYC approve error: %s", exc)
@@ -133,7 +133,7 @@ async def reject_kyc(
             db.commit()
         finally:
             db.close()
-        await _log_superadmin_action(user.sub, "kyc_reject", {"user_id": user_id, "reason": reason})
+        _log_superadmin_action(user, "kyc_reject", {"user_id": user_id, "reason": reason})
         return {"ok": True}
     except Exception as exc:
         logger.error("KYC reject error: %s", exc)
@@ -247,7 +247,7 @@ async def update_aml_alert(
             "reviewed_at": _utcnow().isoformat(),
         })
     _save_aml_alerts(alerts)
-    await _log_superadmin_action(user.sub, "aml_alert_update", {"alert_id": alert_id, **body})
+    _log_superadmin_action(user, "aml_alert_update", {"alert_id": alert_id, **body})
     return {"ok": True}
 
 
@@ -333,7 +333,7 @@ async def clear_sanctions_hit(
             rc.set(_SANCTIONS_KEY, json.dumps(hits), ex=86400 * 30)
     except Exception:
         pass
-    await _log_superadmin_action(user.sub, "sanctions_clear", {"hit_id": hit_id})
+    _log_superadmin_action(user, "sanctions_clear", {"hit_id": hit_id})
     return {"ok": True}
 
 
@@ -395,7 +395,7 @@ async def trigger_regulatory_report(
             rc.set(_REG_REPORTS_KEY, json.dumps(reports[:100]), ex=86400 * 90)
     except Exception as exc:
         logger.warning("Reg report trigger: %s", exc)
-    await _log_superadmin_action(user.sub, "reg_report_trigger", {"type": report_type, "period": period})
+    _log_superadmin_action(user, "reg_report_trigger", {"type": report_type, "period": period})
     return {"ok": True, "report_id": report_id, "report": report}
 
 
