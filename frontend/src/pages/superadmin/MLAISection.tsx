@@ -266,8 +266,10 @@ const MLAISection: React.FC = () => {
 const MLSubsystemsPanel: React.FC = () => {
   const [filterStats, setFilterStats]   = useState<Record<string, unknown> | null>(null);
   const [onlineStatus, setOnlineStatus] = useState<Record<string, unknown> | null>(null);
+  const [driftStatus, setDriftStatus]   = useState<Record<string, unknown> | null>(null);
+  const [sharpeStatus, setSharpeStatus] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading]           = useState(false);
-  const [tab, setTab]                   = useState<'filter' | 'online' | 'features'>('filter');
+  const [tab, setTab]                   = useState<'filter' | 'online' | 'drift' | 'features'>('filter');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
@@ -275,13 +277,17 @@ const MLSubsystemsPanel: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [f, o] = await Promise.allSettled([
-        superadminApi.mlFilterStats ? superadminApi.mlFilterStats() : Promise.reject('no method'),
-        superadminApi.mlOnlineLearnerStatus ? superadminApi.mlOnlineLearnerStatus() : Promise.reject('no method'),
+      const [f, o, d, s] = await Promise.allSettled([
+        superadminApi.mlFilterStats(),
+        superadminApi.mlOnlineLearnerStatus(),
+        superadminApi.mlDriftStatus(),
+        superadminApi.mlSharpeCircuitBreaker(),
       ]);
       if (!mountedRef.current) return;
       if (f.status === 'fulfilled') setFilterStats(f.value.data);
       if (o.status === 'fulfilled') setOnlineStatus(o.value.data);
+      if (d.status === 'fulfilled') setDriftStatus(d.value.data);
+      if (s.status === 'fulfilled') setSharpeStatus(s.value.data);
     } catch { /* non-fatal */ }
     finally { if (mountedRef.current) setLoading(false); }
   }, []);
@@ -289,8 +295,9 @@ const MLSubsystemsPanel: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const STABS = [
-    { id: 'filter',  label: '🎯 Signal Filter' },
-    { id: 'online',  label: '📡 Online Learner' },
+    { id: 'filter',   label: '🎯 Signal Filter' },
+    { id: 'online',   label: '📡 Online Learner' },
+    { id: 'drift',    label: '📉 Drift Monitor' },
     { id: 'features', label: '🔢 ML Metrics' },
   ] as const;
 
@@ -336,6 +343,35 @@ const MLSubsystemsPanel: React.FC = () => {
       )}
       {tab === 'online' && !onlineStatus && (
         <div style={{ color: '#475569', fontSize: 13 }}>Online learner status not available. Enable FEATURE_ONLINE_LEARNING to activate.</div>
+      )}
+
+      {tab === 'drift' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+          {driftStatus && Object.entries(driftStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+            <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fbbf24' }}>{String(val)}</div>
+            </div>
+          ))}
+          {sharpeStatus && (
+            <div style={{ gridColumn: '1 / -1', marginTop: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9', marginBottom: 8 }}>Sharpe Circuit Breaker</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                {Object.entries(sharpeStatus).filter(([, v]) => typeof v !== 'object').map(([key, val]) => (
+                  <div key={key} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4, textTransform: 'uppercase' }}>{key.replace(/_/g, ' ')}</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: (val as boolean) === true ? '#f87171' : '#4ade80' }}>{String(val)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!driftStatus && !sharpeStatus && (
+            <div style={{ color: '#475569', fontSize: 13, gridColumn: '1 / -1' }}>
+              Drift monitor and Sharpe circuit breaker data not available. Ensure the ML engine is running.
+            </div>
+          )}
+        </div>
       )}
 
       {tab === 'features' && (

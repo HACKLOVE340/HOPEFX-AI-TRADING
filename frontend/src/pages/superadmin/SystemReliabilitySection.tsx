@@ -175,6 +175,15 @@ const HealthEnginePanel: React.FC = () => {
     finally { setProbing(null); }
   };
 
+  const runAllProbes = async () => {
+    setLoading(true);
+    try {
+      await superadminApi.healthEngineRun([]);
+      await load();
+    } catch { /* non-fatal */ }
+    finally { setLoading(false); }
+  };
+
   const registerProbe = async () => {
     if (!customName.trim() || !customUrl.trim()) return;
     setRegisterMsg('');
@@ -212,6 +221,7 @@ const HealthEnginePanel: React.FC = () => {
               {report.overall.toUpperCase()}
             </div>
           )}
+          <Button onClick={runAllProbes} disabled={loading} size="sm" variant="primary">{loading ? '…' : '▶ Run All Probes'}</Button>
           <Button onClick={load} disabled={loading} size="sm" variant="secondary">{loading ? '…' : '↻ Refresh'}</Button>
         </div>
       </div>
@@ -336,27 +346,33 @@ const DiagnosticsPanel: React.FC = () => {
   const [report, setReport]   = useState<Record<string, unknown> | null>(null);
   const [checks, setChecks]   = useState<Array<{ name: string; description: string }>>([]);
   const [remLog, setRemLog]   = useState<Array<Record<string, unknown>>>([]);
+  const [latestResults, setLatestResults] = useState<Record<string, unknown>[]>([]);
   const [running, setRunning] = useState(false);
   const [remediating, setRemediating] = useState(false);
   const [runningCheck, setRunningCheck] = useState<string | null>(null);
   const [checkResult, setCheckResult] = useState<Record<string, unknown> | null>(null);
   const [msg, setMsg]         = useState('');
-  const [tab, setTab]         = useState<'summary' | 'report' | 'checks' | 'remediation'>('summary');
+  const [tab, setTab]         = useState<'summary' | 'report' | 'checks' | 'results' | 'remediation'>('summary');
 
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const load = useCallback(async () => {
     try {
-      const [s, c, r] = await Promise.allSettled([
+      const [s, c, r, results] = await Promise.allSettled([
         superadminApi.diagnosticsSummary(),
         superadminApi.diagnosticsChecks(),
         superadminApi.diagnosticsRemediationLog(20),
+        superadminApi.diagnosticsResults(),
       ]);
       if (!mountedRef.current) return;
       if (s.status === 'fulfilled') setSummary(s.value.data);
       if (c.status === 'fulfilled') setChecks(c.value.data.checks ?? []);
       if (r.status === 'fulfilled') setRemLog(r.value.data.entries ?? []);
+      if (results.status === 'fulfilled') {
+        const d = results.value.data as { results?: Record<string, unknown>[] } | Record<string, unknown>[];
+        setLatestResults(Array.isArray(d) ? d : (d as { results?: Record<string, unknown>[] }).results ?? []);
+      }
     } catch { /* non-fatal */ }
   }, []);
 
@@ -402,6 +418,7 @@ const DiagnosticsPanel: React.FC = () => {
   const DTABS = [
     { id: 'summary',     label: '📊 Summary' },
     { id: 'report',      label: '📋 Report' },
+    { id: 'results',     label: '🔎 Results' },
     { id: 'checks',      label: '🔍 Run Check' },
     { id: 'remediation', label: '🔧 Remediation Log' },
   ] as const;
@@ -492,6 +509,40 @@ const DiagnosticsPanel: React.FC = () => {
               ))}
             </>
           )}
+        </>
+      )}
+
+      {tab === 'results' && (
+        <>
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+            Latest diagnostic run results from the backend store ({latestResults.length} entries).
+          </div>
+          {latestResults.length === 0 && (
+            <div style={{ color: '#475569', fontSize: 13 }}>No results available. Run diagnostics first.</div>
+          )}
+          {latestResults.map((r, i) => {
+            const status = String(r.status ?? r.result ?? 'unknown');
+            const statusColor = status === 'ok' || status === 'pass' ? '#22c55e'
+              : status === 'warning' || status === 'warn' ? '#f59e0b' : '#ef4444';
+            return (
+              <div key={i} style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '8px 12px', borderRadius: 6, marginBottom: 4,
+                background: '#1e293b', border: `1px solid ${statusColor}22`,
+              }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>
+                    {String(r.check_name ?? r.name ?? `Check ${i + 1}`)}
+                  </span>
+                  {Boolean(r.message) && <div style={{ fontSize: 12, color: '#94a3b8' }}>{String(r.message as string)}</div>}
+                  {Boolean(r.duration_ms) && <div style={{ fontSize: 11, color: '#475569' }}>Duration: {String(r.duration_ms as number)}ms</div>}
+                </div>
+                <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', flexShrink: 0, marginLeft: 12, color: statusColor }}>
+                  {status}
+                </span>
+              </div>
+            );
+          })}
         </>
       )}
 
@@ -747,6 +798,7 @@ const ValidatePanel: React.FC = () => {
 
 const SystemReliabilitySection: React.FC = () => {
   const [status, setStatus] = useState<ReliabilityStatus | null>(null);
+  const [components, setComponents] = useState<Record<string, unknown>[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [probingComp, setProbingComp] = useState<string | null>(null);
   const [selfTest, setSelfTest] = useState<SelfTestResult | null>(null);
@@ -759,6 +811,7 @@ const SystemReliabilitySection: React.FC = () => {
   const [envAudit, setEnvAudit] = useState<Record<string, unknown> | null>(null);
   const [statusHistory, setStatusHistory] = useState<Record<string, unknown>[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [diagnosticsResults, setDiagnosticsResults] = useState<Record<string, unknown>[] | null>(null);
   const [activeTab, setActiveTab] = useState<'components' | 'health-engine' | 'traces' | 'selftest' | 'env' | 'metrics' | 'diagnostics' | 'routes' | 'validate' | 'history'>('components');
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
@@ -770,13 +823,21 @@ const SystemReliabilitySection: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await superadminApi.reliabilityStatus();
+      const [statusRes, compRes] = await Promise.allSettled([
+        superadminApi.reliabilityStatus(),
+        superadminApi.reliabilityComponents(),
+      ]);
       if (!mountedRef.current) return;
-      setStatus(res.data);
-      setLastRefresh(new Date().toLocaleTimeString());
-    } catch (e: unknown) {
-      if (!mountedRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to fetch reliability status');
+      if (statusRes.status === 'fulfilled') {
+        setStatus(statusRes.value.data);
+        setLastRefresh(new Date().toLocaleTimeString());
+      } else {
+        setError(statusRes.reason instanceof Error ? statusRes.reason.message : 'Failed to fetch reliability status');
+      }
+      if (compRes.status === 'fulfilled') {
+        const d = compRes.value.data as { components?: Record<string, unknown>[] } | Record<string, unknown>[];
+        setComponents(Array.isArray(d) ? d : (d as { components?: Record<string, unknown>[] }).components ?? []);
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -988,14 +1049,20 @@ const SystemReliabilitySection: React.FC = () => {
               Loading component status…
             </div>
           )}
-          {status?.components.map((comp) => (
+          {/* Prefer reliabilityComponents endpoint data; fall back to status.components */}
+          {(components ?? status?.components ?? []).map((comp) => (
             <ComponentCard
-              key={comp.name}
-              comp={comp}
+              key={String((comp as { name?: string }).name ?? JSON.stringify(comp))}
+              comp={comp as Component}
               onProbe={handleProbe}
-              probing={probingComp === comp.name}
+              probing={probingComp === String((comp as { name?: string }).name)}
             />
           ))}
+          {!(components ?? status?.components)?.length && !loading && (
+            <div style={{ gridColumn: '1/-1', color: '#475569', fontSize: 13, padding: '16px 0' }}>
+              No components registered. Ensure the reliability engine is running.
+            </div>
+          )}
         </div>
       )}
 
