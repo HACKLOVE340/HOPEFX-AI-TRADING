@@ -22,17 +22,98 @@
  */
 
 import React, { Suspense } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useStore } from '../store';
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
 // polling and duplicate WebSocket connections on page navigation.
-// useStore is intentionally not imported here — all data flows through
-// AppShell (WebSocket, bootstrap queries) into Zustand; panels read directly.
 import { PanelErrorBoundary } from '../components/ui/PanelErrorBoundary';
 import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/Skeleton';
 
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
+
+// ── Quick-action bar ──────────────────────────────────────────────────────────
+const QuickActionBar: React.FC = () => {
+  const navigate = useNavigate();
+  const positions = useStore((s) => s.positions ?? []);
+  const unrealisedPnl = positions.reduce((sum: number, p: { unrealised_pnl?: number }) => sum + (p.unrealised_pnl ?? 0), 0);
+  const pnlColor = unrealisedPnl >= 0 ? '#22c55e' : '#ef4444';
+
+  const actions = [
+    { label: '⚡ Trade',           path: '/trade',          color: '#3b82f6' },
+    { label: '📊 Analytics',       path: '/performance',    color: '#8b5cf6' },
+    { label: '🧠 AI Strategy',     path: '/ai-strategy',    color: '#06b6d4' },
+    { label: '🌍 Geopolitical',    path: '/geopolitical',   color: '#f59e0b' },
+    { label: '📓 Journal',         path: '/journal',        color: '#10b981' },
+    { label: '🛡 Risk Calc',       path: '/risk-calc',      color: '#ec4899' },
+    { label: '📡 Signal Feed',     path: '/feed',           color: '#a78bfa' },
+    { label: '🔁 Copy Trading',    path: '/copy-trading',   color: '#34d399' },
+  ];
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '4px 8px',
+      background: 'rgba(6,13,24,0.8)',
+      borderBottom: '1px solid #1a2e4a',
+      overflowX: 'auto', flexShrink: 0,
+    }}>
+      {/* Today P&L */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '3px 10px',
+        background: `${pnlColor}12`,
+        border: `1px solid ${pnlColor}30`,
+        borderRadius: 6, flexShrink: 0,
+      }}>
+        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
+        <span style={{ fontSize: 13, fontWeight: 800, color: pnlColor, fontFamily: 'monospace' }}>
+          {unrealisedPnl >= 0 ? '+' : ''}{unrealisedPnl.toFixed(2)}
+        </span>
+        {positions.length > 0 && (
+          <span style={{ fontSize: 10, color: '#475569' }}>{positions.length} pos</span>
+        )}
+      </div>
+
+      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+
+      {/* Quick nav buttons */}
+      {actions.map(({ label, path, color }) => (
+        <button
+          key={path}
+          onClick={() => navigate(path)}
+          style={{
+            background: 'transparent',
+            border: `1px solid ${color}30`,
+            borderRadius: 6,
+            color: '#94a3b8',
+            fontSize: 11,
+            fontFamily: 'inherit',
+            cursor: 'pointer',
+            padding: '4px 10px',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+            transition: 'all 0.15s ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = `${color}15`;
+            (e.currentTarget as HTMLButtonElement).style.color = color;
+            (e.currentTarget as HTMLButtonElement).style.borderColor = `${color}80`;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8';
+            (e.currentTarget as HTMLButtonElement).style.borderColor = `${color}30`;
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+};
 
 // ── Lazily loaded (heavy Recharts panels — split into separate chunks) ─────────
 const EquityCurveChart       = React.lazy(() => import('../components/charts/EquityCurveChart').then(m => ({ default: m.EquityCurveChart })));
@@ -56,13 +137,14 @@ function DashboardInner() {
       className="flex flex-col h-screen bg-[#080c14] overflow-hidden"
       style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0 }}
     >
-      {/* ── Top: price ticker + account bar ─────────────────────────────── */}
+      {/* ── Top: price ticker + account bar + quick actions ─────────────── */}
       <PanelErrorBoundary title="Price Ticker">
         <LivePriceTicker />
       </PanelErrorBoundary>
       <PanelErrorBoundary title="Account Bar">
         <AccountBar />
       </PanelErrorBoundary>
+      <QuickActionBar />
 
       {/* ── Main grid ────────────────────────────────────────────────────── */}
       <div className="flex-1 min-h-0 grid grid-cols-12 grid-rows-2 gap-2 p-2 overflow-hidden">

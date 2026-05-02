@@ -136,7 +136,18 @@ const Profile: React.FC = () => {
         </div>
         <div style={s.headerActions}>
           {isOwn ? (
-            <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
+            <>
+              <a
+                href={`/profile/${profile.user_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+                title="See how your profile looks to other traders"
+              >
+                👁 View Public Profile
+              </a>
+              <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
+            </>
           ) : (
             <button onClick={handleFollow} disabled={followLoading} style={{...s.followBtn, background: following ? '#334155' : '#3b82f6'}}>
               {followLoading ? '…' : following ? 'Unfollow' : 'Follow'}

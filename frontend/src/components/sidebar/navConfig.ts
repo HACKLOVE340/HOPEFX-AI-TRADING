@@ -50,6 +50,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/calendar',     label: 'Economic Cal.',  icon: '📅', group: 'core',      plan: 'free',    featureKey: 'calendar'     },
   { path: '/alerts',       label: 'Price Alerts',   icon: '🔔', group: 'core',      plan: 'starter', featureKey: 'alerts'       },
   { path: '/status',       label: 'System Status',  icon: '🟢', group: 'core',      plan: 'free',    featureKey: 'status'       },
+  { path: '/docs',         label: 'Documentation',  icon: '📚', group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
 
   // ── Trading ───────────────────────────────────────────────────────────────
   { path: '/ai-charts',          label: 'AI Chart Bot',     icon: '🧠', group: 'trading', plan: 'professional', featureKey: 'trading'           },

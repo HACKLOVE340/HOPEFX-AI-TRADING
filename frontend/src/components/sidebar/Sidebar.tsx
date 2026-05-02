@@ -1,15 +1,16 @@
 /**
  * Sidebar.tsx
- * Role-aware, subscription-aware collapsible sidebar.
+ * Role-aware, subscription-aware collapsible sidebar with search.
  *
  * Rules:
  *  - Admin/superadmin see ALL groups including the Admin group
  *  - Traders see items up to their plan tier; locked items show a lock badge
  *  - Admin-only items are completely hidden from non-admins
  *  - Groups with no visible items are hidden entirely
+ *  - Search box filters all visible nav items in real-time
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan } from '../../store';
 import { ThemeToggle } from '../ThemeToggle';
@@ -75,9 +76,6 @@ const LockBadge: React.FC<{ requiredPlan: string }> = ({ requiredPlan }) => (
 );
 
 // ── Trading mode badge ────────────────────────────────────────────────────────
-// Fetches /api/health/live on mount and polls every 60 s.
-// Shows a persistent PAPER (amber) or LIVE (green) pill so operators always
-// know which mode the platform is running in.
 const TradingModeBadge: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const [mode, setMode] = useState<'paper' | 'live' | null>(null);
 
@@ -107,7 +105,6 @@ const TradingModeBadge: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   const border = isLive ? 'rgba(34,197,94,0.35)' : 'rgba(251,191,36,0.35)';
 
   if (collapsed) {
-    // Collapsed: show a coloured dot only
     return (
       <span
         title={`Trading mode: ${label}`}
@@ -153,6 +150,44 @@ const GroupLabel: React.FC<{ label: string; collapsed: boolean }> = ({ label, co
   );
 };
 
+// ── Search box ────────────────────────────────────────────────────────────────
+const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => (
+  <div style={{
+    padding: '6px 10px',
+    borderBottom: '1px solid #1e293b',
+  }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6,
+      background: '#0f172a', border: '1px solid #1e293b',
+      borderRadius: 6, padding: '5px 8px',
+    }}>
+      <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>🔍</span>
+      <input
+        type="text"
+        placeholder="Search…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          background: 'transparent', border: 'none', outline: 'none',
+          color: '#e2e8f0', fontSize: 12, width: '100%',
+          fontFamily: 'inherit',
+        }}
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: '#475569', fontSize: 14, padding: 0, lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  </div>
+);
+
 // ── Main Sidebar ──────────────────────────────────────────────────────────────
 interface SidebarProps {
   collapsed: boolean;
@@ -166,11 +201,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const user      = useStore(selectUser);
   const plan      = useStore(selectPlan);
   const clearAuth = useStore((s) => s.clearAuth);
+  const [search, setSearch] = useState('');
 
   const handleSignOut = async () => {
-    // Tell the server to clear the httpOnly refresh-token cookie.
-    // Fire-and-forget: even if the request fails we still clear local state
-    // so the user is logged out from the browser's perspective.
     try { await authApi.logout(); } catch { /* ignore network errors on logout */ }
     clearAuth();
     navigate('/login', { replace: true });
@@ -185,6 +218,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
     if (g.id === 'admin')      return admin;
     return true;
   });
+
+  // Filter nav items by search query
+  const searchLower = search.toLowerCase().trim();
+  const filteredItems = useMemo(() => {
+    if (!searchLower) return null;
+    return NAV_ITEMS.filter((item) => {
+      if (item.superAdminOnly && !superAdmin) return false;
+      if (item.adminOnly && !admin) return false;
+      return item.label.toLowerCase().includes(searchLower) ||
+             item.path.toLowerCase().includes(searchLower);
+    });
+  }, [searchLower, admin, superAdmin]);
 
   return (
     <aside style={{
@@ -230,66 +275,122 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         </button>
       </div>
 
+      {/* Search box — only when expanded */}
+      {!collapsed && (
+        <SearchBox value={search} onChange={setSearch} />
+      )}
+
       {/* Nav */}
       <nav style={{
         flex: 1, padding: '6px 0',
         display: 'flex', flexDirection: 'column',
         overflowY: 'auto', overflowX: 'hidden',
       }}>
-        {visibleGroups.map((group) => {
-          const items = NAV_ITEMS.filter((item) => {
-            if (item.group !== group.id)  return false;
-            if (item.superAdminOnly)      return superAdmin;
-            if (item.adminOnly)           return admin;
-            return true;
-          });
-
-          if (items.length === 0) return null;
-
-          return (
-            <div key={group.id}>
-              <GroupLabel label={group.label} collapsed={collapsed} />
-              {items.map((item) => {
-                const active  = location.pathname.startsWith(item.path);
-                const locked  = !admin && item.featureKey
+        {/* ── Search results mode ── */}
+        {filteredItems && !collapsed ? (
+          filteredItems.length === 0 ? (
+            <div style={{ padding: '16px 14px', fontSize: 12, color: '#475569', textAlign: 'center' }}>
+              No results for "{search}"
+            </div>
+          ) : (
+            <div>
+              <div style={{
+                fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+                letterSpacing: '0.08em', padding: '8px 14px 4px',
+              }}>
+                {filteredItems.length} result{filteredItems.length !== 1 ? 's' : ''}
+              </div>
+              {filteredItems.map((item) => {
+                const active = location.pathname.startsWith(item.path);
+                const locked = !admin && item.featureKey
                   ? !hasFeatureAccess(user?.role ?? 'user', plan, item.featureKey)
                   : false;
-
                 return (
                   <NavLink
                     key={item.path}
                     to={item.path}
-                    title={collapsed ? item.label : undefined}
+                    onClick={() => setSearch('')}
                     style={{
                       display: 'flex', alignItems: 'center',
                       gap: 10, padding: '9px 14px',
                       textDecoration: 'none', fontSize: 13, fontWeight: 500,
                       transition: 'background 0.15s, color 0.15s',
                       borderRadius: '0 6px 6px 0', marginRight: 8,
-                      background:  active ? '#1e3a5f' : 'transparent',
+                      background:  active ? '#1e3a5f' : 'rgba(59,130,246,0.06)',
                       color:       active ? '#60a5fa' : locked ? '#334155' : '#94a3b8',
-                      borderLeft:  active ? '3px solid #3b82f6' : '3px solid transparent',
-                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      borderLeft:  active ? '3px solid #3b82f6' : '3px solid #1e3a5f',
                       opacity: locked ? 0.6 : 1,
                     }}
                   >
                     <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
                       {item.icon}
                     </span>
-                    {!collapsed && (
-                      <>
-                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
-                          {item.label}
-                        </span>
-                        {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
-                      </>
-                    )}
+                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
+                      {item.label}
+                    </span>
+                    {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
                   </NavLink>
                 );
               })}
             </div>
-          );
-        })}
+          )
+        ) : (
+          /* ── Normal grouped nav ── */
+          visibleGroups.map((group) => {
+            const items = NAV_ITEMS.filter((item) => {
+              if (item.group !== group.id)  return false;
+              if (item.superAdminOnly)      return superAdmin;
+              if (item.adminOnly)           return admin;
+              return true;
+            });
+
+            if (items.length === 0) return null;
+
+            return (
+              <div key={group.id}>
+                <GroupLabel label={group.label} collapsed={collapsed} />
+                {items.map((item) => {
+                  const active  = location.pathname.startsWith(item.path);
+                  const locked  = !admin && item.featureKey
+                    ? !hasFeatureAccess(user?.role ?? 'user', plan, item.featureKey)
+                    : false;
+
+                  return (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      title={collapsed ? item.label : undefined}
+                      style={{
+                        display: 'flex', alignItems: 'center',
+                        gap: 10, padding: '9px 14px',
+                        textDecoration: 'none', fontSize: 13, fontWeight: 500,
+                        transition: 'background 0.15s, color 0.15s',
+                        borderRadius: '0 6px 6px 0', marginRight: 8,
+                        background:  active ? '#1e3a5f' : 'transparent',
+                        color:       active ? '#60a5fa' : locked ? '#334155' : '#94a3b8',
+                        borderLeft:  active ? '3px solid #3b82f6' : '3px solid transparent',
+                        justifyContent: collapsed ? 'center' : 'flex-start',
+                        opacity: locked ? 0.6 : 1,
+                      }}
+                    >
+                      <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
+                        {item.icon}
+                      </span>
+                      {!collapsed && (
+                        <>
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
+                            {item.label}
+                          </span>
+                          {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
+                        </>
+                      )}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            );
+          })
+        )}
       </nav>
 
       {/* Footer */}
@@ -305,11 +406,9 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         {collapsed ? (
           /* ── Collapsed: icon-only footer ─────────────────────────────── */
           <>
-            {/* WS status dot */}
             <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0' }}>
               <WsDot />
             </div>
-            {/* Sign out / sign in icon */}
             {isAuth ? (
               <button
                 onClick={handleSignOut}
@@ -378,9 +477,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
               </button>
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <a href="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
-                ← Landing
-              </a>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <a href="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
+                  ← Landing
+                </a>
+                <a href="/docs" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
+                  Docs
+                </a>
+                <a href="/status" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
+                  Status
+                </a>
+              </div>
               <ThemeToggle />
             </div>
           </>
