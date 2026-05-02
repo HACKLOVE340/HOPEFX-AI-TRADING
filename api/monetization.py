@@ -771,16 +771,15 @@ async def get_marketplace_subscriptions(user: TokenPayload = Depends(get_current
     Return the calling user's active marketplace strategy subscriptions.
     """
     try:
-        subs = strategy_marketplace.get_user_subscriptions(user.sub)
-        return {"subscriptions": [s.to_dict() if hasattr(s, "to_dict") else dict(s) for s in subs]}
+        from database.simple_store import db_get
+
+        purchases = db_get(f"marketplace:purchases:{user.sub}") or []
+        return {"subscriptions": purchases if isinstance(purchases, list) else []}
     except Exception:
-        # Fallback: scan purchase store for this user's active subscriptions
-        try:
-            from database.simple_store import db_get
-            purchases = db_get(f"marketplace:purchases:{user.sub}") or []
-            return {"subscriptions": purchases if isinstance(purchases, list) else []}
-        except Exception:
-            return {"subscriptions": []}
+        logger.exception(
+            "Failed to load marketplace subscriptions for user %s", user.sub
+        )
+        return {"subscriptions": []}
 
 
 # ==========================
