@@ -274,10 +274,16 @@ export async function fetchNewsSentiment(symbol: string): Promise<{ symbol: stri
 }
 
 // World Monitor returns curated deep-link URLs — no API key required.
-// The backend builds these from WorldMonitorIntegration.get_gold_relevant_views().
+// The backend builds these from WorldMonitorIntegration.get_enhanced_views().
 export interface WorldMonitorViews {
   gold_relevant_views: Record<string, string>;
+  crisis_views: Record<string, string>;
+  all_region_views: Record<string, string>;
+  full_global_url: string;
+  available_layers: string[];
   base_url: string;
+  crisis_labels: Record<string, string>;
+  region_labels: Record<string, string>;
 }
 
 export async function fetchWorldMonitorViews(): Promise<WorldMonitorViews> {

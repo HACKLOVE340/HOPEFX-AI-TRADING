@@ -1698,6 +1698,77 @@ class WorldMonitorIntegration:
 
         return urls
 
+    def get_enhanced_views(self) -> dict:
+        """Return the full suite of WorldMonitor views: gold-relevant, crisis hotspots, all regions, and layer metadata."""
+        ALL_LAYERS = self.DATA_LAYERS  # all 12 layers
+
+        # Crisis-specific zoomed views aligned with current major conflicts
+        crisis_views = {
+            "ukraine_russia": self.build_monitor_url(
+                view="europe", lat=49.0, lon=32.0, zoom=5.0, time_range="7d",
+                layers=["conflicts", "hotspots", "military", "outages"],
+            ),
+            "israel_gaza": self.build_monitor_url(
+                view="mena", lat=31.5, lon=35.0, zoom=6.5, time_range="7d",
+                layers=["conflicts", "hotspots", "military", "nuclear"],
+            ),
+            "red_sea_houthi": self.build_monitor_url(
+                view="mena", lat=15.0, lon=43.0, zoom=5.5, time_range="7d",
+                layers=["conflicts", "hotspots", "military", "outages"],
+            ),
+            "taiwan_strait": self.build_monitor_url(
+                view="asia", lat=24.0, lon=120.0, zoom=6.0, time_range="7d",
+                layers=["conflicts", "hotspots", "military", "nuclear"],
+            ),
+            "sudan_africa": self.build_monitor_url(
+                view="africa", lat=15.0, lon=30.0, zoom=5.0, time_range="7d",
+                layers=["conflicts", "hotspots", "military"],
+            ),
+            "korea_peninsula": self.build_monitor_url(
+                view="asia", lat=38.0, lon=127.0, zoom=6.0, time_range="7d",
+                layers=["conflicts", "hotspots", "military", "nuclear"],
+            ),
+        }
+
+        # All WorldMonitor region views
+        all_regions = {
+            "global": self.build_monitor_url(view="global", time_range="7d", layers=ALL_LAYERS),
+            "americas": self.build_monitor_url(view="americas", time_range="7d", layers=ALL_LAYERS),
+            "europe": self.build_monitor_url(view="europe", time_range="7d", layers=ALL_LAYERS),
+            "middle_east_north_africa": self.build_monitor_url(view="mena", time_range="7d", layers=ALL_LAYERS),
+            "asia_pacific": self.build_monitor_url(view="asia", time_range="7d", layers=ALL_LAYERS),
+            "africa": self.build_monitor_url(view="africa", time_range="7d", layers=ALL_LAYERS),
+            "oceania": self.build_monitor_url(view="oceania", time_range="7d", layers=ALL_LAYERS),
+        }
+
+        full_global_url = self.build_monitor_url(view="global", time_range="7d", layers=ALL_LAYERS)
+
+        return {
+            "gold_relevant_views": self.get_gold_relevant_views(),
+            "crisis_views": crisis_views,
+            "all_region_views": all_regions,
+            "full_global_url": full_global_url,
+            "available_layers": ALL_LAYERS,
+            "base_url": self.base_url,
+            "crisis_labels": {
+                "ukraine_russia": "Ukraine / Russia",
+                "israel_gaza": "Israel / Gaza",
+                "red_sea_houthi": "Red Sea / Houthi",
+                "taiwan_strait": "Taiwan Strait",
+                "sudan_africa": "Sudan / Africa",
+                "korea_peninsula": "Korea Peninsula",
+            },
+            "region_labels": {
+                "global": "Global",
+                "americas": "Americas",
+                "europe": "Europe",
+                "middle_east_north_africa": "Middle East & N.Africa",
+                "asia_pacific": "Asia Pacific",
+                "africa": "Africa",
+                "oceania": "Oceania",
+            },
+        }
+
 
 class WorldMonitorAPIClient:
     """
