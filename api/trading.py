@@ -1486,7 +1486,6 @@ async def get_ohlcv(
     # Used when price engine is unavailable or returns flat bars.
     try:
         import yfinance as _yf
-        import pandas as _pd  # noqa: F401 (imported for yfinance compatibility)
 
         _YF_MAP = {
             "XAUUSD": "GC=F", "XAGUSD": "SI=F", "XPTUSD": "PL=F",
@@ -1571,16 +1570,20 @@ async def get_ohlcv(
     now_ts = int(time.time())
     start_ts = now_ts - tf_secs * limit
     price = base_price
-    _rng = _random.Random(hash(symbol) % (2**31))
+    _rng = _random.Random(hash(symbol) % (2**31 - 1))
+    _HIGH_LOW_VOL_FACTOR = 0.4   # Wick depth as fraction of bar body volatility
+    _SYNTHETIC_VOL_MEAN  = 1000  # Mean synthetic tick volume per bar
+    _SYNTHETIC_VOL_STDDEV = 400  # Std-dev of synthetic tick volume
     synthetic: list[dict] = []
     for i in range(limit):
         ts = start_ts + i * tf_secs
         change = _rng.gauss(0, bar_vol)
         open_p = round(price, 5)
         close_p = round(price * (1 + change), 5)
-        high_p  = round(max(open_p, close_p) * (1 + abs(_rng.gauss(0, bar_vol * 0.4))), 5)
-        low_p   = round(min(open_p, close_p) * (1 - abs(_rng.gauss(0, bar_vol * 0.4))), 5)
-        vol     = round(abs(_rng.gauss(1000, 400)), 2)
+        wick_vol = bar_vol * _HIGH_LOW_VOL_FACTOR
+        high_p  = round(max(open_p, close_p) * (1 + abs(_rng.gauss(0, wick_vol))), 5)
+        low_p   = round(min(open_p, close_p) * (1 - abs(_rng.gauss(0, wick_vol))), 5)
+        vol     = round(abs(_rng.gauss(_SYNTHETIC_VOL_MEAN, _SYNTHETIC_VOL_STDDEV)), 2)
         synthetic.append({
             "timestamp": ts,
             "open":   open_p,
