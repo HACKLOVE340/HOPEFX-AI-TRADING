@@ -14,13 +14,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { tradingApi } from '../hooks/useApi';
 import { usePositions, useAccount, useSignals } from '../hooks/useOrchestratorData';
-import { PositionsTable } from '../components/panels/PositionsTable';
-import { OrderEntryForm } from '../components/panels/OrderEntryForm';
-import { LiveSignalFeed } from '../components/panels/LiveSignalFeed';
-import { RiskDashboard } from '../components/panels/RiskDashboard';
-import { MLModelPanel } from '../components/panels/MLModelPanel';
-import { MicrostructurePanel } from '../components/panels/MicrostructurePanel';
-import { SentimentGauge } from '../components/panels/SentimentGauge';
+// Import guarded variants from the barrel — each panel has its own
+// PanelErrorBoundary so a crash in one never takes down the terminal.
+import {
+  PositionsTable,
+  OrderEntryForm,
+  LiveSignalFeedGuarded   as LiveSignalFeed,
+  RiskDashboardGuarded    as RiskDashboard,
+  MLModelPanelGuarded     as MLModelPanel,
+  MicrostructurePanelGuarded as MicrostructurePanel,
+  SentimentGaugeGuarded   as SentimentGauge,
+} from '../components/panels';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative } from '../lib/utils';
