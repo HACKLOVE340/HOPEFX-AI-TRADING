@@ -192,6 +192,30 @@ class AsyncRepository(Generic[ModelT]):
 
     # ── Bulk upsert ────────────────────────────────────────────────────────────
 
+    def _dialect_name(self, session: AsyncSession) -> str:
+        """
+        Return the dialect name for the session's underlying engine.
+
+        Works with both sync-wrapped and native async sessions.
+        Uses the engine URL string rather than calling get_bind() (which is
+        synchronous and raises on async sessions in SQLAlchemy 2.x).
+        """
+        try:
+            # SQLAlchemy 2.x async session exposes .bind (the async engine)
+            engine = session.bind
+            if engine is not None:
+                return engine.dialect.name
+        except Exception:
+            pass
+        try:
+            # Fallback: inspect the engine URL from the session's sync session
+            sync_session = session.sync_session
+            if sync_session.bind is not None:
+                return sync_session.bind.dialect.name
+        except Exception:
+            pass
+        return "unknown"
+
     async def bulk_upsert(
         self,
         session: AsyncSession,
@@ -215,8 +239,7 @@ class AsyncRepository(Generic[ModelT]):
         if not rows:
             return 0
 
-        bind = session.get_bind()
-        dialect_name = bind.dialect.name if bind is not None else "unknown"
+        dialect_name = self._dialect_name(session)
 
         if dialect_name == "postgresql":
             return await self._pg_bulk_upsert(
@@ -233,7 +256,7 @@ class AsyncRepository(Generic[ModelT]):
         update_columns: list[str] | None,
     ) -> int:
         mapper = inspect(self.model)
-        pk_names = [col.key for col in mapper.mapper.primary_key]
+        pk_names = [col.key for col in mapper.mapper.primary_key]  # type: ignore[attr-defined]
 
         if conflict_columns is None:
             conflict_columns = pk_names
@@ -262,7 +285,7 @@ class AsyncRepository(Generic[ModelT]):
     ) -> int:
         """Simple upsert fallback for non-PostgreSQL dialects."""
         mapper = inspect(self.model)
-        pk_names = [col.key for col in mapper.mapper.primary_key]
+        pk_names = [col.key for col in mapper.mapper.primary_key]  # type: ignore[attr-defined]
         count = 0
         for row in rows:
             pk_vals = {k: row[k] for k in pk_names if k in row}

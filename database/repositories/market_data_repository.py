@@ -213,8 +213,19 @@ class MarketDataRepository(AsyncRepository[MarketData]):
         if not bars:
             return 0
 
-        bind = session.get_bind()
-        dialect_name = bind.dialect.name if bind is not None else "unknown"
+        # Detect dialect without calling get_bind() (synchronous, breaks async sessions)
+        dialect_name = "unknown"
+        try:
+            engine = session.bind
+            if engine is not None:
+                dialect_name = engine.dialect.name
+        except Exception:
+            try:
+                sync_bind = session.sync_session.bind
+                if sync_bind is not None:
+                    dialect_name = sync_bind.dialect.name
+            except Exception:
+                pass
 
         if dialect_name == "postgresql":
             from sqlalchemy.dialects.postgresql import insert as pg_insert
