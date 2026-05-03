@@ -570,19 +570,133 @@ class PerformanceMetrics(Base):
     recorded_at = Column(DateTime, default=_utcnow, index=True)
 
 
+class TimestampMixin:
+    """
+    Mixin that adds created_at / updated_at columns to any model.
+
+    Works with both sync and async SQLAlchemy sessions because it uses
+    server_default (database-side) rather than Python-side default callables,
+    which avoids the "greenlet_spawn" error in async contexts.
+    """
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class SoftDeleteMixin:
+    """
+    Mixin that adds soft-delete support (deleted_at timestamp).
+
+    Rows are never physically removed; set deleted_at to mark as deleted.
+    Filter with ``Model.deleted_at.is_(None)`` in queries.
+    """
+
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
+
+
 class TickData(Base):
-    """Real-time tick data storage."""
+    """
+    Sub-millisecond tick data storage.
+
+    Schema is designed for TimescaleDB hypertable partitioning on ts_ns.
+    When TimescaleDB is not available the table works as a plain PostgreSQL
+    or SQLite table with the composite index providing equivalent query
+    performance for moderate data volumes.
+
+    TimescaleDB setup (run once after CREATE TABLE):
+        SELECT create_hypertable('tick_data', 'ts_ns',
+            chunk_time_interval => 86400000000000,  -- 1 day in ns
+            if_not_exists => TRUE);
+        SELECT add_compression_policy('tick_data', INTERVAL '7 days');
+
+    The ts_ns column stores nanosecond-epoch integers so that:
+      - Ordering is exact (no floating-point rounding)
+      - TimescaleDB can partition on it directly
+      - Python time.time_ns() maps directly without conversion
+    """
 
     __tablename__ = "tick_data"
+    __table_args__ = (
+        # Primary query pattern: latest N ticks for a symbol
+        Index("idx_tick_data_symbol_ts_ns", "symbol", "ts_ns", postgresql_using="brin"),
+        # Range queries: ticks between two timestamps
+        Index("idx_tick_data_ts_ns", "ts_ns"),
+        # Source-specific queries (feed health, per-source analytics)
+        Index("idx_tick_data_source_ts_ns", "source", "ts_ns"),
+    )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Nanosecond epoch — use time.time_ns() when inserting
+    ts_ns = Column(BigInteger, nullable=False, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     bid = Column(Float, nullable=False)
     ask = Column(Float, nullable=False)
+    # mid and spread are computed columns in TimescaleDB; stored here for
+    # compatibility with plain PostgreSQL / SQLite.
+    mid = Column(Float, nullable=True)
+    spread = Column(Float, nullable=True)
     last_price = Column(Float, nullable=True)
-    volume = Column(Float, nullable=True)
-    timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
-    source = Column(String(50), nullable=True)
+    volume = Column(Float, nullable=True, default=0.0)
+    # Legacy datetime column — kept for backward compatibility with existing
+    # queries that filter on timestamp.  New code should use ts_ns.
+    timestamp = Column(DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
+    source = Column(String(50), nullable=True, index=True)
+    # Quality flag: good | stale | suspect | rejected
+    quality = Column(String(20), nullable=True, default="good")
+    # Confidence score from multi-source consensus (0.0–1.0)
+    confidence = Column(Float, nullable=True, default=1.0)
+    # Lineage ID links back to DataLineageStore record
+    lineage_id = Column(String(36), nullable=True, index=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "ts_ns": self.ts_ns,
+            "symbol": self.symbol,
+            "bid": self.bid,
+            "ask": self.ask,
+            "mid": self.mid if self.mid is not None else (self.bid + self.ask) / 2.0,
+            "spread": self.spread if self.spread is not None else self.ask - self.bid,
+            "volume": self.volume,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "source": self.source,
+            "quality": self.quality,
+            "confidence": self.confidence,
+            "lineage_id": self.lineage_id,
+        }
+
+    @classmethod
+    def from_gold_tick(cls, tick: "Any") -> "TickData":
+        """Construct a TickData row from a data_layer.types.GoldTick."""
+        import time as _time
+
+        return cls(
+            ts_ns=int(tick.timestamp.timestamp() * 1_000_000_000),
+            symbol=tick.symbol,
+            bid=tick.bid,
+            ask=tick.ask,
+            mid=tick.mid,
+            spread=tick.spread,
+            volume=0.0,
+            timestamp=tick.timestamp,
+            source=str(tick.source),
+            quality=str(tick.quality),
+            confidence=tick.confidence,
+            lineage_id=tick.lineage_id,
+        )
 
 
 class WalletTransaction(Base):
@@ -646,15 +760,61 @@ class KYCRecord(Base):
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
-# Create indexes for common queries
+# ---------------------------------------------------------------------------
+# Composite indexes for common query patterns
+# ---------------------------------------------------------------------------
+
+# Trades
 Index("idx_trades_symbol_status", Trade.symbol, Trade.status)
 Index("idx_trades_entry_time", Trade.entry_time)
+# Covering index for the most common trade list query: user + status + time
+Index("idx_trades_user_status_entry", Trade.user_id, Trade.status, Trade.entry_time)
+# Partial-style: open trades by symbol (status filter applied in WHERE)
+Index("idx_trades_symbol_entry_time", Trade.symbol, Trade.entry_time)
+
+# Orders — Order has no user_id; use account_id + symbol as the covering key
 Index("idx_orders_symbol_created", Order.symbol, Order.created_at)
+Index("idx_orders_account_symbol_created", Order.account_id, Order.symbol, Order.created_at)
+
+# Signals
 Index("idx_signals_generated_executed", Signal.generated_at, Signal.executed)
+Index("idx_signals_symbol_generated", Signal.symbol, Signal.generated_at)
+
+# Account snapshots — no user_id column; timestamp is the only access key
 Index("idx_account_snapshots_timestamp", AccountSnapshot.timestamp)
+
+# Market data — symbol + timeframe + timestamp is the primary access pattern
+Index("idx_market_data_symbol_tf_ts", MarketData.symbol, MarketData.timeframe, MarketData.timestamp)
+
+# Wallet
 Index("idx_wallet_user_created", WalletTransaction.user_id, WalletTransaction.created_at)
+Index("idx_wallet_type_created", WalletTransaction.transaction_type, WalletTransaction.created_at)
+
+# Audit log
 Index("idx_audit_timestamp", AuditLogEntry.timestamp)
+Index("idx_audit_category_ts", AuditLogEntry.category, AuditLogEntry.timestamp)
+Index("idx_audit_actor_ts", AuditLogEntry.actor, AuditLogEntry.timestamp)
+Index("idx_audit_user_ts", AuditLogEntry.user_id, AuditLogEntry.timestamp)
+
+# KYC
 Index("idx_kyc_user", KYCRecord.user_id)
+Index("idx_kyc_status", KYCRecord.status)
+
+# Positions — open positions by user is the hot path
+Index("idx_positions_user_symbol", Position.user_id, Position.symbol)
+Index("idx_positions_user_status", Position.user_id, Position.status)
+
+# AI signals — generated_at is the existing indexed column
+Index("idx_ai_signals_symbol_ts", AISignal.symbol, AISignal.generated_at)
+Index("idx_ai_signals_executed_ts", AISignal.executed, AISignal.generated_at)
+
+# News data — published_at is the existing indexed column; symbols is a text field
+Index("idx_news_published_at", NewsData.published_at)
+Index("idx_news_source_published", NewsData.source, NewsData.published_at)
+
+# PerformanceMetric uses metric_type + name (not metric_name)
+Index("idx_perf_metric_type_name_ts", PerformanceMetric.metric_type, PerformanceMetric.name, PerformanceMetric.timestamp)
+Index("idx_perf_metric_symbol_ts", PerformanceMetric.symbol, PerformanceMetric.timestamp)
 
 
 def create_tables(engine):
