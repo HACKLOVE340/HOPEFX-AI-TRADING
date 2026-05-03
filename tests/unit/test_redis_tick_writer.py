@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import time
+from unittest.mock import AsyncMock, patch
 
 import fakeredis.aioredis as faio
 import pytest
@@ -110,10 +111,23 @@ class TestRedisTickWriterInit:
 class TestRedisTickWriterConnect:
     @pytest.mark.asyncio
     async def test_connect_returns_false_when_redis_unavailable(self):
-        """connect() must return False (not raise) when Redis is unreachable."""
+        """connect() must return False (not raise) when Redis is unreachable.
+
+        Patches both the async get_redis and the sync fakeredis fallback so
+        that no in-process substitute is returned, simulating a fully
+        unavailable Redis environment.
+        """
+        import cache.redis_client as rc_mod
+
         w = RedisTickWriter()
-        # cache.redis_client.get_redis will fail in test env — non-fatal.
-        result = await w.connect()
+        # Disable the async client AND the fakeredis fallback so connect()
+        # truly has no Redis to connect to.
+        with (
+            patch.object(rc_mod, "get_redis", new=AsyncMock(return_value=None)),
+            patch.object(rc_mod, "_fakeredis_instance", None),
+            patch.dict("sys.modules", {"fakeredis": None, "fakeredis.aioredis": None}),
+        ):
+            result = await w.connect()
         assert result is False
         assert w._redis is None
 
