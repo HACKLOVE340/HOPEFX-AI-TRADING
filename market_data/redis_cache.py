@@ -44,7 +44,7 @@ import os
 import threading
 import time
 import traceback
-from collections import defaultdict, deque
+from collections import OrderedDict, defaultdict, deque
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -69,6 +69,12 @@ _HOT_KEY_WINDOW_SECONDS: float = 60.0
 
 # Stampede lock TTL in seconds — how long a recompute lock is held.
 _STAMPEDE_LOCK_TTL: int = int(os.environ.get("CACHE_STAMPEDE_LOCK_TTL", "10"))
+
+# LRU cap for the in-process hot-key access log.
+# When the number of tracked keys exceeds this limit the least-recently-used
+# entry is evicted so the dict does not grow unbounded in systems with many
+# distinct symbols or key patterns.
+_ACCESS_LOG_MAX_KEYS: int = int(os.environ.get("CACHE_ACCESS_LOG_MAX_KEYS", "10000"))
 
 
 class MarketDataCache:
@@ -115,8 +121,11 @@ class MarketDataCache:
         self._hot_key_threshold_rps = hot_key_threshold_rps
         self._stampede_lock_ttl = stampede_lock_ttl
 
-        # Hot-key tracking: key → deque of access timestamps (monotonic)
-        self._access_log: dict[str, deque] = defaultdict(lambda: deque())
+        # Hot-key tracking: key → deque of access timestamps (monotonic).
+        # Uses an OrderedDict so we can evict the LRU entry when the dict
+        # exceeds _ACCESS_LOG_MAX_KEYS, preventing unbounded memory growth
+        # in systems with many distinct symbols or key patterns.
+        self._access_log: OrderedDict[str, deque] = OrderedDict()
         self._hot_keys: dict[str, float] = {}   # key → current rps
         self._access_lock = threading.Lock()    # protects _access_log / _hot_keys
 
@@ -125,10 +134,27 @@ class MarketDataCache:
     # ------------------------------------------------------------------
 
     def _record_access(self, key: str) -> None:
-        """Record a cache access and update hot-key status for *key*."""
+        """
+        Record a cache access and update hot-key status for *key*.
+
+        LRU eviction: when the access log exceeds _ACCESS_LOG_MAX_KEYS entries
+        the least-recently-used key is removed so memory stays bounded even
+        when the system tracks thousands of distinct symbols or key patterns.
+        """
         now = time.monotonic()
         with self._access_lock:
-            log = self._access_log[key]
+            if key in self._access_log:
+                # Move to end (most-recently-used position).
+                self._access_log.move_to_end(key)
+                log = self._access_log[key]
+            else:
+                # New key — evict LRU entry if at capacity.
+                if len(self._access_log) >= _ACCESS_LOG_MAX_KEYS:
+                    evicted_key, _ = self._access_log.popitem(last=False)
+                    self._hot_keys.pop(evicted_key, None)
+                log = deque()
+                self._access_log[key] = log
+
             log.append(now)
             # Evict accesses outside the rolling window.
             cutoff = now - _HOT_KEY_WINDOW_SECONDS
