@@ -8,6 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
@@ -176,6 +177,7 @@ function buildMemberCols(
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const SubAccounts: React.FC = () => {
+  const navigate = useNavigate();
   const [accounts, setAccounts]   = useState<SubAccount[]>([]);
   const [teams, setTeams]         = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -354,6 +356,10 @@ const SubAccounts: React.FC = () => {
         subtitle="Manage trading accounts and team access"
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigate('/trade')}
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              ⚡ Trade
+            </button>
             <button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>+ Sub-Account</button>
             <button onClick={() => setShowCreateTeam(true)} style={s.secondaryBtn}>+ Team</button>
           </div>

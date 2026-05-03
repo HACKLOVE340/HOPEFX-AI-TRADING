@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -249,6 +250,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const TeamsPage: React.FC = () => {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<Team | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -295,11 +297,21 @@ const TeamsPage: React.FC = () => {
             Collaborative trading with shared strategies and P&L — enterprise tier
           </p>
         </div>
-        <button onClick={() => setShowCreate(s => !s)}
-          style={{ padding: '9px 18px', background: '#06b6d4', color: '#fff', border: 'none',
-            borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          + New Team
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/leaderboard')}
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            🏆 Leaderboard
+          </button>
+          <button onClick={() => navigate('/copy-trading')}
+            style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, color: '#34d399', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            🔁 Copy Trading
+          </button>
+          <button onClick={() => setShowCreate(s => !s)}
+            style={{ padding: '9px 18px', background: '#06b6d4', color: '#fff', border: 'none',
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            + New Team
+          </button>
+        </div>
       </div>
 
       {/* Create form */}

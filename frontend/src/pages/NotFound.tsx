@@ -131,6 +131,36 @@ const NotFound: React.FC = () => {
           Go Back
         </button>
       </div>
+
+      {/* Quick links for authenticated users */}
+      {isAuth && (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'center', marginTop: '0.5rem' }}>
+          {[
+            { label: '⚡ Trade',       path: '/trade'      },
+            { label: '📡 Signals',     path: '/signals'    },
+            { label: '📓 Journal',     path: '/journal'    },
+            { label: '📊 Performance', path: '/performance'},
+            { label: '🛡 Risk Calc',   path: '/risk-calculator' },
+          ].map(({ label, path }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              style={{
+                background:   'rgba(59,130,246,0.08)',
+                border:       '1px solid #1e2d3d',
+                borderRadius: '6px',
+                color:        '#64748b',
+                cursor:       'pointer',
+                fontSize:     '0.75rem',
+                fontWeight:   600,
+                padding:      '6px 12px',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

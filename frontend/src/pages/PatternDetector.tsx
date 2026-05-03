@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { tradingApi } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -61,9 +62,11 @@ function riskReward(entry: number, target: number, stop: number): string {
 
 interface PatternCardProps {
   pattern: DetectedPattern;
+  symbol: string;
+  onTrade: (p: DetectedPattern) => void;
 }
 
-const PatternCard: React.FC<PatternCardProps> = ({ pattern }) => {
+const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) => {
   const bullish = pattern.direction === 'bullish';
   const dirColor = bullish ? '#4ade80' : '#f87171';
   const barColor = confidenceColor(pattern.confidence);
@@ -127,9 +130,24 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern }) => {
       </div>
 
       {pattern.description && (
-        <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', lineHeight: 1.6 }}>
+        <p style={{ margin: 0, fontSize: 12, color: '#94a3b8', lineHeight: 1.6, marginBottom: 12 }}>
           {pattern.description}
         </p>
+      )}
+
+      {pattern.confidence >= 0.5 && (
+        <button
+          onClick={() => onTrade(pattern)}
+          style={{
+            width: '100%', padding: '8px 0', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
+            fontSize: 13, fontFamily: 'inherit',
+            background: bullish ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+            border: `1px solid ${bullish ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
+            color: bullish ? '#4ade80' : '#f87171',
+          }}
+        >
+          ⚡ {bullish ? 'BUY' : 'SELL'} {symbol} — Trade This Pattern
+        </button>
       )}
     </div>
   );
@@ -138,6 +156,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern }) => {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 const PatternDetector: React.FC = () => {
+  const navigate = useNavigate();
   const [symbol, setSymbol]     = useState<string>('XAU/USD');
   const [timeframe, setTimeframe] = useState<string>('1h');
   const [minConf, setMinConf]   = useState<number>(0.5);
@@ -167,6 +186,19 @@ const PatternDetector: React.FC = () => {
     }
   }, [symbol, timeframe, minConf]);
 
+  const handleTrade = (p: DetectedPattern) => {
+    navigate('/trade', {
+      state: {
+        signal: {
+          symbol,
+          direction: p.direction === 'bullish' ? 'BUY' : 'SELL',
+          stop_loss: p.stop_loss,
+          take_profit: p.target_price,
+        }
+      }
+    });
+  };
+
   // Auto-scan on mount and when params change
   useEffect(() => { scan(); }, [scan]);
 
@@ -177,6 +209,17 @@ const PatternDetector: React.FC = () => {
         <div>
           <h1 style={s.title}>Pattern Detector</h1>
           <p style={s.subtitle}>AI-powered chart pattern recognition for XAU/USD and major instruments</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
+            🧠 AI Chart
+          </button>
+          <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
+            🤖 AI Strategy
+          </button>
+          <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
+            🛡 Risk Calc
+          </button>
         </div>
 
         {/* Controls */}
@@ -267,7 +310,7 @@ const PatternDetector: React.FC = () => {
             </div>
             <div style={s.grid}>
               {data.patterns.map((p, i) => (
-                <PatternCard key={`${p.pattern_type}-${p.start_index}-${i}`} pattern={p} />
+                <PatternCard key={`${p.pattern_type}-${p.start_index}-${i}`} pattern={p} symbol={symbol} onTrade={handleTrade} />
               ))}
             </div>
           </div>
@@ -329,6 +372,11 @@ const s: Record<string, React.CSSProperties> = {
     borderTopColor: '#3b82f6',
     borderRadius: '50%',
     animation: 'spin 0.8s linear infinite',
+  },
+  navBtn: {
+    background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
+    color: '#94a3b8', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+    padding: '6px 14px', fontFamily: 'inherit',
   },
 };
 

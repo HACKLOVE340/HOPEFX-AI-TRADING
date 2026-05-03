@@ -13,6 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
@@ -87,6 +88,7 @@ async function clearLockdown(): Promise<void> {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const SecurityDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [attacks, setAttacks] = useState<AttackLog>({});
   const [lockdown, setLockdown] = useState<LockdownStatus>({ lockdown_active: false });
   const [blockedIPs, setBlockedIPs] = useState<string[]>([]);
@@ -184,6 +186,18 @@ const SecurityDashboard: React.FC = () => {
       <PageHeader
         title="Security Operations"
         subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring"
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigate('/')}
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              📊 Dashboard
+            </button>
+            <button onClick={() => navigate('/audit-log')}
+              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              📋 Audit Log
+            </button>
+          </div>
+        }
       />
 
       {/* Lockdown banner + toggle */}

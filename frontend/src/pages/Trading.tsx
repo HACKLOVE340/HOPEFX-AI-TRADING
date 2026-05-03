@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -84,6 +85,7 @@ interface TopBarProps {
 }
 
 function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: TopBarProps) {
+  const navigate = useNavigate();
   const account = useStore((s) => s.account);
 
   return (
@@ -154,6 +156,16 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
           <span className="text-slate-500">P&L <span className={cn('font-semibold', account.daily_pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>{fmtPnl(account.daily_pnl)}</span></span>
         </div>
       )}
+
+      {/* Quick nav */}
+      <button onClick={() => navigate('/journal')}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+        📓 Journal
+      </button>
+      <button onClick={() => navigate('/risk-calculator')}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+        🛡 Risk Calc
+      </button>
 
       {/* WS status */}
       <span className={cn(

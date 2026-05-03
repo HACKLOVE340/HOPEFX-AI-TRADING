@@ -9,6 +9,7 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -253,6 +254,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 const WhitelabelAdmin: React.FC = () => {
+  const navigate = useNavigate();
   const [tenants,    setTenants]    = useState<Tenant[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [loadErr,    setLoadErr]    = useState<string | null>(null);
@@ -328,7 +330,17 @@ const WhitelabelAdmin: React.FC = () => {
           <h1 style={s.title}>Whitelabel Tenants</h1>
           <p style={s.subtitle}>Manage prop-firm and reseller branded deployments.</p>
         </div>
-        <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/trade')}
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚡ Trade
+          </button>
+          <button onClick={() => navigate('/performance')}
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📊 Performance
+          </button>
+          <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
+        </div>
       </div>
 
       {/* API key message */}
