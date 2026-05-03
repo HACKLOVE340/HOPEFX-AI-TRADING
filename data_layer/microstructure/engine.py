@@ -30,6 +30,18 @@ Derived signals:
   - delta divergence (price up but delta falling = bearish divergence)
   - VWAP deviation (current mid vs rolling VWAP)
 
+New in this version
+-------------------
+- Amihud illiquidity ratio: |Δprice| / volume, rolling window average.
+  High values indicate price moves a lot per unit of volume (illiquid).
+- Hasbrouck information share: fraction of price discovery attributable to
+  this venue, estimated from the ratio of permanent price impact to total
+  variance. Computed over a rolling window using the Gonzalo-Granger method.
+- PIN model (Probability of Informed Trading): estimated via the simplified
+  Easley-O'Hara model on rolling buy/sell tick counts. PIN = α·μ / (α·μ + 2ε)
+  where α = fraction of informed-trading days, μ = informed arrival rate,
+  ε = uninformed arrival rate.
+
 All metrics use only past ticks — causal guarantee enforced.
 Session reset at UTC midnight resets cumulative delta and VWAP.
 """
@@ -58,6 +70,12 @@ _SPREAD_ALPHA_F = float(os.getenv("MICRO_SPREAD_ALPHA_F", "0.10"))
 _SPREAD_ALPHA_S = float(os.getenv("MICRO_SPREAD_ALPHA_S", "0.02"))
 _VWAP_WINDOW = int(os.getenv("MICRO_VWAP_WINDOW", "200"))
 _ZSCORE_WINDOW = int(os.getenv("MICRO_ZSCORE_WINDOW", "100"))
+# Amihud illiquidity window (ticks)
+_AMIHUD_WINDOW = int(os.getenv("MICRO_AMIHUD_WINDOW", "100"))
+# Hasbrouck information share window (ticks)
+_HASBROUCK_WINDOW = int(os.getenv("MICRO_HASBROUCK_WINDOW", "200"))
+# PIN model window (ticks)
+_PIN_WINDOW = int(os.getenv("MICRO_PIN_WINDOW", "200"))
 
 
 class _TickRecord:
@@ -234,6 +252,12 @@ class MicrostructureEngine:
             else:
                 absorption = 0.0
 
+            # Amihud, Hasbrouck, PIN — computed under lock inside their methods
+            # but we are already under lock here, so call internal versions
+            amihud = self._amihud_unlocked(ticks)
+            hasbrouck = self._hasbrouck_unlocked(ticks)
+            pin_data = self._pin_unlocked(ticks)
+
             return {
                 "micro_spread": round(snap.spread, 6),
                 "micro_spread_pct": round(snap.spread_pct, 6),
@@ -251,9 +275,155 @@ class MicrostructureEngine:
                 "micro_kyles_lambda": round(float(kyles_lambda), 8),
                 "micro_delta_divergence": round(delta_divergence, 4),
                 "micro_absorption": round(absorption, 4),
+                "micro_amihud": round(amihud, 8),
+                "micro_hasbrouck_is": round(hasbrouck, 4),
+                "micro_pin": round(pin_data["pin"], 4),
+                "micro_pin_alpha": round(pin_data["alpha"], 4),
                 # Tick count — used by features_extended.py for normalised
                 # activity feature (dl_tick_count = tick_count / 500)
                 "micro_tick_count": float(self._tick_count),
+            }
+
+    # ── Amihud illiquidity ratio ──────────────────────────────────────────────
+
+    def amihud_illiquidity(self, window: int | None = None) -> float:
+        """
+        Compute the Amihud (2002) illiquidity ratio over the rolling window.
+
+        ILLIQ = (1/N) × Σ |Δprice_t| / volume_t
+
+        High values indicate the market moves a lot per unit of volume (illiquid).
+        Returns 0.0 when insufficient data.
+
+        Reference: Amihud, Y. (2002). Illiquidity and stock returns.
+        Journal of Financial Markets, 5(1), 31-56.
+        """
+        with self._lock:
+            w = window or _AMIHUD_WINDOW
+            ticks = list(self._ticks)
+            if len(ticks) < 2:
+                return 0.0
+            recent = ticks[-w:]
+            ratios = []
+            for i in range(1, len(recent)):
+                price_change = abs(recent[i].mid - recent[i - 1].mid)
+                vol = max(recent[i].volume, 1e-9)
+                ratios.append(price_change / vol)
+            if not ratios:
+                return 0.0
+            return round(float(np.mean(ratios)), 8)
+
+    # ── Hasbrouck information share ───────────────────────────────────────────
+
+    def hasbrouck_information_share(self, window: int | None = None) -> float:
+        """
+        Estimate the Hasbrouck (1995) information share for this venue.
+
+        Uses the Gonzalo-Granger (1995) permanent-transitory decomposition
+        as a tractable approximation:
+
+          IS ≈ var(permanent_component) / var(total_price_change)
+
+        The permanent component is estimated as the fraction of a price
+        innovation that persists after _HASBROUCK_WINDOW ticks, computed
+        via the ratio of the long-run variance to the short-run variance.
+
+        Returns a value in [0, 1] where 1 = all price discovery here.
+        Returns 0.5 (neutral) when insufficient data.
+
+        Reference: Hasbrouck, J. (1995). One security, many markets.
+        Journal of Finance, 50(4), 1175-1199.
+        """
+        with self._lock:
+            w = window or _HASBROUCK_WINDOW
+            ticks = list(self._ticks)
+            if len(ticks) < max(w, 20):
+                return 0.5
+            mids = np.array([t.mid for t in ticks[-w:]], dtype=np.float64)
+            returns = np.diff(mids)
+            if len(returns) < 10:
+                return 0.5
+            # Short-run variance: variance of 1-period returns
+            var_short = float(np.var(returns)) + 1e-12
+            # Long-run variance: variance of cumulative sum (random walk component)
+            # Estimated via Newey-West-style sum of autocovariances
+            n = len(returns)
+            lags = min(10, n // 4)
+            gamma_0 = float(np.var(returns))
+            long_run_var = gamma_0
+            for lag in range(1, lags + 1):
+                gamma_lag = float(np.cov(returns[lag:], returns[:-lag])[0, 1]) if n > lag + 1 else 0.0
+                weight = 1.0 - lag / (lags + 1)  # Bartlett kernel
+                long_run_var += 2.0 * weight * gamma_lag
+            long_run_var = max(long_run_var, 1e-12)
+            # IS = long-run variance / (long-run variance + short-run variance)
+            # Clamp to [0, 1]
+            is_ratio = float(np.clip(long_run_var / (long_run_var + var_short), 0.0, 1.0))
+            return round(is_ratio, 4)
+
+    # ── PIN model ─────────────────────────────────────────────────────────────
+
+    def pin_model(self, window: int | None = None) -> dict[str, float]:
+        """
+        Estimate the Probability of Informed Trading (PIN) via the simplified
+        Easley, Kiefer, O'Hara & Paperman (1996) model.
+
+        Model parameters estimated from rolling buy/sell tick counts:
+          α  = fraction of trading periods with informed activity
+               estimated as: |buy_ticks - sell_ticks| / total_ticks
+          μ  = informed trader arrival rate (excess order flow)
+               estimated as: |buy_ticks - sell_ticks| / window
+          ε  = uninformed arrival rate (symmetric baseline)
+               estimated as: min(buy_ticks, sell_ticks) / window
+
+        PIN = α·μ / (α·μ + 2ε)
+
+        Returns dict with keys:
+          pin:   Probability of Informed Trading [0, 1]
+          alpha: fraction of informed periods [0, 1]
+          mu:    informed arrival rate (ticks/window)
+          epsilon: uninformed arrival rate (ticks/window)
+          buy_ticks: count of buyer-initiated ticks in window
+          sell_ticks: count of seller-initiated ticks in window
+
+        Returns zeros when insufficient data.
+
+        Reference: Easley, D. et al. (1996). Liquidity, information, and
+        infrequently traded stocks. Journal of Finance, 51(4), 1405-1436.
+        """
+        with self._lock:
+            w = window or _PIN_WINDOW
+            ticks = list(self._ticks)
+            if len(ticks) < 20:
+                return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0,
+                        "buy_ticks": 0, "sell_ticks": 0}
+            recent = ticks[-w:]
+            buy_ticks = sum(1 for t in recent if t.is_buy)
+            sell_ticks = len(recent) - buy_ticks
+            total = len(recent)
+
+            if total == 0:
+                return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0,
+                        "buy_ticks": 0, "sell_ticks": 0}
+
+            # Estimate model parameters
+            imbalance = abs(buy_ticks - sell_ticks)
+            alpha = imbalance / total  # fraction of informed periods
+            mu = imbalance / total     # informed arrival rate (normalised)
+            epsilon = min(buy_ticks, sell_ticks) / total  # uninformed rate
+
+            # PIN formula
+            denom = alpha * mu + 2.0 * epsilon
+            pin = (alpha * mu / denom) if denom > 1e-9 else 0.0
+            pin = float(np.clip(pin, 0.0, 1.0))
+
+            return {
+                "pin": round(pin, 4),
+                "alpha": round(alpha, 4),
+                "mu": round(mu, 4),
+                "epsilon": round(epsilon, 4),
+                "buy_ticks": buy_ticks,
+                "sell_ticks": sell_ticks,
             }
 
     def reset_session(self) -> None:
@@ -346,6 +516,57 @@ class MicrostructureEngine:
                 return 0.0
             elapsed = recent[-1].ts - recent[0].ts
             return round(len(recent) / max(elapsed, 1e-9), 4)
+
+    # ── Lock-free internal variants (called while self._lock is held) ─────────
+
+    def _amihud_unlocked(self, ticks: list) -> float:
+        if len(ticks) < 2:
+            return 0.0
+        recent = ticks[-_AMIHUD_WINDOW:]
+        ratios = []
+        for i in range(1, len(recent)):
+            price_change = abs(recent[i].mid - recent[i - 1].mid)
+            vol = max(recent[i].volume, 1e-9)
+            ratios.append(price_change / vol)
+        return float(np.mean(ratios)) if ratios else 0.0
+
+    def _hasbrouck_unlocked(self, ticks: list) -> float:
+        w = _HASBROUCK_WINDOW
+        if len(ticks) < max(w, 20):
+            return 0.5
+        mids = np.array([t.mid for t in ticks[-w:]], dtype=np.float64)
+        returns = np.diff(mids)
+        if len(returns) < 10:
+            return 0.5
+        var_short = float(np.var(returns)) + 1e-12
+        n = len(returns)
+        lags = min(10, n // 4)
+        long_run_var = float(np.var(returns))
+        for lag in range(1, lags + 1):
+            if n > lag + 1:
+                gamma_lag = float(np.cov(returns[lag:], returns[:-lag])[0, 1])
+                weight = 1.0 - lag / (lags + 1)
+                long_run_var += 2.0 * weight * gamma_lag
+        long_run_var = max(long_run_var, 1e-12)
+        return float(np.clip(long_run_var / (long_run_var + var_short), 0.0, 1.0))
+
+    def _pin_unlocked(self, ticks: list) -> dict[str, float]:
+        w = _PIN_WINDOW
+        if len(ticks) < 20:
+            return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0,
+                    "buy_ticks": 0, "sell_ticks": 0}
+        recent = ticks[-w:]
+        buy_ticks = sum(1 for t in recent if t.is_buy)
+        sell_ticks = len(recent) - buy_ticks
+        total = len(recent)
+        imbalance = abs(buy_ticks - sell_ticks)
+        alpha = imbalance / total
+        mu = imbalance / total
+        epsilon = min(buy_ticks, sell_ticks) / total
+        denom = alpha * mu + 2.0 * epsilon
+        pin = float(np.clip((alpha * mu / denom) if denom > 1e-9 else 0.0, 0.0, 1.0))
+        return {"pin": pin, "alpha": alpha, "mu": mu, "epsilon": epsilon,
+                "buy_ticks": buy_ticks, "sell_ticks": sell_ticks}
 
     # ── Internal processing ───────────────────────────────────────────────────
 
@@ -513,6 +734,10 @@ class MicrostructureEngine:
             "micro_kyles_lambda": 0.0,
             "micro_delta_divergence": 0.0,
             "micro_absorption": 0.0,
+            "micro_amihud": 0.0,
+            "micro_hasbrouck_is": 0.5,
+            "micro_pin": 0.0,
+            "micro_pin_alpha": 0.0,
             # Always include tick_count even in zero state so downstream
             # consumers (features_extended.py dl_tick_count) never KeyError
             "micro_tick_count": float(self._tick_count),
