@@ -178,7 +178,7 @@ const AIStrategyGenerator: React.FC = () => {
             runs a backtest, and lets you deploy it to paper trading in one click.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {(['generate', 'history'] as const).map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               ...s.tabBtn,
@@ -187,6 +187,15 @@ const AIStrategyGenerator: React.FC = () => {
               {t === 'generate' ? '✨ Generate' : `📋 History (${history.length})`}
             </button>
           ))}
+          <div style={{ width: 1, height: 20, background: '#334155' }} />
+          <button onClick={() => navigate('/pattern-detector')}
+            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🔍 Patterns
+          </button>
+          <button onClick={() => navigate('/ab-testing')}
+            style={{ padding: '6px 13px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚡ A/B Test
+          </button>
         </div>
       </div>
 
