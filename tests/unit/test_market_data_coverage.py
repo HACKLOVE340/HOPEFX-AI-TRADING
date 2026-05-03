@@ -177,7 +177,7 @@ class TestFeedHandler:
         self.fh.subscribe(["BTCUSDT"])
         raw = {
             "s": "BTCUSDT",
-            "E": 1700000000000,
+            "E": int(time.time() * 1000),  # current timestamp in ms — avoids stale-tick rejection
             "b": "30000.0",
             "a": "30001.0",
             "B": "1.5",
@@ -416,6 +416,56 @@ class TestMarketDataValidator:
 from market_data.redis_cache import MarketDataCache
 
 
+class _FakeRedisPipeline:
+    """Pipeline proxy that queues commands against a FakeRedis instance."""
+
+    def __init__(self, redis: "FakeRedis"):
+        self._redis = redis
+        self._queue: list[tuple] = []
+
+    def zadd(self, key, mapping):
+        self._queue.append(("zadd", key, mapping))
+        return self
+
+    def zremrangebyscore(self, key, min_score, max_score):
+        self._queue.append(("zremrangebyscore", key, min_score, max_score))
+        return self
+
+    def zremrangebyrank(self, key, start, stop):
+        self._queue.append(("zremrangebyrank", key, start, stop))
+        return self
+
+    def expire(self, key, seconds):
+        self._queue.append(("expire", key, seconds))
+        return self
+
+    def setex(self, key, seconds, value):
+        self._queue.append(("setex", key, seconds, value))
+        return self
+
+    def execute(self):
+        results = []
+        for cmd in self._queue:
+            op = cmd[0]
+            if op == "zadd":
+                self._redis.zadd(cmd[1], cmd[2])
+                results.append(1)
+            elif op == "zremrangebyscore":
+                self._redis.zremrangebyscore(cmd[1], cmd[2], cmd[3])
+                results.append(0)
+            elif op == "zremrangebyrank":
+                self._redis.zremrangebyrank(cmd[1], cmd[2], cmd[3])
+                results.append(0)
+            elif op == "expire":
+                self._redis.expire(cmd[1], cmd[2])
+                results.append(1)
+            elif op == "setex":
+                self._redis.setex(cmd[1], cmd[2], cmd[3])
+                results.append("OK")
+        self._queue.clear()
+        return results
+
+
 class FakeRedis:
     """In-process fake Redis for testing without a live server."""
 
@@ -423,6 +473,8 @@ class FakeRedis:
         self._zsets: dict[str, dict[str, float]] = {}
         self._strings: dict[str, str] = {}
         self._ttls: dict[str, int] = {}
+
+    # ── sorted-set ops ────────────────────────────────────────────────────────
 
     def zadd(self, key, mapping):
         if key not in self._zsets:
@@ -446,8 +498,26 @@ class FakeRedis:
                 result.append(k.encode() if isinstance(k, str) else k)
         return result
 
+    def zremrangebyscore(self, key, min_score, max_score):
+        if key not in self._zsets:
+            return
+        self._zsets[key] = {
+            k: s for k, s in self._zsets[key].items()
+            if not (s >= (min_score if min_score != "-inf" else float("-inf")) and
+                    s <= (max_score if max_score != "+inf" else float("inf")))
+        }
+
     def zremrangebyrank(self, key, start, stop):
-        pass  # simplified
+        if key not in self._zsets:
+            return
+        items = sorted(self._zsets[key].items(), key=lambda x: x[1])
+        if stop < 0:
+            stop = len(items) + stop
+        to_remove = [k for k, _ in items[start : stop + 1]]
+        for k in to_remove:
+            self._zsets[key].pop(k, None)
+
+    # ── string ops ────────────────────────────────────────────────────────────
 
     def expire(self, key, seconds):
         self._ttls[key] = seconds
@@ -459,8 +529,18 @@ class FakeRedis:
     def set(self, key, value, ex=None):
         self._strings[key] = value
 
+    def setex(self, key, seconds, value):
+        self._strings[key] = value
+        self._ttls[key] = seconds
+
     def ping(self):
         return True
+
+    # ── pipeline ──────────────────────────────────────────────────────────────
+
+    def pipeline(self, transaction=True):
+        """Return a pipeline that queues commands and executes them on .execute()."""
+        return _FakeRedisPipeline(self)
 
 
 class TestMarketDataCache:
