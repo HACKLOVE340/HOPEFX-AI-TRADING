@@ -1296,13 +1296,22 @@ class TestValidationAdditional:
         except TypeError:
             pass  # known production-code limitation with naive/aware mix
 
-    def test_is_trading_hours_always_true(self):
-        """Line 149: _is_trading_hours returns True (forex 24/5)."""
+    def test_is_trading_hours_weekday_true(self):
+        """_is_trading_hours returns True on a weekday (forex 24/5)."""
         from market_data.validation import MarketDataValidator
 
         v = MarketDataValidator()
-        dt = datetime.now(UTC)
-        assert v._is_trading_hours(dt, "XAUUSD") is True
+        # Use a fixed Monday so the test is not day-of-week sensitive.
+        monday = datetime(2024, 1, 8, 12, 0, 0, tzinfo=UTC)  # 2024-01-08 is a Monday
+        assert v._is_trading_hours(monday, "XAUUSD") is True
+
+    def test_is_trading_hours_weekend_false(self):
+        """_is_trading_hours returns False on a weekend (forex closed Sat/Sun)."""
+        from market_data.validation import MarketDataValidator
+
+        v = MarketDataValidator()
+        saturday = datetime(2024, 1, 6, 12, 0, 0, tzinfo=UTC)  # 2024-01-06 is a Saturday
+        assert v._is_trading_hours(saturday, "XAUUSD") is False
 
     def test_validate_ohlc_with_datetime_index_no_gaps(self):
         """Lines 223-227: DatetimeIndex gap-check branch — no gaps."""
