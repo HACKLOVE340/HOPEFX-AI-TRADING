@@ -365,7 +365,17 @@ class ProductionDataEngine:
     # ── Price fetching ────────────────────────────────────────────────────────
 
     async def _fetch_price(self, provider: str) -> bool:
-        """Attempt to fetch a price from *provider*. Returns True on success."""
+        """
+        Attempt to fetch a price from *provider*. Returns True on success.
+
+        3-path fallback order (enforced by _pick_provider / _fallback_order):
+          1. goldapi       — primary REST source
+          2. metalpriceapi — secondary REST source
+          3. mt5_demo      — last-resort MT5 demo connection
+
+        Health scoring is done exclusively in _continuous_stream to avoid
+        double-counting: this method only returns True/False.
+        """
         if provider == "mt5_demo":
             return await self._fetch_from_mt5()
 
@@ -378,8 +388,7 @@ class ProductionDataEngine:
                     self._fail_count[provider] = 0
                     await self._broadcast(price)
                     return True
-                # Out-of-range price counts as a soft failure
-                self._health[provider].record_failure() if provider in self._health else None
+                # Out-of-range price — log and retry without double-penalising health
                 logger.debug("Provider '%s' returned out-of-range price: %s", provider, price)
             except TimeoutError:
                 logger.warning(
@@ -488,9 +497,40 @@ class ProductionDataEngine:
 
     @staticmethod
     def _load_config(path: str) -> dict:
+        """
+        Load the data-feed YAML config.
+
+        Falls back to a built-in default configuration when the file is absent
+        so the engine can start in environments where the config file has not
+        yet been deployed (e.g. CI, Docker first-run).  A warning is logged so
+        operators know the default is in use.
+        """
         config_path = Path(path)
         if not config_path.exists():
-            raise FileNotFoundError(f"Data feed config not found: {config_path.resolve()}")
+            logger.warning(
+                "Data feed config not found at %s — using built-in defaults. "
+                "Create config/data_feed.yaml to customise.",
+                config_path.resolve(),
+            )
+            return {
+                "data_feed": {
+                    "primary": "goldapi",
+                    "fallback_order": ["goldapi", "metalpriceapi", "mt5_demo"],
+                    "history_size": 5000,
+                    "timeout_seconds": 4,
+                    "max_retries": 3,
+                    "circuit_breaker_threshold": 5,
+                    "goldapi": {
+                        "url": "${GOLDAPI_URL:https://www.goldapi.io/api/XAU/USD}",
+                        "api_key": "${GOLDAPI_KEY:}",
+                    },
+                    "metalpriceapi": {
+                        "url": "${METALPRICEAPI_URL:https://api.metalpriceapi.com/v1/latest?base=USD&currencies=XAU}",
+                        "api_key": "${METALPRICEAPI_KEY:}",
+                    },
+                    "mt5_demo": {},
+                }
+            }
         with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)
 
