@@ -91,6 +91,12 @@ CREATE TABLE IF NOT EXISTS lineage_records (
     payload        TEXT NOT NULL,
     created_at     TEXT NOT NULL
 );
+"""
+
+# Indexes are applied separately — after _migrate_schema() has ensured all
+# columns exist — so that CREATE INDEX on parent_id never runs against a
+# schema that pre-dates the column.
+_CREATE_INDEXES_SQL = """
 CREATE INDEX IF NOT EXISTS idx_lineage_timestamp  ON lineage_records(timestamp);
 CREATE INDEX IF NOT EXISTS idx_lineage_type       ON lineage_records(record_type);
 CREATE INDEX IF NOT EXISTS idx_lineage_source     ON lineage_records(source);
@@ -136,6 +142,52 @@ class DataLineageStore:
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
+    def _migrate_schema(self) -> None:
+        """Apply incremental schema migrations to an existing database.
+
+        CREATE TABLE IF NOT EXISTS only adds the table when it is absent; it
+        does not add columns that were introduced after the initial schema was
+        created.  This method detects and applies those missing columns so
+        existing databases are upgraded in-place without data loss.
+        """
+        cursor = self._conn.execute("PRAGMA table_info(lineage_records)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        migrations: list[str] = []
+
+        # parent_id was added after the initial schema — add it when absent.
+        if "parent_id" not in existing_columns:
+            migrations.append(
+                "ALTER TABLE lineage_records ADD COLUMN parent_id TEXT"
+            )
+            migrations.append(
+                "CREATE INDEX IF NOT EXISTS idx_lineage_parent_id "
+                "ON lineage_records(parent_id)"
+            )
+
+        # schema_version defaulted to TEXT in some early builds — ensure INTEGER.
+        # SQLite does not support ALTER COLUMN, so we only add the index if the
+        # column already exists (it always does from the original schema).
+        if "schema_version" in existing_columns:
+            migrations.append(
+                "CREATE INDEX IF NOT EXISTS idx_lineage_schema_version "
+                "ON lineage_records(schema_version)"
+            )
+
+        for sql in migrations:
+            try:
+                self._conn.execute(sql)
+                logger.info("DataLineageStore migration applied: %s", sql[:60])
+            except sqlite3.OperationalError as exc:
+                # "duplicate column name" or "index already exists" are safe to ignore.
+                if "already exists" in str(exc) or "duplicate column" in str(exc):
+                    logger.debug("DataLineageStore migration skipped (already applied): %s", exc)
+                else:
+                    raise
+
+        if migrations:
+            self._conn.commit()
+
     def start(self) -> None:
         """Initialise DB and start background writer + pruner threads."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -148,7 +200,14 @@ class DataLineageStore:
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA cache_size=-32000")  # 32MB cache
+        # Create table first (no indexes yet — parent_id may not exist in old DBs).
         self._conn.executescript(_CREATE_TABLE_SQL)
+        self._conn.commit()
+        # Migrate schema (adds missing columns like parent_id) before creating
+        # indexes that reference those columns.
+        self._migrate_schema()
+        # Now safe to create all indexes — all columns are guaranteed to exist.
+        self._conn.executescript(_CREATE_INDEXES_SQL)
         self._conn.commit()
 
         self._running = True
