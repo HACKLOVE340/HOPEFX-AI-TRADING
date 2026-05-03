@@ -605,50 +605,74 @@ async def _eventbus_signal_broadcaster() -> None:
     """
     Subscribe to hopefx:signal and forward signal_events to clients
     subscribed to the 'signals' channel.
+
+    The inner loop runs forever — bus.subscribe() never returns on its own
+    (it switches to the local fallback queue when Redis is unavailable).
+    The outer retry loop guards against unexpected exceptions so the task
+    never exits and the done-callback never fires a spurious restart.
     """
-    try:
-        from core.event_bus import CH_SIGNAL, bus
+    _RETRY_DELAY: float = 2.0
 
-        await bus.connect()
-        async for msg in bus.subscribe(CH_SIGNAL):
-            if msg.get("type") != "signal_event":
-                continue
-            if _manager.connection_count == 0:
-                continue
-            # Normalise to the frontend WsMessage schema:
-            # { type: "signal", data: Signal }
-            direction_raw = (msg.get("direction") or "neutral").lower()
-            direction_fe = "long" if direction_raw == "buy" else "short" if direction_raw == "sell" else "neutral"
-            mid = msg.get("mid", 0.0)
-            symbol = msg.get("symbol", "XAU/USD")
+    while True:
+        try:
+            from core.event_bus import CH_SIGNAL, bus
 
-            # Use signal-engine-provided SL/TP when present; compute ATR-based
-            # levels only when the upstream signal did not supply them.
-            sl = msg.get("stop_loss")
-            tp = msg.get("take_profit")
-            if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
-                computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
-                sl = sl if sl is not None else computed_sl
-                tp = tp if tp is not None else computed_tp
+            await bus.connect()
+            async for msg in bus.subscribe(CH_SIGNAL):
+                if msg.get("type") != "signal_event":
+                    continue
+                if _manager.connection_count == 0:
+                    continue
+                # Normalise to the frontend WsMessage schema:
+                # { type: "signal", data: Signal }
+                direction_raw = (msg.get("direction") or "neutral").lower()
+                direction_fe = (
+                    "long" if direction_raw == "buy"
+                    else "short" if direction_raw == "sell"
+                    else "neutral"
+                )
+                mid = msg.get("mid", 0.0)
+                symbol = msg.get("symbol", "XAU/USD")
 
-            signal = {
-                "type": "signal",
-                "data": {
-                    "id": f"sig_{msg.get('tick_seq', 0)}",
-                    "symbol": symbol,
-                    "direction": direction_fe,
-                    "confidence": msg.get("confidence", 0.0),
-                    "model": msg.get("model_version", "advanced_oos"),
-                    "entry_price": mid,
-                    "stop_loss": sl,
-                    "take_profit": tp,
-                    "generated_at": msg.get("timestamp", ""),
-                    "status": "active",
-                },
-            }
-            await _manager.broadcast("signals", signal)
-    except Exception as exc:
-        logger.warning("WS live: EventBus signal stream failed: %s", exc)
+                # Use signal-engine-provided SL/TP when present; compute ATR-based
+                # levels only when the upstream signal did not supply them.
+                sl = msg.get("stop_loss")
+                tp = msg.get("take_profit")
+                if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
+                    computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
+                    sl = sl if sl is not None else computed_sl
+                    tp = tp if tp is not None else computed_tp
+
+                signal = {
+                    "type": "signal",
+                    "data": {
+                        "id": f"sig_{msg.get('tick_seq', 0)}",
+                        "symbol": symbol,
+                        "direction": direction_fe,
+                        "confidence": msg.get("confidence", 0.0),
+                        "model": msg.get("model_version", "advanced_oos"),
+                        "entry_price": mid,
+                        "stop_loss": sl,
+                        "take_profit": tp,
+                        "generated_at": msg.get("timestamp", ""),
+                        "status": "active",
+                    },
+                }
+                await _manager.broadcast("signals", signal)
+
+            # bus.subscribe() returned (should not happen after event_bus fix,
+            # but guard defensively).
+            logger.debug("WS live: signal broadcaster subscribe loop ended — restarting")
+
+        except asyncio.CancelledError:
+            return
+        except Exception as exc:
+            logger.warning(
+                "WS live: EventBus signal stream error: %s — restarting in %.0fs",
+                exc,
+                _RETRY_DELAY,
+            )
+            await asyncio.sleep(_RETRY_DELAY)
 
 
 async def _broadcast_no_live_feed() -> None:
@@ -1111,7 +1135,9 @@ def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type
     if exc is not None:
         logger.error("WS broadcaster task %r crashed: %s — restarting", name, exc, exc_info=exc)
     else:
-        logger.warning("WS broadcaster task %r exited cleanly — restarting", name)
+        # A clean exit from a broadcaster is unexpected (all broadcasters run
+        # infinite loops).  Log at DEBUG — the restart is automatic.
+        logger.debug("WS broadcaster task %r exited cleanly — restarting", name)
 
     for spec_name, coro_fn in _BROADCASTER_SPECS:
         if spec_name == name:
