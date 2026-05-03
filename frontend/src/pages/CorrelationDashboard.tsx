@@ -2,7 +2,7 @@
  * Multi-Symbol Correlation Dashboard (Task 45)
  * + CFTC COT Gold Sentiment (Task 46)
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 

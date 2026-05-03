@@ -2,7 +2,7 @@
  * Strategy Marketplace — browse, purchase, review, and manage your listings.
  * Tabs: Browse · My Listings
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';

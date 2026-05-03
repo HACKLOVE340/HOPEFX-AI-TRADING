@@ -12,7 +12,7 @@
  *           GET    /api/alerts/history/triggers
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts } from '../store';

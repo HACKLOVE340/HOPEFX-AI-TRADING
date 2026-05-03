@@ -120,7 +120,15 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime:            30_000,
-      retry:                2,
+      // Don't retry on 401/403/404/503 — these are definitive responses.
+      // Only retry on network errors (no response) or 5xx server errors
+      // that aren't 503 (server starting up).
+      retry: (failureCount, error) => {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403 || status === 404) return false;
+        if (status === 503) return failureCount < 3; // server starting — retry up to 3×
+        return failureCount < 2;
+      },
       retryDelay:           (attempt) => Math.min(1_000 * 2 ** attempt, 10_000),
       refetchOnWindowFocus: false,
     },

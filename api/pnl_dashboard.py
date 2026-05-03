@@ -215,14 +215,19 @@ def _compute_current_drawdown(equity_series: list[tuple[float, float]]) -> float
 
 
 def _get_db_session():
-    """Return (session, session_factory) from app_state, or (None, None)."""
+    """Return (session, session_factory) from app_state or SessionLocal fallback."""
     try:
         from core.app_state import app_state as _app_state_pnl
 
         sf = getattr(_app_state_pnl, "db_session_factory", None)
         if sf is not None:
             return sf(), sf
-    except Exception:  # nosec B110 — app_state may not be initialised yet; caller handles None
+    except Exception:  # nosec B110
+        pass
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal(), SessionLocal
+    except Exception:  # nosec B110
         pass
     return None, None
 

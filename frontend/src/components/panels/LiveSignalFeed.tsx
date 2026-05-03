@@ -282,7 +282,7 @@ function SignalCard({ signal, isNew, onClick }: { signal: Signal; isNew: boolean
 // ── Position row ──────────────────────────────────────────────────────────────
 function PositionRow({ pos }: { pos: import('../../types').Position }) {
   const pnlColor = (pos.unrealized_pnl ?? 0) >= 0 ? '#00e676' : '#ff1744';
-  const isLong = pos.side === 'long' || pos.side === 'buy';
+  const isLong = pos.side === 'long';
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',

@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useStore } from '../../store';
+import { useStore, selectNewsItems } from '../../store';
 
 interface NewsItem {
   id?: string;
@@ -13,8 +13,8 @@ interface NewsItem {
   title?: string;
   sentiment?: number | string;
   source?: string;
-  url?: string;
-  published_at?: string;
+  url?: string | null;
+  published_at?: string | null;
   timestamp?: string;
 }
 
@@ -35,7 +35,7 @@ const sentimentLabel = (s: number | string | undefined): string => {
 };
 
 export function NewsTicker() {
-  const newsItems = useStore((s: { newsItems?: NewsItem[] }) => (s as { newsItems?: NewsItem[] }).newsItems ?? []);
+  const newsItems = useStore(selectNewsItems) as NewsItem[];
   const [paused, setPaused]   = useState(false);
   const [expanded, setExpanded] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);

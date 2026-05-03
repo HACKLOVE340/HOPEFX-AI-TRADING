@@ -689,7 +689,13 @@ _async_db_manager: AsyncDatabaseManager | None = None
 
 
 def get_db_manager() -> DatabaseManager | None:
-    """Return the global sync database manager."""
+    """Return the global sync database manager, initialising lazily if needed."""
+    global _db_manager
+    if _db_manager is None:
+        try:
+            _db_manager = _get_or_init_manager()
+        except Exception:  # nosec B110
+            return None
     return _db_manager
 
 

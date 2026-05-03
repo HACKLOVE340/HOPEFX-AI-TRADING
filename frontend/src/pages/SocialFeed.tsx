@@ -3,7 +3,7 @@
  * Features: opt-in/out toggle, real-time WS signal injection, pagination,
  * reactions (👍/👎), comments, copy counts.
  */
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';

@@ -22,9 +22,8 @@ import type {
   Position,
   Signal,
   AccountMetrics,
-  OrchestratorHealth,
 } from '../store';
-import type { QualityReport } from '../types/trading';
+import type { QualityReport, OrchestratorHealth } from '../types/trading';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,7 +54,7 @@ const REAL_USER_RESPONSE: User = {
   username: 'gold_trader',
   role: 'trader',
   plan: 'professional',
-  is_verified: true,
+  is_email_verified: true,
   created_at: '2025-01-15T09:00:00Z',
 };
 

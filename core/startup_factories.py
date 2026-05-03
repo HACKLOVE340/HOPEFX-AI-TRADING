@@ -365,7 +365,12 @@ async def init_database(s: Any) -> Any:
             _mctx = MigrationContext.configure(_conn)
             _current_rev = _mctx.get_current_revision()
 
-        alembic_command.upgrade(alembic_cfg, "head")
+        # Run alembic upgrade in a thread executor so it doesn't block the
+        # async event loop during startup (alembic is synchronous I/O).
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None, lambda: alembic_command.upgrade(alembic_cfg, "head")
+        )
         logger.info(
             "Database migrations applied (alembic upgrade head, was=%s)",
             _current_rev or "none",

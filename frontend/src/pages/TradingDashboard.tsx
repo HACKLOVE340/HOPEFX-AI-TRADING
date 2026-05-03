@@ -39,7 +39,7 @@ import { NewsTicker }       from '../components/panels/NewsTicker';
 const QuickActionBar: React.FC = () => {
   const navigate = useNavigate();
   const positions = useStore((s) => s.positions ?? []);
-  const unrealisedPnl = positions.reduce((sum: number, p: { unrealised_pnl?: number }) => sum + (p.unrealised_pnl ?? 0), 0);
+  const unrealisedPnl = positions.reduce((sum: number, p) => sum + (p.unrealized_pnl ?? 0), 0);
   const pnlColor = unrealisedPnl >= 0 ? '#22c55e' : '#ef4444';
 
   const actions = [
