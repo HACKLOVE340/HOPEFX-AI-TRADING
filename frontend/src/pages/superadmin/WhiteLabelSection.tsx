@@ -1,6 +1,6 @@
 // superadmin/WhiteLabelSection.tsx
 // Tenant management, branding, per-tenant feature flags, usage/billing
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -349,14 +349,19 @@ const WhiteLabelSection: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [search, setSearch]     = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const res = await superadminApi.tenants({ search });
+      if (!mountedRef.current) return;
       setTenants(res.data.tenants ?? res.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load tenants');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [search]);
 
   useEffect(() => { load(); }, [load]);

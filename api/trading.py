@@ -248,7 +248,9 @@ class OrderRequest(BaseModel):
     side: str = Field(..., pattern="^(buy|sell)$")
     quantity: float = Field(..., gt=0)
     order_type: str = Field("market", pattern="^(market|limit|stop)$")
-    price: float | None = Field(None, gt=0)
+    price:       float | None = Field(None, gt=0)
+    stop_loss:   float | None = Field(None, gt=0, description="Stop-loss price (optional)")
+    take_profit: float | None = Field(None, gt=0, description="Take-profit price (optional)")
 
     @field_validator("symbol")
     @classmethod
@@ -266,12 +268,17 @@ class PositionResponse(BaseModel):
     symbol: str
     side: str
     quantity: float
+    # `size` mirrors `quantity` — the frontend Position type uses `size`
+    size: float = 0.0
     entry_price: float
     current_price: float
     unrealized_pnl: float
+    realized_pnl: float = 0.0
     # Extended fields for mobile app
     unrealized_pnl_pct: float = 0.0
     opened_at: str = ""
+    stop_loss: float | None = None
+    take_profit: float | None = None
 
 
 class OrderResponse(BaseModel):
@@ -485,11 +492,17 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
     Raises HTTP 400 on broker rejection or unexpected error.
     """
     try:
+        kwargs: dict[str, Any] = {}
+        if order.stop_loss is not None:
+            kwargs["stop_loss"] = order.stop_loss
+        if order.take_profit is not None:
+            kwargs["take_profit"] = order.take_profit
         result = await _broker_call(
             "place_market_order",
             symbol=order.symbol,
             side=order.side,
             quantity=order.quantity,
+            **kwargs,
         )
         return result
     except HTTPException:
@@ -795,7 +808,7 @@ async def get_orders(
 
     # 2. Filled orders from trade DB when broker unavailable or no open orders
     if not orders:
-        trades = _query_trades(user.sub, None, limit, offset)
+        trades = await _query_trades(user.sub, None, limit, offset)
         for t in trades:
             t_dict = _trade_to_dict(t)
             order_status = "filled"
@@ -836,7 +849,7 @@ async def get_history(
       limit   — max rows (1–1000, default 100)
       offset  — pagination offset
     """
-    trades = _query_trades(user.sub, symbol, limit, offset)
+    trades = await _query_trades(user.sub, symbol, limit, offset)
     return {
         "trades": [_trade_to_dict(t) for t in trades],
         "count": len(trades),
@@ -915,17 +928,24 @@ async def get_positions(
         pnl_pct = ((current - entry) / entry * 100) if entry > 0 else 0.0
         opened_at = getattr(p, "opened_at", None) or getattr(p, "created_at", None)
         opened_at_str = opened_at.isoformat() if hasattr(opened_at, "isoformat") else str(opened_at or "")
+        sl = getattr(p, "stop_loss", None) or getattr(p, "sl_price", None) or getattr(p, "stop_price", None)
+        tp = getattr(p, "take_profit", None) or getattr(p, "tp_price", None) or getattr(p, "take_profit_price", None)
+        realized = float(getattr(p, "realized_pnl", 0) or 0)
         result.append(
             PositionResponse(
                 id=p.id,
                 symbol=p.symbol,
                 side=p.side.value if hasattr(p.side, "value") else str(p.side),
                 quantity=p.quantity,
+                size=p.quantity,
                 entry_price=entry,
                 current_price=current,
                 unrealized_pnl=pnl,
+                realized_pnl=realized,
                 unrealized_pnl_pct=round(pnl_pct, 4),
                 opened_at=opened_at_str,
+                stop_loss=float(sl) if sl is not None else None,
+                take_profit=float(tp) if tp is not None else None,
             )
         )
     return result
@@ -1049,23 +1069,20 @@ async def get_account(
         _balance = starting
 
         try:
-            from database.connection import SessionLocal as _SL
-            from database.models import Trade, TradeStatus
             import datetime as _dt
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TradeRepo
+            from database.repositories.position_repository import PositionRepository as _PosRepo
 
-            _db = _SL()
-            try:
-                closed = (
-                    _db.query(Trade)
-                    .filter(Trade.status == TradeStatus.CLOSED)
-                    .order_by(Trade.exit_time.asc())
-                    .all()
-                )
-                open_qs = _db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
-                _open_trades = len(open_qs)
+            async with _get_async_db() as _db:
+                _trade_repo = _TradeRepo(_db)
+                _pos_repo = _PosRepo(_db)
+                closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
+                open_positions = await _pos_repo.get_open_positions(symbol=None)
+                _open_trades = len(open_positions)
 
                 if closed:
-                    pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                    pnls = [float(getattr(t, "realized_pnl", 0) or 0.0) for t in closed]
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
@@ -1105,22 +1122,20 @@ async def get_account(
 
                 # Daily P&L from trades closed today
                 today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-                today_closed = [t for t in closed if t.exit_time and t.exit_time >= today_start]
-                _daily_pnl = round(sum(float(t.realized_pnl or 0.0) for t in today_closed), 2)
+                today_closed = [t for t in closed if getattr(t, "exit_time", None) and t.exit_time >= today_start]
+                _daily_pnl = round(sum(float(getattr(t, "realized_pnl", 0) or 0.0) for t in today_closed), 2)
 
-                # Unrealized P&L from open trades
-                _unrealized = round(sum(float(t.unrealized_pnl or 0.0) for t in open_qs if hasattr(t, "unrealized_pnl")), 2)
+                # Unrealized P&L from open positions
+                _unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in open_positions), 2)
 
                 # Open risk
                 equity_est = _balance + _unrealized
-                if open_qs and equity_est > 0:
+                if open_positions and equity_est > 0:
                     total_notional = sum(
-                        float(t.quantity or 0.0) * float(t.entry_price or 0.0)
-                        for t in open_qs
+                        float(getattr(p, "quantity", 0) or 0.0) * float(getattr(p, "entry_price", 0) or 0.0)
+                        for p in open_positions
                     )
                     _open_risk_pct = round(total_notional / equity_est * 100, 2)
-            finally:
-                _db.close()
         except Exception as _exc:
             logger.debug("Paper account DB stats failed: %s", _exc)
 
@@ -1197,21 +1212,18 @@ async def get_account(
     cvar_95 = 0.0
 
     try:
-        from database.connection import get_db as _get_db
-        from database.models import Trade, TradeStatus
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TradeRepo
+        from database.repositories.position_repository import PositionRepository as _PosRepo
 
-        db = next(_get_db())
-        try:
-            # Closed trades for stats
-            closed = (
-                db.query(Trade)
-                .filter(Trade.status == TradeStatus.CLOSED)
-                .order_by(Trade.exit_time.asc())
-                .all()
-            )
-            # Open trades count
-            open_qs = db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
-            open_trades = len(open_qs)
+        async with _get_async_db() as _db:
+            _trade_repo = _TradeRepo(_db)
+            _pos_repo = _PosRepo(_db)
+            # Closed trades for stats — user_id=None fetches all (admin view)
+            closed = await _trade_repo.get_by_user(user_id=None, status="closed", limit=10000)
+            # Open positions count via PositionRepository
+            open_positions = await _pos_repo.get_open_positions(symbol=None)
+            open_trades = len(open_positions)
 
             if closed:
                 pnls = [float(t.realized_pnl or 0.0) for t in closed]
@@ -1257,15 +1269,13 @@ async def get_account(
                         cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
 
             # Open risk: sum of (quantity × entry_price) / equity
-            if open_qs and equity > 0:
+            if open_positions and equity > 0:
                 total_notional = sum(
-                    float(t.quantity or 0.0) * float(t.entry_price or 0.0)
-                    for t in open_qs
+                    float(getattr(p, "quantity", 0) or 0.0) * float(getattr(p, "entry_price", 0) or 0.0)
+                    for p in open_positions
                 )
                 open_risk_pct = round(total_notional / equity * 100, 2)
 
-        finally:
-            db.close()
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
 
@@ -1425,13 +1435,15 @@ async def get_ohlcv(
     """
     # Normalise: XAU/USD, XAU_USD, xau_usd → XAUUSD
     symbol = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
-    # Sanitise for read-only data endpoint — allow any alphanumeric symbol up to 12 chars.
-    # validate_order_symbol is reserved for order placement (smaller allowed set).
-    import re as _re
-    if not _re.match(r'^[A-Z0-9]{2,12}$', symbol):
+    # Validate against the same allowed-symbol set used for order placement.
+    # This prevents data leakage for unsupported instruments and keeps the
+    # OHLCV endpoint consistent with the order entry allowlist.
+    try:
+        symbol = validate_order_symbol(symbol)
+    except HTTPException:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid symbol format: '{symbol}'. Expected 2-12 alphanumeric characters.",
+            detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
         )
 
     # ── Try price engine first ────────────────────────────────────────────────
@@ -1441,10 +1453,11 @@ async def get_ohlcv(
                 app_state.price_engine.get_ohlcv(symbol, timeframe, limit),
                 timeout=25.0,
             )
-            # Only use engine data if it has real price variation (not synthetic flat bars)
             if data and len(data) >= 2:
                 prices = [d.close for d in data]
-                if max(prices) - min(prices) > 0.001:
+                # Accept any bars with at least minimal variation; flat bars from the
+                # paper engine are acceptable if no external feed is available.
+                if max(prices) - min(prices) > 0.0:
                     return [
                         {
                             "timestamp": d.timestamp,
@@ -1462,10 +1475,9 @@ async def get_ohlcv(
             logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)
 
     # ── Direct yfinance fallback ──────────────────────────────────────────────
-    # Used when price engine is unavailable or returns synthetic flat bars.
+    # Used when price engine is unavailable or returns flat bars.
     try:
         import yfinance as _yf
-        import pandas as _pd
 
         _YF_MAP = {
             "XAUUSD": "GC=F", "XAGUSD": "SI=F", "XPTUSD": "PL=F",
@@ -1510,9 +1522,27 @@ async def get_ohlcv(
     except Exception as exc:
         logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
 
+    # All real data sources exhausted — return 503 so the frontend can display
+    # a meaningful "data unavailable" state rather than rendering fake bars.
+    logger.error(
+        "OHLCV: all real data sources unavailable for %s %s "
+        "(price engine + yfinance both failed). "
+        "Configure at least one live data feed.",
+        symbol,
+        timeframe,
+    )
     raise HTTPException(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail=f"No OHLCV data available for {symbol} — price engine offline and yfinance unavailable",
+        detail={
+            "error": "ohlcv_unavailable",
+            "message": (
+                f"No real OHLCV data available for {symbol} {timeframe}. "
+                "The price engine and all fallback feeds are currently unavailable. "
+                "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
+            ),
+            "symbol": symbol,
+            "timeframe": timeframe,
+        },
     )
 
 
@@ -1695,38 +1725,21 @@ _TRADE_CSV_FIELDS = [
 ]
 
 
-def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
-    """Fetch trades from DB for the given user.
-
-    Queries by Trade.user_id directly (preferred path).  Falls back to joining
-    through Account when a trade was created before the user_id column existed.
-    Uses SessionLocal directly so it works in paper mode (no app_state.db_session_factory).
-    """
+async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
+    """Fetch trades from DB for the given user via TradeRepository."""
     try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Account, Trade
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TradeRepo
 
-        session = _SL()
-        try:
-            # Primary: trades with user_id set directly
-            q_direct = session.query(Trade).filter(Trade.user_id == user_id)
-            # Fallback: trades linked via Account.user_id (legacy rows)
-            try:
-                q_via_account = (
-                    session.query(Trade)
-                    .join(Account, Trade.account_id == Account.id)
-                    .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
-                    .filter(Trade.user_id.is_(None))
-                )
-                combined = q_direct.union(q_via_account)
-            except Exception:
-                combined = q_direct
-            if symbol:
-                combined = combined.filter(Trade.symbol == symbol.upper())
-            combined = combined.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
-            return combined.all()
-        finally:
-            session.close()
+        async with _get_async_db() as _db:
+            repo = _TradeRepo(_db)
+            trades = await repo.get_by_user(
+                user_id=user_id,
+                symbol=symbol.upper() if symbol else None,
+                limit=limit,
+                offset=offset,
+            )
+            return trades
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
@@ -1744,19 +1757,46 @@ def _trade_to_dict(t) -> dict:
         or getattr(t, "quantity", None)
         or 0
     )
+    trade_id_val = getattr(t, "trade_id", None) or str(getattr(t, "id", ""))
+    entry_time_str = entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or "")
+    exit_time_str  = exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or "")
+    qty_float = float(qty or 0)
+
+    # Duration in minutes between entry and exit
+    duration_minutes: int | None = None
+    try:
+        import datetime as _dt
+        _e = entry_time if hasattr(entry_time, "timestamp") else _dt.datetime.fromisoformat(entry_time_str) if entry_time_str else None
+        _x = exit_time  if hasattr(exit_time,  "timestamp") else _dt.datetime.fromisoformat(exit_time_str)  if exit_time_str  else None
+        if _e and _x:
+            duration_minutes = max(0, int((_x - _e).total_seconds() / 60))
+    except Exception:
+        pass
+
     return {
-        "trade_id":    getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
+        # Canonical keys (backend / CSV)
+        "trade_id":    trade_id_val,
         "symbol":      getattr(t, "symbol", "") or "",
         "side":        getattr(t, "side", "") or "",
-        "quantity":    float(qty or 0),
+        "quantity":    qty_float,
         "entry_price": float(getattr(t, "entry_price", 0) or 0),
         "exit_price":  float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None,
         "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0),
         "commission":  float(getattr(t, "commission", 0) or 0),
         "status":      status_str,
         "strategy":    getattr(t, "strategy", "") or "",
-        "entry_time":  entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or ""),
-        "exit_time":   exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or ""),
+        "entry_time":  entry_time_str,
+        "exit_time":   exit_time_str,
+        # Frontend-expected aliases — kept alongside the canonical keys for
+        # backward compatibility.  Trade.tsx uses `id`, `size`, `opened_at`,
+        # `closed_at`; Trading.tsx uses `size`; Portfolio.tsx uses `id`,
+        # `opened_at`, `closed_at`.  Removing either set would break one of
+        # those pages, so both are emitted here.
+        "id":          trade_id_val,
+        "size":        qty_float,
+        "opened_at":   entry_time_str,
+        "closed_at":   exit_time_str,
+        "duration_minutes": duration_minutes,
     }
 
 
@@ -1775,7 +1815,7 @@ async def get_trade_history(
       limit   — max rows (1–1000, default 100)
       offset  — pagination offset
     """
-    trades = _query_trades(user.sub, symbol, limit, offset)
+    trades = await _query_trades(user.sub, symbol, limit, offset)
     return {
         "trades": [_trade_to_dict(t) for t in trades],
         "count": len(trades),
@@ -1799,7 +1839,7 @@ async def export_trade_history_csv(
 
     Returns: application/csv attachment.
     """
-    trades = _query_trades(user.sub, symbol, limit, offset=0)
+    trades = await _query_trades(user.sub, symbol, limit, offset=0)
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=_TRADE_CSV_FIELDS, extrasaction="ignore")

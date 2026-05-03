@@ -324,13 +324,15 @@ class TestMarketDataCache:
         cache = MarketDataCache(r)
         bar = {"bar_open_ts": 1700000000.0, "open": 1980.0, "close": 1985.0}
         cache.store_bar("XAUUSD", "H1", bar)
-        r.zadd.assert_called_once()
+        # store_bar calls pipeline() then pipe.zadd() directly (no context manager)
+        r.pipeline.return_value.zadd.assert_called_once()
 
     def test_store_bar_silent_on_exception(self):
         from market_data.redis_cache import MarketDataCache
 
         r = self._make_redis()
-        r.zadd.side_effect = Exception("redis down")
+        # Raise on pipeline creation so store_bar hits the except branch
+        r.pipeline.side_effect = Exception("redis down")
         cache = MarketDataCache(r)
         # Should not raise
         cache.store_bar("XAUUSD", "H1", {"bar_open_ts": 1.0})
@@ -444,7 +446,8 @@ class TestMarketDataCache:
         cache = MarketDataCache(r)
         # bar without bar_open_ts — should use time.time() as fallback
         cache.store_bar("XAUUSD", "H1", {"open": 1980.0, "close": 1985.0})
-        r.zadd.assert_called_once()
+        # store_bar calls pipeline() then pipe.zadd() directly (no context manager)
+        r.pipeline.return_value.zadd.assert_called_once()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -686,12 +689,14 @@ class TestFeedHandler:
     def test_get_recent_trades_filters_trades(self):
         from market_data.feed_handler import FeedHandler
 
+        import time as _time
+
         fh = FeedHandler()
         fh.subscribe(["BTCUSDT"])
-        # trade tick
+        # trade tick — use current timestamp in ms to avoid stale-tick rejection
         raw_trade = {
             "s": "BTCUSDT",
-            "E": 1700000000000,
+            "E": int(_time.time() * 1000),
             "b": "50000",
             "a": "50001",
             "B": "1.5",
@@ -1296,13 +1301,22 @@ class TestValidationAdditional:
         except TypeError:
             pass  # known production-code limitation with naive/aware mix
 
-    def test_is_trading_hours_always_true(self):
-        """Line 149: _is_trading_hours returns True (forex 24/5)."""
+    def test_is_trading_hours_weekday_true(self):
+        """_is_trading_hours returns True on a weekday (forex 24/5)."""
         from market_data.validation import MarketDataValidator
 
         v = MarketDataValidator()
-        dt = datetime.now(UTC)
-        assert v._is_trading_hours(dt, "XAUUSD") is True
+        # Use a fixed Monday so the test is not day-of-week sensitive.
+        monday = datetime(2024, 1, 8, 12, 0, 0, tzinfo=UTC)  # 2024-01-08 is a Monday
+        assert v._is_trading_hours(monday, "XAUUSD") is True
+
+    def test_is_trading_hours_weekend_false(self):
+        """_is_trading_hours returns False on a weekend (forex closed Sat/Sun)."""
+        from market_data.validation import MarketDataValidator
+
+        v = MarketDataValidator()
+        saturday = datetime(2024, 1, 6, 12, 0, 0, tzinfo=UTC)  # 2024-01-06 is a Saturday
+        assert v._is_trading_hours(saturday, "XAUUSD") is False
 
     def test_validate_ohlc_with_datetime_index_no_gaps(self):
         """Lines 223-227: DatetimeIndex gap-check branch — no gaps."""

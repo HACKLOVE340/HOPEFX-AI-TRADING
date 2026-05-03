@@ -17,6 +17,15 @@ Design principles
 - Fast: async writes via background queue; reads are synchronous
 - Retention: configurable max record count with automatic pruning
 
+New in this version
+-------------------
+- Async writes: record_tick_async/record_news_async/record_signal_async
+  coroutines that enqueue via asyncio without blocking the event loop
+- Lineage graph traversal: get_lineage_chain() follows parent_id links
+  to reconstruct the full provenance chain for any record
+- Data provenance API: get_provenance() returns a structured provenance
+  report for a lineage_id including all ancestors and transformation steps
+
 Record types
 ------------
   TICK    — every validated GoldTick (source, quality, confidence, mid)
@@ -75,6 +84,7 @@ CREATE TABLE IF NOT EXISTS lineage_records (
     record_type    TEXT NOT NULL,
     schema_version INTEGER NOT NULL DEFAULT 1,
     lineage_id     TEXT NOT NULL,
+    parent_id      TEXT,
     source         TEXT,
     symbol         TEXT,
     timestamp      TEXT NOT NULL,
@@ -86,13 +96,14 @@ CREATE INDEX IF NOT EXISTS idx_lineage_type       ON lineage_records(record_type
 CREATE INDEX IF NOT EXISTS idx_lineage_source     ON lineage_records(source);
 CREATE INDEX IF NOT EXISTS idx_lineage_symbol     ON lineage_records(symbol);
 CREATE INDEX IF NOT EXISTS idx_lineage_created_at ON lineage_records(created_at);
+CREATE INDEX IF NOT EXISTS idx_lineage_parent_id  ON lineage_records(parent_id);
 """
 
 _INSERT_SQL = """
 INSERT OR IGNORE INTO lineage_records
-    (id, record_type, schema_version, lineage_id, source,
+    (id, record_type, schema_version, lineage_id, parent_id, source,
      symbol, timestamp, payload, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 
@@ -619,11 +630,13 @@ class DataLineageStore:
         symbol: str | None,
         timestamp: str,
         payload: dict[str, Any],
+        parent_id: str | None = None,
     ) -> None:
         record = {
             "record_type": record_type,
             "schema_version": _SCHEMA_VERSION,
             "lineage_id": lineage_id,
+            "parent_id": parent_id,
             "source": source,
             "symbol": symbol,
             "timestamp": timestamp,
@@ -674,6 +687,7 @@ class DataLineageStore:
                 r["record_type"],
                 r["schema_version"],
                 r["lineage_id"],
+                r.get("parent_id"),
                 r["source"],
                 r["symbol"],
                 r["timestamp"],
@@ -724,6 +738,299 @@ class DataLineageStore:
             )
         except Exception as exc:
             logger.warning("DataLineageStore prune error: %s", exc)
+
+
+    # ── Async write API ───────────────────────────────────────────────────────
+
+    async def record_tick_async(self, tick: GoldTick, parent_id: str | None = None) -> None:
+        """
+        Async-safe tick recording. Enqueues without blocking the event loop.
+
+        Uses asyncio.get_event_loop().run_in_executor to offload the
+        queue.put_nowait call (which is CPU-bound but very fast).
+        """
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: self.record_tick(tick))
+
+    async def record_news_async(self, article: NewsArticle, parent_id: str | None = None) -> None:
+        """Async-safe news article recording."""
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: self.record_news(article))
+
+    async def record_signal_async(
+        self,
+        direction: str,
+        confidence: float,
+        probability: float,
+        features_hash: str,
+        model_version: str,
+        lineage_id: str,
+        symbol: str = "XAU_USD",
+        parent_id: str | None = None,
+    ) -> None:
+        """Async-safe signal recording."""
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: self.record_signal(
+                direction=direction,
+                confidence=confidence,
+                probability=probability,
+                features_hash=features_hash,
+                model_version=model_version,
+                lineage_id=lineage_id,
+                symbol=symbol,
+            ),
+        )
+
+    async def flush_async(self) -> int:
+        """Async-safe flush. Runs the synchronous flush in a thread executor."""
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self.flush)
+
+    # ── Lineage graph traversal ───────────────────────────────────────────────
+
+    def get_lineage_chain(
+        self,
+        lineage_id: str,
+        max_depth: int = 20,
+    ) -> list[dict[str, Any]]:
+        """
+        Follow parent_id links to reconstruct the full provenance chain.
+
+        Starting from the record identified by `lineage_id`, walks up the
+        parent chain until reaching a root record (parent_id IS NULL) or
+        hitting max_depth.
+
+        Returns a list of records in order from the given record back to
+        the root (index 0 = the requested record, last = root ancestor).
+
+        Parameters
+        ----------
+        lineage_id : Starting lineage_id
+        max_depth  : Maximum chain depth to prevent infinite loops
+
+        Returns [] if the starting record is not found.
+        """
+        if not self._conn:
+            return []
+
+        chain = []
+        current_id = lineage_id
+        seen = set()
+
+        for _ in range(max_depth):
+            if current_id in seen:
+                logger.warning("DataLineageStore: cycle detected in lineage chain at %s", current_id)
+                break
+            seen.add(current_id)
+
+            try:
+                cursor = self._conn.execute(
+                    """
+                    SELECT id, record_type, schema_version, lineage_id, parent_id,
+                           source, symbol, timestamp, payload, created_at
+                    FROM lineage_records
+                    WHERE lineage_id = ?
+                    LIMIT 1
+                    """,
+                    (current_id,),
+                )
+                row = cursor.fetchone()
+            except Exception as exc:
+                logger.warning("DataLineageStore.get_lineage_chain error: %s", exc)
+                break
+
+            if row is None:
+                break
+
+            record = {
+                "id": row[0],
+                "record_type": row[1],
+                "schema_version": row[2],
+                "lineage_id": row[3],
+                "parent_id": row[4],
+                "source": row[5],
+                "symbol": row[6],
+                "timestamp": row[7],
+                "payload": json.loads(row[8]),
+                "created_at": row[9],
+            }
+            chain.append(record)
+
+            parent_id = row[4]
+            if parent_id is None:
+                break
+            current_id = parent_id
+
+        return chain
+
+    def get_children(self, lineage_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        """
+        Return all records that have `lineage_id` as their parent_id.
+
+        Used to traverse the lineage graph forward (downstream).
+        """
+        if not self._conn:
+            return []
+        try:
+            cursor = self._conn.execute(
+                """
+                SELECT id, record_type, schema_version, lineage_id, parent_id,
+                       source, symbol, timestamp, payload, created_at
+                FROM lineage_records
+                WHERE parent_id = ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+                """,
+                (lineage_id, limit),
+            )
+            return [
+                {
+                    "id": r[0], "record_type": r[1], "schema_version": r[2],
+                    "lineage_id": r[3], "parent_id": r[4], "source": r[5],
+                    "symbol": r[6], "timestamp": r[7],
+                    "payload": json.loads(r[8]), "created_at": r[9],
+                }
+                for r in cursor.fetchall()
+            ]
+        except Exception as exc:
+            logger.warning("DataLineageStore.get_children error: %s", exc)
+            return []
+
+    # ── Data provenance API ───────────────────────────────────────────────────
+
+    def get_provenance(self, lineage_id: str) -> dict[str, Any]:
+        """
+        Return a structured provenance report for a lineage_id.
+
+        The report includes:
+          - The record itself
+          - Full ancestor chain (via get_lineage_chain)
+          - Direct children (downstream consumers)
+          - Transformation summary: list of (operation, source, timestamp) tuples
+            extracted from the ancestor chain
+
+        This is the canonical data provenance API for regulatory compliance,
+        debugging, and audit queries.
+
+        Parameters
+        ----------
+        lineage_id : The lineage_id of the record to inspect
+
+        Returns a dict with keys:
+          record:          The requested record (or None if not found)
+          ancestors:       List of ancestor records (oldest last)
+          children:        List of downstream records
+          chain_depth:     Number of ancestors
+          root_source:     Source of the root ancestor
+          root_timestamp:  Timestamp of the root ancestor
+          transformations: List of {operation, source, timestamp} dicts
+        """
+        chain = self.get_lineage_chain(lineage_id)
+        if not chain:
+            return {
+                "record": None,
+                "ancestors": [],
+                "children": [],
+                "chain_depth": 0,
+                "root_source": None,
+                "root_timestamp": None,
+                "transformations": [],
+            }
+
+        record = chain[0]
+        ancestors = chain[1:]
+        children = self.get_children(lineage_id)
+
+        # Extract transformation steps from the chain
+        transformations = []
+        for r in chain:
+            payload = r.get("payload", {})
+            op = payload.get("operation", r["record_type"].lower())
+            transformations.append({
+                "operation": op,
+                "source": r.get("source"),
+                "timestamp": r.get("timestamp"),
+                "record_type": r["record_type"],
+            })
+
+        root = chain[-1] if chain else {}
+
+        return {
+            "record": record,
+            "ancestors": ancestors,
+            "children": children,
+            "chain_depth": len(ancestors),
+            "root_source": root.get("source"),
+            "root_timestamp": root.get("timestamp"),
+            "transformations": transformations,
+        }
+
+    def get_data_lineage_summary(self, symbol: str = "XAU_USD", hours: float = 1.0) -> dict[str, Any]:
+        """
+        Return a summary of data lineage activity for the last N hours.
+
+        Useful for monitoring dashboards and health checks.
+
+        Returns:
+          total_records: total records in the time window
+          by_type:       count per record type
+          by_source:     count per source
+          orphan_count:  records with no parent (root records)
+          chain_count:   records with a parent (derived records)
+        """
+        if not self._conn:
+            return {}
+        since = datetime.now(UTC).replace(microsecond=0)
+        from datetime import timedelta
+        since = since - timedelta(hours=hours)
+
+        try:
+            rows = self._conn.execute(
+                """
+                SELECT record_type, source,
+                       COUNT(*) as cnt,
+                       SUM(CASE WHEN parent_id IS NULL THEN 1 ELSE 0 END) as orphans
+                FROM lineage_records
+                WHERE timestamp >= ? AND symbol = ?
+                GROUP BY record_type, source
+                """,
+                (since.isoformat(), symbol),
+            ).fetchall()
+
+            by_type: dict[str, int] = {}
+            by_source: dict[str, int] = {}
+            total = 0
+            orphan_count = 0
+
+            for row in rows:
+                rt, src, cnt, orphans = row
+                by_type[rt] = by_type.get(rt, 0) + cnt
+                by_source[src or "unknown"] = by_source.get(src or "unknown", 0) + cnt
+                total += cnt
+                orphan_count += orphans
+
+            return {
+                "total_records": total,
+                "by_type": by_type,
+                "by_source": by_source,
+                "orphan_count": orphan_count,
+                "chain_count": total - orphan_count,
+                "window_hours": hours,
+                "symbol": symbol,
+            }
+        except Exception as exc:
+            logger.warning("DataLineageStore.get_data_lineage_summary error: %s", exc)
+            return {}
 
 
 # Module-level singleton

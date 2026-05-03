@@ -181,6 +181,11 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
     Call this from app.py or the main FastAPI application:
         from charting.websocket_server import mount_nuclear_routes
         mount_nuclear_routes(app)
+
+    HTTP REST routes (/api/nuclear/*) are registered by the nuclear APIRouter
+    in api/nuclear.py and do not need to be duplicated here.
+    This function only mounts the WebSocket endpoint (/ws/nuclear) which
+    cannot be expressed as an APIRouter route.
     """
     if not _FASTAPI_AVAILABLE:
         logger.warning("FastAPI not available — cannot mount nuclear routes")
@@ -225,78 +230,6 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
             heartbeat_task.cancel()
             await _manager.disconnect(ws)
             await limiter.release(client_ip)
-
-    # ── HTTP endpoints ────────────────────────────────────────────────────────
-
-    @app.get("/api/nuclear/snapshot")
-    async def nuclear_snapshot():
-        """Return current NuclearChartState as JSON (for HTTP polling fallback)."""
-        return JSONResponse(chart_engine.get_snapshot())
-
-    @app.post("/api/nuclear/event")
-    async def inject_nuclear_event(body: dict):
-        """
-        Inject a news event for immediate nuclear scoring.
-        Body: { "text": "...", "volatility": 1.0, "sentiment": 0.0 }
-        """
-        text = body.get("text", "")
-        if not text:
-            raise HTTPException(status_code=400, detail="text is required")
-        vol = float(body.get("volatility", 1.0))
-        sentiment = float(body.get("sentiment", 0.0))
-        result = chart_engine.inject_news_event(text, vol, sentiment)
-        return JSONResponse(result)
-
-    @app.post("/api/nuclear/resume")
-    async def nuclear_resume():
-        """Manually resume trading after a nuclear halt."""
-        try:
-            from brain.nuclear_supervisor import get_nuclear_supervisor
-
-            sup = get_nuclear_supervisor()
-            await sup.manual_resume()
-            await _manager.broadcast(
-                {
-                    "type": "nuclear_resume",
-                    "ts": int(time.time() * 1000),
-                    "message": "Trading manually resumed by operator.",
-                }
-            )
-            return JSONResponse({"status": "resumed"})
-        except Exception as exc:
-            logger.error("nuclear resume failed: %s", exc)
-            raise HTTPException(status_code=500, detail="Operation failed — check server logs") from None
-
-    @app.get("/api/nuclear/history")
-    async def nuclear_history(n: int = 20):
-        """Return last N nuclear events."""
-        try:
-            from brain.nuclear_supervisor import get_nuclear_supervisor
-
-            sup = get_nuclear_supervisor()
-            history = sup.get_event_history(n)
-            return JSONResponse({"events": history})
-        except Exception as exc:
-            logger.warning("nuclear_history failed: %s", exc)
-            return JSONResponse({"events": [], "error": "History unavailable — check server logs"})
-
-    @app.get("/api/nuclear/status")
-    async def nuclear_status():
-        """Return nuclear supervisor status + connection count."""
-        try:
-            from brain.nuclear_supervisor import get_nuclear_supervisor
-
-            sup = get_nuclear_supervisor()
-            status = sup.get_status()
-        except ImportError:
-            status = {}
-        return JSONResponse(
-            {
-                "ws_connections": _manager.count,
-                "supervisor": status,
-                "engine_ticks": chart_engine._tick_count,
-            }
-        )
 
     logger.info("Nuclear dashboard routes mounted: /ws/nuclear, /api/nuclear/*")
 

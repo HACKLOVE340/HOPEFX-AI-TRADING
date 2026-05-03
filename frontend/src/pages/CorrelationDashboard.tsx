@@ -42,6 +42,12 @@ const CorrelationDashboard: React.FC = () => {
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [window, setWindow]   = useState(30);
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadErr(null);
@@ -49,6 +55,7 @@ const CorrelationDashboard: React.FC = () => {
       api.get('/advanced/correlation', { params: { window } }),
       api.get('/advanced/cot-sentiment'),
     ]);
+    if (!mountedRef.current) return;
     const corrOk = corrRes.status === 'fulfilled';
     const cotOk  = cotRes.status  === 'fulfilled';
     setCorr(corrOk ? corrRes.value.data : null);

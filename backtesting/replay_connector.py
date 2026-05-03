@@ -104,6 +104,16 @@ class ReplayJobStatus(BaseModel):
 # ── Regime definitions ────────────────────────────────────────────────────────
 
 
+class CreateSessionBody(BaseModel):
+    """Request body for POST /api/replay/sessions."""
+
+    symbol: str = "XAUUSD"
+    timeframe: str = "H1"
+    start_date: str = "2024-01-01"
+    end_date: str = "2024-06-30"
+    initial_equity: float = 10000.0
+
+
 @dataclass
 class StressRegime:
     """A named historical stress period for regime-shift testing."""
@@ -591,8 +601,220 @@ def create_replay_router():
         from backtesting.replay_connector import create_replay_router
         app.include_router(create_replay_router())
     """
-    router = APIRouter(prefix="/replay", tags=["Replay Backtest"])
+    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"])
     _jobs: dict[str, Any] = {}
+
+    # ── Session-based bar-by-bar replay ──────────────────────────────────────
+    # Sessions are stored in-memory (Redis if available) and support step/run.
+    import json as _json
+    import uuid as _uuid
+
+    _SESSIONS: dict[str, dict] = {}
+
+    def _redis_client():
+        try:
+            import redis as _r
+            import os
+            c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                            socket_connect_timeout=1, socket_timeout=1)
+            c.ping()
+            return c
+        except Exception:
+            return None
+
+    def _save_session(sess: dict) -> None:
+        _SESSIONS[sess["session_id"]] = sess
+        rc = _redis_client()
+        if rc:
+            try:
+                rc.setex(f"hopefx:replay:{sess['session_id']}", 86400, _json.dumps(sess))
+            except Exception:
+                pass
+
+    def _load_session(sid: str) -> dict | None:
+        if sid in _SESSIONS:
+            return _SESSIONS[sid]
+        rc = _redis_client()
+        if rc:
+            try:
+                raw = rc.get(f"hopefx:replay:{sid}")
+                if raw:
+                    sess = _json.loads(raw)
+                    _SESSIONS[sid] = sess
+                    return sess
+            except Exception:
+                pass
+        return None
+
+    def _list_sessions() -> list[dict]:
+        rc = _redis_client()
+        if rc:
+            try:
+                keys = rc.keys("hopefx:replay:*")
+                sessions = []
+                for k in keys:
+                    raw = rc.get(k)
+                    if raw:
+                        sessions.append(_json.loads(raw))
+                return sessions
+            except Exception:
+                pass
+        return list(_SESSIONS.values())
+
+    def _delete_session(sid: str) -> None:
+        _SESSIONS.pop(sid, None)
+        rc = _redis_client()
+        if rc:
+            try:
+                rc.delete(f"hopefx:replay:{sid}")
+            except Exception:
+                pass
+
+    def _build_bars(symbol: str, timeframe: str, start_date: str, end_date: str) -> list[dict]:
+        """Load OHLCV bars from the data layer or generate synthetic bars."""
+        import math
+        import random
+        from datetime import datetime, timedelta
+
+        try:
+            from data_layer.ohlcv_store import OHLCVStore
+            store = OHLCVStore()
+            bars_raw = store.get_bars(symbol, timeframe, start_date, end_date)
+            if bars_raw:
+                return [
+                    {
+                        "time": int(b["timestamp"].timestamp()) if hasattr(b.get("timestamp", 0), "timestamp") else int(b.get("time", 0)),
+                        "open": float(b["open"]),
+                        "high": float(b["high"]),
+                        "low": float(b["low"]),
+                        "close": float(b["close"]),
+                        "volume": float(b.get("volume", 0)),
+                    }
+                    for b in bars_raw
+                ]
+        except Exception:
+            pass
+
+        # Synthetic fallback — realistic random walk
+        SEED_PRICES = {
+            "XAUUSD": 2000.0, "EURUSD": 1.08, "GBPUSD": 1.27,
+            "USDJPY": 150.0, "BTCUSD": 45000.0, "US30": 38000.0, "NAS100": 17000.0,
+        }
+        TF_MINUTES = {"M1": 1, "M5": 5, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}
+        price = SEED_PRICES.get(symbol, 1.0)
+        vol = price * 0.001
+        tf_min = TF_MINUTES.get(timeframe, 60)
+
+        try:
+            dt = datetime.fromisoformat(start_date)
+            end_dt = datetime.fromisoformat(end_date)
+        except ValueError:
+            dt = datetime(2024, 1, 1)
+            end_dt = datetime(2024, 6, 30)
+
+        bars = []
+        rng = random.Random(42)
+        while dt <= end_dt:
+            o = price
+            change = rng.gauss(0, vol)
+            c = max(o + change, o * 0.001)
+            h = max(o, c) + abs(rng.gauss(0, vol * 0.5))
+            l = min(o, c) - abs(rng.gauss(0, vol * 0.5))
+            bars.append({
+                "time": int(dt.timestamp()),
+                "open": round(o, 5),
+                "high": round(h, 5),
+                "low": round(l, 5),
+                "close": round(c, 5),
+                "volume": round(abs(rng.gauss(1000, 300)), 0),
+            })
+            price = c
+            dt += timedelta(minutes=tf_min)
+            if len(bars) >= 2000:
+                break
+
+        return bars
+
+    @router.get("/sessions", summary="List replay sessions")
+    async def list_replay_sessions():
+        sessions = _list_sessions()
+        # Strip bars from list view for performance
+        slim = [{k: v for k, v in s.items() if k != "bars"} for s in sessions]
+        return {"sessions": slim}
+
+    @router.post("/sessions", summary="Create a replay session")
+    async def create_replay_session(body: CreateSessionBody):
+        sid = str(_uuid.uuid4())[:12]
+        bars = _build_bars(body.symbol, body.timeframe, body.start_date, body.end_date)
+        sess = {
+            "session_id": sid,
+            "symbol": body.symbol,
+            "timeframe": body.timeframe,
+            "start_date": body.start_date,
+            "end_date": body.end_date,
+            "current_bar": 0,
+            "total_bars": len(bars),
+            "status": "created",
+            "current_price": bars[0]["close"] if bars else 0.0,
+            "equity": body.initial_equity,
+            "initial_equity": body.initial_equity,
+            "pnl": 0.0,
+            "trades": [],
+            "bars": bars,
+            "created_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        }
+        _save_session(sess)
+        return sess
+
+    @router.get("/sessions/{session_id}", summary="Get replay session state")
+    async def get_replay_session(session_id: str):
+        sess = _load_session(session_id)
+        if not sess:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        return sess
+
+    @router.post("/sessions/{session_id}/step", summary="Advance one bar")
+    async def step_replay_session(session_id: str):
+        sess = _load_session(session_id)
+        if not sess:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        if sess["status"] == "completed":
+            return sess
+        bars = sess.get("bars", [])
+        next_bar = sess["current_bar"] + 1
+        if next_bar >= len(bars):
+            sess["status"] = "completed"
+            sess["current_bar"] = len(bars)
+        else:
+            sess["current_bar"] = next_bar
+            sess["current_price"] = bars[next_bar]["close"]
+            sess["status"] = "running"
+        _save_session(sess)
+        return sess
+
+    @router.post("/sessions/{session_id}/run", summary="Advance N bars")
+    async def run_replay_session(session_id: str, bars: int = 10):
+        sess = _load_session(session_id)
+        if not sess:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        if sess["status"] == "completed":
+            return sess
+        all_bars = sess.get("bars", [])
+        target = min(sess["current_bar"] + bars, len(all_bars))
+        if target >= len(all_bars):
+            sess["status"] = "completed"
+            sess["current_bar"] = len(all_bars)
+        else:
+            sess["current_bar"] = target
+            sess["current_price"] = all_bars[target]["close"]
+            sess["status"] = "running"
+        _save_session(sess)
+        return sess
+
+    @router.delete("/sessions/{session_id}", status_code=204, summary="Delete a replay session")
+    async def delete_replay_session(session_id: str):
+        _delete_session(session_id)
+        return None
 
     # Use module-level models (ReplayRunRequest, StressRunRequest, ReplayJobStatus)
     # so Pydantic v2 can resolve forward references when building the OpenAPI schema.

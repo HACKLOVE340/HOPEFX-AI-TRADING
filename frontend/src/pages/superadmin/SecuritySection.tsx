@@ -1,5 +1,5 @@
 // superadmin/SecuritySection.tsx — security events, blocked IPs, active sessions
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -37,6 +37,9 @@ const SecuritySection: React.FC = () => {
   const [msg, setMsg]           = useState('');
   const [confirm, setConfirm]   = useState<{ type: string; id: string; label: string } | null>(null);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -47,12 +50,14 @@ const SecuritySection: React.FC = () => {
         superadminApi.blockedIPs(),
         superadminApi.activeSessions(),
       ]);
+      if (!mountedRef.current) return;
       setEvents(evRes.data.events ?? evRes.data);
       setBlocked(blRes.data.blocked_ips ?? blRes.data);
       setSessions(seRes.data.sessions ?? seRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load security data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [sevFilter]);
 
   useEffect(() => { load(); }, [load]);

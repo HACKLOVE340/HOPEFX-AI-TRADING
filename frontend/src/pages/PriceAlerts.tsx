@@ -94,6 +94,9 @@ const PriceAlerts: React.FC = () => {
     priority: 'high',
   });
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const fetchAlerts = useCallback(async () => {
     setLoadErr(null);
     try {
@@ -101,6 +104,7 @@ const PriceAlerts: React.FC = () => {
         api.get<Alert[]>('/alerts/'),
         api.get<AlertTrigger[]>('/alerts/history/triggers'),
       ]);
+      if (!mountedRef.current) return;
       if (alertsRes.status === 'fulfilled') {
         setAlerts(alertsRes.value.data ?? []);
       } else {
@@ -108,10 +112,12 @@ const PriceAlerts: React.FC = () => {
       }
       if (histRes.status === 'fulfilled') setHistory(histRes.value.data ?? []);
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      if ((err as {name?:string}).name === 'CanceledError') return;
       const msg = err instanceof Error ? err.message : 'Failed to load alerts.';
       setLoadErr(msg);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

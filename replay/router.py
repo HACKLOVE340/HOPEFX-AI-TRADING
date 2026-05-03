@@ -111,6 +111,18 @@ def create_replay_router(engine: "ChartReplayEngine"):
             raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
         return {"session_id": session_id, "status": "paused"}
 
+    @router.post("/sessions/{session_id}/resume")
+    async def resume(session_id: str):
+        """Resume a paused replay session (or start it if not yet started).
+
+        Delegates to engine.play() which handles both initial start and
+        resume-from-pause transitions.
+        """
+        success = engine.play(session_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        return {"session_id": session_id, "status": "playing"}
+
     @router.post("/sessions/{session_id}/stop")
     async def stop(session_id: str):
         """Stop and reset a replay session."""
@@ -120,6 +132,7 @@ def create_replay_router(engine: "ChartReplayEngine"):
         return {"session_id": session_id, "status": "idle"}
 
     @router.put("/sessions/{session_id}/speed")
+    @router.post("/sessions/{session_id}/speed")
     async def set_speed(session_id: str, req: SetSpeedRequest):
         """Set replay speed (1x, 2x, 5x, 10x, 50x, 100x)."""
         valid_speeds = {s.value: s for s in ReplaySpeed if s != ReplaySpeed.PAUSED}
@@ -249,8 +262,6 @@ def create_replay_router(engine: "ChartReplayEngine"):
             side=req.side,
             size=req.size,
             price=req.price,
-            stop_loss=req.stop_loss,
-            take_profit=req.take_profit,
             session_id=session_id,
         )
         if result is None:

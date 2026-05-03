@@ -570,19 +570,133 @@ class PerformanceMetrics(Base):
     recorded_at = Column(DateTime, default=_utcnow, index=True)
 
 
+class TimestampMixin:
+    """
+    Mixin that adds created_at / updated_at columns to any model.
+
+    Works with both sync and async SQLAlchemy sessions because it uses
+    server_default (database-side) rather than Python-side default callables,
+    which avoids the "greenlet_spawn" error in async contexts.
+    """
+
+    created_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class SoftDeleteMixin:
+    """
+    Mixin that adds soft-delete support (deleted_at timestamp).
+
+    Rows are never physically removed; set deleted_at to mark as deleted.
+    Filter with ``Model.deleted_at.is_(None)`` in queries.
+    """
+
+    deleted_at = Column(DateTime(timezone=True), nullable=True, index=True)
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
+
+
 class TickData(Base):
-    """Real-time tick data storage."""
+    """
+    Sub-millisecond tick data storage.
+
+    Schema is designed for TimescaleDB hypertable partitioning on ts_ns.
+    When TimescaleDB is not available the table works as a plain PostgreSQL
+    or SQLite table with the composite index providing equivalent query
+    performance for moderate data volumes.
+
+    TimescaleDB setup (run once after CREATE TABLE):
+        SELECT create_hypertable('tick_data', 'ts_ns',
+            chunk_time_interval => 86400000000000,  -- 1 day in ns
+            if_not_exists => TRUE);
+        SELECT add_compression_policy('tick_data', INTERVAL '7 days');
+
+    The ts_ns column stores nanosecond-epoch integers so that:
+      - Ordering is exact (no floating-point rounding)
+      - TimescaleDB can partition on it directly
+      - Python time.time_ns() maps directly without conversion
+    """
 
     __tablename__ = "tick_data"
+    __table_args__ = (
+        # Primary query pattern: latest N ticks for a symbol
+        Index("idx_tick_data_symbol_ts_ns", "symbol", "ts_ns", postgresql_using="brin"),
+        # Range queries: ticks between two timestamps
+        Index("idx_tick_data_ts_ns", "ts_ns"),
+        # Source-specific queries (feed health, per-source analytics)
+        Index("idx_tick_data_source_ts_ns", "source", "ts_ns"),
+    )
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
+    # Nanosecond epoch — use time.time_ns() when inserting
+    ts_ns = Column(BigInteger, nullable=False, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     bid = Column(Float, nullable=False)
     ask = Column(Float, nullable=False)
+    # mid and spread are computed columns in TimescaleDB; stored here for
+    # compatibility with plain PostgreSQL / SQLite.
+    mid = Column(Float, nullable=True)
+    spread = Column(Float, nullable=True)
     last_price = Column(Float, nullable=True)
-    volume = Column(Float, nullable=True)
-    timestamp = Column(DateTime, default=_utcnow, nullable=False, index=True)
-    source = Column(String(50), nullable=True)
+    volume = Column(Float, nullable=True, default=0.0)
+    # Legacy datetime column — kept for backward compatibility with existing
+    # queries that filter on timestamp.  New code should use ts_ns.
+    timestamp = Column(DateTime(timezone=True), default=_utcnow, nullable=False, index=True)
+    source = Column(String(50), nullable=True, index=True)
+    # Quality flag: good | stale | suspect | rejected
+    quality = Column(String(20), nullable=True, default="good")
+    # Confidence score from multi-source consensus (0.0–1.0)
+    confidence = Column(Float, nullable=True, default=1.0)
+    # Lineage ID links back to DataLineageStore record
+    lineage_id = Column(String(36), nullable=True, index=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "ts_ns": self.ts_ns,
+            "symbol": self.symbol,
+            "bid": self.bid,
+            "ask": self.ask,
+            "mid": self.mid if self.mid is not None else (self.bid + self.ask) / 2.0,
+            "spread": self.spread if self.spread is not None else self.ask - self.bid,
+            "volume": self.volume,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None,
+            "source": self.source,
+            "quality": self.quality,
+            "confidence": self.confidence,
+            "lineage_id": self.lineage_id,
+        }
+
+    @classmethod
+    def from_gold_tick(cls, tick: "Any") -> "TickData":
+        """Construct a TickData row from a data_layer.types.GoldTick."""
+        import time as _time
+
+        return cls(
+            ts_ns=int(tick.timestamp.timestamp() * 1_000_000_000),
+            symbol=tick.symbol,
+            bid=tick.bid,
+            ask=tick.ask,
+            mid=tick.mid,
+            spread=tick.spread,
+            volume=0.0,
+            timestamp=tick.timestamp,
+            source=str(tick.source),
+            quality=str(tick.quality),
+            confidence=tick.confidence,
+            lineage_id=tick.lineage_id,
+        )
 
 
 class WalletTransaction(Base):
@@ -646,15 +760,62 @@ class KYCRecord(Base):
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
-# Create indexes for common queries
+# ---------------------------------------------------------------------------
+# Composite indexes for common query patterns
+# ---------------------------------------------------------------------------
+
+# Trades
 Index("idx_trades_symbol_status", Trade.symbol, Trade.status)
 Index("idx_trades_entry_time", Trade.entry_time)
+# Covering index for the most common trade list query: user + status + time
+Index("idx_trades_user_status_entry", Trade.user_id, Trade.status, Trade.entry_time)
+# Partial-style: open trades by symbol (status filter applied in WHERE)
+Index("idx_trades_symbol_entry_time", Trade.symbol, Trade.entry_time)
+
+# Orders — Order has no user_id; use account_id + symbol as the covering key
 Index("idx_orders_symbol_created", Order.symbol, Order.created_at)
+Index("idx_orders_account_symbol_created", Order.account_id, Order.symbol, Order.created_at)
+
+# Signals
 Index("idx_signals_generated_executed", Signal.generated_at, Signal.executed)
+Index("idx_signals_symbol_generated", Signal.symbol, Signal.generated_at)
+Index("idx_signals_strategy", Signal.strategy)
+
+# Account snapshots — no user_id column; timestamp is the only access key
 Index("idx_account_snapshots_timestamp", AccountSnapshot.timestamp)
+
+# Market data — symbol + timeframe + timestamp is the primary access pattern
+Index("idx_market_data_symbol_tf_ts", MarketData.symbol, MarketData.timeframe, MarketData.timestamp)
+
+# Wallet
 Index("idx_wallet_user_created", WalletTransaction.user_id, WalletTransaction.created_at)
+Index("idx_wallet_type_created", WalletTransaction.transaction_type, WalletTransaction.created_at)
+
+# Audit log
 Index("idx_audit_timestamp", AuditLogEntry.timestamp)
+Index("idx_audit_category_ts", AuditLogEntry.category, AuditLogEntry.timestamp)
+Index("idx_audit_actor_ts", AuditLogEntry.actor, AuditLogEntry.timestamp)
+Index("idx_audit_user_ts", AuditLogEntry.user_id, AuditLogEntry.timestamp)
+
+# KYC
 Index("idx_kyc_user", KYCRecord.user_id)
+Index("idx_kyc_status", KYCRecord.status)
+
+# Positions — open positions by user is the hot path
+Index("idx_positions_user_symbol", Position.user_id, Position.symbol)
+Index("idx_positions_user_status", Position.user_id, Position.status)
+
+# AI signals — generated_at is the existing indexed column
+Index("idx_ai_signals_symbol_ts", AISignal.symbol, AISignal.generated_at)
+Index("idx_ai_signals_executed_ts", AISignal.executed, AISignal.generated_at)
+
+# News data — published_at is the existing indexed column; symbols is a text field
+Index("idx_news_published_at", NewsData.published_at)
+Index("idx_news_source_published", NewsData.source, NewsData.published_at)
+
+# PerformanceMetric uses metric_type + name (not metric_name)
+Index("idx_perf_metric_type_name_ts", PerformanceMetric.metric_type, PerformanceMetric.name, PerformanceMetric.timestamp)
+Index("idx_perf_metric_symbol_ts", PerformanceMetric.symbol, PerformanceMetric.timestamp)
 
 
 def create_tables(engine):
@@ -877,12 +1038,19 @@ if SQLALCHEMY_AVAILABLE:
         event_type = Column(String(100), nullable=False, index=True)
         channel = Column(String(100), nullable=False)  # Redis pub/sub channel
         payload = Column(Text, nullable=False)  # JSON
+        # status: "pending" | "published" | "dead_letter"
+        status = Column(String(20), nullable=False, default="pending", index=True)
         created_at = Column(DateTime(timezone=True), default=_utcnow, index=True)
         published_at = Column(DateTime(timezone=True), nullable=True)
         attempts = Column(Integer, default=0)
+        max_attempts = Column(Integer, default=5)
         last_error = Column(Text, nullable=True)
+        idempotency_key = Column(String(128), nullable=True, unique=True)
 
-        __table_args__ = (Index("idx_outbox_unpublished", "published_at", "created_at"),)
+        __table_args__ = (
+            Index("idx_outbox_unpublished", "published_at", "created_at"),
+            Index("idx_outbox_status_created", "status", "created_at"),
+        )
 
 else:
 
@@ -1361,4 +1529,322 @@ else:
 
     class GDPRRequest:  # type: ignore[no-redef]
         __tablename__ = "gdpr_requests"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── TradeJournal — per-trade notes, tags, and emotion tracking ────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class TradeJournal(Base):
+        """Per-trade journal entry: notes, tags, emotion, and self-assessment."""
+
+        __tablename__ = "trade_journal"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+        trade_id = Column(
+            String(50),
+            ForeignKey("trades.trade_id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        title = Column(String(200), nullable=True)
+        notes = Column(Text, nullable=True)
+        tags = Column(Text, nullable=True)           # JSON array of strings
+        emotion = Column(String(50), nullable=True)  # "confident","fearful","neutral"
+        rating = Column(Integer, nullable=True)      # 1-5 self-assessment
+        setup_quality = Column(String(20), nullable=True)  # "A","B","C"
+        lessons_learned = Column(Text, nullable=True)
+        screenshot_url = Column(String(500), nullable=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+        updated_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_journal_user_created", "user_id", "created_at"),
+            Index("idx_journal_trade", "trade_id"),
+        )
+
+        def to_dict(self) -> dict:
+            import json as _json
+            tags_val: list = []
+            try:
+                tags_val = _json.loads(self.tags or "[]")
+            except Exception:
+                pass
+            return {
+                "id": self.id,
+                "user_id": self.user_id,
+                "trade_id": self.trade_id,
+                "title": self.title,
+                "notes": self.notes or "",
+                "tags": tags_val,
+                "emotion": self.emotion,
+                "rating": self.rating,
+                "setup_quality": self.setup_quality,
+                "lessons_learned": self.lessons_learned,
+                "screenshot_url": self.screenshot_url,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+else:
+
+    class TradeJournal:  # type: ignore[no-redef]
+        __tablename__ = "trade_journal"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── SubAccount — team/prop-firm sub-account management ───────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class SubAccount(Base):
+        """Sub-account for team or prop-firm trading."""
+
+        __tablename__ = "sub_accounts"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+        owner_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+        name = Column(String(100), nullable=False)
+        description = Column(Text, nullable=True)
+        # account_type: "personal" | "prop_firm" | "team" | "managed"
+        account_type = Column(String(30), nullable=False, default="personal")
+        currency = Column(String(10), nullable=False, default="USD")
+        initial_balance = Column(Float, nullable=True)
+        current_balance = Column(Float, nullable=True)
+        max_drawdown_pct = Column(Float, nullable=True)
+        daily_loss_limit = Column(Float, nullable=True)
+        is_active = Column(Boolean, nullable=False, default=True)
+        broker = Column(String(50), nullable=True)
+        broker_account_id = Column(String(100), nullable=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+        updated_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_sub_accounts_owner", "owner_id"),
+            Index("idx_sub_accounts_active", "is_active"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "id": self.id,
+                "owner_id": self.owner_id,
+                "name": self.name,
+                "description": self.description,
+                "account_type": self.account_type,
+                "currency": self.currency,
+                "initial_balance": self.initial_balance,
+                "current_balance": self.current_balance,
+                "max_drawdown_pct": self.max_drawdown_pct,
+                "daily_loss_limit": self.daily_loss_limit,
+                "is_active": self.is_active,
+                "broker": self.broker,
+                "broker_account_id": self.broker_account_id,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+    class SubAccountMember(Base):
+        """Many-to-many: users can be members of sub-accounts with a role."""
+
+        __tablename__ = "sub_account_members"
+
+        sub_account_id = Column(
+            String(36),
+            ForeignKey("sub_accounts.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+        # role: "owner" | "trader" | "viewer" | "risk_manager"
+        role = Column(String(30), nullable=False, default="viewer")
+        joined_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_sub_account_members_user", "user_id"),
+        )
+
+else:
+
+    class SubAccount:  # type: ignore[no-redef]
+        __tablename__ = "sub_accounts"
+        __table__ = type("T", (), {"columns": []})()
+
+    class SubAccountMember:  # type: ignore[no-redef]
+        __tablename__ = "sub_account_members"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── BillingHistory — Stripe/Flutterwave payment records ──────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class BillingHistory(Base):
+        """Immutable payment event record from Stripe or Flutterwave webhooks."""
+
+        __tablename__ = "billing_history"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+        # provider: "stripe" | "flutterwave"
+        provider = Column(String(30), nullable=False)
+        provider_payment_id = Column(String(200), nullable=True, unique=True)
+        provider_subscription_id = Column(String(200), nullable=True)
+        # event_type: "payment_succeeded" | "payment_failed" | "subscription_created"
+        #             | "subscription_cancelled" | "refund" | "chargeback"
+        event_type = Column(String(50), nullable=False)
+        amount = Column(Float, nullable=True)
+        currency = Column(String(10), nullable=True, default="USD")
+        plan = Column(String(30), nullable=True)
+        # status: "pending" | "succeeded" | "failed" | "refunded"
+        status = Column(String(30), nullable=False, default="pending")
+        description = Column(Text, nullable=True)
+        metadata_json = Column(Text, nullable=True)  # raw provider payload
+        idempotency_key = Column(String(128), nullable=True, unique=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_billing_user_created", "user_id", "created_at"),
+            Index("idx_billing_provider_id", "provider_payment_id"),
+            Index("idx_billing_status", "status"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "id": self.id,
+                "user_id": self.user_id,
+                "provider": self.provider,
+                "provider_payment_id": self.provider_payment_id,
+                "provider_subscription_id": self.provider_subscription_id,
+                "event_type": self.event_type,
+                "amount": self.amount,
+                "currency": self.currency or "USD",
+                "plan": self.plan,
+                "status": self.status,
+                "description": self.description,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+            }
+
+else:
+
+    class BillingHistory:  # type: ignore[no-redef]
+        __tablename__ = "billing_history"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── UserProfile — extended user profile (bio, avatar, preferences) ────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class UserProfile(Base):
+        """Extended user profile — one row per user (1:1 with users table)."""
+
+        __tablename__ = "user_profiles"
+
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+        display_name = Column(String(100), nullable=True)
+        bio = Column(Text, nullable=True)
+        avatar_url = Column(String(500), nullable=True)
+        timezone = Column(String(50), nullable=True, default="UTC")
+        locale = Column(String(10), nullable=True, default="en")
+        theme = Column(String(20), nullable=True, default="dark")
+        notification_prefs = Column(Text, nullable=True)  # JSON
+        # trading_experience: "beginner" | "intermediate" | "advanced" | "professional"
+        trading_experience = Column(String(20), nullable=True)
+        preferred_instruments = Column(Text, nullable=True)  # JSON array
+        # risk_tolerance: "conservative" | "moderate" | "aggressive"
+        risk_tolerance = Column(String(20), nullable=True)
+        referral_code = Column(String(20), nullable=True, unique=True)
+        referred_by = Column(String(36), nullable=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+        updated_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        )
+
+        def to_dict(self) -> dict:
+            import json as _json
+            prefs: dict = {}
+            instruments: list = []
+            try:
+                prefs = _json.loads(self.notification_prefs or "{}")
+            except Exception:
+                pass
+            try:
+                instruments = _json.loads(self.preferred_instruments or "[]")
+            except Exception:
+                pass
+            return {
+                "user_id": self.user_id,
+                "display_name": self.display_name,
+                "bio": self.bio,
+                "avatar_url": self.avatar_url,
+                "timezone": self.timezone or "UTC",
+                "locale": self.locale or "en",
+                "theme": self.theme or "dark",
+                "notification_prefs": prefs,
+                "trading_experience": self.trading_experience,
+                "preferred_instruments": instruments,
+                "risk_tolerance": self.risk_tolerance,
+                "referral_code": self.referral_code,
+                "referred_by": self.referred_by,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+else:
+
+    class UserProfile:  # type: ignore[no-redef]
+        __tablename__ = "user_profiles"
         __table__ = type("T", (), {"columns": []})()

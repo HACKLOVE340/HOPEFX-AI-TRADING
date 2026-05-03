@@ -1,5 +1,5 @@
 // superadmin/PlatformSection.tsx — platform config, maintenance, broadcast
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -26,29 +26,50 @@ interface PlatformConfig {
   force_2fa_for_admins: boolean;
   ip_whitelist_enabled: boolean;
   ip_whitelist: string;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_tls?: boolean;
 }
 
 const PlatformSection: React.FC = () => {
-  const [cfg, setCfg]         = useState<PlatformConfig | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState('');
-  const [msg, setMsg]         = useState('');
-  const [confirm, setConfirm] = useState<string | null>(null);
-  const [broadcast, setBroadcast] = useState({ title: '', body: '', type: 'info' });
+  const [cfg, setCfg]               = useState<PlatformConfig | null>(null);
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
+  const [error, setError]           = useState('');
+  const [msg, setMsg]               = useState('');
+  const [confirm, setConfirm]       = useState<string | null>(null);
+  const [broadcast, setBroadcast]   = useState({ title: '', body: '', type: 'info' });
+  const [smtpTest, setSmtpTest]     = useState({ host: '', port: 587, user: '', password: '', from_addr: '', tls: true });
+
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const res = await superadminApi.platformConfig();
+      if (!mountedRef.current) return;
       setCfg(res.data);
+      // Pre-fill SMTP test form from loaded config
+      if (res.data.smtp_host) {
+        setSmtpTest(s => ({
+          ...s,
+          host: res.data.smtp_host ?? '',
+          port: res.data.smtp_port ?? 587,
+          user: res.data.smtp_user ?? '',
+          tls:  res.data.smtp_tls  ?? true,
+        }));
+      }
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load config');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
-  // Refresh every 30 s — configuration and model data changes less frequently.
   usePolling(load, 30_000);
 
   const save = async () => {
@@ -60,6 +81,42 @@ const PlatformSection: React.FC = () => {
     } catch (e: unknown) {
       setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed');
     } finally { setSaving(false); }
+  };
+
+  const saveFullConfig = async () => {
+    if (!cfg) return;
+    setSaving(true); setMsg('');
+    try {
+      await superadminApi.savePlatformConfigFull(cfg);
+      setMsg('Full configuration saved and applied');
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Full save failed');
+    } finally { setSaving(false); }
+  };
+
+  const validateConfig = async () => {
+    setValidating(true); setMsg('');
+    try {
+      const res = await superadminApi.validatePlatformConfig();
+      const d = res.data as { valid?: boolean; errors?: string[] };
+      if (d.valid) {
+        setMsg('✅ Configuration is valid');
+      } else {
+        setMsg('⚠️ Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
+      }
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Validation failed');
+    } finally { setValidating(false); }
+  };
+
+  const runSmtpTest = async () => {
+    setTestingSmtp(true); setMsg('');
+    try {
+      await superadminApi.testSmtpConfig(smtpTest);
+      setMsg('✅ SMTP connection successful');
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'SMTP test failed');
+    } finally { setTestingSmtp(false); }
   };
 
   const toggleMaintenance = async () => {
@@ -109,7 +166,13 @@ const PlatformSection: React.FC = () => {
 
       {/* General */}
       <SectionCard title="General Settings" icon="⚙️" accent="#3b82f6"
-        actions={<ActionBtn label={saving ? 'Saving…' : 'Save Changes'} onClick={save} variant="primary" loading={saving} size="sm" />}>
+        actions={
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <ActionBtn label={validating ? 'Validating…' : 'Validate'} onClick={validateConfig} variant="ghost" loading={validating} size="sm" />
+            <ActionBtn label={saving ? 'Saving…' : 'Save Changes'} onClick={save} variant="primary" loading={saving} size="sm" />
+            <ActionBtn label="Full Save & Apply" onClick={saveFullConfig} variant="warning" loading={saving} size="sm" />
+          </div>
+        }>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <Input label="Platform Name"   value={cfg.platform_name}   onChange={e => set('platform_name', e.target.value)} />
           <Input label="Support Email"   value={cfg.support_email}   onChange={e => set('support_email', e.target.value)} />
@@ -144,6 +207,28 @@ const PlatformSection: React.FC = () => {
             <Input label="IP Whitelist (comma-separated)" value={cfg.ip_whitelist} onChange={e => set('ip_whitelist', e.target.value)} placeholder="192.168.1.1, 10.0.0.0/24" />
           </div>
         )}
+      </SectionCard>
+
+      {/* SMTP Test */}
+      <SectionCard title="SMTP Configuration Test" icon="📧" accent="#06b6d4"
+        subtitle="Verify email delivery settings before saving">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+          <Input label="SMTP Host"  value={smtpTest.host}     onChange={e => setSmtpTest(s => ({ ...s, host: e.target.value }))} placeholder="smtp.example.com" />
+          <Input label="SMTP Port"  value={smtpTest.port}     onChange={e => setSmtpTest(s => ({ ...s, port: Number(e.target.value) }))} type="number" />
+          <Input label="Username"   value={smtpTest.user}     onChange={e => setSmtpTest(s => ({ ...s, user: e.target.value }))} placeholder="noreply@example.com" />
+          <Input label="From Address" value={smtpTest.from_addr} onChange={e => setSmtpTest(s => ({ ...s, from_addr: e.target.value }))} placeholder="HOPEFX <noreply@example.com>" />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <Toggle label="Use TLS" checked={smtpTest.tls} onChange={v => setSmtpTest(s => ({ ...s, tls: v }))} />
+        </div>
+        <ActionBtn
+          label={testingSmtp ? 'Testing SMTP…' : 'Test SMTP Connection'}
+          onClick={runSmtpTest}
+          variant="ghost"
+          icon="📧"
+          loading={testingSmtp}
+          disabled={!smtpTest.host}
+        />
       </SectionCard>
 
       {/* Maintenance */}
@@ -230,8 +315,8 @@ const PlatformSection: React.FC = () => {
       {msg && (
         <div style={{
           padding: '12px 16px', borderRadius: 8, marginTop: 4,
-          background: msg.includes('failed') || msg.includes('Failed') ? '#450a0a' : '#052e16',
-          color: msg.includes('failed') || msg.includes('Failed') ? '#f87171' : '#4ade80',
+          background: msg.includes('failed') || msg.includes('Failed') || msg.includes('⚠️') ? '#450a0a' : '#052e16',
+          color: msg.includes('failed') || msg.includes('Failed') || msg.includes('⚠️') ? '#f87171' : '#4ade80',
           fontSize: 13, fontWeight: 600,
         }}>
           {msg}

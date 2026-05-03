@@ -7,6 +7,7 @@ import base64
 import hashlib
 import logging
 import os
+import uuid
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
@@ -104,14 +105,25 @@ def _prepare_password(password: str) -> bytes:
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Encode a JWT access token using PyJWT (HS256)."""
+    """Encode a JWT access token using PyJWT (HS256).
+
+    Always injects:
+      - ``exp``  — expiry timestamp
+      - ``iat``  — issued-at timestamp
+      - ``jti``  — unique token ID (UUID4) for revocation tracking
+      - ``type`` — "access" to distinguish from refresh tokens
+    """
     to_encode = data.copy()
+    now = datetime.now(UTC)
     expire = (
-        datetime.now(UTC) + expires_delta
+        now + expires_delta
         if expires_delta
-        else datetime.now(UTC) + timedelta(minutes=_get_access_token_expire_minutes())
+        else now + timedelta(minutes=_get_access_token_expire_minutes())
     )
-    to_encode.update({"exp": expire})
+    # Inject standard claims — do not overwrite caller-supplied jti if present
+    to_encode.setdefault("jti", str(uuid.uuid4()))
+    to_encode.setdefault("type", "access")
+    to_encode.update({"exp": expire, "iat": now})
     return jwt.encode(to_encode, _get_secret(), algorithm=ALGORITHM)
 
 

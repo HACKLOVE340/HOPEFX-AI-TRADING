@@ -293,33 +293,75 @@ def _seed_from_broker() -> None:
 
 def _get_live_price(symbol: str) -> float | None:
     """
-    Return the current mid price from the live stack:
-    1. price_engine.get_last_price() — real ticks when a feed is connected
-    2. broker.market_prices          — paper broker static prices
-    Returns None if neither is available.
+    Return the current mid price from the 4-level live price chain.
+
+    Level 1 — price_engine.get_last_price()
+        Real ticks from the connected data feed (NuclearStreamer / ProductionDataEngine).
+    Level 2 — broker.market_prices
+        Paper broker static prices (always available when broker is connected).
+    Level 3 — Redis tick cache
+        Most recent tick stored by the data feed writer (hopefx:tick_cache:{symbol}).
+    Level 4 — EventBus last-known price
+        Last price published on CH_TICK, held in the module-level _last_mid dict
+        by the _eventbus_tick_broadcaster coroutine.
+
+    Returns None only when all four levels fail, which triggers a no_live_feed
+    status message to the client instead of fabricating a price.
     """
+    broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
+
+    # ── Level 1: price engine ─────────────────────────────────────────────────
     try:
         from core.app_state import app_state
 
-        # 1. Price engine (real ticks)
         pe = getattr(app_state, "price_engine", None)
         if pe is not None:
-            broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
             tick = pe.get_last_price(broker_key)
             if tick is not None:
-                mid = getattr(tick, "mid", None) or ((getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2)
+                mid = getattr(tick, "mid", None) or (
+                    (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
+                )
                 if mid and mid > 0:
                     return float(mid)
+    except Exception as exc:
+        logger.debug("_get_live_price L1 (%s): %s", symbol, exc)
 
-        # 2. Paper broker static prices
+    # ── Level 2: broker market prices ─────────────────────────────────────────
+    try:
+        from core.app_state import app_state
+
         broker = getattr(app_state, "broker", None)
         market_prices = getattr(broker, "market_prices", {}) if broker else {}
-        broker_key = _BROKER_KEY.get(symbol, symbol.replace("/", ""))
         live = market_prices.get(broker_key)
-        if live and live > 0:
+        if live and float(live) > 0:
             return float(live)
     except Exception as exc:
-        logger.debug("_get_live_price(%s): price lookup failed: %s", symbol, exc)
+        logger.debug("_get_live_price L2 (%s): %s", symbol, exc)
+
+    # ── Level 3: Redis tick cache ─────────────────────────────────────────────
+    try:
+        from market_data.redis_cache import MarketDataCache
+        from cache.redis_pool import get_sync_client
+
+        rc = MarketDataCache(get_sync_client())
+        tick_data = rc.get_latest_tick(broker_key) or rc.get_latest_tick(symbol)
+        if tick_data:
+            bid = float(tick_data.get("bid", 0))
+            ask = float(tick_data.get("ask", 0))
+            mid = (bid + ask) / 2.0
+            if mid > 0:
+                return mid
+    except Exception as exc:
+        logger.debug("_get_live_price L3 (%s): %s", symbol, exc)
+
+    # ── Level 4: EventBus last-known price (module-level _last_mid) ───────────
+    # _last_mid is populated by _eventbus_tick_broadcaster as ticks arrive on
+    # CH_TICK.  It is the last resort — stale but better than nothing.
+    cached_mid = _last_mid.get(symbol) or _last_mid.get(broker_key)
+    if cached_mid and cached_mid > 0:
+        logger.debug("_get_live_price L4 (%s): using last-known mid=%.5f", symbol, cached_mid)
+        return float(cached_mid)
+
     return None
 
 
@@ -1343,6 +1385,12 @@ async def push_position_close(position_id: str, user_id: str | None = None) -> N
 async def push_signal(signal: dict) -> None:
     """Signals are broadcast to all subscribers (not user-specific)."""
     await _manager.broadcast("signals", {"type": "signal", "data": signal})
+    # Also forward to /ws/social-feed subscribers
+    try:
+        from api.social_feed import _social_feed_broadcast as _sf_broadcast
+        await _sf_broadcast(signal)
+    except Exception:
+        pass
 
 
 async def push_account_update(account: dict, user_id: str | None = None) -> None:

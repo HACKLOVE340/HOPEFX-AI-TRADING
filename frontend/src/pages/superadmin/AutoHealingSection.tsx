@@ -1,6 +1,6 @@
 // superadmin/AutoHealingSection.tsx
 // Autonomous Healing Engine — Super Admin control panel
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
 import {
@@ -994,7 +994,8 @@ const AutoHealingSection: React.FC = () => {
   const [quarLoading, setQuarLoading]         = useState(false);
   const [approvalLoading, setApprovalLoading] = useState(false);
 
-
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const errDetail = (e: unknown) =>
     (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -1012,6 +1013,7 @@ const AutoHealingSection: React.FC = () => {
         superadminApi.autoHealStatus(),
         superadminApi.autoHealTestIndex(),
       ]);
+      if (!mountedRef.current) return;
       const h = healRes.data;
       setLiveStatus({
         running:         h.running ?? h.status === 'running',
@@ -1037,37 +1039,42 @@ const AutoHealingSection: React.FC = () => {
     setDriftLoading(true);
     try {
       const res = await superadminApi.autoHealDrift(200);
+      if (!mountedRef.current) return;
       setDriftEvents(res.data.events ?? []);
-    } catch { /* silent */ } finally { setDriftLoading(false); }
+    } catch { /* silent */ } finally { if (mountedRef.current) setDriftLoading(false); }
   }, []);
 
   const loadPatches = useCallback(async () => {
     setPatchLoading(true);
     try {
       const res = await superadminApi.autoHealPatches(100);
+      if (!mountedRef.current) return;
       setPatchHistory(res.data.patches ?? []);
-    } catch { /* silent */ } finally { setPatchLoading(false); }
+    } catch { /* silent */ } finally { if (mountedRef.current) setPatchLoading(false); }
   }, []);
 
   const loadQuarantine = useCallback(async () => {
     setQuarLoading(true);
     try {
       const res = await superadminApi.autoHealQuarantine();
+      if (!mountedRef.current) return;
       setQuarantine(res.data.entries ?? []);
-    } catch { /* silent */ } finally { setQuarLoading(false); }
+    } catch { /* silent */ } finally { if (mountedRef.current) setQuarLoading(false); }
   }, []);
 
   const loadApproval = useCallback(async () => {
     setApprovalLoading(true);
     try {
       const res = await superadminApi.autoHealPendingApproval();
+      if (!mountedRef.current) return;
       setPendingApproval(res.data.patches ?? []);
-    } catch { /* silent */ } finally { setApprovalLoading(false); }
+    } catch { /* silent */ } finally { if (mountedRef.current) setApprovalLoading(false); }
   }, []);
 
   const loadConfig = useCallback(async () => {
     try {
       const res = await superadminApi.autoHealConfig();
+      if (!mountedRef.current) return;
       setCfg({ ...DEFAULT_CONFIG, ...res.data });
     } catch { /* use defaults */ }
   }, []);
@@ -1077,8 +1084,9 @@ const AutoHealingSection: React.FC = () => {
     try {
       await Promise.all([loadStatus(), loadConfig(), loadDrift(), loadPatches(), loadQuarantine(), loadApproval()]);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError(errDetail(e) ?? 'Failed to load healing configuration');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [loadStatus, loadConfig, loadDrift, loadPatches, loadQuarantine, loadApproval]);
 
   useEffect(() => { load(); }, [load]);

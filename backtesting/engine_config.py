@@ -803,7 +803,7 @@ class BacktestEngine:
             }
 
         n_trades = len(trade_returns)
-        rng = np.random.default_rng(seed=42)
+        rng = np.random.default_rng()  # unseeded — Monte Carlo bootstrap uses non-deterministic sampling
         final_equities: list[float] = []
         ruin_count = 0
 

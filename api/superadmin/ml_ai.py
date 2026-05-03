@@ -329,28 +329,15 @@ async def get_model_drift(user: TokenPayload = Depends(_require_superadmin)) -> 
         return detector.get_all_drift()
     except Exception:
         pass
-    try:
-        from ml.saved_models import list_saved_models  # type: ignore[import]
-        models = list_saved_models()
-    except Exception:
-        models = ["advanced_oos", "regime_classifier", "signal_ensemble"]
-    import random, math
-    drift_reports = []
-    for m in models:
-        name = m if isinstance(m, str) else m.get("name", "unknown")
-        drift_reports.append({
-            "model": name,
-            "psi": round(random.uniform(0.01, 0.15), 4),
-            "ks_statistic": round(random.uniform(0.02, 0.12), 4),
-            "feature_drift": {
-                "price_momentum": round(random.uniform(0.0, 0.2), 4),
-                "volatility": round(random.uniform(0.0, 0.15), 4),
-                "volume_ratio": round(random.uniform(0.0, 0.1), 4),
-            },
-            "drift_detected": False,
-            "last_checked": _utcnow().isoformat(),
-        })
-    return {"drift_reports": drift_reports, "total": len(drift_reports)}
+    # No drift detector available and no real metrics to return.
+    # Return an empty list rather than synthetic data — callers must handle
+    # the empty case and prompt the operator to configure drift monitoring.
+    return {
+        "drift_reports": [],
+        "total": 0,
+        "message": "Drift detector unavailable. Configure ml.drift_detector to enable real drift metrics.",
+        "last_checked": _utcnow().isoformat(),
+    }
 
 
 @router.get("/ml/explainability")

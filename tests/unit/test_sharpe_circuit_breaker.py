@@ -443,9 +443,15 @@ class TestFireTripEvent:
         state.trip_reason = "test"
 
         mock_outbox = MagicMock()
-        mock_outbox.write_outbox_event_standalone.side_effect = RuntimeError("db down")
+        mock_ae = MagicMock()
+        mock_ae.send_alert.side_effect = RuntimeError("alert down")
+        mock_app_state_module = MagicMock()
+        mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
 
-        with patch.dict("sys.modules", {"core.outbox": mock_outbox}):
+        with patch.dict("sys.modules", {
+            "core.outbox": mock_outbox,
+            "core.app_state": mock_app_state_module,
+        }):
             cb._fire_trip_event(state)  # must not raise
 
     def test_fire_trip_event_calls_alert_engine_when_available(self):
@@ -457,10 +463,13 @@ class TestFireTripEvent:
 
         mock_outbox = MagicMock()
         mock_ae = MagicMock()
-        mock_app_state = MagicMock()
-        mock_app_state.alert_engine = mock_ae
+        mock_app_state_module = MagicMock()
+        mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
 
-        with patch.dict("sys.modules", {"core.outbox": mock_outbox, "app": MagicMock(app_state=mock_app_state)}):
+        with patch.dict("sys.modules", {
+            "core.outbox": mock_outbox,
+            "core.app_state": mock_app_state_module,
+        }):
             cb._fire_trip_event(state)
 
         mock_ae.send_alert.assert_called_once()

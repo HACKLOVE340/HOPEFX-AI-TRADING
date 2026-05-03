@@ -499,6 +499,60 @@ def get_connection_mode() -> str:
     return _connection_mode
 
 
+async def execute_with_readonly_retry(
+    client: Any,
+    command: str,
+    *args: Any,
+    max_retries: int = 2,
+    **kwargs: Any,
+) -> Any:
+    """
+    Execute a Redis command with automatic retry on READONLY errors.
+
+    In Sentinel mode a failover can briefly cause the client to be connected
+    to a replica that returns ``READONLY You can't write against a read only
+    replica``.  This helper catches that error, forces a client re-initialisation
+    (which will discover the new master), and retries the command.
+
+    Also handles RedisCluster MOVED/ASK redirects transparently — the
+    redis-py Cluster client handles those internally, but we add an outer
+    retry for transient connection errors during slot migration.
+
+    Usage::
+
+        await execute_with_readonly_retry(rc, "set", "key", "value", ex=30)
+        await execute_with_readonly_retry(rc, "hset", "hash", "field", "value")
+    """
+    if client is None:
+        return None
+
+    for attempt in range(max_retries + 1):
+        try:
+            method = getattr(client, command)
+            return await method(*args, **kwargs)
+        except Exception as exc:
+            exc_str = str(exc).upper()
+            is_readonly = "READONLY" in exc_str
+            is_moved = "MOVED" in exc_str or "ASK" in exc_str
+            is_connection = "CONNECTION" in exc_str or "TIMEOUT" in exc_str
+
+            if attempt < max_retries and (is_readonly or is_moved or is_connection):
+                logger.warning(
+                    "Redis %s error on attempt %d/%d (%s) — re-initialising client",
+                    command, attempt + 1, max_retries, exc_str[:80],
+                )
+                # Force re-initialisation so the next get_redis() discovers
+                # the new master (Sentinel) or updated slot map (Cluster)
+                global _redis_instance
+                _redis_instance = None
+                client = await get_redis()
+                if client is None:
+                    logger.error("Redis re-initialisation failed — giving up")
+                    return None
+                continue
+            raise
+
+
 # Module-level fakeredis singleton — shared across all callers so state is
 # consistent within a single process (same as a real Redis server would be).
 _fakeredis_instance: Any | None = None
@@ -573,3 +627,295 @@ get_redis_client = get_redis
 # Prefer this over get_redis_client in non-async code to avoid the
 # "coroutine object has no attribute" error from forgetting await.
 get_sync_redis_client = get_sync_redis
+
+
+# ── Pipeline batching helper ──────────────────────────────────────────────────
+
+class RedisPipelineBatch:
+    """
+    Async context manager that accumulates commands and executes them in a
+    single pipeline flush, reducing round-trip overhead for bulk writes.
+
+    Usage::
+
+        async with RedisPipelineBatch(await get_redis()) as pipe:
+            pipe.set("key1", "val1")
+            pipe.set("key2", "val2")
+            pipe.expire("key1", 60)
+        # All three commands sent in one round-trip on __aexit__
+
+    Falls back gracefully when the client is None (degraded mode).
+    """
+
+    def __init__(self, client: Any) -> None:
+        self._client = client
+        self._pipe: Any = None
+
+    async def __aenter__(self) -> "RedisPipelineBatch":
+        if self._client is not None:
+            try:
+                self._pipe = self._client.pipeline(transaction=False)
+            except Exception as exc:
+                logger.debug("RedisPipelineBatch: pipeline() failed: %s", exc)
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        if self._pipe is not None and exc_type is None:
+            try:
+                await self._pipe.execute()
+            except Exception as exc:
+                logger.warning("RedisPipelineBatch: execute() failed: %s", exc)
+        self._pipe = None
+
+    def __getattr__(self, name: str) -> Any:
+        """Proxy attribute access to the underlying pipeline."""
+        if self._pipe is not None:
+            return getattr(self._pipe, name)
+        # Return a no-op callable when pipeline is unavailable
+        def _noop(*args: Any, **kwargs: Any) -> None:
+            pass
+        return _noop
+
+
+async def pipeline_batch(commands: list[tuple]) -> list[Any]:
+    """
+    Execute a list of (command_name, *args) tuples in a single pipeline.
+
+    Args:
+        commands: e.g. [("set", "k", "v"), ("expire", "k", 60)]
+
+    Returns:
+        List of results from each command, or empty list on failure.
+    """
+    client = await get_redis()
+    if client is None:
+        return []
+    try:
+        pipe = client.pipeline(transaction=False)
+        for cmd, *args in commands:
+            getattr(pipe, cmd)(*args)
+        return await pipe.execute()
+    except Exception as exc:
+        logger.warning("pipeline_batch failed: %s", exc)
+        return []
+
+
+# ── Lua scripting support ─────────────────────────────────────────────────────
+
+# Pre-defined Lua scripts for atomic operations.
+# Scripts are registered once and called by SHA1 digest (EVALSHA) for
+# minimal overhead on subsequent calls.
+
+_LUA_SCRIPTS: dict[str, str] = {
+    # Atomic compare-and-set: set key=value only if current value matches expected.
+    # KEYS[1]=key, ARGV[1]=expected, ARGV[2]=new_value, ARGV[3]=ttl_seconds
+    # Returns 1 on success, 0 if value did not match.
+    "cas": """
+        local cur = redis.call('GET', KEYS[1])
+        if cur == ARGV[1] then
+            redis.call('SETEX', KEYS[1], tonumber(ARGV[3]), ARGV[2])
+            return 1
+        end
+        return 0
+    """,
+    # Atomic increment with TTL reset: increment counter and reset TTL.
+    # KEYS[1]=key, ARGV[1]=increment, ARGV[2]=ttl_seconds
+    # Returns new value.
+    "incr_with_ttl": """
+        local val = redis.call('INCRBY', KEYS[1], tonumber(ARGV[1]))
+        redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
+        return val
+    """,
+    # Atomic get-and-delete: return value and delete key in one round-trip.
+    # KEYS[1]=key
+    # Returns the value or false.
+    "get_del": """
+        local val = redis.call('GET', KEYS[1])
+        if val then
+            redis.call('DEL', KEYS[1])
+        end
+        return val
+    """,
+    # Sliding-window rate limiter: allow at most ARGV[1] requests per ARGV[2] seconds.
+    # KEYS[1]=rate_limit_key, ARGV[1]=max_requests, ARGV[2]=window_seconds
+    # Returns 1 if allowed, 0 if rate-limited.
+    "rate_limit": """
+        local key = KEYS[1]
+        local limit = tonumber(ARGV[1])
+        local window = tonumber(ARGV[2])
+        local now = tonumber(redis.call('TIME')[1])
+        local count = redis.call('INCR', key)
+        if count == 1 then
+            redis.call('EXPIRE', key, window)
+        end
+        if count > limit then
+            return 0
+        end
+        return 1
+    """,
+}
+
+# SHA1 digest cache — populated on first use
+_script_shas: dict[str, str] = {}
+
+
+async def eval_script(script_name: str, keys: list[str], args: list[str]) -> Any:
+    """
+    Execute a named Lua script via EVALSHA (cached) or EVAL (first call).
+
+    Args:
+        script_name: Key in _LUA_SCRIPTS.
+        keys: KEYS array passed to the script.
+        args: ARGV array passed to the script.
+
+    Returns:
+        Script return value, or None on failure.
+    """
+    if script_name not in _LUA_SCRIPTS:
+        raise ValueError(f"Unknown Lua script {script_name!r}. Available: {sorted(_LUA_SCRIPTS)}")
+
+    client = await get_redis()
+    if client is None:
+        return None
+
+    script_body = _LUA_SCRIPTS[script_name]
+
+    # Try EVALSHA first (uses cached SHA)
+    if script_name in _script_shas:
+        try:
+            return await client.evalsha(_script_shas[script_name], len(keys), *keys, *args)
+        except Exception as exc:
+            if "NOSCRIPT" in str(exc):
+                # Script was flushed from Redis script cache — fall through to EVAL
+                del _script_shas[script_name]
+            else:
+                logger.warning("eval_script EVALSHA failed: %s", exc)
+                return None
+
+    # EVAL and cache the SHA
+    try:
+        result = await client.eval(script_body, len(keys), *keys, *args)
+        # Cache the SHA for future calls
+        try:
+            sha = await client.script_load(script_body)
+            _script_shas[script_name] = sha
+        except Exception:
+            pass  # SHA caching is best-effort
+        return result
+    except Exception as exc:
+        logger.warning("eval_script EVAL failed for %r: %s", script_name, exc)
+        return None
+
+
+# ── Connection health telemetry ───────────────────────────────────────────────
+
+import threading as _threading
+
+
+class RedisHealthTelemetry:
+    """
+    Tracks Redis connection health metrics over a rolling window.
+
+    Metrics collected:
+    - ping_latency_ms: rolling 50-sample window
+    - command_latency_ms: rolling 200-sample window
+    - error_count: total errors since last reset
+    - reconnect_count: total reconnections
+    - last_error: most recent error message
+    - uptime_s: seconds since first successful connection
+    """
+
+    def __init__(self, window: int = 50) -> None:
+        self._lock = _threading.Lock()
+        self._ping_latencies: list[float] = []
+        self._cmd_latencies: list[float] = []
+        self._window = window
+        self._error_count = 0
+        self._reconnect_count = 0
+        self._last_error: str = ""
+        self._first_connected_at: float | None = None
+        self._last_ping_at: float = 0.0
+
+    def record_ping(self, latency_ms: float) -> None:
+        with self._lock:
+            if self._first_connected_at is None:
+                self._first_connected_at = time.monotonic()
+            self._ping_latencies.append(latency_ms)
+            if len(self._ping_latencies) > self._window:
+                self._ping_latencies.pop(0)
+            self._last_ping_at = time.monotonic()
+
+    def record_command(self, latency_ms: float) -> None:
+        with self._lock:
+            self._cmd_latencies.append(latency_ms)
+            if len(self._cmd_latencies) > self._window * 4:
+                self._cmd_latencies.pop(0)
+
+    def record_error(self, exc: Exception) -> None:
+        with self._lock:
+            self._error_count += 1
+            self._last_error = str(exc)[:200]
+
+    def record_reconnect(self) -> None:
+        with self._lock:
+            self._reconnect_count += 1
+
+    def _percentile(self, samples: list[float], pct: float) -> float:
+        if not samples:
+            return 0.0
+        s = sorted(samples)
+        idx = int(len(s) * pct / 100)
+        return round(s[min(idx, len(s) - 1)], 3)
+
+    def snapshot(self) -> dict:
+        with self._lock:
+            uptime = (
+                time.monotonic() - self._first_connected_at
+                if self._first_connected_at
+                else 0.0
+            )
+            return {
+                "ping_p50_ms": self._percentile(self._ping_latencies, 50),
+                "ping_p99_ms": self._percentile(self._ping_latencies, 99),
+                "cmd_p50_ms": self._percentile(self._cmd_latencies, 50),
+                "cmd_p99_ms": self._percentile(self._cmd_latencies, 99),
+                "error_count": self._error_count,
+                "reconnect_count": self._reconnect_count,
+                "last_error": self._last_error,
+                "uptime_s": round(uptime, 1),
+                "last_ping_age_s": round(time.monotonic() - self._last_ping_at, 1),
+                "connection_mode": _connection_mode,
+            }
+
+    def reset(self) -> None:
+        with self._lock:
+            self._ping_latencies.clear()
+            self._cmd_latencies.clear()
+            self._error_count = 0
+            self._reconnect_count = 0
+            self._last_error = ""
+
+
+# Module-level telemetry singleton
+redis_telemetry = RedisHealthTelemetry()
+
+
+async def ping_with_telemetry() -> bool:
+    """
+    Ping Redis and record the round-trip latency in redis_telemetry.
+
+    Returns True if the ping succeeded, False otherwise.
+    """
+    client = await get_redis()
+    if client is None:
+        redis_telemetry.record_error(ConnectionError("No Redis client available"))
+        return False
+    t0 = time.perf_counter()
+    try:
+        await client.ping()
+        latency_ms = (time.perf_counter() - t0) * 1000
+        redis_telemetry.record_ping(latency_ms)
+        return True
+    except Exception as exc:
+        redis_telemetry.record_error(exc)
+        return False

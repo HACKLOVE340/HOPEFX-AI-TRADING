@@ -422,6 +422,8 @@ class PaperTradingBroker(BrokerConnector):
         quantity: float,
         price: float | None = None,
         stop_price: float | None = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
         **kwargs,
     ) -> Order:
         """
@@ -511,7 +513,8 @@ class PaperTradingBroker(BrokerConnector):
             commission = self._deduct_commission(quantity)
 
             # Update position at the slippage-adjusted fill price
-            self._update_position(symbol, side, quantity, fill_price)
+            self._update_position(symbol, side, quantity, fill_price,
+                                  stop_loss=stop_loss, take_profit=take_profit)
 
             # Record equity snapshot after every fill
             self._snapshot_equity()
@@ -771,7 +774,15 @@ class PaperTradingBroker(BrokerConnector):
         """
         return list(self._equity_history)
 
-    async def place_market_order(self, symbol: str, side: str, quantity: float):
+    async def place_market_order(
+        self,
+        symbol: str,
+        side: str,
+        quantity: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        **kwargs,
+    ):
         """Async market order — delegates to sync place_order."""
         from .base import OrderSide as _OS
         from .base import OrderType as _OT
@@ -782,6 +793,8 @@ class PaperTradingBroker(BrokerConnector):
             side=side_enum,
             order_type=_OT.MARKET,
             quantity=quantity,
+            stop_loss=stop_loss,
+            take_profit=take_profit,
         )
 
     async def close_all_positions(self) -> list[str]:
@@ -878,6 +891,8 @@ class PaperTradingBroker(BrokerConnector):
         side: OrderSide,
         quantity: float,
         price: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
     ):
         """Update or create position"""
         position_side = "LONG" if side == OrderSide.BUY else "SHORT"
@@ -892,6 +907,11 @@ class PaperTradingBroker(BrokerConnector):
 
             position.quantity = total_quantity
             position.entry_price = avg_price
+            # Update SL/TP when explicitly provided
+            if stop_loss is not None:
+                position.stop_loss = stop_loss
+            if take_profit is not None:
+                position.take_profit = take_profit
         else:
             # Create new position
             self.positions[symbol] = Position(
@@ -901,6 +921,8 @@ class PaperTradingBroker(BrokerConnector):
                 entry_price=price,
                 current_price=price,
                 unrealized_pnl=0.0,
+                stop_loss=stop_loss,
+                take_profit=take_profit,
                 timestamp=datetime.now(UTC),
             )
 

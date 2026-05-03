@@ -523,7 +523,7 @@ class AdvancedFeatureEngineer:
         else:
             # Permutation importance — works for any model including TF/Torch
             baseline_score = self._evaluate_model(model, X, y)
-            rng = np.random.default_rng(seed=42)
+            rng = np.random.default_rng()  # unseeded — non-deterministic permutation importance
 
             for i, feature in enumerate(self.feature_names):
                 drop_scores: list[float] = []
@@ -1964,17 +1964,17 @@ def generate_synthetic_data(n_samples: int = 5000, trend: float = 0.0001, volati
         UserWarning,
         stacklevel=2,
     )
-    np.random.seed(42)
-    returns = np.random.normal(trend, volatility, n_samples)
+    _rng = np.random.default_rng()  # unseeded — synthetic data is dev/test only
+    returns = _rng.normal(trend, volatility, n_samples)
     for i in range(1, n_samples):
         returns[i] *= 1 + abs(returns[i - 1]) * 3
     prices = 100 * np.exp(np.cumsum(returns))
     df = pd.DataFrame(index=pd.date_range("2024-01-01", periods=n_samples, freq="5min"))
     df["close"] = prices
-    df["high"] = prices * (1 + np.abs(np.random.normal(0, volatility, n_samples)))
-    df["low"] = prices * (1 - np.abs(np.random.normal(0, volatility, n_samples)))
+    df["high"] = prices * (1 + np.abs(_rng.normal(0, volatility, n_samples)))
+    df["low"] = prices * (1 - np.abs(_rng.normal(0, volatility, n_samples)))
     df["open"] = df["close"].shift(1).fillna(prices[0])
-    df["volume"] = np.random.poisson(1000, n_samples)
+    df["volume"] = _rng.poisson(1000, n_samples)
     return df
 
 

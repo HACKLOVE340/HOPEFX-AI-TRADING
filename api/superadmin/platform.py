@@ -617,8 +617,103 @@ def _save_engine_config(cfg: dict) -> None:
 
 @router.get("/engine/status")
 async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -> dict:
+    """Rich engine status: config + live app_state engine attributes.
+
+    Returns all fields expected by the frontend TradingEngineSection:
+      running, uptime_seconds, last_signal_at, positions_open,
+      heartbeat_ok, mode, status, kill_switch_active.
+
+    Optional fields (present when live data is available):
+      last_signal_direction, last_signal_confidence  — from HopeFXEngine._get_status()
+      decision_engine_cycles, decision_engine_executed, decision_engine_blocked,
+      decision_engine_errors, decision_engine_execution_rate  — from HOPEFXDecisionEngine.status()
+
+    Note: uptime_seconds defaults to 0 if api.admin._start_time is unavailable.
+    """
     cfg = _load_engine_config()
-    return {"status": cfg.get("engine_status", "unknown"), "kill_switch_active": cfg.get("kill_switch_active", False)}
+
+    result: dict = {
+        "status": cfg.get("engine_status", "running"),
+        "kill_switch_active": cfg.get("kill_switch_active", False),
+        # Frontend EngineStatus interface fields
+        "running": cfg.get("engine_status", "running") not in ("stopped", "paused"),
+        "uptime_seconds": 0,
+        "last_signal_at": None,
+        "positions_open": 0,
+        "heartbeat_ok": True,
+        "mode": "paper" if cfg.get("paper_trading_mode", True) else "live",
+    }
+
+    # Override with live data from app_state engine if available
+    try:
+        import api.admin as _admin_mod
+
+        # _start_time is a module-level float set at process start; fall back to 0
+        _start_time = getattr(_admin_mod, "_start_time", None)
+        if _start_time is not None:
+            result["uptime_seconds"] = max(0, int(time.time() - _start_time))
+
+        app_state = getattr(_admin_mod, "app_state", None)
+
+        if app_state and hasattr(app_state, "engine"):
+            eng = app_state.engine
+            result["running"] = bool(getattr(eng, "_running", result["running"]))
+            result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
+
+            # Prefer _get_status() for live positions / signals
+            if callable(getattr(eng, "_get_status", None)):
+                try:
+                    snap = eng._get_status()
+                    result["positions_open"] = int(snap.get("open_positions", 0))
+                    last_sig_block = snap.get("last_signal")
+                    if isinstance(last_sig_block, dict):
+                        # Store direction+confidence in extra field for DecisionEnginePanel
+                        result["last_signal_direction"] = last_sig_block.get("direction", "hold")
+                        result["last_signal_confidence"] = last_sig_block.get("confidence", 0)
+                    result["mode"] = snap.get("mode", result["mode"])
+                except Exception:
+                    logger.debug("engine/status: _get_status() failed", exc_info=False)
+            else:
+                result["positions_open"] = len(getattr(eng, "positions", {})) or result["positions_open"]
+
+            # last_signal_at: try engine attr
+            last_sig = getattr(eng, "_last_signal_at", None)
+            if last_sig is not None:
+                result["last_signal_at"] = (
+                    last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
+                )
+
+        # Decision engine counters (cycles, executed, blocked, errors, execution_rate)
+        if app_state and hasattr(app_state, "decision_engine"):
+            de = app_state.decision_engine
+            if callable(getattr(de, "status", None)):
+                try:
+                    de_status = de.status()
+                    result["decision_engine_cycles"] = de_status.get("cycles_total", 0)
+                    result["decision_engine_executed"] = de_status.get("executed", 0)
+                    result["decision_engine_blocked"] = de_status.get("blocked", 0)
+                    result["decision_engine_errors"] = de_status.get("errors", 0)
+                    result["decision_engine_execution_rate"] = de_status.get("execution_rate", 0.0)
+                except Exception:
+                    logger.debug("engine/status: decision_engine.status() failed", exc_info=False)
+    except Exception:
+        logger.debug("engine/status: app_state unavailable", exc_info=False)
+
+    # Fallback: last_signal_at from Redis
+    if result["last_signal_at"] is None:
+        try:
+            from cache.redis_client import get_sync_redis_client
+            import json as _json
+
+            rc = get_sync_redis_client()
+            if rc:
+                raw = rc.get("engine:last_signal_at")
+                if raw:
+                    result["last_signal_at"] = raw.decode() if isinstance(raw, bytes) else raw
+        except Exception:
+            logger.debug("engine/status: Redis last_signal_at unavailable", exc_info=False)
+
+    return result
 
 
 @router.get("/engine/config")
@@ -846,9 +941,17 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
-            metrics["open_positions"] = len(getattr(eng, "positions", {}))
             metrics["rejected_orders"] = int(getattr(eng, "rejected_orders", 0))
             metrics["kill_switch_triggers"] = int(getattr(eng, "kill_switch_triggers", 0))
+            # Use _get_status() for live open_positions (no eng.positions dict)
+            if callable(getattr(eng, "_get_status", None)):
+                try:
+                    snap = eng._get_status()
+                    metrics["open_positions"] = int(snap.get("open_positions", 0))
+                except Exception:
+                    logger.debug("engine/metrics: _get_status() failed", exc_info=False)
+            else:
+                metrics["open_positions"] = len(getattr(eng, "positions", {}))
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 

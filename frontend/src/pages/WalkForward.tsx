@@ -145,6 +145,12 @@ const WalkForward: React.FC = () => {
   const [runId, setRunId]          = useState('');
   const [inputId, setInputId]      = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const load = useCallback(async (id?: string) => {
     setLoading(true);
     setApiError(null);
@@ -153,9 +159,11 @@ const WalkForward: React.FC = () => {
         ? `/backtesting/walk-forward/${id}`
         : '/backtesting/walk-forward/latest';
       const res = await api.get(endpoint);
+      if (!mountedRef.current) return;
       setData(res.data);
       setVisible(new Set(res.data.folds.map((f: FoldResult) => f.fold)));
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 404) {
         setApiError('No walk-forward results yet. Run a backtest first via the Backtesting page.');
@@ -164,7 +172,7 @@ const WalkForward: React.FC = () => {
       }
       setData(null);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

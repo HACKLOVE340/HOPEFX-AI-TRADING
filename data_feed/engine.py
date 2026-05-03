@@ -20,6 +20,20 @@ Failure handling
 * Health monitor: forces provider rotation when no update arrives for 30 s.
 * Stale-data guard: rejects prices outside a plausible XAUUSD range.
 
+New in this version
+-------------------
+* Adaptive polling interval: poll interval adjusts dynamically based on
+  source health score. Healthy sources poll at min_interval; degraded
+  sources back off to max_interval. Interval changes are logged.
+* Source health scoring: each provider maintains a rolling health score
+  [0.0, 1.0] based on success rate, latency, and staleness. Score decays
+  on failure and recovers on success.
+* Automatic failover with hysteresis: failover only triggers when the
+  active provider's health score drops below FAILOVER_THRESHOLD for
+  HYSTERESIS_COUNT consecutive polls. Recovery back to primary requires
+  the primary's health score to exceed RECOVERY_THRESHOLD for
+  HYSTERESIS_COUNT consecutive polls.
+
 Subscriber pattern
 ------------------
 Any object with an ``on_new_price(price: float)`` coroutine can subscribe.
@@ -38,16 +52,16 @@ import asyncio
 import contextlib
 import logging
 import os
+import time
 from collections import deque
 from datetime import datetime, timezone
-
-UTC = timezone.utc
 from pathlib import Path
 from typing import Any
 
 import aiohttp
 import yaml
 
+UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # Plausible XAUUSD price range used to reject obviously bad ticks.
@@ -56,6 +70,89 @@ _PRICE_MAX = 10_000.0
 
 # How long (seconds) a circuit-breaker stays open before re-trying.
 _CIRCUIT_BREAKER_COOLDOWN = 60
+
+# Adaptive polling interval bounds (seconds)
+_POLL_MIN_S = float(os.getenv("FEED_POLL_MIN_S", "0.5"))
+_POLL_MAX_S = float(os.getenv("FEED_POLL_MAX_S", "10.0"))
+
+# Health score thresholds for failover/recovery
+_FAILOVER_THRESHOLD = float(os.getenv("FEED_FAILOVER_THRESHOLD", "0.3"))
+_RECOVERY_THRESHOLD = float(os.getenv("FEED_RECOVERY_THRESHOLD", "0.7"))
+_HYSTERESIS_COUNT = int(os.getenv("FEED_HYSTERESIS_COUNT", "3"))
+
+# Health score EMA alpha
+_HEALTH_ALPHA = float(os.getenv("FEED_HEALTH_ALPHA", "0.2"))
+
+
+class _SourceHealth:
+    """
+    Rolling health score for a single data source.
+
+    Score in [0.0, 1.0]:
+      1.0 = perfectly healthy (fast, reliable, fresh)
+      0.0 = completely failed
+
+    Updated on every poll attempt:
+      success: score += alpha * (1.0 - score)  [EMA toward 1.0]
+      failure: score -= alpha * score           [EMA toward 0.0]
+      latency penalty: score -= latency_ms / 10000 (capped at 0.2)
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.score: float = 1.0
+        self.consecutive_failures: int = 0
+        self.consecutive_successes: int = 0
+        self.total_calls: int = 0
+        self.total_failures: int = 0
+        self.last_latency_ms: float = 0.0
+        self.last_success_ts: float = 0.0
+        self._poll_interval: float = _POLL_MIN_S
+
+    def record_success(self, latency_ms: float) -> None:
+        self.total_calls += 1
+        self.consecutive_failures = 0
+        self.consecutive_successes += 1
+        self.last_latency_ms = latency_ms
+        self.last_success_ts = time.monotonic()
+        # EMA toward 1.0
+        self.score = self.score + _HEALTH_ALPHA * (1.0 - self.score)
+        # Latency penalty (normalised: 1000ms = 0.1 penalty)
+        latency_penalty = min(0.2, latency_ms / 10000.0)
+        self.score = max(0.0, self.score - latency_penalty)
+        self._update_poll_interval()
+
+    def record_failure(self) -> None:
+        self.total_calls += 1
+        self.total_failures += 1
+        self.consecutive_failures += 1
+        self.consecutive_successes = 0
+        # EMA toward 0.0
+        self.score = self.score - _HEALTH_ALPHA * self.score
+        self.score = max(0.0, self.score)
+        self._update_poll_interval()
+
+    def _update_poll_interval(self) -> None:
+        """Adaptive interval: healthy → min, degraded → max."""
+        # Linear interpolation: score=1.0 → min, score=0.0 → max
+        self._poll_interval = _POLL_MAX_S - self.score * (_POLL_MAX_S - _POLL_MIN_S)
+        self._poll_interval = max(_POLL_MIN_S, min(_POLL_MAX_S, self._poll_interval))
+
+    @property
+    def poll_interval(self) -> float:
+        return self._poll_interval
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "score": round(self.score, 4),
+            "poll_interval_s": round(self._poll_interval, 2),
+            "consecutive_failures": self.consecutive_failures,
+            "consecutive_successes": self.consecutive_successes,
+            "total_calls": self.total_calls,
+            "total_failures": self.total_failures,
+            "last_latency_ms": round(self.last_latency_ms, 1),
+        }
 
 
 def _resolve_env(value: Any) -> str:
@@ -106,6 +203,15 @@ class ProductionDataEngine:
         self._fail_count: dict[str, int] = dict.fromkeys(self._fallback_order, 0)
         self._circuit_open_at: dict[str, datetime | None] = dict.fromkeys(self._fallback_order)
 
+        # Source health scores (adaptive polling + failover hysteresis)
+        self._health: dict[str, _SourceHealth] = {
+            p: _SourceHealth(p) for p in self._fallback_order
+        }
+        # Hysteresis counters for failover/recovery
+        self._failover_count: int = 0   # consecutive polls below FAILOVER_THRESHOLD
+        self._recovery_count: int = 0   # consecutive polls above RECOVERY_THRESHOLD
+        self._primary_provider: str = self._cfg.get("primary", self._fallback_order[0])
+
         # HTTP session (created in start())
         self._session: aiohttp.ClientSession | None = None
 
@@ -155,25 +261,76 @@ class ProductionDataEngine:
     # ── Internal polling loop ─────────────────────────────────────────────────
 
     async def _continuous_stream(self) -> None:
-        refresh = float(self._cfg.get("refresh_seconds", 1))
         while self.is_running:
             provider = self._pick_provider()
+            health = self._health[provider]
+
+            t0 = time.monotonic()
             success = await self._fetch_price(provider)
-            if not success:
+            latency_ms = (time.monotonic() - t0) * 1000.0
+
+            if success:
+                health.record_success(latency_ms)
+                self._fail_count[provider] = 0
+                # Check if we can recover back to primary
+                self._check_recovery(provider)
+            else:
+                health.record_failure()
                 self._fail_count[provider] = self._fail_count.get(provider, 0) + 1
                 threshold = int(self._cfg.get("circuit_breaker_threshold", 5))
                 if self._fail_count[provider] >= threshold:
                     self._circuit_open_at[provider] = datetime.now(tz=UTC)
                     logger.warning(
                         "Circuit breaker OPEN for provider '%s' after %d failures",
-                        provider,
-                        self._fail_count[provider],
+                        provider, self._fail_count[provider],
                     )
+                # Hysteresis-based failover
+                self._check_failover(provider)
+
+            # Adaptive sleep: use the active provider's health-based interval
+            await asyncio.sleep(health.poll_interval)
+
+    def _check_failover(self, provider: str) -> None:
+        """
+        Trigger failover only after HYSTERESIS_COUNT consecutive degraded polls.
+
+        This prevents flapping on transient errors.
+        """
+        health = self._health[provider]
+        if health.score < _FAILOVER_THRESHOLD:
+            self._failover_count += 1
+            self._recovery_count = 0
+            if self._failover_count >= _HYSTERESIS_COUNT:
                 next_provider = self._get_next_provider(provider)
                 if next_provider != provider:
+                    logger.warning(
+                        "Hysteresis failover: %s (score=%.2f) → %s after %d degraded polls",
+                        provider, health.score, next_provider, self._failover_count,
+                    )
                     self.active_provider = next_provider
-                    logger.warning("Switched to fallback provider: %s", next_provider)
-            await asyncio.sleep(refresh)
+                    self._failover_count = 0
+        else:
+            self._failover_count = max(0, self._failover_count - 1)
+
+    def _check_recovery(self, provider: str) -> None:
+        """
+        Recover back to primary only after HYSTERESIS_COUNT consecutive healthy polls.
+        """
+        if provider == self._primary_provider:
+            return  # Already on primary
+        primary_health = self._health.get(self._primary_provider)
+        if primary_health and primary_health.score >= _RECOVERY_THRESHOLD:
+            self._recovery_count += 1
+            self._failover_count = 0
+            if self._recovery_count >= _HYSTERESIS_COUNT:
+                logger.info(
+                    "Hysteresis recovery: returning to primary %s (score=%.2f) after %d healthy polls",
+                    self._primary_provider, primary_health.score, self._recovery_count,
+                )
+                self.active_provider = self._primary_provider
+                self._recovery_count = 0
+        else:
+            self._recovery_count = max(0, self._recovery_count - 1)
 
     def _pick_provider(self) -> str:
         """Return the active provider, skipping any with an open circuit breaker."""
@@ -208,7 +365,17 @@ class ProductionDataEngine:
     # ── Price fetching ────────────────────────────────────────────────────────
 
     async def _fetch_price(self, provider: str) -> bool:
-        """Attempt to fetch a price from *provider*. Returns True on success."""
+        """
+        Attempt to fetch a price from *provider*. Returns True on success.
+
+        3-path fallback order (enforced by _pick_provider / _fallback_order):
+          1. goldapi       — primary REST source
+          2. metalpriceapi — secondary REST source
+          3. mt5_demo      — last-resort MT5 demo connection
+
+        Health scoring is done exclusively in _continuous_stream to avoid
+        double-counting: this method only returns True/False.
+        """
         if provider == "mt5_demo":
             return await self._fetch_from_mt5()
 
@@ -221,6 +388,7 @@ class ProductionDataEngine:
                     self._fail_count[provider] = 0
                     await self._broadcast(price)
                     return True
+                # Out-of-range price — log and retry without double-penalising health
                 logger.debug("Provider '%s' returned out-of-range price: %s", provider, price)
             except TimeoutError:
                 logger.warning(
@@ -329,18 +497,58 @@ class ProductionDataEngine:
 
     @staticmethod
     def _load_config(path: str) -> dict:
+        """
+        Load the data-feed YAML config.
+
+        Falls back to a built-in default configuration when the file is absent
+        so the engine can start in environments where the config file has not
+        yet been deployed (e.g. CI, Docker first-run).  A warning is logged so
+        operators know the default is in use.
+        """
         config_path = Path(path)
         if not config_path.exists():
-            raise FileNotFoundError(f"Data feed config not found: {config_path.resolve()}")
+            logger.warning(
+                "Data feed config not found at %s — using built-in defaults. "
+                "Create config/data_feed.yaml to customise.",
+                config_path.resolve(),
+            )
+            return {
+                "data_feed": {
+                    "primary": "goldapi",
+                    "fallback_order": ["goldapi", "metalpriceapi", "mt5_demo"],
+                    "history_size": 5000,
+                    "timeout_seconds": 4,
+                    "max_retries": 3,
+                    "circuit_breaker_threshold": 5,
+                    "goldapi": {
+                        "url": "${GOLDAPI_URL:https://www.goldapi.io/api/XAU/USD}",
+                        "api_key": "${GOLDAPI_KEY:}",
+                    },
+                    "metalpriceapi": {
+                        "url": "${METALPRICEAPI_URL:https://api.metalpriceapi.com/v1/latest?base=USD&currencies=XAU}",
+                        "api_key": "${METALPRICEAPI_KEY:}",
+                    },
+                    "mt5_demo": {},
+                }
+            }
         with config_path.open("r", encoding="utf-8") as fh:
             return yaml.safe_load(fh)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
+    def get_source_health(self, provider: str) -> _SourceHealth | None:
+        """Return the health object for a named provider."""
+        return self._health.get(provider)
+
+    def get_all_health_scores(self) -> dict[str, float]:
+        """Return health scores for all providers."""
+        return {p: round(h.score, 4) for p, h in self._health.items()}
+
     def status(self) -> dict:
         """Return a snapshot of engine health for monitoring / dashboards."""
         return {
             "active_provider": self.active_provider,
+            "primary_provider": self._primary_provider,
             "current_price": self.current_price,
             "last_update": self.last_update.isoformat() if self.last_update else None,
             "history_size": len(self.price_history),
@@ -348,4 +556,8 @@ class ProductionDataEngine:
             "circuit_breakers": {p: (ts.isoformat() if ts else None) for p, ts in self._circuit_open_at.items()},
             "subscriber_count": len(self.subscribers),
             "is_running": self.is_running,
+            "source_health": {p: h.to_dict() for p, h in self._health.items()},
+            "failover_count": self._failover_count,
+            "recovery_count": self._recovery_count,
+            "adaptive_poll_interval_s": self._health.get(self.active_provider, _SourceHealth("")).poll_interval,
         }

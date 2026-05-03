@@ -14,7 +14,7 @@
  *   GET /api/admin/alerts
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
@@ -307,6 +307,12 @@ const AdminPanel: React.FC = () => {
   const [alerts, setAlerts] = useState<AdminAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -316,14 +322,16 @@ const AdminPanel: React.FC = () => {
         api.get<{ events: AuditEvent[] }>('/admin/audit-log?limit=8'),
         api.get<{ alerts: AdminAlert[] }>('/admin/alerts'),
       ]);
+      if (!mountedRef.current) return;
       if (ovRes.status === 'fulfilled') setOverview(ovRes.value.data);
       if (auditRes.status === 'fulfilled') setAuditEvents(auditRes.value.data.events ?? []);
       if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts ?? []);
       if (ovRes.status === 'rejected') setError('Failed to load admin overview.');
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, []);
 

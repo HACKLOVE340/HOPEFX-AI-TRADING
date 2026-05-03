@@ -14,13 +14,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { tradingApi } from '../hooks/useApi';
 import { usePositions, useAccount, useSignals } from '../hooks/useOrchestratorData';
-import { PositionsTable } from '../components/panels/PositionsTable';
-import { OrderEntryForm } from '../components/panels/OrderEntryForm';
-import { LiveSignalFeed } from '../components/panels/LiveSignalFeed';
-import { RiskDashboard } from '../components/panels/RiskDashboard';
-import { MLModelPanel } from '../components/panels/MLModelPanel';
-import { MicrostructurePanel } from '../components/panels/MicrostructurePanel';
-import { SentimentGauge } from '../components/panels/SentimentGauge';
+// Import guarded variants from the barrel — each panel has its own
+// PanelErrorBoundary so a crash in one never takes down the terminal.
+import {
+  PositionsTable,
+  OrderEntryForm,
+  LiveSignalFeedGuarded   as LiveSignalFeed,
+  RiskDashboardGuarded    as RiskDashboard,
+  MLModelPanelGuarded     as MLModelPanel,
+  MicrostructurePanelGuarded as MicrostructurePanel,
+  SentimentGaugeGuarded   as SentimentGauge,
+} from '../components/panels';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative } from '../lib/utils';
@@ -220,9 +224,11 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
 
   useEffect(() => {
     if (!candleRef.current || !hydrated || !isAuth) return;
+    const controller = new AbortController();
     setLoading(true); setChartError(null);
     tradingApi.ohlcv(symbol, timeframe, 300)
       .then((r) => {
+        if (controller.signal.aborted) return;
         const raw = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data: OHLCVCandle[] = Array.isArray(raw) ? raw : (raw.data ?? []);
         if (!data.length) { setChartError('No OHLCV data for this symbol/timeframe'); return; }
@@ -248,9 +254,11 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
         chartRef.current?.timeScale().fitContent();
       })
       .catch((err) => {
+        if (controller.signal.aborted) return;
         setChartError(err?.response?.data?.detail ?? err?.message ?? 'Failed to load chart data');
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
   }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
@@ -555,6 +563,9 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
   const prices = useStore((s) => s.prices);
   const tick   = prices[symbol];
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const runAnalysis = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -563,14 +574,16 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
         price: tick?.mid ?? tick?.ask ?? 0,
         timeframe: '1h',
       });
+      if (!mountedRef.current) return;
       setResult(r.data as AIAnalysisResult);
       setLastRun(new Date().toLocaleTimeString());
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
         ?? (e as { message?: string })?.message ?? 'Analysis failed';
       setError(msg);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [symbol, tick]);
 
@@ -655,20 +668,25 @@ function EmergencyStopButton() {
   const qc = useQueryClient();
   const killSwitch = useStore((s) => s.account?.kill_switch ?? false);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const handleClick = useCallback(async () => {
     if (!confirming) { setConfirming(true); return; }
     setLoading(true); setError(null);
     try {
       await tradingApi.emergencyStop();
+      if (!mountedRef.current) return;
       setDone(true); setConfirming(false);
       qc.invalidateQueries({ queryKey: ['account'] });
       qc.invalidateQueries({ queryKey: ['positions'] });
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
         ?? (e as { message?: string })?.message ?? 'Emergency stop failed';
       setError(msg); setConfirming(false);
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [confirming, qc]);
 

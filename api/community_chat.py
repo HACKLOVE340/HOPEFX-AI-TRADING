@@ -14,7 +14,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
 
 from api.auth import TokenPayload, get_current_user
@@ -24,6 +24,27 @@ UTC = timezone.utc
 
 # Mounted at /api/chat so /api/chat/rooms, /api/chat/dm, /api/chat/online work
 router = APIRouter(prefix="/api/chat", tags=["Community Chat"])
+
+# Separate router for WebSocket paths (no /api prefix — paths start with /ws/)
+ws_router = APIRouter(tags=["Community Chat WS"])
+
+# ── WebSocket connection registry ─────────────────────────────────────────────
+# room_id -> list of active WebSocket connections
+_CHAT_CONNECTIONS: dict[str, list[WebSocket]] = {}
+
+
+async def _ws_broadcast(room_id: str, payload: dict) -> None:
+    """Push payload to every WebSocket subscriber currently in this room."""
+    conns = _CHAT_CONNECTIONS.get(room_id, [])
+    dead: list[WebSocket] = []
+    for ws in conns:
+        try:
+            await ws.send_json(payload)
+        except Exception:
+            dead.append(ws)
+    for d in dead:
+        conns.remove(d)
+
 
 # ── Storage helpers ───────────────────────────────────────────────────────────
 
@@ -154,8 +175,17 @@ class CreateRoomBody(BaseModel):
 
 
 class SendMessageBody(BaseModel):
-    text: str
+    content: str | None = None  # canonical field name
+    text: str | None = None     # legacy alias — kept for backward compat
     attachments: list[str] | None = None
+
+    @property
+    def message_text(self) -> str:
+        return (self.content or self.text or "").strip()
+
+    def validate_non_empty(self) -> None:
+        if not self.message_text:
+            raise HTTPException(status_code=422, detail="Message content must not be empty")
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -210,6 +240,7 @@ async def send_message(
     body: SendMessageBody,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
+    body.validate_non_empty()
     _seed_default_rooms()
     rooms = _get_rooms()
     if room_id not in rooms:
@@ -219,7 +250,7 @@ async def send_message(
         "room_id": room_id,
         "user_id": user.sub,
         "username": getattr(user, "email", user.sub).split("@")[0],
-        "text": body.text,
+        "content": body.message_text,
         "attachments": body.attachments or [],
         "created_at": datetime.now(UTC).isoformat(),
         "edited": False,
@@ -228,6 +259,12 @@ async def send_message(
     room = rooms[room_id]
     room["last_message_at"] = msg["created_at"]
     _save_room(room)
+    # Push to WebSocket subscribers in this room (non-blocking)
+    try:
+        import asyncio
+        asyncio.ensure_future(_ws_broadcast(room_id, {"type": "message", "message": msg}))
+    except Exception:
+        pass
     return msg
 
 
@@ -271,11 +308,12 @@ async def send_dm(
     body: SendMessageBody,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
+    body.validate_non_empty()
     msg = {
         "id": str(uuid.uuid4()),
         "from_user_id": user.sub,
         "to_user_id": target_user_id,
-        "text": body.text,
+        "content": body.message_text,
         "created_at": datetime.now(UTC).isoformat(),
         "read": False,
     }
@@ -301,3 +339,58 @@ async def online_users(user: TokenPayload = Depends(get_current_user)) -> dict:
     _MEM_ONLINE.clear()
     _MEM_ONLINE.update(active)
     return {"online_users": list(active.keys()), "count": len(active)}
+
+
+# ── WebSocket real-time chat ───────────────────────────────────────────────────
+
+
+@ws_router.websocket("/ws/chat/{room_id}")
+async def chat_ws(room_id: str, websocket: WebSocket) -> None:
+    """
+    Real-time WebSocket endpoint for community chat rooms.
+
+    Connect: GET ws[s]://host/ws/chat/{room_id}?token=<jwt>
+    Server pushes:  {"type": "message", "message": {...}}
+    Server pushes:  {"type": "heartbeat"}
+    Client sends:   {"type": "ping"}  — server echoes {"type": "pong"}
+    """
+    import asyncio
+
+    # Auth — token passed as query param (same pattern as /ws/live)
+    token_param = websocket.query_params.get("token", "")
+    if token_param:
+        try:
+            from api.auth import decode_access_token
+            decode_access_token(token_param)
+        except Exception:
+            pass  # allow unauthenticated reads; writes gated via REST
+
+    await websocket.accept()
+
+    # Register connection
+    if room_id not in _CHAT_CONNECTIONS:
+        _CHAT_CONNECTIONS[room_id] = []
+    _CHAT_CONNECTIONS[room_id].append(websocket)
+
+    try:
+        while True:
+            try:
+                raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                try:
+                    data = json.loads(raw)
+                    if data.get("type") == "ping":
+                        await websocket.send_json({"type": "pong"})
+                except Exception:
+                    pass
+            except TimeoutError:
+                # Send heartbeat to keep connection alive
+                try:
+                    await websocket.send_json({"type": "heartbeat"})
+                except Exception:
+                    break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        conns = _CHAT_CONNECTIONS.get(room_id, [])
+        if websocket in conns:
+            conns.remove(websocket)

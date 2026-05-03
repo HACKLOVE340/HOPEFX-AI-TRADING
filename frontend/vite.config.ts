@@ -30,16 +30,12 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
-      // Backend routers mounted outside /api — must be proxied explicitly so
-      // Vite dev server forwards them instead of returning 404.
-      '/nuclear': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/nuclear-strategy': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
+      // NOTE: /nuclear and /nuclear-strategy API routes are now under /api/nuclear
+      // and /api/nuclear-strategy respectively (prefix="/api/nuclear*" in
+      // core/router_registry.py). All API calls for those routers go through
+      // the '/api' proxy above. The browser-navigation routes /nuclear and
+      // /nuclear-strategy are React SPA routes handled by Vite itself — do NOT
+      // proxy them or Vite's HMR will be bypassed for those pages.
       // NOTE: /tca is mounted at /api/tca in the backend (prefix="/api/tca").
       // All TCA requests go through the '/api' proxy above — no separate entry needed.
       '/kyc': {

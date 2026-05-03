@@ -36,20 +36,29 @@ def _include_router_deduped(app: FastAPI, router: Any, **kwargs: Any) -> None:
     Include a router on *app*, skipping any routes whose (method, full-path)
     pair is already registered.
 
-    The dedup key uses the *full* path (router.prefix + route.path) so it
+    The dedup key uses the *full* path (effective_prefix + route.path) so it
     matches the paths that FastAPI stores on app.routes after include_router.
-    Using only route.path (the relative path) caused false misses when the
-    prefix was non-empty, allowing duplicate routes to slip through.
+    The effective prefix is the mount-time prefix kwarg (if supplied) combined
+    with the router's own prefix, to correctly handle routers that carry no
+    built-in prefix (e.g. the nuclear router mounted at /api/nuclear).
     """
     from fastapi.routing import APIRoute as _APIRoute
 
-    prefix = getattr(router, "prefix", "") or ""
+    # The full effective prefix is the kwarg mount-prefix PLUS the router's
+    # own prefix.  Either may be empty — we combine both to get the real path
+    # that FastAPI will expose for each route.
+    mount_prefix = kwargs.get("prefix", "") or ""
+    router_prefix = getattr(router, "prefix", "") or ""
+    if mount_prefix and router_prefix:
+        effective_prefix = mount_prefix.rstrip("/") + "/" + router_prefix.lstrip("/")
+    else:
+        effective_prefix = mount_prefix or router_prefix
 
     def _full_path(route_path: str) -> str:
-        """Combine router prefix with route path, normalising slashes."""
-        if not prefix:
+        """Combine effective prefix with route path, normalising slashes."""
+        if not effective_prefix:
             return route_path
-        return prefix.rstrip("/") + "/" + route_path.lstrip("/")
+        return effective_prefix.rstrip("/") + "/" + route_path.lstrip("/")
 
     skipped = 0
     for route in router.routes:
@@ -152,6 +161,7 @@ def register_routers(
     from api.settings_new_endpoints import router as settings_new_router
     from api.social_feed import _copy_router as social_copy_router
     from api.social_feed import _copy_alias_router as social_copy_alias_router
+    from api.social_feed import _social_feed_ws_router as social_feed_ws_router
     from api.social_feed import _lb_compat_router as social_lb_compat_router
     from api.social_feed import leaderboard_router as social_leaderboard_router
     from api.social_feed import router as social_feed_router
@@ -171,10 +181,13 @@ def register_routers(
 
     try:
         from api.community_chat import router as community_chat_router
+        from api.community_chat import ws_router as community_chat_ws_router
         _community_chat_router = community_chat_router
+        _community_chat_ws_router = community_chat_ws_router
     except Exception as _e:
         logger.warning("Community chat router not loaded: %s", _e)
         _community_chat_router = None
+        _community_chat_ws_router = None
 
     try:
         from api.kyc import kyc_alias_router as _kyc_alias_router
@@ -211,6 +224,7 @@ def register_routers(
         social_leaderboard_router,
         social_copy_router,
         social_copy_alias_router,
+        social_feed_ws_router,
         social_lb_compat_router,
         mobile_router,
         whitelabel_router,
@@ -229,7 +243,8 @@ def register_routers(
     # Register optional new routers
     for _opt_router, _name in [
         (_notifications_router, "Notifications"),
-        (_community_chat_router, "Community Chat"),
+        (_community_chat_router, "Community Chat REST"),
+        (_community_chat_ws_router, "Community Chat WS"),
         (_kyc_alias, "KYC alias"),
     ]:
         if _opt_router is not None:
@@ -396,15 +411,15 @@ def register_routers(
 
         _include_router_deduped(
             app, nuclear_router,
-            prefix="/nuclear",
+            prefix="/api/nuclear",
             tags=["nuclear"],
         )
         _include_router_deduped(
             app, nuclear_strategy_router,
-            prefix="/nuclear-strategy",
+            prefix="/api/nuclear-strategy",
             tags=["nuclear-strategy"],
         )
-        logger.info("Nuclear routers registered (/nuclear, /nuclear-strategy)")
+        logger.info("Nuclear routers registered (/api/nuclear, /api/nuclear-strategy)")
     except Exception as _nuc_err:
         logger.warning("Nuclear routers not registered: %s", _nuc_err)
 

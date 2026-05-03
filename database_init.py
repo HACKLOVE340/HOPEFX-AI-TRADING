@@ -29,6 +29,17 @@ from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
+# TimescaleDB hypertable definitions: (table_name, time_column, chunk_interval)
+_HYPERTABLES: list[tuple[str, str, str]] = [
+    ("market_data", "timestamp", "7 days"),
+    ("account_snapshots", "timestamp", "1 day"),
+    ("performance_metric_samples", "timestamp", "7 days"),
+]
+
+# PostgreSQL extensions required for production
+_REQUIRED_EXTENSIONS: list[str] = ["timescaledb", "pg_stat_statements"]
+_OPTIONAL_EXTENSIONS: list[str] = ["pg_trgm", "btree_gin"]
+
 
 def initialize_database(db_url: str | None = None) -> None:
     """Create all ORM tables and run pending Alembic migrations.
@@ -88,8 +99,128 @@ def initialize_database(db_url: str | None = None) -> None:
     else:
         logger.debug("alembic.ini not found — skipping migrations")
 
+    # TimescaleDB hypertables (PostgreSQL only)
+    if "postgresql" in db_url:
+        _setup_timescaledb(engine)
+
     engine.dispose()
     logger.info("Database initialised: %s", db_url.split("@")[-1])  # hide credentials
+
+
+def _setup_timescaledb(engine) -> None:
+    """
+    Create TimescaleDB extension and convert time-series tables to hypertables.
+
+    Safe to call on databases that already have TimescaleDB configured —
+    all operations are idempotent (IF NOT EXISTS / migrate_data => false).
+
+    Skips silently when TimescaleDB is not installed on the PostgreSQL server.
+    """
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            # Check if TimescaleDB is available
+            result = conn.execute(
+                text(
+                    "SELECT COUNT(*) FROM pg_available_extensions "
+                    "WHERE name = 'timescaledb'"
+                )
+            )
+            if result.scalar() == 0:
+                logger.info(
+                    "TimescaleDB extension not available on this PostgreSQL server — "
+                    "skipping hypertable setup. Install timescaledb for time-series optimisation."
+                )
+                return
+
+            # Create extension if not already present
+            conn.execute(
+                text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
+            )
+            logger.info("TimescaleDB extension enabled")
+
+            # Convert tables to hypertables
+            for table_name, time_col, chunk_interval in _HYPERTABLES:
+                # Check if already a hypertable
+                result = conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM timescaledb_information.hypertables "
+                        "WHERE hypertable_name = :tbl"
+                    ),
+                    {"tbl": table_name},
+                )
+                if result.scalar() > 0:
+                    logger.debug("Hypertable already exists: %s", table_name)
+                    continue
+
+                # Check if table exists before converting
+                result = conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM information_schema.tables "
+                        "WHERE table_name = :tbl AND table_schema = 'public'"
+                    ),
+                    {"tbl": table_name},
+                )
+                if result.scalar() == 0:
+                    logger.debug("Table %s does not exist yet — skipping hypertable", table_name)
+                    continue
+
+                conn.execute(
+                    text(
+                        f"SELECT create_hypertable("  # nosec B608 — table/col names from internal constant
+                        f"  '{table_name}', '{time_col}', "
+                        f"  chunk_time_interval => INTERVAL '{chunk_interval}', "
+                        f"  migrate_data => true, "
+                        f"  if_not_exists => true"
+                        f")"
+                    )
+                )
+                logger.info(
+                    "Hypertable created: %s (time_col=%s, chunk=%s)",
+                    table_name, time_col, chunk_interval,
+                )
+
+    except Exception as exc:
+        logger.warning(
+            "TimescaleDB setup failed (non-fatal — falling back to plain PostgreSQL): %s", exc
+        )
+
+
+def check_extensions(engine) -> dict[str, bool]:
+    """
+    Check which PostgreSQL extensions are installed.
+
+    Returns a dict mapping extension name → installed (bool).
+    Logs warnings for missing required extensions.
+    """
+    from sqlalchemy import text
+
+    if "postgresql" not in str(engine.url):
+        return {}
+
+    results: dict[str, bool] = {}
+    try:
+        with engine.connect() as conn:
+            for ext in _REQUIRED_EXTENSIONS + _OPTIONAL_EXTENSIONS:
+                row = conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM pg_extension WHERE extname = :ext"
+                    ),
+                    {"ext": ext},
+                )
+                installed = row.scalar() > 0
+                results[ext] = installed
+                if not installed and ext in _REQUIRED_EXTENSIONS:
+                    logger.warning(
+                        "Required PostgreSQL extension '%s' is NOT installed. "
+                        "Run: CREATE EXTENSION IF NOT EXISTS %s;",
+                        ext, ext,
+                    )
+    except Exception as exc:
+        logger.warning("Extension check failed: %s", exc)
+
+    return results
 
 
 def validate_schema(engine) -> dict[str, list[str]]:

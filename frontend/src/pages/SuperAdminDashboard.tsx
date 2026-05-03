@@ -14,11 +14,13 @@
  * Wired via /superadmin route behind SuperAdminGuard.
  */
 
-import React, { useState, Suspense, lazy, Component } from 'react';
+import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import type { SuperAdminTab } from './superadmin/types';
+import { SuperAdminNavContext } from './superadmin/types';
 import { SAStyles, Spinner } from './superadmin/ui';
+import { superadminApi } from '../hooks/useApi';
 
 // ── Section error boundary ────────────────────────────────────────────────────
 
@@ -139,15 +141,65 @@ const SectionFallback: React.FC = () => (
   </div>
 );
 
+// ── Engine health hook (polls /superadmin/engine/status every 20 s) ──────────
+
+interface EngineHealth {
+  running: boolean;
+  kill_switch_active: boolean;
+  mode: string;
+  positions_open: number;
+  heartbeat_ok: boolean;
+}
+
+function useEngineHealth(): EngineHealth | null {
+  const [health, setHealth] = useState<EngineHealth | null>(null);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      const res = await superadminApi.engineStatus();
+      if (mountedRef.current) setHealth(res.data as EngineHealth);
+    } catch {
+      // non-fatal — header pill just stays stale
+    }
+  }, []);
+
+  useEffect(() => { fetchHealth(); }, [fetchHealth]);
+
+  // Poll every 20 s while tab is visible
+  useEffect(() => {
+    if (document.hidden) return;
+    const id = setInterval(() => { if (!document.hidden) fetchHealth(); }, 20_000);
+    const onVis = () => { if (!document.hidden) fetchHealth(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+  }, [fetchHealth]);
+
+  return health;
+}
+
 // ── Main dashboard ────────────────────────────────────────────────────────────
 
 const SuperAdminDashboard: React.FC = () => {
   const user = useStore(selectUser);
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
+  const [sectionLoadedAt, setSectionLoadedAt] = useState<Date>(new Date());
+  const engineHealth = useEngineHealth();
+
+  // Reset the "loaded at" timestamp whenever the active tab changes
+  useEffect(() => { setSectionLoadedAt(new Date()); }, [activeTab]);
 
   if (!user || !isSuperAdmin(user.role)) return null;
 
   const activeTabDef = TABS.find(t => t.id === activeTab) ?? TABS[0]!;
+
+  // Stable nav context value — sections use this to switch tabs without prop-drilling
+  const navCtx = { navigateTo: setActiveTab };
 
   const renderSection = () => {
     switch (activeTab) {
@@ -180,6 +232,9 @@ const SuperAdminDashboard: React.FC = () => {
 
   const groups = ['core', 'compliance', 'risk', 'ops'] as const;
 
+  // Kill-switch alert dot: show red badge on "nuclear-controls" and "trading-engine" tabs
+  const killSwitchActive = engineHealth?.kill_switch_active ?? false;
+
   return (
     <>
       <SAStyles />
@@ -201,7 +256,46 @@ const SuperAdminDashboard: React.FC = () => {
               </p>
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+          {/* Right side: engine health pill + live indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            {/* Engine health pill — always visible once data loads */}
+            {engineHealth ? (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '5px 12px', borderRadius: 20,
+                background: killSwitchActive ? '#450a0a' : engineHealth.running ? '#052e16' : '#1c1f26',
+                border: `1px solid ${killSwitchActive ? '#dc2626' : engineHealth.running ? '#16a34a' : '#334155'}`,
+              }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
+                  background: killSwitchActive ? '#ef4444' : engineHealth.running ? '#4ade80' : '#94a3b8',
+                  boxShadow: engineHealth.running && !killSwitchActive ? '0 0 6px #4ade80' : undefined,
+                  animation: killSwitchActive ? 'sa-pulse 1s ease-in-out infinite' : undefined,
+                }} />
+                <span style={{
+                  fontSize: 11, fontWeight: 700,
+                  color: killSwitchActive ? '#f87171' : engineHealth.running ? '#4ade80' : '#94a3b8',
+                }}>
+                  {killSwitchActive ? 'KILL SWITCH ON' : engineHealth.running ? 'ENGINE LIVE' : 'ENGINE STOPPED'}
+                </span>
+                {!killSwitchActive && (
+                  <span style={{ fontSize: 11, color: '#475569' }}>
+                    · {engineHealth.mode} · {engineHealth.positions_open} pos
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 20,
+                background: '#0f172a', border: '1px solid #1e293b',
+              }}>
+                <Spinner size={10} />
+                <span style={{ fontSize: 11, color: '#475569' }}>engine…</span>
+              </div>
+            )}
+
             <div style={styles.liveIndicator}>
               <span style={styles.liveDot} />
               <span style={{ fontSize: 11, color: '#4ade80', fontWeight: 600 }}>LIVE</span>
@@ -217,6 +311,8 @@ const SuperAdminDashboard: React.FC = () => {
                 <div style={styles.sidebarLabel}>{GROUP_LABELS[group]}</div>
                 {TABS.filter(t => t.group === group).map(tab => {
                   const active = activeTab === tab.id;
+                  // Show a red alert dot on Nuclear Controls and Trading Engine when kill switch is on
+                  const hasAlert = killSwitchActive && (tab.id === 'nuclear-controls' || tab.id === 'trading-engine');
                   return (
                     <button
                       key={tab.id}
@@ -232,7 +328,18 @@ const SuperAdminDashboard: React.FC = () => {
                     >
                       <span style={styles.tabIcon}>{tab.icon}</span>
                       <span style={{ flex: 1, textAlign: 'left' }}>{tab.label}</span>
-                      {active && (
+                      {/* Kill-switch alert badge */}
+                      {hasAlert && (
+                        <span style={{
+                          width: 7, height: 7, borderRadius: '50%',
+                          background: '#ef4444',
+                          boxShadow: '0 0 5px #ef4444',
+                          flexShrink: 0,
+                          animation: 'sa-pulse 1.2s ease-in-out infinite',
+                        }} />
+                      )}
+                      {/* Active tab indicator */}
+                      {active && !hasAlert && (
                         <span style={{ width: 6, height: 6, borderRadius: '50%', background: tab.accent, flexShrink: 0 }} />
                       )}
                     </button>
@@ -244,7 +351,7 @@ const SuperAdminDashboard: React.FC = () => {
 
           {/* ── Content ── */}
           <main style={styles.content}>
-            {/* Section header */}
+            {/* Section header with freshness timestamp */}
             <div style={styles.sectionHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{
@@ -261,14 +368,23 @@ const SuperAdminDashboard: React.FC = () => {
                   <div style={{ fontSize: 12, color: '#475569' }}>{activeTabDef.description}</div>
                 </div>
               </div>
+              {/* Data freshness timestamp */}
+              <div style={{ fontSize: 11, color: '#334155', textAlign: 'right' as const }}>
+                <div>Loaded</div>
+                <div style={{ color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+                  {sectionLoadedAt.toLocaleTimeString()}
+                </div>
+              </div>
             </div>
 
             {/* Section content */}
             <SectionErrorBoundary key={activeTab} tab={activeTabDef.label}>
               <Suspense fallback={<SectionFallback />}>
-                <div style={{ animation: 'sa-fadein 0.2s ease' }}>
-                  {renderSection()}
-                </div>
+                <SuperAdminNavContext.Provider value={navCtx}>
+                  <div style={{ animation: 'sa-fadein 0.2s ease' }}>
+                    {renderSection()}
+                  </div>
+                </SuperAdminNavContext.Provider>
               </Suspense>
             </SectionErrorBoundary>
           </main>

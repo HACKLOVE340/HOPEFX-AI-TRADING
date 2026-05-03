@@ -1,6 +1,6 @@
 // superadmin/RateLimitingSection.tsx
 // Rate limit rules, live stats, violation log
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -40,6 +40,9 @@ const RateLimitingSection: React.FC = () => {
   const [newRule, setNewRule]       = useState({ endpoint: '', limit: '100', window_seconds: '60', scope: 'per_user' });
   const [editing, setEditing]       = useState<Record<string, { limit: string; window_seconds: string }>>({});
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -48,12 +51,14 @@ const RateLimitingSection: React.FC = () => {
         superadminApi.rateLimitStats(),
         superadminApi.rateLimitViolations(),
       ]);
+      if (!mountedRef.current) return;
       setRules(rRes.data.rules ?? rRes.data);
       setStats(sRes.data);
       setViolations(vRes.data.violations ?? vRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load rate limit data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);

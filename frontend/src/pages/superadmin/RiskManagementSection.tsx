@@ -1,6 +1,6 @@
 // superadmin/RiskManagementSection.tsx
 // Circuit breakers, VaR/ES, stress tests, prop firm breach tracking, drawdown tracker
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
 import {
@@ -53,6 +53,9 @@ const RiskManagementSection: React.FC = () => {
   const [confirm, setConfirm]     = useState<{ name: string; action: string } | null>(null);
   const [breachFilter, setBreachFilter] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
@@ -63,14 +66,16 @@ const RiskManagementSection: React.FC = () => {
         superadminApi.propBreaches(),
         superadminApi.drawdownStats(),
       ]);
+      if (!mountedRef.current) return;
       setBreakers(cbRes.data.circuit_breakers ?? cbRes.data.breakers ?? cbRes.data);
       setVarMetrics(varRes.data);
       setStressTests(stRes.data.results ?? stRes.data);
       setPropBreaches(pbRes.data.breaches ?? pbRes.data);
       setDrawdown(ddRes.data);
     } catch (e: unknown) {
+      if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load risk data');
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -85,6 +90,17 @@ const RiskManagementSection: React.FC = () => {
       load();
     } catch (e: unknown) {
       setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Reset failed');
+    } finally { setBusy(null); setConfirm(null); }
+  };
+
+  const forceOpenBreaker = async (name: string) => {
+    setBusy(`open-${name}`); setMsg('');
+    try {
+      await superadminApi.forceOpenBreaker(name);
+      setMsg(`Circuit breaker "${name}" force-opened`);
+      load();
+    } catch (e: unknown) {
+      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Force-open failed');
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -121,11 +137,15 @@ const RiskManagementSection: React.FC = () => {
 
       {confirm && (
         <ConfirmDialog
-          title={`Reset Circuit Breaker: ${confirm.name}`}
-          message="This will force the circuit breaker back to CLOSED state. Only do this after confirming the underlying issue is resolved."
-          confirmLabel="Reset to Closed"
-          variant="warning"
-          onConfirm={() => resetBreaker(confirm.name)}
+          title={confirm.action === 'open'
+            ? `Force-Open Circuit Breaker: ${confirm.name}`
+            : `Reset Circuit Breaker: ${confirm.name}`}
+          message={confirm.action === 'open'
+            ? 'This will force the circuit breaker to OPEN state, blocking all requests to this service. Use for emergency isolation only.'
+            : 'This will force the circuit breaker back to CLOSED state. Only do this after confirming the underlying issue is resolved.'}
+          confirmLabel={confirm.action === 'open' ? 'Force Open' : 'Reset to Closed'}
+          variant={confirm.action === 'open' ? 'danger' : 'warning'}
+          onConfirm={() => confirm.action === 'open' ? forceOpenBreaker(confirm.name) : resetBreaker(confirm.name)}
           onCancel={() => setConfirm(null)}
         />
       )}
@@ -220,6 +240,9 @@ const RiskManagementSection: React.FC = () => {
                   </div>
                   {b.state !== 'closed' && (
                     <ActionBtn label="Reset to Closed" onClick={() => setConfirm({ name: b.name, action: 'reset' })} variant="warning" size="sm" loading={busy === `reset-${b.name}`} />
+                  )}
+                  {b.state === 'closed' && (
+                    <ActionBtn label="Force Open" onClick={() => setConfirm({ name: b.name, action: 'open' })} variant="danger" size="sm" loading={busy === `open-${b.name}`} />
                   )}
                 </div>
               );

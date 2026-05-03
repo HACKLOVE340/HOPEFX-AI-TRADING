@@ -176,6 +176,12 @@ const EconomicCalendar: React.FC = () => {
   useMacro();
   const macro = useStore(selectMacro);
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const fetchEvents = useCallback(async () => {
     setLoading(true);
     setFetchErr(null);
@@ -183,19 +189,22 @@ const EconomicCalendar: React.FC = () => {
       const res = filter === 'high'
         ? await calendarApi.highImpact()
         : await calendarApi.upcoming(168);
+      if (!mountedRef.current) return;
       const raw = res.data as CalendarEvent[] | { events?: CalendarEvent[] };
       setEvents(Array.isArray(raw) ? raw : (raw.events ?? []));
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
       setEvents([]);
       setFetchErr(err instanceof Error ? err.message : 'Failed to load calendar events.');
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [filter]);
 
   const fetchAutoPause = useCallback(async () => {
     try {
       const res = await calendarApi.autoPause();
+      if (!mountedRef.current) return;
       setAutoPause(res.data);
     } catch {
       // Auto-pause config is optional — silently default to disabled

@@ -418,18 +418,46 @@ class AuthService:
                 _record(False, "user_not_found")
                 return False, "Invalid credentials", None
 
-            # Brute-force lockout
+            # Brute-force lockout — Redis TTL-based (fast path) with DB fallback
+            _LOCKOUT_KEY = f"hopefx:auth:lockout:{user.id}"
+            _LOCKOUT_TTL_SECS = LOCKOUT_MINUTES * 60
+            _redis_locked = False
+            try:
+                import redis as _redis_sync
+                _rc = _redis_sync.from_url(
+                    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                    decode_responses=True,
+                    socket_timeout=1,
+                )
+                _redis_locked = bool(_rc.exists(_LOCKOUT_KEY))
+            except Exception:
+                pass  # Redis unavailable — fall through to DB check
+
+            if _redis_locked:
+                _record(False, "account_locked")
+                return (
+                    False,
+                    f"Account locked. Too many failed attempts. Try again in {LOCKOUT_MINUTES} minutes.",
+                    None,
+                )
+
+            # DB fallback: count recent failures within the lockout window
             cutoff = _now() - timedelta(minutes=LOCKOUT_MINUTES)
             recent_failures = (
                 session.query(LoginAttempt)
                 .filter(
                     LoginAttempt.user_id == user.id,
-                    LoginAttempt.success == False,
+                    LoginAttempt.success == False,  # noqa: E712
                     LoginAttempt.attempted_at >= cutoff,
                 )
                 .count()
             )
             if recent_failures >= MAX_LOGIN_ATTEMPTS:
+                # Set Redis TTL key so subsequent checks are O(1)
+                try:
+                    _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
+                except Exception:
+                    pass
                 _record(False, "account_locked")
                 return (
                     False,
@@ -471,6 +499,18 @@ class AuthService:
             user.last_login_at = _now()
             user.last_login_ip = ip_address
             _record(True)
+
+            # Clear Redis lockout key on successful login
+            try:
+                import redis as _redis_sync
+                _rc = _redis_sync.from_url(
+                    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                    decode_responses=True,
+                    socket_timeout=1,
+                )
+                _rc.delete(f"hopefx:auth:lockout:{user.id}")
+            except Exception:
+                pass
 
             return (
                 True,

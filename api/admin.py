@@ -992,6 +992,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
 
 
 @router.get("/alerts", summary="Active admin alerts")
+@router.get("/status", summary="Active admin alerts (alias for /alerts used by frontend adminApi)")
 def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return active system alerts for the admin dashboard."""
     alerts = []
@@ -1331,21 +1332,52 @@ async def trigger_backup(
     }
 
 
+_SYSTEM_SETTINGS_DEFAULTS: dict = {
+    "maintenance_mode": False,
+    "maintenance_message": "",
+    "rate_limit_enabled": True,
+    "rate_limit_requests_per_minute": 60,
+    "max_concurrent_users": 10_000,
+    "session_timeout_minutes": 60,
+    "log_level": "INFO",
+    "debug_mode": False,
+    "enable_paper_trading": True,
+    "enable_live_trading": False,
+    "max_open_positions": 10,
+    "data_refresh_interval": 30,
+    "cache_ttl_seconds": 300,
+    "backup_enabled": True,
+    "backup_frequency": "daily",
+}
+
+_SYSTEM_SETTINGS_ALLOWED = set(_SYSTEM_SETTINGS_DEFAULTS.keys())
+
+_SYSTEM_SETTINGS_KEY = "system_settings:global"
+
+
+def _load_system_settings() -> dict:
+    try:
+        from core.config_store import config_store as _cs
+        stored = _cs.get(_SYSTEM_SETTINGS_KEY)
+        if stored:
+            return {**_SYSTEM_SETTINGS_DEFAULTS, **stored}
+    except Exception:
+        pass
+    return dict(_SYSTEM_SETTINGS_DEFAULTS)
+
+
+def _save_system_settings(data: dict) -> None:
+    try:
+        from core.config_store import config_store as _cs
+        _cs.set(_SYSTEM_SETTINGS_KEY, data)
+    except Exception:
+        pass
+
+
 @router.get("/settings/system", summary="Get system-level admin settings")
 def get_system_settings(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Return system-level settings (maintenance mode, feature flags, rate limits)."""
-    from api.db_store import db_get as _db_g7
-    stored = _db_g7("admin:system_settings") or {}
-    return {
-        "maintenance_mode": stored.get("maintenance_mode", False),
-        "maintenance_message": stored.get("maintenance_message", ""),
-        "rate_limit_enabled": stored.get("rate_limit_enabled", True),
-        "rate_limit_requests_per_minute": stored.get("rate_limit_requests_per_minute", 60),
-        "max_concurrent_users": stored.get("max_concurrent_users", 10000),
-        "session_timeout_minutes": stored.get("session_timeout_minutes", 60),
-        "log_level": stored.get("log_level", "INFO"),
-        "debug_mode": stored.get("debug_mode", False),
-    }
+    return _load_system_settings()
 
 
 @router.post("/settings/system", summary="Update system-level admin settings")
@@ -1353,16 +1385,12 @@ def update_system_settings(
     payload: dict,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
-    """Update system-level settings."""
-    from api.db_store import db_get as _db_g8, db_set as _db_s8
-    stored = _db_g8("admin:system_settings") or {}
-    allowed = {
-        "maintenance_mode", "maintenance_message", "rate_limit_enabled",
-        "rate_limit_requests_per_minute", "max_concurrent_users",
-        "session_timeout_minutes", "log_level", "debug_mode",
-    }
+    """Update system-level settings. Only known keys are accepted."""
+    current = _load_system_settings()
+    updated_keys = {}
     for k, v in payload.items():
-        if k in allowed:
-            stored[k] = v
-    _db_s8("admin:system_settings", stored)
-    return {"ok": True, "updated": {k: v for k, v in payload.items() if k in allowed}}
+        if k in _SYSTEM_SETTINGS_ALLOWED:
+            current[k] = v
+            updated_keys[k] = v
+    _save_system_settings(current)
+    return {"ok": True, "updated": updated_keys}

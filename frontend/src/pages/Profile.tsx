@@ -41,20 +41,25 @@ const Profile: React.FC = () => {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarErr, setAvatarErr]   = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const loadProfile = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const res = await profileApi.get(isOwn ? undefined : id);
+      if (!mountedRef.current) return;
       const d = res.data as { profile?: TraderProfile } | TraderProfile;
       const p: TraderProfile = ('profile' in d && d.profile) ? d.profile : d as TraderProfile;
       setProfile(p);
       setFollowing(p.is_following);
       if (isOwn) setEditForm({ display_name: p.display_name, bio: p.bio, country: p.country ?? '' });
     } catch (err) {
+      if (!mountedRef.current) return;
+      if ((err as {name?:string}).name === 'CanceledError') return;
       setError(extractErr(err, 'Failed to load profile.'));
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [id, isOwn]);
 

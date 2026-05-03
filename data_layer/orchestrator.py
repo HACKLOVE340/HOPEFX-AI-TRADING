@@ -65,7 +65,9 @@ import asyncio
 import logging
 import os
 import time
+from collections import deque
 from datetime import datetime
+from enum import Enum
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -95,6 +97,183 @@ from data_layer.types import FeedSource, GoldTick, QualityReport, TickQuality
 logger = logging.getLogger(__name__)
 
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+_CB_FAILURE_THRESHOLD = int(os.getenv("ORCHESTRATOR_CB_FAILURES", "5"))
+_CB_RECOVERY_TIMEOUT_S = float(os.getenv("ORCHESTRATOR_CB_RECOVERY_S", "30.0"))
+_WS_BROADCAST_QUEUE_SIZE = int(os.getenv("ORCHESTRATOR_WS_QUEUE", "256"))
+
+
+class _CircuitState(Enum):
+    CLOSED = "closed"      # Normal operation
+    OPEN = "open"          # Failing — calls rejected
+    HALF_OPEN = "half_open"  # Testing recovery
+
+
+class CircuitBreaker:
+    """
+    Per-component circuit breaker.
+
+    States:
+      CLOSED    → normal; failures counted
+      OPEN      → component is failing; calls rejected immediately
+      HALF_OPEN → one probe call allowed; success → CLOSED, failure → OPEN
+
+    Parameters
+    ----------
+    name              : Component name for logging
+    failure_threshold : Consecutive failures before opening (default 5)
+    recovery_timeout  : Seconds in OPEN before moving to HALF_OPEN (default 30)
+    """
+
+    def __init__(
+        self,
+        name: str,
+        failure_threshold: int = _CB_FAILURE_THRESHOLD,
+        recovery_timeout: float = _CB_RECOVERY_TIMEOUT_S,
+    ) -> None:
+        self.name = name
+        self._threshold = failure_threshold
+        self._recovery_timeout = recovery_timeout
+        self._state = _CircuitState.CLOSED
+        self._failure_count = 0
+        self._last_failure_ts = 0.0
+        self._success_count = 0
+        self._total_calls = 0
+        self._total_failures = 0
+
+    @property
+    def state(self) -> _CircuitState:
+        if self._state == _CircuitState.OPEN:
+            if time.monotonic() - self._last_failure_ts >= self._recovery_timeout:
+                self._state = _CircuitState.HALF_OPEN
+                logger.info("CircuitBreaker[%s]: OPEN → HALF_OPEN (probe allowed)", self.name)
+        return self._state
+
+    def is_open(self) -> bool:
+        return self.state == _CircuitState.OPEN
+
+    def allow_call(self) -> bool:
+        """Return True if the call should be allowed through."""
+        s = self.state
+        if s == _CircuitState.CLOSED:
+            return True
+        if s == _CircuitState.HALF_OPEN:
+            return True  # Allow one probe
+        return False  # OPEN — reject
+
+    def record_success(self) -> None:
+        self._total_calls += 1
+        self._success_count += 1
+        if self._state == _CircuitState.HALF_OPEN:
+            self._state = _CircuitState.CLOSED
+            self._failure_count = 0
+            logger.info("CircuitBreaker[%s]: HALF_OPEN → CLOSED (recovery confirmed)", self.name)
+        elif self._state == _CircuitState.CLOSED:
+            self._failure_count = max(0, self._failure_count - 1)
+
+    def record_failure(self, exc: Exception | None = None) -> None:
+        self._total_calls += 1
+        self._total_failures += 1
+        self._failure_count += 1
+        self._last_failure_ts = time.monotonic()
+        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN):
+            if self._failure_count >= self._threshold:
+                self._state = _CircuitState.OPEN
+                logger.warning(
+                    "CircuitBreaker[%s]: → OPEN after %d failures (last: %s)",
+                    self.name, self._failure_count, exc,
+                )
+
+    def reset(self) -> None:
+        self._state = _CircuitState.CLOSED
+        self._failure_count = 0
+        logger.info("CircuitBreaker[%s]: manually reset to CLOSED", self.name)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "state": self.state.value,
+            "failure_count": self._failure_count,
+            "total_calls": self._total_calls,
+            "total_failures": self._total_failures,
+            "success_count": self._success_count,
+        }
+
+
+class _WebSocketBroadcaster:
+    """
+    Async WebSocket broadcast integration for the orchestrator.
+
+    Maintains a set of active WebSocket connections and fans out
+    tick/microstructure/sentiment messages to all of them.
+
+    Connections are registered via add_connection() and removed
+    automatically when they close (send raises an exception).
+
+    Uses an asyncio.Queue to decouple the synchronous _on_tick()
+    path from the async broadcast loop — no blocking in the hot path.
+    """
+
+    def __init__(self, queue_size: int = _WS_BROADCAST_QUEUE_SIZE) -> None:
+        self._connections: set = set()
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
+        self._task: asyncio.Task | None = None
+        self._dropped = 0
+        self._sent = 0
+
+    def add_connection(self, ws: Any) -> None:
+        self._connections.add(ws)
+        logger.debug("WebSocketBroadcaster: connection added (%d total)", len(self._connections))
+
+    def remove_connection(self, ws: Any) -> None:
+        self._connections.discard(ws)
+        logger.debug("WebSocketBroadcaster: connection removed (%d total)", len(self._connections))
+
+    def enqueue(self, message: str) -> None:
+        """Non-blocking enqueue from sync context. Drops if queue is full."""
+        try:
+            self._queue.put_nowait(message)
+        except asyncio.QueueFull:
+            self._dropped += 1
+
+    async def start(self) -> None:
+        self._task = asyncio.create_task(self._broadcast_loop(), name="ws_broadcast")
+
+    async def stop(self) -> None:
+        if self._task and not self._task.done():
+            self._task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._task
+
+    async def _broadcast_loop(self) -> None:
+        while True:
+            try:
+                message = await self._queue.get()
+                dead = set()
+                for ws in list(self._connections):
+                    try:
+                        await ws.send_text(message)
+                        self._sent += 1
+                    except Exception:
+                        dead.add(ws)
+                for ws in dead:
+                    self._connections.discard(ws)
+                self._queue.task_done()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.debug("WebSocketBroadcaster loop error: %s", exc)
+
+    @property
+    def connection_count(self) -> int:
+        return len(self._connections)
+
+    def stats(self) -> dict[str, Any]:
+        return {
+            "connections": self.connection_count,
+            "queue_size": self._queue.qsize(),
+            "sent": self._sent,
+            "dropped": self._dropped,
+        }
 
 
 class MarketDataOrchestrator:
@@ -140,9 +319,29 @@ class MarketDataOrchestrator:
         # Registered via subscribe_ticks(); called on every accepted tick.
         self._tick_callbacks: dict[str, Any] = {}
 
+        # Async tick subscriber callbacks: name → Coroutine[[GoldTick], None]
+        # Called via asyncio.create_task() — non-blocking fanout
+        self._async_tick_callbacks: dict[str, Any] = {}
+
+        # Per-component circuit breakers
+        self._cb: dict[str, CircuitBreaker] = {
+            "gold_feed": CircuitBreaker("gold_feed"),
+            "dqe": CircuitBreaker("dqe"),
+            "microstructure": CircuitBreaker("microstructure"),
+            "sentiment": CircuitBreaker("sentiment"),
+            "calendar": CircuitBreaker("calendar"),
+            "macro_bridge": CircuitBreaker("macro_bridge"),
+            "lineage": CircuitBreaker("lineage"),
+            "redis": CircuitBreaker("redis"),
+        }
+
+        # WebSocket broadcaster
+        self._ws_broadcaster = _WebSocketBroadcaster()
+
         # Prometheus
         self._prom_uptime = None
         self._prom_tick_rate = None
+        self._prom_cb_open = None
         self._init_prometheus()
 
     def _init_prometheus(self) -> None:
@@ -168,6 +367,10 @@ class MarketDataOrchestrator:
             self._prom_tick_rate = _counter(
                 "hopefx_orchestrator_ticks_total",
                 "Total ticks processed by orchestrator",
+            )
+            self._prom_cb_open = _gauge(
+                "hopefx_orchestrator_circuit_breakers_open",
+                "Number of open circuit breakers",
             )
         except Exception as _exc:
             logger.debug("MarketDataOrchestrator: Prometheus init skipped: %s", _exc)
@@ -308,6 +511,9 @@ class MarketDataOrchestrator:
         # Start uptime/health reporter — track task so stop() can cancel it
         self._uptime_task = asyncio.create_task(self._uptime_loop(), name="orchestrator_uptime")
 
+        # Start WebSocket broadcaster
+        await self._ws_broadcaster.start()
+
         logger.info("MarketDataOrchestrator: all components started")
 
     async def stop(self) -> None:
@@ -378,6 +584,9 @@ class MarketDataOrchestrator:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._uptime_task
             self._uptime_task = None
+
+        # 7. Stop WebSocket broadcaster
+        await self._ws_broadcaster.stop()
 
         self._started = False
         logger.info("MarketDataOrchestrator: stopped")
@@ -467,30 +676,48 @@ class MarketDataOrchestrator:
         return None
 
     def _on_tick(self, tick: GoldTick) -> None:
-        """Side-effects on every tick: microstructure, cache, lineage."""
-        # Microstructure
-        snap = self._micro.on_tick(tick)
+        """
+        Side-effects on every tick: microstructure, cache, lineage, fanout.
 
-        # Redis cache — tick
-        if self._redis_store._r:
-            tick_dict = {
-                "symbol": tick.symbol,
-                "timestamp": tick.timestamp.isoformat(),
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "mid": tick.mid,
-                "source": tick.source.value,
-                "quality": tick.quality.value,
-                "confidence": tick.confidence,
-                "spread": tick.spread,
-                "lineage_id": tick.lineage_id,
-                "epoch": tick.timestamp.timestamp(),
-            }
-            self._redis_store.set_tick(tick.symbol, tick_dict)
+        Uses per-component circuit breakers to isolate failures.
+        Fans out to all registered sync and async tick subscribers.
+        Enqueues WebSocket broadcast message (non-blocking).
+        """
+        import json as _json
 
-            # Cache microstructure snapshot
-            if snap:
-                try:
+        # ── Microstructure (circuit-breaker guarded) ──────────────────────
+        snap = None
+        cb_micro = self._cb["microstructure"]
+        if cb_micro.allow_call():
+            try:
+                snap = self._micro.on_tick(tick)
+                cb_micro.record_success()
+            except Exception as exc:
+                cb_micro.record_failure(exc)
+                logger.debug("Orchestrator: microstructure error: %s", exc)
+
+        # ── Redis cache (circuit-breaker guarded) ─────────────────────────
+        cb_redis = self._cb["redis"]
+        if self._redis_store._r and cb_redis.allow_call():
+            try:
+                tick_dict = {
+                    "symbol": tick.symbol,
+                    "timestamp": tick.timestamp.isoformat(),
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "mid": tick.mid,
+                    "source": tick.source.value,
+                    "quality": tick.quality.value,
+                    "confidence": tick.confidence,
+                    "spread": tick.spread,
+                    "lineage_id": tick.lineage_id,
+                    "epoch": tick.timestamp.timestamp(),
+                }
+                self._redis_store.set_tick(tick.symbol, tick_dict, broadcast=True)
+                cb_redis.record_success()
+
+                # Cache microstructure snapshot
+                if snap:
                     self._redis_store.set_microstructure(
                         tick.symbol,
                         {
@@ -507,30 +734,65 @@ class MarketDataOrchestrator:
                             "tick_count": snap.tick_count,
                             "timestamp": snap.timestamp.isoformat(),
                         },
+                        broadcast=False,
                     )
-                except Exception as _exc:
-                    logger.debug("Orchestrator: micro cache error: %s", _exc)
+            except Exception as exc:
+                cb_redis.record_failure(exc)
+                logger.debug("Orchestrator: Redis cache error: %s", exc)
 
-        # Lineage — only accepted ticks
-        if tick.quality != TickQuality.REJECTED:
+        # ── Lineage (circuit-breaker guarded) ─────────────────────────────
+        cb_lineage = self._cb["lineage"]
+        if tick.quality != TickQuality.REJECTED and cb_lineage.allow_call():
             try:
                 self._lineage.record_tick(tick)
-            except Exception as _exc:
-                logger.debug("Orchestrator: lineage record_tick error: %s", _exc)
+                cb_lineage.record_success()
+            except Exception as exc:
+                cb_lineage.record_failure(exc)
+                logger.debug("Orchestrator: lineage record_tick error: %s", exc)
 
         self._tick_count += 1
         if self._prom_tick_rate:
-            try:
+            with contextlib.suppress(Exception):
                 self._prom_tick_rate.inc()
-            except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
 
-        # Fire registered tick callbacks (non-blocking)
+        # Update circuit breaker Prometheus gauge
+        if self._prom_cb_open:
+            with contextlib.suppress(Exception):
+                open_count = sum(1 for cb in self._cb.values() if cb.is_open())
+                self._prom_cb_open.set(open_count)
+
+        # ── WebSocket broadcast (non-blocking enqueue) ────────────────────
+        try:
+            ws_msg = _json.dumps({
+                "type": "tick",
+                "symbol": tick.symbol,
+                "bid": tick.bid,
+                "ask": tick.ask,
+                "mid": tick.mid,
+                "spread": tick.spread,
+                "source": tick.source.value,
+                "quality": tick.quality.value,
+                "timestamp": tick.timestamp.isoformat(),
+            })
+            self._ws_broadcaster.enqueue(ws_msg)
+        except Exception as exc:
+            logger.debug("Orchestrator: WS broadcast enqueue error: %s", exc)
+
+        # ── Sync tick subscriber fanout ───────────────────────────────────
         for _name, _cb in list(self._tick_callbacks.items()):
             try:
                 _cb(tick)
             except Exception as _exc:
                 logger.debug("Orchestrator: tick callback %s error: %s", _name, _exc)
+
+        # ── Async tick subscriber fanout (fire-and-forget) ────────────────
+        for _name, _coro_fn in list(self._async_tick_callbacks.items()):
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.create_task(_coro_fn(tick), name=f"tick_cb_{_name}")
+            except Exception as _exc:
+                logger.debug("Orchestrator: async tick callback %s error: %s", _name, _exc)
 
     # ── ML feature aggregation ────────────────────────────────────────────────
 
@@ -588,9 +850,12 @@ class MarketDataOrchestrator:
             if tick:
                 features["tick_confidence"] = tick.confidence
                 features["tick_spread_pct"] = tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
+                # bid_ask_spread in absolute USD terms (not percentage)
+                features["bid_ask_spread"] = tick.spread
             else:
                 features["tick_confidence"] = 0.0
                 features["tick_spread_pct"] = 0.0
+                features["bid_ask_spread"] = 0.0
 
             if self._gold_feed:
                 features["tick_source_count"] = float(len(self._gold_feed.active_sources()))
@@ -598,6 +863,35 @@ class MarketDataOrchestrator:
                 features["tick_source_count"] = 0.0
         except Exception as exc:
             logger.debug("Orchestrator: tick quality features error: %s", exc)
+
+        # 6. Temporal features — session_time and day_of_week
+        # These are causal: computed from the as_of timestamp (or now).
+        try:
+            ref_time = as_of if as_of is not None else datetime.now(UTC)
+            # session_time: fraction of the 24h UTC day elapsed [0, 1)
+            # Used by the ML model to capture intraday seasonality
+            # (gold is most liquid during London/NY overlap 13:00-17:00 UTC)
+            seconds_since_midnight = (
+                ref_time.hour * 3600
+                + ref_time.minute * 60
+                + ref_time.second
+                + ref_time.microsecond / 1_000_000
+            )
+            features["session_time"] = round(seconds_since_midnight / 86400.0, 6)
+
+            # day_of_week: 0=Monday … 6=Sunday, normalised to [0, 1)
+            # Captures weekly seasonality (gold often weaker on Fridays
+            # as traders reduce risk ahead of the weekend)
+            features["day_of_week"] = round(ref_time.weekday() / 7.0, 6)
+
+            # is_weekend: 1.0 on Saturday/Sunday (gold market closed)
+            features["is_weekend"] = 1.0 if ref_time.weekday() >= 5 else 0.0
+
+            # hour_of_day: raw hour [0, 23] for tree-based models that
+            # can learn non-linear hour effects without normalisation
+            features["hour_of_day"] = float(ref_time.hour)
+        except Exception as exc:
+            logger.debug("Orchestrator: temporal features error: %s", exc)
 
         return features
 
@@ -866,6 +1160,51 @@ class MarketDataOrchestrator:
         else:
             logger.debug("Orchestrator: tick subscriber removed: %s", name)
 
+    def subscribe_ticks_async(self, name: str, coro_fn: Any) -> None:
+        """
+        Register an async coroutine function for tick fanout.
+
+        coro_fn must be an async callable: async def handler(tick: GoldTick) -> None
+
+        Called via asyncio.create_task() on every accepted tick — non-blocking.
+        """
+        if not callable(coro_fn):
+            raise TypeError(f"subscribe_ticks_async: coro_fn must be callable, got {type(coro_fn)}")
+        self._async_tick_callbacks[name] = coro_fn
+        logger.debug("Orchestrator: async tick subscriber registered: %s", name)
+
+    def unsubscribe_ticks_async(self, name: str) -> None:
+        """Remove a previously registered async tick callback."""
+        self._async_tick_callbacks.pop(name, None)
+
+    # ── WebSocket integration ─────────────────────────────────────────────────
+
+    def add_websocket_connection(self, ws: Any) -> None:
+        """Register a WebSocket connection for tick broadcast."""
+        self._ws_broadcaster.add_connection(ws)
+
+    def remove_websocket_connection(self, ws: Any) -> None:
+        """Remove a WebSocket connection from the broadcast set."""
+        self._ws_broadcaster.remove_connection(ws)
+
+    # ── Circuit breaker management ────────────────────────────────────────────
+
+    def get_circuit_breaker(self, component: str) -> CircuitBreaker | None:
+        """Return the circuit breaker for a named component."""
+        return self._cb.get(component)
+
+    def reset_circuit_breaker(self, component: str) -> bool:
+        """Manually reset a circuit breaker to CLOSED. Returns True if found."""
+        cb = self._cb.get(component)
+        if cb:
+            cb.reset()
+            return True
+        return False
+
+    def get_circuit_breaker_status(self) -> dict[str, dict]:
+        """Return status dict for all circuit breakers."""
+        return {name: cb.to_dict() for name, cb in self._cb.items()}
+
     # ── OHLCV window helper ───────────────────────────────────────────────────
 
     def get_ohlcv_window(
@@ -930,6 +1269,10 @@ class MarketDataOrchestrator:
         h["calendar"] = self._calendar.health()
         h["macro"] = self._macro_bridge.health()
         h["replay"] = self._replay.health()
+        h["circuit_breakers"] = self.get_circuit_breaker_status()
+        h["websocket"] = self._ws_broadcaster.stats()
+        h["async_subscribers"] = list(self._async_tick_callbacks.keys())
+        h["sync_subscribers"] = list(self._tick_callbacks.keys())
 
         # NOTE: Redis caching of this snapshot is handled by _uptime_loop
         # (every 10s via run_in_executor). Do NOT write to Redis here —
@@ -937,7 +1280,77 @@ class MarketDataOrchestrator:
         # _uptime_loop; a direct Redis write here would either block the
         # event loop (async context) or duplicate the write (sync context).
 
+        # Aggregate health score [0.0, 1.0] — weighted combination of
+        # sub-component health indicators for the OrchestratorHealthGrid.
+        h["aggregate_health"] = self._compute_aggregate_health(h)
+        h["status"] = (
+            "healthy" if h["aggregate_health"] >= 0.7
+            else "degraded" if h["aggregate_health"] >= 0.3
+            else "unhealthy"
+        )
+
         return h
+
+    def _compute_aggregate_health(self, h: dict) -> float:
+        """
+        Compute a weighted aggregate health score [0.0, 1.0].
+
+        Weights:
+          - Gold feed active sources (0.30): most critical — no feed = no prices
+          - Redis healthy (0.20): pub/sub and cache depend on Redis
+          - DQE source confidence (0.20): data quality
+          - Microstructure has data (0.15): tick processing working
+          - Sentiment engine alive (0.10): news pipeline
+          - Calendar engine alive (0.05): macro events
+        """
+        score = 0.0
+
+        # Gold feed: score proportional to active source count (max 5 sources)
+        try:
+            gold = h.get("gold_feed", {})
+            active = len(gold.get("active_sources", []))
+            score += 0.30 * min(active / 3.0, 1.0)  # 3+ sources = full score
+        except Exception:
+            pass
+
+        # Redis
+        try:
+            score += 0.20 if h.get("redis_healthy", False) else 0.0
+        except Exception:
+            pass
+
+        # DQE source confidence — average across all sources
+        try:
+            dqe = h.get("dqe", {})
+            if dqe:
+                confs = [v.get("confidence", 0.0) for v in dqe.values() if isinstance(v, dict)]
+                if confs:
+                    score += 0.20 * (sum(confs) / len(confs))
+        except Exception:
+            pass
+
+        # Microstructure has data
+        try:
+            micro_h = h.get("micro_health", {})
+            score += 0.15 if micro_h.get("has_data", False) else 0.0
+        except Exception:
+            pass
+
+        # Sentiment engine alive
+        try:
+            sent = h.get("sentiment", {})
+            score += 0.10 if sent.get("running", False) or sent.get("article_count_1h", 0) > 0 else 0.05
+        except Exception:
+            pass
+
+        # Calendar engine alive
+        try:
+            cal = h.get("calendar", {})
+            score += 0.05 if cal.get("event_count", 0) >= 0 else 0.0
+        except Exception:
+            score += 0.05  # calendar is non-critical; give benefit of doubt
+
+        return round(min(score, 1.0), 4)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

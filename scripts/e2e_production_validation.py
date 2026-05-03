@@ -328,15 +328,17 @@ def check_normalization() -> str:
 
     norm = orchestrator._norm
 
-    # Build a 60-bar OHLCV DataFrame
+    # Build a 60-bar OHLCV DataFrame using a deterministic arithmetic sequence
+    # (no random data — prices step by 1 USD/bar, spread is fixed at 0.5 USD).
     idx = pd.date_range("2024-01-01", periods=60, freq="h", tz="UTC")
+    closes = np.linspace(2300.0, 2359.0, 60)  # monotone walk, no randomness
     df = pd.DataFrame(
         {
-            "open": np.random.uniform(2300, 2400, 60),
-            "high": np.random.uniform(2400, 2450, 60),
-            "low": np.random.uniform(2250, 2300, 60),
-            "close": np.random.uniform(2300, 2400, 60),
-            "volume": np.random.uniform(100, 1000, 60),
+            "open": closes - 0.25,
+            "high": closes + 0.50,
+            "low": closes - 0.50,
+            "close": closes,
+            "volume": np.full(60, 500.0),
         },
         index=idx,
     )

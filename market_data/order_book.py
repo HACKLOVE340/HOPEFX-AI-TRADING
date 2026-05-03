@@ -788,10 +788,10 @@ class MockL2Feed:  # healer: ignore — assert_not_production() guard in __init_
         return book.get_snapshot() if book else None
 
     async def _generate(self, symbol: str) -> None:
-        """Generate synthetic L2 data with realistic microstructure."""
+        """Generate synthetic L2 data with realistic microstructure (dev/test only)."""
         book = self._books[symbol]
         mid = 2000.0  # gold-like price
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng()  # unseeded — non-deterministic per run
 
         while self._running:
             try:
@@ -849,8 +849,19 @@ class OrderBookFeed:
             else:
                 self._provider = PolygonL2Feed()
         elif self._provider_name == "mock":
+            # assert_not_production raises RuntimeError in production/staging
+            # before MockL2Feed.__init__ is even reached, giving a clear error
+            # message rather than silently serving synthetic data.
+            from utils.production_guard import assert_not_production
+
+            assert_not_production(
+                "MockL2Feed (L2_PROVIDER=mock)",
+                replacement="MultiSourceL2Feed with L2_PROVIDER=multi",
+                extra="Set L2_PROVIDER=multi and configure POLYGON_API_KEY.",
+            )
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). Only permitted in non-production environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
+                "Only permitted in development/test environments."
             )
             self._provider = MockL2Feed()
         else:

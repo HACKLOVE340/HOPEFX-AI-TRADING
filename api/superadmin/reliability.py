@@ -130,6 +130,28 @@ async def _probe_broker() -> dict[str, Any]:
 
 async def _probe_ml_engine() -> dict[str, Any]:
     t0 = time.perf_counter()
+    # Prefer app_state.inference_engine (full MTF pipeline)
+    try:
+        from api.admin import app_state
+
+        if app_state:
+            for attr in ("inference_engine", "brain", "strategy_brain"):
+                engine = getattr(app_state, attr, None)
+                if engine is not None:
+                    ready = getattr(engine, "is_ready", None)
+                    if callable(ready):
+                        ready = ready()
+                    else:
+                        ready = getattr(engine, "_ready", True)
+                    return {
+                        "status": "ok" if ready else "warning",
+                        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                        "detail": f"{attr} ready={ready}",
+                        "component": attr,
+                    }
+    except Exception:
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+    # Redis fallback
     try:
         from cache.redis_client import get_sync_redis_client
 
@@ -148,6 +170,7 @@ async def _probe_ml_engine() -> dict[str, Any]:
                 }
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+    # Module-level fallback
     try:
         from ml.predictor import get_predictor
 
@@ -169,13 +192,26 @@ async def _probe_trading_engine() -> dict[str, Any]:
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
-            status = getattr(eng, "status", "unknown")
-            running = getattr(eng, "_running", False)
+            running = bool(getattr(eng, "_running", False))
+            # Derive status from _running; eng.status property doesn't exist on HopeFXEngine
+            engine_status = "running" if running else "stopped"
+            detail = f"engine running={running}"
+            # Enrich with live snapshot if available
+            if callable(getattr(eng, "_get_status", None)):
+                try:
+                    snap = eng._get_status()
+                    detail = (
+                        f"engine running={running} "
+                        f"open_positions={snap.get('open_positions', 0)} "
+                        f"broker={snap.get('broker', 'unknown')}"
+                    )
+                except Exception:
+                    pass
             return {
                 "status": "ok" if running else "warning",
                 "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                "detail": f"engine status={status} running={running}",
-                "engine_status": status,
+                "detail": detail,
+                "engine_status": engine_status,
             }
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
@@ -277,6 +313,25 @@ async def _probe_data_feed() -> dict[str, Any]:
 
 async def _probe_risk_manager() -> dict[str, Any]:
     t0 = time.perf_counter()
+    # Prefer app_state.risk_manager
+    try:
+        from api.admin import app_state
+
+        if app_state and hasattr(app_state, "risk_manager") and app_state.risk_manager is not None:
+            rm = app_state.risk_manager
+            active = getattr(rm, "_active", True)
+            breached = getattr(rm, "_daily_loss_breached", False)
+            detail = f"risk_manager active={active} daily_loss_breached={breached}"
+            return {
+                "status": "warning" if breached else ("ok" if active else "warning"),
+                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                "detail": detail,
+                "active": active,
+                "daily_loss_breached": breached,
+            }
+    except Exception:
+        logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
+    # Module-level fallback
     try:
         from risk.manager import get_risk_manager
 
@@ -410,33 +465,42 @@ async def _probe_config_store() -> dict[str, Any]:
 
 
 async def _probe_decision_engine() -> dict[str, Any]:
-    """Check the HOPEFXDecisionEngine is accessible."""
+    """Check the HOPEFXDecisionEngine is accessible and return its metrics."""
     t0 = time.perf_counter()
     try:
         from api.admin import app_state
 
         if app_state and hasattr(app_state, "decision_engine"):
             de = app_state.decision_engine
-            ready = getattr(de, "_ready", True)
-            return {
-                "status": "ok" if ready else "warning",
-                "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-                "detail": f"decision_engine ready={ready}",
-            }
+            if de is not None:
+                # HOPEFXDecisionEngine.status() returns cycles_total, executed, blocked, etc.
+                if callable(getattr(de, "status", None)):
+                    try:
+                        de_status = de.status()
+                        return {
+                            "status": "ok",
+                            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                            "detail": (
+                                f"cycles={de_status.get('cycles_total', 0)} "
+                                f"executed={de_status.get('executed', 0)} "
+                                f"blocked={de_status.get('blocked', 0)}"
+                            ),
+                            **{k: v for k, v in de_status.items() if not isinstance(v, dict)},
+                        }
+                    except Exception:
+                        pass
+                return {
+                    "status": "ok",
+                    "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+                    "detail": "decision_engine present (no status() method)",
+                }
     except Exception:
         logger.debug("Suppressed non-fatal exception", exc_info=True)  # nosec B110
-    try:
-        return {
-            "status": "ok",
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": "DecisionEngine module importable",
-        }
-    except Exception as exc:
-        return {
-            "status": "warning",
-            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
-            "detail": str(exc),
-        }
+    return {
+        "status": "warning",
+        "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        "detail": "HOPEFXDecisionEngine not in app_state (pending init or disabled)",
+    }
 
 
 async def _probe_signal_engine() -> dict[str, Any]:

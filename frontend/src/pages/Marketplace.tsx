@@ -117,6 +117,9 @@ const Marketplace: React.FC = () => {
   const [stats,setStats]             = useState<{total_strategies:number;total_subscribers:number}|null>(null);
   const [showReviewModal,setShowReviewModal] = useState(false);
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const loadStrategies = useCallback(async () => {
     setLoading(true); setLoadErr(null);
     try {
@@ -124,28 +127,38 @@ const Marketplace: React.FC = () => {
       if (category !== 'all') params.category = category;
       if (search) params.query = search;
       const res = await marketplaceApi.strategies(params) as {data:{strategies:Strategy[];total:number}};
+      if (!mountedRef.current) return;
       setStrategies(res.data.strategies ?? []);
     } catch (err) {
+      if (!mountedRef.current) return;
+      if ((err as {name?:string}).name === 'CanceledError') return;
       setStrategies([]); setLoadErr(extractErr(err,'Failed to load strategies.'));
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, [category, sortBy, search]);
 
   const loadMyListings = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
       const res = await marketplaceApi.myStrategies(currentUser.id) as {data:{strategies?:Strategy[]}|Strategy[]};
+      if (!mountedRef.current) return;
       const d = res.data;
       setMyListings(Array.isArray(d) ? d : (d.strategies ?? []));
-    } catch { setMyListings([]); }
+    } catch {
+      if (!mountedRef.current) return;
+      setMyListings([]);
+    }
   }, [currentUser?.id]);
 
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
   useEffect(() => { if (mainTab === 'my-listings') loadMyListings(); }, [mainTab, loadMyListings]);
   useEffect(() => {
+    let mounted = true;
     marketplaceApi.stats().then(r => {
+      if (!mounted) return;
       const d = (r as {data:{total_strategies:number;total_subscribers:number}}).data;
       if (d?.total_strategies != null) setStats(d);
     }).catch(() => {});
+    return () => { mounted = false; };
   }, []);
 
   const handleSelect = async (s: Strategy) => {

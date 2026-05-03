@@ -117,15 +117,18 @@ const QuickActionBar: React.FC = () => {
 };
 
 // ── Lazily loaded (heavy Recharts panels — split into separate chunks) ─────────
-const EquityCurveChart       = React.lazy(() => import('../components/charts/EquityCurveChart').then(m => ({ default: m.EquityCurveChart })));
-const RiskDashboard          = React.lazy(() => import('../components/panels/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
-const SentimentGauge         = React.lazy(() => import('../components/panels/SentimentGauge').then(m => ({ default: m.SentimentGauge })));
-const MicrostructurePanel    = React.lazy(() => import('../components/panels/MicrostructurePanel').then(m => ({ default: m.MicrostructurePanel })));
-const MacroCalendar          = React.lazy(() => import('../components/panels/MacroCalendar').then(m => ({ default: m.MacroCalendar })));
-const OrderBookDepth         = React.lazy(() => import('../components/panels/OrderBookDepth').then(m => ({ default: m.OrderBookDepth })));
-const LiveSignalFeed         = React.lazy(() => import('../components/panels/LiveSignalFeed').then(m => ({ default: m.LiveSignalFeed })));
-const OrchestratorHealthGrid = React.lazy(() => import('../components/panels/OrchestratorHealthGrid').then(m => ({ default: m.OrchestratorHealthGrid })));
-const MLModelPanel           = React.lazy(() => import('../components/panels/MLModelPanel').then(m => ({ default: m.MLModelPanel })));
+// Import guarded variants from the barrel so every panel has its own
+// PanelErrorBoundary + Suspense wrapper — a crash in one panel never
+// takes down the rest of the dashboard.
+const EquityCurveChart            = React.lazy(() => import('../components/charts/EquityCurveChart').then(m => ({ default: m.EquityCurveChart })));
+const RiskDashboardGuarded        = React.lazy(() => import('../components/panels').then(m => ({ default: m.RiskDashboardGuarded })));
+const SentimentGaugeGuarded       = React.lazy(() => import('../components/panels').then(m => ({ default: m.SentimentGaugeGuarded })));
+const MicrostructurePanelGuarded  = React.lazy(() => import('../components/panels').then(m => ({ default: m.MicrostructurePanelGuarded })));
+const MacroCalendarGuarded        = React.lazy(() => import('../components/panels').then(m => ({ default: m.MacroCalendarGuarded })));
+const OrderBookDepthGuarded       = React.lazy(() => import('../components/panels').then(m => ({ default: m.OrderBookDepthGuarded })));
+const LiveSignalFeedGuarded       = React.lazy(() => import('../components/panels').then(m => ({ default: m.LiveSignalFeedGuarded })));
+const OrchestratorHealthGridGuarded = React.lazy(() => import('../components/panels').then(m => ({ default: m.OrchestratorHealthGridGuarded })));
+const MLModelPanelGuarded         = React.lazy(() => import('../components/panels').then(m => ({ default: m.MLModelPanelGuarded })));
 
 // ── Dashboard inner ───────────────────────────────────────────────────────────
 
@@ -152,86 +155,68 @@ function DashboardInner() {
 
         {/* Equity curve — large center-left, spans 2 rows */}
         <div className="col-span-5 row-span-2 min-h-0">
-          <PanelErrorBoundary title="Equity Curve">
-            <Suspense fallback={<ChartSkeleton />}>
-              <EquityCurveChart />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<ChartSkeleton />}>
+            <EquityCurveChart />
+          </Suspense>
         </div>
 
-        {/* Signal feed — center column, spans 2 rows */}
+        {/* Signal feed — center column, spans 2 rows (guarded) */}
         <div className="col-span-3 row-span-2 min-h-0">
-          <PanelErrorBoundary title="Signal Feed">
-            <Suspense fallback={<PanelSkeleton rows={6} />}>
-              <LiveSignalFeed />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={6} />}>
+            <LiveSignalFeedGuarded />
+          </Suspense>
         </div>
 
-        {/* Risk dashboard — cols 9-10, row 1 */}
+        {/* Risk dashboard — cols 9-10, row 1 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <PanelErrorBoundary title="Risk Dashboard">
-            <Suspense fallback={<PanelSkeleton rows={4} />}>
-              <RiskDashboard />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={4} />}>
+            <RiskDashboardGuarded />
+          </Suspense>
         </div>
 
-        {/* Order book — cols 11-12, row 1 */}
+        {/* Order book — cols 11-12, row 1 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <PanelErrorBoundary title="Order Book">
-            <Suspense fallback={<PanelSkeleton rows={8} />}>
-              <OrderBookDepth />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={8} />}>
+            <OrderBookDepthGuarded />
+          </Suspense>
         </div>
 
-        {/* Sentiment gauge — cols 9-10, row 2 */}
+        {/* Sentiment gauge — cols 9-10, row 2 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <PanelErrorBoundary title="Sentiment">
-            <Suspense fallback={<PanelSkeleton rows={3} />}>
-              <SentimentGauge />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={3} />}>
+            <SentimentGaugeGuarded />
+          </Suspense>
         </div>
 
-        {/* Microstructure — cols 11-12, row 2 */}
+        {/* Microstructure — cols 11-12, row 2 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <PanelErrorBoundary title="Microstructure">
-            <Suspense fallback={<PanelSkeleton rows={5} />}>
-              <MicrostructurePanel />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={5} />}>
+            <MicrostructurePanelGuarded />
+          </Suspense>
         </div>
       </div>
 
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
       <div className="h-52 shrink-0 grid grid-cols-12 gap-2 px-2 pb-2">
-        {/* Macro calendar — left 5 cols */}
+        {/* Macro calendar — left 5 cols (guarded) */}
         <div className="col-span-5 min-h-0">
-          <PanelErrorBoundary title="Macro Calendar">
-            <Suspense fallback={<PanelSkeleton rows={3} />}>
-              <MacroCalendar />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={3} />}>
+            <MacroCalendarGuarded />
+          </Suspense>
         </div>
 
-        {/* Orchestrator health — center 4 cols */}
+        {/* Orchestrator health — center 4 cols (guarded) */}
         <div className="col-span-4 min-h-0">
-          <PanelErrorBoundary title="Orchestrator Health">
-            <Suspense fallback={<PanelSkeleton rows={4} />}>
-              <OrchestratorHealthGrid />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={4} />}>
+            <OrchestratorHealthGridGuarded />
+          </Suspense>
         </div>
 
-        {/* ML model panel — right 3 cols */}
+        {/* ML model panel — right 3 cols (guarded) */}
         <div className="col-span-3 min-h-0">
-          <PanelErrorBoundary title="ML Model">
-            <Suspense fallback={<PanelSkeleton rows={4} />}>
-              <MLModelPanel />
-            </Suspense>
-          </PanelErrorBoundary>
+          <Suspense fallback={<PanelSkeleton rows={4} />}>
+            <MLModelPanelGuarded />
+          </Suspense>
         </div>
       </div>
     </div>

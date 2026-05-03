@@ -213,11 +213,23 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
-            overview["engine_status"] = getattr(eng, "status", "running")
-            # Only override open_positions if the engine has a live in-memory count.
-            live_pos = len(getattr(eng, "positions", {}))
-            if live_pos > 0:
-                overview["open_positions"] = live_pos
+            # _running is the authoritative live flag on HopeFXEngine
+            running = getattr(eng, "_running", None)
+            if running is not None:
+                overview["engine_status"] = "running" if running else "stopped"
+            # Use _get_status() for live open_positions
+            if callable(getattr(eng, "_get_status", None)):
+                try:
+                    snap = eng._get_status()
+                    live_pos = int(snap.get("open_positions", 0))
+                    if live_pos > 0:
+                        overview["open_positions"] = live_pos
+                except Exception:
+                    logger.debug("overview: _get_status() failed", exc_info=False)
+            else:
+                live_pos = len(getattr(eng, "positions", {}))
+                if live_pos > 0:
+                    overview["open_positions"] = live_pos
     except Exception:
         logger.debug("Suppressed exception (no detail) in %s", __name__)
 

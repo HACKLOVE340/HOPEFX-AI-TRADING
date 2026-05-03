@@ -257,3 +257,68 @@ def pool_stats() -> dict:
         "max_connections": _MAX_CONNECTIONS,
         "url": _REDIS_URL,
     }
+
+
+import contextlib
+
+
+@contextlib.contextmanager
+def borrow_client():
+    """
+    Context manager that yields a healthy synchronous Redis client.
+
+    On entry a PING is issued to verify the connection is alive.  If the
+    ping fails the pool is reset and a fresh client is created so the caller
+    never receives a stale/broken connection.
+
+    Usage::
+
+        with borrow_client() as r:
+            r.set("key", "value", ex=60)
+
+    Raises:
+        RuntimeError: If the ``redis`` package is not installed.
+        redis.exceptions.ConnectionError: If Redis is unreachable after reset.
+    """
+    client = get_sync_client()
+    try:
+        client.ping()
+    except Exception as exc:
+        logger.warning(
+            "Redis health ping failed on borrow (%s) — resetting pool and retrying.",
+            exc,
+        )
+        reset_pool()
+        client = get_sync_client()
+        # Let a second failure propagate — the caller should handle it.
+        client.ping()
+    yield client
+
+
+async def borrow_async_client():
+    """
+    Async context manager that yields a healthy async Redis client.
+
+    Issues an async PING on borrow; resets the pool and retries once on
+    failure so callers never receive a stale connection.
+
+    Usage::
+
+        async with borrow_async_client() as r:
+            await r.set("key", "value", ex=60)
+
+    Raises:
+        RuntimeError: If the ``redis`` package is not installed.
+    """
+    client = await get_async_client()
+    try:
+        await client.ping()
+    except Exception as exc:
+        logger.warning(
+            "Async Redis health ping failed on borrow (%s) — resetting pool and retrying.",
+            exc,
+        )
+        reset_pool()
+        client = await get_async_client()
+        await client.ping()
+    return client

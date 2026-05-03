@@ -12,7 +12,7 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 15_000,
+  timeout: 8_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -290,6 +290,8 @@ export const tradingApi = {
   placeOrder:     (order: object) => api.post('/trading/orders', order),
   closePosition:  (id: string)    => api.delete(`/trading/positions/${id}`),
   closeAllPositions: ()           => api.delete('/trading/positions'),
+  orders:         (params?: { status?: string; limit?: number; offset?: number }) =>
+    api.get('/trading/orders', { params }),
   trades:         (params?: { symbol?: string; limit?: number } | number) => {
     const limit  = typeof params === 'number' ? params : (params?.limit ?? 100);
     const symbol = typeof params === 'object' ? params?.symbol : undefined;
@@ -302,6 +304,8 @@ export const tradingApi = {
   aiAnalysis:     (payload: { symbol: string; price?: number; timeframe?: string }) =>
     api.post('/trading/ai-analysis', payload, { timeout: 30_000 }),
   riskMetrics:    ()              => api.get('/trading/risk'),
+  patterns: (symbol: string, timeframe = '1h', limit = 200, minConfidence = 0.5) =>
+    api.get('/trading/patterns', { params: { symbol, timeframe, limit, min_confidence: minConfidence }, timeout: 30_000 }),
 };
 
 // ── Backtesting ───────────────────────────────────────────────────────────────
@@ -848,11 +852,13 @@ export const propFirmApi = {
 
 export const tcaApi = {
   report:       (params?: object)              => api.get('/tca/report', { params }),
+  reports:      (n?: number)                   => api.get('/tca/report', { params: n ? { last_n: n } : {} }),
   brokerReport: (broker: string)               => api.get(`/tca/report/${broker}`),
-  records:      (params?: object)              => api.get('/tca/records', { params }),
+  records:      (n?: number)                   => api.get('/tca/records', { params: n ? { n } : {} }),
   alerts:       ()                             => api.get('/tca/alerts'),
-  stats:        (params?: object)              => api.get('/tca/stats', { params }),
+  stats:        (n?: number)                   => api.get('/tca/stats', { params: n ? { n } : {} }),
   flushRecords: ()                             => api.delete('/tca/records'),
+  flush:        ()                             => api.delete('/tca/records'),
 };
 
 // ── Regime ────────────────────────────────────────────────────────────────────
@@ -1246,13 +1252,13 @@ export const chatApi = {
   messages:         (roomId: string, params?: Record<string, unknown>) =>
                       api.get(`/chat/rooms/${roomId}/messages`, { params }),
   sendMessage:      (roomId: string, text: string, attachments?: string[]) =>
-                      api.post(`/chat/rooms/${roomId}/messages`, { text, attachments }),
+                      api.post(`/chat/rooms/${roomId}/messages`, { content: text, text, attachments }),
   deleteMessage:    (roomId: string, msgId: string)           =>
                       api.delete(`/chat/rooms/${roomId}/messages/${msgId}`),
   directMessages:   (userId: string, params?: Record<string, unknown>) =>
                       api.get(`/chat/dm/${userId}`, { params }),
   sendDM:           (userId: string, text: string)            =>
-                      api.post(`/chat/dm/${userId}`, { text }),
+                      api.post(`/chat/dm/${userId}`, { content: text, text }),
   onlineUsers:      ()                                        => api.get('/chat/online'),
 };
 

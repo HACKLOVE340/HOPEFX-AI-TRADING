@@ -93,6 +93,12 @@ const TradeJournal: React.FC = () => {
   const [saveErr, setSaveErr]     = useState<string | null>(null);
   const [filterTag, setFilterTag] = useState('');
 
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -103,6 +109,7 @@ const TradeJournal: React.FC = () => {
         journalApi.stats(),
         journalApi.mistakes(),
       ]);
+      if (!mountedRef.current) return;
       if (tradesRes.status === 'fulfilled') {
         const d = tradesRes.value.data as JournalEntry[] | { trades?: JournalEntry[] };
         setTrades(Array.isArray(d) ? d : (d.trades ?? []));
@@ -115,7 +122,7 @@ const TradeJournal: React.FC = () => {
         setMistakes(Array.isArray(d) ? d : (d.mistakes ?? []));
       } else { setMistakes([]); }
     } finally {
-      setLoading(false);
+      if (mountedRef.current) setLoading(false);
     }
   }, [filterTag]);
 
@@ -334,7 +341,7 @@ const TradeJournal: React.FC = () => {
                     formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, 'Win Rate']}
                   />
                   <Bar dataKey="win_rate" radius={[4, 4, 0, 0]}>
-                    {stats.by_emotion.map((e, i) => (
+                    {(stats.by_emotion ?? []).map((e, i) => (
                       <Cell key={i} fill={e.win_rate >= 50 ? '#4ade80' : '#f87171'} />
                     ))}
                   </Bar>

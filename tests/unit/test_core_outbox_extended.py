@@ -171,6 +171,7 @@ async def test_relay_batch_publishes_via_redis():
     row.payload = json.dumps({"reason": "test"})
     row.attempts = 0
     row.published_at = None
+    row.idempotency_key = None  # disable idempotency path so publish is called
 
     session = _make_relay_session([row])
     mock_redis = MagicMock()

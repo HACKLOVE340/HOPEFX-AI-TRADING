@@ -122,27 +122,37 @@ const CopyTrading: React.FC = () => {
   const [editAlloc, setEditAlloc]       = useState<Record<string, number>>({});
   const [activeTab, setActiveTab]       = useState<'browse' | 'active'>('browse');
 
+  const mountedRef = useRef(true);
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
   const loadLeaders = useCallback(async () => {
     setLoading(true);
     try {
       const r = await copyTradingApi.leaders();
+      if (!mountedRef.current) return;
       const d = r.data as Leader[] | { traders?: Leader[]; leaderboard?: Leader[] };
       setLeaders(Array.isArray(d) ? d : (d.traders ?? d.leaderboard ?? []));
       setLoadErr('');
     } catch (err: unknown) {
+      if (!mountedRef.current) return;
+      if ((err as {name?:string}).name === 'CanceledError') return;
       setLoadErr(extractApiError(err, 'Failed to load traders. Please try again.'));
       setLeaders([]);
-    } finally { setLoading(false); }
+    } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   const loadSessions = useCallback(async () => {
     setSessionsLoading(true);
     try {
       const r = await copyTradingApi.activeSessions();
+      if (!mountedRef.current) return;
       const d = r.data as ActiveSession[] | { sessions?: ActiveSession[] };
       setSessions(Array.isArray(d) ? d : (d.sessions ?? []));
-    } catch { setSessions([]); }
-    finally { setSessionsLoading(false); }
+    } catch {
+      if (!mountedRef.current) return;
+      setSessions([]);
+    }
+    finally { if (mountedRef.current) setSessionsLoading(false); }
   }, []);
 
   useEffect(() => { loadLeaders(); loadSessions(); }, [loadLeaders, loadSessions]);

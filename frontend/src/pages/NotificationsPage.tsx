@@ -45,12 +45,16 @@ const NotificationsPage: React.FC = () => {
   const [filter, setFilter]       = useState<'all' | 'unread'>('all');
   const [markingAll, setMarkingAll] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const mountedRef = useRef(true);
   const token = useStore(s => s.token);
+
+  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
   const load = useCallback(async (pg: number, flt: 'all' | 'unread') => {
     setLoading(true);
     try {
       const res = await notificationsApi.list({ page: pg, limit: PAGE_SIZE, unread_only: flt === 'unread' });
+      if (!mountedRef.current) return;
       const d = res.data as { notifications?: Notification[]; has_more?: boolean } | Notification[];
       const notifs = Array.isArray(d) ? d : (d.notifications ?? []);
       const more   = Array.isArray(d) ? notifs.length === PAGE_SIZE : (d.has_more ?? false);
@@ -58,7 +62,7 @@ const NotificationsPage: React.FC = () => {
       setHasMore(more);
       setPage(pg);
     } catch { /* non-fatal */ }
-    finally { setLoading(false); }
+    finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
   useEffect(() => { load(1, filter); }, [load, filter]);
