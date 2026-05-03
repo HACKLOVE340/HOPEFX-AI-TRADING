@@ -83,21 +83,71 @@ if _CELERY_AVAILABLE:
     )
 
     app.conf.update(
-        # Serialisation
+        # ── Serialisation ─────────────────────────────────────────────────────
+        # json only — never pickle.  Pickle allows arbitrary code execution
+        # if the broker is compromised; json is safe and human-readable.
         task_serializer="json",
         result_serializer="json",
         accept_content=["json"],
-        # Timezone
+        # Compress task payloads with gzip.  ML retrain tasks carry feature
+        # arrays that can be several MB; compression cuts broker traffic ~70 %.
+        # Workers must have the same setting to decompress results.
+        task_compression="gzip",
+        result_compression="gzip",
+
+        # ── Timezone ──────────────────────────────────────────────────────────
         timezone="UTC",
         enable_utc=True,
-        # Reliability
+
+        # ── Reliability ───────────────────────────────────────────────────────
+        # task_acks_late: acknowledge only after the task completes so a
+        #   worker crash re-queues the task rather than losing it.
+        # task_reject_on_worker_lost: re-queue (not discard) when a worker
+        #   process is killed mid-task (OOM, SIGKILL).
+        # worker_prefetch_multiplier=1: fetch one task at a time so long-
+        #   running ML tasks don't starve short billing/infra tasks.
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
-        # Result expiry
+
+        # worker_max_tasks_per_child: recycle the worker subprocess after N
+        #   tasks to reclaim memory leaked by ML libraries (numpy, torch).
+        #   Set via CELERY_MAX_TASKS_PER_CHILD; default 200 is conservative
+        #   enough to prevent OOM on 2 GB workers without excessive fork cost.
+        worker_max_tasks_per_child=int(
+            os.getenv("CELERY_MAX_TASKS_PER_CHILD", "200")
+        ),
+
+        # ── Broker transport options ───────────────────────────────────────────
+        # visibility_timeout: how long (seconds) a task can run before the
+        #   broker re-queues it as "lost".  Must be longer than the slowest
+        #   task (ml_daily_full_retrain can take ~30 min).  Default 1 h.
+        # max_retries: number of broker reconnect attempts before giving up.
+        # interval_start / interval_step / interval_max: exponential backoff
+        #   for broker reconnects (0 s → 0.2 s → 0.4 s … → 2 s max).
+        broker_transport_options={
+            "visibility_timeout": int(
+                os.getenv("CELERY_VISIBILITY_TIMEOUT", str(3600))
+            ),
+            "max_retries": 5,
+            "interval_start": 0,
+            "interval_step": 0.2,
+            "interval_max": 2.0,
+        },
+
+        # ── Result backend ────────────────────────────────────────────────────
         result_expires=timedelta(hours=24),
-        # Queue routing — each task family gets its own queue so workers
-        # can be scaled independently (e.g. more ML workers, fewer infra).
+
+        # result_chord_join_timeout: seconds to wait for all chord subtasks
+        #   before the chord callback fires.  Prevents chord callbacks from
+        #   hanging indefinitely when a subtask is slow or lost.
+        result_chord_join_timeout=int(
+            os.getenv("CELERY_CHORD_JOIN_TIMEOUT", "300")  # 5 min
+        ),
+
+        # ── Queue routing ─────────────────────────────────────────────────────
+        # Each task family gets its own queue so workers can be scaled
+        # independently (e.g. more ML workers, fewer infra workers).
         task_routes={
             "celery_app.ml_hourly_online_update": {"queue": "ml"},
             "celery_app.ml_daily_full_retrain": {"queue": "ml"},
@@ -107,7 +157,11 @@ if _CELERY_AVAILABLE:
             "celery_app.database_backup": {"queue": "infra"},
             "celery_app.self_healer_scan": {"queue": "infra"},
         },
-        # Test mode
+
+        # ── Test mode ─────────────────────────────────────────────────────────
+        # task_always_eager=True makes tasks run synchronously in the calling
+        # process — no broker required.  Set CELERY_TASK_ALWAYS_EAGER=true
+        # in test environments.
         task_always_eager=ALWAYS_EAGER,
         # Beat schedule
         beat_schedule={
