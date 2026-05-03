@@ -16,6 +16,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
 import { useStore, selectMacro } from '../store';
@@ -86,9 +87,10 @@ function formatDate(iso: string): string {
 
 // ── Event Row ─────────────────────────────────────────────────────────────────
 
-const EventRow: React.FC<{ event: CalendarEvent }> = ({ event: ev }) => {
+const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = ({ event: ev, onPlanTrade }) => {
   const color = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
   const flag  = FLAG[ev.country] ?? '🌐';
+  const isHighImpact = ev.importance === 'high' || ev.importance === 'critical';
 
   return (
     <div style={{ ...s.eventRow, borderLeft: `3px solid ${color}` }}>
@@ -135,6 +137,20 @@ const EventRow: React.FC<{ event: CalendarEvent }> = ({ event: ev }) => {
             }}>{ev.actual}</span>
           </div>
         )}
+        {isHighImpact && onPlanTrade && (
+          <button
+            onClick={onPlanTrade}
+            style={{
+              padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
+              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+              color: '#60a5fa', fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
+              whiteSpace: 'nowrap',
+            }}
+            title="Navigate to Trade page to plan a trade around this event"
+          >
+            ⚡ Plan Trade
+          </button>
+        )}
       </div>
     </div>
   );
@@ -145,6 +161,7 @@ const EventRow: React.FC<{ event: CalendarEvent }> = ({ event: ev }) => {
 type Tab = 'calendar' | 'macro';
 
 const EconomicCalendar: React.FC = () => {
+  const navigate = useNavigate();
   const [tab, setTab]               = useState<Tab>('calendar');
   const [events, setEvents]         = useState<CalendarEvent[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -309,7 +326,9 @@ const EconomicCalendar: React.FC = () => {
             Object.entries(grouped).map(([date, dayEvents]) => (
               <div key={date} style={s.dayGroup}>
                 <div style={s.dayHeader}>{date}</div>
-                {dayEvents.map((ev, i) => <EventRow key={i} event={ev} />)}
+                {dayEvents.map((ev, i) => (
+                  <EventRow key={i} event={ev} onPlanTrade={() => navigate('/trade')} />
+                ))}
               </div>
             ))
           )}

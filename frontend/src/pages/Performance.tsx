@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
@@ -214,6 +215,7 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
 type Tab = 'overview' | 'trades' | 'weekly';
 
 const Performance: React.FC = () => {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('overview');
   const [tradeSymbol, setTradeSymbol] = useState('');
 
@@ -303,6 +305,18 @@ const Performance: React.FC = () => {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => navigate('/portfolio')}
+            style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}
+          >
+            💼 Portfolio
+          </button>
+          <button
+            onClick={() => navigate('/tca')}
+            style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
+          >
+            📊 TCA
+          </button>
           <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
             {publicQ.isFetching ? '⟳' : '↻'} Refresh
           </button>
