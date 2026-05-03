@@ -330,10 +330,11 @@ async def send_test_notification(
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    # Try to push via WebSocket event bus
+    # Try to push via WebSocket event bus.
+    # The module exports the singleton as `bus`, not `event_bus`.
     try:
-        from core.event_bus import event_bus
-        await event_bus.publish(f"notifications:{user.sub}", test_notif)
+        from core.event_bus import bus
+        await bus.publish(f"notifications:{user.sub}", test_notif)
     except Exception as exc:
         logger.debug("test notification event bus: %s", exc)
 

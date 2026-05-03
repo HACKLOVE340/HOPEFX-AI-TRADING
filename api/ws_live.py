@@ -1153,6 +1153,78 @@ def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type
             break
 
 
+async def _eventbus_news_broadcaster() -> None:
+    """
+    Subscribe to CH_NEWS_ITEM and CH_SENTIMENT on the EventBus and forward
+    messages to WebSocket clients subscribed to the 'news' and 'sentiment'
+    channels respectively.
+
+    This is the push path — the sentiment engine publishes to these channels
+    after each ingest cycle.  The _chartbot_broadcaster poll path remains as
+    a fallback for when no articles have been ingested yet.
+
+    Two inner tasks run concurrently so a slow sentiment message doesn't
+    block news delivery.  Both are cancelled and restarted on any error.
+    """
+    _RETRY_DELAY: float = 5.0
+
+    while True:
+        _inner_tasks: list[asyncio.Task] = []
+        try:
+            from core.event_bus import CH_NEWS_ITEM, CH_SENTIMENT, bus
+
+            await bus.connect()
+            logger.info("WS live: EventBus news/sentiment broadcaster connected.")
+
+            async def _sub_news() -> None:
+                async for msg in bus.subscribe(CH_NEWS_ITEM):
+                    if _manager.connection_count == 0:
+                        continue
+                    if msg.get("type") == "news_item":
+                        await _manager.broadcast("news", msg)
+
+            async def _sub_sentiment() -> None:
+                async for msg in bus.subscribe(CH_SENTIMENT):
+                    if _manager.connection_count == 0:
+                        continue
+                    if msg.get("type") == "sentiment_update":
+                        await _manager.broadcast("sentiment", msg)
+
+            # Run both subscriptions as separate tasks so neither blocks the other.
+            _inner_tasks = [
+                asyncio.create_task(_sub_news(),      name="ws_news_sub"),
+                asyncio.create_task(_sub_sentiment(), name="ws_sentiment_sub"),
+            ]
+            # Wait until either task finishes (which means an error or the
+            # subscribe generator returned unexpectedly).
+            done, pending = await asyncio.wait(
+                _inner_tasks, return_when=asyncio.FIRST_COMPLETED
+            )
+            for t in pending:
+                t.cancel()
+            # Re-raise any exception from the completed task so the outer
+            # retry loop handles it.
+            for t in done:
+                if not t.cancelled() and t.exception():
+                    raise t.exception()  # type: ignore[misc]
+
+            logger.debug("WS live: news/sentiment broadcaster loop ended — restarting")
+
+        except asyncio.CancelledError:
+            for t in _inner_tasks:
+                t.cancel()
+            return
+        except Exception as exc:
+            for t in _inner_tasks:
+                t.cancel()
+            logger.warning(
+                "WS live: EventBus news/sentiment stream error: %s — restarting in %.0fs",
+                exc,
+                _RETRY_DELAY,
+            )
+            await asyncio.sleep(_RETRY_DELAY)
+
+
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
     global _broadcaster_tasks, _BROADCASTER_SPECS
@@ -1162,6 +1234,7 @@ def start_broadcasters() -> None:
         ("price_broadcaster",          _price_broadcaster),
         ("heartbeat_broadcaster",       _heartbeat_broadcaster),
         ("signal_broadcaster",          _eventbus_signal_broadcaster),
+        ("news_sentiment_broadcaster",  _eventbus_news_broadcaster),
         ("chartbot_broadcaster",        _chartbot_broadcaster),
         ("account_update_broadcaster",  _account_update_broadcaster),
     ]
@@ -1172,7 +1245,10 @@ def start_broadcasters() -> None:
         task.add_done_callback(_broadcaster_done_callback)
         _broadcaster_tasks.append(task)
 
-    logger.info("WS live broadcasters started (price → account → signal → heartbeat → chart-bot)")
+    logger.info(
+        "WS live broadcasters started "
+        "(price → account → signal → news/sentiment → heartbeat → chart-bot)"
+    )
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────

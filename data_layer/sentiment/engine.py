@@ -561,6 +561,10 @@ class NewsSentimentEngine:
         # Cache to Redis
         await self._cache_to_redis()
 
+        # Publish to event bus so ws_live _chartbot_broadcaster and any other
+        # subscriber receives news/sentiment updates without polling.
+        await self._publish_to_event_bus()
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     def get_ml_features(self, as_of: datetime | None = None) -> dict[str, float]:
@@ -844,6 +848,62 @@ class NewsSentimentEngine:
             )
         except Exception as exc:
             logger.debug("NewsSentimentEngine Redis cache error: %s", exc)
+
+    async def _publish_to_event_bus(self) -> None:
+        """
+        Publish sentiment snapshot and recent articles to the event bus.
+
+        Publishes two messages per ingest cycle:
+          CH_SENTIMENT  — full sentiment snapshot (signal + recent_articles)
+          CH_NEWS_ITEM  — one message per new article (most recent 3 only)
+
+        This wires the sentiment engine into the ws_live _chartbot_broadcaster
+        subscription path so WebSocket clients receive push updates instead of
+        relying on the broadcaster's poll interval.
+        """
+        try:
+            from core.event_bus import CH_NEWS_ITEM, CH_SENTIMENT, bus
+
+            # Build sentiment snapshot (same shape as orchestrator.get_sentiment_snapshot)
+            features = self.get_ml_features()
+            sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
+            recent_articles: list[dict] = []
+            try:
+                raw = self.get_recent_articles(hours=1.0, min_relevance=0.1)
+                recent_articles = [
+                    {
+                        "headline": getattr(a, "title", getattr(a, "headline", "")),
+                        "source": getattr(a, "source", ""),
+                        "sentiment_score": getattr(a, "sentiment_score", 0.0),
+                        "sentiment_label": getattr(a, "sentiment_label", "neutral"),
+                        "published_at": (
+                            a.published_at.isoformat()
+                            if getattr(a, "published_at", None)
+                            else None
+                        ),
+                        "url": getattr(a, "url", None),
+                    }
+                    for a in (raw or [])[:5]
+                ]
+            except Exception as _exc:
+                logger.debug("_publish_to_event_bus: article serialisation error: %s", _exc)
+
+            await bus.publish(
+                CH_SENTIMENT,
+                {
+                    "type": "sentiment_update",
+                    "data": {"signal": sentiment_features, "recent_articles": recent_articles},
+                },
+            )
+
+            # Publish individual news items (most recent 3 to avoid flooding)
+            for article_dict in recent_articles[:3]:
+                await bus.publish(
+                    CH_NEWS_ITEM,
+                    {"type": "news_item", "data": article_dict},
+                )
+        except Exception as exc:
+            logger.debug("NewsSentimentEngine event bus publish error: %s", exc)
 
 
 # Module-level singleton
