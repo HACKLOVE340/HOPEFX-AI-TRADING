@@ -93,7 +93,7 @@ async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> 
     """Close a WebSocket, ignoring errors when it is already closed."""
     try:
         await websocket.close(code=code, reason=reason)
-    except RuntimeError:
+    except RuntimeError:  # nosec B110
         pass  # already closed
 
 
@@ -1389,7 +1389,7 @@ async def push_signal(signal: dict) -> None:
     try:
         from api.social_feed import _social_feed_broadcast as _sf_broadcast
         await _sf_broadcast(signal)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 

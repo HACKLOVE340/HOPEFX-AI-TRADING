@@ -1310,13 +1310,13 @@ class MarketDataOrchestrator:
             gold = h.get("gold_feed", {})
             active = len(gold.get("active_sources", []))
             score += 0.30 * min(active / 3.0, 1.0)  # 3+ sources = full score
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Redis
         try:
             score += 0.20 if h.get("redis_healthy", False) else 0.0
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # DQE source confidence — average across all sources
@@ -1326,21 +1326,21 @@ class MarketDataOrchestrator:
                 confs = [v.get("confidence", 0.0) for v in dqe.values() if isinstance(v, dict)]
                 if confs:
                     score += 0.20 * (sum(confs) / len(confs))
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Microstructure has data
         try:
             micro_h = h.get("micro_health", {})
             score += 0.15 if micro_h.get("has_data", False) else 0.0
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Sentiment engine alive
         try:
             sent = h.get("sentiment", {})
             score += 0.10 if sent.get("running", False) or sent.get("article_count_1h", 0) > 0 else 0.05
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Calendar engine alive

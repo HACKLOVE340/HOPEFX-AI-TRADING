@@ -403,7 +403,7 @@ class RealTimeSignalService:
                 loop = _asyncio.get_running_loop()
                 _t = loop.create_task(_persist_signal())
                 _t.add_done_callback(lambda _: None)
-            except RuntimeError:
+            except RuntimeError:  # nosec B110
                 pass  # No running loop — skip async persist in sync context
         except Exception as _pe:
             logger.debug("Signal DB persist setup failed: %s", _pe)

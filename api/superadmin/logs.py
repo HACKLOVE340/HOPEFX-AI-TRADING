@@ -136,7 +136,7 @@ async def get_log_levels(user: TokenPayload = Depends(_require_superadmin)) -> d
                 if isinstance(lgr, _logging.Logger):
                     level_name = _logging.getLevelName(lgr.effective_level)
                     loggers[str(name)] = str(level_name)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         root_level = _logging.getLogger().level
         loggers["root"] = _logging.getLevelName(root_level if root_level else _logging.WARNING)

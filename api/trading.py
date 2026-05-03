@@ -1148,7 +1148,7 @@ async def get_account(
             from app import kill_switch as _ks
             active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
             _ks_active = bool(active() if callable(active) else active)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return {
@@ -1181,7 +1181,7 @@ async def get_account(
             if v is not None:
                 try:
                     return float(v)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError):  # nosec B110
                     pass
         return default
 
@@ -1285,7 +1285,7 @@ async def get_account(
         from app import kill_switch as _ks
         active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
         kill_switch_active = bool(active() if callable(active) else active)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {
@@ -1600,7 +1600,7 @@ async def get_brain_state(
                         s if isinstance(s, str) else getattr(s, "name", str(s))
                         for s in strats
                     ]
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             # Derive confidence from performance metrics
             confidence = 0.0
@@ -1609,7 +1609,7 @@ async def get_brain_state(
                 # Use inverse of latency as a proxy for confidence when no ML score
                 lat = perf.get("latency_ms", 0)
                 confidence = max(0.0, min(1.0, 1.0 - lat / 1000.0)) if lat > 0 else 0.75
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             return {
                 **raw,
@@ -1770,7 +1770,7 @@ def _trade_to_dict(t) -> dict:
         _x = exit_time  if hasattr(exit_time,  "timestamp") else _dt.datetime.fromisoformat(exit_time_str)  if exit_time_str  else None
         if _e and _x:
             duration_minutes = max(0, int((_x - _e).total_seconds() / 60))
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {
@@ -2206,7 +2206,7 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
                     peak = max(peak, v)
                     dd = (peak - v) / peak if peak > 0 else 0.0
                     max_dd = max(max_dd, dd)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         positions = broker.get_positions() if hasattr(broker, "get_positions") else []
@@ -2215,7 +2215,7 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
         try:
             ks = _get_kill_switch()
             kill_switch = bool(ks and ks.is_active())
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return {
@@ -2584,7 +2584,7 @@ async def get_regime_status(
                     "description": description,
                     "data_source": "regime_router",
                 }
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {

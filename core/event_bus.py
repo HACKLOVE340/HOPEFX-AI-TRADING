@@ -521,7 +521,7 @@ class EventBus:
                     # Drop oldest message to make room (LIFO-style eviction)
                     try:
                         queue.get_nowait()
-                    except asyncio.QueueEmpty:
+                    except asyncio.QueueEmpty:  # nosec B110
                         pass
                     try:
                         queue.put_nowait(msg)

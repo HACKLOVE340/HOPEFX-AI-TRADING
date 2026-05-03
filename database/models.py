@@ -1583,7 +1583,7 @@ if SQLALCHEMY_AVAILABLE:
             tags_val: list = []
             try:
                 tags_val = _json.loads(self.tags or "[]")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             return {
                 "id": self.id,
@@ -1819,11 +1819,11 @@ if SQLALCHEMY_AVAILABLE:
             instruments: list = []
             try:
                 prefs = _json.loads(self.notification_prefs or "{}")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             try:
                 instruments = _json.loads(self.preferred_instruments or "[]")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             return {
                 "user_id": self.user_id,

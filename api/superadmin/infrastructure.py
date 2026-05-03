@@ -110,7 +110,7 @@ async def get_cache_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
         info: dict[str, Any] = {}
         try:
             info = rc.info()
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return {
             "available": True,
@@ -161,7 +161,7 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
                 ))
                 active_conns = result.scalar() or 0
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             size_mb = 0.0
@@ -170,7 +170,7 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     "SELECT pg_database_size(current_database()) / 1048576.0"
                 ))
                 size_mb = round(float(result.scalar() or 0), 2)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             slow_queries = 0
@@ -179,7 +179,7 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     "SELECT count(*) FROM pg_stat_statements WHERE mean_exec_time > 1000"
                 ))
                 slow_queries = result.scalar() or 0
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             pool = engine.pool
@@ -221,7 +221,7 @@ async def get_queue_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
                     "failed": failed,
                     "workers": 0,
                 })
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     if not queues:

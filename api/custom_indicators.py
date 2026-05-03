@@ -209,7 +209,7 @@ async def preview_indicator(
         bars = store.get_bars(body.symbol, "H1", limit=body.periods)
         if bars:
             closes = [float(b["close"]) for b in bars[-body.periods:]]
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     if not closes:

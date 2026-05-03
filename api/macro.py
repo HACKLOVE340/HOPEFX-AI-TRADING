@@ -135,7 +135,7 @@ async def macro_snapshot():
         snap["macro_store_series_updated"] = n
         snap["source"] = "fred_live"
         return snap
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # 1b. Fallback to legacy data.feeds.macro

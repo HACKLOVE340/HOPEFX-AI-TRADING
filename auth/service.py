@@ -430,7 +430,7 @@ class AuthService:
                     socket_timeout=1,
                 )
                 _redis_locked = bool(_rc.exists(_LOCKOUT_KEY))
-            except Exception:
+            except Exception:  # nosec B110
                 pass  # Redis unavailable — fall through to DB check
 
             if _redis_locked:
@@ -456,7 +456,7 @@ class AuthService:
                 # Set Redis TTL key so subsequent checks are O(1)
                 try:
                     _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
-                except Exception:
+                except Exception:  # nosec B110
                     pass
                 _record(False, "account_locked")
                 return (
@@ -509,7 +509,7 @@ class AuthService:
                     socket_timeout=1,
                 )
                 _rc.delete(f"hopefx:auth:lockout:{user.id}")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             return (

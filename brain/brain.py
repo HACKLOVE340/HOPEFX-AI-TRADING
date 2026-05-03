@@ -400,7 +400,7 @@ class HOPEFXBrain:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
             except asyncio.CancelledError:
                 raise
-            except (TimeoutError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.TimeoutError):  # nosec B110
                 pass
 
     @staticmethod

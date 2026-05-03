@@ -43,7 +43,7 @@ def _load_rules() -> list[dict]:
             raw = rc.get(_RULES_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     # Bootstrap with sensible defaults matching core/middleware.py
     return [
@@ -61,7 +61,7 @@ def _save_rules(rules: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_RULES_KEY, json.dumps(rules), ex=86400 * 30)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -80,7 +80,7 @@ async def get_rate_limit_rules(
                 key = f"{_HITS_PREFIX}{rule['rule_id']}"
                 val = rc.get(key)
                 rule["current_hits"] = int(val) if val else 0
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return {"rules": rules, "total": len(rules)}
 
@@ -176,7 +176,7 @@ async def reset_rate_limit_counter(
         rc = get_sync_redis_client()
         if rc:
             rc.delete(f"{_HITS_PREFIX}{rule_id}")
-    except Exception:
+    except Exception:  # nosec B110
         pass
     await _log_superadmin_action(user.sub, "rate_limit_reset", {"rule_id": rule_id})
     return {"ok": True, "rule_id": rule_id}

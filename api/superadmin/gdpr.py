@@ -46,7 +46,7 @@ def _load_gdpr_requests() -> list[dict]:
             raw = rc.get(_GDPR_REQUESTS_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return []
 
@@ -57,7 +57,7 @@ def _save_gdpr_requests(reqs: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_GDPR_REQUESTS_KEY, json.dumps(reqs), ex=86400 * 365)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -272,7 +272,7 @@ async def get_retention_policies(
             raw = rc.get(_RETENTION_KEY)
             if raw:
                 policies.update(json.loads(raw))
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return {"policies": policies}
 

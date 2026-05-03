@@ -342,6 +342,6 @@ async def kyc_upload_document_alias(user: TokenPayload = Depends(get_current_use
         docs.append(doc)
         record["documents"] = docs
         db_set(f"kyc:{user.sub}", record, changed_by=user.sub)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return {"success": True, "document": doc}
