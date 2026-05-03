@@ -3,6 +3,7 @@
  * + CFTC COT Gold Sentiment (Task 46)
  */
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 
 interface CorrelationData {
@@ -34,6 +35,7 @@ const corrColor = (v: number): string => {
 };
 
 const CorrelationDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [corr, setCorr]   = useState<CorrelationData | null>(null);
   const [cot,  setCot]    = useState<COTData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -69,11 +71,18 @@ const CorrelationDashboard: React.FC = () => {
           <h1 style={s.title}>Correlation & Sentiment</h1>
           <p style={s.subtitle}>Rolling correlations between gold, FX, equities, and macro indicators.</p>
         </div>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
           <span style={{ fontSize:13, color:'#94a3b8' }}>Window:</span>
           {[14,30,60,90].map(w => (
             <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
           ))}
+          <div style={{ width:1, height:24, background:'#334155', margin:'0 4px' }} />
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'#a78bfa', fontSize:12, fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
+          >
+            🤖 Generate Strategy
+          </button>
         </div>
       </div>
 
@@ -116,7 +125,15 @@ const CorrelationDashboard: React.FC = () => {
                 </table>
               </div>
               <div style={{ marginTop:16 }}>
-                <div style={s.cardTitle}>Key Insights</div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+                  <div style={s.cardTitle}>Key Insights</div>
+                  <button
+                    onClick={() => navigate('/ai-strategy')}
+                    style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'#a78bfa', fontSize:11, fontWeight:700, padding:'4px 10px', cursor:'pointer' }}
+                  >
+                    🤖 Build Strategy from Insights
+                  </button>
+                </div>
                 {corr.insights.map((ins, i) => (
                   <div key={i} style={{ fontSize:13, color:'#94a3b8', padding:'4px 0', borderBottom:'1px solid #0f172a' }}>
                     • {ins}
@@ -173,6 +190,19 @@ const CorrelationDashboard: React.FC = () => {
               </div>
               <div style={{ fontSize:12, color:'#475569', marginTop:12, lineHeight:1.5 }}>{cot.note}</div>
               <div style={{ fontSize:11, color:'#334155', marginTop:8 }}>Source: {cot.source}</div>
+              <button
+                onClick={() => navigate('/trade', {
+                  state: { signal: { symbol: 'XAU/USD', direction: cot.sentiment === 'BULLISH' ? 'BUY' : 'SELL' } }
+                })}
+                style={{
+                  marginTop:16, width:'100%', padding:'9px 0', borderRadius:8, fontWeight:700, fontSize:13, cursor:'pointer',
+                  background: cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                  border: `1px solid ${cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
+                  color: cot.sentiment === 'BULLISH' ? '#4ade80' : '#f87171',
+                }}
+              >
+                ⚡ Trade XAU/USD — {cot.sentiment}
+              </button>
             </div>
           )}
         </div>

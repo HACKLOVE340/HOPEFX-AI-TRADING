@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -97,6 +98,7 @@ const ProgressBar: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PropFirmTracker: React.FC = () => {
+  const navigate = useNavigate();
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
   const enabled  = hydrated && isAuth;
@@ -192,6 +194,19 @@ const PropFirmTracker: React.FC = () => {
               {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
             </button>
           ))}
+          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <button
+            onClick={() => navigate('/risk-calculator')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
+          >
+            🛡 Risk Calc
+          </button>
+          <button
+            onClick={() => navigate('/trade')}
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
+          >
+            ⚡ Trade
+          </button>
         </div>
       </div>
 

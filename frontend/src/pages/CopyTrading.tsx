@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
 
@@ -105,6 +106,7 @@ const LeaderCard: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CopyTrading: React.FC = () => {
+  const navigate = useNavigate();
   const [leaders, setLeaders]           = useState<Leader[]>([]);
   const [loading, setLoading]           = useState(true);
   const [loadErr, setLoadErr]           = useState('');
@@ -198,8 +200,13 @@ const CopyTrading: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.title}>Copy Trading Marketplace</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div>
+          <h1 style={s.title}>Copy Trading Marketplace</h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+            Mirror top traders automatically. Allocate capital and start earning.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {(['browse', 'active'] as const).map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               ...s.tabBtn,
@@ -208,6 +215,13 @@ const CopyTrading: React.FC = () => {
               {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
             </button>
           ))}
+          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <button
+            onClick={() => navigate('/leaderboard')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            🏆 Leaderboard
+          </button>
         </div>
       </div>
 

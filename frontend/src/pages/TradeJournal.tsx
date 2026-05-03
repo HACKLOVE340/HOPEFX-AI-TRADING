@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -80,6 +81,7 @@ function pnlColor(pnl: number | null): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const TradeJournal: React.FC = () => {
+  const navigate = useNavigate();
   const [tab, setTab]             = useState<Tab>('trades');
   const [trades, setTrades]       = useState<JournalEntry[]>([]);
   const [mistakes, setMistakes]   = useState<JournalEntry[]>([]);
@@ -153,6 +155,20 @@ const TradeJournal: React.FC = () => {
           <h1 style={s.title}>Trade Journal</h1>
           <p style={s.subtitle}>Every trade logged automatically. Add notes, emotions, and tags to improve.</p>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => navigate('/performance')}
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            📈 Performance
+          </button>
+          <button
+            onClick={() => navigate('/risk-calculator')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            🛡 Risk Calculator
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -199,10 +215,19 @@ const TradeJournal: React.FC = () => {
                   {entry.emotion && <span title={entry.emotion}>{EMOTION_EMOJI[entry.emotion] ?? '🤔'}</span>}
                   {!entry.followed_rules && <span style={s.deviationBadge}>⚠ Rule deviation</span>}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 18, fontWeight: 700, color: pnlColor(entry.pnl) }}>
                     {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
                   </span>
+                  {entry.closed_at && (
+                    <button
+                      onClick={() => navigate('/trade', { state: { signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } } })}
+                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                      title="Open a new trade with the same symbol and direction"
+                    >
+                      🔁 Re-trade
+                    </button>
+                  )}
                   <button onClick={() => editing === entry.trade_id ? setEditing(null) : startEdit(entry)} style={s.editBtn}>
                     {editing === entry.trade_id ? 'Cancel' : 'Edit'}
                   </button>

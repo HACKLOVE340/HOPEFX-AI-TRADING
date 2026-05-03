@@ -10,6 +10,7 @@
  */
 
 import React, { memo, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
 import {
@@ -290,6 +291,7 @@ const WorldMonitorFallback = memo(({ error }: { error?: boolean }) => (
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const GeopoliticalRiskPage: React.FC = () => {
+  const navigate = useNavigate();
   const { data: wmData, isLoading: wmLoading, isError: wmError } = useQuery({
     queryKey: queryKeys.geoWorldMonitor(),
     queryFn: fetchWorldMonitorViews,
@@ -300,10 +302,27 @@ const GeopoliticalRiskPage: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.pageHeader}>
-        <h1 style={s.pageTitle}>Geopolitical Risk Intelligence</h1>
-        <p style={s.pageSubtitle}>
-          Live conflict, sanctions, nuclear, infrastructure and instability data — XAU/USD safe-haven impact
-        </p>
+        <div>
+          <h1 style={s.pageTitle}>Geopolitical Risk Intelligence</h1>
+          <p style={s.pageSubtitle}>
+            Live conflict, sanctions, nuclear, infrastructure and instability data — XAU/USD safe-haven impact
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => navigate('/trade', { state: { signal: { symbol: 'XAU/USD', direction: 'BUY' } } })}
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer' }}
+            title="Gold tends to rally during geopolitical risk — buy XAU/USD"
+          >
+            ⚡ Trade XAU/USD
+          </button>
+          <button
+            onClick={() => navigate('/correlation')}
+            style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 8, color: '#60a5fa', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer' }}
+          >
+            📊 Correlation
+          </button>
+        </div>
       </div>
 
       <div style={s.grid}>

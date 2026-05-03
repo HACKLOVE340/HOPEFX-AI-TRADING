@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
 import { Badge } from '../ui/Badge';
@@ -32,7 +33,7 @@ function ImpactBar({ score, impact }: { score: number; impact: string }) {
 
 // ── Event row ─────────────────────────────────────────────────────────────────
 
-function EventRow({ event }: { event: MacroEvent }) {
+function EventRow({ event, onPlanTrade }: { event: MacroEvent; onPlanTrade?: () => void }) {
   const now       = Date.now();
   const eventTime = new Date(event.scheduled_at).getTime();
   const isPast    = eventTime < now;
@@ -69,7 +70,18 @@ function EventRow({ event }: { event: MacroEvent }) {
           </span>
           <span className="text-[9px] text-slate-700 uppercase">{event.country}</span>
         </div>
-        <Badge variant={impactVariant} dot>{event.impact}</Badge>
+        <div className="flex items-center gap-2">
+          {!isPast && event.impact === 'high' && onPlanTrade && (
+            <button
+              onClick={onPlanTrade}
+              className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+              style={{ background: 'rgba(255,184,0,0.12)', border: '1px solid rgba(255,184,0,0.3)', color: '#ffb800', cursor: 'pointer' }}
+            >
+              ⚡ Plan
+            </button>
+          )}
+          <Badge variant={impactVariant} dot>{event.impact}</Badge>
+        </div>
       </div>
 
       {/* Event name */}
@@ -107,6 +119,7 @@ function EventRow({ event }: { event: MacroEvent }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function MacroCalendar() {
+  const navigate = useNavigate();
   const macro = useStore((s) => s.macro);
 
   const events      = macro?.upcoming_events ?? [];
@@ -170,7 +183,7 @@ export function MacroCalendar() {
           </div>
         ) : (
           events.map((e) => (
-            <EventRow key={`${e.scheduled_at}-${e.name}`} event={e} />
+            <EventRow key={`${e.scheduled_at}-${e.name}`} event={e} onPlanTrade={() => navigate('/trade')} />
           ))
         )}
       </div>

@@ -205,7 +205,7 @@ const WatchlistPage: React.FC = () => {
             <span style={{ width: 100, textAlign: 'right' }}>Mid</span>
             <span style={{ width: 80, textAlign: 'right' }}>24h</span>
             <span style={{ width: 70, textAlign: 'center' }}>Trend</span>
-            <span style={{ width: 80, textAlign: 'center' }}>Actions</span>
+            <span style={{ width: 140, textAlign: 'center' }}>Actions</span>
           </div>
           {enrichedItems.map((item) => (
             <div key={item.symbol} style={s.tableRow}>
@@ -225,7 +225,14 @@ const WatchlistPage: React.FC = () => {
               <span style={{ width: 70, display: 'flex', justifyContent: 'center' }}>
                 <Sparkline history={item.history} />
               </span>
-              <span style={{ width: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <span style={{ width: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <button
+                  onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol.slice(0, 3) + '/' + item.symbol.slice(3) } } })}
+                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 8px' }}
+                  title={`Trade ${item.symbol}`}
+                >
+                  ⚡ Trade
+                </button>
                 <button
                   onClick={() => navigate('/alerts')}
                   style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}

@@ -3,6 +3,7 @@
  * Tabs: Browse · My Listings
  */
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 
@@ -98,6 +99,7 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
 };
 
 const Marketplace: React.FC = () => {
+  const navigate = useNavigate();
   const currentUser = useStore(selectUser);
   const [mainTab,setMainTab]         = useState<MainTab>('browse');
   const [strategies,setStrategies]   = useState<Strategy[]>([]);
@@ -173,6 +175,12 @@ const Marketplace: React.FC = () => {
     <div style={st.page}>
       <div style={st.pageHeader}>
         <div><h1 style={st.heading}>Strategy Marketplace</h1>{stats&&<p style={st.statsLine}>{stats.total_strategies} strategies · {stats.total_subscribers.toLocaleString()} subscribers</p>}</div>
+        <button
+          onClick={() => navigate('/ai-strategy')}
+          style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:8, color:'#a78bfa', fontSize:13, fontWeight:700, padding:'8px 18px', cursor:'pointer' }}
+        >
+          🤖 Build Your Own Strategy
+        </button>
       </div>
 
       <div style={{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid #1e293b'}}>
@@ -223,7 +231,7 @@ const Marketplace: React.FC = () => {
 
 const st: Record<string,React.CSSProperties> = {
   page:{maxWidth:1100,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'#f1f5f9',background:'#0f172a',minHeight:'100vh'},
-  pageHeader:{marginBottom:24},heading:{fontSize:28,fontWeight:700,color:'#f8fafc',marginBottom:4},
+  pageHeader:{marginBottom:24,display:'flex',justifyContent:'space-between',alignItems:'flex-start'},heading:{fontSize:28,fontWeight:700,color:'#f8fafc',marginBottom:4},
   statsLine:{color:'#64748b',fontSize:14,margin:0},
   filterBar:{display:'flex',gap:12,marginBottom:16},
   searchInput:{flex:1,padding:'10px 14px',background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',fontSize:14,outline:'none'},
