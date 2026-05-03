@@ -18,15 +18,23 @@ Key schema (all prefixed hopefx:dl:)
   hopefx:dl:calendar_impact            STRING  current impact score float        TTL: 60s
   hopefx:dl:quality_report:{symbol}    STRING  quality report JSON               TTL: 30s
   hopefx:dl:feed_health                STRING  feed health dict JSON             TTL: 10s
+  hopefx:dl:orderbook:{symbol}         STRING  L2 order book snapshot JSON       TTL: 2s
+  hopefx:dl:volume_delta:{symbol}:{tf} ZSET    score=epoch, member=delta_bar_json TTL: per-tf
+  hopefx:dl:pubsub:ticks               CHANNEL pub/sub broadcast channel
+  hopefx:dl:pubsub:orderbook           CHANNEL pub/sub broadcast channel
+  hopefx:dl:pubsub:volume_delta        CHANNEL pub/sub broadcast channel
+  hopefx:dl:pubsub:micro               CHANNEL pub/sub broadcast channel
 
 Per-instrument TTL strategy
 -----------------------------
-  XAU_USD tick:    30s   (gold is 24h market, ticks arrive every few seconds)
-  1m OHLCV:        5m    (bar closes every minute)
+  XAU_USD tick:    30s
+  1m OHLCV:        5m
   5m OHLCV:        15m
   1h OHLCV:        2h
   4h OHLCV:        8h
   1d OHLCV:        48h
+  Order book:      2s  (L2 data is extremely short-lived)
+  Volume delta:    same as OHLCV per timeframe
 
 Memory pressure handling
 -------------------------
@@ -64,15 +72,29 @@ _MACRO_TTL = int(os.getenv("DL_MACRO_TTL_S", "300"))
 _CALENDAR_TTL = int(os.getenv("DL_CALENDAR_TTL_S", "60"))
 _QUALITY_TTL = int(os.getenv("DL_QUALITY_TTL_S", "30"))
 _HEALTH_TTL = int(os.getenv("DL_HEALTH_TTL_S", "10"))
+_ORDERBOOK_TTL = int(os.getenv("DL_ORDERBOOK_TTL_S", "2"))
 _TICK_HISTORY_MAX = int(os.getenv("DL_TICK_HISTORY_MAX", "10000"))
 _OHLCV_MAX_BARS = int(os.getenv("DL_OHLCV_MAX_BARS", "2000"))
+_VOLUME_DELTA_MAX = int(os.getenv("DL_VOLUME_DELTA_MAX", "1000"))
 
 _PREFIX = "hopefx:dl:"
+
+# Pub/sub channel names
+CHANNEL_TICKS = "hopefx:dl:pubsub:ticks"
+CHANNEL_ORDERBOOK = "hopefx:dl:pubsub:orderbook"
+CHANNEL_VOLUME_DELTA = "hopefx:dl:pubsub:volume_delta"
+CHANNEL_MICRO = "hopefx:dl:pubsub:micro"
 
 
 class DataLayerRedisStore:
     """
     Redis cache for the entire data layer.
+
+    Enhancements:
+      - Order book caching (L2 snapshots with 2s TTL)
+      - Volume delta streaming (sorted set per timeframe + pub/sub)
+      - Pub/sub broadcast for ticks, order book, volume delta, microstructure
+      - Hot-key detection via access frequency tracking
 
     All methods are synchronous (redis-py). Async wrappers use
     run_in_executor for use inside asyncio event loops.
@@ -87,6 +109,10 @@ class DataLayerRedisStore:
         self._misses = 0
         self._errors = 0
         self._writes = 0
+        self._pubsub_publishes = 0
+        # Hot-key tracking: key -> access count
+        self._hot_key_counts: dict[str, int] = {}
+        self._hot_key_threshold = int(os.getenv("DL_HOT_KEY_THRESHOLD", "100"))
         # Prometheus metrics (initialised before auto-connect so they exist
         # even when Redis is unavailable)
         self._prom_hits = None
@@ -95,6 +121,7 @@ class DataLayerRedisStore:
         self._prom_errors = None
         self._prom_hit_rate = None
         self._prom_mem_mb = None
+        self._prom_pubsub = None
         self._init_prometheus()
         # Auto-connect if no client provided and REDIS_URL is set
         if self._r is None:
@@ -122,6 +149,7 @@ class DataLayerRedisStore:
             self._prom_errors = _counter("hopefx_redis_cache_errors_total", "Total Redis cache errors")
             self._prom_hit_rate = _gauge("hopefx_redis_cache_hit_rate", "Rolling Redis cache hit rate [0, 1]")
             self._prom_mem_mb = _gauge("hopefx_redis_memory_rss_mb", "Redis used_memory_rss in MB")
+            self._prom_pubsub = _counter("hopefx_redis_pubsub_publishes_total", "Total pub/sub messages published")
         except Exception as _exc:
             logger.debug("DataLayerRedisStore: Prometheus init skipped: %s", _exc)
 
@@ -212,6 +240,18 @@ class DataLayerRedisStore:
     def _key(self, *parts: str) -> str:
         return _PREFIX + ":".join(parts)
 
+    def _track_hot_key(self, key: str) -> None:
+        """Track access frequency for hot-key detection."""
+        self._hot_key_counts[key] = self._hot_key_counts.get(key, 0) + 1
+
+    def get_hot_keys(self) -> list[tuple[str, int]]:
+        """Return keys accessed >= _hot_key_threshold times, sorted by count desc."""
+        return sorted(
+            [(k, v) for k, v in self._hot_key_counts.items() if v >= self._hot_key_threshold],
+            key=lambda x: x[1],
+            reverse=True,
+        )
+
     def _safe_set(self, key: str, value: str, ttl: int) -> bool:
         if not self._r:
             return False
@@ -244,12 +284,12 @@ class DataLayerRedisStore:
         if not self._r:
             return None
         try:
+            self._track_hot_key(key)
             val = self._r.get(key)
             if val:
                 self._hits += 1
                 if self._prom_hits:
                     self._prom_hits.inc()
-                # Update hit rate gauge
                 total = self._hits + self._misses
                 if self._prom_hit_rate and total > 0:
                     self._prom_hit_rate.set(self._hits / total)
@@ -264,6 +304,20 @@ class DataLayerRedisStore:
                 self._prom_errors.inc()
             logger.debug("Redis get error key=%s: %s", key, exc)
             return None
+
+    def _safe_publish(self, channel: str, message: str) -> int:
+        """Publish to a Redis pub/sub channel. Returns subscriber count."""
+        if not self._r:
+            return 0
+        try:
+            count = self._r.publish(channel, message)
+            self._pubsub_publishes += 1
+            if self._prom_pubsub:
+                self._prom_pubsub.inc()
+            return count
+        except Exception as exc:
+            logger.debug("Redis publish error channel=%s: %s", channel, exc)
+            return 0
 
     def _evict_oldest_ohlcv(self) -> None:
         """Evict oldest 20% of OHLCV bars across all timeframes to free memory."""
@@ -287,8 +341,8 @@ class DataLayerRedisStore:
 
     # ── Tick cache ────────────────────────────────────────────────────────────
 
-    def set_tick(self, symbol: str, tick_dict: dict[str, Any]) -> None:
-        """Cache the latest validated tick and push to history."""
+    def set_tick(self, symbol: str, tick_dict: dict[str, Any], broadcast: bool = True) -> None:
+        """Cache the latest validated tick, push to history, and optionally broadcast."""
         key = self._key("tick", symbol)
         payload = json.dumps(tick_dict)
         self._safe_set(key, payload, _TICK_TTL)
@@ -305,6 +359,9 @@ class DataLayerRedisStore:
                 pipe.execute()
             except Exception as exc:
                 logger.debug("Redis tick_history error: %s", exc)
+
+        if broadcast:
+            self._safe_publish(CHANNEL_TICKS, json.dumps({"symbol": symbol, **tick_dict}))
 
     def get_tick(self, symbol: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("tick", symbol))
@@ -326,6 +383,137 @@ class DataLayerRedisStore:
         except Exception as exc:
             logger.debug("Redis tick_history get error: %s", exc)
             return []
+
+    # ── Order book caching ────────────────────────────────────────────────────
+
+    def set_order_book(self, symbol: str, snapshot: dict[str, Any], broadcast: bool = True) -> None:
+        """
+        Cache an L2 order book snapshot with a 2-second TTL.
+
+        snapshot must contain:
+          bids: list of [price, size] pairs (best bid first)
+          asks: list of [price, size] pairs (best ask first)
+          timestamp: ISO string or epoch float
+          sequence: exchange sequence number
+        """
+        key = self._key("orderbook", symbol)
+        payload = json.dumps(snapshot)
+        self._safe_set(key, payload, _ORDERBOOK_TTL)
+        if broadcast:
+            self._safe_publish(CHANNEL_ORDERBOOK, json.dumps({"symbol": symbol, **snapshot}))
+
+    def get_order_book(self, symbol: str) -> dict[str, Any] | None:
+        """Return the latest L2 order book snapshot, or None if stale/absent."""
+        raw = self._safe_get(self._key("orderbook", symbol))
+        if raw:
+            try:
+                return json.loads(raw)
+            except json.JSONDecodeError:
+                return None
+        return None
+
+    def get_order_book_depth(self, symbol: str, levels: int = 5) -> dict[str, list]:
+        """Return top N bid/ask levels from the cached order book."""
+        book = self.get_order_book(symbol)
+        if not book:
+            return {"bids": [], "asks": []}
+        return {
+            "bids": book.get("bids", [])[:levels],
+            "asks": book.get("asks", [])[:levels],
+        }
+
+    # ── Volume delta streaming ────────────────────────────────────────────────
+
+    def push_volume_delta(
+        self,
+        symbol: str,
+        timeframe: str,
+        delta_bar: dict[str, Any],
+        broadcast: bool = True,
+    ) -> None:
+        """
+        Push a volume delta bar to the sorted set stream and optionally broadcast.
+
+        delta_bar must contain:
+          epoch: float (bar open epoch, used as ZSET score)
+          delta: float (buy_volume - sell_volume)
+          buy_volume, sell_volume, cumulative_delta: float
+          open, high, low, close: float
+        """
+        if not self._r:
+            return
+        try:
+            score = delta_bar.get("epoch", time.time())
+            payload = json.dumps(delta_bar)
+            ttl = _OHLCV_TTL.get(timeframe, 3600)
+            key = self._key("volume_delta", symbol, timeframe)
+            pipe = self._r.pipeline(transaction=False)
+            pipe.zadd(key, {payload: score})
+            pipe.zremrangebyrank(key, 0, -(_VOLUME_DELTA_MAX + 1))
+            pipe.expire(key, ttl * 2)
+            pipe.execute()
+        except Exception as exc:
+            logger.debug("Redis volume_delta push error: %s", exc)
+
+        if broadcast:
+            self._safe_publish(
+                CHANNEL_VOLUME_DELTA,
+                json.dumps({"symbol": symbol, "timeframe": timeframe, **delta_bar}),
+            )
+
+    def get_volume_delta_stream(
+        self,
+        symbol: str,
+        timeframe: str,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Return the last N volume delta bars (oldest first)."""
+        if not self._r:
+            return []
+        try:
+            key = self._key("volume_delta", symbol, timeframe)
+            raw_list = self._r.zrange(key, -limit, -1)
+            return [json.loads(r) for r in raw_list if r]
+        except Exception as exc:
+            logger.debug("Redis volume_delta get error: %s", exc)
+            return []
+
+    def get_cumulative_delta(self, symbol: str, timeframe: str) -> float:
+        """Return the latest cumulative delta from the stream."""
+        bars = self.get_volume_delta_stream(symbol, timeframe, limit=1)
+        if bars:
+            return float(bars[-1].get("cumulative_delta", 0.0))
+        return 0.0
+
+    # ── Pub/sub subscription helpers ──────────────────────────────────────────
+
+    def get_pubsub(self):
+        """
+        Return a Redis PubSub object for subscribing to broadcast channels.
+
+        Usage:
+            ps = store.get_pubsub()
+            if ps:
+                ps.subscribe(CHANNEL_TICKS)
+                for msg in ps.listen():
+                    if msg['type'] == 'message':
+                        data = json.loads(msg['data'])
+        """
+        if not self._r:
+            return None
+        try:
+            return self._r.pubsub(ignore_subscribe_messages=True)
+        except Exception as exc:
+            logger.debug("Redis pubsub error: %s", exc)
+            return None
+
+    def broadcast_tick(self, symbol: str, tick_dict: dict[str, Any]) -> int:
+        """Publish a tick directly to the ticks channel without caching."""
+        return self._safe_publish(CHANNEL_TICKS, json.dumps({"symbol": symbol, **tick_dict}))
+
+    def broadcast_order_book(self, symbol: str, snapshot: dict[str, Any]) -> int:
+        """Publish an order book snapshot directly to the orderbook channel."""
+        return self._safe_publish(CHANNEL_ORDERBOOK, json.dumps({"symbol": symbol, **snapshot}))
 
     # ── OHLCV cache ───────────────────────────────────────────────────────────
 
@@ -371,8 +559,10 @@ class DataLayerRedisStore:
 
     # ── Microstructure cache ──────────────────────────────────────────────────
 
-    def set_microstructure(self, symbol: str, snap: dict[str, Any]) -> None:
+    def set_microstructure(self, symbol: str, snap: dict[str, Any], broadcast: bool = False) -> None:
         self._safe_set(self._key("micro", symbol), json.dumps(snap), _MICRO_TTL)
+        if broadcast:
+            self._safe_publish(CHANNEL_MICRO, json.dumps({"symbol": symbol, **snap}))
 
     def get_microstructure(self, symbol: str) -> dict[str, Any] | None:
         raw = self._safe_get(self._key("micro", symbol))
@@ -449,9 +639,11 @@ class DataLayerRedisStore:
             "misses": self._misses,
             "writes": self._writes,
             "errors": self._errors,
+            "pubsub_publishes": self._pubsub_publishes,
             "hit_rate": round(self._hits / max(total, 1), 4),
             "connected": self._r is not None,
             "memory_mb": self.memory_usage_mb(),
+            "hot_keys": self.get_hot_keys()[:5],
         }
 
     def health(self) -> dict[str, Any]:
