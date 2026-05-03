@@ -104,6 +104,16 @@ class ReplayJobStatus(BaseModel):
 # ── Regime definitions ────────────────────────────────────────────────────────
 
 
+class CreateSessionBody(BaseModel):
+    """Request body for POST /api/replay/sessions."""
+
+    symbol: str = "XAUUSD"
+    timeframe: str = "H1"
+    start_date: str = "2024-01-01"
+    end_date: str = "2024-06-30"
+    initial_equity: float = 10000.0
+
+
 @dataclass
 class StressRegime:
     """A named historical stress period for regime-shift testing."""
@@ -724,13 +734,6 @@ def create_replay_router():
                 break
 
         return bars
-
-    class CreateSessionBody(BaseModel):
-        symbol: str = "XAUUSD"
-        timeframe: str = "H1"
-        start_date: str = "2024-01-01"
-        end_date: str = "2024-06-30"
-        initial_equity: float = 10000.0
 
     @router.get("/sessions", summary="List replay sessions")
     async def list_replay_sessions():
