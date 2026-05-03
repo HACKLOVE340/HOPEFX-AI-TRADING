@@ -45,6 +45,7 @@ class DataQualityIssue(Enum):
     NEGATIVE_SPREAD = "negative_spread"
     SPREAD_TOO_WIDE = "spread_too_wide"
     MISSING_FIELDS = "missing_fields"
+    EXCESSIVE_NAN = "excessive_nan"
     OUTSIDE_HOURS = "outside_hours"
     CROSS_SOURCE_DIVERGENCE = "cross_source_divergence"
 
@@ -333,7 +334,7 @@ class MarketDataValidator:
         )
         if nan_pct > 0.05:
             issues.append(self._issue(
-                DataQualityIssue.MISSING_FIELDS, "high",
+                DataQualityIssue.EXCESSIVE_NAN, "high",
                 f"{nan_pct:.1%} NaN values in OHLCV data",
             ))
 
