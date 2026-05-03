@@ -196,11 +196,51 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
         except Exception as exc:
             logger.debug("Paper broker OHLCV load failed: %s", exc)
 
+    # 4. MarketDataRepository — DB-backed OHLCV (TimescaleDB / PostgreSQL)
+    try:
+        import asyncio as _asyncio_ml
+
+        async def _fetch_db_ohlcv():
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.market_data_repository import MarketDataRepository as _MDR
+
+            async with _get_async_db() as _db:
+                repo = _MDR(_db)
+                bars = await repo.get_latest_n_bars(
+                    symbol=symbol_upper,
+                    timeframe="1h",
+                    n=lookback,
+                )
+                return bars
+
+        try:
+            loop = _asyncio_ml.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures as _cf
+                with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+                    bars = _ex.submit(_asyncio_ml.run, _fetch_db_ohlcv()).result(timeout=10)
+            else:
+                bars = loop.run_until_complete(_fetch_db_ohlcv())
+        except Exception:
+            bars = _asyncio_ml.run(_fetch_db_ohlcv())
+
+        if bars:
+            df = pd.DataFrame(bars)
+            if "timestamp" in df.columns:
+                df["time"] = pd.to_datetime(df["timestamp"], utc=True)
+                df = df.set_index("time")
+            df = df[["open", "high", "low", "close", "volume"]].dropna()
+            if len(df) >= 20:
+                logger.debug("ML predict: loaded %d bars from MarketDataRepository", len(df))
+                return df
+    except Exception as exc:
+        logger.debug("MarketDataRepository OHLCV load failed: %s", exc)
+
     # No OHLCV data available from any source — return empty DataFrame.
     # Callers must check len(df) >= minimum_bars before proceeding.
     logger.warning(
         "_load_ohlcv_for_symbol: no OHLCV data available for %s "
-        "(checked price_engine, CSV files, paper broker). "
+        "(checked price_engine, CSV files, paper broker, MarketDataRepository). "
         "Ensure the data layer is running or place a CSV in data/%s_H1.csv.",
         symbol,
         symbol.upper().replace("/", "_").replace("-", "_"),
@@ -808,7 +848,25 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("tra
     except Exception as exc:
         logger.warning("Could not load feature importances: %s", exc)
 
-    return {"features": [], "note": "Feature importances unavailable"}
+    # Enrich with live orchestrator ML features (26 features from data layer)
+    orchestrator_features: list[dict] = []
+    try:
+        from data_layer.orchestrator import orchestrator as _orch
+        live_features = _orch.get_ml_features()
+        orchestrator_features = [
+            {"name": k, "value": v, "source": "orchestrator"}
+            for k, v in sorted(live_features.items())
+            if v is not None
+        ]
+    except Exception as _exc:
+        logger.debug("Orchestrator ML features unavailable: %s", _exc)
+
+    return {
+        "features": [],
+        "note": "Feature importances unavailable",
+        "orchestrator_features": orchestrator_features,
+        "orchestrator_feature_count": len(orchestrator_features),
+    }
 
 
 @router.post(
@@ -1028,11 +1086,33 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
             pipeline=engine_health.get("pipeline", {}),
             checked_at=engine_health.get("checked_at", checked_at),
         )
+        # Enrich with real live trade performance from TradeRepository
+        live_trade_stats: dict = {}
+        try:
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TR
+
+            async with _get_async_db() as _db:
+                repo = _TR(_db)
+                closed = await repo.get_by_user(user_id=None, status="closed", limit=500)
+                if closed:
+                    pnls = [float(getattr(t, "realized_pnl", 0) or 0) for t in closed]
+                    wins = sum(1 for p in pnls if p > 0)
+                    live_trade_stats = {
+                        "live_trade_count": len(closed),
+                        "live_win_rate": round(wins / len(pnls), 4) if pnls else 0.0,
+                        "live_total_pnl": round(sum(pnls), 2),
+                    }
+        except Exception as _te:
+            logger.debug("ml_health: live trade stats failed: %s", _te)
+
+        result = payload.model_dump()
+        result.update(live_trade_stats)
+
         if not model_available:
             from fastapi.responses import JSONResponse
-
-            return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=payload.model_dump())
-        return payload
+            return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=result)
+        return result
 
     except Exception as exc:
         logger.warning("ml_health: InferenceEngine unavailable: %s", exc)
