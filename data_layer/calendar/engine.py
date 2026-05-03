@@ -400,10 +400,16 @@ class MacroCalendarEngine:
             logger.warning("Finnhub calendar HTTP error %s: %s", exc.status, exc.message)
             return []
         except aiohttp.ClientError as exc:
-            logger.warning("Finnhub calendar network error: %s", exc)
+            # aiohttp network errors (connection refused, DNS failure, timeout)
+            # often produce an empty str() — use repr() to always get a
+            # meaningful message (e.g. "ClientConnectorError(...)" with the
+            # underlying OS error code and address).
+            detail = str(exc) or repr(exc)
+            logger.warning("Finnhub calendar network error: %s", detail)
             return []
         except Exception as exc:
-            logger.warning("Finnhub calendar fetch error: %s", exc)
+            detail = str(exc) or repr(exc)
+            logger.warning("Finnhub calendar fetch error: %s", detail)
             return []
 
         # `events` is a plain local list — ClassVar is a class-level annotation
