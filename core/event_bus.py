@@ -56,12 +56,49 @@ except (ImportError, AttributeError):
 logger = logging.getLogger(__name__)
 
 # ── channel names ─────────────────────────────────────────────────────────────
-CH_TICK = "hopefx:tick"
-CH_SIGNAL = "hopefx:signal"
-CH_ORDER = "hopefx:order"
-CH_BREACH = "hopefx:breach"
+# Core trading channels
+CH_TICK          = "hopefx:tick"           # raw market tick (bid/ask/timestamp)
+CH_SIGNAL        = "hopefx:signal"         # ML/RL trade signal (direction, confidence)
+CH_ORDER         = "hopefx:order"          # order request / fill confirmation
+CH_BREACH        = "hopefx:breach"         # risk breach / kill event
 
-ALL_CHANNELS = (CH_TICK, CH_SIGNAL, CH_ORDER, CH_BREACH)
+# Market microstructure channels (ws_live chart-bot)
+CH_MICROSTRUCTURE = "hopefx:microstructure"  # L2 order book snapshot
+CH_VOLUME_DELTA   = "hopefx:volume_delta"    # cumulative delta bar
+
+# Risk & equity channels
+CH_RISK_UPDATE   = "hopefx:risk_update"    # risk engine snapshot
+CH_EQUITY_UPDATE = "hopefx:equity_update"  # account equity snapshot
+
+# News & sentiment channels
+CH_NEWS_ITEM     = "hopefx:news_item"      # single news article
+CH_SENTIMENT     = "hopefx:sentiment"      # sentiment signal + recent articles
+
+# System / admin channels
+CH_SYSTEM        = "hopefx:system"         # system-level events (halt, maintenance)
+CH_HEARTBEAT     = "hopefx:heartbeat"      # liveness heartbeat
+
+# Convenience groupings
+MARKET_CHANNELS = (CH_TICK, CH_MICROSTRUCTURE, CH_VOLUME_DELTA)
+TRADING_CHANNELS = (CH_SIGNAL, CH_ORDER, CH_BREACH)
+ACCOUNT_CHANNELS = (CH_RISK_UPDATE, CH_EQUITY_UPDATE)
+INFO_CHANNELS    = (CH_NEWS_ITEM, CH_SENTIMENT)
+SYSTEM_CHANNELS  = (CH_SYSTEM, CH_HEARTBEAT)
+
+ALL_CHANNELS = (
+    CH_TICK,
+    CH_SIGNAL,
+    CH_ORDER,
+    CH_BREACH,
+    CH_MICROSTRUCTURE,
+    CH_VOLUME_DELTA,
+    CH_RISK_UPDATE,
+    CH_EQUITY_UPDATE,
+    CH_NEWS_ITEM,
+    CH_SENTIMENT,
+    CH_SYSTEM,
+    CH_HEARTBEAT,
+)
 
 # ── retry / back-off config ───────────────────────────────────────────────────
 MAX_RETRIES: int = 5
@@ -227,6 +264,8 @@ class _LocalBus:
     """
 
     def __init__(self) -> None:
+        # Pre-populate all known channels so callers can subscribe before
+        # the first publish without triggering a KeyError.
         self._handlers: dict[str, list[Callable]] = {ch: [] for ch in ALL_CHANNELS}
 
     def subscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
