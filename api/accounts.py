@@ -78,6 +78,114 @@ def _account_key(owner_id: str, account_id: str) -> str:
     return f"sub_account:{owner_id}:{account_id}"
 
 
+# ── DB-backed sub_accounts helpers ───────────────────────────────────────────
+
+def _db_session():
+    """Return a synchronous DB session or None."""
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception:
+        return None
+
+
+def _db_list_sub_accounts(owner_id: str) -> list[dict] | None:
+    """Query sub_accounts table for owner. Returns None when DB unavailable."""
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        rows = db.execute(
+            _text("SELECT * FROM sub_accounts WHERE owner_id = :oid AND is_active = true ORDER BY created_at DESC"),
+            {"oid": owner_id},
+        ).fetchall()
+        return [dict(r._mapping) for r in rows]
+    except Exception as exc:
+        logger.debug("_db_list_sub_accounts failed: %s", exc)
+        return None
+    finally:
+        db.close()
+
+
+def _db_create_sub_account(data: dict) -> dict | None:
+    """Insert into sub_accounts table. Returns inserted row or None."""
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        db.execute(
+            _text(
+                "INSERT INTO sub_accounts "
+                "(id, owner_id, label, description, account_type, currency, "
+                " initial_balance, balance, max_drawdown_pct, daily_loss_limit, "
+                " broker, broker_account_id, is_active, created_at, updated_at) "
+                "VALUES (:id, :owner_id, :label, :description, :account_type, :currency, "
+                " :initial_balance, :balance, :max_drawdown_pct, :daily_loss_limit, "
+                " :broker, :broker_account_id, :is_active, :created_at, :updated_at)"
+            ),
+            data,
+        )
+        db.commit()
+        return data
+    except Exception as exc:
+        logger.debug("_db_create_sub_account failed: %s", exc)
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def _db_update_sub_account(account_id: str, owner_id: str, updates: dict) -> dict | None:
+    """Update sub_accounts row. Returns updated row or None."""
+    if not updates:
+        return None
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        set_parts = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["account_id"] = account_id
+        updates["owner_id"] = owner_id
+        db.execute(
+            _text(f"UPDATE sub_accounts SET {set_parts} WHERE id = :account_id AND owner_id = :owner_id"),  # nosec B608
+            updates,
+        )
+        db.commit()
+        row = db.execute(
+            _text("SELECT * FROM sub_accounts WHERE id = :aid"),
+            {"aid": account_id},
+        ).fetchone()
+        return dict(row._mapping) if row else None
+    except Exception as exc:
+        logger.debug("_db_update_sub_account failed: %s", exc)
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def _db_get_team_members(team_id: str) -> list[dict] | None:
+    """Query sub_account_members table for a team. Returns None when DB unavailable."""
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        rows = db.execute(
+            _text("SELECT * FROM sub_account_members WHERE sub_account_id = :tid ORDER BY joined_at DESC"),
+            {"tid": team_id},
+        ).fetchall()
+        return [dict(r._mapping) for r in rows]
+    except Exception as exc:
+        logger.debug("_db_get_team_members failed: %s", exc)
+        return None
+    finally:
+        db.close()
+
+
 def _get_index(owner_id: str) -> list[str]:
     return _store_get(_index_key(owner_id)) or []
 
@@ -174,13 +282,18 @@ async def list_sub_accounts(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """List all sub-accounts owned by the current user."""
+    # Prefer DB-backed sub_accounts table
+    db_accounts = _db_list_sub_accounts(user.sub)
+    if db_accounts is not None:
+        return {"accounts": db_accounts, "total": len(db_accounts), "source": "db"}
+    # Fallback: Redis/db_store
     ids = _get_index(user.sub)
     accounts = []
     for acc_id in ids:
         acc = _get_account(user.sub, acc_id)
         if acc is not None:
             accounts.append(acc)
-    return {"accounts": accounts, "total": len(accounts)}
+    return {"accounts": accounts, "total": len(accounts), "source": "store"}
 
 
 @router.post("/sub-accounts", status_code=status.HTTP_201_CREATED)
@@ -218,9 +331,30 @@ async def create_sub_account(
         "created_at": now,
         "updated_at": now,
     }
-    _save_account(user.sub, account)
-    ids.append(acc_id)
-    _save_index(user.sub, ids)
+    # Persist to DB sub_accounts table
+    db_data = {
+        "id": acc_id,
+        "owner_id": user.sub,
+        "label": req.resolved_label,
+        "description": req.description or "",
+        "account_type": req.account_type,
+        "currency": req.currency,
+        "initial_balance": balance,
+        "balance": balance,
+        "max_drawdown_pct": req.max_drawdown_pct,
+        "daily_loss_limit": req.daily_loss_limit,
+        "broker": req.broker or "",
+        "broker_account_id": req.broker_account_id or "",
+        "is_active": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    db_result = _db_create_sub_account(db_data)
+    if db_result is None:
+        # Fallback: store in Redis/db_store
+        _save_account(user.sub, account)
+        ids.append(acc_id)
+        _save_index(user.sub, ids)
     logger.info("Sub-account created: %s for user %s", acc_id, user.sub)
     return account
 
@@ -361,6 +495,10 @@ def _team_members_key(team_id: str) -> str:
 
 
 def _get_team_members(team_id: str) -> list[dict]:
+    # Prefer DB-backed sub_account_members table
+    db_members = _db_get_team_members(team_id)
+    if db_members is not None:
+        return db_members
     return _store_get(_team_members_key(team_id)) or []
 
 

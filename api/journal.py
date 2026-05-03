@@ -40,6 +40,13 @@ router = APIRouter(prefix="/api/journal", tags=["Trade Journal"])
 
 
 def _get_db():
+    """Return a synchronous DB session for legacy sync paths (journal uses sync ORM)."""
+    try:
+        from database.connection import get_db_manager
+        mgr = get_db_manager()
+        return mgr.session().__enter__() if hasattr(mgr, "session") else None
+    except Exception:
+        pass
     try:
         from database.connection import SessionLocal
         return SessionLocal()
