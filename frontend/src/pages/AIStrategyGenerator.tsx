@@ -7,6 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
 
@@ -56,6 +57,7 @@ const pct = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}%`;
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const AIStrategyGenerator: React.FC = () => {
+  const navigate = useNavigate();
 
   const [prompt, setPrompt]         = useState('');
   const [symbol, setSymbol]         = useState('XAU_USD');
@@ -64,6 +66,8 @@ const AIStrategyGenerator: React.FC = () => {
   const [result, setResult]         = useState<GenerateResponse | null>(null);
   const [deploying, setDeploying]   = useState(false);
   const [deployMsg, setDeployMsg]   = useState('');
+  const [codeExpanded, setCodeExpanded] = useState(false);
+  const [copied, setCopied]         = useState(false);
   const [history, setHistory]       = useState<StrategyRecord[]>([]);
   const [histLoading, setHistLoading] = useState(false);
   const [activeTab, setActiveTab]   = useState<'generate' | 'history'>('generate');
@@ -311,13 +315,39 @@ const AIStrategyGenerator: React.FC = () => {
                 </div>
               )}
 
-              {/* Generated code */}
-              <details style={s.codeDetails}>
-                <summary style={s.codeSummary}>View generated Python code</summary>
-                <pre style={s.code}>{result.strategy_code}</pre>
-              </details>
+              {/* Generated code — collapsible with copy button */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <button
+                    onClick={() => setCodeExpanded(v => !v)}
+                    style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontSize: 13, cursor: 'pointer', padding: 0, fontFamily: 'inherit', fontWeight: 600 }}
+                  >
+                    {codeExpanded ? '▼ Hide Python code' : '▶ Show generated Python code'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(result.strategy_code ?? '').then(() => {
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }).catch(() => {});
+                    }}
+                    style={{
+                      background: copied ? 'rgba(34,197,94,0.1)' : 'rgba(59,130,246,0.1)',
+                      border: `1px solid ${copied ? '#22c55e40' : '#3b82f640'}`,
+                      borderRadius: 5, color: copied ? '#22c55e' : '#60a5fa',
+                      fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 10px',
+                      fontFamily: 'inherit', transition: 'all 0.2s',
+                    }}
+                  >
+                    {copied ? '✓ Copied!' : '⎘ Copy'}
+                  </button>
+                </div>
+                {codeExpanded && (
+                  <pre style={s.code}>{result.strategy_code}</pre>
+                )}
+              </div>
 
-              {/* Deploy button */}
+              {/* Deploy button + Walk-Forward link */}
               <div style={s.deployRow}>
                 <button
                   onClick={handleDeploy}
@@ -325,6 +355,17 @@ const AIStrategyGenerator: React.FC = () => {
                   style={{ ...s.deployBtn, opacity: deploying ? 0.5 : 1 }}
                 >
                   {deploying ? '⏳ Deploying…' : '🚀 Deploy to Paper Trading'}
+                </button>
+                <button
+                  onClick={() => navigate('/walk-forward')}
+                  style={{
+                    background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
+                    borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 600,
+                    cursor: 'pointer', padding: '9px 16px', fontFamily: 'inherit',
+                  }}
+                  title="Validate this strategy with walk-forward testing"
+                >
+                  📈 Walk-Forward Validate
                 </button>
                 {deployMsg && (
                   <span style={{ color: deployMsg.startsWith('Deploy failed') ? '#f87171' : '#4ade80', fontSize: 14 }}>

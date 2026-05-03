@@ -17,6 +17,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api as sharedApi } from '../hooks/useApi';
 import {
   useQuery,
@@ -252,6 +253,7 @@ const LatencyTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
 const RECORDS_PER_PAGE = 20;
 
 const TCADashboard: React.FC = () => {
+  const navigate = useNavigate();
   const user = useStore(selectUser);
   const isAdmin = user?.role === 'admin' || user?.role === 'superadmin';
   const qc = useQueryClient();
@@ -354,6 +356,12 @@ const TCADashboard: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {loading && <span style={{ color: '#64748b', fontSize: 11 }}>Updating…</span>}
+            <button
+              onClick={() => navigate('/pnl')}
+              style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
+            >
+              💹 View P&L Impact
+            </button>
             <button style={pg.btn} onClick={refresh} disabled={loading}>Refresh</button>
             <button style={pg.btnCsv} onClick={() => exportCSV(filteredRecords)} disabled={filteredRecords.length === 0}>
               ↓ CSV

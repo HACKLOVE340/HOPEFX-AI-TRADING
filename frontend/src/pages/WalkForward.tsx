@@ -9,6 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
 
@@ -136,6 +137,7 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const WalkForward: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData]            = useState<WalkForwardData | null>(null);
   const [loading, setLoading]      = useState(true);
   const [apiError, setApiError]    = useState<string | null>(null);
@@ -208,14 +210,26 @@ const WalkForward: React.FC = () => {
             {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
           </p>
         </div>
-        <div style={s.searchRow}>
-          <input
-            style={s.searchInput}
-            placeholder="Run ID…"
-            value={inputId}
-            onChange={(e) => setInputId(e.target.value)}
-          />
-          <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            style={{
+              padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+              background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+              color: '#a78bfa', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            }}
+          >
+            🤖 Generate Strategy
+          </button>
+          <div style={s.searchRow}>
+            <input
+              style={s.searchInput}
+              placeholder="Run ID…"
+              value={inputId}
+              onChange={(e) => setInputId(e.target.value)}
+            />
+            <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
+          </div>
         </div>
       </div>
 

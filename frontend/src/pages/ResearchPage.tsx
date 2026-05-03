@@ -13,6 +13,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -230,6 +231,7 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const ResearchPage: React.FC = () => {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<Notebook | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -391,8 +393,21 @@ const ResearchPage: React.FC = () => {
                 {/* Signals */}
                 {selected.results.signals.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Signals ({selected.results.signals.length})
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        Signals ({selected.results.signals.length})
+                      </div>
+                      <button
+                        onClick={() => navigate('/ai-strategy')}
+                        style={{
+                          padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
+                          background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
+                          color: '#a78bfa', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                        }}
+                        title="Use these research signals to generate a trading strategy"
+                      >
+                        🤖 Convert to Strategy
+                      </button>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selected.results.signals.map((s, i) => <SignalCard key={i} signal={s} />)}
