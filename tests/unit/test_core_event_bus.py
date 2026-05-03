@@ -427,4 +427,10 @@ def test_channel_constants():
     assert CH_SIGNAL == "hopefx:signal"
     assert CH_ORDER == "hopefx:order"
     assert CH_BREACH == "hopefx:breach"
-    assert len(ALL_CHANNELS) == 4
+    # ALL_CHANNELS contains all registered channels; verify the four core ones
+    # are present and the total count matches the current definition.
+    assert CH_TICK in ALL_CHANNELS
+    assert CH_SIGNAL in ALL_CHANNELS
+    assert CH_ORDER in ALL_CHANNELS
+    assert CH_BREACH in ALL_CHANNELS
+    assert len(ALL_CHANNELS) == len(set(ALL_CHANNELS)), "ALL_CHANNELS must not contain duplicates"

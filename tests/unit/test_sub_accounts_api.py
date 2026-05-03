@@ -67,6 +67,12 @@ def client(db_store: dict[str, Any]) -> TestClient:
         patch("api.db_store.db_get", side_effect=_db_get),
         patch("api.db_store.db_set", side_effect=_db_set),
         patch("api.db_store.db_delete", side_effect=_db_delete),
+        # Force the db_store fallback path by making all SQLAlchemy helpers
+        # return None — this keeps tests hermetic and independent of any
+        # SQLite/PostgreSQL state on the test machine.
+        patch("api.accounts._db_list_sub_accounts", return_value=None),
+        patch("api.accounts._db_create_sub_account", return_value=None),
+        patch("api.accounts._db_update_sub_account", return_value=None),
     ):
         yield TestClient(app, raise_server_exceptions=True)
 
