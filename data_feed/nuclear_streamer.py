@@ -278,11 +278,21 @@ class NuclearStreamer:
         self._twelve_key: str | None = os.getenv("TWELVE_API_KEY")
         self._polygon_key: str | None = os.getenv("POLYGON_API_KEY")
 
-        # Redis config (env overrides constructor args).
-        self._redis_host: str = os.getenv("REDIS_HOST", redis_host or "localhost")
-        self._redis_port: int = int(os.getenv("REDIS_PORT", str(redis_port or 6379)))
-        self._redis_db: int = int(os.getenv("REDIS_DB", str(redis_db or 0)))
-        self._redis_password: str | None = os.getenv("REDIS_PASSWORD") or None
+        # Redis config: REDIS_URL takes precedence over individual REDIS_HOST/PORT vars.
+        # This ensures NuclearStreamer honours the same connection as the rest of the system.
+        _redis_url = os.getenv("REDIS_URL", "").strip()
+        if _redis_url:
+            import urllib.parse as _urlparse
+            _parsed = _urlparse.urlparse(_redis_url)
+            self._redis_host: str = _parsed.hostname or "localhost"
+            self._redis_port: int = _parsed.port or 6379
+            self._redis_db: int = int(_parsed.path.lstrip("/") or "0")
+            self._redis_password: str | None = _parsed.password or None
+        else:
+            self._redis_host = os.getenv("REDIS_HOST", redis_host or "localhost")
+            self._redis_port = int(os.getenv("REDIS_PORT", str(redis_port or 6379)))
+            self._redis_db = int(os.getenv("REDIS_DB", str(redis_db or 0)))
+            self._redis_password = os.getenv("REDIS_PASSWORD") or None
 
         # Suppress repeated Redis publish errors after the first — log once,
         # then demote to DEBUG so the log is not flooded on every tick.
@@ -386,17 +396,17 @@ class NuclearStreamer:
         if self._finnhub_key:
             tasks.append(asyncio.create_task(self._run_with_backoff("finnhub", self._finnhub_stream)))
         else:
-            logger.warning("FINNHUB_API_KEY not set — Finnhub stream disabled")
+            logger.info("FINNHUB_API_KEY not set — Finnhub stream disabled")
 
         if self._twelve_key and _TWELVE_AVAILABLE:
             tasks.append(asyncio.create_task(self._run_with_backoff("twelvedata", self._twelve_stream)))
         elif not self._twelve_key:
-            logger.warning("TWELVE_API_KEY not set — Twelve Data stream disabled")
+            logger.info("TWELVE_API_KEY not set — Twelve Data stream disabled")
 
         if self._polygon_key:
             tasks.append(asyncio.create_task(self._run_with_backoff("polygon", self._polygon_stream)))
         else:
-            logger.warning("POLYGON_API_KEY not set — Polygon stream disabled")
+            logger.info("POLYGON_API_KEY not set — Polygon stream disabled")
 
         if not tasks:
             logger.error("No streaming sources configured — set at least one API key")
@@ -431,9 +441,11 @@ class NuclearStreamer:
         if self._fail_counts[source] >= self.circuit_breaker_threshold:
             self._circuit_open_at[source] = time.monotonic()
             logger.warning(
-                "Circuit breaker OPEN for source '%s' after %d failures",
+                "Circuit breaker OPEN for source '%s' after %d failures — "
+                "will retry in %.0f s",
                 source,
                 self._fail_counts[source],
+                self.circuit_breaker_cooldown,
             )
 
     def _record_success(self, source: str) -> None:
@@ -463,19 +475,36 @@ class NuclearStreamer:
                 continue
             try:
                 await coro_fn()
-                # Clean exit — reset back-off.
+                # Clean exit (WebSocket closed with code 1000) — reset back-off.
+                # This is normal behaviour when the server closes the connection
+                # gracefully; reconnect immediately without counting as a failure.
                 backoff = _BACKOFF_INITIAL
                 self._record_success(source)
+                logger.debug(
+                    "Source '%s' disconnected cleanly — reconnecting immediately",
+                    source,
+                )
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 self._record_failure(source)
-                logger.warning(
-                    "Source '%s' disconnected: %s — reconnecting in %.0f s",
-                    source,
-                    exc,
-                    backoff,
-                )
+                exc_str = str(exc)
+                # "sent 1000 (OK)" is a clean WebSocket close masquerading as
+                # an exception in some websockets library versions — treat it
+                # as a non-error reconnect and log at DEBUG.
+                if "sent 1000" in exc_str or "1000 (OK)" in exc_str:
+                    logger.debug(
+                        "Source '%s' closed cleanly (code 1000) — reconnecting in %.0f s",
+                        source,
+                        backoff,
+                    )
+                else:
+                    logger.warning(
+                        "Source '%s' disconnected: %s — reconnecting in %.0f s",
+                        source,
+                        exc,
+                        backoff,
+                    )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, _BACKOFF_MAX)
 
@@ -694,12 +723,18 @@ class NuclearStreamer:
             except Exception as exc:
                 self._redis_publish_errors += 1
                 if self._redis_publish_errors == 1:
-                    # Log the first failure at ERROR so operators are alerted.
-                    logger.error("Redis publish error: %s", exc)
+                    # Log the first failure as WARNING — Redis being down is
+                    # expected in dev/offline environments; ticks still flow
+                    # to subscribers via the in-process broadcast path.
+                    logger.warning("Redis publish error: %s", exc)
                 else:
-                    # Demote subsequent failures to DEBUG to avoid log flooding
+                    # Suppress subsequent failures to DEBUG to avoid log flooding
                     # on every tick while Redis is down.
-                    logger.debug("Redis publish error (repeated #%d): %s", self._redis_publish_errors, exc)
+                    logger.debug(
+                        "Redis publish error (suppressed #%d): %s",
+                        self._redis_publish_errors,
+                        exc,
+                    )
 
         logger.debug(
             "%s: %.4f (consensus=%.4f) @ %.0f ms [%s] seq=%s",
