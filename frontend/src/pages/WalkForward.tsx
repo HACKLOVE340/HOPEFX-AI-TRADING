@@ -200,9 +200,14 @@ const WalkForward: React.FC = () => {
           <div style={{ fontSize: 13, color: '#64748b' }}>
             Go to the Backtesting page and run a walk-forward analysis to see results here.
           </div>
-          <button onClick={() => load()} style={{ marginTop: 16, background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
-            Retry
-          </button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
+            <button onClick={() => load()} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+              ↻ Retry
+            </button>
+            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+              📊 Go to Backtesting
+            </button>
+          </div>
         </div>
       </div>
     );

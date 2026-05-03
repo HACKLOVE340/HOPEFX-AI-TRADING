@@ -241,7 +241,15 @@ const CopyTrading: React.FC = () => {
           {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
-              No active copy sessions. Browse traders and start copying.
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 8 }}>No active copy sessions</div>
+              <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
+              <button
+                onClick={() => setActiveTab('browse')}
+                style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 24px' }}
+              >
+                🔍 Browse Traders
+              </button>
             </div>
           )}
           {sessions.map(sess => {
