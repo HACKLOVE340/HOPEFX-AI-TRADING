@@ -258,6 +258,14 @@ _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
 
+# ── Health check endpoints (/health, /health/ready, /health/detailed) ─────────
+try:
+    from health_check_service import health_router as _health_router
+    app.include_router(_health_router)
+    logger.info("Health check router registered at /health")
+except Exception as _hc_exc:
+    logger.warning("Health check router not registered: %s", _hc_exc)
+
 # ── Decision Engine router (/api/decision) ───────────────────────────────────
 try:
     from core.decision.HOPEFXDecisionEngine import create_decision_router
