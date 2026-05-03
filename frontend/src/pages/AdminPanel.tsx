@@ -21,6 +21,19 @@ import { PageHeader } from '../components/PageHeader';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 
+// ── Maintenance / Broadcast types ─────────────────────────────────────────────
+
+interface MaintenanceStatus {
+  maintenance_mode: boolean;
+  maintenance_message: string;
+}
+
+interface BroadcastForm {
+  title: string;
+  body: string;
+  type: 'info' | 'warning' | 'success' | 'error';
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AdminOverview {
@@ -126,6 +139,164 @@ const QuickAction: React.FC<{
     <div style={{ fontSize: 11, color: '#64748b' }}>{desc}</div>
   </button>
 );
+
+// ── Maintenance + Broadcast Panel ─────────────────────────────────────────────
+
+const MaintenanceBroadcastPanel: React.FC = () => {
+  const [maint, setMaint] = useState<MaintenanceStatus>({ maintenance_mode: false, maintenance_message: '' });
+  const [broadcast, setBroadcast] = useState<BroadcastForm>({ title: '', body: '', type: 'info' });
+  const [saving, setSaving] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
+
+  useEffect(() => {
+    api.get<MaintenanceStatus>('/admin/maintenance')
+      .then(r => setMaint(r.data))
+      .catch(() => {/* non-fatal — endpoint may require superadmin */});
+  }, []);
+
+  const flash = (msg: string) => {
+    setStatusMsg(msg);
+    setTimeout(() => setStatusMsg(''), 4000);
+  };
+
+  const toggleMaintenance = async () => {
+    setSaving(true);
+    try {
+      await api.post('/admin/maintenance', {
+        enabled: !maint.maintenance_mode,
+        message: maint.maintenance_message,
+      });
+      setMaint(m => ({ ...m, maintenance_mode: !m.maintenance_mode }));
+      flash(`Maintenance mode ${!maint.maintenance_mode ? 'enabled' : 'disabled'}`);
+    } catch {
+      flash('Failed — check superadmin privileges');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendBroadcast = async () => {
+    if (!broadcast.title || !broadcast.body) return;
+    setSaving(true);
+    try {
+      await api.post('/admin/broadcast', broadcast);
+      setBroadcast({ title: '', body: '', type: 'info' });
+      flash('Broadcast sent to all active users ✓');
+    } catch {
+      flash('Broadcast failed — check superadmin privileges');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '8px 12px', background: '#0f172a',
+    border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9',
+    fontSize: 13, boxSizing: 'border-box', outline: 'none', fontFamily: 'inherit',
+  };
+
+  const BROADCAST_COLORS: Record<string, string> = {
+    info: '#3b82f6', warning: '#f59e0b', success: '#22c55e', error: '#ef4444',
+  };
+
+  return (
+    <div style={{ margin: '0 24px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {/* Maintenance mode */}
+      <div style={{ background: '#1e293b', border: `1px solid ${maint.maintenance_mode ? '#f59e0b' : '#334155'}`, borderRadius: 10, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc' }}>🔧 Maintenance Mode</div>
+            <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+              {maint.maintenance_mode ? '⚠️ ACTIVE — users see downtime page' : 'Platform is live'}
+            </div>
+          </div>
+          <div style={{
+            padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+            background: maint.maintenance_mode ? '#f59e0b20' : '#22c55e20',
+            color: maint.maintenance_mode ? '#f59e0b' : '#22c55e',
+            border: `1px solid ${maint.maintenance_mode ? '#f59e0b40' : '#22c55e40'}`,
+          }}>
+            {maint.maintenance_mode ? 'ON' : 'OFF'}
+          </div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Message shown to users</label>
+          <input
+            style={inputStyle}
+            value={maint.maintenance_message}
+            onChange={e => setMaint(m => ({ ...m, maintenance_message: e.target.value }))}
+            placeholder="We're performing scheduled maintenance. Back shortly."
+          />
+        </div>
+        <button
+          onClick={toggleMaintenance}
+          disabled={saving}
+          style={{
+            width: '100%', padding: '9px 16px', borderRadius: 7, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, border: 'none', fontFamily: 'inherit',
+            background: maint.maintenance_mode ? '#16a34a' : '#b45309',
+            color: '#fff', opacity: saving ? 0.7 : 1,
+          }}
+        >
+          {maint.maintenance_mode ? '✅ Disable Maintenance Mode' : '🔧 Enable Maintenance Mode'}
+        </button>
+      </div>
+
+      {/* Broadcast */}
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 14 }}>📡 Broadcast Message</div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Title</label>
+          <input style={inputStyle} value={broadcast.title} onChange={e => setBroadcast(b => ({ ...b, title: e.target.value }))} placeholder="Important update" />
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 5 }}>Message</label>
+          <textarea
+            style={{ ...inputStyle, resize: 'vertical' as const }}
+            rows={3}
+            value={broadcast.body}
+            onChange={e => setBroadcast(b => ({ ...b, body: e.target.value }))}
+            placeholder="Message to send to all active users…"
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          {(['info', 'warning', 'success', 'error'] as const).map(t => (
+            <button key={t} onClick={() => setBroadcast(b => ({ ...b, type: t }))} style={{
+              flex: 1, padding: '5px 0', borderRadius: 5, cursor: 'pointer', fontSize: 10, fontWeight: 700,
+              border: `1px solid ${broadcast.type === t ? BROADCAST_COLORS[t] : '#334155'}`,
+              background: broadcast.type === t ? `${BROADCAST_COLORS[t]}20` : 'transparent',
+              color: broadcast.type === t ? BROADCAST_COLORS[t] : '#475569',
+              fontFamily: 'inherit', textTransform: 'uppercase',
+            }}>{t}</button>
+          ))}
+        </div>
+        <button
+          onClick={sendBroadcast}
+          disabled={saving || !broadcast.title || !broadcast.body}
+          style={{
+            width: '100%', padding: '9px 16px', borderRadius: 7, cursor: 'pointer',
+            fontSize: 13, fontWeight: 700, border: 'none', fontFamily: 'inherit',
+            background: '#1d4ed8', color: '#fff',
+            opacity: (saving || !broadcast.title || !broadcast.body) ? 0.5 : 1,
+          }}
+        >
+          📡 Send to All Users
+        </button>
+      </div>
+
+      {statusMsg && (
+        <div style={{
+          gridColumn: '1 / -1',
+          padding: '10px 14px', borderRadius: 7, fontSize: 13, fontWeight: 600,
+          background: statusMsg.includes('failed') || statusMsg.includes('Failed') ? '#450a0a' : '#052e16',
+          color: statusMsg.includes('failed') || statusMsg.includes('Failed') ? '#f87171' : '#4ade80',
+        }}>
+          {statusMsg}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -257,6 +428,15 @@ const AdminPanel: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {/* Maintenance Mode + Broadcast */}
+          <div style={{ margin: '0 24px', marginBottom: 8 }}>
+            <div style={{ ...sectionHeader, background: '#1e293b', border: '1px solid #334155', borderRadius: '10px 10px 0 0', padding: '14px 20px' }}>
+              <span>⚙️ Platform Controls</span>
+              <span style={{ fontSize: 11, color: '#475569' }}>Maintenance mode & user broadcasts</span>
+            </div>
+          </div>
+          <MaintenanceBroadcastPanel />
 
           {/* Quick Actions */}
           <div style={sectionStyle}>

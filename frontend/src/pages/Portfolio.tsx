@@ -190,9 +190,13 @@ const TradeHistory: React.FC = () => {
 
   const [filter, setFilter]   = useState<TradeFilter>('all');
   const [search, setSearch]   = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
 
   const filtered = useMemo(() => {
     if (!trades) return [];
+    const fromMs = dateFrom ? new Date(dateFrom).getTime() : 0;
+    const toMs   = dateTo   ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
     return trades.filter((t) => {
       const matchDir = filter === 'all' ? true
         : filter === 'long'  ? (t.side === 'long' || t.side === 'buy')
@@ -200,9 +204,11 @@ const TradeHistory: React.FC = () => {
         : filter === 'win'   ? t.pnl >= 0
         : t.pnl < 0;
       const matchSearch = !search || t.symbol.toLowerCase().includes(search.toLowerCase());
-      return matchDir && matchSearch;
+      const closedMs = t.closed_at ? new Date(t.closed_at).getTime() : 0;
+      const matchDate = closedMs >= fromMs && closedMs <= toMs;
+      return matchDir && matchSearch && matchDate;
     });
-  }, [trades, filter, search]);
+  }, [trades, filter, search, dateFrom, dateTo]);
 
   const totalPnl = filtered.reduce((s, t) => s + t.pnl, 0);
   const wins     = filtered.filter((t) => t.pnl >= 0).length;
@@ -215,8 +221,24 @@ const TradeHistory: React.FC = () => {
     { id: 'loss',  label: '✗ LOSSES',color: '#ff1744' },
   ];
 
+  const dateInputStyle: React.CSSProperties = {
+    background: '#111827', border: '1px solid #1e2d3d', borderRadius: 4,
+    padding: '2px 6px', fontSize: 10, color: '#94a3b8', outline: 'none',
+    colorScheme: 'dark' as React.CSSProperties['colorScheme'],
+  };
+
   const headerRight = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      {/* Date range */}
+      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle} title="From date" />
+      <span style={{ fontSize: 10, color: '#334155' }}>→</span>
+      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle} title="To date" />
+      {(dateFrom || dateTo) && (
+        <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
+          background: 'transparent', border: 'none', color: '#475569', fontSize: 10, cursor: 'pointer', padding: '0 2px',
+        }} title="Clear date filter">✕</button>
+      )}
+      <div style={{ width: 1, height: 14, background: '#1e2d3d' }} />
       {/* Search */}
       <input
         type="text"
