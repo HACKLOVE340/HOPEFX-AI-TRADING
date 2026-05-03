@@ -69,6 +69,9 @@ class FREDFeed:
 
     def __init__(self) -> None:
         self._session: aiohttp.ClientSession | None = None
+        # Suppress repeated "unreachable" warnings — log once per series per
+        # provider lifetime so the log is not flooded when FRED is offline.
+        self._warned_series: set[str] = set()
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -142,7 +145,16 @@ class FREDFeed:
             return pd.Series(vals, index=pd.DatetimeIndex(idx), dtype=float)
 
         except Exception as exc:
-            logger.warning("FRED fetch_series %s error: %s", series_id, exc)
+            # Log first failure per series as INFO; suppress repeats to DEBUG.
+            # FRED being unreachable is expected in offline/dev environments —
+            # the MacroStoreBridge injects neutral series as a fallback.
+            if series_id not in self._warned_series:
+                logger.info("FRED fetch_series %s error: %s", series_id, exc)
+                self._warned_series.add(series_id)
+            else:
+                logger.debug(
+                    "FRED fetch_series %s error (suppressed): %s", series_id, exc
+                )
             return pd.Series(dtype=float)
 
     async def fetch_all(self, observation_start: str | None = None) -> dict[str, pd.Series]:
@@ -161,7 +173,7 @@ class FREDFeed:
                 results[name] = await task
                 logger.debug("FRED %s: %d observations", name, len(results[name]))
             except Exception as exc:
-                logger.warning("FRED %s failed: %s", name, exc)
+                logger.debug("FRED %s failed: %s", name, exc)
                 results[name] = pd.Series(dtype=float)
 
         return results
