@@ -312,7 +312,16 @@ class PaperTradingBroker(BrokerConnector):
 
             from execution.redis_state import RedisStateStore
 
-            redis_url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            redis_url = _os.getenv("REDIS_URL", "").strip()
+            # Track whether the operator explicitly configured Redis so we can
+            # choose the right log level on failure.
+            _explicitly_configured = bool(redis_url)
+
+            if not redis_url:
+                # No REDIS_URL set — use the dev default but don't warn;
+                # Redis being absent in dev is expected and non-actionable.
+                redis_url = "redis://localhost:6379/0"
+
             password = _os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject REDIS_PASSWORD when not already embedded in the URL.
@@ -331,11 +340,21 @@ class PaperTradingBroker(BrokerConnector):
             logger.info("PaperTradingBroker: Redis state persistence connected")
         except Exception as exc:
             self._redis_state = None
-            logger.warning(
-                "PaperTradingBroker: Redis unavailable (%s) — position/order state will NOT "
-                "survive process restarts. Set REDIS_URL to enable persistence.",
-                exc,
-            )
+            import os as _os
+            _explicitly_configured = bool(_os.getenv("REDIS_URL", "").strip())
+            if _explicitly_configured:
+                # REDIS_URL was set but Redis is unreachable — operator needs to know.
+                logger.warning(
+                    "PaperTradingBroker: Redis unavailable (%s) — position/order state will NOT "
+                    "survive process restarts. Check REDIS_URL and ensure Redis is running.",
+                    exc,
+                )
+            else:
+                # No REDIS_URL configured — in-memory only mode, expected in dev.
+                logger.info(
+                    "PaperTradingBroker: Redis not configured — position/order state is "
+                    "in-memory only and will not survive restarts. Set REDIS_URL to enable persistence."
+                )
 
     async def connect(self) -> bool:
         """Connect to paper trading broker and restore persisted state."""
