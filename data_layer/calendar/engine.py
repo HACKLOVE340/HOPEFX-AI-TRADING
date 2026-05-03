@@ -52,7 +52,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
-from typing import Any, ClassVar
+from typing import Any
 
 import aiohttp
 
@@ -60,11 +60,15 @@ from data_layer.types import MacroEvent, MacroImpact
 
 logger = logging.getLogger(__name__)
 
-_FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")
 _BLACKOUT_BEFORE_MIN = int(os.getenv("NEWS_BLACKOUT_BEFORE_MIN", "5"))
 _BLACKOUT_AFTER_MIN = int(os.getenv("NEWS_BLACKOUT_AFTER_MIN", "5"))
 _REFRESH_INTERVAL_S = float(os.getenv("CALENDAR_REFRESH_S", "3600.0"))
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10.0)
+
+
+def _finnhub_key() -> str:
+    """Read FINNHUB_API_KEY at call time so .env loading order doesn't matter."""
+    return os.getenv("FINNHUB_API_KEY", "").strip()
 
 # ── Historical gold reaction lookup ──────────────────────────────────────────
 # Empirical average absolute gold move (USD) in 30 minutes after event release.
@@ -164,6 +168,87 @@ def _safe_float(val) -> float | None:
         return None
 
 
+# ── Hardcoded fallback schedule ───────────────────────────────────────────────
+# Used when Finnhub is unavailable or returns an empty calendar.
+# These are the recurring high-impact US macro events that move gold the most.
+# Scheduled times are approximate (typical release times in UTC).
+# The engine uses these to gate trading around known high-volatility windows
+# rather than allowing all trades through when the live calendar is empty.
+
+_RECURRING_HIGH_IMPACT: list[dict] = [
+    # FOMC — 8 meetings/year, Wednesday 18:00 UTC
+    {"name": "FOMC Rate Decision",       "country": "US", "currency": "USD", "weekday": 2, "hour": 18, "minute": 0},
+    # NFP — first Friday of month, 12:30 UTC
+    {"name": "Non-Farm Payrolls",         "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
+    # CPI — mid-month Wednesday, 12:30 UTC
+    {"name": "CPI",                       "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
+    # Core PCE — last Friday of month, 12:30 UTC
+    {"name": "Core PCE",                  "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
+    # GDP — last Wednesday of month, 12:30 UTC
+    {"name": "GDP",                       "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
+    # Initial Jobless Claims — every Thursday, 12:30 UTC
+    {"name": "Initial Jobless Claims",    "country": "US", "currency": "USD", "weekday": 3, "hour": 12, "minute": 30},
+    # ECB Rate Decision — 6 meetings/year, Thursday 12:15 UTC
+    {"name": "ECB Rate Decision",         "country": "EU", "currency": "EUR", "weekday": 3, "hour": 12, "minute": 15},
+]
+
+
+def _build_hardcoded_fallback_events() -> list[MacroEvent]:
+    """
+    Build a minimal set of MacroEvent objects for the next 7 days based on
+    recurring high-impact event schedules.
+
+    This is a best-effort approximation — actual release dates vary by month.
+    The purpose is to ensure the blackout-window gating logic has *something*
+    to work with when Finnhub is unavailable, preventing the engine from
+    silently allowing all trades through during high-volatility windows.
+    """
+    now = datetime.now(UTC)
+    horizon = now + timedelta(days=7)
+    events: list[MacroEvent] = []
+
+    # Walk every day in the next 7 days and emit events on matching weekdays.
+    for day_offset in range(8):
+        candidate = now + timedelta(days=day_offset)
+        for spec in _RECURRING_HIGH_IMPACT:
+            if candidate.weekday() != spec["weekday"]:
+                continue
+            scheduled = candidate.replace(
+                hour=spec["hour"],
+                minute=spec["minute"],
+                second=0,
+                microsecond=0,
+                tzinfo=UTC,
+            )
+            if scheduled < now or scheduled > horizon:
+                continue
+            name = spec["name"]
+            impact = _classify_impact(name, "high")
+            gold_score = _gold_impact_score(name)
+            events.append(
+                MacroEvent(
+                    event_id=str(uuid.uuid4()),
+                    name=name,
+                    country=spec["country"],
+                    currency=spec["currency"],
+                    scheduled_at=scheduled,
+                    actual=None,
+                    forecast=None,
+                    previous=None,
+                    impact=impact,
+                    gold_impact_score=round(gold_score, 4),
+                    surprise_pct=None,
+                    lineage_id=str(uuid.uuid4()),
+                )
+            )
+
+    logger.debug(
+        "MacroCalendarEngine: hardcoded fallback produced %d events for next 7 days",
+        len(events),
+    )
+    return sorted(events, key=lambda e: e.scheduled_at)
+
+
 class MacroCalendarEngine:
     """
     Economic calendar with gold-specific impact scoring.
@@ -223,18 +308,35 @@ class MacroCalendarEngine:
         logger.info("MacroCalendarEngine stopped")
 
     async def _refresh_loop(self) -> None:
+        # Stagger startup by 5 s so the engine doesn't race with other
+        # components that also initialise on the same event loop tick.
+        await asyncio.sleep(5)
         while self._running:
+            t0 = time.monotonic()
             try:
                 await self.refresh()
+            except asyncio.CancelledError:
+                break
             except Exception as exc:
                 logger.warning("MacroCalendarEngine refresh error: %s", exc)
-            await asyncio.sleep(_REFRESH_INTERVAL_S)
+            elapsed = time.monotonic() - t0
+            await asyncio.sleep(max(1.0, _REFRESH_INTERVAL_S - elapsed))
 
     async def refresh(self) -> None:
-        """Fetch and cache upcoming economic events."""
+        """Fetch and cache upcoming economic events.
+
+        Falls back to a hardcoded schedule of recurring high-impact events
+        when Finnhub is unavailable or returns an empty calendar, so the
+        engine always has *something* to gate on rather than silently
+        allowing all trades through.
+        """
         events = await self._fetch_finnhub_calendar()
         if not events:
-            logger.debug("MacroCalendarEngine: Finnhub returned 0 events")
+            logger.debug(
+                "MacroCalendarEngine: Finnhub returned 0 events — "
+                "loading hardcoded fallback schedule"
+            )
+            events = _build_hardcoded_fallback_events()
 
         async with self._lock:
             self._events = events
@@ -261,10 +363,13 @@ class MacroCalendarEngine:
     # ── Finnhub calendar fetch ────────────────────────────────────────────────
 
     async def _fetch_finnhub_calendar(self) -> list[MacroEvent]:
-        if not _FINNHUB_KEY:
-            logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set")
+        # Read key at call time — env vars may be loaded after module import.
+        key = _finnhub_key()
+        if not key:
+            logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set — skipping Finnhub fetch")
             return []
 
+        # Re-create session if it was closed (e.g. after stop() was called).
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=_HTTP_TIMEOUT)
 
@@ -275,15 +380,35 @@ class MacroCalendarEngine:
         try:
             async with self._session.get(
                 "https://finnhub.io/api/v1/calendar/economic",
-                params={"from": start, "to": end, "token": _FINNHUB_KEY},
+                params={"from": start, "to": end, "token": key},
             ) as resp:
+                if resp.status == 401:
+                    logger.warning(
+                        "MacroCalendarEngine: Finnhub returned 401 — "
+                        "check FINNHUB_API_KEY is valid"
+                    )
+                    return []
+                if resp.status == 429:
+                    logger.warning(
+                        "MacroCalendarEngine: Finnhub rate-limited (429) — "
+                        "will retry on next refresh cycle"
+                    )
+                    return []
                 resp.raise_for_status()
                 data = await resp.json()
+        except aiohttp.ClientResponseError as exc:
+            logger.warning("Finnhub calendar HTTP error %s: %s", exc.status, exc.message)
+            return []
+        except aiohttp.ClientError as exc:
+            logger.warning("Finnhub calendar network error: %s", exc)
+            return []
         except Exception as exc:
             logger.warning("Finnhub calendar fetch error: %s", exc)
             return []
 
-        events: ClassVar[list[MacroEvent]] = []
+        # `events` is a plain local list — ClassVar is a class-level annotation
+        # and must not be used for local variables.
+        events: list[MacroEvent] = []
         for item in data.get("economicCalendar", []):
             name = item.get("event", "")
             country = item.get("country", "")
@@ -292,7 +417,14 @@ class MacroCalendarEngine:
             time_str = item.get("time", "")
             try:
                 scheduled = datetime.fromisoformat(time_str)
-            except Exception:  # nosec B112 - skip malformed calendar entry
+                # Finnhub returns naive datetimes (e.g. "2024-01-15 08:30:00").
+                # Attach UTC so all downstream comparisons with datetime.now(UTC)
+                # work correctly without TypeError on offset-naive vs aware.
+                if scheduled.tzinfo is None:
+                    scheduled = scheduled.replace(tzinfo=UTC)
+            except (ValueError, TypeError):
+                # Skip entries with unparseable or missing time fields.
+                logger.debug("MacroCalendarEngine: skipping event with bad time %r", time_str)
                 continue
 
             actual = _safe_float(item.get("actual"))
@@ -336,6 +468,7 @@ class MacroCalendarEngine:
                 )
             )
 
+        logger.debug("MacroCalendarEngine: Finnhub returned %d events", len(events))
         return sorted(events, key=lambda e: e.scheduled_at)
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -600,7 +733,8 @@ class MacroCalendarEngine:
             "upcoming_high": len([e for e in self.get_upcoming_events(24) if e.impact == MacroImpact.HIGH]),
             "current_impact": self.get_current_impact_score(),
             "is_blackout": self.is_blackout_window(),
-            "finnhub_key": bool(_FINNHUB_KEY),
+            # Read key at call time so the value reflects the current env state.
+            "finnhub_key_configured": bool(_finnhub_key()),
         }
 
     # ── Surprise factor computation ───────────────────────────────────────────
