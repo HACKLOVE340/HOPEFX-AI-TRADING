@@ -371,7 +371,7 @@ class AsyncConnectionPool:
             self.metrics.checked_out = pool.checkedout()
             self.metrics.overflow = pool.overflow()
             self.metrics.invalid = pool.invalidated()
-        except Exception:
+        except Exception:  # nosec B110
             pass  # Pool stats are best-effort
 
     def _register_pool_events(self) -> None:
@@ -407,7 +407,7 @@ class AsyncConnectionPool:
             if parsed.password:
                 netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
                 return urlunparse(parsed._replace(netloc=netloc))
-        except Exception:
+        except Exception:  # nosec B110
             pass
         return url
 

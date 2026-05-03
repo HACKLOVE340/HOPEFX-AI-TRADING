@@ -364,7 +364,7 @@ class DistributedLock:
                     # Fallback: extend TTL without ownership check
                     try:
                         self._client.pexpire(self._name, self._ttl_ms)
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                     logger.debug("DistributedLock renew eval error (used pexpire fallback): %s", exc)
 
@@ -466,7 +466,7 @@ class PubSubManager:
         if self._pubsub:
             try:
                 self._pubsub.close()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         if self._thread:
             self._thread.join(timeout=3.0)

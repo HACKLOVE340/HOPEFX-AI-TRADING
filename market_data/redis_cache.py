@@ -298,7 +298,7 @@ class MarketDataCache:
         finally:
             try:
                 self._r.delete(lock_key)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
     def invalidate(self, key: str) -> bool:

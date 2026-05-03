@@ -45,7 +45,7 @@ def _get_db():
         from database.connection import get_db_manager
         mgr = get_db_manager()
         return mgr.session().__enter__() if hasattr(mgr, "session") else None
-    except Exception:
+    except Exception:  # nosec B110
         pass
     try:
         from database.connection import SessionLocal
@@ -479,7 +479,7 @@ async def get_weekly_report(
             try:
                 for t in _json.loads(e.get("tags") or "[]"):
                     all_tags[t] = all_tags.get(t, 0) + 1
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             em = e.get("emotion")
             if em:

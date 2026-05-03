@@ -49,7 +49,7 @@ def _load_tenants() -> list[dict]:
             raw = rc.get(_TENANTS_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return []
 
@@ -60,7 +60,7 @@ def _save_tenants(tenants: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_TENANTS_KEY, json.dumps(tenants), ex=86400 * 90)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 

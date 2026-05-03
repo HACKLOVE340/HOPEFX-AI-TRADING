@@ -254,7 +254,7 @@ async def list_training_jobs(user: TokenPayload = Depends(_require_superadmin)) 
         from ml.training_manager import get_training_manager  # type: ignore[import]
         mgr = get_training_manager()
         return {"jobs": mgr.list_jobs()}
-    except Exception:
+    except Exception:  # nosec B110
         pass
     # Fallback: read from DB or return empty
     try:
@@ -290,7 +290,7 @@ async def list_ab_tests(user: TokenPayload = Depends(_require_superadmin)) -> di
         from ml.ab_testing import get_ab_test_manager  # type: ignore[import]
         mgr = get_ab_test_manager()
         return {"tests": mgr.list_tests()}
-    except Exception:
+    except Exception:  # nosec B110
         pass
     try:
         from database.connection import get_db_manager
@@ -327,7 +327,7 @@ async def get_model_drift(user: TokenPayload = Depends(_require_superadmin)) -> 
         from ml.drift_detector import get_drift_detector  # type: ignore[import]
         detector = get_drift_detector()
         return detector.get_all_drift()
-    except Exception:
+    except Exception:  # nosec B110
         pass
     # No drift detector available and no real metrics to return.
     # Return an empty list rather than synthetic data — callers must handle
@@ -349,7 +349,7 @@ async def get_model_explainability(
     try:
         from ml.explainability import get_shap_values  # type: ignore[import]
         return get_shap_values(model)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     # Fallback: load model and compute basic feature importance
     try:

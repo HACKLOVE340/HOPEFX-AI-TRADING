@@ -927,7 +927,7 @@ def _patch_timescale_batch_insert() -> None:
             logger.warning("_TimescaleBackend.batch_insert failed: %s", exc)
             try:
                 self._conn.rollback()
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             return 0
 

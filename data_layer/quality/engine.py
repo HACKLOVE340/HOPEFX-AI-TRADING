@@ -347,7 +347,7 @@ class DataQualityEngine:
         state.kalman_smoothed = smoothed
         state.kalman_innovation = innovation
         # Large Kalman innovation (> 3× process noise std) flags suspect tick
-        innovation_threshold = 3.0 * np.sqrt(KALMAN_PROCESS_NOISE) * max(tick.mid, 1.0)
+        innovation_threshold = 3.0 * np.sqrt(np.nan_to_num(KALMAN_PROCESS_NOISE, nan=1e-6)) * max(tick.mid, 1.0)
         if abs(innovation) > innovation_threshold and state.accept_count > 10:
             state.anomaly_count += 1
             state.update_confidence(-0.01)

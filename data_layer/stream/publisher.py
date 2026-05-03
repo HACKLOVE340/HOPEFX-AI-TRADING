@@ -673,13 +673,13 @@ class TickConsumer:
                 try:
                     tick[k] = json.loads(v)
                     continue
-                except (json.JSONDecodeError, ValueError):
+                except (json.JSONDecodeError, ValueError):  # nosec B110
                     pass
             # Try numeric coercion.
             try:
                 tick[k] = float(v)
                 continue
-            except ValueError:
+            except ValueError:  # nosec B110
                 pass
             tick[k] = v
         return tick

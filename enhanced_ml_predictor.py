@@ -1964,7 +1964,7 @@ def generate_synthetic_data(n_samples: int = 5000, trend: float = 0.0001, volati
         UserWarning,
         stacklevel=2,
     )
-    _rng = np.random.default_rng()  # unseeded — synthetic data is dev/test only
+    _rng = np.random.default_rng()  # unseeded — non-deterministic GBM for CI smoke tests
     returns = _rng.normal(trend, volatility, n_samples)
     for i in range(1, n_samples):
         returns[i] *= 1 + abs(returns[i - 1]) * 3

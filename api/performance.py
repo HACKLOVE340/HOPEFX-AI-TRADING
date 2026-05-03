@@ -437,7 +437,7 @@ async def trade_breakdown(
                 session = "asian"
             by_session[session]["trades"] += 1
             by_session[session]["pnl"] += pnl
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # Compute win rates

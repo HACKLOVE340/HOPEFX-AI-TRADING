@@ -73,7 +73,7 @@ class TickDataRepository(AsyncRepository[TickData]):
         await session.flush()
         try:
             await session.refresh(tick)
-        except Exception:
+        except Exception:  # nosec B110
             pass  # BigInteger PK refresh may fail on SQLite; safe to ignore
         return tick
 

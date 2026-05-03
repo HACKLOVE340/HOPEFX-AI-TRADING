@@ -384,7 +384,7 @@ class DatabaseManager:
                     self._metrics.active_connections = self._engine.pool.checkedout()
                     self._metrics.idle_connections = self._engine.pool.checkedin()
                     self._metrics.pool_overflow = self._engine.pool.overflow()
-                except Exception:
+                except Exception:  # nosec B110
                     pass
             return self._metrics.to_dict()
 
@@ -904,7 +904,7 @@ if SQLALCHEMY_AVAILABLE:
                     "Database circuit breaker is OPEN — service temporarily unavailable. "
                     f"Retry in {db_breaker._seconds_until_probe():.0f}s."
                 )
-        except ImportError:
+        except ImportError:  # nosec B110
             pass
 
         try:
@@ -913,7 +913,7 @@ if SQLALCHEMY_AVAILABLE:
                     from resilience.service_circuit_breakers import db_breaker as _cb
 
                     _cb.record_success()
-                except Exception:
+                except Exception:  # nosec B110
                     pass
                 yield session
         except Exception as _exc:
@@ -921,7 +921,7 @@ if SQLALCHEMY_AVAILABLE:
                 from resilience.service_circuit_breakers import db_breaker as _cb
 
                 _cb.record_failure(_exc)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             raise
 

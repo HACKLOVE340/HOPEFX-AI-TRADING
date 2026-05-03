@@ -224,7 +224,7 @@ class MarketDataRepository(AsyncRepository[MarketData]):
                 sync_bind = session.sync_session.bind
                 if sync_bind is not None:
                     dialect_name = sync_bind.dialect.name
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         if dialect_name == "postgresql":

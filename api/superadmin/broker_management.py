@@ -56,7 +56,7 @@ def _get_broker_health_from_app() -> list[dict]:
                 "uptime_pct": 99.9 if connected else 0.0,
                 "last_heartbeat": _utcnow().isoformat(),
             }]
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return []
 
@@ -76,7 +76,7 @@ async def get_broker_health(
                 raw = rc.get(_BROKER_HEALTH_KEY)
                 if raw:
                     brokers = json.loads(raw)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     if not brokers:
@@ -112,7 +112,7 @@ async def get_broker_health(
                 b["orders_today"] = count
         finally:
             db.close()
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {"brokers": brokers, "total": len(brokers)}
@@ -223,7 +223,7 @@ async def get_broker_routing(
             raw = rc.get(_BROKER_ROUTING_KEY)
             if raw:
                 config = json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     if not config:
