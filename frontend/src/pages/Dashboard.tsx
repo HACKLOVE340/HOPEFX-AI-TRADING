@@ -516,13 +516,13 @@ const RiskSnapshotPanel: React.FC = () => {
 
 const QUICK_LINKS = [
   { icon: '⚡', label: 'Trade',        path: '/trade'        },
-  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-charts'    },
+  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-chart'     },
   { icon: '☢️', label: 'Nuclear AI',   path: '/nuclear'      },
   { icon: '📓', label: 'Journal',      path: '/journal'      },
   { icon: '🏆', label: 'Performance',  path: '/performance'  },
   { icon: '💹', label: 'P&L',          path: '/pnl'          },
   { icon: '🌍', label: 'Geopolitical', path: '/geopolitical' },
-  { icon: '📡', label: 'Signal Feed',  path: '/feed'         },
+  { icon: '📡', label: 'Signal Feed',  path: '/signals'      },
   { icon: '👁', label: 'Watchlist',    path: '/watchlist'    },
   { icon: '🔗', label: 'Correlation',  path: '/correlation'  },
   { icon: '🔁', label: 'Copy Trading', path: '/copy-trading' },

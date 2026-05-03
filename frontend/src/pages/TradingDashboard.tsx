@@ -48,8 +48,8 @@ const QuickActionBar: React.FC = () => {
     { label: '🧠 AI Strategy',     path: '/ai-strategy',    color: '#06b6d4' },
     { label: '🌍 Geopolitical',    path: '/geopolitical',   color: '#f59e0b' },
     { label: '📓 Journal',         path: '/journal',        color: '#10b981' },
-    { label: '🛡 Risk Calc',       path: '/risk-calc',      color: '#ec4899' },
-    { label: '📡 Signal Feed',     path: '/feed',           color: '#a78bfa' },
+    { label: '🛡 Risk Calc',       path: '/risk-calculator', color: '#ec4899' },
+    { label: '📡 Signal Feed',     path: '/signals',         color: '#a78bfa' },
     { label: '🔁 Copy Trading',    path: '/copy-trading',   color: '#34d399' },
   ];
 

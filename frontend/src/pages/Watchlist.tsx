@@ -215,7 +215,7 @@ const WatchlistPage: React.FC = () => {
             <div key={item.symbol} style={s.tableRow}>
               <span
                 style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}
-                onClick={() => navigate('/ai-charts')}
+                onClick={() => navigate('/ai-chart')}
                 title={`Open ${item.symbol} chart`}
               >
                 {item.symbol}

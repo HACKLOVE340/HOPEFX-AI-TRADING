@@ -459,7 +459,7 @@ const Portfolio: React.FC = () => {
             ⚡ Trade
           </button>
           <button
-            onClick={() => navigate('/trade-journal')}
+            onClick={() => navigate('/journal')}
             className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors"
           >
             📓 Journal
