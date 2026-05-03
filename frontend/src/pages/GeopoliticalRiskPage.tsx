@@ -355,7 +355,7 @@ const s: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
     color: '#e2e8f0',
   },
-  pageHeader: { marginBottom: 24 },
+  pageHeader: { marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 },
   pageTitle: {
     margin: 0,
     fontSize: 22,
