@@ -279,30 +279,75 @@ async def init_database(s: Any) -> Any:
                 "processes and will corrupt data. Set DATABASE_URL to a "
                 "PostgreSQL connection string before starting with multiple workers."
             )
-        # SQLite is expected in dev — log at INFO, not WARNING.
         logger.info(
             "Database is SQLite (%s) — suitable for local development only. Use PostgreSQL for production.",
             conn_str,
         )
-    engine_kwargs: ClassVar[dict] = {}
-    if not is_sqlite:
-        engine_kwargs["pool_size"] = int(os.getenv("DB_POOL_SIZE", str(s.config.database.connection_pool_size)))
-        engine_kwargs["max_overflow"] = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(s.config.database.max_overflow)))
-        # Raise after 30 s waiting for a connection rather than blocking forever.
-        engine_kwargs["pool_timeout"] = float(os.getenv("DB_POOL_TIMEOUT", "30"))
-        # Recycle connections after 1 hour to avoid stale TCP connections.
-        engine_kwargs["pool_recycle"] = int(os.getenv("DB_POOL_RECYCLE", "3600"))
-        # Ping before checkout so dead connections are replaced transparently.
-        engine_kwargs["pool_pre_ping"] = True
 
-    # PostgreSQL: enforce a per-statement timeout so a runaway query cannot
-    # hold a connection indefinitely. 30 s is generous for OLTP workloads.
+    # ── Pool configuration ────────────────────────────────────────────────────
+    # Read from DatabaseSettings (config/settings.py) so all pool knobs are
+    # controlled from one place.  Env-var overrides (DB_POOL_SIZE etc.) are
+    # still honoured for backwards compatibility with existing deployments.
+    engine_kwargs: dict = {}
+    if not is_sqlite:
+        try:
+            from config.settings import get_settings as _get_settings
+            _db_cfg = _get_settings().db
+            _pool_size    = int(os.getenv("DB_POOL_SIZE",    str(_db_cfg.pool_size)))
+            _max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(_db_cfg.max_overflow)))
+            _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT",  str(_db_cfg.pool_timeout)))
+            _pool_recycle = int(os.getenv("DB_POOL_RECYCLE",   str(_db_cfg.pool_recycle)))
+            _pool_pre_ping = _db_cfg.pool_pre_ping
+        except Exception as _cfg_err:
+            logger.warning(
+                "Could not load DatabaseSettings — using legacy env-var defaults: %s", _cfg_err
+            )
+            _pool_size    = int(os.getenv("DB_POOL_SIZE", "20"))
+            _max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", "10"))
+            _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT", "30"))
+            _pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))
+            _pool_pre_ping = True
+
+        engine_kwargs["pool_size"]     = _pool_size
+        engine_kwargs["max_overflow"]  = _max_overflow
+        engine_kwargs["pool_timeout"]  = _pool_timeout
+        engine_kwargs["pool_recycle"]  = _pool_recycle
+        engine_kwargs["pool_pre_ping"] = _pool_pre_ping
+        logger.info(
+            "DB pool: size=%d overflow=%d timeout=%.0fs recycle=%ds pre_ping=%s",
+            _pool_size, _max_overflow, _pool_timeout, _pool_recycle, _pool_pre_ping,
+        )
+
+    # ── connect_args ──────────────────────────────────────────────────────────
+    # For PostgreSQL we set connect_timeout (TCP handshake) and
+    # application_name (visible in pg_stat_activity for debugging).
+    # statement_timeout is set as a GUC via server_settings so it applies to
+    # every statement on the connection without requiring a SET command.
+    # Note: asyncpg uses server_settings; psycopg2 uses options="-c ...".
+    # We detect the driver from the URL scheme and build the right dict.
     if "postgresql" in conn_str:
         stmt_timeout_ms = int(os.getenv("DB_STATEMENT_TIMEOUT_MS", "30000"))
-        engine_kwargs["connect_args"] = {
-            "connect_timeout": int(os.getenv("DB_CONNECT_TIMEOUT", "10")),
-            "options": f"-c statement_timeout={stmt_timeout_ms}",
-        }
+        connect_timeout = int(os.getenv("DB_CONNECT_TIMEOUT", "10"))
+        app_name = os.getenv("DB_APPLICATION_NAME", "hopefx")
+
+        if "asyncpg" in conn_str:
+            # asyncpg driver — use server_settings dict
+            engine_kwargs["connect_args"] = {
+                "command_timeout": float(os.getenv("DB_COMMAND_TIMEOUT", "60")),
+                "server_settings": {
+                    "application_name": app_name,
+                    "statement_timeout": str(stmt_timeout_ms),
+                },
+            }
+        else:
+            # psycopg2 / psycopg3 driver — use options string
+            engine_kwargs["connect_args"] = {
+                "connect_timeout": connect_timeout,
+                "options": (
+                    f"-c statement_timeout={stmt_timeout_ms} "
+                    f"-c application_name={app_name}"
+                ),
+            }
 
     engine = create_engine(conn_str, **engine_kwargs)
     try:
@@ -414,6 +459,7 @@ def _enforce_redis_maxmemory(host: str, port: int, password: str | None = None) 
 
 
 async def init_cache(s: Any) -> Any:
+    # ── Redis URL resolution ──────────────────────────────────────────────────
     # Prefer REDIS_URL (used by get_redis() and the rest of the app) over
     # the legacy REDIS_HOST / REDIS_PORT pair so all components share the
     # same Redis instance.
@@ -438,6 +484,24 @@ async def init_cache(s: Any) -> Any:
         password = os.getenv("REDIS_PASSWORD") or None
         db = 0
 
+    # ── TLS ssl_context from RedisSettings ───────────────────────────────────
+    # Build the ssl_context once here so MarketDataCache and every other
+    # Redis client in the process uses the same TLS configuration.
+    # Falls back gracefully when config/settings.py is unavailable.
+    _ssl_context = None
+    try:
+        from config.settings import get_settings as _get_settings
+        _redis_cfg = _get_settings().redis
+        _ssl_context = _redis_cfg.build_ssl_context()
+        if _ssl_context is not None:
+            logger.info(
+                "Redis TLS enabled (force_tls=%s skip_verify=%s)",
+                _redis_cfg.force_tls,
+                _redis_cfg.tls_skip_verify,
+            )
+    except Exception as _tls_err:
+        logger.debug("RedisSettings TLS config skipped (non-fatal): %s", _tls_err)
+
     # Enforce maxmemory before the cache starts writing tick data.
     # Runs in executor so the sync Redis client doesn't block the event loop.
     loop = asyncio.get_running_loop()
@@ -445,7 +509,9 @@ async def init_cache(s: Any) -> Any:
 
     from cache import MarketDataCache
 
-    cache = MarketDataCache(
+    # Pass ssl_context when TLS is required; MarketDataCache forwards it to
+    # redis.Redis(ssl_context=...) so the connection is encrypted end-to-end.
+    _cache_kwargs: dict = dict(
         host=host,
         port=port,
         db=db,
@@ -454,7 +520,13 @@ async def init_cache(s: Any) -> Any:
         socket_connect_timeout=1,
         enable_fallback=True,
     )
+    if _ssl_context is not None:
+        _cache_kwargs["ssl"] = True
+        _cache_kwargs["ssl_context"] = _ssl_context
 
+    cache = MarketDataCache(**_cache_kwargs)
+
+    # ── Celery health registration ────────────────────────────────────────────
     # Wire Celery worker heartbeat registration so workers write their
     # liveness key to the same Redis instance the health probe reads from.
     try:
