@@ -27,8 +27,27 @@ class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB_")
 
     url: SecretStr = Field(default="postgresql+asyncpg://localhost/hopefx")
-    pool_size: int = 20
-    max_overflow: int = 10
+
+    # Connection pool sizing
+    # pool_size: number of persistent connections kept open.
+    # max_overflow: extra connections allowed above pool_size under load.
+    # pool_timeout: seconds to wait for a connection before raising.
+    # pool_recycle: seconds before a connection is replaced (prevents stale
+    #   connections after DB-side idle timeouts, typically 8 h on RDS/Cloud SQL).
+    # pool_pre_ping: issue a lightweight SELECT 1 before handing out a
+    #   connection so dead connections are detected and replaced transparently.
+    pool_size: int = Field(default=20, ge=1)
+    max_overflow: int = Field(default=10, ge=0)
+    pool_timeout: float = Field(default=30.0, gt=0)
+    pool_recycle: int = Field(default=1800, ge=60)   # 30 min — well under RDS 8 h idle timeout
+    pool_pre_ping: bool = True
+
+    # asyncpg connect_args — passed directly to the asyncpg driver.
+    # command_timeout: per-query timeout in seconds (None = no limit).
+    # server_settings: PostgreSQL session-level GUCs applied at connect time.
+    command_timeout: float | None = Field(default=60.0)
+    application_name: str = Field(default="hopefx")
+
     echo: bool = False
 
     @field_validator("url", mode="before")
@@ -37,6 +56,20 @@ class DatabaseSettings(BaseSettings):
         if isinstance(v, str) and v.startswith("vault:"):
             return vault.decrypt(v[6:])
         return v
+
+    def asyncpg_connect_args(self) -> dict:
+        """Return connect_args dict for create_async_engine().
+
+        Includes command_timeout and server_settings so every connection
+        carries the application name (visible in pg_stat_activity) and
+        respects the per-query timeout.
+        """
+        args: dict = {
+            "server_settings": {"application_name": self.application_name},
+        }
+        if self.command_timeout is not None:
+            args["command_timeout"] = self.command_timeout
+        return args
 
 
 class RedisSettings(BaseSettings):
@@ -47,6 +80,7 @@ class RedisSettings(BaseSettings):
     socket_connect_timeout: float = 5.0
     health_check_interval: int = 30
     max_connections: int = 100
+
     # TLS enforcement — IS_FORCE_TLS (canonical) or REDIS_FORCE_TLS (alias)
     force_tls: bool = Field(default=False, alias="REDIS_FORCE_TLS")
     tls_skip_verify: bool = Field(default=False, alias="REDIS_TLS_SKIP_VERIFY")
@@ -63,6 +97,89 @@ class RedisSettings(BaseSettings):
             if is_force == "true":
                 values["REDIS_FORCE_TLS"] = True
         return values
+
+    def build_ssl_context(self):
+        """Return an ssl.SSLContext for TLS Redis connections, or None.
+
+        Called by the Redis client factory in database/connection.py and
+        cache/redis_client.py.  Returns None when TLS is not required so
+        callers can pass ``ssl=settings.redis.build_ssl_context()`` directly
+        without branching.
+
+        Behaviour:
+        - force_tls=False and URL does not start with rediss:// → None
+        - force_tls=True or URL starts with rediss:// → SSLContext
+          - tls_skip_verify=True  → CERT_NONE (internal networks only)
+          - tls_ca_cert set       → CERT_REQUIRED with custom CA bundle
+          - otherwise             → CERT_REQUIRED with system CA store
+          - tls_client_cert + tls_client_key set → mutual TLS (mTLS)
+        """
+        import ssl
+
+        redis_url = (
+            self.url.get_secret_value()
+            if hasattr(self.url, "get_secret_value")
+            else str(self.url)
+        )
+        needs_tls = self.force_tls or redis_url.startswith("rediss://")
+        if not needs_tls:
+            return None
+
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+        if self.tls_skip_verify:
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            logger.warning(
+                "Redis TLS: certificate verification disabled (REDIS_TLS_SKIP_VERIFY=true). "
+                "Only acceptable on private internal networks."
+            )
+        elif self.tls_ca_cert:
+            ctx.load_verify_locations(cafile=self.tls_ca_cert)
+        else:
+            ctx.load_default_certs()
+
+        if self.tls_client_cert and self.tls_client_key:
+            ctx.load_cert_chain(
+                certfile=self.tls_client_cert,
+                keyfile=self.tls_client_key,
+            )
+            logger.info("Redis TLS: mTLS client certificate loaded")
+
+        return ctx
+
+    def client_kwargs(self) -> dict:
+        """Return kwargs for redis.Redis() / redis.asyncio.Redis() construction.
+
+        Merges connection pool sizing, socket timeouts, health-check interval,
+        and TLS ssl_context into a single dict so every Redis client factory
+        in the codebase uses identical settings.
+
+        Usage::
+
+            import redis
+            from config.settings import get_settings
+
+            r = redis.Redis(**get_settings().redis.client_kwargs())
+        """
+        redis_url = (
+            self.url.get_secret_value()
+            if hasattr(self.url, "get_secret_value")
+            else str(self.url)
+        )
+        kwargs: dict = {
+            "url": redis_url,
+            "socket_timeout": self.socket_timeout,
+            "socket_connect_timeout": self.socket_connect_timeout,
+            "health_check_interval": self.health_check_interval,
+            "max_connections": self.max_connections,
+            "decode_responses": True,
+        }
+        ssl_ctx = self.build_ssl_context()
+        if ssl_ctx is not None:
+            kwargs["ssl"] = True
+            kwargs["ssl_context"] = ssl_ctx
+        return kwargs
 
 
 def resolve_oanda_token() -> str:
