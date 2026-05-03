@@ -1002,3 +1002,275 @@ class MarketDataCache:
 
 # Alias expected by tests
 CachedTickData = TickData
+
+
+# ── Write-through / read-through cache layer ──────────────────────────────────
+
+class WriteThroughCache:
+    """
+    Write-through / read-through cache layer over MarketDataCache.
+
+    Every write goes to both the cache and the backing store simultaneously.
+    Reads are served from cache; on a miss the backing store is queried and
+    the result is populated into the cache.
+
+    The backing store must implement:
+        get_tick(symbol: str) -> Any | None
+        store_tick(symbol: str, value: Any) -> None
+        get_ohlcv(symbol: str, timeframe: str, limit: int) -> list | None
+        store_ohlcv(symbol: str, timeframe: str, data: list) -> None
+
+    Usage::
+
+        store = MyDatabaseStore()
+        wt = WriteThroughCache(market_data_cache, store)
+
+        # Write-through tick
+        wt.set_tick("XAU_USD", tick_data)
+
+        # Read-through tick (cache → store on miss)
+        tick = wt.get_tick("XAU_USD")
+    """
+
+    def __init__(
+        self,
+        cache: MarketDataCache,
+        backing_store: Any,
+        default_ttl_s: int = 300,
+    ) -> None:
+        self._cache = cache
+        self._store = backing_store
+        self._default_ttl_s = default_ttl_s
+        self._hits = 0
+        self._misses = 0
+        self._writes = 0
+        self._lock = threading.Lock()
+
+    # ── Tick ──────────────────────────────────────────────────────────────────
+
+    def get_tick(self, symbol: str) -> Any | None:
+        """Read-through: cache → backing store on miss."""
+        cached = self._cache.get_tick(symbol)
+        if cached is not None:
+            with self._lock:
+                self._hits += 1
+            return cached
+        with self._lock:
+            self._misses += 1
+        value = None
+        try:
+            value = self._store.get_tick(symbol)
+        except Exception as exc:
+            logger.warning("WriteThroughCache store.get_tick failed for %r: %s", symbol, exc)
+        if value is not None:
+            try:
+                self._cache.cache_tick(symbol, value, ttl=self._default_ttl_s)
+            except Exception as exc:
+                logger.debug("WriteThroughCache populate tick failed for %r: %s", symbol, exc)
+        return value
+
+    def set_tick(self, symbol: str, value: Any, ttl_s: int | None = None) -> None:
+        """Write-through: write tick to cache and backing store."""
+        ttl = ttl_s or self._default_ttl_s
+        try:
+            self._cache.cache_tick(symbol, value, ttl=ttl)
+        except Exception as exc:
+            logger.warning("WriteThroughCache cache_tick failed for %r: %s", symbol, exc)
+        try:
+            self._store.store_tick(symbol, value)
+        except Exception as exc:
+            logger.warning("WriteThroughCache store_tick failed for %r: %s", symbol, exc)
+        with self._lock:
+            self._writes += 1
+
+    # ── OHLCV ─────────────────────────────────────────────────────────────────
+
+    def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 200) -> list | None:
+        """Read-through OHLCV: cache → backing store on miss."""
+        cached = self._cache.get_ohlcv(symbol, timeframe, limit=limit)
+        if cached is not None:
+            with self._lock:
+                self._hits += 1
+            return cached
+        with self._lock:
+            self._misses += 1
+        data = None
+        try:
+            data = self._store.get_ohlcv(symbol, timeframe, limit)
+        except Exception as exc:
+            logger.warning("WriteThroughCache store.get_ohlcv failed for %r/%s: %s", symbol, timeframe, exc)
+        if data is not None:
+            try:
+                self._cache.cache_ohlcv(symbol, timeframe, data)
+            except Exception as exc:
+                logger.debug("WriteThroughCache populate ohlcv failed: %s", exc)
+        return data
+
+    def set_ohlcv(self, symbol: str, timeframe: str, data: list) -> None:
+        """Write-through OHLCV: write to cache and backing store."""
+        try:
+            self._cache.cache_ohlcv(symbol, timeframe, data)
+        except Exception as exc:
+            logger.warning("WriteThroughCache cache_ohlcv failed: %s", exc)
+        try:
+            self._store.store_ohlcv(symbol, timeframe, data)
+        except Exception as exc:
+            logger.warning("WriteThroughCache store_ohlcv failed: %s", exc)
+        with self._lock:
+            self._writes += 1
+
+    def stats(self) -> dict:
+        with self._lock:
+            total = self._hits + self._misses
+            return {
+                "hits": self._hits,
+                "misses": self._misses,
+                "writes": self._writes,
+                "hit_rate_pct": round(self._hits / max(total, 1) * 100, 2),
+            }
+
+
+# ── Cache warming ─────────────────────────────────────────────────────────────
+
+class CacheWarmer:
+    """
+    Pre-populates the cache with data from a backing store on startup.
+
+    Warming strategies:
+    - ``warm_symbols``: fetch latest tick for each symbol and cache it
+    - ``warm_ohlcv``: fetch recent OHLCV bars for each symbol/timeframe pair
+    - ``schedule_refresh``: background thread that re-warms at a fixed interval
+
+    Usage::
+
+        warmer = CacheWarmer(cache, data_source)
+        warmer.warm_symbols(["XAU_USD", "EUR_USD"])
+        warmer.warm_ohlcv(["XAU_USD"], [Timeframe.ONE_MINUTE, Timeframe.ONE_HOUR])
+        warmer.schedule_refresh(interval_s=300)
+    """
+
+    def __init__(self, cache: MarketDataCache, data_source: Any) -> None:
+        self._cache = cache
+        self._source = data_source
+        self._refresh_thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._warm_count = 0
+        self._last_warm_at: float | None = None
+
+    def warm_symbols(self, symbols: list[str]) -> int:
+        """
+        Fetch and cache the latest tick for each symbol.
+
+        The data source must implement ``get_latest_tick(symbol) -> Any | None``.
+        Returns the number of symbols successfully warmed.
+        """
+        warmed = 0
+        for symbol in symbols:
+            try:
+                tick = self._source.get_latest_tick(symbol)
+                if tick is not None:
+                    self._cache.cache_tick(symbol, tick)
+                    warmed += 1
+                    logger.debug("CacheWarmer: warmed tick for %s", symbol)
+            except Exception as exc:
+                logger.warning("CacheWarmer.warm_symbols failed for %s: %s", symbol, exc)
+        self._warm_count += warmed
+        self._last_warm_at = time.time()
+        logger.info("CacheWarmer: warmed %d/%d symbols", warmed, len(symbols))
+        return warmed
+
+    def warm_ohlcv(
+        self,
+        symbols: list[str],
+        timeframes: list[Timeframe],
+        bars: int = 200,
+    ) -> int:
+        """
+        Fetch and cache recent OHLCV bars for each symbol/timeframe pair.
+
+        The data source must implement
+        ``get_ohlcv(symbol, timeframe_str, limit) -> list | None``.
+        Returns the number of (symbol, timeframe) pairs successfully warmed.
+        """
+        warmed = 0
+        for symbol in symbols:
+            for tf in timeframes:
+                tf_str = tf.value if isinstance(tf, Timeframe) else str(tf)
+                try:
+                    data = self._source.get_ohlcv(symbol, tf_str, bars)
+                    if data is not None and len(data) > 0:
+                        self._cache.cache_ohlcv(symbol, tf_str, data)
+                        warmed += 1
+                        logger.debug(
+                            "CacheWarmer: warmed OHLCV %s/%s (%d bars)",
+                            symbol,
+                            tf_str,
+                            len(data),
+                        )
+                except Exception as exc:
+                    logger.warning(
+                        "CacheWarmer.warm_ohlcv failed for %s/%s: %s",
+                        symbol,
+                        tf_str,
+                        exc,
+                    )
+        self._warm_count += warmed
+        self._last_warm_at = time.time()
+        logger.info(
+            "CacheWarmer: warmed %d/%d symbol/timeframe pairs",
+            warmed,
+            len(symbols) * len(timeframes),
+        )
+        return warmed
+
+    def schedule_refresh(
+        self,
+        symbols: list[str],
+        timeframes: list[Timeframe] | None = None,
+        interval_s: float = 300.0,
+    ) -> None:
+        """
+        Start a background thread that re-warms the cache every ``interval_s`` seconds.
+
+        Stops when ``stop()`` is called.
+        """
+        if self._refresh_thread and self._refresh_thread.is_alive():
+            logger.warning("CacheWarmer: refresh thread already running")
+            return
+
+        self._stop_event.clear()
+        tfs = timeframes or [Timeframe.ONE_MINUTE, Timeframe.FIVE_MINUTES, Timeframe.ONE_HOUR]
+
+        def _loop() -> None:
+            while not self._stop_event.wait(timeout=interval_s):
+                try:
+                    self.warm_symbols(symbols)
+                    self.warm_ohlcv(symbols, tfs)
+                except Exception as exc:
+                    logger.warning("CacheWarmer refresh error: %s", exc)
+
+        self._refresh_thread = threading.Thread(
+            target=_loop, daemon=True, name="cache-warmer"
+        )
+        self._refresh_thread.start()
+        logger.info(
+            "CacheWarmer: scheduled refresh every %.0fs for %d symbols",
+            interval_s,
+            len(symbols),
+        )
+
+    def stop(self) -> None:
+        """Stop the background refresh thread."""
+        self._stop_event.set()
+        if self._refresh_thread:
+            self._refresh_thread.join(timeout=3.0)
+        logger.info("CacheWarmer: stopped")
+
+    def stats(self) -> dict:
+        return {
+            "total_warmed": self._warm_count,
+            "last_warm_at": self._last_warm_at,
+            "refresh_running": bool(
+                self._refresh_thread and self._refresh_thread.is_alive()
+            ),
+        }
