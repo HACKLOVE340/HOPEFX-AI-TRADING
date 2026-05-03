@@ -34,6 +34,8 @@ import asyncio
 import json
 import logging
 import os
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -49,6 +51,12 @@ TICK_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_TICK_INTERVAL", "2.0")
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_PUBLIC_HEARTBEAT_INTERVAL", "30.0"))
 MAX_PUBLIC_CONNECTIONS: int = int(os.getenv("WS_PUBLIC_MAX_CONNECTIONS", "500"))
 
+# Per-IP rate limiting
+# Max concurrent open connections from a single IP address.
+WS_MAX_CONNECTIONS_PER_IP: int = int(os.getenv("WS_MAX_CONNECTIONS_PER_IP", "10"))
+# Max new connections per IP per minute (sliding window).
+WS_MAX_CONNECTIONS_PER_MINUTE: int = int(os.getenv("WS_MAX_CONNECTIONS_PER_MINUTE", "30"))
+
 PUBLIC_SYMBOLS = [
     "XAU_USD",
     "EUR_USD",
@@ -63,6 +71,61 @@ PUBLIC_SYMBOLS = [
 # ── Connection registry ───────────────────────────────────────────────────────
 _active_connections: set[WebSocket] = set()
 _last_mid: dict[str, float] = {}
+
+# Per-IP tracking: ip → count of open connections
+_ip_open_count: dict[str, int] = defaultdict(int)
+# Per-IP rate window: ip → deque of connect timestamps (monotonic seconds)
+_ip_rate_window: dict[str, deque] = defaultdict(deque)
+_ip_lock = asyncio.Lock()
+
+
+def _get_client_ip(ws: WebSocket) -> str:
+    """Extract the real client IP, honouring X-Forwarded-For when present."""
+    forwarded = ws.headers.get("x-forwarded-for", "")
+    if forwarded:
+        # Take the first (leftmost) address — the original client.
+        return forwarded.split(",")[0].strip()
+    client = ws.client
+    return client.host if client else "unknown"
+
+
+async def _check_ip_rate_limit(ip: str) -> tuple[bool, str]:
+    """
+    Check per-IP rate limits.
+
+    Returns (allowed: bool, reason: str).
+    Cleans up stale rate-window entries on each call.
+    """
+    async with _ip_lock:
+        now = time.monotonic()
+        window = _ip_rate_window[ip]
+
+        # Evict entries older than 60 seconds.
+        cutoff = now - 60.0
+        while window and window[0] < cutoff:
+            window.popleft()
+
+        # Check concurrent connection cap.
+        if _ip_open_count[ip] >= WS_MAX_CONNECTIONS_PER_IP:
+            return False, f"Too many concurrent connections from this IP (max {WS_MAX_CONNECTIONS_PER_IP})"
+
+        # Check per-minute rate.
+        if len(window) >= WS_MAX_CONNECTIONS_PER_MINUTE:
+            return False, f"Connection rate limit exceeded (max {WS_MAX_CONNECTIONS_PER_MINUTE}/min)"
+
+        # Admit the connection.
+        window.append(now)
+        _ip_open_count[ip] += 1
+        return True, ""
+
+
+async def _release_ip_slot(ip: str) -> None:
+    """Decrement the open-connection counter for an IP on disconnect."""
+    async with _ip_lock:
+        if _ip_open_count[ip] > 0:
+            _ip_open_count[ip] -= 1
+        if _ip_open_count[ip] == 0:
+            _ip_open_count.pop(ip, None)
 
 
 async def _get_price_tick(symbol: str) -> dict | None:
@@ -157,16 +220,34 @@ async def ws_public(ws: WebSocket) -> None:
     Public WebSocket endpoint — no authentication required.
 
     Broadcasts price ticks for PUBLIC_SYMBOLS at TICK_INTERVAL_SECONDS.
+
+    Rate limiting (per-IP):
+      - Max WS_MAX_CONNECTIONS_PER_IP concurrent connections (default 10).
+      - Max WS_MAX_CONNECTIONS_PER_MINUTE new connections per minute (default 30).
+      - Global cap: WS_PUBLIC_MAX_CONNECTIONS total concurrent connections.
     """
+    # ── Global capacity check (before accept to avoid wasting a handshake) ──
     if len(_active_connections) >= MAX_PUBLIC_CONNECTIONS:
         await ws.close(code=1013, reason="Server at capacity")
         return
 
+    # ── Per-IP rate limit check ───────────────────────────────────────────────
+    client_ip = _get_client_ip(ws)
+    allowed, reason = await _check_ip_rate_limit(client_ip)
+    if not allowed:
+        logger.warning("ws/public: rate-limited IP=%s reason=%r", client_ip, reason)
+        await ws.close(code=1008, reason=reason)
+        return
+
     await ws.accept()
     _active_connections.add(ws)
-    logger.debug("ws/public: new connection (total=%d)", len(_active_connections))
+    logger.debug(
+        "ws/public: new connection ip=%s total=%d",
+        client_ip,
+        len(_active_connections),
+    )
 
-    broadcast_task: asyncio.Task | None = None  # initialised before try so finally can always reference it
+    broadcast_task: asyncio.Task | None = None
     try:
         # Confirm subscription
         await ws.send_json({"type": "subscribed", "channels": ["prices"]})
@@ -186,11 +267,16 @@ async def ws_public(ws: WebSocket) -> None:
                 logger.debug("ws/public: ignoring malformed client message: %s", _exc)
 
     except WebSocketDisconnect:
-        logger.debug("ws/public: client disconnected normally")
+        logger.debug("ws/public: client disconnected normally ip=%s", client_ip)
     except Exception as exc:
-        logger.debug("ws/public: connection error: %s", exc)
+        logger.debug("ws/public: connection error ip=%s: %s", client_ip, exc)
     finally:
         if broadcast_task is not None:
             broadcast_task.cancel()
         _active_connections.discard(ws)
-        logger.debug("ws/public: disconnected (total=%d)", len(_active_connections))
+        await _release_ip_slot(client_ip)
+        logger.debug(
+            "ws/public: disconnected ip=%s total=%d",
+            client_ip,
+            len(_active_connections),
+        )
