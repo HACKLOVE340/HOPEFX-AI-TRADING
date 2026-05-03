@@ -29,6 +29,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
+from typing import TYPE_CHECKING
 
 UTC = timezone.utc
 
@@ -42,6 +43,7 @@ from collections.abc import AsyncGenerator
 from typing import ClassVar
 
 import strawberry
+from strawberry.dataloader import DataLoader
 from strawberry.fastapi import GraphQLRouter
 from strawberry.subscriptions import (
     GRAPHQL_TRANSPORT_WS_PROTOCOL,
@@ -50,6 +52,142 @@ from strawberry.subscriptions import (
 from strawberry.types import Info
 
 logger = logging.getLogger(__name__)
+
+
+# ── DataLoader batch functions ────────────────────────────────────────────────
+# Each batch function receives a list of keys and returns a list of results
+# in the same order.  Strawberry's DataLoader deduplicates and coalesces
+# concurrent requests within a single event-loop tick.
+
+
+async def _batch_load_positions(user_ids: list[str]) -> list[list]:
+    """
+    Batch-load open positions for multiple user IDs in one broker call.
+
+    For the paper broker (single-user) all user IDs map to the same position
+    list.  For multi-user deployments this would fan out to per-user queries.
+    """
+    try:
+        from core.app_state import app_state
+
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            return [[] for _ in user_ids]
+
+        # Single bulk fetch — the paper broker holds all positions in memory.
+        raw = broker.get_open_positions() or []
+        positions = [
+            Position(
+                id=str(p.get("id", uuid.uuid4())),
+                symbol=p.get("symbol", "XAU/USD"),
+                side=p.get("side", "long"),
+                lots=float(p.get("lots", 0.01)),
+                open_price=float(p.get("open_price", 0)),
+                current_price=float(p.get("current_price", 0)),
+                unrealized_pnl=float(p.get("unrealized_pnl", 0)),
+                stop_loss=p.get("stop_loss"),
+                take_profit=p.get("take_profit"),
+                opened_at=str(p.get("opened_at", datetime.now(UTC).isoformat())),
+            )
+            for p in raw
+        ]
+        # Return the same list for every requested user_id (single-user broker).
+        return [positions for _ in user_ids]
+    except Exception as exc:
+        logger.debug("DataLoader _batch_load_positions: %s", exc)
+        return [[] for _ in user_ids]
+
+
+async def _batch_load_trades(keys: list[tuple[str, int]]) -> list[list]:
+    """
+    Batch-load trade history for multiple (user_id, limit) keys.
+
+    Fetches the maximum requested limit once and slices per key.
+    """
+    try:
+        from core.app_state import app_state
+
+        broker = getattr(app_state, "broker", None)
+        if broker is None:
+            return [[] for _ in keys]
+
+        max_limit = max((limit for _, limit in keys), default=20)
+        raw = broker.get_trade_history(limit=max_limit) or []
+        all_trades = [
+            Trade(
+                id=str(t.get("id", uuid.uuid4())),
+                symbol=t.get("symbol", "XAU/USD"),
+                side=t.get("side", "long"),
+                lots=float(t.get("lots", 0.01)),
+                open_price=float(t.get("open_price", 0)),
+                close_price=float(t.get("close_price", 0)),
+                pnl=float(t.get("pnl", 0)),
+                pips=float(t.get("pips", 0)),
+                opened_at=str(t.get("opened_at", "")),
+                closed_at=str(t.get("closed_at", "")),
+                duration_minutes=int(t.get("duration_minutes", 0)),
+            )
+            for t in raw
+        ]
+        return [all_trades[:limit] for _, limit in keys]
+    except Exception as exc:
+        logger.debug("DataLoader _batch_load_trades: %s", exc)
+        return [[] for _ in keys]
+
+
+async def _batch_load_signals(keys: list[tuple[str, int]]) -> list[list]:
+    """
+    Batch-load recent signals for multiple (symbol, limit) keys.
+
+    Fetches from the signal engine once and filters per key.
+    """
+    try:
+        from core.app_state import app_state
+
+        signal_engine = getattr(app_state, "signal_engine", None)
+        if signal_engine is None:
+            return [[] for _ in keys]
+
+        max_limit = max((limit for _, limit in keys), default=10)
+        raw = getattr(signal_engine, "get_recent_signals", lambda n: [])(max_limit) or []
+        all_signals = [
+            Signal(
+                signal_id=str(s.get("id", uuid.uuid4())),
+                symbol=s.get("symbol", "XAU/USD"),
+                direction=str(s.get("direction", "neutral")),
+                confidence=float(s.get("confidence", 0.0)),
+                probability=float(s.get("probability", 0.5)),
+                high_confidence=bool(s.get("high_confidence", False)),
+                abstain=bool(s.get("abstain", False)),
+                entry_price=float(s.get("entry_price", 0)),
+                stop_loss=float(s.get("stop_loss", 0)),
+                take_profit=float(s.get("take_profit", 0)),
+                model_version=str(s.get("model_version", "unknown")),
+                created_at=str(s.get("created_at", datetime.now(UTC).isoformat())),
+            )
+            for s in raw
+        ]
+        return [
+            [sig for sig in all_signals if sig.symbol == symbol][:limit]
+            for symbol, limit in keys
+        ]
+    except Exception as exc:
+        logger.debug("DataLoader _batch_load_signals: %s", exc)
+        return [[] for _ in keys]
+
+
+def _make_context_loaders() -> dict:
+    """
+    Create per-request DataLoader instances.
+
+    DataLoaders must be created per-request (not module-level) so their
+    internal batch queues are isolated between concurrent requests.
+    """
+    return {
+        "positions_loader": DataLoader(load_fn=_batch_load_positions),
+        "trades_loader": DataLoader(load_fn=_batch_load_trades),
+        "signals_loader": DataLoader(load_fn=_batch_load_signals),
+    }
 
 # Gating is enforced by core/router_registry.py (feature_flags.GRAPHQL_API).
 # The router is always built here so it is ready when the flag is on.
@@ -396,57 +534,22 @@ class Query:
         return []
 
     @strawberry.field(description="Open positions")
-    def positions(self, info: Info) -> list[Position]:
-        _require_auth(info)
-        state = _get_broker_state()
-        if state and hasattr(state, "broker"):
-            try:
-                raw = state.broker.get_open_positions()
-                return [
-                    Position(
-                        id=str(p.get("id", uuid.uuid4())),
-                        symbol=p.get("symbol", "XAU/USD"),
-                        side=p.get("side", "long"),
-                        lots=float(p.get("lots", 0.01)),
-                        open_price=float(p.get("open_price", 0)),
-                        current_price=float(p.get("current_price", 0)),
-                        unrealized_pnl=float(p.get("unrealized_pnl", 0)),
-                        stop_loss=p.get("stop_loss"),
-                        take_profit=p.get("take_profit"),
-                        opened_at=str(p.get("opened_at", _utcnow().isoformat())),
-                    )
-                    for p in (raw or [])
-                ]
-            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
-                logger.debug("Positions fetch failed: %s", exc)
-        return []
+    async def positions(self, info: Info) -> list[Position]:
+        user = _require_auth(info)
+        user_id = user.get("sub", "default")
+        loader: DataLoader = info.context.get("positions_loader") or DataLoader(
+            load_fn=_batch_load_positions
+        )
+        return await loader.load(user_id)
 
     @strawberry.field(description="Recent closed trades")
-    def trades(self, info: Info, limit: int = 20) -> list[Trade]:
-        _require_auth(info)
-        state = _get_broker_state()
-        if state and hasattr(state, "broker"):
-            try:
-                raw = state.broker.get_trade_history(limit=limit)
-                if raw:
-                    return [
-                        Trade(
-                            id=str(t.get("id", uuid.uuid4())),
-                            symbol=t.get("symbol", "XAU/USD"),
-                            side=t.get("side", "long"),
-                            lots=float(t.get("lots", 0.01)),
-                            open_price=float(t.get("open_price", 0)),
-                            close_price=float(t.get("close_price", 0)),
-                            pnl=float(t.get("pnl", 0)),
-                            pips=float(t.get("pips", 0)),
-                            opened_at=str(t.get("opened_at", "")),
-                            closed_at=str(t.get("closed_at", "")),
-                            duration_minutes=int(t.get("duration_minutes", 0)),
-                        )
-                        for t in raw
-                    ]
-            except (RuntimeError, ValueError, OSError, AttributeError) as exc:
-                logger.debug("Trade history fetch failed: %s", exc)
+    async def trades(self, info: Info, limit: int = 20) -> list[Trade]:
+        user = _require_auth(info)
+        user_id = user.get("sub", "default")
+        loader: DataLoader = info.context.get("trades_loader") or DataLoader(
+            load_fn=_batch_load_trades
+        )
+        return await loader.load((user_id, limit))
 
         # DB fallback: read closed trades from the Trade table
         try:
@@ -1004,9 +1107,22 @@ schema = strawberry.Schema(
 # (the default) to re-enable it locally.
 _graphql_ide = None if os.getenv("APP_ENV", "development").lower() == "production" else "graphiql"
 
+async def _get_context() -> dict:
+    """
+    Per-request GraphQL context factory.
+
+    Creates fresh DataLoader instances for each request so their internal
+    batch queues are isolated between concurrent requests.  The loaders
+    coalesce all field-level loads within a single request into one batch
+    call, eliminating N+1 query patterns.
+    """
+    return _make_context_loaders()
+
+
 graphql_router = GraphQLRouter(
     schema,
     graphql_ide=_graphql_ide,
+    context_getter=_get_context,
     subscription_protocols=[
         GRAPHQL_TRANSPORT_WS_PROTOCOL,
         GRAPHQL_WS_PROTOCOL,
