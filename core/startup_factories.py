@@ -452,8 +452,12 @@ def _enforce_redis_maxmemory(host: str, port: int, password: str | None = None) 
         else:
             logger.debug("Redis maxmemory OK: %d bytes", maxmemory)
     except Exception as exc:
-        logger.warning(
-            "Could not check Redis maxmemory at startup (%s) — ensure Redis is reachable and maxmemory is configured.",
+        # Redis being unreachable at startup is expected in dev/offline mode.
+        # The automations.yaml Redis service sets maxmemory on start, so this
+        # check is a belt-and-suspenders guard for production deployments.
+        logger.info(
+            "Could not check Redis maxmemory at startup (%s) — "
+            "ensure Redis is running and maxmemory is configured in production.",
             exc,
         )
 
@@ -1426,7 +1430,10 @@ async def init_position_manager(s: Any) -> Any:
     """
     from execution.position_manager import position_manager as _pm
 
-    # Wire a Redis async client if available
+    # Wire a Redis async client if available.
+    # Only warn when REDIS_URL is explicitly configured but unreachable —
+    # absence of REDIS_URL in dev is expected and non-actionable.
+    _redis_url_explicit = bool(os.getenv("REDIS_URL", "").strip())
     try:
         import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
@@ -1439,13 +1446,20 @@ async def init_position_manager(s: Any) -> Any:
         _pm._redis_store = AsyncRedisStateStore(redis_client)
         logger.info("PositionManager: Redis client wired (%s)", redis_url)
     except Exception as exc:
-        logger.warning(
-            "PositionManager: could not wire Redis client (%s) — "
-            "positions will not survive restarts. Set REDIS_URL to enable persistence.",
-            exc,
-        )
+        if _redis_url_explicit:
+            logger.warning(
+                "PositionManager: could not wire Redis client (%s) — "
+                "positions will not survive restarts. Check REDIS_URL.",
+                exc,
+            )
+        else:
+            logger.info(
+                "PositionManager: Redis not configured — position state is in-memory only "
+                "(will not survive restarts). Set REDIS_URL to enable persistence."
+            )
 
-    # Restore open positions from the previous session
+    # Restore open positions from the previous session.
+    # A Timeout/ConnectionError here means Redis is not running — expected in dev.
     try:
         restored = await _pm.restore_from_redis()
         if restored:
@@ -1453,11 +1467,17 @@ async def init_position_manager(s: Any) -> Any:
         else:
             logger.info("PositionManager: no open positions to restore from Redis")
     except Exception as exc:
-        logger.warning(
-            "PositionManager: restore_from_redis() failed at startup (%s) — "
-            "starting with empty position state. Reconcile open positions manually.",
-            exc,
-        )
+        if _redis_url_explicit:
+            logger.warning(
+                "PositionManager: restore_from_redis() failed at startup (%s) — "
+                "starting with empty position state. Reconcile open positions manually.",
+                exc,
+            )
+        else:
+            logger.info(
+                "PositionManager: restore_from_redis() skipped (Redis not configured) — "
+                "starting with empty position state."
+            )
 
     return _pm
 
