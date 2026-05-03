@@ -26,6 +26,18 @@ The engine exposes:
   - is_blackout_window()               → bool (±N min around HIGH events)
   - get_ml_features(as_of)             → Dict[str, float]
 
+New in this version
+-------------------
+- Surprise factor computation: compute_surprise_factor() returns a signed
+  normalised surprise score for any event with actual + forecast values.
+  Direction-aware: CPI beat = bullish gold, NFP beat = bearish gold.
+- Event clustering: cluster_events() groups temporally close events into
+  clusters. Overlapping blackout windows are merged into a single cluster
+  with a combined impact score.
+- Blackout window persistence: blackout windows are persisted to Redis as
+  a sorted set (score=epoch) so the risk engine can query them without
+  importing the calendar engine. persist_blackout_windows() writes them.
+
 Causal guarantee: get_ml_features(as_of) only uses events with
 scheduled_at <= as_of and actual values published before as_of.
 """
@@ -230,6 +242,7 @@ class MacroCalendarEngine:
 
         logger.info("MacroCalendarEngine: loaded %d events", len(events))
         await self._publish_to_redis()
+        await self.persist_blackout_windows()
 
         # Update Prometheus
         impact = self.get_current_impact_score()
@@ -589,6 +602,254 @@ class MacroCalendarEngine:
             "is_blackout": self.is_blackout_window(),
             "finnhub_key": bool(_FINNHUB_KEY),
         }
+
+    # ── Surprise factor computation ───────────────────────────────────────────
+
+    def compute_surprise_factor(self, event: MacroEvent) -> float:
+        """
+        Compute a direction-aware, normalised surprise factor for an event.
+
+        Formula: (actual - forecast) / |forecast| × direction_multiplier
+
+        Direction multiplier (gold-specific):
+          +1.0 for events where a beat is bullish for gold (CPI, PCE, PPI)
+          -1.0 for events where a beat is bearish for gold (NFP, GDP, ISM)
+           0.5 for neutral events (unknown direction)
+
+        Returns a float in approximately [-2, +2]:
+          Positive = bullish surprise for gold
+          Negative = bearish surprise for gold
+          0.0 = no surprise or missing data
+
+        Parameters
+        ----------
+        event : MacroEvent with actual and forecast values
+        """
+        if event.actual is None or event.forecast is None:
+            return 0.0
+        if abs(event.forecast) < 1e-9:
+            return 0.0
+
+        raw_surprise = (event.actual - event.forecast) / abs(event.forecast)
+
+        # Direction multiplier: gold-specific
+        name_lower = event.name.lower()
+        bullish_keywords = {"cpi", "pce", "ppi", "inflation", "gold", "geopolitical"}
+        bearish_keywords = {"nfp", "non-farm", "payroll", "gdp", "ism", "employment", "jobs"}
+
+        if any(kw in name_lower for kw in bullish_keywords):
+            direction = 1.0
+        elif any(kw in name_lower for kw in bearish_keywords):
+            direction = -1.0
+        else:
+            direction = 0.5
+
+        return round(raw_surprise * direction, 4)
+
+    def get_surprise_history(
+        self,
+        hours_back: float = 48.0,
+        min_impact: MacroImpact = MacroImpact.MEDIUM,
+    ) -> list[dict[str, Any]]:
+        """
+        Return surprise factors for all released events in the last N hours.
+
+        Parameters
+        ----------
+        hours_back : Look-back window in hours (default 48h)
+        min_impact : Minimum impact level to include
+
+        Returns list of dicts with keys:
+          name, scheduled_at, surprise_factor, surprise_pct, impact, gold_impact_score
+        """
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(hours=hours_back)
+        impact_order = {MacroImpact.HIGH: 3, MacroImpact.MEDIUM: 2, MacroImpact.LOW: 1, MacroImpact.NONE: 0}
+        min_order = impact_order.get(min_impact, 0)
+
+        results = []
+        for e in self._events:
+            if e.scheduled_at > now or e.scheduled_at < cutoff:
+                continue
+            if impact_order.get(e.impact, 0) < min_order:
+                continue
+            if e.actual is None:
+                continue
+            results.append({
+                "name": e.name,
+                "scheduled_at": e.scheduled_at.isoformat(),
+                "surprise_factor": self.compute_surprise_factor(e),
+                "surprise_pct": e.surprise_pct,
+                "impact": e.impact.value,
+                "gold_impact_score": e.gold_impact_score,
+            })
+        return sorted(results, key=lambda x: x["scheduled_at"], reverse=True)
+
+    # ── Event clustering ──────────────────────────────────────────────────────
+
+    def cluster_events(
+        self,
+        events: list[MacroEvent] | None = None,
+        cluster_window_min: float = 30.0,
+    ) -> list[dict[str, Any]]:
+        """
+        Group temporally close events into clusters.
+
+        Events within `cluster_window_min` minutes of each other are merged
+        into a single cluster. The cluster's combined impact score is the
+        sum of individual scores (capped at 1.0).
+
+        This is used to detect "event storms" — periods where multiple
+        high-impact events overlap, creating compounded volatility risk.
+
+        Parameters
+        ----------
+        events             : Events to cluster (default: all loaded events)
+        cluster_window_min : Merge window in minutes (default 30)
+
+        Returns list of cluster dicts:
+          {
+            events:         list of MacroEvent objects in this cluster
+            start:          earliest scheduled_at in cluster
+            end:            latest scheduled_at in cluster
+            combined_score: sum of gold_impact_scores (capped at 1.0)
+            max_impact:     highest MacroImpact in cluster
+            event_count:    number of events
+            is_storm:       True if combined_score > 0.7 or event_count >= 3
+          }
+        """
+        source = sorted(events or self._events, key=lambda e: e.scheduled_at)
+        if not source:
+            return []
+
+        clusters: list[dict[str, Any]] = []
+        current_cluster: list[MacroEvent] = [source[0]]
+
+        for event in source[1:]:
+            last = current_cluster[-1]
+            gap_min = (event.scheduled_at - last.scheduled_at).total_seconds() / 60.0
+            if gap_min <= cluster_window_min:
+                current_cluster.append(event)
+            else:
+                clusters.append(self._build_cluster(current_cluster))
+                current_cluster = [event]
+
+        if current_cluster:
+            clusters.append(self._build_cluster(current_cluster))
+
+        return clusters
+
+    def _build_cluster(self, events: list[MacroEvent]) -> dict[str, Any]:
+        impact_order = {MacroImpact.HIGH: 3, MacroImpact.MEDIUM: 2, MacroImpact.LOW: 1, MacroImpact.NONE: 0}
+        combined = min(1.0, sum(e.gold_impact_score for e in events))
+        max_impact = max(events, key=lambda e: impact_order.get(e.impact, 0)).impact
+        return {
+            "events": events,
+            "start": events[0].scheduled_at,
+            "end": events[-1].scheduled_at,
+            "combined_score": round(combined, 4),
+            "max_impact": max_impact,
+            "event_count": len(events),
+            "is_storm": combined > 0.7 or len(events) >= 3,
+        }
+
+    def get_event_storms(self, hours_ahead: float = 48.0) -> list[dict[str, Any]]:
+        """Return upcoming event clusters classified as storms (high combined risk)."""
+        now = datetime.now(UTC)
+        cutoff = now + timedelta(hours=hours_ahead)
+        upcoming = [e for e in self._events if now <= e.scheduled_at <= cutoff]
+        clusters = self.cluster_events(upcoming)
+        return [c for c in clusters if c["is_storm"]]
+
+    # ── Blackout window persistence ───────────────────────────────────────────
+
+    async def persist_blackout_windows(self) -> int:
+        """
+        Persist all HIGH-impact event blackout windows to Redis as a sorted set.
+
+        Key: hopefx:blackout_windows
+        Score: epoch of blackout start
+        Member: JSON {start, end, event_name, gold_impact_score}
+
+        The risk engine can query this set without importing the calendar engine,
+        enabling decoupled blackout enforcement across services.
+
+        Returns the number of windows persisted.
+        """
+        if not self._redis:
+            return 0
+
+        high_events = [e for e in self._events if e.impact == MacroImpact.HIGH]
+        if not high_events:
+            return 0
+
+        import json as _json
+
+        try:
+            loop = asyncio.get_running_loop()
+            pipe_data: dict[str, float] = {}
+
+            for event in high_events:
+                start = event.scheduled_at - timedelta(minutes=_BLACKOUT_BEFORE_MIN)
+                end = event.scheduled_at + timedelta(minutes=_BLACKOUT_AFTER_MIN)
+                member = _json.dumps({
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                    "event_name": event.name,
+                    "gold_impact_score": event.gold_impact_score,
+                    "surprise_pct": event.surprise_pct,
+                })
+                pipe_data[member] = start.timestamp()
+
+            def _write():
+                pipe = self._redis.pipeline(transaction=False)
+                pipe.delete("hopefx:blackout_windows")
+                if pipe_data:
+                    pipe.zadd("hopefx:blackout_windows", pipe_data)
+                # TTL: 7 days (calendar covers next 7 days)
+                pipe.expire("hopefx:blackout_windows", 7 * 86400)
+                pipe.execute()
+
+            await loop.run_in_executor(None, _write)
+            logger.info("MacroCalendarEngine: persisted %d blackout windows to Redis", len(pipe_data))
+            return len(pipe_data)
+        except Exception as exc:
+            logger.warning("MacroCalendarEngine.persist_blackout_windows error: %s", exc)
+            return 0
+
+    def get_active_blackout_windows(self) -> list[dict[str, Any]]:
+        """
+        Return all currently active blackout windows from Redis.
+
+        Queries hopefx:blackout_windows sorted set for windows that
+        contain the current time.
+
+        Returns list of window dicts or [] if Redis unavailable.
+        """
+        if not self._redis:
+            return []
+        try:
+            import json as _json
+            now = datetime.now(UTC)
+            now_epoch = now.timestamp()
+            # Get all windows that started in the last BLACKOUT_BEFORE_MIN + BLACKOUT_AFTER_MIN
+            lookback = now_epoch - (_BLACKOUT_BEFORE_MIN + _BLACKOUT_AFTER_MIN) * 60
+            raw = self._redis.zrangebyscore("hopefx:blackout_windows", lookback, now_epoch + 1)
+            active = []
+            for r in raw:
+                try:
+                    w = _json.loads(r)
+                    end_dt = datetime.fromisoformat(w["end"])
+                    if end_dt.tzinfo is None:
+                        end_dt = end_dt.replace(tzinfo=UTC)
+                    if now <= end_dt:
+                        active.append(w)
+                except Exception:
+                    continue
+            return active
+        except Exception as exc:
+            logger.debug("MacroCalendarEngine.get_active_blackout_windows error: %s", exc)
+            return []
 
 
 # Module-level singleton
