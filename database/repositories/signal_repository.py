@@ -50,7 +50,7 @@ class SignalRepository(AsyncRepository[Signal]):
         stmt = (
             select(Signal)
             .where(and_(*conditions))
-            .order_by(desc(Signal.created_at))
+            .order_by(desc(Signal.generated_at))
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -66,11 +66,11 @@ class SignalRepository(AsyncRepository[Signal]):
         """Return signals from a specific strategy."""
         conditions = [Signal.strategy == strategy]
         if since:
-            conditions.append(Signal.created_at >= since)
+            conditions.append(Signal.generated_at >= since)
         stmt = (
             select(Signal)
             .where(and_(*conditions))
-            .order_by(desc(Signal.created_at))
+            .order_by(desc(Signal.generated_at))
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -86,7 +86,7 @@ class SignalRepository(AsyncRepository[Signal]):
         stmt = (
             select(Signal)
             .where(Signal.source == source)
-            .order_by(desc(Signal.created_at))
+            .order_by(desc(Signal.generated_at))
             .limit(limit)
         )
         result = await session.execute(stmt)
@@ -120,7 +120,7 @@ class SignalRepository(AsyncRepository[Signal]):
         stmt = (
             select(Signal)
             .where(Signal.symbol == symbol)
-            .order_by(desc(Signal.created_at))
+            .order_by(desc(Signal.generated_at))
             .limit(limit)
         )
         result = await session.execute(stmt)
