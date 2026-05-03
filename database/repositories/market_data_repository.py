@@ -173,6 +173,88 @@ class MarketDataRepository(AsyncRepository[MarketData]):
         await session.flush()
         return len(instances)
 
+    async def get_latest_n_bars(
+        self,
+        session: AsyncSession,
+        symbol: str,
+        timeframe: str,
+        n: int = 200,
+    ) -> Sequence[MarketData]:
+        """Return the N most recent bars in chronological order (oldest first)."""
+        stmt = (
+            select(MarketData)
+            .where(
+                and_(
+                    MarketData.symbol == symbol,
+                    MarketData.timeframe == timeframe,
+                )
+            )
+            .order_by(desc(MarketData.timestamp))
+            .limit(n)
+        )
+        result = await session.execute(stmt)
+        rows = list(result.scalars().all())
+        return list(reversed(rows))  # chronological order
+
+    async def upsert_batch(
+        self,
+        session: AsyncSession,
+        bars: list[dict[str, Any]],
+    ) -> int:
+        """
+        Upsert a batch of OHLCV bars using PostgreSQL INSERT … ON CONFLICT DO UPDATE.
+
+        Each dict must contain: symbol, timeframe, timestamp, open, high, low, close.
+        Optional: volume, spread, tick_count.
+
+        Falls back to individual upserts on non-PostgreSQL dialects.
+        Returns the number of rows affected.
+        """
+        if not bars:
+            return 0
+
+        bind = session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else "unknown"
+
+        if dialect_name == "postgresql":
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            stmt = pg_insert(MarketData).values(bars)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["symbol", "timeframe", "timestamp"],
+                set_={
+                    "open": stmt.excluded.open,
+                    "high": stmt.excluded.high,
+                    "low": stmt.excluded.low,
+                    "close": stmt.excluded.close,
+                    "volume": stmt.excluded.volume,
+                    "spread": stmt.excluded.spread,
+                    "tick_count": stmt.excluded.tick_count,
+                },
+            )
+            result = await session.execute(stmt)
+            await session.flush()
+            return result.rowcount
+        else:
+            # Fallback: individual upserts
+            count = 0
+            for bar in bars:
+                await self.upsert_bar(
+                    session,
+                    symbol=bar["symbol"],
+                    timeframe=bar["timeframe"],
+                    timestamp=bar["timestamp"],
+                    open_=bar["open"],
+                    high=bar["high"],
+                    low=bar["low"],
+                    close=bar["close"],
+                    volume=bar.get("volume", 0.0),
+                    spread=bar.get("spread"),
+                    tick_count=bar.get("tick_count"),
+                )
+                count += 1
+            return count
+
     async def delete_bars_before(
         self,
         session: AsyncSession,

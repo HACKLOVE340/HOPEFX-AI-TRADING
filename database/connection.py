@@ -140,6 +140,7 @@ class DatabaseManager:
         self._metrics = DatabaseMetrics()
         self._metrics_lock = threading.Lock()
         self._circuit_open = False
+        self._circuit_half_open = False  # half-open: allow one probe request
         self._failure_count = 0
         self._circuit_threshold = 5
         self._circuit_recovery_time = 60.0
@@ -204,30 +205,50 @@ class DatabaseManager:
             self._metrics.total_connections += 1
 
     def _check_circuit(self) -> bool:
-        """Check if circuit breaker allows operation"""
+        """
+        Check if circuit breaker allows operation.
+
+        States:
+          CLOSED      — normal operation (_circuit_open=False)
+          OPEN        — all requests rejected (_circuit_open=True, _circuit_half_open=False)
+          HALF-OPEN   — one probe request allowed (_circuit_open=True, _circuit_half_open=True)
+        """
         if not self._circuit_open:
             return True
 
-        # Try recovery
-        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
-            self._circuit_open = False
-            self._failure_count = 0
-            logger.info("Database circuit breaker recovered")
-            return True
+        # Transition OPEN → HALF-OPEN after recovery window
+        if self._last_failure_time and (
+            time.time() - self._last_failure_time > self._circuit_recovery_time
+        ):
+            if not self._circuit_half_open:
+                self._circuit_half_open = True
+                logger.info("Database circuit breaker entering HALF-OPEN state — probe allowed")
+            return True  # allow the probe request through
 
         return False
 
     def _record_success(self):
-        """Record successful operation"""
-        self._failure_count = max(0, self._failure_count - 1)
+        """Record successful operation; close circuit if in half-open state."""
+        if self._circuit_half_open:
+            self._circuit_open = False
+            self._circuit_half_open = False
+            self._failure_count = 0
+            logger.info("Database circuit breaker CLOSED after successful probe")
+        else:
+            self._failure_count = max(0, self._failure_count - 1)
 
     def _record_failure(self):
-        """Record failed operation"""
+        """Record failed operation; re-open circuit from half-open if probe fails."""
         self._failure_count += 1
         self._last_failure_time = time.time()
 
-        if self._failure_count >= self._circuit_threshold:
+        if self._circuit_half_open:
+            # Probe failed — stay open, reset half-open flag
+            self._circuit_half_open = False
+            logger.warning("Database circuit breaker probe FAILED — staying OPEN")
+        elif self._failure_count >= self._circuit_threshold:
             self._circuit_open = True
+            self._circuit_half_open = False
             logger.critical("Database circuit breaker OPENED after %s failures", self._failure_count)
 
     @contextmanager
@@ -244,6 +265,7 @@ class DatabaseManager:
 
         session: Session | None = None
         last_error = None
+        t0 = time.perf_counter()
 
         for attempt in range(self.max_retries):
             try:
@@ -259,8 +281,12 @@ class DatabaseManager:
                 session.commit()
                 self._record_success()
 
+                elapsed_ms = (time.perf_counter() - t0) * 1000
                 with self._metrics_lock:
                     self._metrics.query_count += 1
+                    self._metrics.record_latency(elapsed_ms)
+                    if elapsed_ms > self.query_timeout * 1000 * 0.8:
+                        self._metrics.slow_query_count += 1
 
                 return
 
@@ -498,6 +524,7 @@ class AsyncDatabaseManager:
         self._metrics = DatabaseMetrics()
         self._metrics_lock = threading.Lock()
         self._circuit_open = False
+        self._circuit_half_open = False
         self._failure_count = 0
         self._circuit_threshold = 5
         self._circuit_recovery_time = 60.0
@@ -550,12 +577,18 @@ class AsyncDatabaseManager:
         )
 
     def _check_circuit(self) -> bool:
+        """
+        CLOSED → normal; OPEN → reject; HALF-OPEN → allow one probe.
+        Transitions OPEN → HALF-OPEN after _circuit_recovery_time seconds.
+        """
         if not self._circuit_open:
             return True
-        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
-            self._circuit_open = False
-            self._failure_count = 0
-            logger.info("AsyncDatabaseManager circuit breaker recovered")
+        if self._last_failure_time and (
+            time.time() - self._last_failure_time > self._circuit_recovery_time
+        ):
+            if not self._circuit_half_open:
+                self._circuit_half_open = True
+                logger.info("AsyncDatabaseManager circuit breaker entering HALF-OPEN — probe allowed")
             return True
         return False
 
@@ -564,8 +597,12 @@ class AsyncDatabaseManager:
         self._last_failure_time = time.time()
         with self._metrics_lock:
             self._metrics.error_count += 1
-        if self._failure_count >= self._circuit_threshold:
+        if self._circuit_half_open:
+            self._circuit_half_open = False
+            logger.warning("AsyncDatabaseManager probe FAILED — circuit stays OPEN: %s", exc)
+        elif self._failure_count >= self._circuit_threshold:
             self._circuit_open = True
+            self._circuit_half_open = False
             logger.critical(
                 "AsyncDatabaseManager circuit breaker OPENED after %d failures: %s",
                 self._failure_count,
@@ -573,7 +610,13 @@ class AsyncDatabaseManager:
             )
 
     def _record_success(self) -> None:
-        self._failure_count = max(0, self._failure_count - 1)
+        if self._circuit_half_open:
+            self._circuit_open = False
+            self._circuit_half_open = False
+            self._failure_count = 0
+            logger.info("AsyncDatabaseManager circuit breaker CLOSED after successful probe")
+        else:
+            self._failure_count = max(0, self._failure_count - 1)
 
     @asynccontextmanager
     async def async_session(self) -> "AsyncGenerator[AsyncSession, None]":

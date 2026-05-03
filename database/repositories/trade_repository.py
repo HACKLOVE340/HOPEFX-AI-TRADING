@@ -173,6 +173,35 @@ class TradeRepository(AsyncRepository[Trade]):
         await session.flush()
         return trade
 
+    async def get_by_user_and_date_range(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        start: datetime,
+        end: datetime,
+        symbol: str | None = None,
+        status: TradeStatus | None = None,
+        limit: int = 500,
+    ) -> Sequence[Trade]:
+        """Return trades for a user within a date range, optionally filtered."""
+        conditions = [
+            Trade.user_id == user_id,
+            Trade.entry_time >= start,
+            Trade.entry_time <= end,
+        ]
+        if symbol:
+            conditions.append(Trade.symbol == symbol)
+        if status:
+            conditions.append(Trade.status == status)
+        stmt = (
+            select(Trade)
+            .where(and_(*conditions))
+            .order_by(Trade.entry_time)
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
     async def get_pnl_summary(
         self,
         session: AsyncSession,

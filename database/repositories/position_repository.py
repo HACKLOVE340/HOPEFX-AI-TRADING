@@ -109,6 +109,87 @@ class PositionRepository(AsyncRepository[Position]):
         await session.refresh(position)
         return position
 
+    async def get_by_instrument(
+        self,
+        session: AsyncSession,
+        symbol: str,
+        status: str = "open",
+        limit: int = 100,
+    ) -> Sequence[Position]:
+        """Return all positions for a given instrument/symbol."""
+        conditions = [Position.symbol == symbol]
+        if status:
+            conditions.append(Position.status == status)
+        stmt = (
+            select(Position)
+            .where(and_(*conditions))
+            .order_by(desc(Position.opened_at))
+            .limit(limit)
+        )
+        result = await session.execute(stmt)
+        return result.scalars().all()
+
+    async def get_net_exposure(
+        self,
+        session: AsyncSession,
+        user_id: str,
+        symbol: str | None = None,
+    ) -> dict[str, Any]:
+        """
+        Compute net exposure for a user across open positions.
+
+        Returns per-symbol net quantity (long positive, short negative)
+        and total absolute exposure in market value.
+        """
+        from sqlalchemy import case, func as sa_func
+
+        conditions = [Position.user_id == user_id, Position.status == "open"]
+        if symbol:
+            conditions.append(Position.symbol == symbol)
+
+        # Net quantity: long positions add, short positions subtract
+        net_qty_expr = sa_func.sum(
+            case(
+                (Position.side == "long", Position.quantity),
+                (Position.side == "buy", Position.quantity),
+                else_=-Position.quantity,
+            )
+        ).label("net_quantity")
+
+        stmt = (
+            select(
+                Position.symbol,
+                net_qty_expr,
+                sa_func.sum(Position.market_value).label("gross_market_value"),
+                sa_func.sum(Position.unrealized_pnl).label("unrealized_pnl"),
+                sa_func.count(Position.id).label("position_count"),
+            )
+            .where(and_(*conditions))
+            .group_by(Position.symbol)
+        )
+        result = await session.execute(stmt)
+        rows = result.all()
+
+        exposure: dict[str, Any] = {}
+        total_abs_exposure = 0.0
+        for row in rows:
+            net_q = float(row.net_quantity or 0)
+            gmv = float(row.gross_market_value or 0)
+            exposure[row.symbol] = {
+                "net_quantity": net_q,
+                "gross_market_value": gmv,
+                "unrealized_pnl": float(row.unrealized_pnl or 0),
+                "position_count": row.position_count,
+                "direction": "long" if net_q > 0 else "short" if net_q < 0 else "flat",
+            }
+            total_abs_exposure += abs(gmv)
+
+        return {
+            "by_symbol": exposure,
+            "total_abs_exposure": total_abs_exposure,
+            "symbol_count": len(exposure),
+        }
+
     async def get_portfolio_summary(
         self,
         session: AsyncSession,

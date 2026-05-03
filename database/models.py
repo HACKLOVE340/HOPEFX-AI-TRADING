@@ -779,6 +779,7 @@ Index("idx_orders_account_symbol_created", Order.account_id, Order.symbol, Order
 # Signals
 Index("idx_signals_generated_executed", Signal.generated_at, Signal.executed)
 Index("idx_signals_symbol_generated", Signal.symbol, Signal.generated_at)
+Index("idx_signals_strategy", Signal.strategy)
 
 # Account snapshots — no user_id column; timestamp is the only access key
 Index("idx_account_snapshots_timestamp", AccountSnapshot.timestamp)
@@ -1037,12 +1038,19 @@ if SQLALCHEMY_AVAILABLE:
         event_type = Column(String(100), nullable=False, index=True)
         channel = Column(String(100), nullable=False)  # Redis pub/sub channel
         payload = Column(Text, nullable=False)  # JSON
+        # status: "pending" | "published" | "dead_letter"
+        status = Column(String(20), nullable=False, default="pending", index=True)
         created_at = Column(DateTime(timezone=True), default=_utcnow, index=True)
         published_at = Column(DateTime(timezone=True), nullable=True)
         attempts = Column(Integer, default=0)
+        max_attempts = Column(Integer, default=5)
         last_error = Column(Text, nullable=True)
+        idempotency_key = Column(String(128), nullable=True, unique=True)
 
-        __table_args__ = (Index("idx_outbox_unpublished", "published_at", "created_at"),)
+        __table_args__ = (
+            Index("idx_outbox_unpublished", "published_at", "created_at"),
+            Index("idx_outbox_status_created", "status", "created_at"),
+        )
 
 else:
 
