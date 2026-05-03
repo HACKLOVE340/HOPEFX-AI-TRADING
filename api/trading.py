@@ -808,7 +808,7 @@ async def get_orders(
 
     # 2. Filled orders from trade DB when broker unavailable or no open orders
     if not orders:
-        trades = _query_trades(user.sub, None, limit, offset)
+        trades = await _query_trades(user.sub, None, limit, offset)
         for t in trades:
             t_dict = _trade_to_dict(t)
             order_status = "filled"
@@ -849,7 +849,7 @@ async def get_history(
       limit   — max rows (1–1000, default 100)
       offset  — pagination offset
     """
-    trades = _query_trades(user.sub, symbol, limit, offset)
+    trades = await _query_trades(user.sub, symbol, limit, offset)
     return {
         "trades": [_trade_to_dict(t) for t in trades],
         "count": len(trades),
@@ -1069,23 +1069,20 @@ async def get_account(
         _balance = starting
 
         try:
-            from database.connection import SessionLocal as _SL
-            from database.models import Trade, TradeStatus
             import datetime as _dt
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TradeRepo
+            from database.repositories.position_repository import PositionRepository as _PosRepo
 
-            _db = _SL()
-            try:
-                closed = (
-                    _db.query(Trade)
-                    .filter(Trade.status == TradeStatus.CLOSED)
-                    .order_by(Trade.exit_time.asc())
-                    .all()
-                )
-                open_qs = _db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
-                _open_trades = len(open_qs)
+            async with _get_async_db() as _db:
+                _trade_repo = _TradeRepo(_db)
+                _pos_repo = _PosRepo(_db)
+                closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
+                open_positions = await _pos_repo.get_open_positions(symbol=None)
+                _open_trades = len(open_positions)
 
                 if closed:
-                    pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                    pnls = [float(getattr(t, "realized_pnl", 0) or 0.0) for t in closed]
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
@@ -1125,22 +1122,20 @@ async def get_account(
 
                 # Daily P&L from trades closed today
                 today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-                today_closed = [t for t in closed if t.exit_time and t.exit_time >= today_start]
-                _daily_pnl = round(sum(float(t.realized_pnl or 0.0) for t in today_closed), 2)
+                today_closed = [t for t in closed if getattr(t, "exit_time", None) and t.exit_time >= today_start]
+                _daily_pnl = round(sum(float(getattr(t, "realized_pnl", 0) or 0.0) for t in today_closed), 2)
 
-                # Unrealized P&L from open trades
-                _unrealized = round(sum(float(t.unrealized_pnl or 0.0) for t in open_qs if hasattr(t, "unrealized_pnl")), 2)
+                # Unrealized P&L from open positions
+                _unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in open_positions), 2)
 
                 # Open risk
                 equity_est = _balance + _unrealized
-                if open_qs and equity_est > 0:
+                if open_positions and equity_est > 0:
                     total_notional = sum(
-                        float(t.quantity or 0.0) * float(t.entry_price or 0.0)
-                        for t in open_qs
+                        float(getattr(p, "quantity", 0) or 0.0) * float(getattr(p, "entry_price", 0) or 0.0)
+                        for p in open_positions
                     )
                     _open_risk_pct = round(total_notional / equity_est * 100, 2)
-            finally:
-                _db.close()
         except Exception as _exc:
             logger.debug("Paper account DB stats failed: %s", _exc)
 
@@ -1217,21 +1212,18 @@ async def get_account(
     cvar_95 = 0.0
 
     try:
-        from database.connection import get_db as _get_db
-        from database.models import Trade, TradeStatus
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TradeRepo
+        from database.repositories.position_repository import PositionRepository as _PosRepo
 
-        db = next(_get_db())
-        try:
-            # Closed trades for stats
-            closed = (
-                db.query(Trade)
-                .filter(Trade.status == TradeStatus.CLOSED)
-                .order_by(Trade.exit_time.asc())
-                .all()
-            )
-            # Open trades count
-            open_qs = db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
-            open_trades = len(open_qs)
+        async with _get_async_db() as _db:
+            _trade_repo = _TradeRepo(_db)
+            _pos_repo = _PosRepo(_db)
+            # Closed trades for stats — user_id=None fetches all (admin view)
+            closed = await _trade_repo.get_by_user(user_id=None, status="closed", limit=10000)
+            # Open positions count via PositionRepository
+            open_positions = await _pos_repo.get_open_positions(symbol=None)
+            open_trades = len(open_positions)
 
             if closed:
                 pnls = [float(t.realized_pnl or 0.0) for t in closed]
@@ -1277,15 +1269,13 @@ async def get_account(
                         cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
 
             # Open risk: sum of (quantity × entry_price) / equity
-            if open_qs and equity > 0:
+            if open_positions and equity > 0:
                 total_notional = sum(
-                    float(t.quantity or 0.0) * float(t.entry_price or 0.0)
-                    for t in open_qs
+                    float(getattr(p, "quantity", 0) or 0.0) * float(getattr(p, "entry_price", 0) or 0.0)
+                    for p in open_positions
                 )
                 open_risk_pct = round(total_notional / equity * 100, 2)
 
-        finally:
-            db.close()
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
 
@@ -1735,38 +1725,21 @@ _TRADE_CSV_FIELDS = [
 ]
 
 
-def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
-    """Fetch trades from DB for the given user.
-
-    Queries by Trade.user_id directly (preferred path).  Falls back to joining
-    through Account when a trade was created before the user_id column existed.
-    Uses SessionLocal directly so it works in paper mode (no app_state.db_session_factory).
-    """
+async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
+    """Fetch trades from DB for the given user via TradeRepository."""
     try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Account, Trade
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TradeRepo
 
-        session = _SL()
-        try:
-            # Primary: trades with user_id set directly
-            q_direct = session.query(Trade).filter(Trade.user_id == user_id)
-            # Fallback: trades linked via Account.user_id (legacy rows)
-            try:
-                q_via_account = (
-                    session.query(Trade)
-                    .join(Account, Trade.account_id == Account.id)
-                    .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
-                    .filter(Trade.user_id.is_(None))
-                )
-                combined = q_direct.union(q_via_account)
-            except Exception:
-                combined = q_direct
-            if symbol:
-                combined = combined.filter(Trade.symbol == symbol.upper())
-            combined = combined.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
-            return combined.all()
-        finally:
-            session.close()
+        async with _get_async_db() as _db:
+            repo = _TradeRepo(_db)
+            trades = await repo.get_by_user(
+                user_id=user_id,
+                symbol=symbol.upper() if symbol else None,
+                limit=limit,
+                offset=offset,
+            )
+            return trades
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
@@ -1842,7 +1815,7 @@ async def get_trade_history(
       limit   — max rows (1–1000, default 100)
       offset  — pagination offset
     """
-    trades = _query_trades(user.sub, symbol, limit, offset)
+    trades = await _query_trades(user.sub, symbol, limit, offset)
     return {
         "trades": [_trade_to_dict(t) for t in trades],
         "count": len(trades),
@@ -1866,7 +1839,7 @@ async def export_trade_history_csv(
 
     Returns: application/csv attachment.
     """
-    trades = _query_trades(user.sub, symbol, limit, offset=0)
+    trades = await _query_trades(user.sub, symbol, limit, offset=0)
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=_TRADE_CSV_FIELDS, extrasaction="ignore")
