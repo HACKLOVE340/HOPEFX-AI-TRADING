@@ -1445,13 +1445,15 @@ async def get_ohlcv(
     """
     # Normalise: XAU/USD, XAU_USD, xau_usd → XAUUSD
     symbol = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
-    # Sanitise for read-only data endpoint — allow any alphanumeric symbol up to 12 chars.
-    # validate_order_symbol is reserved for order placement (smaller allowed set).
-    import re as _re
-    if not _re.match(r'^[A-Z0-9]{2,12}$', symbol):
+    # Validate against the same allowed-symbol set used for order placement.
+    # This prevents data leakage for unsupported instruments and keeps the
+    # OHLCV endpoint consistent with the order entry allowlist.
+    try:
+        symbol = validate_order_symbol(symbol)
+    except HTTPException:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid symbol format: '{symbol}'. Expected 2-12 alphanumeric characters.",
+            detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
         )
 
     # ── Try price engine first ────────────────────────────────────────────────
