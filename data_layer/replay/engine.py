@@ -42,9 +42,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
+import time
 from collections.abc import AsyncIterator
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pandas as pd
@@ -59,10 +62,66 @@ from data_layer.types import FeedSource, GoldTick
 
 logger = logging.getLogger(__name__)
 
+UTC = timezone.utc
+
 _DEFAULT_SYMBOL = os.getenv("REPLAY_DEFAULT_SYMBOL", "XAUUSD")
 _DEFAULT_TF_MIN = int(os.getenv("REPLAY_DEFAULT_TF_MIN", "60"))
 _MAX_REPLAY_DAYS = int(os.getenv("REPLAY_MAX_DAYS", "365"))
 _REPLAY_SPEED = float(os.getenv("REPLAY_SPEED", "0.0"))  # 0 = as fast as possible
+_GAP_THRESHOLD_S = float(os.getenv("REPLAY_GAP_THRESHOLD_S", "60.0"))
+_GAP_COMPRESS_S = float(os.getenv("REPLAY_GAP_COMPRESS_S", "5.0"))
+_GAP_FILL_INTERVAL_S = float(os.getenv("REPLAY_GAP_FILL_INTERVAL_S", "1.0"))
+
+
+@dataclass
+class ReplayMetrics:
+    """Tracks statistics for a single replay session."""
+
+    ticks_replayed: int = 0
+    gaps_detected: int = 0
+    gaps_filled: int = 0
+    synthetic_ticks_emitted: int = 0
+    ticks_rejected: int = 0
+    wall_start_s: float = field(default_factory=time.monotonic)
+    market_start: datetime | None = None
+    market_end: datetime | None = None
+
+    @property
+    def elapsed_wall_s(self) -> float:
+        return time.monotonic() - self.wall_start_s
+
+    @property
+    def elapsed_market_s(self) -> float:
+        if self.market_start is None or self.market_end is None:
+            return 0.0
+        return (self.market_end - self.market_start).total_seconds()
+
+    @property
+    def compression_ratio(self) -> float:
+        wall = self.elapsed_wall_s
+        if wall < 1e-6:
+            return 0.0
+        return round(self.elapsed_market_s / wall, 2)
+
+    @property
+    def ticks_per_second(self) -> float:
+        wall = self.elapsed_wall_s
+        if wall < 1e-6:
+            return 0.0
+        return round(self.ticks_replayed / wall, 1)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ticks_replayed": self.ticks_replayed,
+            "gaps_detected": self.gaps_detected,
+            "gaps_filled": self.gaps_filled,
+            "synthetic_ticks_emitted": self.synthetic_ticks_emitted,
+            "ticks_rejected": self.ticks_rejected,
+            "elapsed_wall_s": round(self.elapsed_wall_s, 2),
+            "elapsed_market_s": round(self.elapsed_market_s, 2),
+            "compression_ratio": self.compression_ratio,
+            "ticks_per_second": self.ticks_per_second,
+        }
 
 
 class MarketReplayEngine:
@@ -79,6 +138,44 @@ class MarketReplayEngine:
         self._replay_cursor: datetime | None = None
         self._replay_ticks: pd.DataFrame | None = None
         self._is_replaying: bool = False
+        self._speed: float = _REPLAY_SPEED  # current replay speed (mutable)
+        self._paused: bool = False
+        self._metrics: ReplayMetrics = ReplayMetrics()
+
+    # ── Variable-speed control ────────────────────────────────────────────────
+
+    def set_speed(self, speed: float) -> None:
+        """
+        Change replay speed at runtime without stopping.
+
+        speed=0 or math.inf → instant (no sleep)
+        speed=1.0           → real-time
+        speed=10.0          → 10× faster than real-time
+
+        The change takes effect on the next tick's sleep interval.
+        """
+        if speed < 0:
+            raise ValueError(f"Replay speed must be >= 0, got {speed}")
+        self._speed = speed
+        logger.info("MarketReplayEngine: speed changed to %.1f×", speed)
+
+    def pause(self) -> None:
+        """Pause replay. Ticks will not be yielded until resume() is called."""
+        self._paused = True
+        logger.info("MarketReplayEngine: paused at %s", self._replay_cursor)
+
+    def resume(self) -> None:
+        """Resume a paused replay."""
+        self._paused = False
+        logger.info("MarketReplayEngine: resumed at %s", self._replay_cursor)
+
+    def get_metrics(self) -> ReplayMetrics:
+        """Return the current replay metrics snapshot."""
+        return self._metrics
+
+    def reset_metrics(self) -> None:
+        """Reset metrics for a new replay session."""
+        self._metrics = ReplayMetrics()
 
     # ── OHLCV DataFrame builder ───────────────────────────────────────────────
 
@@ -184,20 +281,21 @@ class MarketReplayEngine:
         start: datetime,
         end: datetime,
         symbol: str = _DEFAULT_SYMBOL,
-        speed: float = _REPLAY_SPEED,
+        speed: float | None = None,
+        gap_fill: bool = False,
     ) -> AsyncIterator[GoldTick]:
         """
         Async generator that yields GoldTicks in chronological order.
 
         Causal guarantee: yields ticks in strict timestamp order.
-        speed=0 → as fast as possible (backtesting)
-        speed=1 → real-time (1 second per second)
-        speed=N → N× real-time
+        speed=0 or None → use self._speed (set via set_speed())
+        speed=1         → real-time (1 second per second)
+        speed=N         → N× real-time
+        gap_fill=True   → emit synthetic ticks during gaps > GAP_THRESHOLD_S
 
         Each tick passes through DQE validation and normalisation.
+        Replay metrics are updated on every tick.
         """
-        # Import DQE once before the loop — not inside the generator body
-        # to avoid repeated module lookups on every tick.
         from data_layer.quality.engine import dqe
 
         if self._replay_ticks is None or self._replay_ticks.empty:
@@ -206,42 +304,84 @@ class MarketReplayEngine:
         if self._replay_ticks is None or self._replay_ticks.empty:
             return
 
-        # Pre-compute Timestamp bounds once (not on every iteration)
         ts_start = pd.Timestamp(start, tz="UTC")
         ts_end = pd.Timestamp(end, tz="UTC")
 
         self._is_replaying = True
+        self.reset_metrics()
+        self._metrics.market_start = start
         prev_ts: datetime | None = None
+        prev_mid: float = 0.0
 
         for ts, row in self._replay_ticks.iterrows():
             if ts < ts_start:
                 continue
-            # Causal hard stop: never yield a tick at or after end
             if ts >= ts_end:
                 break
 
-            self._replay_cursor = ts.to_pydatetime()
+            # Handle pause
+            while self._paused:
+                await asyncio.sleep(0.1)
+
+            current_ts = ts.to_pydatetime()
+            self._replay_cursor = current_ts
+
+            # ── Gap detection and fill ────────────────────────────────────
+            if prev_ts is not None:
+                gap_s = (current_ts - prev_ts).total_seconds()
+                if gap_s > _GAP_THRESHOLD_S:
+                    self._metrics.gaps_detected += 1
+                    logger.debug(
+                        "MarketReplayEngine: gap %.1fs at %s",
+                        gap_s, current_ts.isoformat(),
+                    )
+
+                    if gap_fill and prev_mid > 0:
+                        # Emit synthetic ticks at GAP_FILL_INTERVAL_S intervals
+                        fill_ts = prev_ts + timedelta(seconds=_GAP_FILL_INTERVAL_S)
+                        while fill_ts < current_ts:
+                            synthetic = GoldTick(
+                                symbol="XAU_USD",
+                                timestamp=fill_ts,
+                                bid=round(prev_mid * 0.9999, 4),
+                                ask=round(prev_mid * 1.0001, 4),
+                                mid=round(prev_mid, 4),
+                                source=FeedSource.REPLAY,
+                                spread=round(prev_mid * 0.0002, 4),
+                                volume=0.0,
+                            )
+                            # Mark as synthetic via extra field if supported
+                            object.__setattr__(synthetic, "is_synthetic", True) if hasattr(synthetic, "__dataclass_fields__") else None
+                            self._metrics.synthetic_ticks_emitted += 1
+                            self._metrics.gaps_filled += 1
+                            yield synthetic
+                            fill_ts += timedelta(seconds=_GAP_FILL_INTERVAL_S)
+
+                    # Compress gap in real-time/fast modes
+                    effective_speed = speed if speed is not None else self._speed
+                    if effective_speed > 0 and not math.isinf(effective_speed):
+                        compress_sleep = min(_GAP_COMPRESS_S / effective_speed, _GAP_COMPRESS_S)
+                        await asyncio.sleep(compress_sleep)
 
             bid = float(row.get("bid", 0))
             ask = float(row.get("ask", 0))
             mid = float(row.get("mid", (bid + ask) / 2.0))
 
             if bid <= 0 or ask <= 0:
+                self._metrics.ticks_rejected += 1
                 continue
 
-            # Sanity: reject ticks with inverted spread
             if ask < bid:
+                self._metrics.ticks_rejected += 1
                 logger.debug(
                     "MarketReplayEngine: inverted spread at %s bid=%.4f ask=%.4f — skipped",
-                    ts,
-                    bid,
-                    ask,
+                    ts, bid, ask,
                 )
                 continue
 
             raw_tick = GoldTick(
                 symbol="XAU_USD",
-                timestamp=self._replay_cursor,
+                timestamp=current_ts,
                 bid=round(bid, 4),
                 ask=round(ask, 4),
                 mid=round(mid, 4),
@@ -249,16 +389,21 @@ class MarketReplayEngine:
                 spread=round(ask - bid, 4),
             )
 
-            # Pass through DQE then normalisation — same pipeline as live ticks
             validated = dqe.validate_tick(raw_tick, received_at=ts.timestamp())
             normalised = normalization_pipeline.normalize_tick(validated)
 
-            # Speed control for real-time simulation
-            if speed > 0 and prev_ts is not None:
-                dt_s = (self._replay_cursor - prev_ts).total_seconds()
-                await asyncio.sleep(dt_s / speed)
+            # Variable-speed sleep
+            effective_speed = speed if speed is not None else self._speed
+            if effective_speed > 0 and not math.isinf(effective_speed) and prev_ts is not None:
+                dt_s = (current_ts - prev_ts).total_seconds()
+                sleep_s = dt_s / effective_speed
+                if sleep_s > 0:
+                    await asyncio.sleep(sleep_s)
 
-            prev_ts = self._replay_cursor
+            prev_ts = current_ts
+            prev_mid = mid
+            self._metrics.ticks_replayed += 1
+            self._metrics.market_end = current_ts
             yield normalised
 
         self._is_replaying = False
@@ -460,8 +605,11 @@ class MarketReplayEngine:
     def health(self) -> dict:
         return {
             "is_replaying": self._is_replaying,
+            "paused": self._paused,
+            "speed": self._speed,
             "replay_cursor": self._replay_cursor.isoformat() if self._replay_cursor else None,
             "ticks_loaded": len(self._replay_ticks) if self._replay_ticks is not None else 0,
+            "metrics": self._metrics.to_dict(),
         }
 
 
