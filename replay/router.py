@@ -262,8 +262,6 @@ def create_replay_router(engine: "ChartReplayEngine"):
             side=req.side,
             size=req.size,
             price=req.price,
-            stop_loss=req.stop_loss,
-            take_profit=req.take_profit,
             session_id=session_id,
         )
         if result is None:

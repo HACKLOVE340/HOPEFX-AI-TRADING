@@ -613,8 +613,9 @@ def create_research_router(engine: "ResearchNotebookEngine"):
             title=req.title,
             description=req.description,
             author=req.author,
-            tags=req.tags,
         )
+        if req.tags:
+            nb.tags = req.tags
         return {
             "notebook_id": nb.notebook_id,
             "title": nb.title,
