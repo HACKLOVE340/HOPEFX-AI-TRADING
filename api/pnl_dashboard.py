@@ -227,140 +227,119 @@ def _get_db_session():
     return None, None
 
 
-def _pnl_summary_from_db() -> PnLSummary:
+async def _pnl_summary_from_db() -> PnLSummary:
     """
-    Compute P&L summary from the DB Trade table when the engine is offline.
+    Compute P&L summary from the DB Trade table via TradeRepository.
     Uses closed trades only. Returns zeroed summary when DB is unavailable.
     """
-    db, _ = _get_db_session()
-    if db is None:
-        return PnLSummary(
-            equity=0.0,
-            starting_equity=0.0,
-            total_return_pct=0.0,
-            total_fills=0,
-            open_positions=0,
-            win_rate=None,
-            sharpe_ratio=None,
-            max_drawdown_pct=0.0,
-            current_drawdown_pct=0.0,
-            avg_slippage_bps=0.0,
-            avg_latency_ms=0.0,
-            last_fill_at=None,
-            note="Engine not started and DB unavailable.",
-        )
+    _empty_note = "Engine not started and DB unavailable."
     try:
-        from database.models import Trade, TradeStatus
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TR
 
-        trades = db.query(Trade).filter(Trade.status == TradeStatus.CLOSED).order_by(Trade.exit_time.asc()).all()
-        if not trades:
-            return PnLSummary(
-                equity=0.0,
-                starting_equity=0.0,
-                total_return_pct=0.0,
-                total_fills=0,
-                open_positions=0,
-                win_rate=None,
-                sharpe_ratio=None,
-                max_drawdown_pct=0.0,
-                current_drawdown_pct=0.0,
-                avg_slippage_bps=0.0,
-                avg_latency_ms=0.0,
-                last_fill_at=None,
-                note="Engine not started. No closed trades in DB yet.",
-            )
-
-        starting = 10_000.0
-        equity = starting
-        wins = 0
-        equity_series: list[tuple[float, float]] = []
-        for t in trades:
-            pnl = float(t.realized_pnl or 0.0)
-            equity += pnl
-            if pnl > 0:
-                wins += 1
-            ts = t.exit_time.timestamp() if t.exit_time and hasattr(t.exit_time, "timestamp") else 0.0
-            equity_series.append((ts, equity))
-
-        total_return_pct = (equity - starting) / starting * 100.0 if starting > 0 else 0.0
-        win_rate = round(wins / len(trades) * 100, 2) if len(trades) >= _MIN_FILLS_FOR_SHARPE else None
-        sharpe = _compute_sharpe(equity_series)
-        max_dd = _compute_max_drawdown(equity_series)
-        cur_dd = _compute_current_drawdown(equity_series)
-        last_trade = trades[-1]
-        last_fill_at = last_trade.exit_time.isoformat() if last_trade.exit_time else None
-
-        return PnLSummary(
-            equity=round(equity, 4),
-            starting_equity=round(starting, 4),
-            total_return_pct=round(total_return_pct, 4),
-            total_fills=len(trades),
-            open_positions=0,
-            win_rate=win_rate,
-            sharpe_ratio=sharpe,
-            max_drawdown_pct=max_dd,
-            current_drawdown_pct=cur_dd,
-            avg_slippage_bps=0.0,
-            avg_latency_ms=0.0,
-            last_fill_at=last_fill_at,
-            note=f"Engine offline. Stats from {len(trades)} closed DB trades.",
-        )
+        async with _get_async_db() as _db:
+            repo = _TR(_db)
+            trades = await repo.get_by_user(user_id=None, status="closed", limit=50000)
     except Exception as exc:
-        logger.debug("_pnl_summary_from_db failed: %s", exc)
+        logger.debug("_pnl_summary_from_db DB fetch failed: %s", exc)
         return PnLSummary(
-            equity=0.0,
-            starting_equity=0.0,
-            total_return_pct=0.0,
-            total_fills=0,
-            open_positions=0,
-            win_rate=None,
-            sharpe_ratio=None,
-            max_drawdown_pct=0.0,
-            current_drawdown_pct=0.0,
-            avg_slippage_bps=0.0,
-            avg_latency_ms=0.0,
-            last_fill_at=None,
-            note="Engine not started. Start the trading engine to see live P&L.",
+            equity=0.0, starting_equity=0.0, total_return_pct=0.0, total_fills=0,
+            open_positions=0, win_rate=None, sharpe_ratio=None, max_drawdown_pct=0.0,
+            current_drawdown_pct=0.0, avg_slippage_bps=0.0, avg_latency_ms=0.0,
+            last_fill_at=None, note=_empty_note,
         )
-    finally:
-        db.close()
+
+    if not trades:
+        return PnLSummary(
+            equity=0.0, starting_equity=0.0, total_return_pct=0.0, total_fills=0,
+            open_positions=0, win_rate=None, sharpe_ratio=None, max_drawdown_pct=0.0,
+            current_drawdown_pct=0.0, avg_slippage_bps=0.0, avg_latency_ms=0.0,
+            last_fill_at=None, note="Engine not started. No closed trades in DB yet.",
+        )
+
+    # Sort by exit_time ascending for equity curve
+    trades_sorted = sorted(trades, key=lambda t: getattr(t, "exit_time", None) or datetime.min)
+    starting = 10_000.0
+    equity = starting
+    wins = 0
+    equity_series: list[tuple[float, float]] = []
+    for t in trades_sorted:
+        pnl = float(getattr(t, "realized_pnl", 0) or 0.0)
+        equity += pnl
+        if pnl > 0:
+            wins += 1
+        exit_time = getattr(t, "exit_time", None)
+        ts = exit_time.timestamp() if exit_time and hasattr(exit_time, "timestamp") else 0.0
+        equity_series.append((ts, equity))
+
+    total_return_pct = (equity - starting) / starting * 100.0 if starting > 0 else 0.0
+    win_rate = round(wins / len(trades_sorted) * 100, 2) if len(trades_sorted) >= _MIN_FILLS_FOR_SHARPE else None
+    sharpe = _compute_sharpe(equity_series)
+    max_dd = _compute_max_drawdown(equity_series)
+    cur_dd = _compute_current_drawdown(equity_series)
+    last_exit = getattr(trades_sorted[-1], "exit_time", None)
+    last_fill_at = last_exit.isoformat() if last_exit and hasattr(last_exit, "isoformat") else None
+
+    return PnLSummary(
+        equity=round(equity, 4),
+        starting_equity=round(starting, 4),
+        total_return_pct=round(total_return_pct, 4),
+        total_fills=len(trades_sorted),
+        open_positions=0,
+        win_rate=win_rate,
+        sharpe_ratio=sharpe,
+        max_drawdown_pct=max_dd,
+        current_drawdown_pct=cur_dd,
+        avg_slippage_bps=0.0,
+        avg_latency_ms=0.0,
+        last_fill_at=last_fill_at,
+        note=f"Engine offline. Stats from {len(trades_sorted)} closed DB trades.",
+    )
 
 
-def _trade_log_from_db(
+async def _trade_log_from_db(
     limit: int = 100,
     offset: int = 0,
     symbol: str | None = None,
     direction: str | None = None,
 ) -> list[FillEntry]:
     """
-    Serve the trade log from the DB Trade table when the engine is offline.
+    Serve the trade log from the DB via TradeRepository when the engine is offline.
     Maps Trade rows to FillEntry — uses trade_id as fill_id.
     """
-    db, _ = _get_db_session()
-    if db is None:
-        return []
     try:
-        from database.models import Trade, TradeStatus
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TR
 
-        q = db.query(Trade).filter(Trade.status == TradeStatus.CLOSED)
-        if symbol:
-            q = q.filter(Trade.symbol == symbol.upper())
-        if direction:
-            q = q.filter(Trade.side == direction.lower())
-        trades = q.order_by(Trade.exit_time.desc()).offset(offset).limit(limit).all()
+        async with _get_async_db() as _db:
+            repo = _TR(_db)
+            trades = await repo.get_by_user(
+                user_id=None,
+                status="closed",
+                symbol=symbol.upper() if symbol else None,
+                limit=limit,
+                offset=offset,
+            )
         result = []
         for t in trades:
-            exit_ts = t.exit_time.isoformat() if t.exit_time else (t.entry_time.isoformat() if t.entry_time else "")
+            if direction and str(getattr(t, "side", "")).lower() != direction.lower():
+                continue
+            exit_time = getattr(t, "exit_time", None)
+            entry_time = getattr(t, "entry_time", None)
+            exit_ts = (
+                exit_time.isoformat() if exit_time and hasattr(exit_time, "isoformat")
+                else (entry_time.isoformat() if entry_time and hasattr(entry_time, "isoformat") else "")
+            )
             result.append(
                 FillEntry(
-                    fill_id=str(t.trade_id or t.id),
-                    order_id=str(t.client_order_id or t.id),
+                    fill_id=str(getattr(t, "trade_id", None) or getattr(t, "id", "")),
+                    order_id=str(getattr(t, "client_order_id", None) or getattr(t, "id", "")),
                     signal_id="",
-                    symbol=t.symbol,
-                    direction=str(t.side or ""),
-                    quantity=float(t.entry_quantity or t.size or 0),
-                    fill_price=float(t.exit_price or t.entry_price or 0),
-                    expected_price=float(t.entry_price or 0),
+                    symbol=getattr(t, "symbol", "") or "",
+                    direction=str(getattr(t, "side", "") or ""),
+                    quantity=float(getattr(t, "entry_quantity", None) or getattr(t, "size", None) or getattr(t, "quantity", 0) or 0),
+                    fill_price=float(getattr(t, "exit_price", None) or getattr(t, "entry_price", 0) or 0),
+                    expected_price=float(getattr(t, "entry_price", 0) or 0),
                     slippage_bps=0.0,
                     broker="db",
                     latency_ms=0.0,
@@ -372,8 +351,6 @@ def _trade_log_from_db(
     except Exception as exc:
         logger.debug("_trade_log_from_db failed: %s", exc)
         return []
-    finally:
-        db.close()
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -398,7 +375,7 @@ async def pnl_summary(
     engine = _get_engine()
     if engine is None:
         # DB fallback: compute summary from closed Trade rows
-        return await _asyncio.to_thread(_pnl_summary_from_db)
+        return await _pnl_summary_from_db()
 
     fills = list(getattr(engine, "_fill_history", []))
     starting = float(getattr(engine, "_starting_equity", 10_000.0))
@@ -515,9 +492,7 @@ async def trade_log(
     engine = _get_engine()
     if engine is None:
         # DB fallback: serve closed trades from the Trade table
-        return await _asyncio.to_thread(
-            _functools.partial(_trade_log_from_db, limit=limit, offset=offset, symbol=symbol, direction=direction)
-        )
+        return await _trade_log_from_db(limit=limit, offset=offset, symbol=symbol, direction=direction)
 
     fills = list(getattr(engine, "_fill_history", []))
     # Sort newest-first
@@ -634,11 +609,7 @@ async def pnl_history(
     Queries the DB Trade table directly so paper broker trades persisted
     via _persist_trade_record are visible immediately.
     """
-    import asyncio as _asyncio
-    import functools as _functools
-    return await _asyncio.to_thread(
-        _functools.partial(_trade_log_from_db, limit=limit, offset=offset, symbol=symbol)
-    )
+    return await _trade_log_from_db(limit=limit, offset=offset, symbol=symbol)
 
 
 @router.get("/export", summary="Export P&L data as CSV or JSON")
