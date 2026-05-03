@@ -635,14 +635,35 @@ class StreamConsumerGroup:
             logger.warning("StreamConsumerGroup.read error: %s", exc)
             return []
 
-    def ack(self, *message_ids: str) -> int:
-        """Acknowledge one or more message IDs. Returns count acknowledged."""
+    def ack(self, *message_ids: str, _retry: bool = True) -> int:
+        """
+        Acknowledge one or more message IDs. Returns count acknowledged.
+
+        On transient Redis errors the XACK is retried once after a short
+        delay.  If the retry also fails the error is logged and 0 is returned
+        so the caller can decide whether to re-queue or dead-letter the message.
+        Unacknowledged messages remain in the PEL and will be reclaimed by
+        reprocess_pending() on the next cycle.
+        """
         if not message_ids:
             return 0
         try:
             return int(self._client.xack(self._stream, self._group, *message_ids))
         except Exception as exc:
-            logger.warning("StreamConsumerGroup.ack error: %s", exc)
+            if _retry:
+                logger.warning(
+                    "StreamConsumerGroup.ack error (will retry once): %s", exc
+                )
+                import time as _time
+                _time.sleep(0.1)
+                return self.ack(*message_ids, _retry=False)
+            logger.error(
+                "StreamConsumerGroup.ack failed after retry for ids=%s stream=%s group=%s: %s",
+                message_ids,
+                self._stream,
+                self._group,
+                exc,
+            )
             return 0
 
     def reprocess_pending(self, idle_ms: int = 60_000) -> list[tuple[str, dict]]:
@@ -668,24 +689,50 @@ class StreamConsumerGroup:
                     continue
 
                 if delivery_count > self._max_retries:
-                    # Move to dead-letter stream
+                    # Move to dead-letter stream, then XACK regardless of
+                    # whether the XADD succeeded.  Without the unconditional
+                    # XACK the message stays in the PEL forever and
+                    # reprocess_pending() loops on it indefinitely.
+                    dead_letter_written = False
                     try:
                         raw = self._client.xrange(self._stream, min=msg_id, max=msg_id)
                         if raw:
                             _, fields = raw[0]
-                            fields["_original_id"] = msg_id
-                            fields["_delivery_count"] = str(delivery_count)
+                            # Annotate with provenance metadata.
+                            dl_fields = dict(fields)
+                            dl_fields[b"_original_id"] = msg_id.encode() if isinstance(msg_id, str) else msg_id
+                            dl_fields[b"_delivery_count"] = str(delivery_count).encode()
+                            dl_fields[b"_dead_lettered_at"] = str(time.time()).encode()
                             self._client.xadd(
-                                self._dead_stream, fields, maxlen=10_000, approximate=True
+                                self._dead_stream, dl_fields, maxlen=10_000, approximate=True
                             )
-                        self.ack(msg_id)
-                        logger.warning(
-                            "StreamConsumerGroup: moved %r to dead-letter after %d retries",
-                            msg_id,
-                            delivery_count,
-                        )
+                            dead_letter_written = True
                     except Exception as exc:
-                        logger.warning("Dead-letter move failed for %r: %s", msg_id, exc)
+                        logger.error(
+                            "StreamConsumerGroup: dead-letter XADD failed for %r: %s — "
+                            "will XACK anyway to prevent infinite PEL loop.",
+                            msg_id,
+                            exc,
+                        )
+                    finally:
+                        # Always XACK: if dead-letter write failed the message
+                        # is lost, but that is preferable to an infinite loop.
+                        acked = self.ack(msg_id)
+                        if dead_letter_written:
+                            logger.warning(
+                                "StreamConsumerGroup: dead-lettered %r after %d retries (acked=%d)",
+                                msg_id,
+                                delivery_count,
+                                acked,
+                            )
+                        else:
+                            logger.error(
+                                "StreamConsumerGroup: dropped %r after %d retries "
+                                "(dead-letter write failed, acked=%d)",
+                                msg_id,
+                                delivery_count,
+                                acked,
+                            )
                     continue
 
                 # Claim the message
