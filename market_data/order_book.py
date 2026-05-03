@@ -788,10 +788,10 @@ class MockL2Feed:  # healer: ignore — assert_not_production() guard in __init_
         return book.get_snapshot() if book else None
 
     async def _generate(self, symbol: str) -> None:
-        """Generate synthetic L2 data with realistic microstructure."""
+        """Generate synthetic L2 data with realistic microstructure (dev/test only)."""
         book = self._books[symbol]
         mid = 2000.0  # gold-like price
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng()  # unseeded — non-deterministic per run
 
         while self._running:
             try:
