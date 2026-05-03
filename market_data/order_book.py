@@ -849,8 +849,19 @@ class OrderBookFeed:
             else:
                 self._provider = PolygonL2Feed()
         elif self._provider_name == "mock":
+            # assert_not_production raises RuntimeError in production/staging
+            # before MockL2Feed.__init__ is even reached, giving a clear error
+            # message rather than silently serving synthetic data.
+            from utils.production_guard import assert_not_production
+
+            assert_not_production(
+                "MockL2Feed (L2_PROVIDER=mock)",
+                replacement="MultiSourceL2Feed with L2_PROVIDER=multi",
+                extra="Set L2_PROVIDER=multi and configure POLYGON_API_KEY.",
+            )
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). Only permitted in non-production environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
+                "Only permitted in development/test environments."
             )
             self._provider = MockL2Feed()
         else:
