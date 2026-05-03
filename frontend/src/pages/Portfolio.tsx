@@ -16,7 +16,7 @@
  *   GET /trading/trades
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   useStore,
@@ -174,6 +174,8 @@ interface TradeRecord {
   closed_at:   string;
 }
 
+type TradeFilter = 'all' | 'long' | 'short' | 'win' | 'loss';
+
 const TradeHistory: React.FC = () => {
   const { data: trades, isLoading, isError } = useQuery<TradeRecord[]>({
     queryKey: ['trades', 'history'],
@@ -186,8 +188,69 @@ const TradeHistory: React.FC = () => {
     refetchInterval: 60_000,
   });
 
+  const [filter, setFilter]   = useState<TradeFilter>('all');
+  const [search, setSearch]   = useState('');
+
+  const filtered = useMemo(() => {
+    if (!trades) return [];
+    return trades.filter((t) => {
+      const matchDir = filter === 'all' ? true
+        : filter === 'long'  ? (t.side === 'long' || t.side === 'buy')
+        : filter === 'short' ? (t.side === 'short' || t.side === 'sell')
+        : filter === 'win'   ? t.pnl >= 0
+        : t.pnl < 0;
+      const matchSearch = !search || t.symbol.toLowerCase().includes(search.toLowerCase());
+      return matchDir && matchSearch;
+    });
+  }, [trades, filter, search]);
+
+  const totalPnl = filtered.reduce((s, t) => s + t.pnl, 0);
+  const wins     = filtered.filter((t) => t.pnl >= 0).length;
+
+  const FILTERS: { id: TradeFilter; label: string; color: string }[] = [
+    { id: 'all',   label: 'ALL',     color: '#64748b' },
+    { id: 'long',  label: '▲ LONG',  color: '#00e676' },
+    { id: 'short', label: '▼ SHORT', color: '#ff1744' },
+    { id: 'win',   label: '✓ WINS',  color: '#00e676' },
+    { id: 'loss',  label: '✗ LOSSES',color: '#ff1744' },
+  ];
+
+  const headerRight = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="Symbol…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="bg-[#111827] border border-[#1e2d3d] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
+      />
+      {/* Filter pills */}
+      {FILTERS.map(({ id, label, color }) => (
+        <button
+          key={id}
+          onClick={() => setFilter(id)}
+          style={{
+            padding: '2px 8px', borderRadius: 4,
+            background: filter === id ? `${color}18` : 'transparent',
+            border: `1px solid ${filter === id ? `${color}50` : '#1e2d3d'}`,
+            color: filter === id ? color : '#475569',
+            fontSize: 9, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer',
+          }}
+        >
+          {label}
+        </button>
+      ))}
+      {filtered.length > 0 && (
+        <span style={{ fontSize: 10, color: totalPnl >= 0 ? '#00e676' : '#ff1744', fontFamily: 'monospace', fontWeight: 700 }}>
+          {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)} ({wins}/{filtered.length})
+        </span>
+      )}
+    </div>
+  );
+
   return (
-    <Panel title="Trade History" noPad>
+    <Panel title="Trade History" headerRight={headerRight} noPad>
       {isLoading && <PanelSkeleton rows={5} />}
 
       {isError && (
@@ -196,14 +259,16 @@ const TradeHistory: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && !isError && (!trades || trades.length === 0) && (
+      {!isLoading && !isError && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-10 gap-2">
           <span className="text-2xl opacity-30">📋</span>
-          <span className="text-[12px] text-slate-500">No closed trades yet</span>
+          <span className="text-[12px] text-slate-500">
+            {!trades || trades.length === 0 ? 'No closed trades yet' : `No ${filter} trades`}
+          </span>
         </div>
       )}
 
-      {trades && trades.length > 0 && (
+      {filtered.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
@@ -219,7 +284,7 @@ const TradeHistory: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {trades.map((t) => {
+              {filtered.map((t) => {
                 const isLong = t.side === 'long' || t.side === 'buy';
                 const pnlPos = t.pnl >= 0;
                 return (

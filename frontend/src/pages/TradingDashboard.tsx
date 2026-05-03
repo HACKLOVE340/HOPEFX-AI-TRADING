@@ -33,6 +33,7 @@ import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/S
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
+import { NewsTicker }       from '../components/panels/NewsTicker';
 
 // ── Quick-action bar ──────────────────────────────────────────────────────────
 const QuickActionBar: React.FC = () => {
