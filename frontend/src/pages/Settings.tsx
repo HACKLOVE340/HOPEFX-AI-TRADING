@@ -14,7 +14,7 @@
  */
 
 import React, { useState, Suspense, lazy } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
@@ -216,6 +216,7 @@ const PLAN_RANK: Record<string, number> = {
 // ── Settings page ─────────────────────────────────────────────────────────────
 
 const Settings: React.FC = () => {
+  const navigate   = useNavigate();
   const user       = useStore(selectUser);
   const admin      = user ? isAdmin(user.role) : false;
   const superAdmin = user ? isSuperAdmin(user.role) : false;
@@ -297,7 +298,23 @@ const Settings: React.FC = () => {
 
       <div style={S.page}>
         <div style={S.header}>
-          <h1 style={S.heading}>Settings</h1>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <h1 style={S.heading}>Settings</h1>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                ⚡ Trade
+              </button>
+              <button onClick={() => navigate('/journal')}
+                style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                📓 Journal
+              </button>
+              <button onClick={() => navigate('/wallet')}
+                style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                💰 Wallet
+              </button>
+            </div>
+          </div>
           <p style={S.subheading}>
             Manage your account, trading preferences, integrations, and platform configuration.
             {superAdmin && (
