@@ -28,6 +28,7 @@ Design
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import mmap
@@ -505,41 +506,72 @@ class EventBus:
         """
         Async generator yielding decoded dicts from the given channels.
 
-        Reconnects automatically when the Redis connection drops.
-        Switches to local fallback when Redis is permanently unavailable.
+        Reconnects automatically when the Redis connection drops using
+        exponential back-off (1 s → 2 s → 4 s … capped at MAX_BACKOFF_S).
+
+        When Redis is permanently unavailable (or already degraded at call
+        time) the generator transparently switches to the in-process local
+        fallback queue so callers keep receiving messages without restarting.
+        The generator never returns on its own — it runs until cancelled.
         """
-        if self._degraded:
-            # Local fallback: feed a bounded queue from _local_bus handlers.
-            # Maxsize prevents unbounded memory growth when consumers are slow.
-            _LOCAL_QUEUE_MAXSIZE = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
-            queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=_LOCAL_QUEUE_MAXSIZE)
+        _LOCAL_QUEUE_MAXSIZE = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
+
+        def _make_local_queue() -> asyncio.Queue:  # type: ignore[type-arg]
+            """Wire up a local queue and register handlers for all channels."""
+            q: asyncio.Queue[dict] = asyncio.Queue(maxsize=_LOCAL_QUEUE_MAXSIZE)
 
             async def _enqueue(msg: dict) -> None:
                 try:
-                    queue.put_nowait(msg)
+                    q.put_nowait(msg)
                 except asyncio.QueueFull:
-                    # Drop oldest message to make room (LIFO-style eviction)
+                    # Evict oldest to make room — prefer freshness over completeness.
                     try:
-                        queue.get_nowait()
+                        q.get_nowait()
                     except asyncio.QueueEmpty:  # nosec B110
                         pass
                     try:
-                        queue.put_nowait(msg)
+                        q.put_nowait(msg)
                     except asyncio.QueueFull:
-                        logger.warning("EventBus local queue full — dropping message on %s", channels)
+                        logger.warning(
+                            "EventBus local queue full — dropping message on %s", channels
+                        )
 
             for ch in channels:
                 _local_bus.subscribe_local(ch, _enqueue)
+            return q
 
+        # ── Local fallback path ───────────────────────────────────────────────
+        if self._degraded:
+            q = _make_local_queue()
             while True:
-                msg = await queue.get()
+                msg = await q.get()
                 self._metrics["delivered"] += 1
                 yield msg
             return  # unreachable; satisfies type checker
 
-        # Redis path with auto-reconnect
+        # ── Redis path with exponential back-off reconnect ────────────────────
         _pubsub_redis: aioredis.Redis | None = None
+        _reconnect_backoff: float = BASE_BACKOFF_S
+        # How many consecutive Redis failures before giving up and falling back.
+        _MAX_CONSECUTIVE_FAILURES = int(
+            os.environ.get("EVENT_BUS_MAX_FAILURES", "5")
+        )
+        _consecutive_failures: int = 0
+
         while True:
+            # If we transitioned to degraded mid-loop, switch to local queue.
+            if self._degraded:
+                logger.info(
+                    "EventBus subscribe: Redis degraded — switching to local fallback for %s",
+                    channels,
+                )
+                q = _make_local_queue()
+                while True:
+                    msg = await q.get()
+                    self._metrics["delivered"] += 1
+                    yield msg
+                return  # unreachable
+
             pubsub = None
             try:
                 if _pubsub_redis is None:
@@ -547,24 +579,23 @@ class EventBus:
                 pubsub = _pubsub_redis.pubsub()
                 await pubsub.subscribe(*channels)
                 logger.info("EventBus subscribed to channels: %s", channels)
+                # Successful subscribe — reset failure counter and back-off.
+                _consecutive_failures = 0
+                _reconnect_backoff = BASE_BACKOFF_S
 
                 while True:
                     try:
-                        # get_message with a timeout avoids blocking the event loop
-                        # indefinitely and prevents spurious "Timeout reading" errors
-                        # that occur when socket_timeout fires on an idle connection.
                         raw = await pubsub.get_message(
                             ignore_subscribe_messages=True,
                             timeout=1.0,
                         )
                     except TimeoutError:
-                        # No message within the poll window — normal for idle channels
+                        # No message within poll window — normal on idle channels.
                         continue
                     except Exception:
-                        raise  # propagate real errors to the outer except
+                        raise  # propagate real errors to outer handler
 
                     if raw is None:
-                        # No message ready — yield control and poll again
                         await asyncio.sleep(0.01)
                         continue
 
@@ -573,8 +604,6 @@ class EventBus:
 
                     try:
                         msg = json.loads(raw["data"])
-                        # Restore trace context from publisher so this consumer's
-                        # spans appear as children in the same distributed trace.
                         try:
                             from tracing.setup import extract_trace_context
 
@@ -586,30 +615,53 @@ class EventBus:
                         self._metrics["delivered"] += 1
                         yield msg
                     except json.JSONDecodeError as exc:
-                        logger.warning("EventBus: bad JSON on %s: %s", raw.get("channel"), exc)
+                        logger.warning(
+                            "EventBus: bad JSON on %s: %s", raw.get("channel"), exc
+                        )
 
             except asyncio.CancelledError:
                 if pubsub:
-                    await pubsub.unsubscribe()
+                    with contextlib.suppress(Exception):
+                        await pubsub.unsubscribe()
                 return
-            except (TimeoutError, _redis_exc.TimeoutError):
-                # Idle pubsub timeout — no messages received within socket_timeout.
-                # This is normal on quiet channels; just re-subscribe without logging.
+
+            except (TimeoutError, _redis_exc.TimeoutError) if _redis_exc else (TimeoutError,):
+                # Idle pubsub timeout — normal on quiet channels; re-subscribe silently.
                 _pubsub_redis = None
                 continue
+
             except Exception as exc:
                 self._metrics["errors"] += 1
-                logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
+                _consecutive_failures += 1
                 _pubsub_redis = None
-                await asyncio.sleep(5)
+
+                if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+                    logger.error(
+                        "EventBus: Redis unavailable after %d attempts — switching to local fallback.",
+                        _consecutive_failures,
+                    )
+                    self._degraded = True
+                    # Fall through to the degraded check at the top of the loop.
+                    continue
+
+                wait = min(_reconnect_backoff, MAX_BACKOFF_S)
+                logger.warning(
+                    "EventBus subscribe error: %s — reconnecting in %.0f s",
+                    exc,
+                    wait,
+                )
+                await asyncio.sleep(wait)
+                _reconnect_backoff = min(_reconnect_backoff * 2, MAX_BACKOFF_S)
+
+                # Attempt to re-establish the main Redis connection too.
                 try:
                     self._redis = _make_redis()
                     await self._redis.ping()
                     logger.info("EventBus reconnected to Redis.")
+                    _consecutive_failures = 0
+                    _reconnect_backoff = BASE_BACKOFF_S
                 except Exception:
-                    self._degraded = True
-                    logger.error("EventBus: Redis reconnect failed — switching to local fallback.")
-                    return
+                    pass  # will retry on next loop iteration
 
     # ── local subscription (in-process handlers) ──────────────────────────────
 
