@@ -16,7 +16,7 @@ import { useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan } from '
 import { ThemeToggle } from '../ThemeToggle';
 import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
 import { NAV_ITEMS, NAV_GROUPS } from './navConfig';
-import { authApi } from '../../hooks/useApi';
+import { authApi, notificationsApi } from '../../hooks/useApi';
 import type { Plan } from '../../lib/subscription';
 
 // ── WS status dot ─────────────────────────────────────────────────────────────
@@ -202,6 +202,22 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const plan      = useStore(selectPlan);
   const clearAuth = useStore((s) => s.clearAuth);
   const [search, setSearch] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuth) return;
+    const fetchUnread = () =>
+      notificationsApi.list({ page: 1, limit: 1, unread_only: true })
+        .then(r => {
+          const d = r.data as { total?: number } | unknown[];
+          const n = Array.isArray(d) ? d.length : ((d as { total?: number }).total ?? 0);
+          setUnreadCount(typeof n === 'number' ? n : 0);
+        })
+        .catch(() => {/* non-fatal */});
+    fetchUnread();
+    const id = setInterval(fetchUnread, 60_000);
+    return () => clearInterval(id);
+  }, [isAuth]);
 
   const handleSignOut = async () => {
     try { await authApi.logout(); } catch { /* ignore network errors on logout */ }
@@ -371,6 +387,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                         borderLeft:  active ? '3px solid #3b82f6' : '3px solid transparent',
                         justifyContent: collapsed ? 'center' : 'flex-start',
                         opacity: locked ? 0.6 : 1,
+                        position: 'relative',
                       }}
                     >
                       <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
@@ -382,8 +399,25 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                             {item.label}
                           </span>
                           {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
+                          {item.path === '/notifications' && unreadCount > 0 && (
+                            <span style={{
+                              minWidth: 16, height: 16, borderRadius: 8,
+                              background: '#ef4444', color: '#fff',
+                              fontSize: 9, fontWeight: 800, lineHeight: '16px',
+                              textAlign: 'center', padding: '0 4px', flexShrink: 0,
+                            }}>
+                              {unreadCount > 99 ? '99+' : unreadCount}
+                            </span>
+                          )}
                         </>
                       )}
+                    {collapsed && item.path === '/notifications' && unreadCount > 0 && (
+                      <span style={{
+                        position: 'absolute', top: 4, right: 4,
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: '#ef4444',
+                      }} />
+                    )}
                     </NavLink>
                   );
                 })}

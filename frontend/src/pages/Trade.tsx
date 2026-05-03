@@ -21,6 +21,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocation } from 'react-router-dom';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
@@ -379,7 +380,13 @@ function BottomSection() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Trade: React.FC = () => {
-  const [selectedSymbol, setSelectedSymbol] = useState('XAU/USD');
+  const location        = useLocation();
+  const signalState     = (location.state as { signal?: {
+    symbol?: string; direction?: string;
+    stop_loss?: number; take_profit?: number;
+  } } | null)?.signal;
+
+  const [selectedSymbol, setSelectedSymbol] = useState(signalState?.symbol ?? 'XAU/USD');
   const [closingAll, setClosingAll]         = useState(false);
   const prices      = useStore((s) => s.prices);
   const allHistory  = useStore((s) => s.priceHistory);
@@ -444,6 +451,9 @@ const Trade: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
         <OrderEntryForm
           symbol={selectedSymbol}
+          defaultSide={signalState?.direction === 'SELL' ? 'sell' : signalState?.direction === 'BUY' ? 'buy' : undefined}
+          defaultSl={signalState?.stop_loss ? String(signalState.stop_loss) : undefined}
+          defaultTp={signalState?.take_profit ? String(signalState.take_profit) : undefined}
           onOrderPlaced={() => qc.invalidateQueries({ queryKey: ['positions'] })}
         />
         <div className="flex flex-col gap-4">
