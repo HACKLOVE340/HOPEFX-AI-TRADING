@@ -372,18 +372,30 @@ class PolygonL2Feed:
         while self._running:
             try:
                 await self._stream(symbols)
-                backoff = L2_RECONNECT_INITIAL  # clean exit resets back-off
+                # Clean exit — reset back-off and failure counter.
+                backoff = L2_RECONNECT_INITIAL
                 self._fail_count = 0
+                logger.debug("PolygonL2Feed: stream ended cleanly — reconnecting")
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 self._fail_count += 1
-                logger.warning(
-                    "PolygonL2Feed disconnected (attempt %d): %s — reconnecting in %.0f s",
-                    self._fail_count,
-                    exc,
-                    backoff,
-                )
+                exc_str = str(exc)
+                # "no close frame received or sent" / "sent 1000 (OK)" are
+                # clean WebSocket closes, not real errors.
+                if "no close frame" in exc_str or "sent 1000" in exc_str or "1000 (OK)" in exc_str:
+                    logger.debug(
+                        "PolygonL2Feed: clean close (attempt %d) — reconnecting in %.0f s",
+                        self._fail_count,
+                        backoff,
+                    )
+                else:
+                    logger.warning(
+                        "PolygonL2Feed disconnected (attempt %d): %s — reconnecting in %.0f s",
+                        self._fail_count,
+                        exc,
+                        backoff,
+                    )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, L2_RECONNECT_MAX)
 
@@ -579,7 +591,7 @@ class FinnhubTradeFeed:
 
     async def start(self) -> None:
         if not self._api_key:
-            logger.warning(
+            logger.info(
                 "FINNHUB_API_KEY not set — Finnhub trade tape disabled. "
                 "Cumulative delta will be sourced from Polygon trade events only."
             )
@@ -598,18 +610,30 @@ class FinnhubTradeFeed:
         while self._running:
             try:
                 await self._stream()
+                # Clean exit — reset back-off and failure counter.
                 backoff = L2_RECONNECT_INITIAL
                 self._fail_count = 0
+                logger.debug("FinnhubTradeFeed: stream ended cleanly — reconnecting")
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 self._fail_count += 1
-                logger.warning(
-                    "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
-                    self._fail_count,
-                    exc,
-                    backoff,
-                )
+                exc_str = str(exc)
+                # "no close frame received or sent" is a clean WebSocket close
+                # in some websockets library versions — not a real error.
+                if "no close frame" in exc_str or "sent 1000" in exc_str or "1000 (OK)" in exc_str:
+                    logger.debug(
+                        "FinnhubTradeFeed: clean close (attempt %d) — reconnecting in %.0f s",
+                        self._fail_count,
+                        backoff,
+                    )
+                else:
+                    logger.warning(
+                        "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
+                        self._fail_count,
+                        exc,
+                        backoff,
+                    )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, L2_RECONNECT_MAX)
 
