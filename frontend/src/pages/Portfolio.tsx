@@ -17,6 +17,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   useStore,
@@ -411,6 +412,7 @@ const AllocationBreakdown: React.FC = () => {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Portfolio: React.FC = () => {
+  const navigate = useNavigate();
   // Prefetch all data on mount
   useEquityCurve();
   usePositions();
@@ -449,12 +451,26 @@ const Portfolio: React.FC = () => {
             Balances, equity curve, allocation, and trade history
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
-        >
-          ↓ Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/trade')}
+            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors"
+          >
+            ⚡ Trade
+          </button>
+          <button
+            onClick={() => navigate('/trade-journal')}
+            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors"
+          >
+            📓 Journal
+          </button>
+          <button
+            onClick={handleExport}
+            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
+          >
+            ↓ Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Account balances */}

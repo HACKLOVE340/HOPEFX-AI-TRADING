@@ -3,6 +3,7 @@
  * Tabs: Overview · Referrals · Commissions · Leaderboard
  */
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
 
@@ -22,6 +23,7 @@ const statusBadge=(s:string)=>{ const m:Record<string,{bg:string;color:string}>=
 const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value,sub})=>(<div style={st.metricCard}><div style={st.metricValue}>{value}</div><div style={st.metricLabel}>{label}</div>{sub&&<div style={st.metricSub}>{sub}</div>}</div>);
 
 const Affiliate:React.FC=()=>{
+  const navigate=useNavigate();
   const user=useStore(s=>s.user); const userId=user?.id;
   const [account,setAccount]=useState<AffiliateAccount|null>(null);
   const [metrics,setMetrics]=useState<AffiliateMetrics|null>(null);
@@ -118,7 +120,11 @@ const Affiliate:React.FC=()=>{
             <span style={{color:'#64748b',fontSize:14}}>{(account.commission_rate*100).toFixed(0)}% commission · {statusBadge(account.status)}</span>
           </div>
         </div>
-        <button onClick={loadData} style={st.refreshBtn}>↻ Refresh</button>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <button onClick={()=>navigate('/copy-trading')} style={st.refreshBtn}>🔁 Copy Trading</button>
+          <button onClick={()=>navigate('/leaderboard')} style={st.refreshBtn}>🏆 Leaderboard</button>
+          <button onClick={loadData} style={st.refreshBtn}>↻ Refresh</button>
+        </div>
       </div>
 
       <div style={st.linkCard}>
@@ -186,7 +192,10 @@ const Affiliate:React.FC=()=>{
 
       {activeTab==='leaderboard'&&(
         <div style={st.card}>
-          <h3 style={st.cardTitle}>Top affiliates</h3>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+            <h3 style={{...st.cardTitle,marginBottom:0}}>Top affiliates</h3>
+            <button onClick={()=>navigate('/leaderboard')} style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'#60a5fa',fontSize:12,fontWeight:600,padding:'4px 12px',cursor:'pointer'}}>View full leaderboard →</button>
+          </div>
           {subErrors.leaderboard&&<div style={st.subError}>{subErrors.leaderboard}</div>}
           {!subErrors.leaderboard&&(
             <table style={st.table}><thead><tr><th style={st.th}>#</th><th style={st.th}>Code</th><th style={st.th}>Level</th><th style={st.th}>Conversions</th><th style={st.th}>Earned</th></tr></thead>
