@@ -96,6 +96,17 @@ if _CELERY_AVAILABLE:
         worker_prefetch_multiplier=1,
         # Result expiry
         result_expires=timedelta(hours=24),
+        # Queue routing — each task family gets its own queue so workers
+        # can be scaled independently (e.g. more ML workers, fewer infra).
+        task_routes={
+            "celery_app.ml_hourly_online_update": {"queue": "ml"},
+            "celery_app.ml_daily_full_retrain": {"queue": "ml"},
+            "celery_app.subscription_expiry_check": {"queue": "billing"},
+            "celery_app.affiliate_commission_payout": {"queue": "billing"},
+            "celery_app.pnl_reconciliation": {"queue": "risk"},
+            "celery_app.database_backup": {"queue": "infra"},
+            "celery_app.self_healer_scan": {"queue": "infra"},
+        },
         # Test mode
         task_always_eager=ALWAYS_EAGER,
         # Beat schedule

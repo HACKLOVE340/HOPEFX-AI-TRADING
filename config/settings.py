@@ -300,6 +300,58 @@ class Settings(BaseSettings):
         self.ml.feature_store_path.mkdir(parents=True, exist_ok=True)  # pylint: disable=no-member
         return self
 
+    @model_validator(mode="after")
+    def fail_fast_production(self) -> "Settings":
+        """
+        Fail-fast validation for production deployments.
+
+        Raises ValueError at startup if any critical secret is missing or
+        still set to a placeholder value when env=production.  This prevents
+        silent misconfiguration from reaching live traffic.
+        """
+        if self.env != "production":
+            return self
+
+        errors: list[str] = []
+
+        # JWT secret must be set and long enough to be secure
+        jwt_secret = (
+            self.security.jwt_secret.get_secret_value()
+            if hasattr(self.security.jwt_secret, "get_secret_value")
+            else str(self.security.jwt_secret or "")
+        )
+        if len(jwt_secret) < 32:
+            errors.append(
+                "SECURITY_JWT_SECRET must be at least 32 characters in production"
+            )
+
+        # Database URL must point to a real server (not SQLite)
+        db_url = str(self.db.url or "")
+        if not db_url or "sqlite" in db_url.lower():
+            errors.append(
+                "DATABASE_URL must be a PostgreSQL URL in production (not SQLite)"
+            )
+
+        # Redis URL must be configured
+        redis_url = str(self.redis.url or "")
+        if not redis_url:
+            errors.append("REDIS_URL must be set in production")
+
+        # Redis must use TLS in production
+        if redis_url.startswith("redis://") and not redis_url.startswith("redis://localhost"):
+            errors.append(
+                "REDIS_URL must use rediss:// (TLS) in production; "
+                "set REDIS_TLS_SKIP_VERIFY=true only for internal networks"
+            )
+
+        if errors:
+            raise ValueError(
+                "Production configuration errors — fix before deploying:\n"
+                + "\n".join(f"  • {e}" for e in errors)
+            )
+
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:
