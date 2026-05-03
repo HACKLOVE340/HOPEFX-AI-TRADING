@@ -42,7 +42,6 @@ import datetime as dt
 import logging
 import os
 import platform
-import random
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -918,21 +917,10 @@ compat_router = _APIRouter(prefix="/api", tags=["Convenience Aliases"])
 
 @compat_router.get("/dashboard/stats", summary="Trading dashboard summary stats")
 async def _dashboard_stats(user: TokenPayload = Depends(_get_current_user)):
-    """Aggregate stats for the main trading dashboard — requires authentication."""
-    return {
-        "user_id": user.sub,
-        "total_trades": 1_248,
-        "win_rate": 0.673,
-        "total_pnl": 18_432.50,
-        "open_positions": 3,
-        "daily_pnl": 412.75,
-        "balance": 52_800.00,
-        "equity": 54_105.25,
-        "margin_used": 0.12,
-        "sharpe_ratio": 1.84,
-        "max_drawdown": 0.087,
-        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
-    }
+    """Aggregate stats for the main trading dashboard — delegates to canonical endpoints."""
+    # Redirect to the canonical performance metrics endpoint which computes
+    # all values from real trade history and broker account data.
+    return RedirectResponse(url="/api/performance/metrics", status_code=307)
 
 
 @compat_router.get("/trades", summary="Recent trade history (alias for /trading/trades)")
@@ -943,20 +931,8 @@ async def _trades_alias(limit: int = 50, user: TokenPayload = Depends(_get_curre
 
 @compat_router.get("/market-data/live", summary="Live XAU/USD market data")
 async def _market_data_live(user: TokenPayload = Depends(_get_current_user)):
-    """Return live or last-known XAU/USD price data — requires authentication."""
-    _base = 2_340.00 + random.uniform(-15, 15)
-    _spread = 0.30
-    return {
-        "symbol": "XAUUSD",
-        "bid": round(_base, 2),
-        "ask": round(_base + _spread, 2),
-        "last": round(_base + _spread / 2, 2),
-        "change": round(random.uniform(-12, 12), 2),
-        "change_pct": round(random.uniform(-0.5, 0.5), 4),
-        "volume": random.randint(80_000, 120_000),
-        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
-        "source": "live",
-    }
+    """Return live or last-known XAU/USD price data — delegates to canonical price endpoint."""
+    return RedirectResponse(url="/api/trading/price/XAUUSD", status_code=307)
 
 
 @compat_router.get("/ai/signals", summary="AI trading signals (alias for /trading/signals)")
@@ -967,15 +943,8 @@ async def _ai_signals_alias(user: TokenPayload = Depends(_get_current_user)):
 
 @compat_router.get("/nuclear/status", summary="Nuclear AI engine status")
 async def _nuclear_status(user: TokenPayload = Depends(_get_current_user)):
-    """Return Nuclear AI engine status — requires authentication."""
-    return {
-        "active": True,
-        "mode": "adaptive",
-        "confidence": round(0.72 + random.uniform(-0.1, 0.15), 3),
-        "signals_generated": random.randint(5, 25),
-        "last_update": dt.datetime.utcnow().isoformat() + "Z",
-        "status": "running",
-    }
+    """Return Nuclear AI engine status — delegates to canonical nuclear endpoint."""
+    return RedirectResponse(url="/api/nuclear/status", status_code=307)
 
 
 @compat_router.get("/system/health", summary="System health overview (alias for /api/health/live)")

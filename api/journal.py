@@ -376,13 +376,27 @@ async def get_tags(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     """Return every unique tag used in journal entries with usage counts."""
-    entries = _load_all_entries()
-    counts: dict[str, int] = {}
-    for entry in entries.values():
-        for tag in entry.get("tags") or []:
-            counts[tag] = counts.get(tag, 0) + 1
-    tags = [{"tag": t, "count": c} for t, c in sorted(counts.items(), key=lambda x: -x[1])]
-    return {"tags": tags, "total": len(tags)}
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        rows = db.execute(
+            _text("SELECT tags FROM trade_journal WHERE user_id = :uid"),
+            {"uid": user.sub},
+        ).fetchall()
+        counts: dict[str, int] = {}
+        for row in rows:
+            tags_raw = row._mapping.get("tags") or "[]"
+            try:
+                tag_list = _json.loads(tags_raw)
+            except Exception:
+                tag_list = []
+            for tag in tag_list:
+                counts[tag] = counts.get(tag, 0) + 1
+        tags = [{"tag": t, "count": c} for t, c in sorted(counts.items(), key=lambda x: -x[1])]
+        return {"tags": tags, "total": len(tags)}
+    finally:
+        db.close()
 
 
 @router.get("/emotion-stats", summary="Emotion breakdown across journal entries")
@@ -390,30 +404,39 @@ async def get_emotion_stats(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     """Return win rate and average PnL grouped by emotion tag."""
-    entries = list(_load_all_entries().values())
-    closed = [e for e in entries if e.get("pnl") is not None]
-
-    emotion_map: dict[str, list[float]] = {}
-    for entry in closed:
-        em = entry.get("emotion")
-        if em:
-            emotion_map.setdefault(em, []).append(float(entry["pnl"]))
-
-    stats = []
-    for emotion, pnls in emotion_map.items():
-        wins = [p for p in pnls if p > 0]
-        stats.append(
-            {
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        rows = db.execute(
+            _text(
+                "SELECT tj.emotion, t.realized_pnl "
+                "FROM trade_journal tj "
+                "LEFT JOIN trades t ON t.trade_id = tj.trade_id "
+                "WHERE tj.user_id = :uid AND tj.emotion IS NOT NULL"
+            ),
+            {"uid": user.sub},
+        ).fetchall()
+        emotion_map: dict[str, list[float]] = {}
+        for row in rows:
+            em = row._mapping.get("emotion")
+            pnl = row._mapping.get("realized_pnl")
+            if em and pnl is not None:
+                emotion_map.setdefault(em, []).append(float(pnl))
+        stats = []
+        for emotion, pnls in emotion_map.items():
+            wins = [p for p in pnls if p > 0]
+            stats.append({
                 "emotion": emotion,
                 "count": len(pnls),
                 "win_rate": round(len(wins) / len(pnls) * 100, 1) if pnls else 0,
                 "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
                 "total_pnl": round(sum(pnls), 2),
-            }
-        )
-
-    stats.sort(key=lambda x: x["count"], reverse=True)
-    return {"emotion_stats": stats, "total_emotions": len(stats)}
+            })
+        stats.sort(key=lambda x: x["count"], reverse=True)
+        return {"emotion_stats": stats, "total_emotions": len(stats)}
+    finally:
+        db.close()
 
 
 @router.get("/weekly-report", summary="Weekly performance summary from journal")
@@ -425,40 +448,49 @@ async def get_weekly_report(
 
     today = date.today()
     week_start = today - timedelta(days=today.weekday())  # Monday
-    week_start_iso = week_start.isoformat()
 
-    entries = list(_load_all_entries().values())
-    this_week = [
-        e for e in entries
-        if e.get("pnl") is not None and (e.get("closed_at") or e.get("created_at") or "") >= week_start_iso
-    ]
-
-    pnls = [float(e["pnl"]) for e in this_week]
-    wins = [p for p in pnls if p > 0]
-    losses = [p for p in pnls if p <= 0]
-
-    # Collect all tags and emotions from this week
-    all_tags: dict[str, int] = {}
-    all_emotions: dict[str, int] = {}
-    for e in this_week:
-        for t in e.get("tags") or []:
-            all_tags[t] = all_tags.get(t, 0) + 1
-        em = e.get("emotion")
-        if em:
-            all_emotions[em] = all_emotions.get(em, 0) + 1
-
-    return {
-        "week_start": week_start_iso,
-        "week_end": (week_start + timedelta(days=6)).isoformat(),
-        "total_trades": len(this_week),
-        "wins": len(wins),
-        "losses": len(losses),
-        "win_rate": round(len(wins) / len(this_week) * 100, 1) if this_week else 0,
-        "total_pnl": round(sum(pnls), 2),
-        "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
-        "best_trade": max(pnls) if pnls else 0,
-        "worst_trade": min(pnls) if pnls else 0,
-        "top_tags": sorted(all_tags.items(), key=lambda x: -x[1])[:5],
-        "top_emotions": sorted(all_emotions.items(), key=lambda x: -x[1])[:5],
-        "rule_deviations": sum(1 for e in this_week if not e.get("followed_rules", True)),
-    }
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        rows = db.execute(
+            _text(
+                "SELECT tj.tags, tj.emotion, tj.lessons_learned, t.realized_pnl, t.exit_time "
+                "FROM trade_journal tj "
+                "LEFT JOIN trades t ON t.trade_id = tj.trade_id "
+                "WHERE tj.user_id = :uid AND t.exit_time >= :week_start"
+            ),
+            {"uid": user.sub, "week_start": datetime.combine(week_start, datetime.min.time())},
+        ).fetchall()
+        entries = [dict(r._mapping) for r in rows]
+        pnls = [float(e["realized_pnl"]) for e in entries if e.get("realized_pnl") is not None]
+        wins = [p for p in pnls if p > 0]
+        losses = [p for p in pnls if p <= 0]
+        all_tags: dict[str, int] = {}
+        all_emotions: dict[str, int] = {}
+        for e in entries:
+            try:
+                for t in _json.loads(e.get("tags") or "[]"):
+                    all_tags[t] = all_tags.get(t, 0) + 1
+            except Exception:
+                pass
+            em = e.get("emotion")
+            if em:
+                all_emotions[em] = all_emotions.get(em, 0) + 1
+        return {
+            "week_start": week_start.isoformat(),
+            "week_end": (week_start + timedelta(days=6)).isoformat(),
+            "total_trades": len(entries),
+            "wins": len(wins),
+            "losses": len(losses),
+            "win_rate": round(len(wins) / len(entries) * 100, 1) if entries else 0,
+            "total_pnl": round(sum(pnls), 2),
+            "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
+            "best_trade": max(pnls) if pnls else 0,
+            "worst_trade": min(pnls) if pnls else 0,
+            "top_tags": sorted(all_tags.items(), key=lambda x: -x[1])[:5],
+            "top_emotions": sorted(all_emotions.items(), key=lambda x: -x[1])[:5],
+            "rule_deviations": sum(1 for e in entries if e.get("lessons_learned")),
+        }
+    finally:
+        db.close()

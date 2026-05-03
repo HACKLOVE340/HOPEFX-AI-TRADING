@@ -1530,3 +1530,321 @@ else:
     class GDPRRequest:  # type: ignore[no-redef]
         __tablename__ = "gdpr_requests"
         __table__ = type("T", (), {"columns": []})()
+
+
+# ── TradeJournal — per-trade notes, tags, and emotion tracking ────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class TradeJournal(Base):
+        """Per-trade journal entry: notes, tags, emotion, and self-assessment."""
+
+        __tablename__ = "trade_journal"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+        trade_id = Column(
+            String(50),
+            ForeignKey("trades.trade_id", ondelete="SET NULL"),
+            nullable=True,
+            index=True,
+        )
+        title = Column(String(200), nullable=True)
+        notes = Column(Text, nullable=True)
+        tags = Column(Text, nullable=True)           # JSON array of strings
+        emotion = Column(String(50), nullable=True)  # "confident","fearful","neutral"
+        rating = Column(Integer, nullable=True)      # 1-5 self-assessment
+        setup_quality = Column(String(20), nullable=True)  # "A","B","C"
+        lessons_learned = Column(Text, nullable=True)
+        screenshot_url = Column(String(500), nullable=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+        updated_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_journal_user_created", "user_id", "created_at"),
+            Index("idx_journal_trade", "trade_id"),
+        )
+
+        def to_dict(self) -> dict:
+            import json as _json
+            tags_val: list = []
+            try:
+                tags_val = _json.loads(self.tags or "[]")
+            except Exception:
+                pass
+            return {
+                "id": self.id,
+                "user_id": self.user_id,
+                "trade_id": self.trade_id,
+                "title": self.title,
+                "notes": self.notes or "",
+                "tags": tags_val,
+                "emotion": self.emotion,
+                "rating": self.rating,
+                "setup_quality": self.setup_quality,
+                "lessons_learned": self.lessons_learned,
+                "screenshot_url": self.screenshot_url,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+else:
+
+    class TradeJournal:  # type: ignore[no-redef]
+        __tablename__ = "trade_journal"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── SubAccount — team/prop-firm sub-account management ───────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class SubAccount(Base):
+        """Sub-account for team or prop-firm trading."""
+
+        __tablename__ = "sub_accounts"
+
+        id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+        owner_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+        name = Column(String(100), nullable=False)
+        description = Column(Text, nullable=True)
+        # account_type: "personal" | "prop_firm" | "team" | "managed"
+        account_type = Column(String(30), nullable=False, default="personal")
+        currency = Column(String(10), nullable=False, default="USD")
+        initial_balance = Column(Float, nullable=True)
+        current_balance = Column(Float, nullable=True)
+        max_drawdown_pct = Column(Float, nullable=True)
+        daily_loss_limit = Column(Float, nullable=True)
+        is_active = Column(Boolean, nullable=False, default=True)
+        broker = Column(String(50), nullable=True)
+        broker_account_id = Column(String(100), nullable=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+        updated_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_sub_accounts_owner", "owner_id"),
+            Index("idx_sub_accounts_active", "is_active"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "id": self.id,
+                "owner_id": self.owner_id,
+                "name": self.name,
+                "description": self.description,
+                "account_type": self.account_type,
+                "currency": self.currency,
+                "initial_balance": self.initial_balance,
+                "current_balance": self.current_balance,
+                "max_drawdown_pct": self.max_drawdown_pct,
+                "daily_loss_limit": self.daily_loss_limit,
+                "is_active": self.is_active,
+                "broker": self.broker,
+                "broker_account_id": self.broker_account_id,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+    class SubAccountMember(Base):
+        """Many-to-many: users can be members of sub-accounts with a role."""
+
+        __tablename__ = "sub_account_members"
+
+        sub_account_id = Column(
+            String(36),
+            ForeignKey("sub_accounts.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+        # role: "owner" | "trader" | "viewer" | "risk_manager"
+        role = Column(String(30), nullable=False, default="viewer")
+        joined_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_sub_account_members_user", "user_id"),
+        )
+
+else:
+
+    class SubAccount:  # type: ignore[no-redef]
+        __tablename__ = "sub_accounts"
+        __table__ = type("T", (), {"columns": []})()
+
+    class SubAccountMember:  # type: ignore[no-redef]
+        __tablename__ = "sub_account_members"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── BillingHistory — Stripe/Flutterwave payment records ──────────────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class BillingHistory(Base):
+        """Immutable payment event record from Stripe or Flutterwave webhooks."""
+
+        __tablename__ = "billing_history"
+
+        id = Column(Integer, primary_key=True, autoincrement=True)
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+            index=True,
+        )
+        # provider: "stripe" | "flutterwave"
+        provider = Column(String(30), nullable=False)
+        provider_payment_id = Column(String(200), nullable=True, unique=True)
+        provider_subscription_id = Column(String(200), nullable=True)
+        # event_type: "payment_succeeded" | "payment_failed" | "subscription_created"
+        #             | "subscription_cancelled" | "refund" | "chargeback"
+        event_type = Column(String(50), nullable=False)
+        amount = Column(Float, nullable=True)
+        currency = Column(String(10), nullable=True, default="USD")
+        plan = Column(String(30), nullable=True)
+        # status: "pending" | "succeeded" | "failed" | "refunded"
+        status = Column(String(30), nullable=False, default="pending")
+        description = Column(Text, nullable=True)
+        metadata_json = Column(Text, nullable=True)  # raw provider payload
+        idempotency_key = Column(String(128), nullable=True, unique=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+
+        __table_args__ = (
+            Index("idx_billing_user_created", "user_id", "created_at"),
+            Index("idx_billing_provider_id", "provider_payment_id"),
+            Index("idx_billing_status", "status"),
+        )
+
+        def to_dict(self) -> dict:
+            return {
+                "id": self.id,
+                "user_id": self.user_id,
+                "provider": self.provider,
+                "provider_payment_id": self.provider_payment_id,
+                "provider_subscription_id": self.provider_subscription_id,
+                "event_type": self.event_type,
+                "amount": self.amount,
+                "currency": self.currency or "USD",
+                "plan": self.plan,
+                "status": self.status,
+                "description": self.description,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+            }
+
+else:
+
+    class BillingHistory:  # type: ignore[no-redef]
+        __tablename__ = "billing_history"
+        __table__ = type("T", (), {"columns": []})()
+
+
+# ── UserProfile — extended user profile (bio, avatar, preferences) ────────────
+if SQLALCHEMY_AVAILABLE:
+
+    class UserProfile(Base):
+        """Extended user profile — one row per user (1:1 with users table)."""
+
+        __tablename__ = "user_profiles"
+
+        user_id = Column(
+            String(36),
+            ForeignKey("users.id", ondelete="CASCADE"),
+            primary_key=True,
+        )
+        display_name = Column(String(100), nullable=True)
+        bio = Column(Text, nullable=True)
+        avatar_url = Column(String(500), nullable=True)
+        timezone = Column(String(50), nullable=True, default="UTC")
+        locale = Column(String(10), nullable=True, default="en")
+        theme = Column(String(20), nullable=True, default="dark")
+        notification_prefs = Column(Text, nullable=True)  # JSON
+        # trading_experience: "beginner" | "intermediate" | "advanced" | "professional"
+        trading_experience = Column(String(20), nullable=True)
+        preferred_instruments = Column(Text, nullable=True)  # JSON array
+        # risk_tolerance: "conservative" | "moderate" | "aggressive"
+        risk_tolerance = Column(String(20), nullable=True)
+        referral_code = Column(String(20), nullable=True, unique=True)
+        referred_by = Column(String(36), nullable=True)
+        created_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            nullable=False,
+        )
+        updated_at = Column(
+            DateTime(timezone=True),
+            server_default=func.now(),
+            onupdate=func.now(),
+            nullable=False,
+        )
+
+        def to_dict(self) -> dict:
+            import json as _json
+            prefs: dict = {}
+            instruments: list = []
+            try:
+                prefs = _json.loads(self.notification_prefs or "{}")
+            except Exception:
+                pass
+            try:
+                instruments = _json.loads(self.preferred_instruments or "[]")
+            except Exception:
+                pass
+            return {
+                "user_id": self.user_id,
+                "display_name": self.display_name,
+                "bio": self.bio,
+                "avatar_url": self.avatar_url,
+                "timezone": self.timezone or "UTC",
+                "locale": self.locale or "en",
+                "theme": self.theme or "dark",
+                "notification_prefs": prefs,
+                "trading_experience": self.trading_experience,
+                "preferred_instruments": instruments,
+                "risk_tolerance": self.risk_tolerance,
+                "referral_code": self.referral_code,
+                "referred_by": self.referred_by,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            }
+
+else:
+
+    class UserProfile:  # type: ignore[no-redef]
+        __tablename__ = "user_profiles"
+        __table__ = type("T", (), {"columns": []})()
