@@ -115,6 +115,7 @@ def write_outbox_event_standalone(
             event_type=event_type,
             channel=channel,
             payload=json.dumps(payload),
+            status="pending",
             created_at=datetime.now(UTC),
             attempts=0,
         )
@@ -181,6 +182,8 @@ class OutboxRelay:
         try:
             from database.models import OutboxEvent
 
+            # Fetch pending rows (status="pending" OR legacy published_at IS NULL)
+            # ordered oldest-first for FIFO delivery guarantees.
             rows = (
                 session.query(OutboxEvent)
                 .filter(
@@ -198,6 +201,31 @@ class OutboxRelay:
             redis_client = _get_redis()
 
             for row in rows:
+                # ── Idempotency check ─────────────────────────────────────────
+                # If the row has an idempotency_key, check whether a row with
+                # the same key was already published.  This prevents duplicate
+                # delivery when the relay crashes after publishing but before
+                # committing published_at.
+                if getattr(row, "idempotency_key", None):
+                    already = (
+                        session.query(OutboxEvent)
+                        .filter(
+                            OutboxEvent.idempotency_key == row.idempotency_key,
+                            OutboxEvent.published_at.isnot(None),
+                            OutboxEvent.id != row.id,
+                        )
+                        .first()
+                    )
+                    if already is not None:
+                        # Mark as published without re-sending
+                        row.published_at = datetime.now(UTC)
+                        row.status = "published"
+                        logger.debug(
+                            "outbox: idempotency skip id=%d key=%s (already published as id=%d)",
+                            row.id, row.idempotency_key, already.id,
+                        )
+                        continue
+
                 try:
                     if redis_client is not None:
                         redis_client.publish(row.channel, row.payload)
@@ -206,6 +234,7 @@ class OutboxRelay:
                         await _publish_in_process(row.channel, row.payload)
 
                     row.published_at = datetime.now(UTC)
+                    row.status = "published"
                     logger.debug(
                         "outbox: published id=%d type=%s channel=%s",
                         row.id,
@@ -215,12 +244,27 @@ class OutboxRelay:
                 except Exception as pub_exc:
                     row.attempts = (row.attempts or 0) + 1
                     row.last_error = str(pub_exc)[:500]
-                    logger.warning(
-                        "outbox: publish failed id=%d attempt=%d: %s",
-                        row.id,
-                        row.attempts,
-                        pub_exc,
-                    )
+
+                    # ── Dead-letter after max_attempts ────────────────────────
+                    # Use per-row max_attempts if set, otherwise global MAX_ATTEMPTS.
+                    row_max = getattr(row, "max_attempts", None) or MAX_ATTEMPTS
+                    if row.attempts >= row_max:
+                        row.status = "dead_letter"
+                        logger.error(
+                            "outbox: dead-lettered id=%d type=%s after %d attempts: %s",
+                            row.id,
+                            row.event_type,
+                            row.attempts,
+                            pub_exc,
+                        )
+                    else:
+                        logger.warning(
+                            "outbox: publish failed id=%d attempt=%d/%d: %s",
+                            row.id,
+                            row.attempts,
+                            row_max,
+                            pub_exc,
+                        )
 
             session.commit()
 

@@ -33,16 +33,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
-from api.db_store import db_get, db_keys_prefix, db_set
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/journal", tags=["Trade Journal"])
 
-# In-memory fallback
-_entries: dict[str, dict] = {}
 
-_JOURNAL_PREFIX = "journal_entry"
+def _get_db():
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("journal: DB unavailable: %s", exc)
+        return None
 
 EMOTION_TAGS = [
     "patient",
@@ -122,96 +125,24 @@ class JournalStats(BaseModel):
     rule_deviation_count: int
 
 
+import json as _json
+
+
 # ── Persistence helpers ───────────────────────────────────────────────────────
 
 
-def _entry_key(trade_id: str) -> str:
-    return f"{_JOURNAL_PREFIX}:{trade_id}"
-
-
-def _save_entry(entry: dict) -> None:
-    tid = entry["trade_id"]
-    _entries[tid] = entry
-    db_set(_entry_key(tid), entry, changed_by="journal")
-
-
-def _load_all_entries() -> dict[str, dict]:
-    """Load journal entries, merging db_store entries with DB Trade rows.
-
-    Explicit journal entries (created via POST /api/journal/trades) take
-    precedence over auto-synthesised entries from the Trade table so user
-    notes/tags/emotions are never overwritten.
-    """
-    # Load explicit journal entries from db_store first
-    if not _entries:
-        keys = db_keys_prefix(f"{_JOURNAL_PREFIX}:")
-        for key in keys:
-            val = db_get(key)
-            if isinstance(val, dict) and "trade_id" in val:
-                _entries[val["trade_id"]] = val
-
-    # Merge closed Trade rows from the DB as synthesised journal entries.
-    # Trades that already have an explicit journal entry are skipped.
-    try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Trade, TradeStatus
-
-        db = _SL()
+def _row_to_dict(row) -> dict:
+    """Convert a DB row to a plain dict, deserialising JSON tags."""
+    d = dict(row._mapping)
+    if isinstance(d.get("tags"), str):
         try:
-            rows = (
-                db.query(Trade)
-                .filter(Trade.status == TradeStatus.CLOSED)
-                .order_by(Trade.entry_time.desc())
-                .limit(500)
-                .all()
-            )
-            for t in rows:
-                tid = getattr(t, "trade_id", None) or str(t.id)
-                if tid in _entries:
-                    continue  # explicit entry takes precedence
-                qty = (
-                    getattr(t, "entry_quantity", None)
-                    or getattr(t, "size", None)
-                    or 0.0
-                )
-                raw_side = getattr(t, "side", "buy")
-                side_str = raw_side.value if hasattr(raw_side, "value") else str(raw_side or "buy")
-                entry_time = t.entry_time
-                exit_time = t.exit_time
-                # Parse emotion/tags from notes field (seed script stores them there)
-                notes_raw = getattr(t, "notes", "") or ""
-                emotion: str | None = None
-                tags: list[str] = []
-                for part in notes_raw.split():
-                    if part.startswith("emotion:"):
-                        emotion = part.split(":", 1)[1]
-                    elif part not in ("demo_seed",):
-                        tags.append(part)
-                _entries[tid] = {
-                    "trade_id": tid,
-                    "symbol": t.symbol or "UNKNOWN",
-                    "side": side_str,
-                    "entry_price": float(t.entry_price or 0.0),
-                    "exit_price": float(t.exit_price) if t.exit_price is not None else None,
-                    "size": float(qty or 0.0),
-                    "pnl": float(t.realized_pnl or 0.0),
-                    "opened_at": entry_time.isoformat() if entry_time else "",
-                    "closed_at": exit_time.isoformat() if exit_time else None,
-                    "notes": notes_raw,
-                    "tags": tags,
-                    "emotion": emotion,
-                    "followed_rules": True,
-                    "rule_deviation": None,
-                    "screenshot_url": None,
-                    "created_at": entry_time.isoformat() if entry_time else datetime.now(UTC).isoformat(),
-                    "updated_at": exit_time.isoformat() if exit_time else datetime.now(UTC).isoformat(),
-                }
-        finally:
-            db.close()
-    except Exception as exc:
-        logger.debug("journal _load_all_entries DB merge failed: %s", exc)
+            d["tags"] = _json.loads(d["tags"])
+        except Exception:
+            d["tags"] = []
+    return d
 
-    return _entries
+
+from sqlalchemy import text as _text
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -227,34 +158,80 @@ async def list_trades(
     symbol: str | None = None,
     user: TokenPayload = Depends(get_current_user),
 ) -> list[JournalEntry]:
-    entries = list(_load_all_entries().values())
-    if tag:
-        entries = [e for e in entries if tag in e.get("tags", [])]
-    if emotion:
-        entries = [e for e in entries if e.get("emotion") == emotion]
-    if symbol:
-        entries = [e for e in entries if e.get("symbol") == symbol.upper()]
-    entries.sort(key=lambda e: e.get("created_at", ""), reverse=True)
-    return [JournalEntry(**e) for e in entries[offset : offset + limit]]
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        conditions = ["user_id = :uid"]
+        params: dict = {"uid": user.sub, "limit": limit, "offset": offset}
+        if emotion:
+            conditions.append("emotion = :emotion")
+            params["emotion"] = emotion
+        where = " AND ".join(conditions)
+        rows = db.execute(
+            _text(
+                f"SELECT * FROM trade_journal WHERE {where} "  # nosec B608
+                "ORDER BY created_at DESC LIMIT :limit OFFSET :offset"
+            ),
+            params,
+        ).fetchall()
+        entries = [_row_to_dict(r) for r in rows]
+        # Filter by tag in Python (JSON array stored as text)
+        if tag:
+            entries = [e for e in entries if tag in (e.get("tags") or [])]
+        if symbol:
+            entries = [e for e in entries if (e.get("symbol") or "").upper() == symbol.upper()]
+        return [JournalEntry(**e) for e in entries]
+    finally:
+        db.close()
 
 
-@router.post(
-    "/trades",
-    response_model=JournalEntry,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/trades", response_model=JournalEntry, status_code=status.HTTP_201_CREATED)
 async def create_entry(
     entry: JournalEntry,
     user: TokenPayload = Depends(get_current_user),
 ) -> JournalEntry:
-    _load_all_entries()
-    if not entry.trade_id:
-        entry.trade_id = str(uuid.uuid4())
-    now = datetime.now(UTC).isoformat()
-    entry.created_at = now
-    entry.updated_at = now
-    _save_entry(entry.model_dump())
-    return entry
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        now = datetime.now(UTC)
+        if not entry.trade_id:
+            entry.trade_id = str(uuid.uuid4())
+        entry.created_at = now.isoformat()
+        entry.updated_at = now.isoformat()
+        tags_json = _json.dumps(entry.tags or [])
+        db.execute(
+            _text(
+                "INSERT INTO trade_journal "
+                "(user_id, trade_id, title, notes, tags, emotion, rating, "
+                "setup_quality, lessons_learned, screenshot_url, created_at, updated_at) "
+                "VALUES (:uid, :trade_id, :title, :notes, :tags, :emotion, :rating, "
+                ":setup_quality, :lessons_learned, :screenshot_url, :created_at, :updated_at)"
+            ),
+            {
+                "uid": user.sub,
+                "trade_id": entry.trade_id,
+                "title": None,
+                "notes": entry.notes,
+                "tags": tags_json,
+                "emotion": entry.emotion,
+                "rating": None,
+                "setup_quality": None,
+                "lessons_learned": entry.rule_deviation,
+                "screenshot_url": entry.screenshot_url,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        db.commit()
+        return entry
+    except Exception as exc:
+        db.rollback()
+        logger.error("create_entry error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create journal entry")
+    finally:
+        db.close()
 
 
 @router.get("/trades/{trade_id}", response_model=JournalEntry)
@@ -262,10 +239,20 @@ async def get_entry(
     trade_id: str,
     user: TokenPayload = Depends(get_current_user),
 ) -> JournalEntry:
-    entries = _load_all_entries()
-    if trade_id not in entries:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    return JournalEntry(**entries[trade_id])
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.execute(
+            _text("SELECT * FROM trade_journal WHERE trade_id = :tid AND user_id = :uid"),
+            {"tid": trade_id, "uid": user.sub},
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+        d = _row_to_dict(row)
+        return JournalEntry(**d)
+    finally:
+        db.close()
 
 
 @router.patch("/trades/{trade_id}", response_model=JournalEntry)
@@ -274,86 +261,111 @@ async def update_entry(
     update: JournalUpdate,
     user: TokenPayload = Depends(get_current_user),
 ) -> JournalEntry:
-    entries = _load_all_entries()
-    if trade_id not in entries:
-        raise HTTPException(status_code=404, detail="Trade not found")
-    entry = entries[trade_id]
-    for field, value in update.model_dump(exclude_none=True).items():
-        entry[field] = value
-    entry["updated_at"] = datetime.now(UTC).isoformat()
-    _save_entry(entry)
-    return JournalEntry(**entry)
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.execute(
+            _text("SELECT id FROM trade_journal WHERE trade_id = :tid AND user_id = :uid"),
+            {"tid": trade_id, "uid": user.sub},
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+        updates: dict = {"updated_at": datetime.now(UTC)}
+        data = update.model_dump(exclude_none=True)
+        if "notes" in data:
+            updates["notes"] = data["notes"]
+        if "tags" in data:
+            updates["tags"] = _json.dumps(data["tags"])
+        if "emotion" in data:
+            updates["emotion"] = data["emotion"]
+        if "rule_deviation" in data:
+            updates["lessons_learned"] = data["rule_deviation"]
+        if "screenshot_url" in data:
+            updates["screenshot_url"] = data["screenshot_url"]
+        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["trade_id"] = trade_id
+        db.execute(
+            _text(f"UPDATE trade_journal SET {set_clause} WHERE trade_id = :trade_id"),  # nosec B608
+            updates,
+        )
+        db.commit()
+        updated = db.execute(
+            _text("SELECT * FROM trade_journal WHERE trade_id = :tid"),
+            {"tid": trade_id},
+        ).fetchone()
+        return JournalEntry(**_row_to_dict(updated))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("update_entry error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to update journal entry")
+    finally:
+        db.close()
 
 
 @router.get("/stats", response_model=JournalStats)
 async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalStats:
-    entries = list(_load_all_entries().values())
-    closed = [e for e in entries if e.get("pnl") is not None]
-    if not closed:
+    db = _get_db()
+    if db is None:
+        return JournalStats(total_trades=0, win_rate=0, avg_pnl=0, best_trade_pnl=0, worst_trade_pnl=0, by_tag=[], by_emotion=[], rule_deviation_count=0)
+    try:
+        # Join trade_journal with trades to get PnL
+        rows = db.execute(
+            _text(
+                "SELECT tj.tags, tj.emotion, tj.lessons_learned, t.realized_pnl "
+                "FROM trade_journal tj "
+                "LEFT JOIN trades t ON t.trade_id = tj.trade_id "
+                "WHERE tj.user_id = :uid"
+            ),
+            {"uid": user.sub},
+        ).fetchall()
+        entries = [_row_to_dict(r) for r in rows]
+        closed = [e for e in entries if e.get("realized_pnl") is not None]
+        if not closed:
+            return JournalStats(total_trades=0, win_rate=0, avg_pnl=0, best_trade_pnl=0, worst_trade_pnl=0, by_tag=[], by_emotion=[], rule_deviation_count=0)
+        pnls = [float(e["realized_pnl"]) for e in closed]
+        wins = [p for p in pnls if p > 0]
+        all_tags = {t for e in closed for t in (e.get("tags") or [])}
+        tag_stats = []
+        for tag in all_tags:
+            tagged = [e for e in closed if tag in (e.get("tags") or [])]
+            tag_pnls = [float(e["realized_pnl"]) for e in tagged]
+            tag_wins = [p for p in tag_pnls if p > 0]
+            tag_stats.append(TagStats(tag=tag, count=len(tagged), win_rate=round(len(tag_wins)/len(tagged)*100,1) if tagged else 0, avg_pnl=round(sum(tag_pnls)/len(tag_pnls),2) if tag_pnls else 0))
+        all_emotions = {e.get("emotion") for e in closed if e.get("emotion")}
+        emotion_stats = []
+        for em in all_emotions:
+            em_entries = [e for e in closed if e.get("emotion") == em]
+            em_pnls = [float(e["realized_pnl"]) for e in em_entries]
+            em_wins = [p for p in em_pnls if p > 0]
+            emotion_stats.append(TagStats(tag=em, count=len(em_entries), win_rate=round(len(em_wins)/len(em_entries)*100,1) if em_entries else 0, avg_pnl=round(sum(em_pnls)/len(em_pnls),2) if em_pnls else 0))
         return JournalStats(
-            total_trades=0,
-            win_rate=0,
-            avg_pnl=0,
-            best_trade_pnl=0,
-            worst_trade_pnl=0,
-            by_tag=[],
-            by_emotion=[],
-            rule_deviation_count=0,
+            total_trades=len(closed), win_rate=round(len(wins)/len(closed)*100,1),
+            avg_pnl=round(sum(pnls)/len(pnls),2), best_trade_pnl=max(pnls), worst_trade_pnl=min(pnls),
+            by_tag=sorted(tag_stats, key=lambda x: x.count, reverse=True),
+            by_emotion=sorted(emotion_stats, key=lambda x: x.count, reverse=True),
+            rule_deviation_count=sum(1 for e in entries if e.get("lessons_learned")),
         )
-
-    pnls = [e["pnl"] for e in closed]
-    wins = [p for p in pnls if p > 0]
-
-    all_tags = {t for e in closed for t in e.get("tags", [])}
-    tag_stats = []
-    for tag in all_tags:
-        tagged = [e for e in closed if tag in e.get("tags", [])]
-        tag_pnls = [e["pnl"] for e in tagged]
-        tag_wins = [p for p in tag_pnls if p > 0]
-        tag_stats.append(
-            TagStats(
-                tag=tag,
-                count=len(tagged),
-                win_rate=round(len(tag_wins) / len(tagged) * 100, 1) if tagged else 0,
-                avg_pnl=round(sum(tag_pnls) / len(tag_pnls), 2) if tag_pnls else 0,
-            ),
-        )
-
-    all_emotions = {e.get("emotion") for e in closed if e.get("emotion")}
-    emotion_stats = []
-    for em in all_emotions:
-        em_entries = [e for e in closed if e.get("emotion") == em]
-        em_pnls = [e["pnl"] for e in em_entries]
-        em_wins = [p for p in em_pnls if p > 0]
-        emotion_stats.append(
-            TagStats(
-                tag=em,
-                count=len(em_entries),
-                win_rate=round(len(em_wins) / len(em_entries) * 100, 1) if em_entries else 0,
-                avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
-            ),
-        )
-
-    return JournalStats(
-        total_trades=len(closed),
-        win_rate=round(len(wins) / len(closed) * 100, 1),
-        avg_pnl=round(sum(pnls) / len(pnls), 2),
-        best_trade_pnl=max(pnls),
-        worst_trade_pnl=min(pnls),
-        by_tag=sorted(tag_stats, key=lambda x: x.count, reverse=True),
-        by_emotion=sorted(emotion_stats, key=lambda x: x.count, reverse=True),
-        rule_deviation_count=sum(1 for e in entries if not e.get("followed_rules", True)),
-    )
+    finally:
+        db.close()
 
 
 @router.get("/mistakes", response_model=list[JournalEntry])
-async def get_mistakes(
-    user: TokenPayload = Depends(get_current_user),
-) -> list[JournalEntry]:
-    """Trades where the user deviated from their rules."""
-    entries = _load_all_entries()
-    mistakes = [e for e in entries.values() if not e.get("followed_rules", True)]
-    return [JournalEntry(**e) for e in mistakes]
+async def get_mistakes(user: TokenPayload = Depends(get_current_user)) -> list[JournalEntry]:
+    """Trades where the user recorded a rule deviation (lessons_learned is set)."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        rows = db.execute(
+            _text("SELECT * FROM trade_journal WHERE user_id = :uid AND lessons_learned IS NOT NULL ORDER BY created_at DESC"),
+            {"uid": user.sub},
+        ).fetchall()
+        return [JournalEntry(**_row_to_dict(r)) for r in rows]
+    finally:
+        db.close()
 
 
 # ── Extended analytics endpoints ──────────────────────────────────────────────

@@ -214,12 +214,17 @@ async def preview_indicator(
         pass
 
     if not closes:
-        # Synthetic random walk
-        price = 2000.0
-        rng = random.Random(42)
-        for _ in range(body.periods):
-            price += rng.gauss(0, price * 0.001)
-            closes.append(round(price, 5))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "ohlcv_unavailable",
+                "message": (
+                    f"No real OHLCV data available for {body.symbol}. "
+                    "Configure a live data feed to use indicator preview."
+                ),
+                "symbol": body.symbol,
+            },
+        )
 
     # Evaluate formula — support SMA(close, N), EMA(close, N), RSI(close, N)
     formula = body.formula.strip().upper()

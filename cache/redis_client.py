@@ -499,6 +499,60 @@ def get_connection_mode() -> str:
     return _connection_mode
 
 
+async def execute_with_readonly_retry(
+    client: Any,
+    command: str,
+    *args: Any,
+    max_retries: int = 2,
+    **kwargs: Any,
+) -> Any:
+    """
+    Execute a Redis command with automatic retry on READONLY errors.
+
+    In Sentinel mode a failover can briefly cause the client to be connected
+    to a replica that returns ``READONLY You can't write against a read only
+    replica``.  This helper catches that error, forces a client re-initialisation
+    (which will discover the new master), and retries the command.
+
+    Also handles RedisCluster MOVED/ASK redirects transparently — the
+    redis-py Cluster client handles those internally, but we add an outer
+    retry for transient connection errors during slot migration.
+
+    Usage::
+
+        await execute_with_readonly_retry(rc, "set", "key", "value", ex=30)
+        await execute_with_readonly_retry(rc, "hset", "hash", "field", "value")
+    """
+    if client is None:
+        return None
+
+    for attempt in range(max_retries + 1):
+        try:
+            method = getattr(client, command)
+            return await method(*args, **kwargs)
+        except Exception as exc:
+            exc_str = str(exc).upper()
+            is_readonly = "READONLY" in exc_str
+            is_moved = "MOVED" in exc_str or "ASK" in exc_str
+            is_connection = "CONNECTION" in exc_str or "TIMEOUT" in exc_str
+
+            if attempt < max_retries and (is_readonly or is_moved or is_connection):
+                logger.warning(
+                    "Redis %s error on attempt %d/%d (%s) — re-initialising client",
+                    command, attempt + 1, max_retries, exc_str[:80],
+                )
+                # Force re-initialisation so the next get_redis() discovers
+                # the new master (Sentinel) or updated slot map (Cluster)
+                global _redis_instance
+                _redis_instance = None
+                client = await get_redis()
+                if client is None:
+                    logger.error("Redis re-initialisation failed — giving up")
+                    return None
+                continue
+            raise
+
+
 # Module-level fakeredis singleton — shared across all callers so state is
 # consistent within a single process (same as a real Redis server would be).
 _fakeredis_instance: Any | None = None

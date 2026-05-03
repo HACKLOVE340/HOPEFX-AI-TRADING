@@ -137,13 +137,26 @@ class MicrostructureEngine:
         self._last_mid: float = 0.0
         self._last_session_day: int = -1
 
-        # Kyle's lambda accumulators
+        # Kyle's lambda accumulators — rolling window (last _KYLE_WINDOW ticks)
         self._kyles_num: float = 0.0  # Σ|Δprice|
         self._kyles_den: float = 0.0  # Σvolume
+        # Rolling window for Kyle's lambda to prevent unbounded accumulation
+        _KYLE_WINDOW = int(os.getenv("MICRO_KYLE_WINDOW", "200"))
+        self._kyle_price_changes: deque = deque(maxlen=_KYLE_WINDOW)
+        self._kyle_volumes: deque = deque(maxlen=_KYLE_WINDOW)
 
         # Spread EMA state
         self._spread_ema_fast: float = 0.0
         self._spread_ema_slow: float = 0.0
+
+        # L2 OFI delta tracking — tracks changes in bid/ask depth between snapshots
+        # OFI_L2 = Δbid_depth - Δask_depth (positive = net order flow buying pressure)
+        self._prev_bid_depth: float = 0.0
+        self._prev_ask_depth: float = 0.0
+        self._ofi_l2_delta: float = 0.0  # latest L2 OFI delta
+        self._ofi_l2_ema: float = 0.0    # EMA-smoothed L2 OFI
+        _OFI_L2_ALPHA = float(os.getenv("MICRO_OFI_L2_ALPHA", "0.10"))
+        self._ofi_l2_alpha: float = _OFI_L2_ALPHA
 
         # Tick counter
         self._tick_count: int = 0
@@ -282,6 +295,10 @@ class MicrostructureEngine:
                 # Tick count — used by features_extended.py for normalised
                 # activity feature (dl_tick_count = tick_count / 500)
                 "micro_tick_count": float(self._tick_count),
+                # L2 OFI delta — change in bid depth minus change in ask depth
+                # from the most recent L2 snapshot injection
+                "micro_ofi_l2_delta": round(self._ofi_l2_delta, 6),
+                "micro_ofi_l2_ema": round(self._ofi_l2_ema, 6),
             }
 
     # ── Amihud illiquidity ratio ──────────────────────────────────────────────
@@ -442,6 +459,14 @@ class MicrostructureEngine:
         self._vwap_den = 0.0
         self._kyles_num = 0.0
         self._kyles_den = 0.0
+        # Clear rolling window so Kyle's lambda starts fresh each session
+        self._kyle_price_changes.clear()
+        self._kyle_volumes.clear()
+        # Reset L2 OFI delta baseline so the first post-reset snapshot
+        # doesn't produce a spurious large delta from the previous session
+        self._prev_bid_depth = 0.0
+        self._prev_ask_depth = 0.0
+        self._ofi_l2_delta = 0.0
         self._session_open = time.time()
         logger.debug("MicrostructureEngine: session reset")
 
@@ -470,8 +495,22 @@ class MicrostructureEngine:
             if not self._ticks:
                 return
             last = self._ticks[-1]
-            last.bid_depth = max(bid_depth, 0.0)
-            last.ask_depth = max(ask_depth, 0.0)
+            bid_depth = max(bid_depth, 0.0)
+            ask_depth = max(ask_depth, 0.0)
+            last.bid_depth = bid_depth
+            last.ask_depth = ask_depth
+
+            # OFI L2 delta: change in bid depth minus change in ask depth.
+            # Positive = more bids added (or asks removed) = buying pressure.
+            delta_bid = bid_depth - self._prev_bid_depth
+            delta_ask = ask_depth - self._prev_ask_depth
+            self._ofi_l2_delta = delta_bid - delta_ask
+            self._ofi_l2_ema = (
+                self._ofi_l2_alpha * self._ofi_l2_delta
+                + (1.0 - self._ofi_l2_alpha) * self._ofi_l2_ema
+            )
+            self._prev_bid_depth = bid_depth
+            self._prev_ask_depth = ask_depth
 
     def health(self) -> dict[str, object]:
         """
@@ -619,10 +658,14 @@ class MicrostructureEngine:
         self._vwap_num += mid
         self._vwap_den += 1.0
 
-        # Kyle's lambda: Σ|Δprice| / Σtick_count (price impact per tick)
+        # Kyle's lambda: rolling window |Δprice| / volume (price impact per unit volume)
         if self._last_mid > 0:
-            self._kyles_num += abs(mid - self._last_mid)
-            self._kyles_den += 1.0
+            price_change = abs(mid - self._last_mid)
+            self._kyle_price_changes.append(price_change)
+            self._kyle_volumes.append(volume)
+            # Recompute from rolling window (deque handles eviction automatically)
+            self._kyles_num = sum(self._kyle_price_changes)
+            self._kyles_den = sum(self._kyle_volumes)
 
         # Spread EMAs
         if self._spread_ema_fast == 0.0:
@@ -741,6 +784,8 @@ class MicrostructureEngine:
             # Always include tick_count even in zero state so downstream
             # consumers (features_extended.py dl_tick_count) never KeyError
             "micro_tick_count": float(self._tick_count),
+            "micro_ofi_l2_delta": 0.0,
+            "micro_ofi_l2_ema": 0.0,
         }
 
 

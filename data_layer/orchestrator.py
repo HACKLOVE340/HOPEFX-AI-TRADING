@@ -850,9 +850,12 @@ class MarketDataOrchestrator:
             if tick:
                 features["tick_confidence"] = tick.confidence
                 features["tick_spread_pct"] = tick.spread / tick.mid * 100.0 if tick.mid > 0 else 0.0
+                # bid_ask_spread in absolute USD terms (not percentage)
+                features["bid_ask_spread"] = tick.spread
             else:
                 features["tick_confidence"] = 0.0
                 features["tick_spread_pct"] = 0.0
+                features["bid_ask_spread"] = 0.0
 
             if self._gold_feed:
                 features["tick_source_count"] = float(len(self._gold_feed.active_sources()))
@@ -860,6 +863,35 @@ class MarketDataOrchestrator:
                 features["tick_source_count"] = 0.0
         except Exception as exc:
             logger.debug("Orchestrator: tick quality features error: %s", exc)
+
+        # 6. Temporal features — session_time and day_of_week
+        # These are causal: computed from the as_of timestamp (or now).
+        try:
+            ref_time = as_of if as_of is not None else datetime.now(UTC)
+            # session_time: fraction of the 24h UTC day elapsed [0, 1)
+            # Used by the ML model to capture intraday seasonality
+            # (gold is most liquid during London/NY overlap 13:00-17:00 UTC)
+            seconds_since_midnight = (
+                ref_time.hour * 3600
+                + ref_time.minute * 60
+                + ref_time.second
+                + ref_time.microsecond / 1_000_000
+            )
+            features["session_time"] = round(seconds_since_midnight / 86400.0, 6)
+
+            # day_of_week: 0=Monday … 6=Sunday, normalised to [0, 1)
+            # Captures weekly seasonality (gold often weaker on Fridays
+            # as traders reduce risk ahead of the weekend)
+            features["day_of_week"] = round(ref_time.weekday() / 7.0, 6)
+
+            # is_weekend: 1.0 on Saturday/Sunday (gold market closed)
+            features["is_weekend"] = 1.0 if ref_time.weekday() >= 5 else 0.0
+
+            # hour_of_day: raw hour [0, 23] for tree-based models that
+            # can learn non-linear hour effects without normalisation
+            features["hour_of_day"] = float(ref_time.hour)
+        except Exception as exc:
+            logger.debug("Orchestrator: temporal features error: %s", exc)
 
         return features
 
@@ -1248,7 +1280,77 @@ class MarketDataOrchestrator:
         # _uptime_loop; a direct Redis write here would either block the
         # event loop (async context) or duplicate the write (sync context).
 
+        # Aggregate health score [0.0, 1.0] — weighted combination of
+        # sub-component health indicators for the OrchestratorHealthGrid.
+        h["aggregate_health"] = self._compute_aggregate_health(h)
+        h["status"] = (
+            "healthy" if h["aggregate_health"] >= 0.7
+            else "degraded" if h["aggregate_health"] >= 0.3
+            else "unhealthy"
+        )
+
         return h
+
+    def _compute_aggregate_health(self, h: dict) -> float:
+        """
+        Compute a weighted aggregate health score [0.0, 1.0].
+
+        Weights:
+          - Gold feed active sources (0.30): most critical — no feed = no prices
+          - Redis healthy (0.20): pub/sub and cache depend on Redis
+          - DQE source confidence (0.20): data quality
+          - Microstructure has data (0.15): tick processing working
+          - Sentiment engine alive (0.10): news pipeline
+          - Calendar engine alive (0.05): macro events
+        """
+        score = 0.0
+
+        # Gold feed: score proportional to active source count (max 5 sources)
+        try:
+            gold = h.get("gold_feed", {})
+            active = len(gold.get("active_sources", []))
+            score += 0.30 * min(active / 3.0, 1.0)  # 3+ sources = full score
+        except Exception:
+            pass
+
+        # Redis
+        try:
+            score += 0.20 if h.get("redis_healthy", False) else 0.0
+        except Exception:
+            pass
+
+        # DQE source confidence — average across all sources
+        try:
+            dqe = h.get("dqe", {})
+            if dqe:
+                confs = [v.get("confidence", 0.0) for v in dqe.values() if isinstance(v, dict)]
+                if confs:
+                    score += 0.20 * (sum(confs) / len(confs))
+        except Exception:
+            pass
+
+        # Microstructure has data
+        try:
+            micro_h = h.get("micro_health", {})
+            score += 0.15 if micro_h.get("has_data", False) else 0.0
+        except Exception:
+            pass
+
+        # Sentiment engine alive
+        try:
+            sent = h.get("sentiment", {})
+            score += 0.10 if sent.get("running", False) or sent.get("article_count_1h", 0) > 0 else 0.05
+        except Exception:
+            pass
+
+        # Calendar engine alive
+        try:
+            cal = h.get("calendar", {})
+            score += 0.05 if cal.get("event_count", 0) >= 0 else 0.0
+        except Exception:
+            score += 0.05  # calendar is non-critical; give benefit of doubt
+
+        return round(min(score, 1.0), 4)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

@@ -34,99 +34,55 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 UTC = timezone.utc
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
 
-# ── DB-backed persistence via api/db_store (configurations table) ─────────────
-# Keys: "accounts:sub:{user_id}" → {account_id: {...}, ...}
-#       "accounts:teams:{team_id}" → {team_id, name, members, ...}
-#       "accounts:team_index:{user_id}" → [team_id, ...]
 
-_SUB_KEY = "accounts:sub:{uid}"
-_TEAM_KEY = "accounts:team:{tid}"
-_TIDX_KEY = "accounts:team_index:{uid}"
+# ── DB session helper ─────────────────────────────────────────────────────────
 
-
-def _load_sub_accounts(user_id: str) -> dict[str, Any]:
-    """Load sub-accounts for a user from DB; return empty dict on miss."""
-    from api.db_store import db_get
-
-    return db_get(_SUB_KEY.format(uid=user_id)) or {}
-
-
-def _save_sub_accounts(user_id: str, accounts: dict[str, Any]) -> None:
-    from api.db_store import db_set
-
-    db_set(_SUB_KEY.format(uid=user_id), accounts, changed_by=user_id)
-
-
-def _load_team(team_id: str) -> dict[str, Any] | None:
-    from api.db_store import db_get
-
-    return db_get(_TEAM_KEY.format(tid=team_id))
-
-
-def _save_team(team: dict[str, Any]) -> None:
-    from api.db_store import db_set
-
-    db_set(
-        _TEAM_KEY.format(tid=team["team_id"]),
-        team,
-        changed_by=team.get("creator_id", "system"),
-    )
-
-
-def _delete_team(team_id: str) -> None:
-    from api.db_store import db_delete
-
-    db_delete(_TEAM_KEY.format(tid=team_id))
-
-
-def _load_team_index(user_id: str) -> list:
-    """Return list of team_ids the user belongs to."""
-    from api.db_store import db_get
-
-    return db_get(_TIDX_KEY.format(uid=user_id)) or []
-
-
-def _add_to_team_index(user_id: str, team_id: str) -> None:
-    from api.db_store import db_get, db_set
-
-    idx = db_get(_TIDX_KEY.format(uid=user_id)) or []
-    if team_id not in idx:
-        idx.append(team_id)
-        db_set(_TIDX_KEY.format(uid=user_id), idx, changed_by=user_id)
-
-
-def _remove_from_team_index(user_id: str, team_id: str) -> None:
-    from api.db_store import db_get, db_set
-
-    idx = db_get(_TIDX_KEY.format(uid=user_id)) or []
-    idx = [t for t in idx if t != team_id]
-    db_set(_TIDX_KEY.format(uid=user_id), idx, changed_by=user_id)
+def _get_db():
+    """Return a synchronous SQLAlchemy session, or None."""
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception as exc:
+        logger.warning("accounts: DB unavailable: %s", exc)
+        return None
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 
 class CreateSubAccountRequest(BaseModel):
-    label: str = Field(..., min_length=1, max_length=64)
-    broker: str = Field(default="oanda_paper")
-    initial_balance: float = Field(default=10_000.0, ge=0)
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str | None = None
+    account_type: str = Field(default="personal", pattern="^(personal|prop_firm|team|managed)$")
+    currency: str = Field(default="USD", max_length=10)
+    initial_balance: float | None = Field(default=None, ge=0)
+    max_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
+    daily_loss_limit: float | None = Field(default=None, ge=0)
+    broker: str | None = None
+    broker_account_id: str | None = None
 
 
 class UpdateSubAccountRequest(BaseModel):
-    label: str | None = Field(None, min_length=1, max_length=64)
-    active: bool | None = None
+    name: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = None
+    is_active: bool | None = None
+    max_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
+    daily_loss_limit: float | None = Field(default=None, ge=0)
+    broker: str | None = None
+    broker_account_id: str | None = None
 
 
 class CreateTeamRequest(BaseModel):
@@ -135,13 +91,11 @@ class CreateTeamRequest(BaseModel):
 
 class InviteMemberRequest(BaseModel):
     user_id: str
-    username: str
-    email: str
-    role: str = Field(default="trader", pattern="^(admin|manager|trader|viewer)$")
+    role: str = Field(default="trader", pattern="^(owner|trader|viewer|risk_manager)$")
 
 
 class UpdateMemberRoleRequest(BaseModel):
-    role: str = Field(..., pattern="^(admin|manager|trader|viewer)$")
+    role: str = Field(..., pattern="^(owner|trader|viewer|risk_manager)$")
 
 
 # ── Sub-account endpoints ─────────────────────────────────────────────────────
@@ -151,9 +105,24 @@ class UpdateMemberRoleRequest(BaseModel):
 async def list_sub_accounts(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """List all sub-accounts owned by the current user."""
-    accounts = list(_load_sub_accounts(user.sub).values())
-    return {"accounts": accounts, "total": len(accounts)}
+    """List all sub-accounts owned by the current user from the sub_accounts table."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        rows = db.execute(
+            text(
+                "SELECT id, owner_id, name, description, account_type, currency, "
+                "initial_balance, current_balance, max_drawdown_pct, daily_loss_limit, "
+                "is_active, broker, broker_account_id, created_at, updated_at "
+                "FROM sub_accounts WHERE owner_id = :uid ORDER BY created_at ASC"
+            ),
+            {"uid": user.sub},
+        ).fetchall()
+        accounts = [dict(r._mapping) for r in rows]
+        return {"accounts": accounts, "total": len(accounts)}
+    finally:
+        db.close()
 
 
 def _require_elite_plan(user: TokenPayload) -> None:
@@ -200,71 +169,63 @@ async def create_sub_account(
     req: CreateSubAccountRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a new sub-account under the current user. Requires Elite plan."""
-    _require_elite_plan(user)
-    existing = _load_sub_accounts(user.sub)
-    if len(existing) >= 10:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 10 sub-accounts per user",
+    """Create a new sub-account in the sub_accounts table."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        count = db.execute(
+            text("SELECT COUNT(*) FROM sub_accounts WHERE owner_id = :uid"),
+            {"uid": user.sub},
+        ).scalar()
+        if count >= 10:
+            raise HTTPException(status_code=400, detail="Maximum 10 sub-accounts per user")
+        acc_id = str(uuid.uuid4())
+        now = datetime.now(UTC)
+        db.execute(
+            text(
+                "INSERT INTO sub_accounts "
+                "(id, owner_id, name, description, account_type, currency, "
+                "initial_balance, current_balance, max_drawdown_pct, daily_loss_limit, "
+                "is_active, broker, broker_account_id, created_at, updated_at) "
+                "VALUES (:id, :owner_id, :name, :description, :account_type, :currency, "
+                ":initial_balance, :current_balance, :max_drawdown_pct, :daily_loss_limit, "
+                ":is_active, :broker, :broker_account_id, :created_at, :updated_at)"
+            ),
+            {
+                "id": acc_id,
+                "owner_id": user.sub,
+                "name": req.name,
+                "description": req.description,
+                "account_type": req.account_type,
+                "currency": req.currency,
+                "initial_balance": req.initial_balance,
+                "current_balance": req.initial_balance,
+                "max_drawdown_pct": req.max_drawdown_pct,
+                "daily_loss_limit": req.daily_loss_limit,
+                "is_active": True,
+                "broker": req.broker,
+                "broker_account_id": req.broker_account_id,
+                "created_at": now,
+                "updated_at": now,
+            },
         )
-    acc_id = str(uuid.uuid4())
-    account: dict[str, Any] = {
-        "account_id": acc_id,
-        "owner_id": user.sub,
-        "label": req.label,
-        "broker": req.broker,
-        "balance": req.initial_balance,
-        "equity": req.initial_balance,
-        "daily_pnl": 0.0,
-        "role": "trader",
-        "active": True,
-        "created_at": datetime.now(UTC).isoformat(),
-    }
-    existing[acc_id] = account
-    _save_sub_accounts(user.sub, existing)
-    logger.info("Sub-account created: %s for user %s", acc_id, user.sub)
-    return account
-
-
-@router.patch("/sub-accounts/{account_id}")
-async def update_sub_account(
-    account_id: str,
-    req: UpdateSubAccountRequest,
-    user: TokenPayload = Depends(get_current_user),
-) -> dict[str, Any]:
-    """Update sub-account label or active status."""
-    existing = _load_sub_accounts(user.sub)
-    acc = existing.get(account_id)
-    if not acc or acc["owner_id"] != user.sub:
-        raise HTTPException(status_code=404, detail="Sub-account not found")
-    if req.label is not None:
-        acc["label"] = req.label
-    if req.active is not None:
-        acc["active"] = req.active
-    existing[account_id] = acc
-    _save_sub_accounts(user.sub, existing)
-    return acc
-
-
-@router.delete("/sub-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_sub_account(
-    account_id: str,
-    user: TokenPayload = Depends(get_current_user),
-) -> None:
-    """Delete a sub-account. Cannot delete the last active account."""
-    existing = _load_sub_accounts(user.sub)
-    acc = existing.get(account_id)
-    if not acc or acc["owner_id"] != user.sub:
-        raise HTTPException(status_code=404, detail="Sub-account not found")
-    active = [a for a in existing.values() if a.get("active")]
-    if len(active) <= 1 and acc.get("active"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete the last active sub-account",
-        )
-    del existing[account_id]
-    _save_sub_accounts(user.sub, existing)
+        db.commit()
+        logger.info("Sub-account created: %s for user %s", acc_id, user.sub)
+        return {
+            "id": acc_id, "owner_id": user.sub, "name": req.name,
+            "account_type": req.account_type, "currency": req.currency,
+            "initial_balance": req.initial_balance, "current_balance": req.initial_balance,
+            "is_active": True, "created_at": now.isoformat(),
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("create_sub_account error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create sub-account")
+    finally:
+        db.close()
 
 
 @router.get("/sub-accounts/{account_id}", summary="Get a specific sub-account")
@@ -273,11 +234,110 @@ async def get_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return details of a single sub-account owned by the current user."""
-    existing = _load_sub_accounts(user.sub)
-    acc = existing.get(account_id)
-    if not acc or acc["owner_id"] != user.sub:
-        raise HTTPException(status_code=404, detail="Sub-account not found")
-    return acc
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.execute(
+            text("SELECT * FROM sub_accounts WHERE id = :id AND owner_id = :uid"),
+            {"id": account_id, "uid": user.sub},
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Sub-account not found")
+        return dict(row._mapping)
+    finally:
+        db.close()
+
+
+@router.patch("/sub-accounts/{account_id}")
+async def update_sub_account(
+    account_id: str,
+    req: UpdateSubAccountRequest,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Update sub-account fields."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.execute(
+            text("SELECT id FROM sub_accounts WHERE id = :id AND owner_id = :uid"),
+            {"id": account_id, "uid": user.sub},
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Sub-account not found")
+
+        updates: dict[str, Any] = {"updated_at": datetime.now(UTC)}
+        if req.name is not None:
+            updates["name"] = req.name
+        if req.description is not None:
+            updates["description"] = req.description
+        if req.is_active is not None:
+            updates["is_active"] = req.is_active
+        if req.max_drawdown_pct is not None:
+            updates["max_drawdown_pct"] = req.max_drawdown_pct
+        if req.daily_loss_limit is not None:
+            updates["daily_loss_limit"] = req.daily_loss_limit
+        if req.broker is not None:
+            updates["broker"] = req.broker
+        if req.broker_account_id is not None:
+            updates["broker_account_id"] = req.broker_account_id
+
+        set_clause = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["id"] = account_id
+        db.execute(
+            text(f"UPDATE sub_accounts SET {set_clause} WHERE id = :id"),  # nosec B608
+            updates,
+        )
+        db.commit()
+        updated = db.execute(
+            text("SELECT * FROM sub_accounts WHERE id = :id"),
+            {"id": account_id},
+        ).fetchone()
+        return dict(updated._mapping)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("update_sub_account error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to update sub-account")
+    finally:
+        db.close()
+
+
+@router.delete("/sub-accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_sub_account(
+    account_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> None:
+    """Delete a sub-account. Cannot delete the last active account."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        row = db.execute(
+            text("SELECT is_active FROM sub_accounts WHERE id = :id AND owner_id = :uid"),
+            {"id": account_id, "uid": user.sub},
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Sub-account not found")
+        if row.is_active:
+            active_count = db.execute(
+                text("SELECT COUNT(*) FROM sub_accounts WHERE owner_id = :uid AND is_active = true"),
+                {"uid": user.sub},
+            ).scalar()
+            if active_count <= 1:
+                raise HTTPException(status_code=400, detail="Cannot delete the last active sub-account")
+        db.execute(text("DELETE FROM sub_accounts WHERE id = :id"), {"id": account_id})
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("delete_sub_account error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to delete sub-account")
+    finally:
+        db.close()
 
 
 class TransferRequest(BaseModel):
@@ -292,61 +352,85 @@ async def transfer_between_sub_accounts(
     req: TransferRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """
-    Transfer funds from one sub-account to another within the same user.
-    Both accounts must belong to the authenticated user.
-    """
+    """Transfer funds between two sub-accounts owned by the same user."""
     if account_id == req.to_account_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Source and destination accounts must be different",
+        raise HTTPException(status_code=400, detail="Source and destination must differ")
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        src = db.execute(
+            text("SELECT id, current_balance FROM sub_accounts WHERE id = :id AND owner_id = :uid"),
+            {"id": account_id, "uid": user.sub},
+        ).fetchone()
+        dst = db.execute(
+            text("SELECT id, current_balance FROM sub_accounts WHERE id = :id AND owner_id = :uid"),
+            {"id": req.to_account_id, "uid": user.sub},
+        ).fetchone()
+        if src is None:
+            raise HTTPException(status_code=404, detail="Source sub-account not found")
+        if dst is None:
+            raise HTTPException(status_code=404, detail="Destination sub-account not found")
+        src_bal = float(src.current_balance or 0)
+        if src_bal < req.amount:
+            raise HTTPException(status_code=400, detail=f"Insufficient balance: {src_bal:.2f}")
+        now = datetime.now(UTC)
+        db.execute(
+            text("UPDATE sub_accounts SET current_balance = current_balance - :amt, updated_at = :now WHERE id = :id"),
+            {"amt": req.amount, "now": now, "id": account_id},
         )
-    existing = _load_sub_accounts(user.sub)
-    src = existing.get(account_id)
-    dst = existing.get(req.to_account_id)
-    if not src or src["owner_id"] != user.sub:
-        raise HTTPException(status_code=404, detail="Source sub-account not found")
-    if not dst or dst["owner_id"] != user.sub:
-        raise HTTPException(status_code=404, detail="Destination sub-account not found")
-    if src.get("balance", 0) < req.amount:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Insufficient balance. Available: {src.get('balance', 0):.2f}",
+        db.execute(
+            text("UPDATE sub_accounts SET current_balance = current_balance + :amt, updated_at = :now WHERE id = :id"),
+            {"amt": req.amount, "now": now, "id": req.to_account_id},
         )
-    src["balance"] = round(src.get("balance", 0) - req.amount, 2)
-    src["equity"] = round(src.get("equity", src["balance"]) - req.amount, 2)
-    dst["balance"] = round(dst.get("balance", 0) + req.amount, 2)
-    dst["equity"] = round(dst.get("equity", dst["balance"]) + req.amount, 2)
-    existing[account_id] = src
-    existing[req.to_account_id] = dst
-    _save_sub_accounts(user.sub, existing)
-    logger.info(
-        "Transfer %.2f from %s to %s by user %s",
-        req.amount,
-        account_id,
-        req.to_account_id,
-        user.sub,
-    )
-    return {
-        "ok": True,
-        "from_account_id": account_id,
-        "to_account_id": req.to_account_id,
-        "amount": req.amount,
-        "from_balance": src["balance"],
-        "to_balance": dst["balance"],
-        "note": req.note,
-    }
+        db.commit()
+        logger.info("Transfer %.2f from %s to %s by user %s", req.amount, account_id, req.to_account_id, user.sub)
+        return {
+            "ok": True,
+            "from_account_id": account_id,
+            "to_account_id": req.to_account_id,
+            "amount": req.amount,
+            "from_balance": round(src_bal - req.amount, 2),
+            "to_balance": round(float(dst.current_balance or 0) + req.amount, 2),
+            "note": req.note,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("transfer error: %s", exc)
+        raise HTTPException(status_code=500, detail="Transfer failed")
+    finally:
+        db.close()
 
 
-# ── Team endpoints ────────────────────────────────────────────────────────────
+# ── Team endpoints — backed by sub_accounts + sub_account_members tables ──────
+# Teams are modelled as sub_accounts with account_type="team".
+# Members are rows in sub_account_members.
 
 
 @router.get("/teams")
 async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
-    """List teams the current user belongs to."""
-    team_ids = _load_team_index(user.sub)
-    teams = [t for tid in team_ids if (t := _load_team(tid)) is not None]
-    return {"teams": teams, "total": len(teams)}
+    """List teams the current user belongs to (as owner or member)."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        rows = db.execute(
+            text(
+                "SELECT sa.id, sa.owner_id, sa.name, sa.description, sa.created_at, "
+                "sam.role AS my_role "
+                "FROM sub_accounts sa "
+                "JOIN sub_account_members sam ON sam.sub_account_id = sa.id "
+                "WHERE sam.user_id = :uid AND sa.account_type = 'team' "
+                "ORDER BY sa.created_at ASC"
+            ),
+            {"uid": user.sub},
+        ).fetchall()
+        teams = [dict(r._mapping) for r in rows]
+        return {"teams": teams, "total": len(teams)}
+    finally:
+        db.close()
 
 
 @router.post("/teams", status_code=status.HTTP_201_CREATED)
@@ -354,27 +438,36 @@ async def create_team(
     req: CreateTeamRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a new team. The creator is automatically added as admin."""
-    team_id = str(uuid.uuid4())
-    team: dict[str, Any] = {
-        "team_id": team_id,
-        "name": req.name,
-        "creator_id": user.sub,
-        "created_at": datetime.now(UTC).isoformat(),
-        "members": [
-            {
-                "user_id": user.sub,
-                "username": getattr(user, "username", user.sub),
-                "email": getattr(user, "email", ""),
-                "role": "admin",
-                "joined_at": datetime.now(UTC).isoformat(),
-            }
-        ],
-    }
-    _save_team(team)
-    _add_to_team_index(user.sub, team_id)
-    logger.info("Team created: %s by %s", team_id, user.sub)
-    return team
+    """Create a new team sub-account. Creator is added as owner member."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        team_id = str(uuid.uuid4())
+        now = datetime.now(UTC)
+        db.execute(
+            text(
+                "INSERT INTO sub_accounts (id, owner_id, name, account_type, currency, is_active, created_at, updated_at) "
+                "VALUES (:id, :owner_id, :name, 'team', 'USD', true, :now, :now)"
+            ),
+            {"id": team_id, "owner_id": user.sub, "name": req.name, "now": now},
+        )
+        db.execute(
+            text(
+                "INSERT INTO sub_account_members (sub_account_id, user_id, role, joined_at) "
+                "VALUES (:tid, :uid, 'owner', :now)"
+            ),
+            {"tid": team_id, "uid": user.sub, "now": now},
+        )
+        db.commit()
+        logger.info("Team created: %s by %s", team_id, user.sub)
+        return {"team_id": team_id, "name": req.name, "owner_id": user.sub, "created_at": now.isoformat()}
+    except Exception as exc:
+        db.rollback()
+        logger.error("create_team error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to create team")
+    finally:
+        db.close()
 
 
 @router.post("/teams/{team_id}/members", status_code=status.HTTP_201_CREATED)
@@ -383,29 +476,68 @@ async def invite_member(
     req: InviteMemberRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Invite a member to a team. Requires admin or manager role in the team."""
-    team = _load_team(team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
+    """Invite a member to a team. Requires owner role."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        # Verify caller is owner
+        caller = db.execute(
+            text("SELECT role FROM sub_account_members WHERE sub_account_id = :tid AND user_id = :uid"),
+            {"tid": team_id, "uid": user.sub},
+        ).fetchone()
+        if caller is None or caller.role not in ("owner",):
+            raise HTTPException(status_code=403, detail="Only team owners can invite members")
+        now = datetime.now(UTC)
+        db.execute(
+            text(
+                "INSERT INTO sub_account_members (sub_account_id, user_id, role, joined_at) "
+                "VALUES (:tid, :uid, :role, :now) "
+                "ON CONFLICT (sub_account_id, user_id) DO UPDATE SET role = :role"
+            ),
+            {"tid": team_id, "uid": req.user_id, "role": req.role, "now": now},
+        )
+        db.commit()
+        return {"team_id": team_id, "user_id": req.user_id, "role": req.role, "joined_at": now.isoformat()}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.error("invite_member error: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to invite member")
+    finally:
+        db.close()
 
-    caller = next((m for m in team["members"] if m["user_id"] == user.sub), None)
-    if not caller or caller["role"] not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Insufficient team permissions")
 
-    if any(m["user_id"] == req.user_id for m in team["members"]):
-        raise HTTPException(status_code=400, detail="User already in team")
-
-    member = {
-        "user_id": req.user_id,
-        "username": req.username,
-        "email": req.email,
-        "role": req.role,
-        "joined_at": datetime.now(UTC).isoformat(),
-    }
-    team["members"].append(member)
-    _save_team(team)
-    _add_to_team_index(req.user_id, team_id)
-    return member
+@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_member(
+    team_id: str,
+    member_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> None:
+    """Remove a member from a team. Requires owner role."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        caller = db.execute(
+            text("SELECT role FROM sub_account_members WHERE sub_account_id = :tid AND user_id = :uid"),
+            {"tid": team_id, "uid": user.sub},
+        ).fetchone()
+        if caller is None or caller.role not in ("owner",):
+            raise HTTPException(status_code=403, detail="Only team owners can remove members")
+        db.execute(
+            text("DELETE FROM sub_account_members WHERE sub_account_id = :tid AND user_id = :uid"),
+            {"tid": team_id, "uid": member_id},
+        )
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to remove member")
+    finally:
+        db.close()
 
 
 @router.patch("/teams/{team_id}/members/{member_id}")
@@ -415,42 +547,30 @@ async def update_member_role(
     req: UpdateMemberRoleRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Change a team member's role. Requires admin role."""
-    team = _load_team(team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
+    """Change a team member's role. Requires owner role."""
+    db = _get_db()
+    if db is None:
+        raise HTTPException(status_code=503, detail="Database unavailable")
+    try:
+        caller = db.execute(
+            text("SELECT role FROM sub_account_members WHERE sub_account_id = :tid AND user_id = :uid"),
+            {"tid": team_id, "uid": user.sub},
+        ).fetchone()
+        if caller is None or caller.role not in ("owner",):
+            raise HTTPException(status_code=403, detail="Only team owners can change roles")
+        db.execute(
+            text("UPDATE sub_account_members SET role = :role WHERE sub_account_id = :tid AND user_id = :uid"),
+            {"role": req.role, "tid": team_id, "uid": member_id},
+        )
+        db.commit()
+        return {"team_id": team_id, "user_id": member_id, "role": req.role}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update role")
+    finally:
+        db.close()
 
-    caller = next((m for m in team["members"] if m["user_id"] == user.sub), None)
-    if not caller or caller["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-    member = next((m for m in team["members"] if m["user_id"] == member_id), None)
-    if not member:
-        raise HTTPException(status_code=404, detail="Member not found")
-
-    member["role"] = req.role
-    _save_team(team)
-    return member
 
 
-@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_member(
-    team_id: str,
-    member_id: str,
-    user: TokenPayload = Depends(get_current_user),
-) -> None:
-    """Remove a member from a team. Requires admin role or self-removal."""
-    team = _load_team(team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    caller = next((m for m in team["members"] if m["user_id"] == user.sub), None)
-    if not caller:
-        raise HTTPException(status_code=403, detail="Not a team member")
-
-    if caller["role"] != "admin" and user.sub != member_id:
-        raise HTTPException(status_code=403, detail="Admin role required to remove others")
-
-    team["members"] = [m for m in team["members"] if m["user_id"] != member_id]
-    _save_team(team)
-    _remove_from_team_index(member_id, team_id)

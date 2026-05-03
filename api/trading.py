@@ -1530,76 +1530,28 @@ async def get_ohlcv(
     except Exception as exc:
         logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
 
-    # ── Synthetic fallback (paper/dev environment) ────────────────────────────
-    # When both live feeds are unavailable (sandbox, offline, no API keys),
-    # generate a plausible random-walk series from the current mid price so
-    # charts render instead of showing an error overlay.
-    import random as _random
-    import math as _math
-
-    # Base price seeds per symbol; falls back to 1.0 for unknown pairs.
-    _SEED_PRICES: dict[str, float] = {
-        "XAUUSD": 3300.0, "XAGUSD": 29.5, "XPTUSD": 960.0,
-        "EURUSD": 1.082,  "GBPUSD": 1.294, "USDJPY": 154.5,
-        "USDCHF": 0.905,  "AUDUSD": 0.645, "NZDUSD": 0.597,
-        "USDCAD": 1.362,  "BTCUSD": 96500.0, "ETHUSD": 3450.0,
-        "US30": 39800.0,  "US500": 5200.0,  "NAS100": 18200.0,
-        "USOIL": 82.5,    "UKOIL": 86.0,
-    }
-    _TF_SECONDS: dict[str, int] = {
-        "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
-        "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800,
-    }
-    tf_secs = _TF_SECONDS.get(timeframe, 3600)
-    # Try to get current price from price engine; fall back to seed
-    base_price = _SEED_PRICES.get(symbol, 1.0)
-    try:
-        if app_state and app_state.price_engine:
-            tick = app_state.price_engine.get_price(symbol)
-            if tick and getattr(tick, "mid", None):
-                base_price = float(tick.mid)
-            elif tick and getattr(tick, "last", None):
-                base_price = float(tick.last)
-    except Exception:
-        pass
-
-    # Volatility as fraction of price per bar (~daily vol / sqrt(bars/day))
-    daily_vol_frac = 0.008 if symbol.endswith("USD") and base_price > 100 else 0.005
-    bar_vol = daily_vol_frac * _math.sqrt(tf_secs / 86400)
-
-    now_ts = int(time.time())
-    start_ts = now_ts - tf_secs * limit
-    price = base_price
-    _rng = _random.Random(hash(symbol) % (2**31 - 1))
-    _HIGH_LOW_VOL_FACTOR = 0.4   # Wick depth as fraction of bar body volatility
-    _SYNTHETIC_VOL_MEAN  = 1000  # Mean synthetic tick volume per bar
-    _SYNTHETIC_VOL_STDDEV = 400  # Std-dev of synthetic tick volume
-    synthetic: list[dict] = []
-    for i in range(limit):
-        ts = start_ts + i * tf_secs
-        change = _rng.gauss(0, bar_vol)
-        open_p = round(price, 5)
-        close_p = round(price * (1 + change), 5)
-        wick_vol = bar_vol * _HIGH_LOW_VOL_FACTOR
-        high_p  = round(max(open_p, close_p) * (1 + abs(_rng.gauss(0, wick_vol))), 5)
-        low_p   = round(min(open_p, close_p) * (1 - abs(_rng.gauss(0, wick_vol))), 5)
-        vol     = round(abs(_rng.gauss(_SYNTHETIC_VOL_MEAN, _SYNTHETIC_VOL_STDDEV)), 2)
-        synthetic.append({
-            "timestamp": ts,
-            "open":   open_p,
-            "high":   high_p,
-            "low":    low_p,
-            "close":  close_p,
-            "volume": vol,
-            "synthetic": True,
-        })
-        price = close_p
-
-    logger.info(
-        "OHLCV synthetic fallback: %s %s — %d bars (paper/dev mode, no live feed)",
-        symbol, timeframe, len(synthetic),
+    # All real data sources exhausted — return 503 so the frontend can display
+    # a meaningful "data unavailable" state rather than rendering fake bars.
+    logger.error(
+        "OHLCV: all real data sources unavailable for %s %s "
+        "(price engine + yfinance both failed). "
+        "Configure at least one live data feed.",
+        symbol,
+        timeframe,
     )
-    return synthetic
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "ohlcv_unavailable",
+            "message": (
+                f"No real OHLCV data available for {symbol} {timeframe}. "
+                "The price engine and all fallback feeds are currently unavailable. "
+                "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
+            ),
+            "symbol": symbol,
+            "timeframe": timeframe,
+        },
+    )
 
 
 @router.get("/signals", summary="Active trading signals from the signal engine")
