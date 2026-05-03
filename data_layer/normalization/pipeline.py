@@ -551,7 +551,8 @@ class NormalizationPipeline:
         )
 
         if volume_col and volume_col in tick_df.columns:
-            ohlcv["volume"] = tick_df[volume_col].astype(float).resample(freq).sum()
+            # fillna(0) prevents NaN from propagating into bars with no volume ticks
+            ohlcv["volume"] = tick_df[volume_col].astype(float).resample(freq).sum().fillna(0.0)
         else:
             # Unit volume: count ticks per bar
             ohlcv["volume"] = prices.resample(freq).count().astype(float)

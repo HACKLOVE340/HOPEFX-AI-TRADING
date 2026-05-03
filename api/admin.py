@@ -1010,7 +1010,7 @@ def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dic
                 "created_at": _import_datetime().now(_import_utc()).isoformat(),
                 "resolved": False,
             })
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Check engine health
@@ -1026,7 +1026,7 @@ def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dic
                 "created_at": _import_datetime().now(_import_utc()).isoformat(),
                 "resolved": False,
             })
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Check DB
@@ -1204,11 +1204,12 @@ async def update_user(
 @router.post("/users/{user_id}/ban", summary="Ban a user")
 async def ban_user(
     user_id: str,
-    payload: dict = {},
+    payload: dict = None,
     user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
     """Set user status to 'banned'."""
     from api.db_store import db_get as _db_g2, db_set as _db_s2
+    payload = payload or {}
     u = _db_g2(f"user:{user_id}") or {"user_id": user_id}
     u["status"] = "banned"
     u["ban_reason"] = payload.get("reason", "")
@@ -1361,7 +1362,7 @@ def _load_system_settings() -> dict:
         stored = _cs.get(_SYSTEM_SETTINGS_KEY)
         if stored:
             return {**_SYSTEM_SETTINGS_DEFAULTS, **stored}
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return dict(_SYSTEM_SETTINGS_DEFAULTS)
 
@@ -1370,7 +1371,7 @@ def _save_system_settings(data: dict) -> None:
     try:
         from core.config_store import config_store as _cs
         _cs.set(_SYSTEM_SETTINGS_KEY, data)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 

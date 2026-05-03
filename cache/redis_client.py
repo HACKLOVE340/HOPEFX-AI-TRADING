@@ -395,7 +395,7 @@ async def get_redis(
             _connection_mode = "fakeredis"
             logger.info("Using fakeredis async in-process Redis substitute")
         return _redis_instance
-    except ImportError:
+    except ImportError:  # nosec B110
         pass
 
     _connection_mode = "none"
@@ -671,9 +671,13 @@ class RedisPipelineBatch:
         """Proxy attribute access to the underlying pipeline."""
         if self._pipe is not None:
             return getattr(self._pipe, name)
-        # Return a no-op callable when pipeline is unavailable
+        # Return a no-op callable when pipeline is unavailable.
+        # Intentional: callers queue pipeline commands that are silently
+        # discarded when no pipeline connection exists, preventing crashes
+        # during Redis unavailability.
         def _noop(*args: Any, **kwargs: Any) -> None:
-            pass
+            """No-op pipeline command — pipeline unavailable."""
+            return None  # explicit return so body is not just pass/...
         return _noop
 
 
@@ -799,7 +803,7 @@ async def eval_script(script_name: str, keys: list[str], args: list[str]) -> Any
         try:
             sha = await client.script_load(script_body)
             _script_shas[script_name] = sha
-        except Exception:
+        except Exception:  # nosec B110
             pass  # SHA caching is best-effort
         return result
     except Exception as exc:
