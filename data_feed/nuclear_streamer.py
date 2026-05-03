@@ -174,6 +174,26 @@ _SEQ_GAP_COUNTER_GAUGE = Gauge(
     "Total sequence gaps detected",
     ["source"],
 )
+_CONSENSUS_GAUGE = Gauge(
+    "price_stream_consensus_price",
+    "Last consensus-validated XAUUSD price",
+)
+_CONSENSUS_REJECT_GAUGE = Gauge(
+    "price_stream_consensus_rejected_total",
+    "Total ticks rejected by consensus filter",
+)
+
+# ── Consensus configuration ───────────────────────────────────────────────────
+# Require at least this many sources to agree within _CONSENSUS_TOLERANCE_PCT
+# before the consensus price is published.  When fewer sources are active,
+# the single-source price is published directly (graceful degradation).
+_CONSENSUS_MIN_SOURCES: int = int(os.environ.get("NUCLEAR_CONSENSUS_MIN_SOURCES", "2"))
+# Two prices are considered "in agreement" when they differ by less than this
+# percentage of the reference price.
+_CONSENSUS_TOLERANCE_PCT: float = float(os.environ.get("NUCLEAR_CONSENSUS_TOLERANCE_PCT", "0.05"))
+# Maximum age (seconds) of a source's last tick before it is excluded from
+# the consensus window.  Stale sources should not block consensus.
+_CONSENSUS_WINDOW_SECONDS: float = float(os.environ.get("NUCLEAR_CONSENSUS_WINDOW_SECONDS", "5.0"))
 
 
 async def _polygon_recv_status(
@@ -303,6 +323,12 @@ class NuclearStreamer:
 
         # Running flag.
         self._running: bool = False
+
+        # ── Consensus state ───────────────────────────────────────────────────
+        # Per-source latest validated price and the wall-clock time it arrived.
+        # Used to compute a cross-source consensus before broadcasting.
+        self._source_prices: dict[str, tuple[float, float]] = {}  # source → (price, received_at)
+        self._consensus_reject_count: int = 0
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -578,15 +604,85 @@ class NuclearStreamer:
 
         _PRICE_GAUGE.labels(source=source).set(price)
 
+        # ── Consensus filter ──────────────────────────────────────────────────
+        # Record this source's latest price, then check whether enough sources
+        # agree within _CONSENSUS_TOLERANCE_PCT.  When consensus is reached,
+        # publish the median of the agreeing prices.  When fewer than
+        # _CONSENSUS_MIN_SOURCES are active (e.g. only one API key is set),
+        # fall through and publish the single-source price directly so the
+        # system degrades gracefully rather than going silent.
+        self._source_prices[source] = (price, now)
+
+        # Evict stale source entries outside the consensus window.
+        stale_cutoff = now - _CONSENSUS_WINDOW_SECONDS
+        self._source_prices = {
+            s: (p, t)
+            for s, (p, t) in self._source_prices.items()
+            if t >= stale_cutoff
+        }
+
+        active_sources = list(self._source_prices.items())
+        consensus_price: float | None = None
+
+        if len(active_sources) < _CONSENSUS_MIN_SOURCES:
+            # Graceful degradation: not enough sources — publish directly.
+            consensus_price = price
+        else:
+            # Find the largest group of sources whose prices agree within
+            # _CONSENSUS_TOLERANCE_PCT of each other.
+            best_group: list[float] = []
+            for ref_src, (ref_price, _) in active_sources:
+                group = [
+                    p for _, (p, _) in active_sources
+                    if ref_price > 0 and abs(p - ref_price) / ref_price * 100 <= _CONSENSUS_TOLERANCE_PCT
+                ]
+                if len(group) > len(best_group):
+                    best_group = group
+
+            if len(best_group) >= _CONSENSUS_MIN_SOURCES:
+                # Consensus reached — use the median of the agreeing prices.
+                sorted_group = sorted(best_group)
+                mid = len(sorted_group) // 2
+                consensus_price = (
+                    sorted_group[mid]
+                    if len(sorted_group) % 2 == 1
+                    else (sorted_group[mid - 1] + sorted_group[mid]) / 2.0
+                )
+                _CONSENSUS_GAUGE.set(consensus_price)
+                logger.debug(
+                    "Consensus: %.4f from %d/%d sources (triggered by %s)",
+                    consensus_price,
+                    len(best_group),
+                    len(active_sources),
+                    source,
+                )
+            else:
+                # No consensus — discard this tick.
+                self._consensus_reject_count += 1
+                _CONSENSUS_REJECT_GAUGE.set(self._consensus_reject_count)
+                logger.debug(
+                    "Consensus MISS [%s]: price=%.4f — only %d/%d sources agree "
+                    "(need %d, tolerance=%.2f%%). Tick discarded (total_rejected=%d).",
+                    source,
+                    price,
+                    len(best_group),
+                    len(active_sources),
+                    _CONSENSUS_MIN_SOURCES,
+                    _CONSENSUS_TOLERANCE_PCT,
+                    self._consensus_reject_count,
+                )
+                return  # Do not publish — wait for more sources to agree.
+
         payload = {
             "symbol": self.symbol,
-            "price": price,
+            "price": consensus_price,
             "timestamp": event_ts,
             "received_at": now,
             "source": source,
             "latency_ms": round(latency_ms, 2),
             "sequence": sequence,
             "fingerprint": fingerprint,
+            "consensus_sources": len(active_sources),
         }
 
         # Publish to Redis.
@@ -606,16 +702,17 @@ class NuclearStreamer:
                     logger.debug("Redis publish error (repeated #%d): %s", self._redis_publish_errors, exc)
 
         logger.debug(
-            "%s: %.4f @ %.0f ms [%s] seq=%s",
+            "%s: %.4f (consensus=%.4f) @ %.0f ms [%s] seq=%s",
             self.symbol,
             price,
+            consensus_price,
             latency_ms,
             source,
             sequence,
         )
 
-        # Notify subscribers.
-        await self._broadcast(price)
+        # Notify subscribers with the consensus-validated price.
+        await self._broadcast(consensus_price)
 
     async def _broadcast(self, price: float) -> None:
         """Notify all subscribers concurrently; log but never propagate errors."""
@@ -892,6 +989,16 @@ class NuclearStreamer:
             },
             "subscriber_count": len(self._subscribers),
             "is_running": self._running,
+            "consensus": {
+                "min_sources_required": _CONSENSUS_MIN_SOURCES,
+                "tolerance_pct": _CONSENSUS_TOLERANCE_PCT,
+                "window_seconds": _CONSENSUS_WINDOW_SECONDS,
+                "active_sources": {
+                    src: {"price": p, "age_s": round(time.time() - t, 2)}
+                    for src, (p, t) in self._source_prices.items()
+                },
+                "consensus_reject_count": self._consensus_reject_count,
+            },
         }
 
 
