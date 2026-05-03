@@ -200,9 +200,8 @@ async def preview_indicator(
 ) -> dict:
     """Evaluate a formula string against recent price data and return index/value pairs."""
     import math
-    import random
 
-    # Try to load real OHLCV data; fall back to synthetic
+    # Try to load real OHLCV data; raise 503 if unavailable
     closes: list[float] = []
     try:
         from data_layer.ohlcv_store import OHLCVStore

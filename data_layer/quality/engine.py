@@ -782,7 +782,6 @@ class DataQualityEngine:
                 model = IsolationForest(
                     n_estimators=50,
                     contamination=IF_CONTAMINATION,
-                    random_state=42,
                     n_jobs=1,
                 )
                 model.fit(X)
