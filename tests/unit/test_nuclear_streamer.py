@@ -171,14 +171,25 @@ class TestProcessTick:
 
     @pytest.mark.asyncio
     async def test_multiple_sources_independent(self):
-        """Ticks from different sources all feed the same last_price."""
+        """Ticks from different sources are each published independently.
+
+        Set _CONSENSUS_MIN_SOURCES higher than the number of active sources so
+        the graceful-degradation path fires for every tick — each source
+        publishes its own price directly without waiting for consensus.
+        """
+        import data_feed.nuclear_streamer as ns
+
         streamer = _make_streamer()
         collector = _Collector()
         streamer.subscribe(collector)
 
-        await streamer.process_tick(2000.0, time.time(), "finnhub")
-        await streamer.process_tick(2001.0, time.time(), "twelvedata")
-        await streamer.process_tick(2002.0, time.time(), "polygon")
+        # With min_sources=10, len(active_sources) < 10 is always True for our
+        # 3-source test, so each tick takes the graceful-degradation path and
+        # publishes its own price directly.
+        with patch.object(ns, "_CONSENSUS_MIN_SOURCES", 10):
+            await streamer.process_tick(2000.0, time.time(), "finnhub")
+            await streamer.process_tick(2001.0, time.time(), "twelvedata")
+            await streamer.process_tick(2002.0, time.time(), "polygon")
 
         assert collector.prices == [2000.0, 2001.0, 2002.0]
 
