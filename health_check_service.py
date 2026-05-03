@@ -314,6 +314,95 @@ async def _check_disk() -> ComponentStatus:
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
 
 
+async def _check_macro_calendar() -> ComponentStatus:
+    """Check MacroCalendarEngine — last refresh age and event count."""
+    t0 = time.monotonic()
+    try:
+        from data_layer.calendar.engine import macro_calendar_engine as _cal
+
+        event_count = len(_cal._events)
+        last_refresh = _cal._last_refresh  # float unix timestamp or 0
+        latency = (time.monotonic() - t0) * 1000
+
+        if last_refresh == 0:
+            return ComponentStatus(
+                status="degraded",
+                latency_ms=round(latency, 2),
+                detail="never refreshed — calendar engine may not have started",
+            )
+
+        age_s = time.time() - last_refresh
+        age_min = age_s / 60
+        finnhub_key = bool(os.getenv("FINNHUB_API_KEY", "").strip())
+        detail = (
+            f"events={event_count}, last_refresh={age_min:.1f}m ago, "
+            f"finnhub_key={'yes' if finnhub_key else 'no (using fallback)'}"
+        )
+
+        # Stale threshold: 2× the configured refresh interval
+        from data_layer.calendar.engine import _REFRESH_INTERVAL_S
+        stale_threshold_s = _REFRESH_INTERVAL_S * 2
+
+        if age_s > stale_threshold_s:
+            return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=detail)
+        return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail=detail)
+    except Exception as exc:
+        latency = (time.monotonic() - t0) * 1000
+        return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=str(exc)[:200])
+
+
+async def _check_geopolitical() -> ComponentStatus:
+    """Check GeopoliticalRiskProvider — cache age, source failures, and fallback state.
+
+    Uses the module-level singleton _geopolitical_provider created by
+    get_geopolitical_provider().  Returns 'ok' (not 'error') when the
+    provider has not been started — it is an optional component.
+    """
+    t0 = time.monotonic()
+    try:
+        import news.geopolitical_risk as _geo_mod
+
+        # The singleton is _geopolitical_provider (set by get_geopolitical_provider())
+        provider = getattr(_geo_mod, "_geopolitical_provider", None)
+        if provider is None:
+            latency = (time.monotonic() - t0) * 1000
+            return ComponentStatus(
+                status="ok",
+                latency_ms=round(latency, 2),
+                detail="provider not started (optional component)",
+            )
+
+        cache_ts = getattr(provider, "_cache_timestamp", None)
+        cache_events = provider._cache.get("events", [])
+        all_warned = getattr(provider, "_all_sources_warned", False)
+        source_failures = getattr(provider, "_source_failures", {})
+        latency = (time.monotonic() - t0) * 1000
+
+        if cache_ts is None:
+            return ComponentStatus(
+                status="degraded",
+                latency_ms=round(latency, 2),
+                detail="cache never populated — all sources may be unreachable",
+            )
+
+        from datetime import datetime, timezone as _tz
+        age_s = (datetime.now(_tz.utc) - cache_ts).total_seconds()
+        age_min = age_s / 60
+        failed_sources = [k for k, v in source_failures.items() if v > 0]
+        detail = (
+            f"events={len(cache_events)}, cache_age={age_min:.1f}m, "
+            f"all_sources_warned={all_warned}, "
+            f"failed_sources={failed_sources or 'none'}"
+        )
+
+        if all_warned:
+            return ComponentStatus(status="degraded", latency_ms=round(latency, 2), detail=detail)
+        return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail=detail)
+    except Exception as exc:
+        latency = (time.monotonic() - t0) * 1000
+        return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail=f"unavailable: {exc}")
+
+
 # ── Aggregation ───────────────────────────────────────────────────────────────
 
 # Checks that must pass for the service to be considered "ready"
@@ -330,9 +419,14 @@ async def _run_all_checks() -> dict[str, ComponentStatus]:
         _check_event_bus(),
         _check_kill_switch(),
         _check_disk(),
+        _check_macro_calendar(),
+        _check_geopolitical(),
         return_exceptions=True,
     )
-    names = ["redis", "database", "data_feed", "broker", "event_bus", "kill_switch", "disk"]
+    names = [
+        "redis", "database", "data_feed", "broker", "event_bus",
+        "kill_switch", "disk", "macro_calendar", "geopolitical",
+    ]
     out: dict[str, ComponentStatus] = {}
     for name, result in zip(names, results):
         if isinstance(result, Exception):
