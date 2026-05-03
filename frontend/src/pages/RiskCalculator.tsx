@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore, selectAccount } from '../store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const RiskCalculator: React.FC = () => {
+  const navigate = useNavigate();
   const account = useStore(selectAccount);
   const prices  = useStore((s) => s.prices);
 
@@ -264,6 +266,29 @@ const RiskCalculator: React.FC = () => {
             />
           ) : (
             <div style={s.placeholder}>Enter entry, stop loss, and take profit to visualize.</div>
+          )}
+
+          {result && (
+            <button
+              onClick={() => navigate('/trade', {
+                state: {
+                  signal: {
+                    symbol: state.symbol,
+                    direction: parseFloat(state.takeProfit) > parseFloat(state.entryPrice) ? 'BUY' : 'SELL',
+                    stop_loss: parseFloat(state.stopLoss),
+                    take_profit: parseFloat(state.takeProfit),
+                  }
+                }
+              })}
+              style={{
+                width: '100%', padding: '10px 0', borderRadius: 8, cursor: 'pointer',
+                background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+                color: '#60a5fa', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
+                marginBottom: 16,
+              }}
+            >
+              ⚡ Apply to Trade — {state.symbol}
+            </button>
           )}
 
           <div style={s.divider} />
