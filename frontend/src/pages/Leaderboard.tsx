@@ -153,9 +153,13 @@ const Leaderboard: React.FC = () => {
                     <td style={s.td}>
                       <button
                         onClick={() => navigate('/copy-trading')}
-                        style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: '#60a5fa', fontSize: 11, cursor: 'pointer', padding: '4px 10px', fontWeight: 600 }}
+                        style={{
+                          background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)',
+                          borderRadius: 6, color: '#fbbf24', fontSize: 11, cursor: 'pointer',
+                          padding: '5px 12px', fontWeight: 700, whiteSpace: 'nowrap',
+                        }}
                       >
-                        Copy
+                        🔁 Copy
                       </button>
                     </td>
                   </tr>
