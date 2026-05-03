@@ -188,6 +188,32 @@ class DataLineageStore:
         if migrations:
             self._conn.commit()
 
+    def _create_indexes(self) -> None:
+        """Create all indexes individually via execute() (not executescript).
+
+        executescript() issues an implicit COMMIT before running, which can
+        leave the schema cache stale after an ALTER TABLE in the same session.
+        Running each statement via execute() avoids that implicit commit and
+        ensures the index creation sees the fully-migrated schema.
+        """
+        index_stmts = [
+            "CREATE INDEX IF NOT EXISTS idx_lineage_timestamp  ON lineage_records(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_type       ON lineage_records(record_type)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_source     ON lineage_records(source)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_symbol     ON lineage_records(symbol)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_created_at ON lineage_records(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_parent_id  ON lineage_records(parent_id)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_schema_version ON lineage_records(schema_version)",
+        ]
+        for stmt in index_stmts:
+            try:
+                self._conn.execute(stmt)
+            except sqlite3.OperationalError as exc:
+                if "already exists" in str(exc):
+                    logger.debug("DataLineageStore index already exists: %s", exc)
+                else:
+                    raise
+
     def start(self) -> None:
         """Initialise DB and start background writer + pruner threads."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -196,18 +222,32 @@ class DataLineageStore:
             check_same_thread=False,
             timeout=30.0,
         )
-        # WAL mode: allows concurrent reads while writer is active
+        # WAL mode: allows concurrent reads while writer is active.
+        # These PRAGMAs must run outside a transaction.
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA cache_size=-32000")  # 32MB cache
-        # Create table first (no indexes yet — parent_id may not exist in old DBs).
-        self._conn.executescript(_CREATE_TABLE_SQL)
+
+        # Create the table using execute() not executescript().
+        # executescript() issues an implicit COMMIT before running, which
+        # ends any open transaction and can cause the schema cache to be
+        # stale for subsequent ALTER TABLE / CREATE INDEX statements in the
+        # same connection.  Using execute() keeps everything in one
+        # explicit transaction so _migrate_schema() and _create_indexes()
+        # all see the same committed schema state.
+        self._conn.execute(_CREATE_TABLE_SQL)
         self._conn.commit()
-        # Migrate schema (adds missing columns like parent_id) before creating
-        # indexes that reference those columns.
+
+        # Migrate schema (adds missing columns like parent_id).
+        # Must run after the table exists and before indexes are created,
+        # because CREATE INDEX ON lineage_records(parent_id) will fail if
+        # the column doesn't exist yet.
         self._migrate_schema()
-        # Now safe to create all indexes — all columns are guaranteed to exist.
-        self._conn.executescript(_CREATE_INDEXES_SQL)
+
+        # Create indexes individually via execute() for the same reason —
+        # executescript() would issue an implicit COMMIT that could race
+        # with the just-committed ALTER TABLE on some SQLite versions.
+        self._create_indexes()
         self._conn.commit()
 
         self._running = True
