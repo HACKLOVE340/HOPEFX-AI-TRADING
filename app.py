@@ -481,6 +481,14 @@ async def lifespan(_app: FastAPI):
     asyncio.get_event_loop().set_default_executor(_io_executor)
 
     await kill_switch.start()
+
+    # Expose app_state on app.state BEFORE the startup task runs so that
+    # StartupGateMiddleware can find the object immediately and return 503
+    # (instead of passing all requests through because app_state is None).
+    # initialized=False at this point — the gate will block data endpoints
+    # until startup_event() sets initialized=True.
+    _app.state.app_state = app_state
+
     # Run startup_event as a background task so the lifespan yields immediately
     # and uvicorn starts accepting HTTP requests without waiting for all feeds
     # (FRED, CFTC, IMF, Yahoo, gold) to connect.  The server returns 503 on
@@ -622,10 +630,17 @@ async def startup_event():
     _tasks_failed: list[str] = []
 
     try:
-        await _registry.start_all(app_state)
+        _components = await _registry.start_all(app_state)
         _registry.print_table()
         _push_state_to_api_modules(app_state)
-        _tasks_done.append("component_registry")
+
+        # Populate _tasks_done / _tasks_failed from the registry results so
+        # mark_startup_complete() and the health endpoint report accurate state.
+        for _cname, _comp in _components.items():
+            if _comp.status == "ok":
+                _tasks_done.append(_cname)
+            elif _comp.status in ("failed", "skipped"):
+                _tasks_failed.append(f"{_cname}: {_comp.error or _comp.status}")
 
         # Wire the global health checker to the running app so /api/status/json
         # can report real component states instead of "not configured".
@@ -662,9 +677,10 @@ async def startup_event():
         _tasks_done.append("api_gateway")
 
         app_state.initialized = True
-        # Expose app_state on app.state so health checker and other middleware
-        # can reach db_engine, cache, broker, price_engine, brain without
-        # importing the module-level app_state directly.
+        # app.state.app_state was already set in lifespan() before this task
+        # started so StartupGateMiddleware could return 503 during boot.
+        # Re-assign here to confirm the reference is current after all
+        # components have been attached to app_state.
         app.state.app_state = app_state
         log_activity("API server ready")
         logger.info("=" * 70)
