@@ -47,9 +47,29 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Module-level defaults — read once at import time.
+# OutboxRelay re-reads these via _get_batch_config() on every tick so that
+# operators can tune them via env vars without restarting the process.
 RELAY_INTERVAL_SECONDS: float = float(os.getenv("OUTBOX_RELAY_INTERVAL_SECONDS", "2.0"))
 MAX_ATTEMPTS: int = int(os.getenv("OUTBOX_MAX_ATTEMPTS", "10"))
 BATCH_SIZE: int = int(os.getenv("OUTBOX_BATCH_SIZE", "50"))
+
+
+def _get_batch_config() -> tuple[float, int, int]:
+    """
+    Return (relay_interval_s, max_attempts, batch_size) read live from env.
+
+    Re-reading on every relay tick allows operators to tune throughput and
+    retry limits via env vars without a process restart.
+    """
+    interval = float(os.getenv("OUTBOX_RELAY_INTERVAL_SECONDS", str(RELAY_INTERVAL_SECONDS)))
+    attempts = int(os.getenv("OUTBOX_MAX_ATTEMPTS", str(MAX_ATTEMPTS)))
+    batch = int(os.getenv("OUTBOX_BATCH_SIZE", str(BATCH_SIZE)))
+    # Clamp to sane bounds to prevent accidental misconfiguration.
+    interval = max(0.1, min(interval, 60.0))
+    attempts = max(1, min(attempts, 100))
+    batch = max(1, min(batch, 500))
+    return interval, attempts, batch
 
 
 # ── Write helper ──────────────────────────────────────────────────────────────
@@ -154,11 +174,12 @@ class OutboxRelay:
     async def run(self) -> None:
         """Run the relay loop until cancelled."""
         self._running = True
+        interval, max_attempts, batch_size = _get_batch_config()
         logger.info(
             "OutboxRelay started (interval=%.1fs batch=%d max_attempts=%d)",
-            RELAY_INTERVAL_SECONDS,
-            BATCH_SIZE,
-            MAX_ATTEMPTS,
+            interval,
+            batch_size,
+            max_attempts,
         )
         while self._running:
             try:
@@ -168,7 +189,9 @@ class OutboxRelay:
                 return
             except Exception as exc:
                 logger.warning("OutboxRelay tick error: %s", exc)
-            await asyncio.sleep(RELAY_INTERVAL_SECONDS)
+            # Re-read interval on every sleep so hot-reloading works.
+            interval, _, _ = _get_batch_config()
+            await asyncio.sleep(interval)
 
     def stop(self) -> None:
         self._running = False
@@ -179,6 +202,9 @@ class OutboxRelay:
         if session is None:
             return
 
+        # Re-read batch config on every tick for live tunability.
+        _, max_attempts, batch_size = _get_batch_config()
+
         try:
             from database.models import OutboxEvent
 
@@ -188,10 +214,10 @@ class OutboxRelay:
                 session.query(OutboxEvent)
                 .filter(
                     OutboxEvent.published_at.is_(None),
-                    OutboxEvent.attempts < MAX_ATTEMPTS,
+                    OutboxEvent.attempts < max_attempts,
                 )
                 .order_by(OutboxEvent.created_at.asc())
-                .limit(BATCH_SIZE)
+                .limit(batch_size)
                 .all()
             )
 
@@ -246,8 +272,8 @@ class OutboxRelay:
                     row.last_error = str(pub_exc)[:500]
 
                     # ── Dead-letter after max_attempts ────────────────────────
-                    # Use per-row max_attempts if set, otherwise global MAX_ATTEMPTS.
-                    row_max = getattr(row, "max_attempts", None) or MAX_ATTEMPTS
+                    # Use per-row max_attempts if set, otherwise live config value.
+                    row_max = getattr(row, "max_attempts", None) or max_attempts
                     if row.attempts >= row_max:
                         row.status = "dead_letter"
                         logger.error(
