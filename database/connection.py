@@ -237,19 +237,25 @@ class DatabaseManager:
         else:
             self._failure_count = max(0, self._failure_count - 1)
 
-    def _record_failure(self):
+    def _record_failure(self, exc: Exception | None = None):
         """Record failed operation; re-open circuit from half-open if probe fails."""
         self._failure_count += 1
         self._last_failure_time = time.time()
+        with self._metrics_lock:
+            self._metrics.error_count += 1
 
         if self._circuit_half_open:
             # Probe failed — stay open, reset half-open flag
             self._circuit_half_open = False
-            logger.warning("Database circuit breaker probe FAILED — staying OPEN")
+            logger.warning("Database circuit breaker probe FAILED — staying OPEN: %s", exc)
         elif self._failure_count >= self._circuit_threshold:
             self._circuit_open = True
             self._circuit_half_open = False
-            logger.critical("Database circuit breaker OPENED after %s failures", self._failure_count)
+            logger.critical(
+                "Database circuit breaker OPENED after %d failures: %s",
+                self._failure_count,
+                exc,
+            )
 
     @contextmanager
     def session(self) -> "Generator[Session, None, None]":
@@ -292,7 +298,7 @@ class DatabaseManager:
 
             except OperationalError as e:
                 last_error = e
-                self._record_failure()
+                self._record_failure(e)
 
                 if session:
                     session.rollback()
@@ -306,7 +312,7 @@ class DatabaseManager:
 
             except SATimeoutError as e:
                 last_error = e
-                self._record_failure()
+                self._record_failure(e)
 
                 if session:
                     session.rollback()
@@ -320,7 +326,7 @@ class DatabaseManager:
 
             except Exception as e:
                 last_error = e
-                self._record_failure()
+                self._record_failure(e)
 
                 if session:
                     session.rollback()
@@ -351,17 +357,9 @@ class DatabaseManager:
 
     @contextmanager
     def timed_session(self) -> "Generator[Session, None, None]":
-        """Session context manager that records query latency in metrics."""
-        t0 = time.perf_counter()
-        try:
-            with self.session() as s:
-                yield s
-        finally:
-            elapsed_ms = (time.perf_counter() - t0) * 1000
-            with self._metrics_lock:
-                self._metrics.record_latency(elapsed_ms)
-                if elapsed_ms > self.query_timeout * 1000 * 0.8:
-                    self._metrics.slow_query_count += 1
+        """Alias for session() — latency is already recorded inside session()."""
+        with self.session() as s:
+            yield s
 
     def health_check(self) -> bool:
         """Check database connectivity"""
@@ -376,24 +374,19 @@ class DatabaseManager:
             logger.error("Database health check failed: %s", e)
             return False
 
-    def get_metrics(self) -> DatabaseMetrics:
-        """Get current database metrics"""
+    def get_metrics(self) -> dict[str, Any]:
+        """Get current database metrics including p50/p99 latency."""
         with self._metrics_lock:
-            # Update pool stats
+            # Refresh live pool stats
             if self._engine and hasattr(self._engine.pool, "size"):
-                self._metrics.active_connections = self._engine.pool.checkedout()
-                self._metrics.idle_connections = self._engine.pool.checkedin()
-
-            return DatabaseMetrics(
-                total_connections=self._metrics.total_connections,
-                active_connections=self._metrics.active_connections,
-                idle_connections=self._metrics.idle_connections,
-                checked_out_connections=self._metrics.checked_out_connections,
-                checkout_time_avg_ms=self._metrics.checkout_time_avg_ms,
-                query_count=self._metrics.query_count,
-                error_count=self._metrics.error_count,
-                slow_query_count=self._metrics.slow_query_count,
-            )
+                try:
+                    self._metrics.pool_size = self._engine.pool.size()
+                    self._metrics.active_connections = self._engine.pool.checkedout()
+                    self._metrics.idle_connections = self._engine.pool.checkedin()
+                    self._metrics.pool_overflow = self._engine.pool.overflow()
+                except Exception:
+                    pass
+            return self._metrics.to_dict()
 
     def close(self):
         """Close all database connections"""
