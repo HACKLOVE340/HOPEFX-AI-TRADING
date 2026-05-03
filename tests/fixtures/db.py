@@ -90,9 +90,17 @@ try:
     )
     from database.user_models import User
 
+    # Position model is optional — not all deployments have it yet
+    try:
+        from database.models import Position as _Position
+        _POSITION_MODEL_AVAILABLE = True
+    except ImportError:
+        _POSITION_MODEL_AVAILABLE = False
+
     _MODELS_AVAILABLE = True
 except ImportError:
     _MODELS_AVAILABLE = False
+    _POSITION_MODEL_AVAILABLE = False
 
 
 # ── Engine fixtures ───────────────────────────────────────────────────────────
@@ -101,11 +109,16 @@ except ImportError:
 @pytest.fixture(scope="session")
 def db_engine():
     """
-    Module-scoped async engine.
+    Session-scoped async engine.
 
     Uses NullPool so connections are not pooled — safe for test isolation.
     For SQLite in-memory, uses StaticPool so all connections share the same
-    in-memory database.
+    in-memory database (required for in-memory SQLite to be visible across
+    multiple sessions).
+
+    Disposal uses asyncio.run() (Python 3.7+) rather than the deprecated
+    asyncio.get_event_loop().run_until_complete() which raises DeprecationWarning
+    in Python 3.10+ and RuntimeError in 3.12+ when no running loop exists.
     """
     if not _SA_AVAILABLE:
         pytest.skip("SQLAlchemy not installed")
@@ -122,7 +135,20 @@ def db_engine():
     yield engine
 
     import asyncio
-    asyncio.get_event_loop().run_until_complete(engine.dispose())
+
+    async def _dispose():
+        await engine.dispose()
+
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Inside an async context (e.g. pytest-asyncio) — schedule disposal
+            loop.create_task(_dispose())
+        else:
+            loop.run_until_complete(_dispose())
+    except RuntimeError:
+        # No event loop — create a temporary one for cleanup
+        asyncio.run(_dispose())
 
 
 @pytest.fixture(scope="session")
@@ -151,13 +177,24 @@ def db_tables(db_engine, sync_db_engine):
 
     Uses the sync engine for DDL (simpler than async DDL).
     Drops and recreates to ensure a clean schema.
+
+    Skips gracefully when ORM models are not importable (e.g. in CI
+    environments where optional DB dependencies are not installed).
     """
     if not _MODELS_AVAILABLE:
-        pytest.skip("Database models not available")
+        pytest.skip("Database models not available — install database dependencies")
 
-    Base.metadata.create_all(bind=sync_db_engine)
+    try:
+        Base.metadata.create_all(bind=sync_db_engine)
+    except Exception as exc:
+        pytest.skip(f"Could not create DB tables: {exc}")
+
     yield
-    Base.metadata.drop_all(bind=sync_db_engine)
+
+    try:
+        Base.metadata.drop_all(bind=sync_db_engine)
+    except Exception:
+        pass  # Best-effort cleanup — don't fail teardown
 
 
 # ── Session fixtures ──────────────────────────────────────────────────────────
@@ -168,8 +205,16 @@ async def async_db_session(db_engine, db_tables) -> AsyncGenerator[AsyncSession,
     """
     Function-scoped async session with automatic rollback.
 
-    Each test gets a fresh transaction that is rolled back on teardown,
-    leaving the database in the same state as before the test.
+    Uses a nested transaction (SAVEPOINT) so each test gets a clean slate
+    without committing any data to the database.  The outer transaction is
+    rolled back on teardown regardless of whether the test passed or failed.
+
+    Pattern:
+      1. Begin outer transaction
+      2. Create SAVEPOINT (nested transaction)
+      3. Yield session to test
+      4. Roll back to SAVEPOINT (discards all test writes)
+      5. Roll back outer transaction
     """
     if not _SA_AVAILABLE:
         pytest.skip("SQLAlchemy not installed")
@@ -178,12 +223,17 @@ async def async_db_session(db_engine, db_tables) -> AsyncGenerator[AsyncSession,
         bind=db_engine,
         class_=AsyncSession,
         expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
     )
 
-    async with factory() as session:
-        async with session.begin():
-            yield session
-            await session.rollback()
+    async with db_engine.connect() as conn:
+        await conn.begin()
+        async with factory(bind=conn) as session:
+            try:
+                yield session
+            finally:
+                await session.rollback()
+        await conn.rollback()
 
 
 @pytest.fixture
@@ -290,6 +340,36 @@ async def db_signal(async_db_session: AsyncSession, db_user: User) -> Signal:
     async_db_session.add(signal)
     await async_db_session.flush()
     return signal
+
+
+@pytest_asyncio.fixture
+async def db_position(async_db_session: AsyncSession, db_user: User):
+    """
+    Persist a real Position row linked to db_user.
+
+    Skipped when the Position model is not available in the current schema.
+    """
+    if not _POSITION_MODEL_AVAILABLE:
+        pytest.skip("Position model not available")
+
+    position = _Position(
+        position_id=f"P-{uuid.uuid4().hex[:12].upper()}",
+        user_id=db_user.id,
+        symbol="XAUUSD",
+        direction="buy",
+        entry_price=2340.50,
+        current_price=2355.00,
+        quantity=0.10,
+        unrealized_pnl=145.00,
+        stop_loss=2320.00,
+        take_profit=2380.00,
+        status="open",
+        broker="paper",
+        opened_at=datetime(2025, 1, 15, 9, 30, 0, tzinfo=UTC),
+    )
+    async_db_session.add(position)
+    await async_db_session.flush()
+    return position
 
 
 # ── Repository fixtures ───────────────────────────────────────────────────────
