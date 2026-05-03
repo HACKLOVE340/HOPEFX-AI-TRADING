@@ -515,14 +515,18 @@ const RiskSnapshotPanel: React.FC = () => {
 // ─── Quick-nav shortcuts ──────────────────────────────────────────────────────
 
 const QUICK_LINKS = [
-  { icon: '⚡', label: 'Trade',        path: '/trade'       },
-  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-charts'   },
-  { icon: '☢️', label: 'Nuclear AI',   path: '/nuclear'     },
-  { icon: '📓', label: 'Journal',      path: '/journal'     },
-  { icon: '🏆', label: 'Performance',  path: '/performance' },
-  { icon: '💹', label: 'P&L',          path: '/pnl'         },
-  { icon: '🌍', label: 'Geopolitical', path: '/geopolitical'},
-  { icon: '📡', label: 'Signal Feed',  path: '/feed'        },
+  { icon: '⚡', label: 'Trade',        path: '/trade'        },
+  { icon: '🧠', label: 'AI Chart Bot', path: '/ai-charts'    },
+  { icon: '☢️', label: 'Nuclear AI',   path: '/nuclear'      },
+  { icon: '📓', label: 'Journal',      path: '/journal'      },
+  { icon: '🏆', label: 'Performance',  path: '/performance'  },
+  { icon: '💹', label: 'P&L',          path: '/pnl'          },
+  { icon: '🌍', label: 'Geopolitical', path: '/geopolitical' },
+  { icon: '📡', label: 'Signal Feed',  path: '/feed'         },
+  { icon: '👁', label: 'Watchlist',    path: '/watchlist'    },
+  { icon: '🔗', label: 'Correlation',  path: '/correlation'  },
+  { icon: '🔁', label: 'Copy Trading', path: '/copy-trading' },
+  { icon: '▶️', label: 'Replay',       path: '/replay'       },
 ];
 
 const QuickNav: React.FC = () => {

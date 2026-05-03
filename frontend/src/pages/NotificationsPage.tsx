@@ -9,6 +9,7 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -36,6 +37,7 @@ const TYPE_ICON: Record<string, string> = {
 const PAGE_SIZE = 20;
 
 const NotificationsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [items, setItems]         = useState<Notification[]>([]);
   const [loading, setLoading]     = useState(true);
   const [page, setPage]           = useState(1);
@@ -180,11 +182,21 @@ const NotificationsPage: React.FC = () => {
               </div>
             </div>
             <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
-            {n.link && (
-              <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', marginTop: 6, display: 'inline-block' }}>
-                View details →
-              </a>
-            )}
+            <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+              {n.link && (
+                <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', display: 'inline-block' }}>
+                  View details →
+                </a>
+              )}
+              {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
+                <button
+                  onClick={e => { e.stopPropagation(); navigate('/trade'); }}
+                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                >
+                  ⚡ Trade
+                </button>
+              )}
+            </div>
           </div>
         </div>
       ))}
