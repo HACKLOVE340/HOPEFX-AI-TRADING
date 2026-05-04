@@ -43,6 +43,7 @@ Usage
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -495,6 +496,110 @@ class DataValidator:
         self._results.clear()
         self._total_validated = 0
         self._total_failed = 0
+
+
+# ── Tick-level validation (bid/ask spread sanity + cross-source divergence) ───
+
+# Maximum allowed bid/ask spread as a fraction of mid price per symbol.
+# Gold typically trades at 0.01–0.05% spread; reject anything above 1%.
+_MAX_SPREAD_PCT: dict[str, float] = {
+    "XAUUSD": 0.01,
+    "XAU_USD": 0.01,
+    "GC=F": 0.01,
+    "BTCUSD": 0.02,
+    "ETHUSD": 0.02,
+    "EURUSD": 0.005,
+    "GBPUSD": 0.005,
+    "USDJPY": 0.005,
+}
+_DEFAULT_MAX_SPREAD_PCT = 0.05  # 5% fallback for unknown symbols
+
+# Maximum allowed divergence between any two sources as a fraction of the
+# consensus mid price.  Prices more than 0.5% apart indicate a stale/bad feed.
+_MAX_CROSS_SOURCE_DIVERGENCE_PCT: float = float(
+    os.environ.get("DQE_CROSS_SOURCE_MAX_DIFF_PCT", "0.5")
+) / 100.0
+
+
+def validate_tick_spread(
+    bid: float,
+    ask: float,
+    symbol: str = "XAU_USD",
+    strict: bool = False,
+) -> tuple[bool, str]:
+    """
+    Validate bid/ask spread sanity for a single tick.
+
+    Returns (is_valid, reason).  reason is empty string when valid.
+
+    Rules:
+    - ask must be >= bid (no inverted spread)
+    - spread must be <= max_spread_pct * mid
+    - bid and ask must both be positive
+    """
+    if bid <= 0 or ask <= 0:
+        return False, f"non-positive bid/ask: bid={bid} ask={ask}"
+    if ask < bid:
+        return False, f"inverted spread: bid={bid} > ask={ask}"
+
+    mid = (bid + ask) / 2.0
+    spread_pct = (ask - bid) / mid if mid > 0 else 0.0
+    max_pct = _MAX_SPREAD_PCT.get(symbol.upper(), _DEFAULT_MAX_SPREAD_PCT)
+
+    if spread_pct > max_pct:
+        return (
+            False,
+            f"spread too wide: {spread_pct:.4%} > max {max_pct:.4%} for {symbol}",
+        )
+    return True, ""
+
+
+def validate_cross_source_divergence(
+    prices: dict[str, float],
+    symbol: str = "XAU_USD",
+    max_divergence_pct: float | None = None,
+) -> tuple[bool, str, dict[str, float]]:
+    """
+    Check that all source prices agree within the allowed divergence threshold.
+
+    Args:
+        prices: mapping of source_name → mid_price
+        symbol: instrument symbol (for logging)
+        max_divergence_pct: override for the global threshold (0–1 fraction)
+
+    Returns:
+        (all_agree, reason, outliers)
+        - all_agree: True if all prices are within threshold of the median
+        - reason: human-readable explanation when all_agree is False
+        - outliers: dict of source → price for sources that diverge too much
+    """
+    if len(prices) < 2:
+        return True, "", {}
+
+    threshold = max_divergence_pct if max_divergence_pct is not None else _MAX_CROSS_SOURCE_DIVERGENCE_PCT
+    vals = list(prices.values())
+    median_price = float(np.median(vals))
+
+    if median_price <= 0:
+        return False, "median price is zero or negative", {}
+
+    outliers: dict[str, float] = {}
+    for src, price in prices.items():
+        divergence = abs(price - median_price) / median_price
+        if divergence > threshold:
+            outliers[src] = price
+
+    if outliers:
+        reason = (
+            f"cross-source divergence for {symbol}: "
+            f"median={median_price:.4f}, "
+            f"outliers={{{', '.join(f'{s}={p:.4f}' for s, p in outliers.items())}}}, "
+            f"threshold={threshold:.4%}"
+        )
+        logger.warning("validate_cross_source_divergence: %s", reason)
+        return False, reason, outliers
+
+    return True, "", {}
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

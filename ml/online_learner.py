@@ -159,9 +159,9 @@ class OnlineLearner:
         for i in range(len(X_new)):
             self.replay_buffer.append((X_new[i], y_new[i]))
 
-        # Sample from replay buffer (experience replay)
+        # Sample from replay buffer (experience replay — unseeded)
         if len(self.replay_buffer) >= self.batch_size:
-            indices = np.random.choice(
+            indices = np.random.default_rng().choice(
                 len(self.replay_buffer),
                 self.batch_size,
                 replace=False,

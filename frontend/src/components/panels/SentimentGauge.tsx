@@ -5,6 +5,7 @@
  */
 
 import React, { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
 import { Badge } from '../ui/Badge';
@@ -119,6 +120,7 @@ function ArticleRow({ article }: { article: NewsArticle }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function SentimentGauge() {
+  const navigate = useNavigate();
   const sentiment = useStore((s) => s.sentiment);
 
   const score    = sentiment?.signal.news_sentiment_score ?? 0;
@@ -130,8 +132,28 @@ export function SentimentGauge() {
   const label = score > 0.3 ? 'BULLISH' : score < -0.3 ? 'BEARISH' : 'NEUTRAL';
   const labelVariant = score > 0.3 ? 'bull' : score < -0.3 ? 'bear' : 'neutral';
 
+  const isExtreme = Math.abs(score) > 0.5;
+  const extremeDir = score > 0.5 ? 'BUY' : 'SELL';
+
   const headerRight = (
-    <Badge variant={labelVariant} dot>{label}</Badge>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {isExtreme && (
+        <button
+          onClick={() => navigate('/trade', { state: { signal: { symbol: 'XAU/USD', direction: extremeDir } } })}
+          style={{
+            padding: '2px 8px', borderRadius: 4, cursor: 'pointer',
+            background: score > 0 ? 'rgba(0,230,118,0.12)' : 'rgba(255,23,68,0.12)',
+            border: `1px solid ${score > 0 ? 'rgba(0,230,118,0.35)' : 'rgba(255,23,68,0.35)'}`,
+            color: score > 0 ? '#00e676' : '#ff1744',
+            fontSize: 9, fontWeight: 800, fontFamily: 'inherit',
+          }}
+          title={`Strong ${score > 0 ? 'bullish' : 'bearish'} sentiment — consider a ${extremeDir} trade`}
+        >
+          ⚡ {extremeDir}
+        </button>
+      )}
+      <Badge variant={labelVariant} dot>{label}</Badge>
+    </div>
   );
 
   return (

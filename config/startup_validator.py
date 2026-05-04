@@ -280,6 +280,39 @@ def _validate_argocd_webhook(errors: list[str]) -> None:
         errors.append(f"INVALID  ARGOCD_ROLLBACK_WEBHOOK={argocd_webhook[:60]!r}: must be an https:// URL")
 
 
+def _validate_finnhub(errors: list[str]) -> None:
+    """
+    Warn when FINNHUB_API_KEY is absent.
+
+    The MacroCalendarEngine falls back to a hardcoded schedule of recurring
+    high-impact events when the key is missing, so this is not a hard failure.
+    However, the live Finnhub calendar provides exact release dates and actual
+    vs forecast values that drive the surprise-factor amplification in the ML
+    pipeline — missing it degrades signal quality.
+    """
+    key = _env("FINNHUB_API_KEY")
+    if not key:
+        # Not added to errors (not a hard failure) — log at appropriate level.
+        if _is_dev():
+            logger.debug(
+                "FINNHUB_API_KEY not set — MacroCalendarEngine will use the hardcoded "
+                "fallback schedule instead of live Finnhub data. "
+                "Get a free key at https://finnhub.io/register"
+            )
+        else:
+            logger.warning(
+                "FINNHUB_API_KEY not set — MacroCalendarEngine is running on the "
+                "hardcoded fallback schedule. Live economic calendar data (exact release "
+                "dates, actual vs forecast values) will not be available. "
+                "Set FINNHUB_API_KEY to a valid Finnhub API key to enable live data."
+            )
+    elif key.startswith("CHANGE_ME"):
+        errors.append(
+            "INSECURE FINNHUB_API_KEY: placeholder value detected — "
+            "replace with a real Finnhub API key from https://finnhub.io/dashboard"
+        )
+
+
 def _validate_optional_vars(errors: list[str]) -> None:
     sentry_dsn = _env("SENTRY_DSN")
     if sentry_dsn and not sentry_dsn.startswith("https://"):
@@ -287,6 +320,7 @@ def _validate_optional_vars(errors: list[str]) -> None:
             f"INVALID  SENTRY_DSN={sentry_dsn[:40]!r}: must be a valid https:// Sentry DSN",
         )
 
+    _validate_finnhub(errors)
     _validate_mobile_cors(errors)
     _validate_ibkr_port(errors)
 

@@ -89,24 +89,27 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   performance:  'free',
 
   // ── Starter ───────────────────────────────────────────────────────────────
-  alerts:       'starter',
-  'risk-calc':  'starter',
-  wallet:       'starter',
+  alerts:             'starter',
+  'risk-calculator':  'starter',
+  wallet:             'starter',
 
   // ── Professional ──────────────────────────────────────────────────────────
   trading:        'professional',   // advanced AI charting terminal (ChartDashboard)
+  'ai-chart':     'professional',   // AI Chart Bot (same gate as 'trading')
   terminal:       'professional',   // classic trading terminal (TradingTerminal)
   geopolitical:   'professional',   // geopolitical risk intelligence
   'ai-strategy':  'professional',
   'copy-trading': 'professional',
   'prop-firm':    'professional',
   correlation:    'professional',
-  indicators:     'professional',
-  'walk-forward': 'professional',
+  indicators:          'professional',
+  'pattern-detector':  'professional',
+  'walk-forward':      'professional',
   'ab-testing':   'professional',
   tca:            'professional',
   nuclear:        'professional',
   feed:           'professional',
+  signals:        'professional',   // alias for feed (Signal Feed)
 
   // ── Enterprise ────────────────────────────────────────────────────────────
   research:       'enterprise',
@@ -130,6 +133,7 @@ export const ADMIN_ONLY_ROUTES = new Set([
 /** Routes that require superadmin only */
 export const SUPERADMIN_ONLY_ROUTES = new Set([
   '/superadmin',
+  '/master-control',
 ]);
 
 // ── Role predicates ───────────────────────────────────────────────────────────

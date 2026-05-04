@@ -152,28 +152,58 @@ function HealthBadge({ status, loaded }: { status: string; loaded: boolean }) {
 
 type Tab = 'metrics' | 'features' | 'models';
 
-function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void }) {
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'metrics',  label: 'Metrics'  },
-    { id: 'features', label: 'Features' },
-    { id: 'models',   label: 'Models'   },
+function TabBar({
+  active, onChange, modelCount, featureCount,
+}: {
+  active: Tab;
+  onChange: (t: Tab) => void;
+  modelCount?: number;
+  featureCount?: number;
+}) {
+  const tabs: { id: Tab; icon: string; label: string; badge?: number; color: string }[] = [
+    { id: 'metrics',  icon: '📊', label: 'Metrics',  color: '#60a5fa' },
+    { id: 'features', icon: '🧬', label: 'Features', badge: featureCount, color: '#a78bfa' },
+    { id: 'models',   icon: '🤖', label: 'Models',   badge: modelCount,   color: '#34d399' },
   ];
   return (
-    <div className="flex gap-1">
-      {tabs.map(({ id, label }) => (
-        <button
-          key={id}
-          onClick={() => onChange(id)}
-          className={cn(
-            'px-3 py-1 rounded text-[11px] font-semibold border transition-colors',
-            active === id
-              ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-              : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
-          )}
-        >
-          {label}
-        </button>
-      ))}
+    <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #1e2d3d', marginBottom: 2 }}>
+      {tabs.map(({ id, icon, label, badge, color }) => {
+        const isActive = active === id;
+        return (
+          <button
+            key={id}
+            onClick={() => onChange(id)}
+            title={label}
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              padding: '6px 4px',
+              background: isActive ? `${color}12` : 'transparent',
+              border: 'none',
+              borderBottom: isActive ? `2px solid ${color}` : '2px solid transparent',
+              color: isActive ? color : '#475569',
+              fontSize: 10, fontWeight: 700, cursor: 'pointer',
+              transition: 'all 0.15s ease',
+              letterSpacing: 0.5,
+            }}
+            onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; }}
+            onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLButtonElement).style.color = '#475569'; }}
+          >
+            <span style={{ fontSize: 11 }}>{icon}</span>
+            <span style={{ textTransform: 'uppercase' }}>{label}</span>
+            {badge !== undefined && badge > 0 && (
+              <span style={{
+                fontSize: 9, fontWeight: 800,
+                background: isActive ? `${color}25` : '#1e2d3d',
+                color: isActive ? color : '#64748b',
+                padding: '0px 4px', borderRadius: 8, lineHeight: '14px',
+                minWidth: 16, textAlign: 'center',
+              }}>
+                {badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -237,10 +267,18 @@ function MLModelPanelInner() {
     <HealthBadge status={health.status} loaded={health.model_loaded} />
   ) : undefined;
 
+  const modelCount   = modelsQ.data?.length;
+  const featureCount = featuresQ.data?.features.length;
+
   return (
     <Panel title="ML Model" headerRight={headerRight}>
       <div className="flex flex-col gap-3">
-        <TabBar active={tab} onChange={setTab} />
+        <TabBar
+          active={tab}
+          onChange={setTab}
+          modelCount={modelCount}
+          featureCount={featureCount}
+        />
 
         {/* ── Metrics tab ─────────────────────────────────────────────────── */}
         {tab === 'metrics' && (

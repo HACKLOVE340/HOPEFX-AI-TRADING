@@ -700,14 +700,14 @@ class WGCFeed:
                 logger.debug("WGC demand: resolved via CSV download")
                 return _csv_to_series(text, _DEMAND_COL_VARIANTS)
             if not self._warned_demand_offline:
-                logger.warning(
+                logger.info(
                     "WGC demand URL returned HTML — www.gold.org may require a browser session. "
                     "Place a manually downloaded CSV at %s",
                     self._cache_path(_DEMAND_CACHE_FILE),
                 )
                 self._warned_demand_offline = True
         elif not self._warned_demand_offline:
-            logger.warning(
+            logger.info(
                 "WGC demand CSV fetch returned no usable data — www.gold.org unreachable. "
                 "Place a manually downloaded CSV at %s",
                 self._cache_path(_DEMAND_CACHE_FILE),
@@ -754,14 +754,14 @@ class WGCFeed:
                 logger.debug("WGC ETF flow: resolved via CSV download")
                 return _csv_to_series(text, _ETF_COL_VARIANTS)
             if not self._warned_etf_offline:
-                logger.warning(
+                logger.info(
                     "WGC ETF flow URL returned HTML — www.gold.org may require a browser session. "
                     "Place a manually downloaded CSV at %s",
                     self._cache_path(_ETF_CACHE_FILE),
                 )
                 self._warned_etf_offline = True
         elif not self._warned_etf_offline:
-            logger.warning(
+            logger.info(
                 "WGC ETF flow CSV fetch returned no usable data — www.gold.org unreachable. "
                 "Place a manually downloaded CSV at %s",
                 self._cache_path(_ETF_CACHE_FILE),

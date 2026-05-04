@@ -3,6 +3,7 @@
  * Define indicator formulas, preview on chart, save for use in strategies.
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 
@@ -55,6 +56,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 const CustomIndicators: React.FC = () => {
+  const navigate = useNavigate();
   const [formula,    setFormula]    = useState('EMA(close, 20)');
   const [name,       setName]       = useState('');
   const [color,      setColor]      = useState('#60a5fa');
@@ -112,8 +114,24 @@ const CustomIndicators: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.title}>Custom Indicator Builder</h1>
-        <p style={s.subtitle}>Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies.</p>
+        <div>
+          <h1 style={s.title}>Custom Indicator Builder</h1>
+          <p style={s.subtitle}>Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies.</p>
+        </div>
+        <div style={{ display:'flex', gap:8 }}>
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:7, color:'#a78bfa', fontSize:12, fontWeight:700, padding:'7px 14px', cursor:'pointer' }}
+          >
+            🤖 AI Strategy
+          </button>
+          <button
+            onClick={() => navigate('/walk-forward')}
+            style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)', borderRadius:7, color:'#60a5fa', fontSize:12, fontWeight:700, padding:'7px 14px', cursor:'pointer' }}
+          >
+            📊 Walk-Forward Test
+          </button>
+        </div>
       </div>
 
       <div style={s.grid}>
@@ -193,7 +211,7 @@ const CustomIndicators: React.FC = () => {
 
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
-  header: { marginBottom:24 },
+  header: { marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'flex-start' },
   title: { fontSize:28, fontWeight:700, margin:0 },
   subtitle: { fontSize:14, color:'#94a3b8', marginTop:4 },
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20, marginBottom:20 },

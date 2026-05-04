@@ -97,6 +97,9 @@ BrokerSubmitFn = Callable[..., Coroutine[Any, Any, Any]]
 
 import numpy as np
 
+# Module-level RNG for timing jitter — unseeded, non-deterministic per process
+_JITTER_RNG = np.random.default_rng()
+
 logger = logging.getLogger(__name__)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
@@ -339,7 +342,7 @@ class TWAPOrder(AlgoOrder):
 
                 if i < self.num_slices - 1:
                     # Add jitter to avoid predictable timing
-                    jitter = self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)
+                    jitter = self._interval * ALGO_TWAP_JITTER * (_JITTER_RNG.random() - 0.5)
                     sleep_time = max(0.1, self._interval + jitter)
                     await asyncio.sleep(sleep_time)
 
@@ -490,7 +493,7 @@ class VWAPOrder(AlgoOrder):
                     await self._submit_child(qty)
 
                 if i < len(slice_quantities) - 1:
-                    jitter = self._interval * ALGO_TWAP_JITTER * (np.random.random() - 0.5)
+                    jitter = self._interval * ALGO_TWAP_JITTER * (_JITTER_RNG.random() - 0.5)
                     await asyncio.sleep(max(0.1, self._interval + jitter))
 
             self.status = AlgoStatus.COMPLETED

@@ -16,6 +16,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { EmptyState } from '../components/EmptyState';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -281,38 +282,48 @@ const AuditLog: React.FC = () => {
         />
       )}
 
-      <DataTable<AuditEvent>
-          columns={COLUMNS}
-          data={events}
-          rowKey={(r) => r.event_id}
-          loading={loading}
-          pageSize={PAGE_SIZE}
-          emptyMessage="No events match your filters"
+      {!loading && events.length === 0 && !error ? (
+        <EmptyState
+          icon="🔍"
+          title="No events match your filters"
+          description="Try adjusting your filters or check back after some activity."
         />
+      ) : (
+        <>
+          <DataTable<AuditEvent>
+            columns={COLUMNS}
+            data={events}
+            rowKey={(r) => r.event_id}
+            loading={loading}
+            pageSize={PAGE_SIZE}
+            emptyMessage="No events match your filters"
+          />
 
-      {/* Manual pagination (server-side) */}
-      {pages > 1 && !loading && (
-        <div style={s.pagination}>
-          <span style={{ color: '#64748b', fontSize: 12 }}>
-            Page {page} of {pages}
-          </span>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              disabled={page <= 1}
-              onClick={() => void fetchAudit(page - 1, filterUser, filterType)}
-              style={s.pageBtn}
-            >
-              ‹ Prev
-            </button>
-            <button
-              disabled={page >= pages}
-              onClick={() => void fetchAudit(page + 1, filterUser, filterType)}
-              style={s.pageBtn}
-            >
-              Next ›
-            </button>
-          </div>
-        </div>
+          {/* Manual pagination (server-side) */}
+          {pages > 1 && !loading && (
+            <div style={s.pagination}>
+              <span style={{ color: '#64748b', fontSize: 12 }}>
+                Page {page} of {pages}
+              </span>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  disabled={page <= 1}
+                  onClick={() => void fetchAudit(page - 1, filterUser, filterType)}
+                  style={s.pageBtn}
+                >
+                  ‹ Prev
+                </button>
+                <button
+                  disabled={page >= pages}
+                  onClick={() => void fetchAudit(page + 1, filterUser, filterType)}
+                  style={s.pageBtn}
+                >
+                  Next ›
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

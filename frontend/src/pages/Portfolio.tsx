@@ -16,7 +16,8 @@
  *   GET /trading/trades
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   useStore,
@@ -174,6 +175,8 @@ interface TradeRecord {
   closed_at:   string;
 }
 
+type TradeFilter = 'all' | 'long' | 'short' | 'win' | 'loss';
+
 const TradeHistory: React.FC = () => {
   const { data: trades, isLoading, isError } = useQuery<TradeRecord[]>({
     queryKey: ['trades', 'history'],
@@ -186,8 +189,91 @@ const TradeHistory: React.FC = () => {
     refetchInterval: 60_000,
   });
 
+  const [filter, setFilter]   = useState<TradeFilter>('all');
+  const [search, setSearch]   = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
+
+  const filtered = useMemo(() => {
+    if (!trades) return [];
+    const fromMs = dateFrom ? new Date(dateFrom).getTime() : 0;
+    const toMs   = dateTo   ? new Date(dateTo + 'T23:59:59').getTime() : Infinity;
+    return trades.filter((t) => {
+      const matchDir = filter === 'all' ? true
+        : filter === 'long'  ? (t.side === 'long' || t.side === 'buy')
+        : filter === 'short' ? (t.side === 'short' || t.side === 'sell')
+        : filter === 'win'   ? t.pnl >= 0
+        : t.pnl < 0;
+      const matchSearch = !search || t.symbol.toLowerCase().includes(search.toLowerCase());
+      const closedMs = t.closed_at ? new Date(t.closed_at).getTime() : 0;
+      const matchDate = closedMs >= fromMs && closedMs <= toMs;
+      return matchDir && matchSearch && matchDate;
+    });
+  }, [trades, filter, search, dateFrom, dateTo]);
+
+  const totalPnl = filtered.reduce((s, t) => s + t.pnl, 0);
+  const wins     = filtered.filter((t) => t.pnl >= 0).length;
+
+  const FILTERS: { id: TradeFilter; label: string; color: string }[] = [
+    { id: 'all',   label: 'ALL',     color: '#64748b' },
+    { id: 'long',  label: '▲ LONG',  color: '#00e676' },
+    { id: 'short', label: '▼ SHORT', color: '#ff1744' },
+    { id: 'win',   label: '✓ WINS',  color: '#00e676' },
+    { id: 'loss',  label: '✗ LOSSES',color: '#ff1744' },
+  ];
+
+  const dateInputStyle: React.CSSProperties = {
+    background: '#111827', border: '1px solid #1e2d3d', borderRadius: 4,
+    padding: '2px 6px', fontSize: 10, color: '#94a3b8', outline: 'none',
+    colorScheme: 'dark' as React.CSSProperties['colorScheme'],
+  };
+
+  const headerRight = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      {/* Date range */}
+      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={dateInputStyle} title="From date" />
+      <span style={{ fontSize: 10, color: '#334155' }}>→</span>
+      <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={dateInputStyle} title="To date" />
+      {(dateFrom || dateTo) && (
+        <button onClick={() => { setDateFrom(''); setDateTo(''); }} style={{
+          background: 'transparent', border: 'none', color: '#475569', fontSize: 10, cursor: 'pointer', padding: '0 2px',
+        }} title="Clear date filter">✕</button>
+      )}
+      <div style={{ width: 1, height: 14, background: '#1e2d3d' }} />
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="Symbol…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="bg-[#111827] border border-[#1e2d3d] rounded px-2 py-1 text-[11px] text-slate-300 outline-none w-20"
+      />
+      {/* Filter pills */}
+      {FILTERS.map(({ id, label, color }) => (
+        <button
+          key={id}
+          onClick={() => setFilter(id)}
+          style={{
+            padding: '2px 8px', borderRadius: 4,
+            background: filter === id ? `${color}18` : 'transparent',
+            border: `1px solid ${filter === id ? `${color}50` : '#1e2d3d'}`,
+            color: filter === id ? color : '#475569',
+            fontSize: 9, fontWeight: 700, letterSpacing: 0.8, cursor: 'pointer',
+          }}
+        >
+          {label}
+        </button>
+      ))}
+      {filtered.length > 0 && (
+        <span style={{ fontSize: 10, color: totalPnl >= 0 ? '#00e676' : '#ff1744', fontFamily: 'monospace', fontWeight: 700 }}>
+          {totalPnl >= 0 ? '+' : ''}{totalPnl.toFixed(2)} ({wins}/{filtered.length})
+        </span>
+      )}
+    </div>
+  );
+
   return (
-    <Panel title="Trade History" noPad>
+    <Panel title="Trade History" headerRight={headerRight} noPad>
       {isLoading && <PanelSkeleton rows={5} />}
 
       {isError && (
@@ -196,14 +282,16 @@ const TradeHistory: React.FC = () => {
         </div>
       )}
 
-      {!isLoading && !isError && (!trades || trades.length === 0) && (
+      {!isLoading && !isError && filtered.length === 0 && (
         <div className="flex flex-col items-center justify-center py-10 gap-2">
           <span className="text-2xl opacity-30">📋</span>
-          <span className="text-[12px] text-slate-500">No closed trades yet</span>
+          <span className="text-[12px] text-slate-500">
+            {!trades || trades.length === 0 ? 'No closed trades yet' : `No ${filter} trades`}
+          </span>
         </div>
       )}
 
-      {trades && trades.length > 0 && (
+      {filtered.length > 0 && (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
@@ -219,7 +307,7 @@ const TradeHistory: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {trades.map((t) => {
+              {filtered.map((t) => {
                 const isLong = t.side === 'long' || t.side === 'buy';
                 const pnlPos = t.pnl >= 0;
                 return (
@@ -324,6 +412,7 @@ const AllocationBreakdown: React.FC = () => {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Portfolio: React.FC = () => {
+  const navigate = useNavigate();
   // Prefetch all data on mount
   useEquityCurve();
   usePositions();
@@ -362,12 +451,26 @@ const Portfolio: React.FC = () => {
             Balances, equity curve, allocation, and trade history
           </p>
         </div>
-        <button
-          onClick={handleExport}
-          className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
-        >
-          ↓ Export CSV
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/trade')}
+            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors"
+          >
+            ⚡ Trade
+          </button>
+          <button
+            onClick={() => navigate('/journal')}
+            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors"
+          >
+            📓 Journal
+          </button>
+          <button
+            onClick={handleExport}
+            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
+          >
+            ↓ Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Account balances */}

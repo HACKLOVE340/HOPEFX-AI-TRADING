@@ -232,3 +232,222 @@ class QualityReport:
     primary_source: str
     consensus_price: float
     price_spread_across_sources: float  # max - min across live feeds
+
+
+# ── Sentiment signal ──────────────────────────────────────────────────────────
+
+
+@dataclass
+class SentimentSignal:
+    """
+    Aggregated sentiment signal produced by NewsSentimentEngine.
+
+    score:    EMA-smoothed composite sentiment (-1 bearish → +1 bullish)
+    momentum: rate of change of score over the last window
+    label:    "bullish" | "bearish" | "neutral"
+    article_count_1h: articles processed in the last hour
+    bullish_ratio:    fraction of articles with positive sentiment
+    regime:   "risk_on" | "risk_off" | "neutral" — macro sentiment regime
+    """
+
+    timestamp: datetime
+    symbol: str
+    score: float          # -1.0 to +1.0
+    momentum: float       # score delta over last N articles
+    label: str            # "bullish" | "bearish" | "neutral"
+    article_count_1h: int
+    bullish_ratio: float  # 0.0 to 1.0
+    regime: str = "neutral"  # "risk_on" | "risk_off" | "neutral"
+    source_breakdown: dict[str, float] = field(default_factory=dict)
+    lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    @property
+    def is_bullish(self) -> bool:
+        return self.score > 0.1
+
+    @property
+    def is_bearish(self) -> bool:
+        return self.score < -0.1
+
+
+# ── Volume delta bar ──────────────────────────────────────────────────────────
+
+
+@dataclass
+class VolumeDeltaBar:
+    """
+    Aggregated volume delta for a time bucket.
+
+    Used by the chart-bot WebSocket to stream real-time order flow imbalance.
+
+    buy_volume:  estimated buy-side volume (Lee-Ready classified)
+    sell_volume: estimated sell-side volume
+    delta:       buy_volume - sell_volume (positive = net buying)
+    cumulative_delta: running sum of delta since session open
+    """
+
+    symbol: str
+    bar_open: datetime    # UTC bar open time
+    bar_close: datetime   # UTC bar close time
+    timeframe_s: int      # bar duration in seconds
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    buy_volume: float
+    sell_volume: float
+    delta: float          # buy_volume - sell_volume
+    cumulative_delta: float
+    tick_count: int = 0
+    source: FeedSource = FeedSource.AGGREGATED
+    lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    @property
+    def delta_pct(self) -> float:
+        """Delta as a percentage of total volume (0 if volume is zero)."""
+        if self.volume == 0:
+            return 0.0
+        return self.delta / self.volume
+
+    @property
+    def buy_pressure(self) -> float:
+        """Buy volume fraction (0–1)."""
+        total = self.buy_volume + self.sell_volume
+        return self.buy_volume / total if total > 0 else 0.5
+
+
+# ── Order book snapshot ───────────────────────────────────────────────────────
+
+
+@dataclass
+class OrderBookLevel:
+    """A single price level in the order book."""
+
+    price: float
+    size: float
+    order_count: int = 0
+
+
+@dataclass
+class OrderBookSnapshot:
+    """
+    Level-2 order book snapshot at a point in time.
+
+    bids: sorted descending by price (best bid first)
+    asks: sorted ascending by price (best ask first)
+    """
+
+    symbol: str
+    timestamp: datetime
+    bids: list[OrderBookLevel] = field(default_factory=list)
+    asks: list[OrderBookLevel] = field(default_factory=list)
+    sequence: int = 0       # exchange sequence number for gap detection
+    source: str = ""
+    lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    @property
+    def best_bid(self) -> float:
+        return self.bids[0].price if self.bids else 0.0
+
+    @property
+    def best_ask(self) -> float:
+        return self.asks[0].price if self.asks else 0.0
+
+    @property
+    def mid(self) -> float:
+        if self.best_bid and self.best_ask:
+            return (self.best_bid + self.best_ask) / 2.0
+        return 0.0
+
+    @property
+    def spread(self) -> float:
+        return self.best_ask - self.best_bid if self.best_bid and self.best_ask else 0.0
+
+    @property
+    def bid_depth(self) -> float:
+        """Total bid-side size across all levels."""
+        return sum(lvl.size for lvl in self.bids)
+
+    @property
+    def ask_depth(self) -> float:
+        """Total ask-side size across all levels."""
+        return sum(lvl.size for lvl in self.asks)
+
+    @property
+    def depth_imbalance(self) -> float:
+        """(bid_depth - ask_depth) / (bid_depth + ask_depth); 0 if empty."""
+        total = self.bid_depth + self.ask_depth
+        if total == 0:
+            return 0.0
+        return (self.bid_depth - self.ask_depth) / total
+
+
+# ── Data lineage record ───────────────────────────────────────────────────────
+
+
+@dataclass
+class DataLineageRecord:
+    """
+    Immutable audit record linking a processed data point back to its origin.
+
+    Stored in DataLineageStore (SQLite WAL) for regulatory compliance and
+    data quality investigations.
+
+    lineage_id:   UUID linking this record to the GoldTick / NewsArticle / etc.
+    parent_id:    lineage_id of the upstream record (None for raw ingestion)
+    data_type:    "tick" | "ohlcv" | "news" | "macro" | "signal" | "prediction"
+    source:       feed source name (e.g. "goldapi", "finnhub")
+    operation:    transformation applied (e.g. "normalize", "quality_check", "aggregate")
+    checksum:     SHA-256 of the serialised payload for tamper detection
+    """
+
+    lineage_id: str
+    timestamp: datetime
+    data_type: str        # "tick" | "ohlcv" | "news" | "macro" | "signal" | "prediction"
+    source: str
+    operation: str        # "ingest" | "normalize" | "quality_check" | "aggregate" | "publish"
+    symbol: str = ""
+    parent_id: str | None = None
+    checksum: str = ""    # SHA-256 hex digest of payload
+    payload_size_bytes: int = 0
+    tags: dict[str, str] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        return {
+            "lineage_id": self.lineage_id,
+            "timestamp": self.timestamp.isoformat(),
+            "data_type": self.data_type,
+            "source": self.source,
+            "operation": self.operation,
+            "symbol": self.symbol,
+            "parent_id": self.parent_id,
+            "checksum": self.checksum,
+            "payload_size_bytes": self.payload_size_bytes,
+            "tags": self.tags,
+        }
+
+    @classmethod
+    def for_tick(
+        cls,
+        tick: "GoldTick",
+        operation: str = "ingest",
+        parent_id: str | None = None,
+    ) -> "DataLineageRecord":
+        """Convenience factory for creating a lineage record from a GoldTick."""
+        import hashlib
+        import json as _json
+
+        payload = f"{tick.symbol}:{tick.timestamp.isoformat()}:{tick.bid}:{tick.ask}"
+        checksum = hashlib.sha256(payload.encode()).hexdigest()
+        return cls(
+            lineage_id=tick.lineage_id,
+            timestamp=tick.timestamp,
+            data_type="tick",
+            source=str(tick.source),
+            operation=operation,
+            symbol=tick.symbol,
+            parent_id=parent_id,
+            checksum=checksum,
+            payload_size_bytes=len(payload.encode()),
+        )

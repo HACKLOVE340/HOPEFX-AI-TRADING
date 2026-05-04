@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -14,13 +15,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { tradingApi } from '../hooks/useApi';
 import { usePositions, useAccount, useSignals } from '../hooks/useOrchestratorData';
-import { PositionsTable } from '../components/panels/PositionsTable';
-import { OrderEntryForm } from '../components/panels/OrderEntryForm';
-import { LiveSignalFeed } from '../components/panels/LiveSignalFeed';
-import { RiskDashboard } from '../components/panels/RiskDashboard';
-import { MLModelPanel } from '../components/panels/MLModelPanel';
-import { MicrostructurePanel } from '../components/panels/MicrostructurePanel';
-import { SentimentGauge } from '../components/panels/SentimentGauge';
+// Import guarded variants from the barrel — each panel has its own
+// PanelErrorBoundary so a crash in one never takes down the terminal.
+import {
+  PositionsTable,
+  OrderEntryForm,
+  LiveSignalFeedGuarded   as LiveSignalFeed,
+  RiskDashboardGuarded    as RiskDashboard,
+  MLModelPanelGuarded     as MLModelPanel,
+  MicrostructurePanelGuarded as MicrostructurePanel,
+  SentimentGaugeGuarded   as SentimentGauge,
+} from '../components/panels';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, fmtRelative } from '../lib/utils';
@@ -80,6 +85,7 @@ interface TopBarProps {
 }
 
 function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: TopBarProps) {
+  const navigate = useNavigate();
   const account = useStore((s) => s.account);
 
   return (
@@ -150,6 +156,16 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
           <span className="text-slate-500">P&L <span className={cn('font-semibold', account.daily_pnl >= 0 ? 'text-[#00e676]' : 'text-[#ff1744]')}>{fmtPnl(account.daily_pnl)}</span></span>
         </div>
       )}
+
+      {/* Quick nav */}
+      <button onClick={() => navigate('/journal')}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+        📓 Journal
+      </button>
+      <button onClick={() => navigate('/risk-calculator')}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+        🛡 Risk Calc
+      </button>
 
       {/* WS status */}
       <span className={cn(

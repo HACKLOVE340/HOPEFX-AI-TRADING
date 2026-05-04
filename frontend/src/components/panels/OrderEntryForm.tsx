@@ -158,7 +158,10 @@ function RiskPreview({
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface OrderEntryFormProps {
-  symbol?:    string;
+  symbol?:       string;
+  defaultSide?:  Side;
+  defaultSl?:    string;
+  defaultTp?:    string;
   onOrderPlaced?: () => void;
 }
 
@@ -170,7 +173,7 @@ const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: 'stop',   label: 'Stop'   },
 ];
 
-function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFormProps) {
+function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defaultTp, onOrderPlaced }: OrderEntryFormProps) {
   const uid        = useId();
   const prices     = useStore((s) => s.prices);
   const account    = useStore((s) => s.account);
@@ -184,12 +187,12 @@ function OrderEntryFormInner({ symbol: symbolProp, onOrderPlaced }: OrderEntryFo
   const symbols = liveSymbols.length > 0 ? liveSymbols : FALLBACK_SYMBOLS;
 
   const [symbol,    setSymbol]    = useState(symbolProp ?? symbols[0] ?? 'XAU/USD');
-  const [side,      setSide]      = useState<Side>('buy');
+  const [side,      setSide]      = useState<Side>(defaultSide ?? 'buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [qty,       setQty]       = useState('0.01');
   const [limitPx,   setLimitPx]   = useState('');
-  const [sl,        setSl]        = useState('');
-  const [tp,        setTp]        = useState('');
+  const [sl,        setSl]        = useState(defaultSl ?? '');
+  const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [result,    setResult]    = useState<{ ok: boolean; msg: string } | null>(null);
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

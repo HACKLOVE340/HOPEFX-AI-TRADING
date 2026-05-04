@@ -4,6 +4,7 @@
  * reactions (👍/👎), comments, copy counts.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -23,6 +24,7 @@ function extractErr(err: unknown, fb: string): string {
 }
 
 const SocialFeed: React.FC = () => {
+  const navigate = useNavigate();
   const user = useStore(s => s.user);
   const [items, setItems]           = useState<FeedItem[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -256,6 +258,17 @@ const SocialFeed: React.FC = () => {
               </button>
               <button onClick={() => toggleExpand(item.signal_id)} style={s.commentToggle}>
                 💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
+              </button>
+              <button
+                onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol, direction: item.direction } } })}
+                style={{
+                  marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                  border: `1px solid ${item.direction === 'BUY' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
+                  color: item.direction === 'BUY' ? '#4ade80' : '#f87171',
+                }}
+              >
+                ⚡ Trade
               </button>
             </div>
 

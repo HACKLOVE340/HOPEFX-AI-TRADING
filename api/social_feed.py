@@ -912,3 +912,73 @@ async def _copy_performance(
     except Exception as exc:
         logger.debug("copy performance lookup failed: %s", exc)
         return {"trader_id": trader_id, "total_return_pct": 0.0, "win_rate": 0.0, "followers": 0}
+
+
+# ── /ws/social-feed  WebSocket endpoint ──────────────────────────────────────
+# The frontend SocialFeed.tsx opens:
+#   new WebSocket(`${wsBase}/ws/social-feed?token=${wsToken}`)
+# and listens for {"type": "new_signal", "signal": FeedItem} frames.
+# We subscribe to the ws_live signal broadcaster so every new signal emitted by
+# the trading engine gets forwarded here in real time.
+
+from fastapi import WebSocket, WebSocketDisconnect
+
+_social_feed_ws_router = APIRouter(tags=["Social Feed WebSocket"])
+
+# Lightweight in-process pub/sub: set of active ws connections for /ws/social-feed
+_sf_connections: set[WebSocket] = set()
+
+
+async def _social_feed_broadcast(signal_item: dict) -> None:
+    """Push a new signal to all connected social-feed WebSocket clients."""
+    dead: set[WebSocket] = set()
+    frame = _json.dumps({"type": "new_signal", "signal": signal_item})
+    for ws in list(_sf_connections):
+        try:
+            await ws.send_text(frame)
+        except Exception:
+            dead.add(ws)
+    _sf_connections.difference_update(dead)
+
+
+@_social_feed_ws_router.websocket("/ws/social-feed")
+async def ws_social_feed(websocket: WebSocket) -> None:
+    """
+    WebSocket endpoint — streams live signal feed to SocialFeed.tsx.
+
+    Auth: token query-param (JWT).  Closes 4001 on invalid/missing token.
+    Messages sent:
+      {"type": "new_signal",  "signal": FeedItem}
+      {"type": "heartbeat"}           — every 30 s
+    Messages accepted from client:
+      {"type": "ping"}                — resets heartbeat timer
+    """
+    import asyncio as _asyncio
+    from api.auth import decode_token
+
+    token = websocket.query_params.get("token", "")
+    try:
+        decode_token(token)
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
+    await websocket.accept()
+    _sf_connections.add(websocket)
+    try:
+        while True:
+            # Wait up to 30 s for a client message; send heartbeat on timeout
+            try:
+                await _asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                # ignore content — just a keep-alive ping
+            except TimeoutError:
+                try:
+                    await websocket.send_text(_json.dumps({"type": "heartbeat"}))
+                except Exception:
+                    break
+            except WebSocketDisconnect:
+                break
+            except Exception:
+                break
+    finally:
+        _sf_connections.discard(websocket)

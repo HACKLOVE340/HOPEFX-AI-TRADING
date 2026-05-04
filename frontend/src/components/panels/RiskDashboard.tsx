@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
 import { MetricTile } from '../ui/MetricTile';
@@ -65,6 +66,7 @@ function SourceHealthRow({ name, health }: { name: string; health: Record<string
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function RiskDashboard() {
+  const navigate = useNavigate();
   const account  = useStore((s) => s.account);
   const health   = useStore((s) => s.orchestratorHealth);
   const quality  = useStore((s) => s.qualityReport);
@@ -79,7 +81,20 @@ export function RiskDashboard() {
     marginLevel > 100 ? '#ffb800' : '#ff3b5c';
 
   return (
-    <Panel title="Risk Dashboard" noPad bodyClass="p-0">
+    <Panel
+      title="Risk Dashboard"
+      noPad
+      bodyClass="p-0"
+      headerRight={
+        <button
+          onClick={() => navigate('/risk-calculator')}
+          className="text-[10px] font-bold px-2 py-0.5 rounded"
+          style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', cursor: 'pointer' }}
+        >
+          🛡 Calculator
+        </button>
+      }
+    >
       <div className="flex flex-col h-full overflow-y-auto scrollbar-terminal">
 
         {/* Kill switch */}

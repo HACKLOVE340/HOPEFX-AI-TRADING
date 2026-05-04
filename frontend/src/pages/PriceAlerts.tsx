@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts } from '../store';
 
@@ -71,6 +72,7 @@ const CHANNELS  = ['discord', 'telegram', 'email', 'push'];
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const PriceAlerts: React.FC = () => {
+  const navigate = useNavigate();
   const [alerts, setAlerts]       = useState<Alert[]>([]);
   const [history, setHistory]     = useState<AlertTrigger[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -279,6 +281,13 @@ const PriceAlerts: React.FC = () => {
             <div style={{ fontSize: 12, color: '#475569', marginRight: 12 }}>
               Triggered {alert.trigger_count}×
             </div>
+            <button
+              onClick={() => navigate('/trade', { state: { signal: { symbol: alert.symbol.slice(0, 3) + '/' + alert.symbol.slice(3) } } })}
+              style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', marginRight: 6 }}
+              title={`Trade ${alert.symbol}`}
+            >
+              ⚡ Trade
+            </button>
             <button onClick={() => handleToggle(alert)} style={s.iconBtn}
               title={alert.status === 'paused' ? 'Resume' : 'Pause'}>
               {alert.status === 'paused' ? '▶' : '⏸'}
@@ -306,6 +315,12 @@ const PriceAlerts: React.FC = () => {
               <span style={{ fontSize: 12, color: '#475569' }}>
                 {new Date(t.triggered_at).toLocaleString()}
               </span>
+              <button
+                onClick={() => navigate('/trade', { state: { signal: { symbol: t.symbol.slice(0, 3) + '/' + t.symbol.slice(3) } } })}
+                style={{ background: 'rgba(249,115,22,0.15)', border: '1px solid rgba(249,115,22,0.4)', borderRadius: 5, color: '#f97316', fontSize: 11, fontWeight: 800, padding: '4px 10px', cursor: 'pointer', marginLeft: 8 }}
+              >
+                ⚡ Trade Now
+              </button>
             </div>
           ))
       )}

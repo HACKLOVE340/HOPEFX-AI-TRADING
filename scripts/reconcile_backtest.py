@@ -398,9 +398,10 @@ def compute_metrics(
     sharpe = float(daily_ret.mean() / daily_ret.std() * np.sqrt(252)) if daily_ret.std() > 0 else 0.0
 
     # Monte Carlo: resample trade P&Ls to get drawdown distribution
+    _mc_rng = np.random.default_rng()  # unseeded — bootstrap resampling
     mc_dds = []
     for _ in range(mc_runs):
-        sampled = np.random.choice(pnls, size=len(pnls), replace=True)
+        sampled = _mc_rng.choice(pnls, size=len(pnls), replace=True)
         cum = INITIAL_BALANCE + np.cumsum(sampled)
         pk = np.maximum.accumulate(cum)
         mc_dd = float(np.min((cum - pk) / pk))

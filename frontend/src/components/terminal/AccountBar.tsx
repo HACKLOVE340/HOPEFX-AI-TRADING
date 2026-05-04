@@ -4,10 +4,60 @@
  * Shows: balance, equity, daily P&L, margin level, open trades, win rate.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import { MetricTile } from '../ui/MetricTile';
 import { fmtPctRaw, fmtRatio, pnlColor } from '../../lib/utils';
+import { notificationsApi } from '../../hooks/useApi';
+
+function NotificationBell() {
+  const navigate = useNavigate();
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    const fetch = () =>
+      notificationsApi.list({ page: 1, limit: 1, unread_only: true })
+        .then(r => {
+          const d = r.data as { total?: number; notifications?: unknown[] } | unknown[];
+          const total = Array.isArray(d) ? d.length : ((d as { total?: number }).total ?? 0);
+          setCount(typeof total === 'number' ? total : 0);
+        })
+        .catch(() => {/* non-fatal */});
+    fetch();
+    const id = setInterval(fetch, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <button
+      onClick={() => navigate('/notifications')}
+      title={count > 0 ? `${count} unread notification${count === 1 ? '' : 's'}` : 'Notifications'}
+      style={{
+        position: 'relative', flexShrink: 0,
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        padding: '2px 6px', borderRadius: 6,
+        display: 'flex', alignItems: 'center',
+        transition: 'background 0.15s',
+      }}
+      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'}
+      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = 'transparent'}
+    >
+      <span style={{ fontSize: 14 }}>🔔</span>
+      {count > 0 && (
+        <span style={{
+          position: 'absolute', top: 0, right: 2,
+          minWidth: 14, height: 14, borderRadius: 7,
+          background: '#ef4444', color: '#fff',
+          fontSize: 9, fontWeight: 800, lineHeight: '14px',
+          textAlign: 'center', padding: '0 3px',
+        }}>
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+    </button>
+  );
+}
 
 export function AccountBar() {
   const account = useStore((s) => s.account);
@@ -112,6 +162,9 @@ export function AccountBar() {
           </div>
         </>
       )}
+      <div className="ml-auto shrink-0 flex items-center gap-1">
+        <NotificationBell />
+      </div>
     </div>
   );
 }

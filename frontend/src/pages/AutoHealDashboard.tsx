@@ -9,6 +9,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
@@ -261,6 +262,7 @@ const ThreatTable: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const AutoHealDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [healStatus, setHealStatus] = useState<HealStatus | null>(null);
   const [drift, setDrift] = useState<DriftEvent[]>([]);
   const [patches, setPatches] = useState<PatchRecord[]>([]);
@@ -356,6 +358,18 @@ const AutoHealDashboard: React.FC = () => {
       <PageHeader
         title="Auto-Heal & Antivirus"
         subtitle="Code integrity monitor · Self-healing engine · Malware scanner"
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigate('/security')}
+              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🛡 Security
+            </button>
+            <button onClick={() => navigate('/')}
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              📊 Dashboard
+            </button>
+          </div>
+        }
       />
 
       {error && <div style={errorBannerStyle}>{error}</div>}

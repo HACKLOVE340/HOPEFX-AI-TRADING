@@ -14,7 +14,7 @@
  */
 
 import React, { useState, Suspense, lazy } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
@@ -216,6 +216,7 @@ const PLAN_RANK: Record<string, number> = {
 // ── Settings page ─────────────────────────────────────────────────────────────
 
 const Settings: React.FC = () => {
+  const navigate   = useNavigate();
   const user       = useStore(selectUser);
   const admin      = user ? isAdmin(user.role) : false;
   const superAdmin = user ? isSuperAdmin(user.role) : false;
@@ -225,6 +226,7 @@ const Settings: React.FC = () => {
   const planRank   = PLAN_RANK[plan] ?? 0;
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [search, setSearch]       = useState('');
 
   const renderSection = () => {
     const gate = (minPlan: string, node: React.ReactNode) => {
@@ -296,7 +298,23 @@ const Settings: React.FC = () => {
 
       <div style={S.page}>
         <div style={S.header}>
-          <h1 style={S.heading}>Settings</h1>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <h1 style={S.heading}>Settings</h1>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                ⚡ Trade
+              </button>
+              <button onClick={() => navigate('/journal')}
+                style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                📓 Journal
+              </button>
+              <button onClick={() => navigate('/wallet')}
+                style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                💰 Wallet
+              </button>
+            </div>
+          </div>
           <p style={S.subheading}>
             Manage your account, trading preferences, integrations, and platform configuration.
             {superAdmin && (
@@ -307,10 +325,72 @@ const Settings: React.FC = () => {
 
         <div style={S.layout}>
           <nav style={S.sidebar}>
+            {/* Search box */}
+            <div style={{ padding: '0 0 12px', position: 'sticky', top: 0, background: '#0f172a', zIndex: 1 }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                background: '#1e293b', border: '1px solid #334155',
+                borderRadius: 8, padding: '7px 10px',
+              }}>
+                <span style={{ fontSize: 12, color: '#475569', flexShrink: 0 }}>🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search settings…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  style={{
+                    background: 'transparent', border: 'none', outline: 'none',
+                    color: '#e2e8f0', fontSize: 13, width: '100%', fontFamily: 'inherit',
+                  }}
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} style={{
+                    background: 'transparent', border: 'none', cursor: 'pointer',
+                    color: '#64748b', fontSize: 16, padding: 0, lineHeight: 1,
+                  }}>×</button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick-access shortcuts (always visible) */}
+            {!search && (
+              <div style={{ marginBottom: 16 }}>
+                <div style={S.groupLabel}>Quick Access</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0 8px' }}>
+                  {[
+                    { id: 'profile' as SettingsTab,        label: '👤 Profile' },
+                    { id: 'security' as SettingsTab,       label: '🔒 Security' },
+                    { id: 'broker' as SettingsTab,         label: '🏦 Broker' },
+                    { id: 'notifications' as SettingsTab,  label: '🔔 Alerts' },
+                    { id: 'billing' as SettingsTab,        label: '💳 Billing' },
+                    { id: 'danger' as SettingsTab,         label: '⚠️ Danger' },
+                  ].map(({ id, label }) => (
+                    <button
+                      key={id}
+                      onClick={() => setActiveTab(id)}
+                      style={{
+                        padding: '4px 10px',
+                        background: activeTab === id ? 'rgba(59,130,246,0.15)' : 'rgba(255,255,255,0.04)',
+                        border: `1px solid ${activeTab === id ? '#3b82f6' : '#1e293b'}`,
+                        borderRadius: 6,
+                        color: activeTab === id ? '#60a5fa' : '#64748b',
+                        fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {TAB_GROUPS.map((group) => {
               const visibleTabs = group.tabs.filter((t) => {
                 if (t.superAdminOnly) return superAdmin;
                 if (t.adminOnly)      return admin;
+                // Filter by search
+                if (search) return t.label.toLowerCase().includes(search.toLowerCase());
                 return true;
               });
               if (visibleTabs.length === 0) return null;

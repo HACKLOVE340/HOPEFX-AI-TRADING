@@ -1,9 +1,10 @@
 /**
  * components/ui/Panel.tsx
  * Base panel container used by every dashboard widget.
+ * Supports maximize (fullscreen overlay) via the maximize button in the header.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
 
 interface PanelProps {
@@ -14,6 +15,8 @@ interface PanelProps {
   className?:   string;
   bodyClass?:   string;
   noPad?:       boolean;
+  /** Set false to hide the maximize button */
+  maximizable?: boolean;
 }
 
 export function Panel({
@@ -24,15 +27,20 @@ export function Panel({
   className,
   bodyClass,
   noPad = false,
+  maximizable = true,
 }: PanelProps) {
-  return (
+  const [maximized, setMaximized] = useState(false);
+
+  const inner = (
     <div
       className={cn(
         'flex flex-col bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden',
-        className,
+        maximized ? 'fixed inset-4 z-[9000] rounded-xl shadow-2xl' : '',
+        !maximized ? className : '',
       )}
+      style={maximized ? { boxShadow: '0 0 0 9999px rgba(0,0,0,0.7)' } : undefined}
     >
-      {(title || headerRight) && (
+      {(title || headerRight || maximizable) && (
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1e2d3d] shrink-0">
           <div className="flex items-center gap-2">
             {title && (
@@ -44,9 +52,26 @@ export function Panel({
               <span className="text-[10px] text-slate-600">{subtitle}</span>
             )}
           </div>
-          {headerRight && (
-            <div className="flex items-center gap-2">{headerRight}</div>
-          )}
+          <div className="flex items-center gap-2">
+            {headerRight && <>{headerRight}</>}
+            {maximizable && (
+              <button
+                onClick={() => setMaximized((v) => !v)}
+                title={maximized ? 'Restore' : 'Maximize panel'}
+                style={{
+                  background: 'transparent', border: 'none',
+                  color: maximized ? '#60a5fa' : '#334155',
+                  fontSize: 13, cursor: 'pointer', padding: '2px 4px',
+                  lineHeight: 1, borderRadius: 4,
+                  transition: 'color 0.15s ease',
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#60a5fa'; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = maximized ? '#60a5fa' : '#334155'; }}
+              >
+                {maximized ? '⊡' : '⊞'}
+              </button>
+            )}
+          </div>
         </div>
       )}
       <div className={cn('flex-1 min-h-0', !noPad && 'p-4', bodyClass)}>
@@ -54,4 +79,6 @@ export function Panel({
       </div>
     </div>
   );
+
+  return inner;
 }

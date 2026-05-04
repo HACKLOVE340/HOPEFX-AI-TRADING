@@ -309,9 +309,10 @@ class RegimeSynthesizer:
         conds = np.eye(self.n_regimes, dtype=np.float32)[labs]
 
         # ── Phase 1: Pre-train embedder / recovery (reconstruction) ──────────
+        _rng = np.random.default_rng()  # unseeded — non-deterministic mini-batch sampling
         opt_er = optim.Adam(list(self.E.parameters()) + list(self.R.parameters()), lr=lr)
         for ep in range(min(epochs // 2, 200)):
-            idx = np.random.choice(n, min(batch_size, n), replace=False)
+            idx = _rng.choice(n, min(batch_size, n), replace=False)
             x_b = torch.tensor(seqs[idx]).to(self.device)
             h = self.E(x_b)
             x_hat = self.R(h)
@@ -327,7 +328,7 @@ class RegimeSynthesizer:
         opt_d = optim.Adam(self.D.parameters(), lr=lr, betas=(0.5, 0.9))
 
         for ep in range(epochs):
-            idx = np.random.choice(n, min(batch_size, n), replace=False)
+            idx = _rng.choice(n, min(batch_size, n), replace=False)
             x_b = torch.tensor(seqs[idx]).to(self.device)
             c_b = torch.tensor(conds[idx]).to(self.device)
 

@@ -466,10 +466,10 @@ class IncrementalXGBoost:
             self._replay_X.append(X_sc[i])
             self._replay_y.append(float(y[i]))
 
-        # Sample from replay buffer
+        # Sample from replay buffer (unseeded — non-deterministic experience replay)
         buf_size = len(self._replay_X)
         n_replay = min(buf_size, max(len(X_sc) * 4, 256))
-        idx = np.random.choice(buf_size, n_replay, replace=False)
+        idx = np.random.default_rng().choice(buf_size, n_replay, replace=False)
         X_replay = np.stack([self._replay_X[i] for i in idx])
         y_replay = np.array([self._replay_y[i] for i in idx])
 

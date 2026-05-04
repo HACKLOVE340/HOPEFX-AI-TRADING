@@ -25,6 +25,8 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 # Disable CSRF so integration tests can POST without a browser cookie flow.
 os.environ.setdefault("CSRF_PROTECTION", "false")
+# Disable startup gate — tests don't run the full lifespan startup sequence.
+os.environ["STARTUP_GATE"] = "false"
 
 try:
     from fastapi.testclient import TestClient
@@ -78,14 +80,16 @@ class TestHealthEndpoints:
     def test_health_endpoint(self, client):
         """Test health check endpoint.
 
-        In CI/devcontainer Redis and DB are unavailable, so the app reports
-        'degraded' rather than 'healthy'. Both are valid non-error responses.
+        /health is the Kubernetes liveness probe — returns {"status": "alive"}.
+        /api/health is the detailed readiness check.
+        Both return 200 in test mode.
         """
         response = client.get("/health")
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] in ("healthy", "degraded")
+        # Liveness probe returns "alive"; detailed health returns "healthy"/"degraded"
+        assert data["status"] in ("alive", "healthy", "degraded")
 
     def test_status_endpoint(self, client):
         """Test machine-readable status endpoint."""

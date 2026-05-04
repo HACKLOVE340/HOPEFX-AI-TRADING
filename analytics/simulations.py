@@ -107,7 +107,6 @@ class SimulationEngine:
                 bounds,
                 maxiter=generations,
                 popsize=max(5, population_size // 10),
-                seed=42,
                 tol=1e-6,
             )
             best_params = dict(zip(param_keys, result.x, strict=False))

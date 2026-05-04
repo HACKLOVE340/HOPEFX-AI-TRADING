@@ -36,6 +36,8 @@ import jwt
 import pytest
 
 os.environ.setdefault("APP_ENV", "test")
+# Disable startup gate — tests don't run the full lifespan startup sequence.
+os.environ["STARTUP_GATE"] = "false"
 os.environ.setdefault(
     "SECURITY_JWT_SECRET",
     "test-only-jwt-secret-key-minimum-32-chars!!",

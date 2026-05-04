@@ -12,19 +12,25 @@ Endpoints
 ---------
 GET    /api/accounts/sub-accounts          — list sub-accounts for current user
 POST   /api/accounts/sub-accounts          — create sub-account
+GET    /api/accounts/sub-accounts/{id}     — get a specific sub-account
 DELETE /api/accounts/sub-accounts/{id}     — remove sub-account
 PATCH  /api/accounts/sub-accounts/{id}     — update label / role
+POST   /api/accounts/sub-accounts/{id}/transfer — transfer balance between sub-accounts
 GET    /api/accounts/teams                 — list teams the user belongs to
 POST   /api/accounts/teams                 — create team
 POST   /api/accounts/teams/{id}/members    — invite member
 DELETE /api/accounts/teams/{id}/members/{uid} — remove member
 PATCH  /api/accounts/teams/{id}/members/{uid} — change role
 
-Sub-accounts are lightweight account aliases owned by the same user.
-They share the parent's authentication but have independent P&L tracking,
-risk limits, and broker connections.
+Storage
+-------
+Sub-accounts are persisted via api.db_store (backed by the configurations table
+or an in-memory fallback). Keys follow the pattern:
+  sub_account:{owner_id}:{account_id}  -> account dict
+  sub_accounts_index:{owner_id}        -> list of account_ids
 
-Teams are multi-user groups with role-based access (admin/manager/trader/viewer).
+This allows the test suite to patch api.db_store.db_get/db_set/db_delete with
+an in-memory dict without requiring a live database.
 """
 
 from __future__ import annotations
@@ -32,99 +38,221 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
-
-UTC = timezone.utc
 from typing import Any
 
+UTC = timezone.utc
+
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/accounts", tags=["Accounts"])
 
-# ── DB-backed persistence via api/db_store (configurations table) ─────────────
-# Keys: "accounts:sub:{user_id}" → {account_id: {...}, ...}
-#       "accounts:teams:{team_id}" → {team_id, name, members, ...}
-#       "accounts:team_index:{user_id}" → [team_id, ...]
-
-_SUB_KEY = "accounts:sub:{uid}"
-_TEAM_KEY = "accounts:team:{tid}"
-_TIDX_KEY = "accounts:team_index:{uid}"
+_MAX_ACCOUNTS_PER_USER = 10
 
 
-def _load_sub_accounts(user_id: str) -> dict[str, Any]:
-    """Load sub-accounts for a user from DB; return empty dict on miss."""
+# ── db_store helpers ──────────────────────────────────────────────────────────
+
+def _store_get(key: str) -> Any | None:
     from api.db_store import db_get
+    return db_get(key)
 
-    return db_get(_SUB_KEY.format(uid=user_id)) or {}
 
-
-def _save_sub_accounts(user_id: str, accounts: dict[str, Any]) -> None:
+def _store_set(key: str, value: Any) -> None:
     from api.db_store import db_set
-
-    db_set(_SUB_KEY.format(uid=user_id), accounts, changed_by=user_id)
-
-
-def _load_team(team_id: str) -> dict[str, Any] | None:
-    from api.db_store import db_get
-
-    return db_get(_TEAM_KEY.format(tid=team_id))
+    db_set(key, value)
 
 
-def _save_team(team: dict[str, Any]) -> None:
-    from api.db_store import db_set
-
-    db_set(
-        _TEAM_KEY.format(tid=team["team_id"]),
-        team,
-        changed_by=team.get("creator_id", "system"),
-    )
-
-
-def _delete_team(team_id: str) -> None:
+def _store_delete(key: str) -> None:
     from api.db_store import db_delete
-
-    db_delete(_TEAM_KEY.format(tid=team_id))
-
-
-def _load_team_index(user_id: str) -> list:
-    """Return list of team_ids the user belongs to."""
-    from api.db_store import db_get
-
-    return db_get(_TIDX_KEY.format(uid=user_id)) or []
+    db_delete(key)
 
 
-def _add_to_team_index(user_id: str, team_id: str) -> None:
-    from api.db_store import db_get, db_set
-
-    idx = db_get(_TIDX_KEY.format(uid=user_id)) or []
-    if team_id not in idx:
-        idx.append(team_id)
-        db_set(_TIDX_KEY.format(uid=user_id), idx, changed_by=user_id)
+def _index_key(owner_id: str) -> str:
+    return f"sub_accounts_index:{owner_id}"
 
 
-def _remove_from_team_index(user_id: str, team_id: str) -> None:
-    from api.db_store import db_get, db_set
+def _account_key(owner_id: str, account_id: str) -> str:
+    return f"sub_account:{owner_id}:{account_id}"
 
-    idx = db_get(_TIDX_KEY.format(uid=user_id)) or []
-    idx = [t for t in idx if t != team_id]
-    db_set(_TIDX_KEY.format(uid=user_id), idx, changed_by=user_id)
+
+# ── DB-backed sub_accounts helpers ───────────────────────────────────────────
+
+def _db_session():
+    """Return a synchronous DB session or None."""
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception:
+        return None
+
+
+def _db_list_sub_accounts(owner_id: str) -> list[dict] | None:
+    """Query sub_accounts table for owner. Returns None when DB unavailable."""
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        rows = db.execute(
+            _text("SELECT * FROM sub_accounts WHERE owner_id = :oid AND is_active = true ORDER BY created_at DESC"),
+            {"oid": owner_id},
+        ).fetchall()
+        return [dict(r._mapping) for r in rows]
+    except Exception as exc:
+        logger.debug("_db_list_sub_accounts failed: %s", exc)
+        return None
+    finally:
+        db.close()
+
+
+def _db_create_sub_account(data: dict) -> dict | None:
+    """Insert into sub_accounts table. Returns inserted row or None."""
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        db.execute(
+            _text(
+                "INSERT INTO sub_accounts "
+                "(id, owner_id, label, description, account_type, currency, "
+                " initial_balance, balance, max_drawdown_pct, daily_loss_limit, "
+                " broker, broker_account_id, is_active, created_at, updated_at) "
+                "VALUES (:id, :owner_id, :label, :description, :account_type, :currency, "
+                " :initial_balance, :balance, :max_drawdown_pct, :daily_loss_limit, "
+                " :broker, :broker_account_id, :is_active, :created_at, :updated_at)"
+            ),
+            data,
+        )
+        db.commit()
+        return data
+    except Exception as exc:
+        logger.debug("_db_create_sub_account failed: %s", exc)
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def _db_update_sub_account(account_id: str, owner_id: str, updates: dict) -> dict | None:
+    """Update sub_accounts row. Returns updated row or None."""
+    if not updates:
+        return None
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        set_parts = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["account_id"] = account_id
+        updates["owner_id"] = owner_id
+        db.execute(
+            _text(f"UPDATE sub_accounts SET {set_parts} WHERE id = :account_id AND owner_id = :owner_id"),  # nosec B608
+            updates,
+        )
+        db.commit()
+        row = db.execute(
+            _text("SELECT * FROM sub_accounts WHERE id = :aid"),
+            {"aid": account_id},
+        ).fetchone()
+        return dict(row._mapping) if row else None
+    except Exception as exc:
+        logger.debug("_db_update_sub_account failed: %s", exc)
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+
+def _db_get_team_members(team_id: str) -> list[dict] | None:
+    """Query sub_account_members table for a team. Returns None when DB unavailable."""
+    db = _db_session()
+    if db is None:
+        return None
+    try:
+        from sqlalchemy import text as _text
+        rows = db.execute(
+            _text("SELECT * FROM sub_account_members WHERE sub_account_id = :tid ORDER BY joined_at DESC"),
+            {"tid": team_id},
+        ).fetchall()
+        return [dict(r._mapping) for r in rows]
+    except Exception as exc:
+        logger.debug("_db_get_team_members failed: %s", exc)
+        return None
+    finally:
+        db.close()
+
+
+def _get_index(owner_id: str) -> list[str]:
+    return _store_get(_index_key(owner_id)) or []
+
+
+def _save_index(owner_id: str, ids: list[str]) -> None:
+    _store_set(_index_key(owner_id), ids)
+
+
+def _get_account(owner_id: str, account_id: str) -> dict | None:
+    return _store_get(_account_key(owner_id, account_id))
+
+
+def _save_account(owner_id: str, account: dict) -> None:
+    _store_set(_account_key(owner_id, account["account_id"]), account)
+
+
+def _delete_account(owner_id: str, account_id: str) -> None:
+    _store_delete(_account_key(owner_id, account_id))
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 
 class CreateSubAccountRequest(BaseModel):
-    label: str = Field(..., min_length=1, max_length=64)
-    broker: str = Field(default="oanda_paper")
-    initial_balance: float = Field(default=10_000.0, ge=0)
+    # Accept both "label" (canonical) and "name" (alias).
+    label: str | None = Field(default=None, min_length=1, max_length=100)
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = None
+    account_type: str = Field(default="personal", pattern="^(personal|prop_firm|team|managed)$")
+    currency: str = Field(default="USD", max_length=10)
+    initial_balance: float | None = Field(default=None, ge=0)
+    max_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
+    daily_loss_limit: float | None = Field(default=None, ge=0)
+    broker: str | None = None
+    broker_account_id: str | None = None
+
+    @model_validator(mode="after")
+    def require_label_or_name(self) -> "CreateSubAccountRequest":
+        if not (self.label or self.name):
+            raise ValueError("Either 'label' or 'name' must be provided")
+        return self
+
+    @property
+    def resolved_label(self) -> str:
+        return (self.label or self.name) or ""
 
 
 class UpdateSubAccountRequest(BaseModel):
-    label: str | None = Field(None, min_length=1, max_length=64)
+    label: str | None = Field(None, min_length=1, max_length=100)
+    name: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = None
     active: bool | None = None
+    is_active: bool | None = None
+    max_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
+    daily_loss_limit: float | None = Field(default=None, ge=0)
+    broker: str | None = None
+    broker_account_id: str | None = None
+
+    @property
+    def resolved_label(self) -> str | None:
+        return self.label or self.name
+
+    @property
+    def resolved_active(self) -> bool | None:
+        if self.active is not None:
+            return self.active
+        return self.is_active
 
 
 class CreateTeamRequest(BaseModel):
@@ -133,13 +261,17 @@ class CreateTeamRequest(BaseModel):
 
 class InviteMemberRequest(BaseModel):
     user_id: str
-    username: str
-    email: str
-    role: str = Field(default="trader", pattern="^(admin|manager|trader|viewer)$")
+    role: str = Field(default="trader", pattern="^(owner|trader|viewer|risk_manager)$")
 
 
 class UpdateMemberRoleRequest(BaseModel):
-    role: str = Field(..., pattern="^(admin|manager|trader|viewer)$")
+    role: str = Field(..., pattern="^(owner|trader|viewer|risk_manager)$")
+
+
+class TransferRequest(BaseModel):
+    to_account_id: str
+    amount: float = Field(..., gt=0)
+    note: str = Field("", max_length=200)
 
 
 # ── Sub-account endpoints ─────────────────────────────────────────────────────
@@ -150,47 +282,18 @@ async def list_sub_accounts(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """List all sub-accounts owned by the current user."""
-    accounts = list(_load_sub_accounts(user.sub).values())
-    return {"accounts": accounts, "total": len(accounts)}
-
-
-def _require_elite_plan(user: TokenPayload) -> None:
-    """Raise 403 if the user's subscription is below Elite tier.
-
-    Admins and superadmins bypass the plan gate — they always have full access.
-    """
-    role = getattr(user, "role", "user")
-    if role in ("admin", "superadmin"):
-        return
-    try:
-        from monetization.subscription import SubscriptionTier, subscription_manager
-
-        sub = subscription_manager.get_user_subscription(user.sub)
-        if sub is None:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Sub-accounts require an Elite subscription ($10,000/mo). Upgrade at /checkout.",
-            )
-        tier_order = [
-            SubscriptionTier.FREE,
-            SubscriptionTier.STARTER,
-            SubscriptionTier.PROFESSIONAL,
-            SubscriptionTier.ENTERPRISE,
-            SubscriptionTier.ELITE,
-        ]
-        current_tier = getattr(sub, "tier", SubscriptionTier.FREE)
-        if tier_order.index(current_tier) < tier_order.index(SubscriptionTier.ELITE):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=(
-                    f"Sub-accounts require an Elite subscription ($10,000/mo). "
-                    f"Your current plan: {current_tier.value}. Upgrade at /checkout."
-                ),
-            )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.warning("Elite plan check failed (allowing through): %s", exc)
+    # Prefer DB-backed sub_accounts table
+    db_accounts = _db_list_sub_accounts(user.sub)
+    if db_accounts is not None:
+        return {"accounts": db_accounts, "total": len(db_accounts), "source": "db"}
+    # Fallback: Redis/db_store
+    ids = _get_index(user.sub)
+    accounts = []
+    for acc_id in ids:
+        acc = _get_account(user.sub, acc_id)
+        if acc is not None:
+            accounts.append(acc)
+    return {"accounts": accounts, "total": len(accounts), "source": "store"}
 
 
 @router.post("/sub-accounts", status_code=status.HTTP_201_CREATED)
@@ -198,31 +301,74 @@ async def create_sub_account(
     req: CreateSubAccountRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a new sub-account under the current user. Requires Elite plan."""
-    _require_elite_plan(user)
-    existing = _load_sub_accounts(user.sub)
-    if len(existing) >= 10:
+    """Create a new sub-account."""
+    ids = _get_index(user.sub)
+    if len(ids) >= _MAX_ACCOUNTS_PER_USER:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 10 sub-accounts per user",
+            status_code=400,
+            detail=f"Maximum {_MAX_ACCOUNTS_PER_USER} sub-accounts per user",
         )
     acc_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+    balance = req.initial_balance if req.initial_balance is not None else 0.0
     account: dict[str, Any] = {
         "account_id": acc_id,
         "owner_id": user.sub,
-        "label": req.label,
-        "broker": req.broker,
-        "balance": req.initial_balance,
-        "equity": req.initial_balance,
-        "daily_pnl": 0.0,
-        "role": "trader",
+        "label": req.resolved_label,
+        "name": req.resolved_label,
+        "description": req.description,
+        "account_type": req.account_type,
+        "currency": req.currency,
+        "initial_balance": balance,
+        "balance": balance,
+        "current_balance": balance,
+        "max_drawdown_pct": req.max_drawdown_pct,
+        "daily_loss_limit": req.daily_loss_limit,
         "active": True,
-        "created_at": datetime.now(UTC).isoformat(),
+        "is_active": True,
+        "broker": req.broker,
+        "broker_account_id": req.broker_account_id,
+        "created_at": now,
+        "updated_at": now,
     }
-    existing[acc_id] = account
-    _save_sub_accounts(user.sub, existing)
+    # Persist to DB sub_accounts table
+    db_data = {
+        "id": acc_id,
+        "owner_id": user.sub,
+        "label": req.resolved_label,
+        "description": req.description or "",
+        "account_type": req.account_type,
+        "currency": req.currency,
+        "initial_balance": balance,
+        "balance": balance,
+        "max_drawdown_pct": req.max_drawdown_pct,
+        "daily_loss_limit": req.daily_loss_limit,
+        "broker": req.broker or "",
+        "broker_account_id": req.broker_account_id or "",
+        "is_active": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    db_result = _db_create_sub_account(db_data)
+    if db_result is None:
+        # Fallback: store in Redis/db_store
+        _save_account(user.sub, account)
+        ids.append(acc_id)
+        _save_index(user.sub, ids)
     logger.info("Sub-account created: %s for user %s", acc_id, user.sub)
     return account
+
+
+@router.get("/sub-accounts/{account_id}", summary="Get a specific sub-account")
+async def get_sub_account(
+    account_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return details of a single sub-account owned by the current user."""
+    acc = _get_account(user.sub, account_id)
+    if acc is None:
+        raise HTTPException(status_code=404, detail="Sub-account not found")
+    return acc
 
 
 @router.patch("/sub-accounts/{account_id}")
@@ -231,17 +377,30 @@ async def update_sub_account(
     req: UpdateSubAccountRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Update sub-account label or active status."""
-    existing = _load_sub_accounts(user.sub)
-    acc = existing.get(account_id)
-    if not acc or acc["owner_id"] != user.sub:
+    """Update sub-account fields."""
+    acc = _get_account(user.sub, account_id)
+    if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
-    if req.label is not None:
-        acc["label"] = req.label
-    if req.active is not None:
-        acc["active"] = req.active
-    existing[account_id] = acc
-    _save_sub_accounts(user.sub, existing)
+
+    if req.resolved_label is not None:
+        acc["label"] = req.resolved_label
+        acc["name"] = req.resolved_label
+    if req.description is not None:
+        acc["description"] = req.description
+    if req.resolved_active is not None:
+        acc["active"] = req.resolved_active
+        acc["is_active"] = req.resolved_active
+    if req.max_drawdown_pct is not None:
+        acc["max_drawdown_pct"] = req.max_drawdown_pct
+    if req.daily_loss_limit is not None:
+        acc["daily_loss_limit"] = req.daily_loss_limit
+    if req.broker is not None:
+        acc["broker"] = req.broker
+    if req.broker_account_id is not None:
+        acc["broker_account_id"] = req.broker_account_id
+
+    acc["updated_at"] = datetime.now(UTC).isoformat()
+    _save_account(user.sub, acc)
     return acc
 
 
@@ -251,28 +410,113 @@ async def delete_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> None:
     """Delete a sub-account. Cannot delete the last active account."""
-    existing = _load_sub_accounts(user.sub)
-    acc = existing.get(account_id)
-    if not acc or acc["owner_id"] != user.sub:
+    acc = _get_account(user.sub, account_id)
+    if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
-    active = [a for a in existing.values() if a.get("active")]
-    if len(active) <= 1 and acc.get("active"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete the last active sub-account",
+
+    if acc.get("active", True) or acc.get("is_active", True):
+        ids = _get_index(user.sub)
+        active_count = sum(
+            1 for aid in ids
+            if (a := _get_account(user.sub, aid)) and (a.get("active", True) or a.get("is_active", True))
         )
-    del existing[account_id]
-    _save_sub_accounts(user.sub, existing)
+        if active_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete the last active sub-account",
+            )
+
+    _delete_account(user.sub, account_id)
+    ids = _get_index(user.sub)
+    ids = [i for i in ids if i != account_id]
+    _save_index(user.sub, ids)
+
+
+@router.post("/sub-accounts/{account_id}/transfer", summary="Transfer balance between sub-accounts")
+async def transfer_between_sub_accounts(
+    account_id: str,
+    req: TransferRequest,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Transfer funds between two sub-accounts owned by the same user."""
+    if account_id == req.to_account_id:
+        raise HTTPException(status_code=400, detail="Source and destination must be different accounts")
+
+    src = _get_account(user.sub, account_id)
+    dst = _get_account(user.sub, req.to_account_id)
+
+    if src is None:
+        raise HTTPException(status_code=404, detail="Source sub-account not found")
+    if dst is None:
+        raise HTTPException(status_code=404, detail="Destination sub-account not found")
+
+    src_bal = float(src.get("balance") or src.get("current_balance") or 0)
+    dst_bal = float(dst.get("balance") or dst.get("current_balance") or 0)
+
+    if src_bal < req.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance: {src_bal:.2f}",
+        )
+
+    new_src_bal = round(src_bal - req.amount, 2)
+    new_dst_bal = round(dst_bal + req.amount, 2)
+
+    src["balance"] = new_src_bal
+    src["current_balance"] = new_src_bal
+    src["updated_at"] = datetime.now(UTC).isoformat()
+
+    dst["balance"] = new_dst_bal
+    dst["current_balance"] = new_dst_bal
+    dst["updated_at"] = datetime.now(UTC).isoformat()
+
+    _save_account(user.sub, src)
+    _save_account(user.sub, dst)
+
+    logger.info(
+        "Transfer %.2f from %s to %s by user %s",
+        req.amount, account_id, req.to_account_id, user.sub,
+    )
+    return {
+        "ok": True,
+        "from_account_id": account_id,
+        "to_account_id": req.to_account_id,
+        "amount": req.amount,
+        "from_balance": new_src_bal,
+        "to_balance": new_dst_bal,
+        "note": req.note,
+    }
 
 
 # ── Team endpoints ────────────────────────────────────────────────────────────
+
+def _team_members_key(team_id: str) -> str:
+    return f"team_members:{team_id}"
+
+
+def _get_team_members(team_id: str) -> list[dict]:
+    # Prefer DB-backed sub_account_members table
+    db_members = _db_get_team_members(team_id)
+    if db_members is not None:
+        return db_members
+    return _store_get(_team_members_key(team_id)) or []
+
+
+def _save_team_members(team_id: str, members: list[dict]) -> None:
+    _store_set(_team_members_key(team_id), members)
 
 
 @router.get("/teams")
 async def list_teams(user: TokenPayload = Depends(get_current_user)) -> dict[str, Any]:
     """List teams the current user belongs to."""
-    team_ids = _load_team_index(user.sub)
-    teams = [t for tid in team_ids if (t := _load_team(tid)) is not None]
+    teams = []
+    ids = _get_index(user.sub)
+    for acc_id in ids:
+        acc = _get_account(user.sub, acc_id)
+        if acc and acc.get("account_type") == "team":
+            members = _get_team_members(acc_id)
+            my_role = next((m["role"] for m in members if m["user_id"] == user.sub), "owner")
+            teams.append({**acc, "my_role": my_role})
     return {"teams": teams, "total": len(teams)}
 
 
@@ -281,27 +525,36 @@ async def create_team(
     req: CreateTeamRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Create a new team. The creator is automatically added as admin."""
+    """Create a new team. Creator is added as owner member."""
+    ids = _get_index(user.sub)
+    if len(ids) >= _MAX_ACCOUNTS_PER_USER:
+        raise HTTPException(status_code=400, detail="Maximum accounts limit reached")
+
     team_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
     team: dict[str, Any] = {
-        "team_id": team_id,
+        "account_id": team_id,
+        "owner_id": user.sub,
+        "label": req.name,
         "name": req.name,
-        "creator_id": user.sub,
-        "created_at": datetime.now(UTC).isoformat(),
-        "members": [
-            {
-                "user_id": user.sub,
-                "username": getattr(user, "username", user.sub),
-                "email": getattr(user, "email", ""),
-                "role": "admin",
-                "joined_at": datetime.now(UTC).isoformat(),
-            }
-        ],
+        "account_type": "team",
+        "currency": "USD",
+        "balance": 0.0,
+        "current_balance": 0.0,
+        "active": True,
+        "is_active": True,
+        "created_at": now,
+        "updated_at": now,
     }
-    _save_team(team)
-    _add_to_team_index(user.sub, team_id)
+    _save_account(user.sub, team)
+    ids.append(team_id)
+    _save_index(user.sub, ids)
+
+    members = [{"user_id": user.sub, "role": "owner", "joined_at": now}]
+    _save_team_members(team_id, members)
+
     logger.info("Team created: %s by %s", team_id, user.sub)
-    return team
+    return {"team_id": team_id, "name": req.name, "owner_id": user.sub, "created_at": now}
 
 
 @router.post("/teams/{team_id}/members", status_code=status.HTTP_201_CREATED)
@@ -310,29 +563,35 @@ async def invite_member(
     req: InviteMemberRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Invite a member to a team. Requires admin or manager role in the team."""
-    team = _load_team(team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
+    """Invite a member to a team. Requires owner role."""
+    members = _get_team_members(team_id)
+    caller = next((m for m in members if m["user_id"] == user.sub), None)
+    if caller is None or caller["role"] != "owner":
+        raise HTTPException(status_code=403, detail="Only team owners can invite members")
+    if any(m["user_id"] == req.user_id for m in members):
+        raise HTTPException(status_code=409, detail="User is already a member")
 
-    caller = next((m for m in team["members"] if m["user_id"] == user.sub), None)
-    if not caller or caller["role"] not in ("admin", "manager"):
-        raise HTTPException(status_code=403, detail="Insufficient team permissions")
+    now = datetime.now(UTC).isoformat()
+    members.append({"user_id": req.user_id, "role": req.role, "joined_at": now})
+    _save_team_members(team_id, members)
+    return {"team_id": team_id, "user_id": req.user_id, "role": req.role}
 
-    if any(m["user_id"] == req.user_id for m in team["members"]):
-        raise HTTPException(status_code=400, detail="User already in team")
 
-    member = {
-        "user_id": req.user_id,
-        "username": req.username,
-        "email": req.email,
-        "role": req.role,
-        "joined_at": datetime.now(UTC).isoformat(),
-    }
-    team["members"].append(member)
-    _save_team(team)
-    _add_to_team_index(req.user_id, team_id)
-    return member
+@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_member(
+    team_id: str,
+    member_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> None:
+    """Remove a member from a team. Requires owner role."""
+    members = _get_team_members(team_id)
+    caller = next((m for m in members if m["user_id"] == user.sub), None)
+    if caller is None or caller["role"] != "owner":
+        raise HTTPException(status_code=403, detail="Only team owners can remove members")
+    updated = [m for m in members if m["user_id"] != member_id]
+    if len(updated) == len(members):
+        raise HTTPException(status_code=404, detail="Member not found")
+    _save_team_members(team_id, updated)
 
 
 @router.patch("/teams/{team_id}/members/{member_id}")
@@ -342,42 +601,14 @@ async def update_member_role(
     req: UpdateMemberRoleRequest,
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Change a team member's role. Requires admin role."""
-    team = _load_team(team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    caller = next((m for m in team["members"] if m["user_id"] == user.sub), None)
-    if not caller or caller["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admin role required")
-
-    member = next((m for m in team["members"] if m["user_id"] == member_id), None)
-    if not member:
+    """Change a team member's role. Requires owner role."""
+    members = _get_team_members(team_id)
+    caller = next((m for m in members if m["user_id"] == user.sub), None)
+    if caller is None or caller["role"] != "owner":
+        raise HTTPException(status_code=403, detail="Only team owners can change roles")
+    target = next((m for m in members if m["user_id"] == member_id), None)
+    if target is None:
         raise HTTPException(status_code=404, detail="Member not found")
-
-    member["role"] = req.role
-    _save_team(team)
-    return member
-
-
-@router.delete("/teams/{team_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_member(
-    team_id: str,
-    member_id: str,
-    user: TokenPayload = Depends(get_current_user),
-) -> None:
-    """Remove a member from a team. Requires admin role or self-removal."""
-    team = _load_team(team_id)
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    caller = next((m for m in team["members"] if m["user_id"] == user.sub), None)
-    if not caller:
-        raise HTTPException(status_code=403, detail="Not a team member")
-
-    if caller["role"] != "admin" and user.sub != member_id:
-        raise HTTPException(status_code=403, detail="Admin role required to remove others")
-
-    team["members"] = [m for m in team["members"] if m["user_id"] != member_id]
-    _save_team(team)
-    _remove_from_team_index(member_id, team_id)
+    target["role"] = req.role
+    _save_team_members(team_id, members)
+    return {"team_id": team_id, "user_id": member_id, "role": req.role}

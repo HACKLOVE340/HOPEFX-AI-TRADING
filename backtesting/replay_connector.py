@@ -104,6 +104,16 @@ class ReplayJobStatus(BaseModel):
 # ── Regime definitions ────────────────────────────────────────────────────────
 
 
+class CreateSessionBody(BaseModel):
+    """Request body for POST /api/replay/sessions."""
+
+    symbol: str = "XAUUSD"
+    timeframe: str = "H1"
+    start_date: str = "2024-01-01"
+    end_date: str = "2024-06-30"
+    initial_equity: float = 10000.0
+
+
 @dataclass
 class StressRegime:
     """A named historical stress period for regime-shift testing."""
@@ -618,7 +628,7 @@ def create_replay_router():
         if rc:
             try:
                 rc.setex(f"hopefx:replay:{sess['session_id']}", 86400, _json.dumps(sess))
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
     def _load_session(sid: str) -> dict | None:
@@ -632,7 +642,7 @@ def create_replay_router():
                     sess = _json.loads(raw)
                     _SESSIONS[sid] = sess
                     return sess
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         return None
 
@@ -647,7 +657,7 @@ def create_replay_router():
                     if raw:
                         sessions.append(_json.loads(raw))
                 return sessions
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         return list(_SESSIONS.values())
 
@@ -657,7 +667,7 @@ def create_replay_router():
         if rc:
             try:
                 rc.delete(f"hopefx:replay:{sid}")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
     def _build_bars(symbol: str, timeframe: str, start_date: str, end_date: str) -> list[dict]:
@@ -682,7 +692,7 @@ def create_replay_router():
                     }
                     for b in bars_raw
                 ]
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         # Synthetic fallback — realistic random walk
@@ -724,13 +734,6 @@ def create_replay_router():
                 break
 
         return bars
-
-    class CreateSessionBody(BaseModel):
-        symbol: str = "XAUUSD"
-        timeframe: str = "H1"
-        start_date: str = "2024-01-01"
-        end_date: str = "2024-06-30"
-        initial_equity: float = 10000.0
 
     @router.get("/sessions", summary="List replay sessions")
     async def list_replay_sessions():

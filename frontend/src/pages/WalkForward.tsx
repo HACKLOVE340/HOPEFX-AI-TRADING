@@ -9,6 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
 
@@ -136,6 +137,7 @@ const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const WalkForward: React.FC = () => {
+  const navigate = useNavigate();
   const [data, setData]            = useState<WalkForwardData | null>(null);
   const [loading, setLoading]      = useState(true);
   const [apiError, setApiError]    = useState<string | null>(null);
@@ -198,9 +200,14 @@ const WalkForward: React.FC = () => {
           <div style={{ fontSize: 13, color: '#64748b' }}>
             Go to the Backtesting page and run a walk-forward analysis to see results here.
           </div>
-          <button onClick={() => load()} style={{ marginTop: 16, background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
-            Retry
-          </button>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16 }}>
+            <button onClick={() => load()} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+              ↻ Retry
+            </button>
+            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+              📊 Go to Backtesting
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -216,14 +223,26 @@ const WalkForward: React.FC = () => {
             {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
           </p>
         </div>
-        <div style={s.searchRow}>
-          <input
-            style={s.searchInput}
-            placeholder="Run ID…"
-            value={inputId}
-            onChange={(e) => setInputId(e.target.value)}
-          />
-          <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            style={{
+              padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+              background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+              color: '#a78bfa', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            }}
+          >
+            🤖 Generate Strategy
+          </button>
+          <div style={s.searchRow}>
+            <input
+              style={s.searchInput}
+              placeholder="Run ID…"
+              value={inputId}
+              onChange={(e) => setInputId(e.target.value)}
+            />
+            <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
+          </div>
         </div>
       </div>
 

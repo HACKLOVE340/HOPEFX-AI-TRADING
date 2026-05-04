@@ -5,15 +5,22 @@
 # No commercial use without explicit permission.
 """
 HOPEFX Database Connection Management
-SQLAlchemy with connection pooling, retries, and monitoring
+SQLAlchemy sync + async engines with connection pooling, retries, and monitoring.
+
+Sync engine  — DatabaseManager / get_db()         — FastAPI sync endpoints
+Async engine — AsyncDatabaseManager / get_async_db() — FastAPI async endpoints
+
+Both engines share the same circuit-breaker and metrics infrastructure.
 """
 
+import asyncio
 import logging
 import threading
 import time
-from collections.abc import Callable, Generator
-from contextlib import contextmanager
-from dataclasses import dataclass
+from collections.abc import AsyncGenerator, Callable, Generator
+from contextlib import asynccontextmanager, contextmanager
+from dataclasses import dataclass, field
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +45,7 @@ except ImportError:
 
 @dataclass
 class DatabaseMetrics:
-    """Database connection metrics"""
+    """Database connection pool and query metrics."""
 
     total_connections: int = 0
     active_connections: int = 0
@@ -48,6 +55,48 @@ class DatabaseMetrics:
     query_count: int = 0
     error_count: int = 0
     slow_query_count: int = 0
+    # Extended pool health
+    pool_size: int = 0
+    pool_overflow: int = 0
+    pool_timeout_count: int = 0
+    # Latency tracking (rolling 100-sample window)
+    _latency_samples: list = field(default_factory=list, repr=False, compare=False)
+
+    def record_latency(self, ms: float) -> None:
+        self._latency_samples.append(ms)
+        if len(self._latency_samples) > 100:
+            self._latency_samples.pop(0)
+
+    @property
+    def p50_latency_ms(self) -> float:
+        if not self._latency_samples:
+            return 0.0
+        s = sorted(self._latency_samples)
+        return s[len(s) // 2]
+
+    @property
+    def p99_latency_ms(self) -> float:
+        if not self._latency_samples:
+            return 0.0
+        s = sorted(self._latency_samples)
+        return s[int(len(s) * 0.99)]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "total_connections": self.total_connections,
+            "active_connections": self.active_connections,
+            "idle_connections": self.idle_connections,
+            "checked_out_connections": self.checked_out_connections,
+            "checkout_time_avg_ms": round(self.checkout_time_avg_ms, 3),
+            "query_count": self.query_count,
+            "error_count": self.error_count,
+            "slow_query_count": self.slow_query_count,
+            "pool_size": self.pool_size,
+            "pool_overflow": self.pool_overflow,
+            "pool_timeout_count": self.pool_timeout_count,
+            "p50_latency_ms": round(self.p50_latency_ms, 3),
+            "p99_latency_ms": round(self.p99_latency_ms, 3),
+        }
 
 
 class DatabaseManager:
@@ -91,6 +140,7 @@ class DatabaseManager:
         self._metrics = DatabaseMetrics()
         self._metrics_lock = threading.Lock()
         self._circuit_open = False
+        self._circuit_half_open = False  # half-open: allow one probe request
         self._failure_count = 0
         self._circuit_threshold = 5
         self._circuit_recovery_time = 60.0
@@ -155,31 +205,57 @@ class DatabaseManager:
             self._metrics.total_connections += 1
 
     def _check_circuit(self) -> bool:
-        """Check if circuit breaker allows operation"""
+        """
+        Check if circuit breaker allows operation.
+
+        States:
+          CLOSED      — normal operation (_circuit_open=False)
+          OPEN        — all requests rejected (_circuit_open=True, _circuit_half_open=False)
+          HALF-OPEN   — one probe request allowed (_circuit_open=True, _circuit_half_open=True)
+        """
         if not self._circuit_open:
             return True
 
-        # Try recovery
-        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
-            self._circuit_open = False
-            self._failure_count = 0
-            logger.info("Database circuit breaker recovered")
-            return True
+        # Transition OPEN → HALF-OPEN after recovery window
+        if self._last_failure_time and (
+            time.time() - self._last_failure_time > self._circuit_recovery_time
+        ):
+            if not self._circuit_half_open:
+                self._circuit_half_open = True
+                logger.info("Database circuit breaker entering HALF-OPEN state — probe allowed")
+            return True  # allow the probe request through
 
         return False
 
     def _record_success(self):
-        """Record successful operation"""
-        self._failure_count = max(0, self._failure_count - 1)
+        """Record successful operation; close circuit if in half-open state."""
+        if self._circuit_half_open:
+            self._circuit_open = False
+            self._circuit_half_open = False
+            self._failure_count = 0
+            logger.info("Database circuit breaker CLOSED after successful probe")
+        else:
+            self._failure_count = max(0, self._failure_count - 1)
 
-    def _record_failure(self):
-        """Record failed operation"""
+    def _record_failure(self, exc: Exception | None = None):
+        """Record failed operation; re-open circuit from half-open if probe fails."""
         self._failure_count += 1
         self._last_failure_time = time.time()
+        with self._metrics_lock:
+            self._metrics.error_count += 1
 
-        if self._failure_count >= self._circuit_threshold:
+        if self._circuit_half_open:
+            # Probe failed — stay open, reset half-open flag
+            self._circuit_half_open = False
+            logger.warning("Database circuit breaker probe FAILED — staying OPEN: %s", exc)
+        elif self._failure_count >= self._circuit_threshold:
             self._circuit_open = True
-            logger.critical("Database circuit breaker OPENED after %s failures", self._failure_count)
+            self._circuit_half_open = False
+            logger.critical(
+                "Database circuit breaker OPENED after %d failures: %s",
+                self._failure_count,
+                exc,
+            )
 
     @contextmanager
     def session(self) -> "Generator[Session, None, None]":
@@ -195,6 +271,7 @@ class DatabaseManager:
 
         session: Session | None = None
         last_error = None
+        t0 = time.perf_counter()
 
         for attempt in range(self.max_retries):
             try:
@@ -210,14 +287,18 @@ class DatabaseManager:
                 session.commit()
                 self._record_success()
 
+                elapsed_ms = (time.perf_counter() - t0) * 1000
                 with self._metrics_lock:
                     self._metrics.query_count += 1
+                    self._metrics.record_latency(elapsed_ms)
+                    if elapsed_ms > self.query_timeout * 1000 * 0.8:
+                        self._metrics.slow_query_count += 1
 
                 return
 
             except OperationalError as e:
                 last_error = e
-                self._record_failure()
+                self._record_failure(e)
 
                 if session:
                     session.rollback()
@@ -231,7 +312,7 @@ class DatabaseManager:
 
             except SATimeoutError as e:
                 last_error = e
-                self._record_failure()
+                self._record_failure(e)
 
                 if session:
                     session.rollback()
@@ -245,7 +326,7 @@ class DatabaseManager:
 
             except Exception as e:
                 last_error = e
-                self._record_failure()
+                self._record_failure(e)
 
                 if session:
                     session.rollback()
@@ -261,7 +342,7 @@ class DatabaseManager:
         raise last_error or ConnectionError("Max retries exceeded")
 
     def execute_with_retry(self, operation: Callable, *args, **kwargs):
-        """Execute database operation with retry logic"""
+        """Execute database operation with retry logic."""
         for attempt in range(self.max_retries):
             try:
                 with self.session() as session:
@@ -273,6 +354,12 @@ class DatabaseManager:
                     time.sleep(wait_time)
                 else:
                     raise
+
+    @contextmanager
+    def timed_session(self) -> "Generator[Session, None, None]":
+        """Alias for session() — latency is already recorded inside session()."""
+        with self.session() as s:
+            yield s
 
     def health_check(self) -> bool:
         """Check database connectivity"""
@@ -287,24 +374,19 @@ class DatabaseManager:
             logger.error("Database health check failed: %s", e)
             return False
 
-    def get_metrics(self) -> DatabaseMetrics:
-        """Get current database metrics"""
+    def get_metrics(self) -> dict[str, Any]:
+        """Get current database metrics including p50/p99 latency."""
         with self._metrics_lock:
-            # Update pool stats
+            # Refresh live pool stats
             if self._engine and hasattr(self._engine.pool, "size"):
-                self._metrics.active_connections = self._engine.pool.checkedout()
-                self._metrics.idle_connections = self._engine.pool.checkedin()
-
-            return DatabaseMetrics(
-                total_connections=self._metrics.total_connections,
-                active_connections=self._metrics.active_connections,
-                idle_connections=self._metrics.idle_connections,
-                checked_out_connections=self._metrics.checked_out_connections,
-                checkout_time_avg_ms=self._metrics.checkout_time_avg_ms,
-                query_count=self._metrics.query_count,
-                error_count=self._metrics.error_count,
-                slow_query_count=self._metrics.slow_query_count,
-            )
+                try:
+                    self._metrics.pool_size = self._engine.pool.size()
+                    self._metrics.active_connections = self._engine.pool.checkedout()
+                    self._metrics.idle_connections = self._engine.pool.checkedin()
+                    self._metrics.pool_overflow = self._engine.pool.overflow()
+                except Exception:  # nosec B110
+                    pass
+            return self._metrics.to_dict()
 
     def close(self):
         """Close all database connections"""
@@ -368,20 +450,272 @@ class DatabaseMigrationManager:
         return stats
 
 
-# Global instance
+# ---------------------------------------------------------------------------
+# Async database manager (SQLAlchemy 2.x async engine + asyncpg)
+# ---------------------------------------------------------------------------
+
+try:
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
+
+    ASYNC_SQLALCHEMY_AVAILABLE = True
+except ImportError:
+    ASYNC_SQLALCHEMY_AVAILABLE = False
+    AsyncSession = None  # type: ignore[assignment,misc]
+    async_sessionmaker = None  # type: ignore[assignment]
+    create_async_engine = None  # type: ignore[assignment]
+
+
+class AsyncDatabaseManager:
+    """
+    Async SQLAlchemy engine backed by asyncpg (PostgreSQL) or aiosqlite (SQLite).
+
+    Provides:
+    - Async connection pool with configurable size and overflow
+    - Per-query latency tracking
+    - Circuit breaker integration
+    - Health check coroutine
+    - async_session() context manager for use in FastAPI async endpoints
+
+    Usage::
+
+        async with async_db_manager.async_session() as session:
+            result = await session.execute(select(Trade))
+            trades = result.scalars().all()
+    """
+
+    def __init__(
+        self,
+        connection_string: str,
+        pool_size: int = 10,
+        max_overflow: int = 20,
+        pool_recycle: int = 3600,
+        pool_pre_ping: bool = True,
+        echo: bool = False,
+        max_retries: int = 3,
+        query_timeout: float = 30.0,
+    ) -> None:
+        if not ASYNC_SQLALCHEMY_AVAILABLE:
+            raise ImportError(
+                "sqlalchemy[asyncio] required. Install: pip install 'sqlalchemy[asyncio]' asyncpg aiosqlite"
+            )
+
+        self.connection_string = connection_string
+        self.pool_size = pool_size
+        self.max_overflow = max_overflow
+        self.pool_recycle = pool_recycle
+        self.pool_pre_ping = pool_pre_ping
+        self.echo = echo
+        self.max_retries = max_retries
+        self.query_timeout = query_timeout
+
+        self._engine = None
+        self._session_factory = None
+        self._metrics = DatabaseMetrics()
+        self._metrics_lock = threading.Lock()
+        self._circuit_open = False
+        self._circuit_half_open = False
+        self._failure_count = 0
+        self._circuit_threshold = 5
+        self._circuit_recovery_time = 60.0
+        self._last_failure_time: float | None = None
+
+        self._initialize()
+
+    def _async_url(self, url: str) -> str:
+        """Convert a sync DB URL to its async driver equivalent."""
+        if url.startswith("postgresql://") or url.startswith("postgresql+psycopg2://"):
+            return url.replace("postgresql://", "postgresql+asyncpg://", 1).replace(
+                "postgresql+psycopg2://", "postgresql+asyncpg://", 1
+            )
+        if url.startswith("sqlite://"):
+            return url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+        return url
+
+    def _initialize(self) -> None:
+        async_url = self._async_url(self.connection_string)
+        connect_args: dict = {}
+        if "asyncpg" in async_url:
+            connect_args = {
+                "command_timeout": self.query_timeout,
+                "server_settings": {"application_name": "hopefx_async"},
+            }
+        elif "aiosqlite" in async_url:
+            connect_args = {"check_same_thread": False}
+
+        self._engine = create_async_engine(
+            async_url,
+            pool_size=self.pool_size,
+            max_overflow=self.max_overflow,
+            pool_recycle=self.pool_recycle,
+            pool_pre_ping=self.pool_pre_ping,
+            echo=self.echo,
+            connect_args=connect_args,
+        )
+        self._session_factory = async_sessionmaker(
+            bind=self._engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autoflush=False,
+            autocommit=False,
+        )
+        logger.info(
+            "AsyncDatabaseManager initialized | pool=%s/%s | url=%s",
+            self.pool_size,
+            self.max_overflow,
+            async_url.split("@")[-1] if "@" in async_url else async_url,
+        )
+
+    def _check_circuit(self) -> bool:
+        """
+        CLOSED → normal; OPEN → reject; HALF-OPEN → allow one probe.
+        Transitions OPEN → HALF-OPEN after _circuit_recovery_time seconds.
+        """
+        if not self._circuit_open:
+            return True
+        if self._last_failure_time and (
+            time.time() - self._last_failure_time > self._circuit_recovery_time
+        ):
+            if not self._circuit_half_open:
+                self._circuit_half_open = True
+                logger.info("AsyncDatabaseManager circuit breaker entering HALF-OPEN — probe allowed")
+            return True
+        return False
+
+    def _record_failure(self, exc: Exception) -> None:
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        with self._metrics_lock:
+            self._metrics.error_count += 1
+        if self._circuit_half_open:
+            self._circuit_half_open = False
+            logger.warning("AsyncDatabaseManager probe FAILED — circuit stays OPEN: %s", exc)
+        elif self._failure_count >= self._circuit_threshold:
+            self._circuit_open = True
+            self._circuit_half_open = False
+            logger.critical(
+                "AsyncDatabaseManager circuit breaker OPENED after %d failures: %s",
+                self._failure_count,
+                exc,
+            )
+
+    def _record_success(self) -> None:
+        if self._circuit_half_open:
+            self._circuit_open = False
+            self._circuit_half_open = False
+            self._failure_count = 0
+            logger.info("AsyncDatabaseManager circuit breaker CLOSED after successful probe")
+        else:
+            self._failure_count = max(0, self._failure_count - 1)
+
+    @asynccontextmanager
+    async def async_session(self) -> "AsyncGenerator[AsyncSession, None]":
+        """
+        Async session context manager with automatic commit/rollback.
+
+        Integrates with the resilience circuit breaker.  Retries on
+        OperationalError up to max_retries times with exponential back-off.
+        """
+        if not self._check_circuit():
+            raise ConnectionError(
+                "AsyncDatabaseManager circuit breaker is OPEN — service temporarily unavailable."
+            )
+
+        last_exc: Exception | None = None
+        for attempt in range(self.max_retries):
+            session: AsyncSession = self._session_factory()
+            t0 = time.perf_counter()
+            try:
+                yield session
+                await session.commit()
+                elapsed_ms = (time.perf_counter() - t0) * 1000
+                with self._metrics_lock:
+                    self._metrics.query_count += 1
+                    self._metrics.record_latency(elapsed_ms)
+                    if elapsed_ms > self.query_timeout * 1000 * 0.8:
+                        self._metrics.slow_query_count += 1
+                self._record_success()
+                return
+            except Exception as exc:
+                await session.rollback()
+                last_exc = exc
+                self._record_failure(exc)
+                if attempt < self.max_retries - 1:
+                    wait = 2**attempt
+                    logger.warning(
+                        "AsyncDB retry %d/%d in %.1fs: %s",
+                        attempt + 1,
+                        self.max_retries,
+                        wait,
+                        exc,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    raise
+            finally:
+                await session.close()
+
+        raise last_exc or ConnectionError("AsyncDatabaseManager: max retries exceeded")
+
+    async def health_check(self) -> bool:
+        """Ping the database asynchronously."""
+        if self._circuit_open:
+            return False
+        try:
+            async with self._engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            return True
+        except Exception as exc:
+            logger.error("AsyncDatabaseManager health check failed: %s", exc)
+            return False
+
+    def get_metrics(self) -> dict[str, Any]:
+        with self._metrics_lock:
+            return self._metrics.to_dict()
+
+    async def dispose(self) -> None:
+        """Close all async connections."""
+        if self._engine:
+            await self._engine.dispose()
+            logger.info("AsyncDatabaseManager: connections disposed")
+
+
+# Global instances
 _db_manager: DatabaseManager | None = None
+_async_db_manager: AsyncDatabaseManager | None = None
 
 
 def get_db_manager() -> DatabaseManager | None:
-    """Get global database manager"""
+    """Return the global sync database manager, initialising lazily if needed."""
+    global _db_manager
+    if _db_manager is None:
+        try:
+            _db_manager = _get_or_init_manager()
+        except Exception:  # nosec B110
+            return None
     return _db_manager
 
 
 def init_db_manager(connection_string: str, **kwargs) -> DatabaseManager:
-    """Initialize global database manager"""
+    """Initialize the global sync database manager."""
     global _db_manager
     _db_manager = DatabaseManager(connection_string, **kwargs)
     return _db_manager
+
+
+def get_async_db_manager() -> AsyncDatabaseManager | None:
+    """Return the global async database manager."""
+    return _async_db_manager
+
+
+def init_async_db_manager(connection_string: str, **kwargs) -> AsyncDatabaseManager:
+    """Initialize the global async database manager."""
+    global _async_db_manager
+    _async_db_manager = AsyncDatabaseManager(connection_string, **kwargs)
+    return _async_db_manager
 
 
 # ---------------------------------------------------------------------------
@@ -463,6 +797,16 @@ def _get_or_init_manager() -> "DatabaseManager":
         _check_sqlite_multiworker(url)
         _db_manager = DatabaseManager(url)
     return _db_manager
+
+
+def _get_or_init_async_manager() -> "AsyncDatabaseManager":
+    """Return the global async manager, initialising it with defaults if needed."""
+    global _async_db_manager
+    if _async_db_manager is None:
+        url = _default_db_url()
+        _check_sqlite_multiworker(url)
+        _async_db_manager = AsyncDatabaseManager(url)
+    return _async_db_manager
 
 
 if SQLALCHEMY_AVAILABLE:
@@ -547,6 +891,46 @@ if SQLALCHEMY_AVAILABLE:
                 pass
             raise
 
+    async def get_async_db() -> "AsyncGenerator[AsyncSession, None]":
+        """
+        FastAPI async dependency that yields an AsyncSession.
+
+        Usage::
+
+            @router.get("/items")
+            async def list_items(db: AsyncSession = Depends(get_async_db)):
+                result = await db.execute(select(Item))
+                return result.scalars().all()
+        """
+        try:
+            from resilience.service_circuit_breakers import db_breaker
+
+            if db_breaker.is_open:
+                raise RuntimeError(
+                    "Database circuit breaker is OPEN — service temporarily unavailable. "
+                    f"Retry in {db_breaker._seconds_until_probe():.0f}s."
+                )
+        except ImportError:  # nosec B110
+            pass
+
+        try:
+            async with _get_or_init_async_manager().async_session() as session:
+                try:
+                    from resilience.service_circuit_breakers import db_breaker as _cb
+
+                    _cb.record_success()
+                except Exception:  # nosec B110
+                    pass
+                yield session
+        except Exception as _exc:
+            try:
+                from resilience.service_circuit_breakers import db_breaker as _cb
+
+                _cb.record_failure(_exc)
+            except Exception:  # nosec B110
+                pass
+            raise
+
 else:
     # Stubs when SQLAlchemy is not installed (test / CI environments).
     engine = None  # type: ignore[assignment]
@@ -554,3 +938,7 @@ else:
 
     def get_db():  # type: ignore[misc]
         raise RuntimeError("SQLAlchemy is not installed — database features unavailable.")
+
+    async def get_async_db():  # type: ignore[misc]
+        raise RuntimeError("SQLAlchemy is not installed — async database features unavailable.")
+        yield  # make it a generator

@@ -187,6 +187,11 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     // Exclude Playwright e2e specs — they run via `npm run test:e2e`, not vitest
     exclude: ['**/node_modules/**', '**/e2e/**'],
+    // Per-test timeout: 10 s is generous for jsdom tests while still preventing
+    // infinite hangs that would otherwise wait for the pool's 150 s worker limit.
+    testTimeout: 10_000,
+    // Hook timeout: 30 s covers beforeAll/afterAll environment setup in CI.
+    hookTimeout: 30_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

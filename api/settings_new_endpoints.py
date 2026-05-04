@@ -443,19 +443,11 @@ _SYSTEM_DEFAULTS: dict[str, Any] = {
 }
 
 
-@router.get("/api/admin/settings/system")
-async def get_system_settings(user: TokenPayload = Depends(require_role("admin"))):
-    return _load_from_db("system_settings:global", _SYSTEM_DEFAULTS)
-
-
-@router.post("/api/admin/settings/system")
-async def save_system_settings(request: Request, user: TokenPayload = Depends(require_role("admin"))):
-    body = await request.json()
-    current = _load_from_db("system_settings:global", _SYSTEM_DEFAULTS)
-    updated = {**current, **body}
-    _save_to_db("system_settings:global", updated)
-    logger.info("System settings updated by admin %s", user.sub)
-    return {"status": "saved"}
+# NOTE: GET /api/admin/settings/system and POST /api/admin/settings/system are
+# handled by api/admin.py (prefix="/api/admin", routes /settings/system).
+# admin.py is registered before this router so those paths are already claimed.
+# Duplicate handlers were removed here to avoid silent dead-code via dedup.
+# admin.py now uses config_store with full defaults (see _load_system_settings).
 
 
 # ── Backup trigger (admin only) ───────────────────────────────────────────────

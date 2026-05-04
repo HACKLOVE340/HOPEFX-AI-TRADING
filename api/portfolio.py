@@ -486,106 +486,101 @@ async def factor_risk_report(
     }
 
 
-# ── Portfolio overview endpoints (used by Portfolio.tsx) ──────────────────────
+# ── Portfolio summary & positions convenience endpoints ───────────────────────
+# These provide a unified portfolio view consumed by the frontend allocatorApi.
 
 
-@router.get("/positions", response_model=None, summary="Current open positions")
-async def get_portfolio_positions(
+@router.get(
+    "/summary",
+    summary="Portfolio summary",
+    tags=["Portfolio"],
+)
+async def portfolio_summary(
     user: TokenPayload = Depends(get_current_user),
-) -> dict:
-    """Return current open positions from the broker / execution engine.
+) -> dict[str, Any]:
+    """Return portfolio equity, P&L, and rebalancer weights as a single summary."""
+    s = _get_app_state()
+    broker = getattr(s, "broker", None) if s else None
 
-    Handles both synchronous brokers (Alpaca, Binance, ByBit, CCXT, CME) and
-    asynchronous brokers (OANDA, IBKR, AsyncEngine) transparently.
-    """
-    import inspect
-
-    positions: list[dict] = []
-    try:
-        from core.app_state import app_state
-
-        broker = getattr(app_state, "broker", None)
-        if broker and hasattr(broker, "get_positions"):
-            raw_result = broker.get_positions()
-            # Await if the broker returns a coroutine (async brokers: OANDA, IBKR)
-            raw = await raw_result if inspect.iscoroutine(raw_result) else raw_result
-            positions = [
-                {
-                    "symbol": getattr(p, "symbol", "XAUUSD") if not isinstance(p, dict) else p.get("symbol", "XAUUSD"),
-                    "side": getattr(p, "side", "long") if not isinstance(p, dict) else p.get("side", "long"),
-                    "quantity": float(getattr(p, "quantity", 0) if not isinstance(p, dict) else p.get("quantity", 0)),
-                    "entry_price": float(getattr(p, "entry_price", 0) if not isinstance(p, dict) else p.get("entry_price", 0)),
-                    "current_price": float(getattr(p, "current_price", 0) if not isinstance(p, dict) else p.get("current_price", 0)),
-                    "unrealized_pnl": float(getattr(p, "unrealized_pnl", 0) if not isinstance(p, dict) else p.get("unrealized_pnl", 0)),
-                    "margin_used": float(getattr(p, "margin_used", 0) if not isinstance(p, dict) else p.get("margin_used", 0)),
-                    "opened_at": str(getattr(p, "opened_at", "") if not isinstance(p, dict) else p.get("opened_at", "")),
-                }
-                for p in (raw or [])
-            ]
-    except Exception as exc:
-        logger.debug("portfolio positions: %s", exc)
-    return {"positions": positions, "count": len(positions)}
-
-
-@router.get("/summary", response_model=None, summary="Portfolio summary metrics")
-async def get_portfolio_summary(
-    user: TokenPayload = Depends(get_current_user),
-) -> dict:
-    """Return a high-level portfolio summary: equity, PnL, positions count.
-
-    Handles both synchronous brokers (Alpaca, Binance, ByBit, CCXT, CME) and
-    asynchronous brokers (OANDA, IBKR, AsyncEngine) transparently.
-    """
-    import inspect
+    equity = 0.0
+    balance = 0.0
+    unrealised_pnl = 0.0
+    realised_pnl = 0.0
+    open_positions = 0
+    weights: dict[str, float] = {}
 
     try:
-        from core.app_state import app_state
-
-        broker = getattr(app_state, "broker", None)
-        if broker is None:
-            raise AttributeError("no broker")
-
-        # Fetch account info — await if async broker
-        if hasattr(broker, "get_account_info"):
-            acct_result = broker.get_account_info()
-            account = await acct_result if inspect.iscoroutine(acct_result) else acct_result
-        else:
-            account = None
-
-        # Fetch positions — await if async broker
-        if hasattr(broker, "get_positions"):
-            pos_result = broker.get_positions()
-            positions = await pos_result if inspect.iscoroutine(pos_result) else pos_result
-        else:
-            positions = []
-
-        def _float(obj, key: str) -> float:
-            if obj is None:
-                return 0.0
-            return float(obj.get(key, 0) if isinstance(obj, dict) else getattr(obj, key, 0))
-
-        equity = _float(account, "equity")
-        balance = _float(account, "balance")
-        margin_used = _float(account, "margin_used")
-        unrealized = sum(
-            float(p.get("unrealized_pnl", 0) if isinstance(p, dict) else getattr(p, "unrealized_pnl", 0))
-            for p in (positions or [])
-        )
-        return {
-            "equity": round(equity, 2),
-            "balance": round(balance, 2),
-            "unrealized_pnl": round(unrealized, 2),
-            "open_positions": len(positions or []),
-            "margin_used": round(margin_used, 2),
-            "margin_free": round(equity - margin_used, 2),
-        }
+        if broker is not None:
+            if hasattr(broker, "get_account"):
+                acct = await broker.get_account()
+                equity = float(getattr(acct, "equity", 0.0))
+                balance = float(getattr(acct, "balance", 0.0))
+                unrealised_pnl = float(getattr(acct, "unrealised_pnl", 0.0))
+                realised_pnl = float(getattr(acct, "realised_pnl", 0.0))
+            if hasattr(broker, "get_positions"):
+                positions = await broker.get_positions()
+                open_positions = len(positions)
     except Exception as exc:
-        logger.debug("portfolio summary: %s", exc)
+        logger.debug("portfolio_summary: broker fetch failed: %s", exc)
+
+    rb = _get_rebalancer()
+    if rb is not None:
+        try:
+            rb_status = rb.status()
+            weights = rb_status.get("weights", {})
+        except Exception as exc:
+            logger.debug("portfolio_summary: rebalancer fetch failed: %s", exc)
+
     return {
-        "equity": 0.0,
-        "balance": 0.0,
-        "unrealized_pnl": 0.0,
-        "open_positions": 0,
-        "margin_used": 0.0,
-        "margin_free": 0.0,
+        "equity": equity,
+        "balance": balance,
+        "unrealised_pnl": unrealised_pnl,
+        "realised_pnl": realised_pnl,
+        "open_positions": open_positions,
+        "weights": weights,
+        "rebalancer_available": rb is not None,
+    }
+
+
+@router.get(
+    "/positions",
+    summary="Portfolio positions with weights",
+    tags=["Portfolio"],
+)
+async def portfolio_positions(
+    user: TokenPayload = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Return open positions list with market values and rebalancer target weights."""
+    s = _get_app_state()
+    broker = getattr(s, "broker", None) if s else None
+
+    positions_list: list[dict[str, Any]] = []
+    try:
+        if broker is not None and hasattr(broker, "get_positions"):
+            raw = await broker.get_positions()
+            for p in raw:
+                positions_list.append({
+                    "symbol": getattr(p, "symbol", ""),
+                    "side": getattr(p, "side", "long"),
+                    "quantity": float(getattr(p, "quantity", 0.0)),
+                    "entry_price": float(getattr(p, "entry_price", 0.0)),
+                    "current_price": float(getattr(p, "current_price", 0.0)),
+                    "unrealised_pnl": float(getattr(p, "unrealised_pnl", 0.0)),
+                    "market_value": float(getattr(p, "market_value", 0.0)),
+                })
+    except Exception as exc:
+        logger.debug("portfolio_positions: broker fetch failed: %s", exc)
+
+    target_weights: dict[str, float] = {}
+    rb = _get_rebalancer()
+    if rb is not None:
+        try:
+            target_weights = rb.status().get("weights", {})
+        except Exception as exc:
+            logger.debug("portfolio_positions: rebalancer fetch failed: %s", exc)
+
+    return {
+        "positions": positions_list,
+        "total": len(positions_list),
+        "target_weights": target_weights,
     }

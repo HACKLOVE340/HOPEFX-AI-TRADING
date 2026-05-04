@@ -147,6 +147,27 @@ const NuclearDashboard = memo(() => {
       {/* Geopolitical risk banner */}
       <NuclearGeopoliticalBanner onClickExplain={handleExplainToggle} />
 
+      {/* Explain panel toggle — always visible */}
+      <div style={{
+        display: 'flex', justifyContent: 'flex-end',
+        padding: '4px 12px', borderBottom: '1px solid #0d1421',
+        background: '#020408', gap: 8,
+      }}>
+        <button
+          onClick={handleExplainToggle}
+          style={{
+            padding: '4px 12px', borderRadius: 4,
+            background: showExplainPanel ? 'rgba(139,92,246,0.15)' : 'rgba(255,255,255,0.04)',
+            border: `1px solid ${showExplainPanel ? '#8b5cf6' : '#1e293b'}`,
+            color: showExplainPanel ? '#a78bfa' : '#64748b',
+            fontSize: 11, cursor: 'pointer', fontFamily: 'monospace',
+            display: 'flex', alignItems: 'center', gap: 6,
+          }}
+        >
+          🧠 AI Explain Panel {showExplainPanel ? '◀ Hide' : '▶ Show'}
+        </button>
+      </div>
+
       {/* Main content area */}
       <div style={s.contentArea}>
         {/* Chart + sidebar row */}

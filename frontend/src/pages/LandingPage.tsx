@@ -761,13 +761,13 @@ function PricingSection() {
   /**
    * Display price per month.
    * Monthly billing: price_usd_monthly (e.g. 1800 → "$1,800")
-   * Annual billing:  price_usd_annual / 10 — 2 months free means 10 months paid
-   *                  (e.g. 18000 / 10 = 1800 → "$1,800/mo, billed $18,000/yr")
+   * Annual billing:  price_usd_annual / 10 — 2 months free (≈17% off)
+   *                  (e.g. 12600 / 10 = 1260 → "$1,260/mo, billed $12,600/yr — save 17%")
    * Free tier:       always $0 → "Free"
    */
   const displayPrice = (plan: ApiPlan): string => {
     if (plan.price_usd_monthly === 0) return 'Free';
-    const perMonth = annual
+    const perMonth = annual && plan.price_usd_annual > 0
       ? Math.round(plan.price_usd_annual / 10)
       : plan.price_usd_monthly;
     return `$${perMonth.toLocaleString()}`;

@@ -190,6 +190,55 @@ const ProfileSection: React.FC = () => {
       </Card>
 
       <SaveBar onSave={handleSave} saving={saving} saved={saved} error={error} />
+
+      {/* Quick actions */}
+      <Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', letterSpacing: 1, textTransform: 'uppercase' }}>
+            Quick Actions
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+            <a
+              href="/profile/me"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+                color: '#60a5fa', fontSize: 13, textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              👁 View Public Profile
+            </a>
+            <button
+              onClick={() => {
+                localStorage.removeItem('hopefx_onboarding_complete');
+                window.location.href = '/onboarding';
+              }}
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
+                color: '#a78bfa', fontSize: 13, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              🚀 Restart Onboarding
+            </button>
+            <a
+              href="/docs"
+              style={{
+                padding: '8px 16px', borderRadius: 8,
+                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+                color: '#34d399', fontSize: 13, textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              📚 Documentation
+            </a>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 };

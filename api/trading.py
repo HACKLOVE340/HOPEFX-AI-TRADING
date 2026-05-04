@@ -808,7 +808,7 @@ async def get_orders(
 
     # 2. Filled orders from trade DB when broker unavailable or no open orders
     if not orders:
-        trades = _query_trades(user.sub, None, limit, offset)
+        trades = await _query_trades(user.sub, None, limit, offset)
         for t in trades:
             t_dict = _trade_to_dict(t)
             order_status = "filled"
@@ -849,7 +849,7 @@ async def get_history(
       limit   — max rows (1–1000, default 100)
       offset  — pagination offset
     """
-    trades = _query_trades(user.sub, symbol, limit, offset)
+    trades = await _query_trades(user.sub, symbol, limit, offset)
     return {
         "trades": [_trade_to_dict(t) for t in trades],
         "count": len(trades),
@@ -1069,23 +1069,20 @@ async def get_account(
         _balance = starting
 
         try:
-            from database.connection import SessionLocal as _SL
-            from database.models import Trade, TradeStatus
             import datetime as _dt
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TradeRepo
+            from database.repositories.position_repository import PositionRepository as _PosRepo
 
-            _db = _SL()
-            try:
-                closed = (
-                    _db.query(Trade)
-                    .filter(Trade.status == TradeStatus.CLOSED)
-                    .order_by(Trade.exit_time.asc())
-                    .all()
-                )
-                open_qs = _db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
-                _open_trades = len(open_qs)
+            async with _get_async_db() as _db:
+                _trade_repo = _TradeRepo(_db)
+                _pos_repo = _PosRepo(_db)
+                closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
+                open_positions = await _pos_repo.get_open_positions(symbol=None)
+                _open_trades = len(open_positions)
 
                 if closed:
-                    pnls = [float(t.realized_pnl or 0.0) for t in closed]
+                    pnls = [float(getattr(t, "realized_pnl", 0) or 0.0) for t in closed]
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
@@ -1125,22 +1122,20 @@ async def get_account(
 
                 # Daily P&L from trades closed today
                 today_start = _dt.datetime.now(_dt.timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-                today_closed = [t for t in closed if t.exit_time and t.exit_time >= today_start]
-                _daily_pnl = round(sum(float(t.realized_pnl or 0.0) for t in today_closed), 2)
+                today_closed = [t for t in closed if getattr(t, "exit_time", None) and t.exit_time >= today_start]
+                _daily_pnl = round(sum(float(getattr(t, "realized_pnl", 0) or 0.0) for t in today_closed), 2)
 
-                # Unrealized P&L from open trades
-                _unrealized = round(sum(float(t.unrealized_pnl or 0.0) for t in open_qs if hasattr(t, "unrealized_pnl")), 2)
+                # Unrealized P&L from open positions
+                _unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in open_positions), 2)
 
                 # Open risk
                 equity_est = _balance + _unrealized
-                if open_qs and equity_est > 0:
+                if open_positions and equity_est > 0:
                     total_notional = sum(
-                        float(t.quantity or 0.0) * float(t.entry_price or 0.0)
-                        for t in open_qs
+                        float(getattr(p, "quantity", 0) or 0.0) * float(getattr(p, "entry_price", 0) or 0.0)
+                        for p in open_positions
                     )
                     _open_risk_pct = round(total_notional / equity_est * 100, 2)
-            finally:
-                _db.close()
         except Exception as _exc:
             logger.debug("Paper account DB stats failed: %s", _exc)
 
@@ -1153,7 +1148,7 @@ async def get_account(
             from app import kill_switch as _ks
             active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
             _ks_active = bool(active() if callable(active) else active)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return {
@@ -1186,7 +1181,7 @@ async def get_account(
             if v is not None:
                 try:
                     return float(v)
-                except (TypeError, ValueError):
+                except (TypeError, ValueError):  # nosec B110
                     pass
         return default
 
@@ -1217,21 +1212,18 @@ async def get_account(
     cvar_95 = 0.0
 
     try:
-        from database.connection import get_db as _get_db
-        from database.models import Trade, TradeStatus
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TradeRepo
+        from database.repositories.position_repository import PositionRepository as _PosRepo
 
-        db = next(_get_db())
-        try:
-            # Closed trades for stats
-            closed = (
-                db.query(Trade)
-                .filter(Trade.status == TradeStatus.CLOSED)
-                .order_by(Trade.exit_time.asc())
-                .all()
-            )
-            # Open trades count
-            open_qs = db.query(Trade).filter(Trade.status == TradeStatus.OPEN).all()
-            open_trades = len(open_qs)
+        async with _get_async_db() as _db:
+            _trade_repo = _TradeRepo(_db)
+            _pos_repo = _PosRepo(_db)
+            # Closed trades for stats — user_id=None fetches all (admin view)
+            closed = await _trade_repo.get_by_user(user_id=None, status="closed", limit=10000)
+            # Open positions count via PositionRepository
+            open_positions = await _pos_repo.get_open_positions(symbol=None)
+            open_trades = len(open_positions)
 
             if closed:
                 pnls = [float(t.realized_pnl or 0.0) for t in closed]
@@ -1277,15 +1269,13 @@ async def get_account(
                         cvar_95 = round(abs(sum(sorted_rets[:cutoff]) / cutoff), 6)
 
             # Open risk: sum of (quantity × entry_price) / equity
-            if open_qs and equity > 0:
+            if open_positions and equity > 0:
                 total_notional = sum(
-                    float(t.quantity or 0.0) * float(t.entry_price or 0.0)
-                    for t in open_qs
+                    float(getattr(p, "quantity", 0) or 0.0) * float(getattr(p, "entry_price", 0) or 0.0)
+                    for p in open_positions
                 )
                 open_risk_pct = round(total_notional / equity * 100, 2)
 
-        finally:
-            db.close()
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
 
@@ -1295,7 +1285,7 @@ async def get_account(
         from app import kill_switch as _ks
         active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
         kill_switch_active = bool(active() if callable(active) else active)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {
@@ -1445,13 +1435,15 @@ async def get_ohlcv(
     """
     # Normalise: XAU/USD, XAU_USD, xau_usd → XAUUSD
     symbol = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
-    # Sanitise for read-only data endpoint — allow any alphanumeric symbol up to 12 chars.
-    # validate_order_symbol is reserved for order placement (smaller allowed set).
-    import re as _re
-    if not _re.match(r'^[A-Z0-9]{2,12}$', symbol):
+    # Validate against the same allowed-symbol set used for order placement.
+    # This prevents data leakage for unsupported instruments and keeps the
+    # OHLCV endpoint consistent with the order entry allowlist.
+    try:
+        symbol = validate_order_symbol(symbol)
+    except HTTPException:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid symbol format: '{symbol}'. Expected 2-12 alphanumeric characters.",
+            detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
         )
 
     # ── Try price engine first ────────────────────────────────────────────────
@@ -1530,76 +1522,28 @@ async def get_ohlcv(
     except Exception as exc:
         logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
 
-    # ── Synthetic fallback (paper/dev environment) ────────────────────────────
-    # When both live feeds are unavailable (sandbox, offline, no API keys),
-    # generate a plausible random-walk series from the current mid price so
-    # charts render instead of showing an error overlay.
-    import random as _random
-    import math as _math
-
-    # Base price seeds per symbol; falls back to 1.0 for unknown pairs.
-    _SEED_PRICES: dict[str, float] = {
-        "XAUUSD": 3300.0, "XAGUSD": 29.5, "XPTUSD": 960.0,
-        "EURUSD": 1.082,  "GBPUSD": 1.294, "USDJPY": 154.5,
-        "USDCHF": 0.905,  "AUDUSD": 0.645, "NZDUSD": 0.597,
-        "USDCAD": 1.362,  "BTCUSD": 96500.0, "ETHUSD": 3450.0,
-        "US30": 39800.0,  "US500": 5200.0,  "NAS100": 18200.0,
-        "USOIL": 82.5,    "UKOIL": 86.0,
-    }
-    _TF_SECONDS: dict[str, int] = {
-        "1m": 60, "5m": 300, "15m": 900, "30m": 1800,
-        "1h": 3600, "4h": 14400, "1d": 86400, "1w": 604800,
-    }
-    tf_secs = _TF_SECONDS.get(timeframe, 3600)
-    # Try to get current price from price engine; fall back to seed
-    base_price = _SEED_PRICES.get(symbol, 1.0)
-    try:
-        if app_state and app_state.price_engine:
-            tick = app_state.price_engine.get_price(symbol)
-            if tick and getattr(tick, "mid", None):
-                base_price = float(tick.mid)
-            elif tick and getattr(tick, "last", None):
-                base_price = float(tick.last)
-    except Exception:
-        pass
-
-    # Volatility as fraction of price per bar (~daily vol / sqrt(bars/day))
-    daily_vol_frac = 0.008 if symbol.endswith("USD") and base_price > 100 else 0.005
-    bar_vol = daily_vol_frac * _math.sqrt(tf_secs / 86400)
-
-    now_ts = int(time.time())
-    start_ts = now_ts - tf_secs * limit
-    price = base_price
-    _rng = _random.Random(hash(symbol) % (2**31 - 1))
-    _HIGH_LOW_VOL_FACTOR = 0.4   # Wick depth as fraction of bar body volatility
-    _SYNTHETIC_VOL_MEAN  = 1000  # Mean synthetic tick volume per bar
-    _SYNTHETIC_VOL_STDDEV = 400  # Std-dev of synthetic tick volume
-    synthetic: list[dict] = []
-    for i in range(limit):
-        ts = start_ts + i * tf_secs
-        change = _rng.gauss(0, bar_vol)
-        open_p = round(price, 5)
-        close_p = round(price * (1 + change), 5)
-        wick_vol = bar_vol * _HIGH_LOW_VOL_FACTOR
-        high_p  = round(max(open_p, close_p) * (1 + abs(_rng.gauss(0, wick_vol))), 5)
-        low_p   = round(min(open_p, close_p) * (1 - abs(_rng.gauss(0, wick_vol))), 5)
-        vol     = round(abs(_rng.gauss(_SYNTHETIC_VOL_MEAN, _SYNTHETIC_VOL_STDDEV)), 2)
-        synthetic.append({
-            "timestamp": ts,
-            "open":   open_p,
-            "high":   high_p,
-            "low":    low_p,
-            "close":  close_p,
-            "volume": vol,
-            "synthetic": True,
-        })
-        price = close_p
-
-    logger.info(
-        "OHLCV synthetic fallback: %s %s — %d bars (paper/dev mode, no live feed)",
-        symbol, timeframe, len(synthetic),
+    # All real data sources exhausted — return 503 so the frontend can display
+    # a meaningful "data unavailable" state rather than rendering fake bars.
+    logger.error(
+        "OHLCV: all real data sources unavailable for %s %s "
+        "(price engine + yfinance both failed). "
+        "Configure at least one live data feed.",
+        symbol,
+        timeframe,
     )
-    return synthetic
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "error": "ohlcv_unavailable",
+            "message": (
+                f"No real OHLCV data available for {symbol} {timeframe}. "
+                "The price engine and all fallback feeds are currently unavailable. "
+                "Configure a live data feed (GOLDAPI_IO_KEY, OANDA_API_KEY, etc.)."
+            ),
+            "symbol": symbol,
+            "timeframe": timeframe,
+        },
+    )
 
 
 @router.get("/signals", summary="Active trading signals from the signal engine")
@@ -1656,7 +1600,7 @@ async def get_brain_state(
                         s if isinstance(s, str) else getattr(s, "name", str(s))
                         for s in strats
                     ]
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             # Derive confidence from performance metrics
             confidence = 0.0
@@ -1665,7 +1609,7 @@ async def get_brain_state(
                 # Use inverse of latency as a proxy for confidence when no ML score
                 lat = perf.get("latency_ms", 0)
                 confidence = max(0.0, min(1.0, 1.0 - lat / 1000.0)) if lat > 0 else 0.75
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             return {
                 **raw,
@@ -1781,38 +1725,21 @@ _TRADE_CSV_FIELDS = [
 ]
 
 
-def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
-    """Fetch trades from DB for the given user.
-
-    Queries by Trade.user_id directly (preferred path).  Falls back to joining
-    through Account when a trade was created before the user_id column existed.
-    Uses SessionLocal directly so it works in paper mode (no app_state.db_session_factory).
-    """
+async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
+    """Fetch trades from DB for the given user via TradeRepository."""
     try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Account, Trade
+        from database.async_connection import get_async_db as _get_async_db
+        from database.repositories.trade_repository import TradeRepository as _TradeRepo
 
-        session = _SL()
-        try:
-            # Primary: trades with user_id set directly
-            q_direct = session.query(Trade).filter(Trade.user_id == user_id)
-            # Fallback: trades linked via Account.user_id (legacy rows)
-            try:
-                q_via_account = (
-                    session.query(Trade)
-                    .join(Account, Trade.account_id == Account.id)
-                    .filter(Account.user_id == int(user_id) if str(user_id).isdigit() else Account.user_id == user_id)
-                    .filter(Trade.user_id.is_(None))
-                )
-                combined = q_direct.union(q_via_account)
-            except Exception:
-                combined = q_direct
-            if symbol:
-                combined = combined.filter(Trade.symbol == symbol.upper())
-            combined = combined.order_by(Trade.entry_time.desc()).offset(offset).limit(limit)
-            return combined.all()
-        finally:
-            session.close()
+        async with _get_async_db() as _db:
+            repo = _TradeRepo(_db)
+            trades = await repo.get_by_user(
+                user_id=user_id,
+                symbol=symbol.upper() if symbol else None,
+                limit=limit,
+                offset=offset,
+            )
+            return trades
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
@@ -1843,7 +1770,7 @@ def _trade_to_dict(t) -> dict:
         _x = exit_time  if hasattr(exit_time,  "timestamp") else _dt.datetime.fromisoformat(exit_time_str)  if exit_time_str  else None
         if _e and _x:
             duration_minutes = max(0, int((_x - _e).total_seconds() / 60))
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {
@@ -1888,7 +1815,7 @@ async def get_trade_history(
       limit   — max rows (1–1000, default 100)
       offset  — pagination offset
     """
-    trades = _query_trades(user.sub, symbol, limit, offset)
+    trades = await _query_trades(user.sub, symbol, limit, offset)
     return {
         "trades": [_trade_to_dict(t) for t in trades],
         "count": len(trades),
@@ -1912,7 +1839,7 @@ async def export_trade_history_csv(
 
     Returns: application/csv attachment.
     """
-    trades = _query_trades(user.sub, symbol, limit, offset=0)
+    trades = await _query_trades(user.sub, symbol, limit, offset=0)
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=_TRADE_CSV_FIELDS, extrasaction="ignore")
@@ -2279,7 +2206,7 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
                     peak = max(peak, v)
                     dd = (peak - v) / peak if peak > 0 else 0.0
                     max_dd = max(max_dd, dd)
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         positions = broker.get_positions() if hasattr(broker, "get_positions") else []
@@ -2288,7 +2215,7 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
         try:
             ks = _get_kill_switch()
             kill_switch = bool(ks and ks.is_active())
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         return {
@@ -2657,7 +2584,7 @@ async def get_regime_status(
                     "description": description,
                     "data_source": "regime_router",
                 }
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {

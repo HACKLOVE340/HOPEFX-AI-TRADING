@@ -188,10 +188,11 @@ class GoldFeedBase(ABC):
         if self._consecutive_errors >= _CB_OPEN_AFTER_ERRORS and self._cb_state != CircuitState.OPEN:
             self._cb_state = CircuitState.OPEN
             self._cb_opened_at = time.monotonic()
-            logger.error(
-                "%s circuit: OPEN after %d consecutive errors",
+            logger.warning(
+                "%s circuit: OPEN after %d consecutive errors — will probe in %.0fs",
                 self.name.value,
                 self._consecutive_errors,
+                _CB_HALF_OPEN_AFTER_S,
             )
             if self._prom_cb_state:
                 self._prom_cb_state.set(1)

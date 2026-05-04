@@ -26,6 +26,17 @@ Steps applied to OHLCV DataFrames (vectorised)
 8. Log returns              — log(close/prev_close), causal (shift(1))
 9. OHLCV validity flag      — 1 if all OHLCV values are finite and positive
 
+New in this version
+-------------------
+- Adaptive outlier removal: IQR-based outlier detection on close prices with
+  configurable fence multiplier; outlier bars are flagged (not dropped) so
+  downstream consumers can decide whether to exclude them.
+- Tick-to-bar alignment: align_ticks_to_bars() resamples a tick DataFrame to
+  OHLCV bars at any timeframe, filling gaps with forward-fill and flagging
+  synthetic bars created by gap-fill.
+- Feature scaling: scale_features() applies per-column MinMax or Z-score
+  scaling to a feature DataFrame using a rolling window (causal, no look-ahead).
+
 All OHLCV operations are vectorised (numpy/pandas) for performance.
 Single-tick operations are pure Python for minimal latency.
 """
@@ -418,6 +429,220 @@ class NormalizationPipeline:
         ohlcv = ohlcv.dropna(subset=["open", "close"])
 
         return self.normalize_ohlcv(ohlcv)
+
+    # ── Adaptive outlier removal ──────────────────────────────────────────────
+
+    def flag_outlier_bars(
+        self,
+        df: pd.DataFrame,
+        column: str = "close",
+        fence: float = 3.0,
+        window: int = 100,
+    ) -> pd.DataFrame:
+        """
+        Flag outlier bars using a rolling IQR fence (adaptive, causal).
+
+        For each bar, computes the rolling IQR over the previous `window` bars.
+        A bar is flagged as an outlier if its value falls outside:
+          [Q1 - fence × IQR, Q3 + fence × IQR]
+
+        The fence multiplier defaults to 3.0 (Tukey outer fence), which is
+        conservative enough to avoid flagging legitimate gold price moves.
+
+        Adds column `{column}_outlier` (1 = outlier, 0 = normal).
+        Bars are flagged but NOT dropped — callers decide whether to exclude.
+
+        Parameters
+        ----------
+        df     : OHLCV DataFrame with UTC DatetimeIndex
+        column : Column to check (default 'close')
+        fence  : IQR fence multiplier (default 3.0)
+        window : Rolling window size in bars (default 100)
+
+        Returns the DataFrame with an added `{column}_outlier` column.
+        """
+        if df is None or df.empty or column not in df.columns:
+            return df
+
+        d = df.copy()
+        col = d[column].astype(float)
+
+        # Rolling Q1, Q3 — shift(1) ensures causal (no look-ahead)
+        q1 = col.shift(1).rolling(window, min_periods=max(10, window // 4)).quantile(0.25)
+        q3 = col.shift(1).rolling(window, min_periods=max(10, window // 4)).quantile(0.75)
+        iqr = q3 - q1
+
+        lower = q1 - fence * iqr
+        upper = q3 + fence * iqr
+
+        outlier_flag = ((col < lower) | (col > upper)).astype(int)
+        # First `window` bars have no rolling history — mark as non-outlier
+        outlier_flag.iloc[:window] = 0
+        d[f"{column}_outlier"] = outlier_flag.fillna(0).astype(int)
+        return d
+
+    def remove_outlier_bars(
+        self,
+        df: pd.DataFrame,
+        column: str = "close",
+        fence: float = 3.0,
+        window: int = 100,
+    ) -> pd.DataFrame:
+        """
+        Remove outlier bars (hard drop). Use flag_outlier_bars() to inspect first.
+
+        Returns a DataFrame with outlier rows removed and the flag column dropped.
+        """
+        flagged = self.flag_outlier_bars(df, column=column, fence=fence, window=window)
+        flag_col = f"{column}_outlier"
+        if flag_col not in flagged.columns:
+            return df
+        clean = flagged[flagged[flag_col] == 0].drop(columns=[flag_col])
+        return clean
+
+    # ── Tick-to-bar alignment ─────────────────────────────────────────────────
+
+    def align_ticks_to_bars(
+        self,
+        tick_df: pd.DataFrame,
+        timeframe_minutes: int = 60,
+        price_col: str = "mid",
+        volume_col: str | None = "volume",
+        fill_gaps: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Resample a tick DataFrame to OHLCV bars at the given timeframe.
+
+        Gaps in the tick stream (periods with no ticks) are forward-filled
+        when fill_gaps=True, and the synthetic bars are flagged with
+        `synthetic=1` so downstream consumers can exclude them.
+
+        Parameters
+        ----------
+        tick_df           : DataFrame with UTC DatetimeIndex and price column
+        timeframe_minutes : Bar size in minutes
+        price_col         : Column to use as price (default 'mid')
+        volume_col        : Column to use as volume (None = unit volume)
+        fill_gaps         : Forward-fill missing bars (default True)
+
+        Returns a normalised OHLCV DataFrame with columns:
+          open, high, low, close, volume, synthetic, [log_return, gap_flag, ...]
+        """
+        if tick_df is None or tick_df.empty:
+            return pd.DataFrame()
+
+        if not isinstance(tick_df.index, pd.DatetimeIndex):
+            logger.warning("align_ticks_to_bars: index is not DatetimeIndex")
+            return pd.DataFrame()
+
+        if price_col not in tick_df.columns:
+            logger.warning("align_ticks_to_bars: price column '%s' not found", price_col)
+            return pd.DataFrame()
+
+        prices = tick_df[price_col].astype(float)
+        freq = f"{timeframe_minutes}min"
+
+        # Build OHLCV via resample
+        ohlcv = prices.resample(freq).agg(
+            open="first",
+            high="max",
+            low="min",
+            close="last",
+        )
+
+        if volume_col and volume_col in tick_df.columns:
+            # fillna(0) prevents NaN from propagating into bars with no volume ticks
+            ohlcv["volume"] = tick_df[volume_col].astype(float).resample(freq).sum().fillna(0.0)
+        else:
+            # Unit volume: count ticks per bar
+            ohlcv["volume"] = prices.resample(freq).count().astype(float)
+
+        # Mark bars that had real ticks vs synthetic (gap-filled)
+        tick_count = prices.resample(freq).count()
+        ohlcv["synthetic"] = (tick_count == 0).astype(int)
+
+        if fill_gaps:
+            # Forward-fill OHLC for synthetic bars (open=close=prev_close)
+            ohlcv["close"] = ohlcv["close"].ffill()
+            ohlcv["open"] = ohlcv["open"].fillna(ohlcv["close"])
+            ohlcv["high"] = ohlcv["high"].fillna(ohlcv["close"])
+            ohlcv["low"] = ohlcv["low"].fillna(ohlcv["close"])
+            ohlcv["volume"] = ohlcv["volume"].fillna(0.0)
+
+        # Drop bars where we still have no price (start of series)
+        ohlcv = ohlcv.dropna(subset=["close"])
+
+        if ohlcv.empty:
+            return pd.DataFrame()
+
+        # Apply standard normalisation
+        result = self.normalize_ohlcv(ohlcv)
+        if result.empty:
+            return pd.DataFrame()
+
+        # Re-attach synthetic flag (normalize_ohlcv may have dropped it)
+        result["synthetic"] = ohlcv["synthetic"].reindex(result.index).fillna(0).astype(int)
+        return result
+
+    # ── Feature scaling ───────────────────────────────────────────────────────
+
+    def scale_features(
+        self,
+        df: pd.DataFrame,
+        columns: list[str] | None = None,
+        method: str = "zscore",
+        window: int = 200,
+        min_periods: int = 20,
+    ) -> pd.DataFrame:
+        """
+        Apply causal (rolling) feature scaling to a DataFrame.
+
+        Scaling is strictly causal: the scaler at time t uses only data
+        from [t-window, t-1] — no look-ahead bias.
+
+        Parameters
+        ----------
+        df          : Feature DataFrame with UTC DatetimeIndex
+        columns     : Columns to scale (None = all numeric columns)
+        method      : 'zscore' (subtract mean, divide by std) or
+                      'minmax' (scale to [0, 1] using rolling min/max)
+        window      : Rolling window size in bars
+        min_periods : Minimum observations before scaling is applied
+
+        Returns a new DataFrame with scaled columns appended as
+        `{col}_scaled`. Original columns are preserved unchanged.
+        """
+        if df is None or df.empty:
+            return df
+
+        d = df.copy()
+        cols = columns or list(d.select_dtypes(include=[np.number]).columns)
+        # Exclude already-scaled columns and flag columns
+        cols = [c for c in cols if not c.endswith("_scaled") and c not in
+                ("gap_flag", "ohlcv_valid", "synthetic", "close_outlier")]
+
+        for col in cols:
+            if col not in d.columns:
+                continue
+            series = d[col].astype(float)
+            # Shift by 1 to ensure causal: scaler uses data up to t-1
+            shifted = series.shift(1)
+
+            if method == "zscore":
+                roll_mean = shifted.rolling(window, min_periods=min_periods).mean()
+                roll_std = shifted.rolling(window, min_periods=min_periods).std().replace(0, np.nan)
+                scaled = (series - roll_mean) / roll_std
+            elif method == "minmax":
+                roll_min = shifted.rolling(window, min_periods=min_periods).min()
+                roll_max = shifted.rolling(window, min_periods=min_periods).max()
+                denom = (roll_max - roll_min).replace(0, np.nan)
+                scaled = (series - roll_min) / denom
+            else:
+                raise ValueError(f"Unknown scaling method: {method!r}. Use 'zscore' or 'minmax'.")
+
+            d[f"{col}_scaled"] = scaled.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+        return d
 
     def detect_gaps(
         self,

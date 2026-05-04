@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ const STATUS_COLOR: Record<string, string> = {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Wallet: React.FC = () => {
+  const navigate = useNavigate();
   const [tab, setTab]                   = useState<'overview' | 'transactions' | 'subscriptions' | 'payment-methods'>('overview');
   const [transactions, setTxs]          = useState<Transaction[]>([]);
   const [txLoading, setTxLoading]       = useState(true);
@@ -185,7 +187,15 @@ const Wallet: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <h1 style={s.title}>Wallet & Payments</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1 style={{ ...s.title, marginBottom: 0 }}>Wallet & Payments</h1>
+        <button
+          onClick={() => navigate('/trade')}
+          style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 13, fontWeight: 700, padding: '9px 18px', cursor: 'pointer' }}
+        >
+          ⚡ Start Trading
+        </button>
+      </div>
 
       {balanceErr && (
         <div style={s.errBanner}>⚠️ {balanceErr}</div>
@@ -196,9 +206,11 @@ const Wallet: React.FC = () => {
         <div>
           <div style={s.balanceLabel}>Available Balance</div>
           {balanceLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ width: 160, height: 36, borderRadius: 6, background: '#1e293b', animation: 'pulse 1.5s ease-in-out infinite' }} />
-              <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 24, height: 24, border: '3px solid #334155', borderTopColor: '#f59e0b',
+                borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <span style={{ color: '#64748b', fontSize: 14 }}>Loading wallet…</span>
             </div>
           ) : (
             <>

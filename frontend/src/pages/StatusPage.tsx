@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 
@@ -103,6 +104,7 @@ const UptimeBar: React.FC<{ history: HistoryDay[] }> = ({ history }) => (
 // ── Main component ────────────────────────────────────────────────────────────
 
 const StatusPage: React.FC = () => {
+  const navigate = useNavigate();
   const wsStatus = useStore(selectWsStatus);
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
@@ -198,7 +200,13 @@ const StatusPage: React.FC = () => {
             Uptime: {data?.uptime_human ?? '—'} &nbsp;·&nbsp; Checked: {data ? fmtTime(data.checked_at) : '—'}
           </div>
         </div>
-        <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/')}
+            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📊 Dashboard
+          </button>
+          <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
+        </div>
       </div>
 
       {/* WebSocket live status */}

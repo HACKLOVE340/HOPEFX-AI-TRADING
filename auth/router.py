@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import asyncio
 import functools
+import hmac
 import logging
 import os
 import secrets
@@ -38,6 +39,80 @@ UTC = timezone.utc
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
+
+# ── Signed token helpers (itsdangerous) ──────────────────────────────────────
+# Email verification and password reset tokens are signed with
+# URLSafeTimedSerializer so they carry an embedded expiry and cannot be
+# forged without the server secret.  The DB still stores a SHA-256 hash of
+# the raw token for revocation (one-time use), but expiry is enforced by the
+# signature itself — no DB timestamp column required.
+
+try:
+    from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+    _ITS_AVAILABLE = True
+except ImportError:  # pragma: no cover — itsdangerous is in requirements.txt
+    _ITS_AVAILABLE = False
+    URLSafeTimedSerializer = None  # type: ignore[assignment,misc]
+    BadSignature = Exception  # type: ignore[assignment,misc]
+    SignatureExpired = Exception  # type: ignore[assignment,misc]
+
+
+def _get_signing_secret() -> str:
+    """Return the signing secret for itsdangerous serialisers.
+
+    Uses SECURITY_JWT_SECRET (already required at startup) so no extra env
+    var is needed.  A distinct salt is applied per token type so the same
+    secret cannot be reused across contexts.
+    """
+    secret = os.getenv("SECURITY_JWT_SECRET", "")
+    if not secret or len(secret) < 32:
+        raise RuntimeError(
+            "SECURITY_JWT_SECRET must be set (≥32 chars) before issuing signed tokens"
+        )
+    return secret
+
+
+def _make_signed_token(payload: dict, salt: str, max_age_seconds: int = 86400) -> str:
+    """Return a URL-safe signed token embedding *payload*.
+
+    Falls back to ``secrets.token_urlsafe(32)`` when itsdangerous is not
+    installed (should never happen in production — itsdangerous is in
+    requirements.txt).
+    """
+    if not _ITS_AVAILABLE:
+        logger.warning("itsdangerous not available — falling back to opaque token")
+        return secrets.token_urlsafe(32)
+    s = URLSafeTimedSerializer(_get_signing_secret(), salt=salt)
+    return s.dumps(payload)
+
+
+def _verify_signed_token(
+    token: str,
+    salt: str,
+    max_age_seconds: int,
+) -> dict | None:
+    """Verify and decode a signed token.  Returns the payload dict or None.
+
+    Returns None on any error (expired, tampered, wrong salt).  Callers
+    should treat None as an invalid/expired token without leaking the reason.
+    """
+    if not _ITS_AVAILABLE:
+        return None
+    try:
+        s = URLSafeTimedSerializer(_get_signing_secret(), salt=salt)
+        return s.loads(token, max_age=max_age_seconds)
+    except (SignatureExpired, BadSignature, Exception):
+        return None
+
+
+# Salt constants — distinct per token type so tokens cannot be cross-used.
+_SALT_EMAIL_VERIFY = "hopefx-email-verify-v1"
+_SALT_PASSWORD_RESET = "hopefx-password-reset-v1"
+
+# Token TTLs
+_EMAIL_VERIFY_TTL = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(24 * 3600)))   # 24 h
+_PASSWORD_RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(3600)))    # 1 h
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -345,9 +420,9 @@ def _get_current_user_id(
 
 @router.post("/register", status_code=201)
 async def register(body: RegisterRequest, request: Request):
-    """Create a new user account and send email verification."""
+    """Create a new user account and send a signed email verification link."""
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, verify_token = await asyncio.to_thread(
+    ok, msg, raw_verify_token = await asyncio.to_thread(
         functools.partial(
             _svc().register,
             email=body.email,
@@ -358,24 +433,29 @@ async def register(body: RegisterRequest, request: Request):
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
-    if verify_token:
+    if raw_verify_token:
+        # Wrap the raw opaque token in a signed envelope so the link is
+        # self-expiring and tamper-evident without a DB timestamp lookup.
+        signed_verify_token = _make_signed_token(
+            {"tok": raw_verify_token, "email": body.email},
+            salt=_SALT_EMAIL_VERIFY,
+            max_age_seconds=_EMAIL_VERIFY_TTL,
+        )
         try:
             from core.email_service import send_verification_email
 
-            send_verification_email(body.email, body.username, verify_token)
+            send_verification_email(body.email, body.username, signed_verify_token)
         except Exception as _e:
             logger.warning("Verification email failed: %s", _e)
+    else:
+        signed_verify_token = None
 
     # Auto-assign FREE tier so paper trading works immediately after signup.
-    # Must use the user's UUID (not username) as the subscription key so that
-    # /api/billing/subscription lookups by user.sub (JWT sub = UUID) work.
     try:
         from monetization.subscription import SubscriptionTier, subscription_manager
 
-        # Resolve the UUID for the newly created user.
         new_user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
         user_uuid = new_user.id if new_user else None
-
         if user_uuid:
             existing = subscription_manager.get_user_subscription(user_uuid)
             if not existing:
@@ -387,19 +467,33 @@ async def register(body: RegisterRequest, request: Request):
         logger.debug("Free tier assignment skipped: %s", _tier_err)
 
     response = {"message": msg}
-    # Expose token only in explicit test mode (APP_ENV=test) so devs can test
-    # without SMTP.  Never expose in development or staging — those environments
-    # may share infrastructure with production and a leaked token is a live
-    # account-takeover vector.
-    if verify_token and os.getenv("APP_ENV", "").lower() == "test":
-        response["_dev_verify_token"] = verify_token
+    # Expose signed token only in APP_ENV=test so CI can verify without SMTP.
+    if signed_verify_token and os.getenv("APP_ENV", "").lower() == "test":
+        response["_dev_verify_token"] = signed_verify_token
     return response
 
 
 @router.get("/verify-email")
 async def verify_email(token: str):
-    """Verify email address from link. token= query param."""
-    ok, msg = await asyncio.to_thread(_svc().verify_email, token)
+    """Verify email address from a signed link token.
+
+    The token is a URLSafeTimedSerializer envelope.  Signature and expiry
+    are validated before any DB lookup so forged or expired tokens are
+    rejected without a database round-trip.  The inner raw token is then
+    passed to the service for one-time-use hash validation.
+    """
+    # 1. Verify outer signature and expiry — fast, no DB hit
+    payload = _verify_signed_token(token, _SALT_EMAIL_VERIFY, _EMAIL_VERIFY_TTL)
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+
+    # 2. Extract the raw opaque token stored in the DB as a SHA-256 hash
+    raw_token = payload.get("tok") if isinstance(payload, dict) else None
+    if not raw_token:
+        raise HTTPException(status_code=400, detail="Malformed verification token")
+
+    # 3. Service validates one-time-use hash and marks the account verified
+    ok, msg = await asyncio.to_thread(_svc().verify_email, raw_token)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -408,17 +502,21 @@ async def verify_email(token: str):
 @router.post("/resend-verification")
 async def resend_verification(body: ForgotPasswordRequest, request: Request):
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg, verify_token = await asyncio.to_thread(_svc().resend_verification, body.email)
+    ok, msg, raw_verify_token = await asyncio.to_thread(_svc().resend_verification, body.email)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
-    if verify_token:
+    if raw_verify_token:
+        signed_verify_token = _make_signed_token(
+            {"tok": raw_verify_token, "email": body.email},
+            salt=_SALT_EMAIL_VERIFY,
+            max_age_seconds=_EMAIL_VERIFY_TTL,
+        )
         try:
             from core.email_service import send_verification_email
 
-            # Fetch username for the email
             user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
             username = user.username if user else body.email
-            send_verification_email(body.email, username, verify_token)
+            send_verification_email(body.email, username, signed_verify_token)
         except Exception as _e:
             logger.warning("Resend verification email failed: %s", _e)
     return {"message": msg}
@@ -687,31 +785,63 @@ async def revoke_all_sessions(user_id: str = Depends(_get_current_user_id)):
 
 @router.post("/forgot-password")
 async def forgot_password(body: ForgotPasswordRequest, request: Request):
-    """Request a password reset link. Always returns 200 to avoid email enumeration."""
+    """Request a password reset link.
+
+    Always returns 200 to prevent email enumeration.  The reset link
+    carries a signed token (URLSafeTimedSerializer) so expiry is enforced
+    by the signature — no DB timestamp lookup required on redemption.
+    """
     _check_ip_rate_limit(_get_client_ip(request))
-    _, msg, reset_token = await asyncio.to_thread(functools.partial(_svc().request_password_reset, body.email))
-    if reset_token:
+    _, msg, raw_reset_token = await asyncio.to_thread(
+        functools.partial(_svc().request_password_reset, body.email)
+    )
+    if raw_reset_token:
+        signed_reset_token = _make_signed_token(
+            {"tok": raw_reset_token, "email": body.email},
+            salt=_SALT_PASSWORD_RESET,
+            max_age_seconds=_PASSWORD_RESET_TTL,
+        )
         try:
             from core.email_service import send_password_reset_email
 
             user = await asyncio.to_thread(_svc().get_user_by_email, body.email)
             username = user.username if user else body.email
-            send_password_reset_email(body.email, username, reset_token)
+            send_password_reset_email(body.email, username, signed_reset_token)
         except Exception as _e:
             logger.warning("Password reset email failed: %s", _e)
+    else:
+        signed_reset_token = None
 
     response = {"message": msg}
-    # Same restriction as register: only expose in APP_ENV=test.
-    if reset_token and os.getenv("APP_ENV", "").lower() == "test":
-        response["_dev_reset_token"] = reset_token
+    if signed_reset_token and os.getenv("APP_ENV", "").lower() == "test":
+        response["_dev_reset_token"] = signed_reset_token
     return response
 
 
 @router.post("/reset-password")
 async def reset_password(body: ResetPasswordRequest, request: Request):
-    """Set a new password using the reset token."""
+    """Set a new password using a signed reset token.
+
+    The outer signed envelope is verified first (signature + expiry).
+    The inner raw token is then passed to the service for one-time-use
+    hash validation and the actual password update.
+    """
     _check_ip_rate_limit(_get_client_ip(request))
-    ok, msg = await asyncio.to_thread(functools.partial(_svc().reset_password, body.token, body.new_password))
+
+    # 1. Verify outer signature and expiry
+    payload = _verify_signed_token(body.token, _SALT_PASSWORD_RESET, _PASSWORD_RESET_TTL)
+    if payload is None:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+
+    # 2. Extract raw token for DB one-time-use check
+    raw_token = payload.get("tok") if isinstance(payload, dict) else None
+    if not raw_token:
+        raise HTTPException(status_code=400, detail="Malformed reset token")
+
+    # 3. Service validates hash, updates password, revokes all sessions
+    ok, msg = await asyncio.to_thread(
+        functools.partial(_svc().reset_password, raw_token, body.new_password)
+    )
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -775,28 +905,88 @@ async def get_me(user_id: str = Depends(_get_current_user_id)):
     }
 
 
-# ── CSRF token endpoint ───────────────────────────────────────────────────────
-# Issues a short-lived CSRF token as a cookie (SameSite=Strict, not HttpOnly
-# so JavaScript can read it) and returns it in the JSON body.
-# State-changing requests must echo the token back in the X-CSRF-Token header.
-# The CSRF middleware in app.py validates the header against the cookie.
+# ── CSRF double-submit cookie ─────────────────────────────────────────────────
+# Pattern: server issues a random token as a cookie (SameSite=Strict) and
+# returns it in the JSON body.  The SPA reads the body value and echoes it
+# back in the X-CSRF-Token request header on every state-changing call.
+# The middleware (core/middleware.py) calls validate_csrf_token() to compare
+# the header value against the cookie using a constant-time HMAC comparison
+# so timing attacks cannot distinguish a wrong token from a missing one.
+#
+# Why HMAC comparison instead of == ?
+#   Plain string equality short-circuits on the first differing byte, leaking
+#   timing information.  hmac.compare_digest() always runs in constant time.
 
 _CSRF_COOKIE_NAME = "hopefx_csrf"
 _CSRF_HEADER_NAME = "X-CSRF-Token"
 _CSRF_TOKEN_BYTES = 32
 _CSRF_COOKIE_MAX_AGE = 3600  # 1 hour
 
+# Paths that are exempt from CSRF validation (GET/HEAD/OPTIONS are always
+# exempt; these are POST paths that must work without a prior cookie fetch,
+# e.g. OAuth callbacks and webhook receivers).
+_CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
+    "/api/auth/login",
+    "/api/auth/register",
+    "/api/auth/refresh",
+    "/api/auth/forgot-password",
+    "/api/auth/reset-password",
+    "/api/auth/verify-email",
+    "/api/billing/webhook",
+    "/api/payments/webhook",
+    "/api/health",
+    "/api/auth/csrf-token",
+)
+
+_CSRF_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def validate_csrf_token(request: Request) -> bool:
+    """Return True if the request passes CSRF validation.
+
+    Exempt conditions (always pass):
+    - Safe HTTP methods (GET, HEAD, OPTIONS)
+    - Paths in _CSRF_EXEMPT_PREFIXES
+    - CSRF cookie not yet issued (first-visit grace — cookie absent)
+
+    Validation: constant-time HMAC comparison of the X-CSRF-Token header
+    value against the hopefx_csrf cookie value.
+    """
+    if request.method in _CSRF_SAFE_METHODS:
+        return True
+
+    path = request.url.path
+    for prefix in _CSRF_EXEMPT_PREFIXES:
+        if path.startswith(prefix):
+            return True
+
+    cookie_val = request.cookies.get(_CSRF_COOKIE_NAME)
+    if not cookie_val:
+        # Cookie not yet issued — first-visit grace period.
+        # The client must call GET /api/auth/csrf-token before submitting forms.
+        return False
+
+    header_val = request.headers.get(_CSRF_HEADER_NAME, "")
+    if not header_val:
+        return False
+
+    # Constant-time comparison — prevents timing oracle attacks
+    return hmac.compare_digest(
+        cookie_val.encode("utf-8"),
+        header_val.encode("utf-8"),
+    )
+
 
 @router.get("/csrf-token")
 async def get_csrf_token(response: Response) -> dict:
-    """
-    Issue a CSRF token.
+    """Issue a CSRF token.
 
     Sets a ``hopefx_csrf`` cookie (SameSite=Strict, Secure in production)
-    and returns the token in the JSON body so the client can include it as
-    the ``X-CSRF-Token`` header on all state-changing requests.
+    and returns the token in the JSON body.  The SPA must include this value
+    as the ``X-CSRF-Token`` header on all state-changing requests (POST,
+    PUT, PATCH, DELETE).
 
-    Call this once on page load before submitting any form.
+    Call once on page load before submitting any form.
     """
     token = secrets.token_hex(_CSRF_TOKEN_BYTES)
     secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
@@ -804,7 +994,7 @@ async def get_csrf_token(response: Response) -> dict:
         key=_CSRF_COOKIE_NAME,
         value=token,
         max_age=_CSRF_COOKIE_MAX_AGE,
-        httponly=False,  # JS must be able to read it to set the header
+        httponly=False,   # JS must read it to set the header
         samesite="strict",
         secure=secure,
         path="/",

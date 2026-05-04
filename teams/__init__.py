@@ -699,7 +699,7 @@ def create_teams_router(manager: "TeamManager"):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
 
     from api.auth import TokenPayload, get_current_user as _get_current_user
@@ -727,6 +727,7 @@ def create_teams_router(manager: "TeamManager"):
         new_role: str
         changed_by: str = "admin"
 
+    @router.get("")
     @router.get("/")
     async def list_teams(user_id: str | None = None):
         """List all teams, optionally filtered by user membership."""

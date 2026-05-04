@@ -116,6 +116,7 @@ class User(Base):
         # email uniqueness enforced by Column(unique=True) — no separate index needed
         Index("idx_users_username", "username"),
         Index("idx_users_status", "status"),
+        Index("idx_users_plan", "plan"),
     )
 
     def __init__(self, **kwargs):

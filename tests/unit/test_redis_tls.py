@@ -168,7 +168,11 @@ class TestResetRedisClient:
 @pytest.mark.asyncio
 class TestGetRedisNoConfig:
     async def test_returns_none_when_unconfigured(self):
-        """get_redis() returns None when no Redis env vars are set."""
+        """get_redis() returns a fakeredis fallback (not None) when no Redis env vars are set.
+
+        The client falls back to an in-process fakeredis instance so that all
+        cache-dependent code paths remain functional without a real Redis server.
+        """
         from cache.redis_client import reset_redis_client, get_redis
 
         reset_redis_client()
@@ -179,7 +183,8 @@ class TestGetRedisNoConfig:
         }
         with patch.dict(os.environ, env, clear=False):
             result = await get_redis()
-        assert result is None
+        # fakeredis fallback is returned — not None
+        assert result is not None
 
     async def test_no_config_warning_logged_once(self, caplog):
         """'no connection configured' warning is logged exactly once."""

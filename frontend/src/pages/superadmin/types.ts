@@ -1,5 +1,19 @@
 // superadmin/types.ts — shared types for all superadmin sections
 
+import { createContext, useContext } from 'react';
+
+/**
+ * Context that lets any section inside SuperAdminDashboard navigate to another tab
+ * without requiring prop-drilling through every lazy-loaded section.
+ */
+export interface SuperAdminNavContextValue {
+  navigateTo: (tab: SuperAdminTab) => void;
+}
+export const SuperAdminNavContext = createContext<SuperAdminNavContextValue>({
+  navigateTo: () => { /* noop until provider mounts */ },
+});
+export const useSuperAdminNav = () => useContext(SuperAdminNavContext);
+
 export type SuperAdminTab =
   | 'overview'
   | 'users'

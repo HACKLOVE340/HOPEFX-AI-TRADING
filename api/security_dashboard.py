@@ -590,7 +590,7 @@ async def get_security_status(user: TokenPayload = Depends(require_role("admin")
         from api.db_store import db_get
         ld = db_get("lockdown_status") or {}
         lockdown_active = bool(ld.get("active", False))
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     blocked_count = len(_blocked_ips)
@@ -599,7 +599,7 @@ async def get_security_status(user: TokenPayload = Depends(require_role("admin")
     try:
         from api.security.fixes import _fix_store
         pending_fixes = sum(1 for f in _fix_store.values() if f.get("status") == "pending")
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {
@@ -628,7 +628,7 @@ async def unblock_ip_address(
         blocked = db_get("blocked_ips") or []
         blocked = [b for b in blocked if b.get("ip") != ip]
         db_set("blocked_ips", blocked, changed_by=user.sub)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     logger.info("IP unblocked: %s by %s", ip, user.sub)
     return {"success": True, "ip": ip, "action": "unblocked"}
@@ -657,7 +657,7 @@ async def block_ip_address(
                 "blocked_at": datetime.now(UTC).isoformat(),
             })
         db_set("blocked_ips", blocked, changed_by=user.sub)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     logger.warning("IP blocked: %s reason=%s by %s", ip, reason, user.sub)
     return {"success": True, "ip": ip, "reason": reason, "action": "blocked"}

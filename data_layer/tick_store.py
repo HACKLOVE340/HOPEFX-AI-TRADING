@@ -76,7 +76,8 @@ import logging
 import os
 import time
 from collections import defaultdict, deque
-from datetime import timezone
+from collections.abc import Callable
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -95,14 +96,17 @@ _FORCE_BACKEND: str = os.getenv("TICK_STORE_BACKEND", "").lower()
 # ── Schema DDL for TimescaleDB ────────────────────────────────────────────────
 _TIMESCALE_DDL = """
 CREATE TABLE IF NOT EXISTS ticks (
-    ts_ns       BIGINT        NOT NULL,
-    symbol      TEXT          NOT NULL,
+    ts_ns       BIGINT           NOT NULL,
+    symbol      TEXT             NOT NULL,
     bid         DOUBLE PRECISION NOT NULL,
     ask         DOUBLE PRECISION NOT NULL,
     mid         DOUBLE PRECISION GENERATED ALWAYS AS ((bid + ask) / 2.0) STORED,
     spread      DOUBLE PRECISION GENERATED ALWAYS AS (ask - bid) STORED,
     volume      DOUBLE PRECISION NOT NULL DEFAULT 0.0,
-    source      TEXT          NOT NULL DEFAULT ''
+    source      TEXT             NOT NULL DEFAULT '',
+    quality     TEXT             NOT NULL DEFAULT 'good',
+    confidence  DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    lineage_id  TEXT             NOT NULL DEFAULT ''
 );
 """
 # TimescaleDB hypertable — partitioned on (symbol, ts_ns expressed as TIMESTAMPTZ)
@@ -787,8 +791,277 @@ class TickStore:
         return df.sort_index()
 
 
+    def batch_insert(self, ticks: list[dict]) -> int:
+        """
+        Insert multiple ticks in a single operation.
+
+        For the TimescaleDB backend this uses a single multi-row INSERT for
+        maximum throughput.  For the memory and Redis backends it falls back
+        to sequential inserts.
+
+        Args:
+            ticks: List of tick dicts, each with the same keys as insert().
+
+        Returns:
+            Number of ticks successfully inserted.
+        """
+        if not ticks:
+            return 0
+
+        backend = self._backend
+        if isinstance(backend, _TimescaleBackend):
+            return backend.batch_insert(ticks)
+
+        # Fallback: sequential insert for other backends
+        inserted = 0
+        for tick in ticks:
+            try:
+                self.insert(**tick)
+                inserted += 1
+            except Exception as exc:
+                logger.warning("TickStore.batch_insert: single insert failed: %s", exc)
+        return inserted
+
+    def query_range(
+        self,
+        symbol: str,
+        start: "datetime",
+        end: "datetime",
+        limit: int = 10_000,
+    ) -> "pd.DataFrame":
+        """
+        Query ticks between two UTC datetimes.
+
+        Returns a DataFrame sorted ascending by ts_ns.
+        """
+        since_ns = int(start.timestamp() * 1_000_000_000)
+        until_ns = int(end.timestamp() * 1_000_000_000)
+        df = self.query(symbol, since_ns=since_ns, until_ns=until_ns, limit=limit)
+        return df.sort_values("ts_ns", ascending=True).reset_index(drop=True)
+
+    def ohlcv_multi_timeframe(
+        self,
+        symbol: str,
+        timeframes_s: list[int],
+        limit: int = 200,
+    ) -> dict[int, "pd.DataFrame"]:
+        """
+        Return OHLCV DataFrames for multiple timeframes in one call.
+
+        Args:
+            symbol: Instrument symbol.
+            timeframes_s: List of bar durations in seconds (e.g. [60, 300, 3600]).
+            limit: Maximum bars per timeframe.
+
+        Returns:
+            Dict mapping timeframe_s → DataFrame with columns
+            [open, high, low, close, volume].
+        """
+        result: dict[int, "pd.DataFrame"] = {}
+        for tf in timeframes_s:
+            try:
+                result[tf] = self.to_ohlcv_df(symbol, timeframe_s=tf, limit=limit)
+            except Exception as exc:
+                logger.warning(
+                    "TickStore.ohlcv_multi_timeframe failed for %s/%ds: %s",
+                    symbol,
+                    tf,
+                    exc,
+                )
+                import pandas as _pd
+                result[tf] = _pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
+        return result
+
+
+# ── TimescaleDB batch insert ──────────────────────────────────────────────────
+
+def _patch_timescale_batch_insert() -> None:
+    """
+    Monkey-patch _TimescaleBackend with a batch_insert method that uses a
+    single multi-row INSERT for maximum throughput.
+
+    Called once at module load time.
+    """
+    import time as _time
+
+    def batch_insert(self: "_TimescaleBackend", ticks: list[dict]) -> int:
+        if not ticks:
+            return 0
+        if self._conn is None:
+            self._connect()
+        if self._conn is None:
+            return 0
+
+        rows = []
+        for t in ticks:
+            ts_ns = t.get("ts_ns") or int(t.get("timestamp", _time.time()) * 1_000_000_000)
+            rows.append((
+                ts_ns,
+                t.get("symbol", ""),
+                float(t.get("bid", 0.0)),
+                float(t.get("ask", 0.0)),
+                float(t.get("mid", (t.get("bid", 0.0) + t.get("ask", 0.0)) / 2.0)),
+                float(t.get("spread", t.get("ask", 0.0) - t.get("bid", 0.0))),
+                float(t.get("volume", 0.0)),
+                str(t.get("source", "")),
+                str(t.get("quality", "good")),
+                float(t.get("confidence", 1.0)),
+                str(t.get("lineage_id", "")),
+            ))
+
+        try:
+            with self._cur() as cur:
+                cur.executemany(
+                    """
+                    INSERT INTO ticks
+                        (ts_ns, symbol, bid, ask, mid, spread, volume,
+                         source, quality, confidence, lineage_id)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    rows,
+                )
+            self._conn.commit()
+            return len(rows)
+        except Exception as exc:
+            logger.warning("_TimescaleBackend.batch_insert failed: %s", exc)
+            try:
+                self._conn.rollback()
+            except Exception:  # nosec B110
+                pass
+            return 0
+
+    _TimescaleBackend.batch_insert = batch_insert  # type: ignore[attr-defined]
+
+
+_patch_timescale_batch_insert()
+
+
+# ── Async wrapper ─────────────────────────────────────────────────────────────
+
+class AsyncTickStore:
+    """
+    Async wrapper around TickStore for use in FastAPI async endpoints and
+    asyncio-based pipelines.
+
+    All blocking I/O is dispatched to a thread-pool executor so the event
+    loop is never blocked.
+
+    Usage::
+
+        store = AsyncTickStore()
+
+        # Insert a single tick
+        await store.insert(symbol="XAU_USD", ts_ns=time.time_ns(),
+                           bid=2300.0, ask=2301.0)
+
+        # Batch insert
+        await store.batch_insert(ticks)
+
+        # Query
+        rows = await store.query("XAU_USD", limit=100)
+
+        # OHLCV
+        df = await store.to_ohlcv_df("XAU_USD", timeframe_s=60)
+    """
+
+    def __init__(self, store: TickStore | None = None) -> None:
+        self._store = store or get_tick_store()
+        self._executor: "concurrent.futures.ThreadPoolExecutor | None" = None
+
+    def _get_executor(self) -> "concurrent.futures.ThreadPoolExecutor":
+        if self._executor is None:
+            import concurrent.futures
+            self._executor = concurrent.futures.ThreadPoolExecutor(
+                max_workers=4, thread_name_prefix="async-tick-store"
+            )
+        return self._executor
+
+    async def _run(self, fn: "Callable", *args: "Any", **kwargs: "Any") -> "Any":
+        import asyncio
+        loop = asyncio.get_event_loop()
+        import functools
+        return await loop.run_in_executor(
+            self._get_executor(), functools.partial(fn, *args, **kwargs)
+        )
+
+    async def insert(self, **kwargs: "Any") -> bool:
+        """Async insert a single tick."""
+        return await self._run(self._store.insert, **kwargs)
+
+    async def batch_insert(self, ticks: list[dict]) -> int:
+        """Async batch insert."""
+        return await self._run(self._store.batch_insert, ticks)
+
+    async def query(
+        self,
+        symbol: str,
+        since_ns: int = 0,
+        until_ns: int = 0,
+        limit: int = 1000,
+    ) -> "pd.DataFrame":
+        """Async query ticks."""
+        return await self._run(
+            self._store.query, symbol, since_ns=since_ns, until_ns=until_ns, limit=limit
+        )
+
+    async def query_range(
+        self,
+        symbol: str,
+        start: "datetime",
+        end: "datetime",
+        limit: int = 10_000,
+    ) -> "pd.DataFrame":
+        """Async range query by datetime."""
+        return await self._run(self._store.query_range, symbol, start, end, limit=limit)
+
+    async def ohlcv(
+        self,
+        symbol: str,
+        timeframe_s: int = 3600,
+        limit: int = 500,
+    ) -> "pd.DataFrame":
+        """Async OHLCV DataFrame."""
+        return await self._run(self._store.ohlcv, symbol, timeframe_s, limit=limit)
+
+    async def to_ohlcv_df(
+        self,
+        symbol: str,
+        timeframe_s: int = 3600,
+        limit: int = 500,
+    ) -> "pd.DataFrame":
+        """Async OHLCV DataFrame (convenience alias)."""
+        return await self._run(self._store.to_ohlcv_df, symbol, timeframe_s, limit=limit)
+
+    async def ohlcv_multi_timeframe(
+        self,
+        symbol: str,
+        timeframes_s: list[int],
+        limit: int = 200,
+    ) -> "dict[int, pd.DataFrame]":
+        """Async multi-timeframe OHLCV."""
+        return await self._run(
+            self._store.ohlcv_multi_timeframe, symbol, timeframes_s, limit=limit
+        )
+
+    async def latest(self, symbol: str) -> dict | None:
+        """Async latest tick."""
+        return await self._run(self._store.latest, symbol)
+
+    async def health(self) -> dict:
+        """Async health check."""
+        return await self._run(self._store.health)
+
+    async def close(self) -> None:
+        """Shut down the thread-pool executor."""
+        if self._executor:
+            self._executor.shutdown(wait=False)
+            self._executor = None
+
+
 # ── Singleton ─────────────────────────────────────────────────────────────────
 _instance: TickStore | None = None
+_async_instance: AsyncTickStore | None = None
 
 
 def get_tick_store() -> TickStore:
@@ -802,3 +1075,11 @@ def get_tick_store() -> TickStore:
     if _instance is None:
         _instance = TickStore()
     return _instance
+
+
+def get_async_tick_store() -> AsyncTickStore:
+    """Return the process-wide AsyncTickStore singleton."""
+    global _async_instance
+    if _async_instance is None:
+        _async_instance = AsyncTickStore(get_tick_store())
+    return _async_instance

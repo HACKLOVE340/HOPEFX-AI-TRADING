@@ -352,14 +352,81 @@ def setup_csrf_middleware(app: FastAPI) -> None:
         logger.warning("CSRF protection DISABLED (CSRF_PROTECTION=false)")
 
 
+# ── Startup health gate ───────────────────────────────────────────────────────
+# Returns 503 for data-dependent API endpoints until app_state.initialized
+# is True.  Health, auth, CSRF, docs, and static assets are always allowed
+# through so the frontend can render and users can log in while the trading
+# engine is still warming up.
+
+# Paths that are always allowed regardless of startup state.
+_STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
+    "/api/health",
+    "/api/auth",
+    "/api/auth/csrf-token",
+    "/health",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+    "/metrics",
+    "/static",
+    "/favicon.ico",
+    "/ws",          # WebSocket — auth is checked inside the handler
+    "/api/status",  # lightweight status page
+)
+
+
+class StartupGateMiddleware(BaseHTTPMiddleware):
+    """Block data-dependent endpoints with 503 until startup completes.
+
+    Reads app_state.initialized from app.state.app_state so it works
+    without importing the module-level app_state directly (avoids circular
+    imports and makes the gate testable with a plain Starlette app).
+
+    The gate is disabled when STARTUP_GATE=false (useful in unit tests that
+    don't run the full startup sequence).
+    """
+
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        if os.getenv("STARTUP_GATE", "true").lower() in ("false", "0", "no"):
+            return await call_next(request)
+
+        path = request.url.path
+        if any(path.startswith(prefix) for prefix in _STARTUP_GATE_ALWAYS_ALLOW):
+            return await call_next(request)
+
+        # Check app_state.initialized via app.state (set in startup_event)
+        app_state = getattr(request.app.state, "app_state", None)
+        initialized = getattr(app_state, "initialized", False) if app_state else False
+
+        if not initialized:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "detail": "Server is starting up. Please retry in a few seconds.",
+                    "status": "starting",
+                },
+                headers={"Retry-After": "5"},
+            )
+
+        return await call_next(request)
+
+
+def setup_startup_gate(app: FastAPI) -> None:
+    """Add the startup health gate middleware."""
+    app.add_middleware(StartupGateMiddleware)
+    logger.info("StartupGateMiddleware registered — data endpoints return 503 until initialized")
+
+
 def register_all(app: FastAPI) -> None:
     """Register all middleware on *app* in the correct order.
 
     Order matters — Starlette applies middleware in reverse registration order
     (last registered = outermost = first to process the request).
-    We want: CSRF → metrics → security headers → CORS (outermost).
+    We want:
+      startup_gate → CSRF → metrics → security headers → CORS (outermost)
     """
-    setup_csrf_middleware(app)  # innermost — validates before routing
+    setup_startup_gate(app)   # innermost — gate before CSRF so 503 beats 403
+    setup_csrf_middleware(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)
     setup_cors(app)  # outermost — handles preflight first

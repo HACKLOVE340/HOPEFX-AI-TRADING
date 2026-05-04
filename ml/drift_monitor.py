@@ -344,7 +344,7 @@ class DriftMonitor:
                     "(assumption may not hold for non-normal features).",
                     feat_name,
                 )
-                rng = np.random.default_rng(seed=42)
+                rng = np.random.default_rng()  # unseeded — Gaussian fallback for missing percentiles
                 reference = rng.normal(loc=train_mean, scale=max(train_std, 1e-9), size=max(n_samples, 100))
 
             psi_val = _psi(reference, live_vals)

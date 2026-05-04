@@ -13,6 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, Activity, Shield,
@@ -201,6 +202,7 @@ function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PnLDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
   const enabled  = hydrated && isAuth;
@@ -296,14 +298,23 @@ const PnLDashboard: React.FC = () => {
             Real fills from the live engine — no synthetic data
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isLoading}
-          className="flex items-center gap-2 px-4 py-2 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-          {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/tca')}
+            className="flex items-center gap-2 px-4 py-2 text-[#a78bfa] rounded-lg text-sm font-semibold"
+            style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}
+          >
+            📊 TCA Analysis
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Error */}

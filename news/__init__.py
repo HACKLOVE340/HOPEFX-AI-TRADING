@@ -175,16 +175,14 @@ def create_news_router():
     @news_router.get("/geopolitical/world-monitor")
     async def get_world_monitor_urls():
         """
-        Return curated World Monitor dashboard URLs relevant to XAU/USD trading.
+        Return full WorldMonitor dashboard URL suite — gold-relevant regions, crisis hotspots,
+        all regions, available layers, and a full global deep-link.
 
         These deep-links open specific intelligence views on https://worldmonitor.app/
         """
         try:
             wm = WorldMonitorIntegration()
-            return {
-                "gold_relevant_views": wm.get_gold_relevant_views(),
-                "base_url": "https://worldmonitor.app",
-            }
+            return wm.get_enhanced_views()
         except Exception as exc:
             logger.error("World Monitor URLs error: %s", exc)
             raise HTTPException(

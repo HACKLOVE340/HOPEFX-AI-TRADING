@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
 
@@ -146,6 +147,7 @@ const SYMBOLS    = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSD', 'US30', 'N
 const TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
 
 const ReplayPage: React.FC = () => {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<ReplaySession | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -225,11 +227,25 @@ const ReplayPage: React.FC = () => {
             Bar-by-bar historical replay with live strategy testing — enterprise tier
           </p>
         </div>
-        <button onClick={() => setShowCreate(s => !s)}
-          style={{ padding: '9px 18px', background: '#3b82f6', color: '#fff', border: 'none',
-            borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          + New Session
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => navigate('/walk-forward')}
+            style={{ padding: '9px 16px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            📊 Walk-Forward
+          </button>
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            style={{ padding: '9px 16px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            🤖 AI Strategy
+          </button>
+          <button onClick={() => setShowCreate(s => !s)}
+            style={{ padding: '9px 18px', background: '#3b82f6', color: '#fff', border: 'none',
+              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            + New Session
+          </button>
+        </div>
       </div>
 
       {/* Create form */}

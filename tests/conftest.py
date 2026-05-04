@@ -32,6 +32,11 @@ UTC = timezone.utc
 import numpy as np
 import pytest
 
+# Register shared fixture modules — makes db_engine, async_db_session, db_user,
+# db_trade, db_signal, and repository fixtures available to all test modules
+# without explicit imports.
+pytest_plugins = ["tests.fixtures.db"]
+
 # Import core components for testing
 from brokers import PaperTradingBroker
 from data.real_time_price_engine import OHLCV, Tick

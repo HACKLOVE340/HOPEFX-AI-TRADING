@@ -3,7 +3,7 @@
  * Features: edit form, avatar upload, follow/unfollow, stats, signals, strategies.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
 
@@ -24,6 +24,7 @@ interface TraderProfile {
 interface EditForm extends Record<string, unknown> { display_name: string; bio: string; country: string; }
 
 const Profile: React.FC = () => {
+  const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const currentUser = useStore(s => s.user);
   const isOwn = !id || id === 'me' || id === currentUser?.id;
@@ -140,8 +141,27 @@ const Profile: React.FC = () => {
           {avatarErr && <div style={s.inlineError}>{avatarErr}</div>}
         </div>
         <div style={s.headerActions}>
+          <button onClick={() => navigate('/trade')}
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚡ Trade
+          </button>
+          <button onClick={() => navigate('/leaderboard')}
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🏆 Leaderboard
+          </button>
           {isOwn ? (
-            <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
+            <>
+              <a
+                href={`/profile/${profile.user_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
+                title="See how your profile looks to other traders"
+              >
+                👁 View Public Profile
+              </a>
+              <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
+            </>
           ) : (
             <button onClick={handleFollow} disabled={followLoading} style={{...s.followBtn, background: following ? '#334155' : '#3b82f6'}}>
               {followLoading ? '…' : following ? 'Unfollow' : 'Follow'}

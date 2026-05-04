@@ -400,7 +400,7 @@ class HOPEFXBrain:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
             except asyncio.CancelledError:
                 raise
-            except (TimeoutError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.TimeoutError):  # nosec B110
                 pass
 
     @staticmethod
@@ -447,10 +447,10 @@ class HOPEFXBrain:
                             self.state.margin_used = mu
                             self.state.free_margin = fm
                     except (TimeoutError, asyncio.TimeoutError):
-                        logger.error("Broker timeout getting account info")
+                        logger.warning("Broker timeout getting account info")
                         raise
                     except Exception as e:
-                        logger.error("Error getting account info: %s", e)
+                        logger.warning("Error getting account info: %s", e)
 
                 # Get positions (with timeout)
                 if self.broker:
@@ -473,11 +473,11 @@ class HOPEFXBrain:
                         }
                         self.state.open_trades_count = len(positions or [])
                     except TimeoutError:
-                        logger.error("Broker timeout getting positions")
+                        logger.warning("Broker timeout getting positions")
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
                     except Exception as e:
-                        logger.error("Error getting positions: %s", e)
+                        logger.warning("Error getting positions: %s", e)
                         self.state.active_positions = {}
 
                 # Get pending orders (with timeout; broker may not support this)
@@ -499,10 +499,10 @@ class HOPEFXBrain:
                             for o in (orders or [])
                         ]
                     except TimeoutError:
-                        logger.error("Broker timeout getting orders")
+                        logger.warning("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
-                        logger.error("Error getting orders: %s", e)
+                        logger.warning("Error getting orders: %s", e)
                         self.state.pending_orders = []
 
             except Exception as e:
@@ -874,7 +874,10 @@ class HOPEFXBrain:
             global _decision_timeout_last_logged
             now = time.monotonic()
             if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
-                logger.warning(
+                # Log at INFO — timeouts are expected when data feeds or broker
+                # are not connected (dev/offline mode). The brain continues
+                # running and will retry on the next cycle.
+                logger.info(
                     "Strategy decision timeout (further timeouts suppressed for %.0f s)",
                     _DECISION_TIMEOUT_LOG_INTERVAL,
                 )

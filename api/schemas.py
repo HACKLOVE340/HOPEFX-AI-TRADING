@@ -19,10 +19,11 @@ Import pattern:
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
-from typing import Any
+from typing import Any, Generic, TypeVar
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ── Generic wrappers ──────────────────────────────────────────────────────────
 
@@ -38,6 +39,77 @@ class ErrorResponse(BaseModel):
     """Standard error envelope (mirrors FastAPI HTTPException detail)."""
 
     detail: str
+
+
+# ── Pagination envelope ───────────────────────────────────────────────────────
+
+T = TypeVar("T")
+
+
+class PaginationMeta(BaseModel):
+    """
+    Pagination metadata included in every paginated list response.
+
+    Supports both offset/page-based and cursor-based pagination:
+    - Offset: use ``page`` + ``page_size`` + ``total`` + ``total_pages``.
+    - Cursor: use ``next_cursor`` / ``prev_cursor`` (opaque strings).
+
+    ``has_next`` and ``has_prev`` are always set regardless of pagination style.
+    """
+
+    total: int = Field(..., description="Total number of items across all pages")
+    page: int = Field(1, ge=1, description="Current page number (1-based)")
+    page_size: int = Field(50, ge=1, le=1000, description="Items per page")
+    total_pages: int = Field(0, description="Total number of pages")
+    has_next: bool = Field(False, description="Whether a next page exists")
+    has_prev: bool = Field(False, description="Whether a previous page exists")
+    next_cursor: str | None = Field(None, description="Opaque cursor for the next page")
+    prev_cursor: str | None = Field(None, description="Opaque cursor for the previous page")
+
+    @model_validator(mode="after")
+    def _compute_derived(self) -> "PaginationMeta":
+        """Compute total_pages, has_next, has_prev from total/page/page_size."""
+        if self.page_size > 0:
+            self.total_pages = max(1, math.ceil(self.total / self.page_size))
+        self.has_next = self.page < self.total_pages or self.next_cursor is not None
+        self.has_prev = self.page > 1 or self.prev_cursor is not None
+        return self
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    """
+    Generic paginated list envelope.
+
+    Usage::
+
+        @router.get("/trades", response_model=PaginatedResponse[TradeOut])
+        def list_trades(page: int = 1, page_size: int = 50) -> PaginatedResponse[TradeOut]:
+            items, total = trade_repo.list(page=page, page_size=page_size)
+            return PaginatedResponse.build(items=items, total=total, page=page, page_size=page_size)
+    """
+
+    items: list[T]
+    pagination: PaginationMeta
+
+    @classmethod
+    def build(
+        cls,
+        items: list[T],
+        total: int,
+        page: int = 1,
+        page_size: int = 50,
+        next_cursor: str | None = None,
+        prev_cursor: str | None = None,
+    ) -> "PaginatedResponse[T]":
+        """Convenience constructor that computes all pagination metadata."""
+        meta = PaginationMeta(
+            total=total,
+            page=page,
+            page_size=page_size,
+            next_cursor=next_cursor,
+            prev_cursor=prev_cursor,
+        )
+        return cls(items=items, pagination=meta)
 
 
 # ── Account ───────────────────────────────────────────────────────────────────
@@ -94,10 +166,26 @@ class TradeOut(BaseModel):
 
 
 class TradeListResponse(BaseModel):
+    """
+    Paginated trade list response.
+
+    Wraps the generic PaginatedResponse envelope for backward compatibility
+    with existing API consumers that expect a ``trades`` key.
+    """
+
     trades: list[TradeOut]
-    total: int
-    page: int = Field(1)
-    page_size: int = Field(50)
+    pagination: PaginationMeta
+
+    @classmethod
+    def build(
+        cls,
+        trades: list[TradeOut],
+        total: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> "TradeListResponse":
+        meta = PaginationMeta(total=total, page=page, page_size=page_size)
+        return cls(trades=trades, pagination=meta)
 
 
 # ── Risk metrics ──────────────────────────────────────────────────────────────
@@ -159,8 +247,21 @@ class RegimeHistoryEntry(BaseModel):
 
 
 class RegimeHistoryResponse(BaseModel):
+    """Paginated regime history response."""
+
     history: list[RegimeHistoryEntry]
-    total: int
+    pagination: PaginationMeta
+
+    @classmethod
+    def build(
+        cls,
+        history: list[RegimeHistoryEntry],
+        total: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> "RegimeHistoryResponse":
+        meta = PaginationMeta(total=total, page=page, page_size=page_size)
+        return cls(history=history, pagination=meta)
 
 
 # ── Admin ─────────────────────────────────────────────────────────────────────
@@ -215,8 +316,21 @@ class SignalOut(BaseModel):
 
 
 class SignalListResponse(BaseModel):
+    """Paginated signal list response."""
+
     signals: list[SignalOut]
-    count: int
+    pagination: PaginationMeta
+
+    @classmethod
+    def build(
+        cls,
+        signals: list[SignalOut],
+        total: int,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> "SignalListResponse":
+        meta = PaginationMeta(total=total, page=page, page_size=page_size)
+        return cls(signals=signals, pagination=meta)
 
 
 # ── Broker ────────────────────────────────────────────────────────────────────

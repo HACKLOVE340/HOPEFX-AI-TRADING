@@ -8,6 +8,7 @@
  *   WS   /ws/chat/:room_id          — real-time messages
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -40,6 +41,7 @@ const ROOM_ICONS: Record<string, string> = {
 };
 
 const ChatPage: React.FC = () => {
+  const navigate = useNavigate();
   const user = useStore(selectUser);
   const token = useStore(s => s.token);
 
@@ -202,6 +204,16 @@ const ChatPage: React.FC = () => {
               {activeRoom.description && (
                 <div style={{ fontSize: 12, color: '#64748b' }}>{activeRoom.description}</div>
               )}
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button onClick={() => navigate('/trade')}
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                ⚡ Trade
+              </button>
+              <button onClick={() => navigate('/signals')}
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                📡 Signals
+              </button>
             </div>
           </div>
         )}

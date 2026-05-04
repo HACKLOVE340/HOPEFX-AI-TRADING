@@ -56,6 +56,17 @@ def _get_macro_store():
         return None
 
 
+def _get_macro_store_bridge():
+    """Return the MacroStoreBridge singleton from data_layer (never raises)."""
+    try:
+        from data_layer.feeds.macro.store_bridge import macro_store_bridge
+
+        return macro_store_bridge
+    except Exception as exc:
+        logger.debug("MacroStoreBridge unavailable: %s", exc)
+        return None
+
+
 def _push_snapshot_to_store(snapshot: dict[str, Any]) -> int:
     """
     Push FRED snapshot values into MacroStore so live inference sees them.
@@ -103,7 +114,31 @@ async def macro_snapshot():
     2. MacroStore cached values from a previous successful fetch
     3. Hardcoded neutral baseline with source='static_fallback'
     """
-    # 1. Try FRED live fetch
+    # 0. MacroStoreBridge snapshot — preferred (data_layer, normalized, cached)
+    bridge = _get_macro_store_bridge()
+    if bridge is not None:
+        try:
+            bridge_snap = bridge.snapshot()
+            if bridge_snap:
+                bridge_snap["source"] = "macro_store_bridge"
+                return bridge_snap
+        except Exception as exc:
+            logger.debug("MacroStoreBridge.snapshot failed: %s", exc)
+
+    # 1. Try FRED live fetch via data_layer.feeds.macro.fred
+    try:
+        from data_layer.feeds.macro.fred import FREDFeed
+
+        fred = FREDFeed()
+        snap = await fred.fetch_all()
+        n = _push_snapshot_to_store(snap)
+        snap["macro_store_series_updated"] = n
+        snap["source"] = "fred_live"
+        return snap
+    except Exception:  # nosec B110
+        pass
+
+    # 1b. Fallback to legacy data.feeds.macro
     try:
         from data.feeds.macro import get_macro_feed
 
@@ -111,7 +146,7 @@ async def macro_snapshot():
         snap = await feed.refresh_async()
         n = _push_snapshot_to_store(snap)
         snap["macro_store_series_updated"] = n
-        snap["source"] = "fred_live"
+        snap["source"] = "fred_live_legacy"
         return snap
     except Exception as fred_exc:
         logger.warning("FRED fetch failed, trying MacroStore cache: %s", fred_exc)
@@ -204,29 +239,41 @@ async def macro_features(user: TokenPayload = Depends(get_current_user)):
     Return macro values as a flat dict of floats ready to merge into
     the ML feature matrix.  All keys are prefixed with 'macro_'.
 
-    Prefers MacroStore (which may have more series than FRED alone) and
-    falls back to MacroFeed if the store is empty.
+    Priority:
+    1. MacroStoreBridge.get_ml_features() — data_layer bridge (most complete)
+    2. MacroStore snapshot — ml.macro_store (in-memory, forward-filled)
+    3. MacroFeed.as_ml_features() — FRED direct fetch
     """
+    # 1. MacroStoreBridge — primary source (data_layer, normalized)
+    bridge = _get_macro_store_bridge()
+    if bridge is not None:
+        try:
+            features = bridge.get_ml_features()
+            if features:
+                return {"source": "macro_store_bridge", **features}
+        except Exception as exc:
+            logger.debug("MacroStoreBridge.get_ml_features failed: %s", exc)
+
+    # 2. MacroStore snapshot
     store = _get_macro_store()
     if store is not None and len(store) > 0:
         snap = store.snapshot()
-        features: dict[str, float] = {}
+        features_store: dict[str, float] = {}
         for name, info in snap.items():
             if info is not None:
-                features[f"macro_{name}"] = float(info["value"])
-        if features:
-            return features
+                features_store[f"macro_{name}"] = float(info["value"])
+        if features_store:
+            return {"source": "macro_store", **features_store}
 
-    # Fallback: MacroFeed
+    # 3. MacroFeed direct
     try:
         from data.feeds.macro import get_macro_feed
 
         feed = get_macro_feed()
-        return feed.as_ml_features()
+        result = feed.as_ml_features()
+        result["source"] = "fred_direct"
+        return result
     except Exception as exc:
-        # Log the full exception server-side. Suppress the chain (from None) so
-        # the original exception object is not attached to the HTTPException and
-        # cannot be serialised into the response by any middleware.
         logger.warning("macro features failed: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

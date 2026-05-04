@@ -372,18 +372,30 @@ class PolygonL2Feed:
         while self._running:
             try:
                 await self._stream(symbols)
-                backoff = L2_RECONNECT_INITIAL  # clean exit resets back-off
+                # Clean exit — reset back-off and failure counter.
+                backoff = L2_RECONNECT_INITIAL
                 self._fail_count = 0
+                logger.debug("PolygonL2Feed: stream ended cleanly — reconnecting")
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 self._fail_count += 1
-                logger.warning(
-                    "PolygonL2Feed disconnected (attempt %d): %s — reconnecting in %.0f s",
-                    self._fail_count,
-                    exc,
-                    backoff,
-                )
+                exc_str = str(exc)
+                # "no close frame received or sent" / "sent 1000 (OK)" are
+                # clean WebSocket closes, not real errors.
+                if "no close frame" in exc_str or "sent 1000" in exc_str or "1000 (OK)" in exc_str:
+                    logger.debug(
+                        "PolygonL2Feed: clean close (attempt %d) — reconnecting in %.0f s",
+                        self._fail_count,
+                        backoff,
+                    )
+                else:
+                    logger.warning(
+                        "PolygonL2Feed disconnected (attempt %d): %s — reconnecting in %.0f s",
+                        self._fail_count,
+                        exc,
+                        backoff,
+                    )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, L2_RECONNECT_MAX)
 
@@ -579,7 +591,7 @@ class FinnhubTradeFeed:
 
     async def start(self) -> None:
         if not self._api_key:
-            logger.warning(
+            logger.info(
                 "FINNHUB_API_KEY not set — Finnhub trade tape disabled. "
                 "Cumulative delta will be sourced from Polygon trade events only."
             )
@@ -598,18 +610,30 @@ class FinnhubTradeFeed:
         while self._running:
             try:
                 await self._stream()
+                # Clean exit — reset back-off and failure counter.
                 backoff = L2_RECONNECT_INITIAL
                 self._fail_count = 0
+                logger.debug("FinnhubTradeFeed: stream ended cleanly — reconnecting")
             except asyncio.CancelledError:
                 break
             except Exception as exc:
                 self._fail_count += 1
-                logger.warning(
-                    "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
-                    self._fail_count,
-                    exc,
-                    backoff,
-                )
+                exc_str = str(exc)
+                # "no close frame received or sent" is a clean WebSocket close
+                # in some websockets library versions — not a real error.
+                if "no close frame" in exc_str or "sent 1000" in exc_str or "1000 (OK)" in exc_str:
+                    logger.debug(
+                        "FinnhubTradeFeed: clean close (attempt %d) — reconnecting in %.0f s",
+                        self._fail_count,
+                        backoff,
+                    )
+                else:
+                    logger.warning(
+                        "FinnhubTradeFeed disconnected (attempt %d): %s — reconnecting in %.0f s",
+                        self._fail_count,
+                        exc,
+                        backoff,
+                    )
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, L2_RECONNECT_MAX)
 
@@ -788,10 +812,10 @@ class MockL2Feed:  # healer: ignore — assert_not_production() guard in __init_
         return book.get_snapshot() if book else None
 
     async def _generate(self, symbol: str) -> None:
-        """Generate synthetic L2 data with realistic microstructure."""
+        """Generate synthetic L2 data with realistic microstructure (dev/test only)."""
         book = self._books[symbol]
         mid = 2000.0  # gold-like price
-        rng = np.random.default_rng(42)
+        rng = np.random.default_rng()  # unseeded — non-deterministic per run
 
         while self._running:
             try:
@@ -849,8 +873,19 @@ class OrderBookFeed:
             else:
                 self._provider = PolygonL2Feed()
         elif self._provider_name == "mock":
+            # assert_not_production raises RuntimeError in production/staging
+            # before MockL2Feed.__init__ is even reached, giving a clear error
+            # message rather than silently serving synthetic data.
+            from utils.production_guard import assert_not_production
+
+            assert_not_production(
+                "MockL2Feed (L2_PROVIDER=mock)",
+                replacement="MultiSourceL2Feed with L2_PROVIDER=multi",
+                extra="Set L2_PROVIDER=multi and configure POLYGON_API_KEY.",
+            )
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). Only permitted in non-production environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
+                "Only permitted in development/test environments."
             )
             self._provider = MockL2Feed()
         else:

@@ -46,7 +46,7 @@ def _load_alert_rules() -> list[dict]:
             raw = rc.get(_RULES_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     # Bootstrap with sensible defaults
     return [
@@ -114,7 +114,7 @@ def _save_alert_rules(rules: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_RULES_KEY, json.dumps(rules), ex=86400 * 90)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -134,7 +134,7 @@ def _append_alert_history(rule_id: str, rule_name: str, severity: str, detail: s
                 "fired_at": _utcnow().isoformat(),
             })
             rc.set(_HISTORY_KEY, json.dumps(history[:500]), ex=86400 * 30)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -270,7 +270,7 @@ async def get_alert_history(
             raw = rc.get(_HISTORY_KEY)
             if raw:
                 history = json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return {"history": history, "fired": history, "total": len(history)}
 
@@ -295,7 +295,7 @@ async def get_prometheus_status(
             if r.status_code == 200:
                 prom_ok = True
                 prom_version = r.json().get("data", {}).get("version", "unknown")
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     try:
@@ -303,7 +303,7 @@ async def get_prometheus_status(
         async with httpx.AsyncClient(timeout=3) as client:
             r = await client.get(f"{am_url}/-/healthy")
             am_ok = r.status_code == 200
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     return {

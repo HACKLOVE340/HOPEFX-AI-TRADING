@@ -3,6 +3,7 @@
  * Run two strategies in parallel on paper, auto-select winner.
  */
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 
 interface ABResult {
@@ -61,24 +62,29 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 const ABTesting: React.FC = () => {
+  const navigate = useNavigate();
   const [tests, setTests]       = useState<ABResult[]>([]);
   const [stratA, setStratA]     = useState('MovingAverageCrossover');
   const [stratB, setStratB]     = useState('RSIStrategy');
   const [symbol, setSymbol]     = useState('XAU/USD');
   const [days, setDays]         = useState('30');
   const [running, setRunning]   = useState(false);
+  const [loadingTests, setLoadingTests] = useState(true);
   const [runError, setRunError] = useState<string | null>(null);
   const [loadErr, setLoadErr]   = useState<string | null>(null);
   const [selected, setSelected] = useState<ABResult | null>(null);
 
   const load = useCallback(async () => {
     setLoadErr(null);
+    setLoadingTests(true);
     try {
       const res = await api.get('/advanced/ab-tests');
       setTests(res.data.tests || res.data || []);
     } catch (err) {
       setTests([]);
       setLoadErr(extractErrorMessage(err, 'Failed to load test history. Ensure the API is running.'));
+    } finally {
+      setLoadingTests(false);
     }
   }, []);
 
@@ -109,6 +115,16 @@ const ABTesting: React.FC = () => {
         <div>
           <h1 style={s.title}>Strategy A/B Testing</h1>
           <p style={s.subtitle}>Run two strategies in parallel on paper. Auto-select winner after N days.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/ai-strategy')}
+            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🤖 AI Strategy
+          </button>
+          <button onClick={() => navigate('/walk-forward')}
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📈 Walk-Forward
+          </button>
         </div>
       </div>
 
@@ -172,6 +188,11 @@ const ABTesting: React.FC = () => {
       </div>
 
       {/* History */}
+      {loadingTests && (
+        <div style={{ ...s.card, textAlign: 'center', color: '#64748b', padding: 24 }}>
+          Loading test history…
+        </div>
+      )}
       {loadErr && (
         <div style={{ ...s.card }}>
           <div style={s.errorBox}>{loadErr}</div>
@@ -196,7 +217,7 @@ const ABTesting: React.FC = () => {
 
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
-  header: { marginBottom:24 },
+  header: { marginBottom:24, display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 },
   title: { fontSize:28, fontWeight:700, margin:0 },
   subtitle: { fontSize:14, color:'#94a3b8', marginTop:4 },
   grid: { display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(320px,1fr))', gap:20, marginBottom:20 },

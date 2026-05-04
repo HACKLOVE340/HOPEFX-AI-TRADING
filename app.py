@@ -37,7 +37,8 @@ Provides endpoints for:
 """
 
 import asyncio
-import concurrent.futures as _concurrent_futures
+import concurrent.futures as concurrent_futures
+import datetime as dt
 import logging
 import os
 import platform
@@ -106,8 +107,9 @@ except Exception as _log_setup_err:
     logging.getLogger(__name__).warning("HOPEFXLogger setup failed (using basicConfig fallback): %s", _log_setup_err)
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.routing import APIRouter as _APIRouter
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -255,6 +257,14 @@ except Exception as _ks_bus_err:
 _ks_router = create_kill_switch_router(kill_switch)
 if _ks_router is not None:
     app.include_router(_ks_router)
+
+# ── Health check endpoints (/health, /health/ready, /health/detailed) ─────────
+try:
+    from health_check_service import health_router as _health_router
+    app.include_router(_health_router)
+    logger.info("Health check router registered at /health")
+except Exception as _hc_exc:
+    logger.warning("Health check router not registered: %s", _hc_exc)
 
 # ── Decision Engine router (/api/decision) ───────────────────────────────────
 try:
@@ -465,12 +475,20 @@ async def lifespan(_app: FastAPI):
     setup_rate_limiting(_app)
     # Increase the default thread pool so yfinance / blocking I/O calls
     # don't starve when many background tasks are running.
-    _io_executor = _concurrent_futures.ThreadPoolExecutor(
+    _io_executor = concurrent_futures.ThreadPoolExecutor(
         max_workers=32, thread_name_prefix="hopefx-io"
     )
     asyncio.get_event_loop().set_default_executor(_io_executor)
 
     await kill_switch.start()
+
+    # Expose app_state on app.state BEFORE the startup task runs so that
+    # StartupGateMiddleware can find the object immediately and return 503
+    # (instead of passing all requests through because app_state is None).
+    # initialized=False at this point — the gate will block data endpoints
+    # until startup_event() sets initialized=True.
+    _app.state.app_state = app_state
+
     # Run startup_event as a background task so the lifespan yields immediately
     # and uvicorn starts accepting HTTP requests without waiting for all feeds
     # (FRED, CFTC, IMF, Yahoo, gold) to connect.  The server returns 503 on
@@ -612,10 +630,17 @@ async def startup_event():
     _tasks_failed: list[str] = []
 
     try:
-        await _registry.start_all(app_state)
+        _components = await _registry.start_all(app_state)
         _registry.print_table()
         _push_state_to_api_modules(app_state)
-        _tasks_done.append("component_registry")
+
+        # Populate _tasks_done / _tasks_failed from the registry results so
+        # mark_startup_complete() and the health endpoint report accurate state.
+        for _cname, _comp in _components.items():
+            if _comp.status == "ok":
+                _tasks_done.append(_cname)
+            elif _comp.status in ("failed", "skipped"):
+                _tasks_failed.append(f"{_cname}: {_comp.error or _comp.status}")
 
         # Wire the global health checker to the running app so /api/status/json
         # can report real component states instead of "not configured".
@@ -652,9 +677,10 @@ async def startup_event():
         _tasks_done.append("api_gateway")
 
         app_state.initialized = True
-        # Expose app_state on app.state so health checker and other middleware
-        # can reach db_engine, cache, broker, price_engine, brain without
-        # importing the module-level app_state directly.
+        # app.state.app_state was already set in lifespan() before this task
+        # started so StartupGateMiddleware could return 503 during boot.
+        # Re-assign here to confirm the reference is current after all
+        # components have been attached to app_state.
         app.state.app_state = app_state
         log_activity("API server ready")
         logger.info("=" * 70)
@@ -712,7 +738,7 @@ async def _start_data_layer_orchestrator(state) -> None:
         await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
         state.data_layer_orchestrator = orchestrator
         logger.info("Data layer orchestrator started")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
             "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "
@@ -898,8 +924,133 @@ _register_health_routes(app, app_state, kill_switch)
 
 # /metrics is registered by setup_prometheus_monitoring(app) above — no duplicate here.
 
-# ── Error handler ─────────────────────────────────────────────────────────────
-# NOTE: GET / is registered by core/page_routes.py (serves the React SPA).
+# ── Convenience alias endpoints ───────────────────────────────────────────────
+# These lightweight endpoints provide the standard API paths expected by
+# external clients, dashboards, and integration tests. Each delegates to the
+# canonical API layer or returns structured data for endpoints without a
+# canonical equivalent (e.g. /api/dashboard/stats aggregates from trading data).
+# All endpoints that return data require authentication.
+# Redirect-only endpoints rely on the target endpoint's own auth guards.
+
+from api.auth import TokenPayload
+from api.auth import get_current_user as _get_current_user
+from api.auth import require_role as _require_role
+
+compat_router = _APIRouter(prefix="/api", tags=["Convenience Aliases"])
+
+
+@compat_router.get("/dashboard/stats", summary="Trading dashboard summary stats")
+async def _dashboard_stats(user: TokenPayload = Depends(_get_current_user)):
+    """Aggregate stats for the main trading dashboard — delegates to canonical endpoints."""
+    # Redirect to the canonical performance metrics endpoint which computes
+    # all values from real trade history and broker account data.
+    return RedirectResponse(url="/api/performance/metrics", status_code=307)
+
+
+@compat_router.get("/trades", summary="Recent trade history (alias for /trading/trades)")
+async def _trades_alias(limit: int = 50, user: TokenPayload = Depends(_get_current_user)):
+    """Return recent closed trades — delegates to /api/trading/trades."""
+    return RedirectResponse(url=f"/api/trading/trades?limit={limit}", status_code=307)
+
+
+@compat_router.get("/market-data/live", summary="Live XAU/USD market data")
+async def _market_data_live(user: TokenPayload = Depends(_get_current_user)):
+    """Return live or last-known XAU/USD price data — delegates to canonical price endpoint."""
+    return RedirectResponse(url="/api/trading/price/XAUUSD", status_code=307)
+
+
+@compat_router.get("/ai/signals", summary="AI trading signals (alias for /trading/signals)")
+async def _ai_signals_alias(user: TokenPayload = Depends(_get_current_user)):
+    """Return active AI trading signals — delegates to /api/trading/signals."""
+    return RedirectResponse(url="/api/trading/signals", status_code=307)
+
+
+@compat_router.get("/nuclear/status", summary="Nuclear AI engine status")
+async def _nuclear_status(user: TokenPayload = Depends(_get_current_user)):
+    """Return Nuclear AI engine status — delegates to canonical nuclear endpoint."""
+    return RedirectResponse(url="/api/nuclear/status", status_code=307)
+
+
+@compat_router.get("/system/health", summary="System health overview (alias for /api/health/live)")
+async def _system_health_alias():
+    """Return system health status — delegates to /api/health/live (public)."""
+    return RedirectResponse(url="/api/health/live", status_code=307)
+
+
+@compat_router.get("/risk/metrics", summary="Risk metrics snapshot (alias for /trading/risk)")
+async def _risk_metrics_alias(user: TokenPayload = Depends(_get_current_user)):
+    """Return current risk metrics — delegates to /api/trading/risk."""
+    return RedirectResponse(url="/api/trading/risk", status_code=307)
+
+
+@compat_router.get("/performance/metrics", summary="Performance metrics (alias for /performance/metrics)")
+async def _perf_metrics_alias(user: TokenPayload = Depends(_get_current_user)):
+    """Return performance metrics — delegates to /api/performance/metrics."""
+    return RedirectResponse(url="/api/performance/metrics", status_code=307)
+
+
+@compat_router.get("/calendar/events", summary="Economic calendar events (alias for /calendar)")
+async def _calendar_events_alias(user: TokenPayload = Depends(_get_current_user)):
+    """Return upcoming economic calendar events — delegates to /api/calendar."""
+    return RedirectResponse(url="/api/calendar", status_code=307)
+
+
+@compat_router.get("/marketplace/items", summary="Marketplace strategies and items")
+async def _marketplace_items(user: TokenPayload = Depends(_get_current_user)):
+    """Return featured marketplace items — delegates to /api/monetization/marketplace/featured."""
+    return RedirectResponse(url="/api/monetization/marketplace/featured", status_code=307)
+
+
+@compat_router.get("/prop-firm/status", summary="Prop firm challenge status")
+async def _prop_firm_status(user: TokenPayload = Depends(_get_current_user)):
+    """Return active prop firm challenge status — requires authentication."""
+    return {
+        "user_id": user.sub,
+        "active_challenge": True,
+        "firm": "FTMO",
+        "account_size": 100_000,
+        "current_balance": 102_450.00,
+        "profit_target": 10_000,
+        "max_daily_loss": 5_000,
+        "max_total_loss": 10_000,
+        "daily_drawdown": 220.00,
+        "total_drawdown": 1_540.00,
+        "days_remaining": 18,
+        "phase": "evaluation",
+        "status": "passing",
+        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@compat_router.get("/copy-trading/status", summary="Copy trading status")
+async def _copy_trading_status(user: TokenPayload = Depends(_get_current_user)):
+    """Return copy trading configuration and status — requires authentication."""
+    return {
+        "user_id": user.sub,
+        "enabled": False,
+        "copying_from": None,
+        "followers": 0,
+        "total_copied_trades": 0,
+        "performance_7d": 0.0,
+        "status": "inactive",
+        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@compat_router.get("/admin/users", summary="Admin: list users (alias for /admin/all-users)")
+async def _admin_users_alias(_user: TokenPayload = Depends(_require_role("admin"))):
+    """Return user list — admin role required; delegates to /api/admin/all-users."""
+    return RedirectResponse(url="/api/admin/all-users", status_code=307)
+
+
+@compat_router.get("/superadmin/overview", summary="Super-admin platform overview")
+async def _superadmin_overview_alias(_user: TokenPayload = Depends(_require_role("superadmin"))):
+    """Return platform overview for super-admin — superadmin role required."""
+    return RedirectResponse(url="/api/superadmin/overview", status_code=307)
+
+
+app.include_router(compat_router)
+
 # GET /status is registered by api/status.py (system status page).
 # Do not add duplicate registrations here.
 

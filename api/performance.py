@@ -104,29 +104,37 @@ def _load_equity_curve() -> list[EquityPoint]:
     except Exception as exc:
         logger.debug("engine fill history load failed: %s", exc)
 
-    # ── 2. DB Trade table (closed trades) ────────────────────────────────────
+    # ── 2. DB Trade table via TradeRepository (closed trades) ────────────────
     try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Trade, TradeStatus
+        import asyncio as _asyncio2
 
-        db = _SL()
+        async def _fetch_closed_trades():
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TR
+
+            async with _get_async_db() as _db:
+                repo = _TR(_db)
+                return await repo.get_by_user(user_id=None, status="closed", limit=50000)
+
         try:
-            trades = (
-                db.query(Trade)
-                .filter(Trade.status == TradeStatus.CLOSED, Trade.exit_time.isnot(None))
-                .order_by(Trade.exit_time.asc())
-                .all()
-            )
-            if trades:
-                equity = starting
-                pairs = []
-                for t in trades:
-                    equity += float(t.realized_pnl or 0.0)
-                    pairs.append((t.exit_time, equity))
-                if pairs:
-                    return _build_equity_points(pairs, starting)
-        finally:
-            db.close()
+            loop = _asyncio2.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures as _cf
+                with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+                    trades = _ex.submit(_asyncio2.run, _fetch_closed_trades()).result(timeout=10)
+            else:
+                trades = loop.run_until_complete(_fetch_closed_trades())
+        except Exception:
+            trades = _asyncio2.run(_fetch_closed_trades())
+
+        if trades:
+            equity = starting
+            pairs = []
+            for t in sorted(trades, key=lambda x: getattr(x, "exit_time", None) or datetime.min):
+                equity += float(getattr(t, "realized_pnl", 0) or 0.0)
+                pairs.append((getattr(t, "exit_time", None), equity))
+            if pairs:
+                return _build_equity_points(pairs, starting)
     except Exception as exc:
         logger.debug("DB trade history load failed: %s", exc)
 
@@ -146,16 +154,34 @@ def _load_equity_curve() -> list[EquityPoint]:
 
 
 def _db_trade_count() -> int:
-    """Return the count of closed trades from the DB, or 0 on any error."""
+    """Return the count of closed trades from the DB via TradeRepository, or 0 on error."""
     try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Trade, TradeStatus
+        import asyncio as _asyncio3
 
-        db = _SL()
+        async def _count():
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TR
+
+            async with _get_async_db() as _db:
+                repo = _TR(_db)
+                rows = await repo.get_by_user(user_id=None, status="closed", limit=1, offset=0)
+                # Use paginate to get total count if available
+                try:
+                    total = await repo.count(status="closed")
+                    return total
+                except Exception:
+                    return len(rows)
+
         try:
-            return db.query(Trade).filter(Trade.status == TradeStatus.CLOSED).count()
-        finally:
-            db.close()
+            loop = _asyncio3.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures as _cf
+                with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+                    return _ex.submit(_asyncio3.run, _count()).result(timeout=5)
+            else:
+                return loop.run_until_complete(_count())
+        except Exception:
+            return _asyncio3.run(_count())
     except Exception as exc:
         logger.debug("DB trade count failed: %s", exc)
     return 0
@@ -411,7 +437,7 @@ async def trade_breakdown(
                 session = "asian"
             by_session[session]["trades"] += 1
             by_session[session]["pnl"] += pnl
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
     # Compute win rates
@@ -517,47 +543,57 @@ def _load_trades() -> list[dict]:
     except Exception as exc:
         logger.debug("_load_trades engine: %s", exc)
 
-    # 2. DB Trade table — primary persistent source
+    # 2. DB Trade table via TradeRepository — primary persistent source
     try:
-        from database.connection import SessionLocal as _SL
-        from database.models import Trade, TradeStatus
+        import asyncio as _asyncio4
 
-        db = _SL()
+        async def _fetch_all_trades():
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.trade_repository import TradeRepository as _TR
+
+            async with _get_async_db() as _db:
+                repo = _TR(_db)
+                return await repo.get_by_user(user_id=None, limit=500)
+
         try:
-            rows = (
-                db.query(Trade)
-                .order_by(Trade.entry_time.desc())
-                .limit(500)
-                .all()
-            )
-            if rows:
-                result = []
-                for t in rows:
-                    qty = (
-                        getattr(t, "entry_quantity", None)
-                        or getattr(t, "size", None)
-                        or getattr(t, "quantity", None)
-                        or 0.0
-                    )
-                    raw_status = getattr(t, "status", "open")
-                    status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "open")
-                    result.append({
-                        "trade_id":     getattr(t, "trade_id", None) or str(t.id),
-                        "symbol":       t.symbol or "UNKNOWN",
-                        "side":         t.side or "buy",
-                        "quantity":     float(qty or 0.0),
-                        "entry_price":  float(t.entry_price or 0.0),
-                        "exit_price":   float(t.exit_price) if t.exit_price is not None else None,
-                        "realized_pnl": float(t.realized_pnl or 0.0),
-                        "commission":   float(getattr(t, "commission", 0.0) or 0.0),
-                        "status":       status_str,
-                        "strategy":     t.strategy or "unknown",
-                        "entry_time":   t.entry_time.isoformat() if t.entry_time else "",
-                        "exit_time":    t.exit_time.isoformat() if t.exit_time else None,
-                    })
-                return result
-        finally:
-            db.close()
+            loop = _asyncio4.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures as _cf
+                with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
+                    rows = _ex.submit(_asyncio4.run, _fetch_all_trades()).result(timeout=10)
+            else:
+                rows = loop.run_until_complete(_fetch_all_trades())
+        except Exception:
+            rows = _asyncio4.run(_fetch_all_trades())
+
+        if rows:
+            result = []
+            for t in rows:
+                qty = (
+                    getattr(t, "entry_quantity", None)
+                    or getattr(t, "size", None)
+                    or getattr(t, "quantity", None)
+                    or 0.0
+                )
+                raw_status = getattr(t, "status", "open")
+                status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "open")
+                entry_time = getattr(t, "entry_time", None)
+                exit_time = getattr(t, "exit_time", None)
+                result.append({
+                    "trade_id":     getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
+                    "symbol":       getattr(t, "symbol", None) or "UNKNOWN",
+                    "side":         getattr(t, "side", None) or "buy",
+                    "quantity":     float(qty or 0.0),
+                    "entry_price":  float(getattr(t, "entry_price", 0) or 0.0),
+                    "exit_price":   float(getattr(t, "exit_price", None)) if getattr(t, "exit_price", None) is not None else None,
+                    "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0.0),
+                    "commission":   float(getattr(t, "commission", 0) or 0.0),
+                    "status":       status_str,
+                    "strategy":     getattr(t, "strategy", None) or "unknown",
+                    "entry_time":   entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or ""),
+                    "exit_time":    exit_time.isoformat() if hasattr(exit_time, "isoformat") else (str(exit_time) if exit_time else None),
+                })
+            return result
     except Exception as exc:
         logger.debug("_load_trades DB: %s", exc)
 

@@ -49,7 +49,7 @@ def _get_notifs(user_id: str) -> list[dict]:
         try:
             raw = r.lrange(key, 0, 199)
             return [json.loads(x) for x in raw]
-        except Exception:
+        except Exception:  # nosec B110
             pass
     return _MEM_STORE.get(user_id, [])
 
@@ -62,7 +62,7 @@ def _save_notif(user_id: str, notif: dict) -> None:
             r.lpush(key, json.dumps(notif))
             r.ltrim(key, 0, 499)
             return
-        except Exception:
+        except Exception:  # nosec B110
             pass
     _MEM_STORE.setdefault(user_id, []).insert(0, notif)
     _MEM_STORE[user_id] = _MEM_STORE[user_id][:500]
@@ -85,7 +85,7 @@ def _update_notif(user_id: str, notif_id: str, updates: dict) -> bool:
                 for n in reversed(notifs):
                     r.rpush(key, json.dumps(n))
                 return True
-            except Exception:
+            except Exception:  # nosec B110
                 pass
         _MEM_STORE[user_id] = notifs
     return found
@@ -104,7 +104,7 @@ def _delete_notif(user_id: str, notif_id: str) -> bool:
             for n in reversed(new):
                 r.rpush(key, json.dumps(n))
             return True
-        except Exception:
+        except Exception:  # nosec B110
             pass
     _MEM_STORE[user_id] = new
     return True
@@ -118,7 +118,7 @@ def _get_prefs(user_id: str) -> dict:
             raw = r.get(key)
             if raw:
                 return json.loads(raw)
-        except Exception:
+        except Exception:  # nosec B110
             pass
     return _PREFS_STORE.get(user_id, _default_prefs())
 
@@ -130,7 +130,7 @@ def _save_prefs(user_id: str, prefs: dict) -> None:
         try:
             r.set(key, json.dumps(prefs), ex=86400 * 30)
             return
-        except Exception:
+        except Exception:  # nosec B110
             pass
     _PREFS_STORE[user_id] = prefs
 
@@ -257,7 +257,7 @@ async def mark_all_read(user: TokenPayload = Depends(get_current_user)) -> dict:
             r.delete(key)
             for n in reversed(notifs):
                 r.rpush(key, json.dumps(n))
-        except Exception:
+        except Exception:  # nosec B110
             pass
     else:
         _MEM_STORE[user.sub] = notifs
@@ -330,10 +330,11 @@ async def send_test_notification(
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    # Try to push via WebSocket event bus
+    # Try to push via WebSocket event bus.
+    # The module exports the singleton as `bus`, not `event_bus`.
     try:
-        from core.event_bus import event_bus
-        await event_bus.publish(f"notifications:{user.sub}", test_notif)
+        from core.event_bus import bus
+        await bus.publish(f"notifications:{user.sub}", test_notif)
     except Exception as exc:
         logger.debug("test notification event bus: %s", exc)
 

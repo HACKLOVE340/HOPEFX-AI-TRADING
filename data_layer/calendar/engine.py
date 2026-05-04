@@ -26,6 +26,18 @@ The engine exposes:
   - is_blackout_window()               → bool (±N min around HIGH events)
   - get_ml_features(as_of)             → Dict[str, float]
 
+New in this version
+-------------------
+- Surprise factor computation: compute_surprise_factor() returns a signed
+  normalised surprise score for any event with actual + forecast values.
+  Direction-aware: CPI beat = bullish gold, NFP beat = bearish gold.
+- Event clustering: cluster_events() groups temporally close events into
+  clusters. Overlapping blackout windows are merged into a single cluster
+  with a combined impact score.
+- Blackout window persistence: blackout windows are persisted to Redis as
+  a sorted set (score=epoch) so the risk engine can query them without
+  importing the calendar engine. persist_blackout_windows() writes them.
+
 Causal guarantee: get_ml_features(as_of) only uses events with
 scheduled_at <= as_of and actual values published before as_of.
 """
@@ -40,7 +52,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
-from typing import Any, ClassVar
+from typing import Any
 
 import aiohttp
 
@@ -48,11 +60,15 @@ from data_layer.types import MacroEvent, MacroImpact
 
 logger = logging.getLogger(__name__)
 
-_FINNHUB_KEY = os.getenv("FINNHUB_API_KEY", "")
 _BLACKOUT_BEFORE_MIN = int(os.getenv("NEWS_BLACKOUT_BEFORE_MIN", "5"))
 _BLACKOUT_AFTER_MIN = int(os.getenv("NEWS_BLACKOUT_AFTER_MIN", "5"))
 _REFRESH_INTERVAL_S = float(os.getenv("CALENDAR_REFRESH_S", "3600.0"))
 _HTTP_TIMEOUT = aiohttp.ClientTimeout(total=10.0)
+
+
+def _finnhub_key() -> str:
+    """Read FINNHUB_API_KEY at call time so .env loading order doesn't matter."""
+    return os.getenv("FINNHUB_API_KEY", "").strip()
 
 # ── Historical gold reaction lookup ──────────────────────────────────────────
 # Empirical average absolute gold move (USD) in 30 minutes after event release.
@@ -152,6 +168,87 @@ def _safe_float(val) -> float | None:
         return None
 
 
+# ── Hardcoded fallback schedule ───────────────────────────────────────────────
+# Used when Finnhub is unavailable or returns an empty calendar.
+# These are the recurring high-impact US macro events that move gold the most.
+# Scheduled times are approximate (typical release times in UTC).
+# The engine uses these to gate trading around known high-volatility windows
+# rather than allowing all trades through when the live calendar is empty.
+
+_RECURRING_HIGH_IMPACT: list[dict] = [
+    # FOMC — 8 meetings/year, Wednesday 18:00 UTC
+    {"name": "FOMC Rate Decision",       "country": "US", "currency": "USD", "weekday": 2, "hour": 18, "minute": 0},
+    # NFP — first Friday of month, 12:30 UTC
+    {"name": "Non-Farm Payrolls",         "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
+    # CPI — mid-month Wednesday, 12:30 UTC
+    {"name": "CPI",                       "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
+    # Core PCE — last Friday of month, 12:30 UTC
+    {"name": "Core PCE",                  "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
+    # GDP — last Wednesday of month, 12:30 UTC
+    {"name": "GDP",                       "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
+    # Initial Jobless Claims — every Thursday, 12:30 UTC
+    {"name": "Initial Jobless Claims",    "country": "US", "currency": "USD", "weekday": 3, "hour": 12, "minute": 30},
+    # ECB Rate Decision — 6 meetings/year, Thursday 12:15 UTC
+    {"name": "ECB Rate Decision",         "country": "EU", "currency": "EUR", "weekday": 3, "hour": 12, "minute": 15},
+]
+
+
+def _build_hardcoded_fallback_events() -> list[MacroEvent]:
+    """
+    Build a minimal set of MacroEvent objects for the next 7 days based on
+    recurring high-impact event schedules.
+
+    This is a best-effort approximation — actual release dates vary by month.
+    The purpose is to ensure the blackout-window gating logic has *something*
+    to work with when Finnhub is unavailable, preventing the engine from
+    silently allowing all trades through during high-volatility windows.
+    """
+    now = datetime.now(UTC)
+    horizon = now + timedelta(days=7)
+    events: list[MacroEvent] = []
+
+    # Walk every day in the next 7 days and emit events on matching weekdays.
+    for day_offset in range(8):
+        candidate = now + timedelta(days=day_offset)
+        for spec in _RECURRING_HIGH_IMPACT:
+            if candidate.weekday() != spec["weekday"]:
+                continue
+            scheduled = candidate.replace(
+                hour=spec["hour"],
+                minute=spec["minute"],
+                second=0,
+                microsecond=0,
+                tzinfo=UTC,
+            )
+            if scheduled < now or scheduled > horizon:
+                continue
+            name = spec["name"]
+            impact = _classify_impact(name, "high")
+            gold_score = _gold_impact_score(name)
+            events.append(
+                MacroEvent(
+                    event_id=str(uuid.uuid4()),
+                    name=name,
+                    country=spec["country"],
+                    currency=spec["currency"],
+                    scheduled_at=scheduled,
+                    actual=None,
+                    forecast=None,
+                    previous=None,
+                    impact=impact,
+                    gold_impact_score=round(gold_score, 4),
+                    surprise_pct=None,
+                    lineage_id=str(uuid.uuid4()),
+                )
+            )
+
+    logger.debug(
+        "MacroCalendarEngine: hardcoded fallback produced %d events for next 7 days",
+        len(events),
+    )
+    return sorted(events, key=lambda e: e.scheduled_at)
+
+
 class MacroCalendarEngine:
     """
     Economic calendar with gold-specific impact scoring.
@@ -211,18 +308,35 @@ class MacroCalendarEngine:
         logger.info("MacroCalendarEngine stopped")
 
     async def _refresh_loop(self) -> None:
+        # Stagger startup by 5 s so the engine doesn't race with other
+        # components that also initialise on the same event loop tick.
+        await asyncio.sleep(5)
         while self._running:
+            t0 = time.monotonic()
             try:
                 await self.refresh()
+            except asyncio.CancelledError:
+                break
             except Exception as exc:
                 logger.warning("MacroCalendarEngine refresh error: %s", exc)
-            await asyncio.sleep(_REFRESH_INTERVAL_S)
+            elapsed = time.monotonic() - t0
+            await asyncio.sleep(max(1.0, _REFRESH_INTERVAL_S - elapsed))
 
     async def refresh(self) -> None:
-        """Fetch and cache upcoming economic events."""
+        """Fetch and cache upcoming economic events.
+
+        Falls back to a hardcoded schedule of recurring high-impact events
+        when Finnhub is unavailable or returns an empty calendar, so the
+        engine always has *something* to gate on rather than silently
+        allowing all trades through.
+        """
         events = await self._fetch_finnhub_calendar()
         if not events:
-            logger.debug("MacroCalendarEngine: Finnhub returned 0 events")
+            logger.debug(
+                "MacroCalendarEngine: Finnhub returned 0 events — "
+                "loading hardcoded fallback schedule"
+            )
+            events = _build_hardcoded_fallback_events()
 
         async with self._lock:
             self._events = events
@@ -230,6 +344,7 @@ class MacroCalendarEngine:
 
         logger.info("MacroCalendarEngine: loaded %d events", len(events))
         await self._publish_to_redis()
+        await self.persist_blackout_windows()
 
         # Update Prometheus
         impact = self.get_current_impact_score()
@@ -248,10 +363,13 @@ class MacroCalendarEngine:
     # ── Finnhub calendar fetch ────────────────────────────────────────────────
 
     async def _fetch_finnhub_calendar(self) -> list[MacroEvent]:
-        if not _FINNHUB_KEY:
-            logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set")
+        # Read key at call time — env vars may be loaded after module import.
+        key = _finnhub_key()
+        if not key:
+            logger.debug("MacroCalendarEngine: FINNHUB_API_KEY not set — skipping Finnhub fetch")
             return []
 
+        # Re-create session if it was closed (e.g. after stop() was called).
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=_HTTP_TIMEOUT)
 
@@ -262,15 +380,41 @@ class MacroCalendarEngine:
         try:
             async with self._session.get(
                 "https://finnhub.io/api/v1/calendar/economic",
-                params={"from": start, "to": end, "token": _FINNHUB_KEY},
+                params={"from": start, "to": end, "token": key},
             ) as resp:
+                if resp.status == 401:
+                    logger.warning(
+                        "MacroCalendarEngine: Finnhub returned 401 — "
+                        "check FINNHUB_API_KEY is valid"
+                    )
+                    return []
+                if resp.status == 429:
+                    logger.warning(
+                        "MacroCalendarEngine: Finnhub rate-limited (429) — "
+                        "will retry on next refresh cycle"
+                    )
+                    return []
                 resp.raise_for_status()
                 data = await resp.json()
+        except aiohttp.ClientResponseError as exc:
+            logger.warning("Finnhub calendar HTTP error %s: %s", exc.status, exc.message)
+            return []
+        except aiohttp.ClientError as exc:
+            # aiohttp network errors (connection refused, DNS failure, timeout)
+            # often produce an empty str() — use repr() to always get a
+            # meaningful message (e.g. "ClientConnectorError(...)" with the
+            # underlying OS error code and address).
+            detail = str(exc) or repr(exc)
+            logger.warning("Finnhub calendar network error: %s", detail)
+            return []
         except Exception as exc:
-            logger.warning("Finnhub calendar fetch error: %s", exc)
+            detail = str(exc) or repr(exc)
+            logger.warning("Finnhub calendar fetch error: %s", detail)
             return []
 
-        events: ClassVar[list[MacroEvent]] = []
+        # `events` is a plain local list — ClassVar is a class-level annotation
+        # and must not be used for local variables.
+        events: list[MacroEvent] = []
         for item in data.get("economicCalendar", []):
             name = item.get("event", "")
             country = item.get("country", "")
@@ -279,7 +423,14 @@ class MacroCalendarEngine:
             time_str = item.get("time", "")
             try:
                 scheduled = datetime.fromisoformat(time_str)
-            except Exception:  # nosec B112 - skip malformed calendar entry
+                # Finnhub returns naive datetimes (e.g. "2024-01-15 08:30:00").
+                # Attach UTC so all downstream comparisons with datetime.now(UTC)
+                # work correctly without TypeError on offset-naive vs aware.
+                if scheduled.tzinfo is None:
+                    scheduled = scheduled.replace(tzinfo=UTC)
+            except (ValueError, TypeError):
+                # Skip entries with unparseable or missing time fields.
+                logger.debug("MacroCalendarEngine: skipping event with bad time %r", time_str)
                 continue
 
             actual = _safe_float(item.get("actual"))
@@ -323,6 +474,7 @@ class MacroCalendarEngine:
                 )
             )
 
+        logger.debug("MacroCalendarEngine: Finnhub returned %d events", len(events))
         return sorted(events, key=lambda e: e.scheduled_at)
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -587,8 +739,257 @@ class MacroCalendarEngine:
             "upcoming_high": len([e for e in self.get_upcoming_events(24) if e.impact == MacroImpact.HIGH]),
             "current_impact": self.get_current_impact_score(),
             "is_blackout": self.is_blackout_window(),
-            "finnhub_key": bool(_FINNHUB_KEY),
+            # Read key at call time so the value reflects the current env state.
+            "finnhub_key_configured": bool(_finnhub_key()),
         }
+
+    # ── Surprise factor computation ───────────────────────────────────────────
+
+    def compute_surprise_factor(self, event: MacroEvent) -> float:
+        """
+        Compute a direction-aware, normalised surprise factor for an event.
+
+        Formula: (actual - forecast) / |forecast| × direction_multiplier
+
+        Direction multiplier (gold-specific):
+          +1.0 for events where a beat is bullish for gold (CPI, PCE, PPI)
+          -1.0 for events where a beat is bearish for gold (NFP, GDP, ISM)
+           0.5 for neutral events (unknown direction)
+
+        Returns a float in approximately [-2, +2]:
+          Positive = bullish surprise for gold
+          Negative = bearish surprise for gold
+          0.0 = no surprise or missing data
+
+        Parameters
+        ----------
+        event : MacroEvent with actual and forecast values
+        """
+        if event.actual is None or event.forecast is None:
+            return 0.0
+        if abs(event.forecast) < 1e-9:
+            return 0.0
+
+        raw_surprise = (event.actual - event.forecast) / abs(event.forecast)
+
+        # Direction multiplier: gold-specific
+        name_lower = event.name.lower()
+        bullish_keywords = {"cpi", "pce", "ppi", "inflation", "gold", "geopolitical"}
+        bearish_keywords = {"nfp", "non-farm", "payroll", "gdp", "ism", "employment", "jobs"}
+
+        if any(kw in name_lower for kw in bullish_keywords):
+            direction = 1.0
+        elif any(kw in name_lower for kw in bearish_keywords):
+            direction = -1.0
+        else:
+            direction = 0.5
+
+        return round(raw_surprise * direction, 4)
+
+    def get_surprise_history(
+        self,
+        hours_back: float = 48.0,
+        min_impact: MacroImpact = MacroImpact.MEDIUM,
+    ) -> list[dict[str, Any]]:
+        """
+        Return surprise factors for all released events in the last N hours.
+
+        Parameters
+        ----------
+        hours_back : Look-back window in hours (default 48h)
+        min_impact : Minimum impact level to include
+
+        Returns list of dicts with keys:
+          name, scheduled_at, surprise_factor, surprise_pct, impact, gold_impact_score
+        """
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(hours=hours_back)
+        impact_order = {MacroImpact.HIGH: 3, MacroImpact.MEDIUM: 2, MacroImpact.LOW: 1, MacroImpact.NONE: 0}
+        min_order = impact_order.get(min_impact, 0)
+
+        results = []
+        for e in self._events:
+            if e.scheduled_at > now or e.scheduled_at < cutoff:
+                continue
+            if impact_order.get(e.impact, 0) < min_order:
+                continue
+            if e.actual is None:
+                continue
+            results.append({
+                "name": e.name,
+                "scheduled_at": e.scheduled_at.isoformat(),
+                "surprise_factor": self.compute_surprise_factor(e),
+                "surprise_pct": e.surprise_pct,
+                "impact": e.impact.value,
+                "gold_impact_score": e.gold_impact_score,
+            })
+        return sorted(results, key=lambda x: x["scheduled_at"], reverse=True)
+
+    # ── Event clustering ──────────────────────────────────────────────────────
+
+    def cluster_events(
+        self,
+        events: list[MacroEvent] | None = None,
+        cluster_window_min: float = 30.0,
+    ) -> list[dict[str, Any]]:
+        """
+        Group temporally close events into clusters.
+
+        Events within `cluster_window_min` minutes of each other are merged
+        into a single cluster. The cluster's combined impact score is the
+        sum of individual scores (capped at 1.0).
+
+        This is used to detect "event storms" — periods where multiple
+        high-impact events overlap, creating compounded volatility risk.
+
+        Parameters
+        ----------
+        events             : Events to cluster (default: all loaded events)
+        cluster_window_min : Merge window in minutes (default 30)
+
+        Returns list of cluster dicts:
+          {
+            events:         list of MacroEvent objects in this cluster
+            start:          earliest scheduled_at in cluster
+            end:            latest scheduled_at in cluster
+            combined_score: sum of gold_impact_scores (capped at 1.0)
+            max_impact:     highest MacroImpact in cluster
+            event_count:    number of events
+            is_storm:       True if combined_score > 0.7 or event_count >= 3
+          }
+        """
+        source = sorted(events or self._events, key=lambda e: e.scheduled_at)
+        if not source:
+            return []
+
+        clusters: list[dict[str, Any]] = []
+        current_cluster: list[MacroEvent] = [source[0]]
+
+        for event in source[1:]:
+            last = current_cluster[-1]
+            gap_min = (event.scheduled_at - last.scheduled_at).total_seconds() / 60.0
+            if gap_min <= cluster_window_min:
+                current_cluster.append(event)
+            else:
+                clusters.append(self._build_cluster(current_cluster))
+                current_cluster = [event]
+
+        if current_cluster:
+            clusters.append(self._build_cluster(current_cluster))
+
+        return clusters
+
+    def _build_cluster(self, events: list[MacroEvent]) -> dict[str, Any]:
+        impact_order = {MacroImpact.HIGH: 3, MacroImpact.MEDIUM: 2, MacroImpact.LOW: 1, MacroImpact.NONE: 0}
+        combined = min(1.0, sum(e.gold_impact_score for e in events))
+        max_impact = max(events, key=lambda e: impact_order.get(e.impact, 0)).impact
+        return {
+            "events": events,
+            "start": events[0].scheduled_at,
+            "end": events[-1].scheduled_at,
+            "combined_score": round(combined, 4),
+            "max_impact": max_impact,
+            "event_count": len(events),
+            "is_storm": combined > 0.7 or len(events) >= 3,
+        }
+
+    def get_event_storms(self, hours_ahead: float = 48.0) -> list[dict[str, Any]]:
+        """Return upcoming event clusters classified as storms (high combined risk)."""
+        now = datetime.now(UTC)
+        cutoff = now + timedelta(hours=hours_ahead)
+        upcoming = [e for e in self._events if now <= e.scheduled_at <= cutoff]
+        clusters = self.cluster_events(upcoming)
+        return [c for c in clusters if c["is_storm"]]
+
+    # ── Blackout window persistence ───────────────────────────────────────────
+
+    async def persist_blackout_windows(self) -> int:
+        """
+        Persist all HIGH-impact event blackout windows to Redis as a sorted set.
+
+        Key: hopefx:blackout_windows
+        Score: epoch of blackout start
+        Member: JSON {start, end, event_name, gold_impact_score}
+
+        The risk engine can query this set without importing the calendar engine,
+        enabling decoupled blackout enforcement across services.
+
+        Returns the number of windows persisted.
+        """
+        if not self._redis:
+            return 0
+
+        high_events = [e for e in self._events if e.impact == MacroImpact.HIGH]
+        if not high_events:
+            return 0
+
+        import json as _json
+
+        try:
+            loop = asyncio.get_running_loop()
+            pipe_data: dict[str, float] = {}
+
+            for event in high_events:
+                start = event.scheduled_at - timedelta(minutes=_BLACKOUT_BEFORE_MIN)
+                end = event.scheduled_at + timedelta(minutes=_BLACKOUT_AFTER_MIN)
+                member = _json.dumps({
+                    "start": start.isoformat(),
+                    "end": end.isoformat(),
+                    "event_name": event.name,
+                    "gold_impact_score": event.gold_impact_score,
+                    "surprise_pct": event.surprise_pct,
+                })
+                pipe_data[member] = start.timestamp()
+
+            def _write():
+                pipe = self._redis.pipeline(transaction=False)
+                pipe.delete("hopefx:blackout_windows")
+                if pipe_data:
+                    pipe.zadd("hopefx:blackout_windows", pipe_data)
+                # TTL: 7 days (calendar covers next 7 days)
+                pipe.expire("hopefx:blackout_windows", 7 * 86400)
+                pipe.execute()
+
+            await loop.run_in_executor(None, _write)
+            logger.info("MacroCalendarEngine: persisted %d blackout windows to Redis", len(pipe_data))
+            return len(pipe_data)
+        except Exception as exc:
+            logger.warning("MacroCalendarEngine.persist_blackout_windows error: %s", exc)
+            return 0
+
+    def get_active_blackout_windows(self) -> list[dict[str, Any]]:
+        """
+        Return all currently active blackout windows from Redis.
+
+        Queries hopefx:blackout_windows sorted set for windows that
+        contain the current time.
+
+        Returns list of window dicts or [] if Redis unavailable.
+        """
+        if not self._redis:
+            return []
+        try:
+            import json as _json
+            now = datetime.now(UTC)
+            now_epoch = now.timestamp()
+            # Get all windows that started in the last BLACKOUT_BEFORE_MIN + BLACKOUT_AFTER_MIN
+            lookback = now_epoch - (_BLACKOUT_BEFORE_MIN + _BLACKOUT_AFTER_MIN) * 60
+            raw = self._redis.zrangebyscore("hopefx:blackout_windows", lookback, now_epoch + 1)
+            active = []
+            for r in raw:
+                try:
+                    w = _json.loads(r)
+                    end_dt = datetime.fromisoformat(w["end"])
+                    if end_dt.tzinfo is None:
+                        end_dt = end_dt.replace(tzinfo=UTC)
+                    if now <= end_dt:
+                        active.append(w)
+                except Exception:
+                    continue
+            return active
+        except Exception as exc:
+            logger.debug("MacroCalendarEngine.get_active_blackout_windows error: %s", exc)
+            return []
 
 
 # Module-level singleton

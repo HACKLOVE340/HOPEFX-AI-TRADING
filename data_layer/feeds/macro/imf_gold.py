@@ -267,7 +267,7 @@ class IMFGoldFeed:
 
         if tonnes.empty:
             if not self._offline_warned:
-                logger.warning(
+                logger.info(
                     "IMF: no data available — dataservices.imf.org unreachable and no local cache. "
                     "Injecting neutral zero-valued series into MacroStore. "
                     "Place cached CSVs in %s or ensure outbound HTTPS access to dataservices.imf.org.",

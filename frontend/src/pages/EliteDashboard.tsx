@@ -527,7 +527,23 @@ const EliteDashboard: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.heading}>⭐ Elite Dashboard</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
+        <div style={s.heading}>⭐ Elite Dashboard</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/walk-forward')}
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📈 Walk-Forward
+          </button>
+          <button onClick={() => navigate('/ai-strategy')}
+            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🤖 AI Strategy
+          </button>
+          <button onClick={() => navigate('/leaderboard')}
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🏆 Leaderboard
+          </button>
+        </div>
+      </div>
       <div style={s.sub}>
         Dedicated support · Custom development · Sub-accounts · White-label
       </div>

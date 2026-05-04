@@ -88,7 +88,7 @@ class PaymentStatusResponse(BaseModel):
 
 
 def _get_db_session():
-    """Return a SQLAlchemy session from the global app_state, or None."""
+    """Return a SQLAlchemy session from app_state or SessionLocal fallback."""
     try:
         from core.app_state import app_state
 
@@ -96,6 +96,11 @@ def _get_db_session():
             return app_state.db_session_factory()  # pylint: disable=not-callable
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
+    try:
+        from database.connection import SessionLocal
+        return SessionLocal()
+    except Exception as _exc2:
+        logger.debug("SessionLocal fallback failed: %s", _exc2)
     return None
 
 

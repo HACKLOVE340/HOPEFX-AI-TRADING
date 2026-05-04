@@ -304,6 +304,8 @@ export const tradingApi = {
   aiAnalysis:     (payload: { symbol: string; price?: number; timeframe?: string }) =>
     api.post('/trading/ai-analysis', payload, { timeout: 30_000 }),
   riskMetrics:    ()              => api.get('/trading/risk'),
+  patterns: (symbol: string, timeframe = '1h', limit = 200, minConfidence = 0.5) =>
+    api.get('/trading/patterns', { params: { symbol, timeframe, limit, min_confidence: minConfidence }, timeout: 30_000 }),
 };
 
 // ── Backtesting ───────────────────────────────────────────────────────────────
@@ -1250,13 +1252,13 @@ export const chatApi = {
   messages:         (roomId: string, params?: Record<string, unknown>) =>
                       api.get(`/chat/rooms/${roomId}/messages`, { params }),
   sendMessage:      (roomId: string, text: string, attachments?: string[]) =>
-                      api.post(`/chat/rooms/${roomId}/messages`, { text, attachments }),
+                      api.post(`/chat/rooms/${roomId}/messages`, { content: text, text, attachments }),
   deleteMessage:    (roomId: string, msgId: string)           =>
                       api.delete(`/chat/rooms/${roomId}/messages/${msgId}`),
   directMessages:   (userId: string, params?: Record<string, unknown>) =>
                       api.get(`/chat/dm/${userId}`, { params }),
   sendDM:           (userId: string, text: string)            =>
-                      api.post(`/chat/dm/${userId}`, { text }),
+                      api.post(`/chat/dm/${userId}`, { content: text, text }),
   onlineUsers:      ()                                        => api.get('/chat/online'),
 };
 

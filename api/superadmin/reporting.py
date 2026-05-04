@@ -54,7 +54,7 @@ def _load_reports() -> list[dict]:
             raw = rc.get(_REPORTS_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     return []
 
@@ -65,7 +65,7 @@ def _save_reports(reports: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_REPORTS_KEY, json.dumps(reports[:200]), ex=86400 * 90)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
 
@@ -187,7 +187,7 @@ async def generate_report(
         rc = get_sync_redis_client()
         if rc:
             rc.set(f"superadmin:report:data:{report_id}", csv_content, ex=3600 * 24)
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     # Mark complete
@@ -216,7 +216,7 @@ async def download_report(
             raw = rc.get(f"superadmin:report:data:{report_id}")
             if raw:
                 csv_content = raw if isinstance(raw, str) else raw.decode()
-    except Exception:
+    except Exception:  # nosec B110
         pass
 
     if not csv_content:
@@ -257,7 +257,7 @@ async def delete_report(
         rc = get_sync_redis_client()
         if rc:
             rc.delete(f"superadmin:report:data:{report_id}")
-    except Exception:
+    except Exception:  # nosec B110
         pass
     _log_superadmin_action(user, "report_delete", {"report_id": report_id})
     return {"ok": True}

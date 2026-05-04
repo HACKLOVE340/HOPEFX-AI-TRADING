@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
 
@@ -105,6 +106,7 @@ const LeaderCard: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const CopyTrading: React.FC = () => {
+  const navigate = useNavigate();
   const [leaders, setLeaders]           = useState<Leader[]>([]);
   const [loading, setLoading]           = useState(true);
   const [loadErr, setLoadErr]           = useState('');
@@ -208,8 +210,13 @@ const CopyTrading: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.header}>
-        <h1 style={s.title}>Copy Trading Marketplace</h1>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div>
+          <h1 style={s.title}>Copy Trading Marketplace</h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+            Mirror top traders automatically. Allocate capital and start earning.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {(['browse', 'active'] as const).map(t => (
             <button key={t} onClick={() => setActiveTab(t)} style={{
               ...s.tabBtn,
@@ -218,6 +225,13 @@ const CopyTrading: React.FC = () => {
               {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
             </button>
           ))}
+          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <button
+            onClick={() => navigate('/leaderboard')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            🏆 Leaderboard
+          </button>
         </div>
       </div>
 
@@ -227,7 +241,15 @@ const CopyTrading: React.FC = () => {
           {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
             <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
-              No active copy sessions. Browse traders and start copying.
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 8 }}>No active copy sessions</div>
+              <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
+              <button
+                onClick={() => setActiveTab('browse')}
+                style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 24px' }}
+              >
+                🔍 Browse Traders
+              </button>
             </div>
           )}
           {sessions.map(sess => {

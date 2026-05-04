@@ -16,6 +16,7 @@
 
 import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { AIChart } from '../components/charts/AIChart';
 import { cn } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
@@ -215,6 +216,7 @@ class ChartErrorBoundary extends React.Component<
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AIChartDashboard() {
+  const navigate = useNavigate();
   const [timeframe, setTimeframe] = useState<TF>('1h');
 
   return (
@@ -239,15 +241,25 @@ export default function AIChartDashboard() {
       <div className="flex-1 min-h-0 overflow-y-auto p-2">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {SYMBOLS.map((sym) => (
-            <ChartErrorBoundary key={`${sym}-${timeframe}`} label={sym}>
-              <AIChart
-                symbol={sym}
-                timeframe={timeframe}
-                height={300}
-                autoAnalyze
-                showBranding={false}
-              />
-            </ChartErrorBoundary>
+            <div key={`${sym}-${timeframe}`} className="relative">
+              <button
+                onClick={() => navigate('/trade', { state: { signal: { symbol: sym } } })}
+                className="absolute top-2 right-2 z-10 px-2 py-1 rounded text-[10px] font-bold"
+                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: 'pointer' }}
+                title={`Go to Trade page for ${sym}`}
+              >
+                ⚡ Trade
+              </button>
+              <ChartErrorBoundary label={sym}>
+                <AIChart
+                  symbol={sym}
+                  timeframe={timeframe}
+                  height={300}
+                  autoAnalyze
+                  showBranding={false}
+                />
+              </ChartErrorBoundary>
+            </div>
           ))}
         </div>
       </div>

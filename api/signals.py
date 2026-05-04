@@ -373,6 +373,41 @@ class RealTimeSignalService:
             except Exception as _dbe:
                 logger.debug("signals:active db_set failed: %s", _dbe)
 
+        # Persist to DB via SignalRepository (fire-and-forget, non-blocking)
+        try:
+            import asyncio as _asyncio
+
+            async def _persist_signal() -> None:
+                try:
+                    from database.async_connection import get_async_db as _get_async_db
+                    from database.repositories.signal_repository import SignalRepository as _SigRepo
+
+                    async with _get_async_db() as _db:
+                        _repo = _SigRepo(_db)
+                        await _repo.create(
+                            signal_id=signal.id,
+                            symbol=signal.symbol,
+                            direction=signal.direction.value,
+                            confidence=signal.confidence,
+                            entry_price=signal.entry_price,
+                            stop_loss=signal.stop_loss,
+                            take_profit=signal.take_profit,
+                            strategy=signal.metadata.get("strategy", "api_signal"),
+                            source=signal.metadata.get("source", "signal_service"),
+                            metadata=signal.metadata,
+                        )
+                except Exception as _pe:
+                    logger.debug("SignalRepository persist failed: %s", _pe)
+
+            try:
+                loop = _asyncio.get_running_loop()
+                _t = loop.create_task(_persist_signal())
+                _t.add_done_callback(lambda _: None)
+            except RuntimeError:  # nosec B110
+                pass  # No running loop — skip async persist in sync context
+        except Exception as _pe:
+            logger.debug("Signal DB persist setup failed: %s", _pe)
+
         # Publish event
         self._publish_event("signal_generated", signal)
 
@@ -876,8 +911,24 @@ def _register_signal_read_routes(router: Any) -> None:
         return _with_disclaimer({"signals": [s.to_dict() for s in signals], "count": len(signals)})
 
     @router.get("/analytics")
-    async def get_signal_analytics(user: _TokenPayload = _Depends(_get_current_user)):
-        return _with_disclaimer(_get_signal_service().get_analytics())
+    async def get_signal_analytics(
+        symbol: str | None = None,
+        user: _TokenPayload = _Depends(_get_current_user),
+    ):
+        base = _get_signal_service().get_analytics()
+        # Enrich with DB-backed accuracy stats from SignalRepository
+        db_accuracy: dict = {}
+        try:
+            from database.async_connection import get_async_db as _get_async_db
+            from database.repositories.signal_repository import SignalRepository as _SigRepo
+
+            async with _get_async_db() as _db:
+                _repo = _SigRepo(_db)
+                db_accuracy = await _repo.get_accuracy_stats(symbol=symbol)
+        except Exception as _exc:
+            logger.debug("SignalRepository.get_accuracy_stats failed: %s", _exc)
+        base["db_accuracy"] = db_accuracy
+        return _with_disclaimer(base)
 
     @router.get("/channels")
     async def get_websocket_channels(user: _TokenPayload = _Depends(_get_current_user)):
