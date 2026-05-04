@@ -402,7 +402,10 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
         style={{ animation: 'tickerScroll 28s linear infinite' }}
       >
         {items.map((item, i) => {
-          const up = item.change_pct >= 0;
+          const bid = typeof item.bid === 'number' && isFinite(item.bid) ? item.bid : null;
+          const changePct = typeof item.change_pct === 'number' && isFinite(item.change_pct) ? item.change_pct : 0;
+          const up = changePct >= 0;
+          const decimals = item.symbol.includes('JPY') ? 3 : item.symbol.includes('XAU') || item.symbol.includes('BTC') ? 2 : 5;
           return (
             <div
               key={`${item.symbol}-${i}`}
@@ -412,11 +415,11 @@ function TickerBar({ ticks }: { ticks: Record<string, TickerItem> }) {
                 {item.symbol.replace('_', '/')}
               </span>
               <span className={`text-xs font-mono tabular-nums font-bold ${up ? 'text-bull' : 'text-bear'}`}>
-                {item.bid.toFixed(item.symbol.includes('JPY') ? 3 : item.symbol.includes('XAU') || item.symbol.includes('BTC') ? 2 : 5)}
+                {bid !== null ? bid.toFixed(decimals) : '—'}
               </span>
               <span className={`inline-flex items-center gap-0.5 text-2xs font-mono ${up ? 'text-bull' : 'text-bear'}`}>
                 {up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                {up ? '+' : ''}{item.change_pct.toFixed(2)}%
+                {up ? '+' : ''}{changePct.toFixed(2)}%
               </span>
             </div>
           );
