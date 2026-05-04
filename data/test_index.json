@@ -1,15 +1,15 @@
 {
-  "total": 13117,
-  "files": 354,
+  "total": 13601,
+  "files": 369,
   "by_category": {
     "e2e": 253,
     "performance": 44,
     "security": 167,
-    "ml": 1695,
+    "ml": 1712,
     "risk": 2490,
-    "broker": 2206,
-    "api": 694,
-    "unit": 5568
+    "broker": 2207,
+    "api": 751,
+    "unit": 5977
   },
   "file_list": [
     {
@@ -18,224 +18,9 @@
       "test_count": 0
     },
     {
-      "path": "risk/stress_test.py",
-      "category": "unit",
-      "test_count": 0
-    },
-    {
-      "path": "scripts/test_ibkr_connection.py",
-      "category": "broker",
-      "test_count": 0
-    },
-    {
-      "path": "scripts/test_migrations.py",
-      "category": "unit",
-      "test_count": 0
-    },
-    {
-      "path": "tests/test_paper_trading_broker.py",
-      "category": "risk",
-      "test_count": 41
-    },
-    {
-      "path": "tests/test_ibkr_fix_bridge.py",
-      "category": "broker",
-      "test_count": 32
-    },
-    {
-      "path": "tests/test_market_data_feed.py",
-      "category": "broker",
-      "test_count": 31
-    },
-    {
-      "path": "tests/test_connector_hub.py",
-      "category": "broker",
-      "test_count": 39
-    },
-    {
-      "path": "tests/test_jwt_pyjwt.py",
-      "category": "security",
-      "test_count": 10
-    },
-    {
-      "path": "tests/test_deployment_gates.py",
-      "category": "security",
-      "test_count": 15
-    },
-    {
-      "path": "tests/test_security.py",
-      "category": "security",
-      "test_count": 12
-    },
-    {
-      "path": "tests/test_v17_fixes.py",
-      "category": "api",
-      "test_count": 24
-    },
-    {
-      "path": "tests/test_integration_pipeline.py",
-      "category": "api",
-      "test_count": 46
-    },
-    {
-      "path": "tests/test_validation.py",
-      "category": "api",
-      "test_count": 14
-    },
-    {
-      "path": "tests/test_ml_training_pipeline.py",
-      "category": "ml",
-      "test_count": 13
-    },
-    {
-      "path": "tests/test_paper_trading_gate.py",
-      "category": "risk",
-      "test_count": 21
-    },
-    {
-      "path": "tests/test_execution_missing.py",
-      "category": "risk",
-      "test_count": 73
-    },
-    {
-      "path": "tests/test_signal_engine_coverage.py",
-      "category": "ml",
-      "test_count": 178
-    },
-    {
-      "path": "tests/test_production_readiness.py",
-      "category": "e2e",
-      "test_count": 10
-    },
-    {
-      "path": "tests/test_whitelabel_rate_limiting.py",
-      "category": "api",
-      "test_count": 13
-    },
-    {
-      "path": "tests/test_bybit_connector.py",
-      "category": "unit",
-      "test_count": 32
-    },
-    {
-      "path": "tests/test_brokers_coverage.py",
-      "category": "broker",
-      "test_count": 136
-    },
-    {
-      "path": "tests/test_auth_gates.py",
-      "category": "api",
-      "test_count": 17
-    },
-    {
-      "path": "tests/test_model_registry_and_wiring.py",
-      "category": "ml",
-      "test_count": 52
-    },
-    {
       "path": "tests/test_ibkr_broker.py",
       "category": "broker",
       "test_count": 22
-    },
-    {
-      "path": "tests/test_e2e_wiring.py",
-      "category": "e2e",
-      "test_count": 28
-    },
-    {
-      "path": "tests/test_copy_trading.py",
-      "category": "broker",
-      "test_count": 20
-    },
-    {
-      "path": "tests/test_backtest_engine_fixes.py",
-      "category": "risk",
-      "test_count": 25
-    },
-    {
-      "path": "tests/test_paper_runner.py",
-      "category": "unit",
-      "test_count": 26
-    },
-    {
-      "path": "tests/test_brokers_data_missing.py",
-      "category": "broker",
-      "test_count": 41
-    },
-    {
-      "path": "tests/test_sharpe_tracker_and_lstm.py",
-      "category": "ml",
-      "test_count": 39
-    },
-    {
-      "path": "tests/test_secrets_management.py",
-      "category": "security",
-      "test_count": 18
-    },
-    {
-      "path": "tests/test_oanda_paper_clock.py",
-      "category": "broker",
-      "test_count": 13
-    },
-    {
-      "path": "tests/test_research_pipeline_wiring.py",
-      "category": "unit",
-      "test_count": 26
-    },
-    {
-      "path": "tests/test_execution.py",
-      "category": "risk",
-      "test_count": 14
-    },
-    {
-      "path": "tests/test_production_wiring.py",
-      "category": "e2e",
-      "test_count": 39
-    },
-    {
-      "path": "tests/test_auth_pentest.py",
-      "category": "security",
-      "test_count": 18
-    },
-    {
-      "path": "tests/test_brokers_base.py",
-      "category": "broker",
-      "test_count": 36
-    },
-    {
-      "path": "tests/test_smoke_critical.py",
-      "category": "security",
-      "test_count": 35
-    },
-    {
-      "path": "tests/test_backtest.py",
-      "category": "risk",
-      "test_count": 9
-    },
-    {
-      "path": "tests/test_inference_engine.py",
-      "category": "unit",
-      "test_count": 25
-    },
-    {
-      "path": "tests/test_critical_paths.py",
-      "category": "api",
-      "test_count": 47
-    },
-    {
-      "path": "tests/test_lstm_signal_layer.py",
-      "category": "unit",
-      "test_count": 25
-    },
-    {
-      "path": "tests/test_connect_to_life.py",
-      "category": "e2e",
-      "test_count": 21
-    },
-    {
-      "path": "tests/test_kill_switch_load.py",
-      "category": "performance",
-      "test_count": 27
     },
     {
       "path": "tests/test_ml_pipeline.py",
@@ -243,14 +28,14 @@
       "test_count": 31
     },
     {
-      "path": "tests/test_online_learner.py",
-      "category": "unit",
-      "test_count": 35
+      "path": "tests/test_order_gateway_integration.py",
+      "category": "broker",
+      "test_count": 29
     },
     {
-      "path": "tests/test_advanced_predictor.py",
+      "path": "tests/test_sentry_wiring.py",
       "category": "unit",
-      "test_count": 40
+      "test_count": 25
     },
     {
       "path": "tests/test_ml_pipeline_full.py",
@@ -263,88 +48,18 @@
       "test_count": 142
     },
     {
-      "path": "tests/test_sentry_wiring.py",
+      "path": "tests/test_smoke_critical.py",
+      "category": "security",
+      "test_count": 35
+    },
+    {
+      "path": "tests/test_online_learner.py",
       "category": "unit",
-      "test_count": 25
+      "test_count": 35
     },
     {
-      "path": "tests/test_performance_monitor.py",
-      "category": "unit",
-      "test_count": 39
-    },
-    {
-      "path": "tests/test_new_components.py",
-      "category": "api",
-      "test_count": 29
-    },
-    {
-      "path": "tests/test_comprehensive.py",
-      "category": "api",
-      "test_count": 12
-    },
-    {
-      "path": "tests/test_marketplace.py",
-      "category": "api",
-      "test_count": 4
-    },
-    {
-      "path": "tests/test_macro_wiring.py",
-      "category": "broker",
-      "test_count": 7
-    },
-    {
-      "path": "tests/test_mt5_bridge.py",
-      "category": "unit",
-      "test_count": 31
-    },
-    {
-      "path": "tests/test_k6_load_tests.py",
-      "category": "performance",
-      "test_count": 17
-    },
-    {
-      "path": "tests/test_ml_missing.py",
-      "category": "ml",
-      "test_count": 36
-    },
-    {
-      "path": "tests/test_prop_enforcement.py",
-      "category": "risk",
-      "test_count": 32
-    },
-    {
-      "path": "tests/test_order_gateway_integration.py",
-      "category": "broker",
-      "test_count": 29
-    },
-    {
-      "path": "tests/test_brokers_init.py",
-      "category": "broker",
-      "test_count": 42
-    },
-    {
-      "path": "tests/test_proof_artifacts.py",
+      "path": "tests/test_connect_to_life.py",
       "category": "e2e",
-      "test_count": 18
-    },
-    {
-      "path": "tests/test_train_advanced.py",
-      "category": "ml",
-      "test_count": 27
-    },
-    {
-      "path": "tests/test_cvar_order_gate.py",
-      "category": "risk",
-      "test_count": 7
-    },
-    {
-      "path": "tests/test_risk_analytics.py",
-      "category": "risk",
-      "test_count": 40
-    },
-    {
-      "path": "tests/test_pre_trade_gate.py",
-      "category": "risk",
       "test_count": 21
     },
     {
@@ -353,19 +68,69 @@
       "test_count": 4
     },
     {
+      "path": "tests/test_whitelabel_rate_limiting.py",
+      "category": "api",
+      "test_count": 13
+    },
+    {
+      "path": "tests/test_prop_enforcement.py",
+      "category": "risk",
+      "test_count": 32
+    },
+    {
+      "path": "tests/test_validation.py",
+      "category": "api",
+      "test_count": 14
+    },
+    {
+      "path": "tests/test_brokers_init.py",
+      "category": "broker",
+      "test_count": 42
+    },
+    {
+      "path": "tests/test_paper_trading_gate.py",
+      "category": "risk",
+      "test_count": 21
+    },
+    {
+      "path": "tests/test_brokers_data_missing.py",
+      "category": "broker",
+      "test_count": 41
+    },
+    {
+      "path": "tests/test_execution.py",
+      "category": "risk",
+      "test_count": 14
+    },
+    {
+      "path": "tests/test_execution_missing.py",
+      "category": "risk",
+      "test_count": 73
+    },
+    {
+      "path": "tests/test_proof_artifacts.py",
+      "category": "e2e",
+      "test_count": 18
+    },
+    {
+      "path": "tests/test_bybit_connector.py",
+      "category": "unit",
+      "test_count": 32
+    },
+    {
       "path": "tests/test_execution_engine.py",
       "category": "risk",
       "test_count": 22
     },
     {
-      "path": "tests/test_oanda_paper_clock_full.py",
-      "category": "broker",
-      "test_count": 29
+      "path": "tests/test_integration_pipeline.py",
+      "category": "api",
+      "test_count": 46
     },
     {
-      "path": "tests/test_trade_count_sharpe_se.py",
+      "path": "tests/test_data_layer.py",
       "category": "unit",
-      "test_count": 26
+      "test_count": 83
     },
     {
       "path": "tests/test_backtesting.py",
@@ -373,8 +138,268 @@
       "test_count": 12
     },
     {
-      "path": "tests/integration/test_mcc_signal_pipeline.py",
+      "path": "tests/test_secrets_management.py",
+      "category": "security",
+      "test_count": 18
+    },
+    {
+      "path": "tests/test_paper_trading_broker.py",
+      "category": "risk",
+      "test_count": 41
+    },
+    {
+      "path": "tests/test_macro_wiring.py",
       "category": "broker",
+      "test_count": 7
+    },
+    {
+      "path": "tests/test_kill_switch_load.py",
+      "category": "performance",
+      "test_count": 27
+    },
+    {
+      "path": "tests/test_production_wiring.py",
+      "category": "e2e",
+      "test_count": 39
+    },
+    {
+      "path": "tests/test_ibkr_fix_bridge.py",
+      "category": "broker",
+      "test_count": 32
+    },
+    {
+      "path": "tests/test_oanda_paper_clock.py",
+      "category": "broker",
+      "test_count": 13
+    },
+    {
+      "path": "tests/test_auth_pentest.py",
+      "category": "security",
+      "test_count": 18
+    },
+    {
+      "path": "tests/test_paper_runner.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/test_security.py",
+      "category": "security",
+      "test_count": 12
+    },
+    {
+      "path": "tests/test_comprehensive.py",
+      "category": "api",
+      "test_count": 12
+    },
+    {
+      "path": "tests/test_v17_fixes.py",
+      "category": "api",
+      "test_count": 24
+    },
+    {
+      "path": "tests/test_deployment_gates.py",
+      "category": "security",
+      "test_count": 15
+    },
+    {
+      "path": "tests/test_research_pipeline_wiring.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/test_performance_monitor.py",
+      "category": "unit",
+      "test_count": 39
+    },
+    {
+      "path": "tests/test_trade_count_sharpe_se.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/test_pre_trade_gate.py",
+      "category": "risk",
+      "test_count": 21
+    },
+    {
+      "path": "tests/test_signal_engine_coverage.py",
+      "category": "ml",
+      "test_count": 178
+    },
+    {
+      "path": "tests/test_auth_gates.py",
+      "category": "api",
+      "test_count": 17
+    },
+    {
+      "path": "tests/test_lstm_signal_layer.py",
+      "category": "unit",
+      "test_count": 25
+    },
+    {
+      "path": "tests/test_critical_paths.py",
+      "category": "api",
+      "test_count": 47
+    },
+    {
+      "path": "tests/test_new_components.py",
+      "category": "api",
+      "test_count": 29
+    },
+    {
+      "path": "tests/test_e2e_wiring.py",
+      "category": "e2e",
+      "test_count": 28
+    },
+    {
+      "path": "tests/test_backtest.py",
+      "category": "risk",
+      "test_count": 9
+    },
+    {
+      "path": "tests/test_mt5_bridge.py",
+      "category": "unit",
+      "test_count": 31
+    },
+    {
+      "path": "tests/test_brokers_base.py",
+      "category": "broker",
+      "test_count": 36
+    },
+    {
+      "path": "tests/test_oanda_paper_clock_full.py",
+      "category": "broker",
+      "test_count": 29
+    },
+    {
+      "path": "tests/test_train_advanced.py",
+      "category": "ml",
+      "test_count": 27
+    },
+    {
+      "path": "tests/test_model_registry_and_wiring.py",
+      "category": "ml",
+      "test_count": 52
+    },
+    {
+      "path": "tests/test_k6_load_tests.py",
+      "category": "performance",
+      "test_count": 17
+    },
+    {
+      "path": "tests/test_brokers_coverage.py",
+      "category": "broker",
+      "test_count": 136
+    },
+    {
+      "path": "tests/test_marketplace.py",
+      "category": "api",
+      "test_count": 4
+    },
+    {
+      "path": "tests/test_risk_analytics.py",
+      "category": "risk",
+      "test_count": 40
+    },
+    {
+      "path": "tests/test_advanced_predictor.py",
+      "category": "unit",
+      "test_count": 40
+    },
+    {
+      "path": "tests/test_backtest_engine_fixes.py",
+      "category": "risk",
+      "test_count": 25
+    },
+    {
+      "path": "tests/test_jwt_pyjwt.py",
+      "category": "security",
+      "test_count": 10
+    },
+    {
+      "path": "tests/test_cvar_order_gate.py",
+      "category": "risk",
+      "test_count": 7
+    },
+    {
+      "path": "tests/test_connector_hub.py",
+      "category": "broker",
+      "test_count": 39
+    },
+    {
+      "path": "tests/test_production_readiness.py",
+      "category": "e2e",
+      "test_count": 10
+    },
+    {
+      "path": "tests/test_sharpe_tracker_and_lstm.py",
+      "category": "ml",
+      "test_count": 39
+    },
+    {
+      "path": "tests/test_market_data_feed.py",
+      "category": "broker",
+      "test_count": 31
+    },
+    {
+      "path": "tests/test_inference_engine.py",
+      "category": "unit",
+      "test_count": 25
+    },
+    {
+      "path": "tests/test_ml_missing.py",
+      "category": "ml",
+      "test_count": 36
+    },
+    {
+      "path": "tests/test_copy_trading.py",
+      "category": "broker",
+      "test_count": 20
+    },
+    {
+      "path": "tests/test_ml_training_pipeline.py",
+      "category": "ml",
+      "test_count": 13
+    },
+    {
+      "path": "tests/test_chaos/test_failure_modes.py",
+      "category": "unit",
+      "test_count": 19
+    },
+    {
+      "path": "tests/test_integration/test_full_pipeline.py",
+      "category": "e2e",
+      "test_count": 5
+    },
+    {
+      "path": "tests/e2e/test_dashboard_realtime.py",
+      "category": "e2e",
+      "test_count": 43
+    },
+    {
+      "path": "tests/e2e/test_websocket_e2e.py",
+      "category": "e2e",
+      "test_count": 7
+    },
+    {
+      "path": "tests/e2e/test_full_pipeline_wiring.py",
+      "category": "e2e",
+      "test_count": 29
+    },
+    {
+      "path": "tests/e2e/test_trading_flow.py",
+      "category": "e2e",
+      "test_count": 12
+    },
+    {
+      "path": "tests/e2e/test_auth_billing_trading.py",
+      "category": "e2e",
+      "test_count": 41
+    },
+    {
+      "path": "tests/integration/test_redis.py",
+      "category": "api",
       "test_count": 15
     },
     {
@@ -383,24 +408,14 @@
       "test_count": 76
     },
     {
-      "path": "tests/integration/test_redis.py",
-      "category": "api",
-      "test_count": 15
-    },
-    {
       "path": "tests/integration/test_broker.py",
       "category": "broker",
       "test_count": 21
     },
     {
-      "path": "tests/integration/test_payments_integration.py",
+      "path": "tests/integration/test_repository_db.py",
       "category": "api",
-      "test_count": 13
-    },
-    {
-      "path": "tests/integration/test_api.py",
-      "category": "api",
-      "test_count": 10
+      "test_count": 38
     },
     {
       "path": "tests/integration/test_api_db_flow.py",
@@ -413,449 +428,39 @@
       "test_count": 57
     },
     {
+      "path": "tests/integration/test_payments_integration.py",
+      "category": "api",
+      "test_count": 13
+    },
+    {
+      "path": "tests/integration/test_auth_flow.py",
+      "category": "api",
+      "test_count": 41
+    },
+    {
+      "path": "tests/integration/test_mcc_signal_pipeline.py",
+      "category": "broker",
+      "test_count": 15
+    },
+    {
+      "path": "tests/integration/test_api.py",
+      "category": "api",
+      "test_count": 10
+    },
+    {
       "path": "tests/unit/test_execution_wiring.py",
       "category": "risk",
       "test_count": 48
     },
     {
-      "path": "tests/unit/test_coverage_boost_router_trade.py",
-      "category": "unit",
-      "test_count": 36
-    },
-    {
-      "path": "tests/unit/test_risk_modules_coverage.py",
-      "category": "risk",
-      "test_count": 69
-    },
-    {
-      "path": "tests/unit/test_institutional_flow.py",
-      "category": "unit",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_coverage_gate_boost.py",
-      "category": "unit",
-      "test_count": 123
-    },
-    {
-      "path": "tests/unit/test_broker_connectors.py",
-      "category": "broker",
-      "test_count": 147
-    },
-    {
-      "path": "tests/unit/test_risk_position_sizing.py",
-      "category": "risk",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_nuclear_streamer.py",
-      "category": "unit",
-      "test_count": 49
-    },
-    {
-      "path": "tests/unit/test_service_circuit_breakers.py",
-      "category": "unit",
-      "test_count": 19
-    },
-    {
-      "path": "tests/unit/test_fill_tracker.py",
-      "category": "unit",
-      "test_count": 16
-    },
-    {
-      "path": "tests/unit/test_analysis_modules.py",
-      "category": "ml",
-      "test_count": 108
-    },
-    {
-      "path": "tests/unit/test_core_circuit_breaker.py",
-      "category": "unit",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_core_position_reconciler_extended.py",
-      "category": "unit",
-      "test_count": 21
-    },
-    {
-      "path": "tests/unit/test_coverage_boost_ml_misc.py",
-      "category": "unit",
-      "test_count": 22
-    },
-    {
-      "path": "tests/unit/test_core_full.py",
-      "category": "unit",
-      "test_count": 79
-    },
-    {
-      "path": "tests/unit/test_auth_coverage.py",
-      "category": "api",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_horizon5_oos_split.py",
-      "category": "unit",
-      "test_count": 22
-    },
-    {
-      "path": "tests/unit/test_simple_backtesting_modules.py",
-      "category": "unit",
-      "test_count": 57
-    },
-    {
-      "path": "tests/unit/test_risk_prop_enforcer.py",
-      "category": "risk",
-      "test_count": 36
-    },
-    {
-      "path": "tests/unit/test_sniper_entry_engine_batch1.py",
-      "category": "unit",
-      "test_count": 56
-    },
-    {
-      "path": "tests/unit/test_time_and_sales.py",
-      "category": "unit",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_risk_notification_extended.py",
-      "category": "risk",
-      "test_count": 47
-    },
-    {
-      "path": "tests/unit/test_prom_metrics.py",
-      "category": "unit",
-      "test_count": 3
-    },
-    {
-      "path": "tests/unit/test_execution_coverage4.py",
-      "category": "risk",
-      "test_count": 24
-    },
-    {
-      "path": "tests/unit/test_risk_fia_compliance.py",
-      "category": "risk",
-      "test_count": 50
-    },
-    {
-      "path": "tests/unit/test_brokers_deep_coverage.py",
-      "category": "broker",
-      "test_count": 201
-    },
-    {
-      "path": "tests/unit/test_security.py",
-      "category": "security",
-      "test_count": 29
-    },
-    {
-      "path": "tests/unit/test_advanced_risk_analytics.py",
-      "category": "unit",
-      "test_count": 59
-    },
-    {
-      "path": "tests/unit/test_brokers_init_async.py",
-      "category": "broker",
-      "test_count": 21
-    },
-    {
-      "path": "tests/unit/test_trading_auth.py",
-      "category": "unit",
-      "test_count": 32
-    },
-    {
-      "path": "tests/unit/test_core_live_trading_gate.py",
-      "category": "unit",
-      "test_count": 29
-    },
-    {
-      "path": "tests/unit/test_async_engine_comprehensive.py",
-      "category": "unit",
-      "test_count": 65
-    },
-    {
-      "path": "tests/unit/test_email_triggers.py",
+      "path": "tests/unit/test_mtf_ensemble_leakage.py",
       "category": "unit",
       "test_count": 12
     },
     {
-      "path": "tests/unit/test_ml_coverage.py",
-      "category": "ml",
-      "test_count": 34
-    },
-    {
-      "path": "tests/unit/test_ml_advanced_predictor.py",
-      "category": "ml",
-      "test_count": 33
-    },
-    {
-      "path": "tests/unit/test_risk_manager_coverage.py",
-      "category": "risk",
-      "test_count": 152
-    },
-    {
-      "path": "tests/unit/test_enhanced_ml_predictor.py",
+      "path": "tests/unit/test_mobile.py",
       "category": "unit",
-      "test_count": 41
-    },
-    {
-      "path": "tests/unit/test_core_config_store.py",
-      "category": "unit",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_risk_calculations.py",
-      "category": "risk",
-      "test_count": 6
-    },
-    {
-      "path": "tests/unit/test_position_manager_comprehensive.py",
-      "category": "unit",
-      "test_count": 54
-    },
-    {
-      "path": "tests/unit/test_charting.py",
-      "category": "unit",
-      "test_count": 27
-    },
-    {
-      "path": "tests/unit/test_chaos.py",
-      "category": "unit",
-      "test_count": 34
-    },
-    {
-      "path": "tests/unit/test_alert_engine.py",
-      "category": "unit",
-      "test_count": 31
-    },
-    {
-      "path": "tests/unit/test_fixes.py",
-      "category": "unit",
-      "test_count": 21
-    },
-    {
-      "path": "tests/unit/test_transaction_costs.py",
-      "category": "unit",
-      "test_count": 20
-    },
-    {
-      "path": "tests/unit/test_parabolic_regime.py",
-      "category": "unit",
-      "test_count": 31
-    },
-    {
-      "path": "tests/unit/test_execution_coverage6.py",
-      "category": "risk",
-      "test_count": 37
-    },
-    {
-      "path": "tests/unit/test_prop_firms.py",
-      "category": "risk",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_coverage_boost_execution.py",
-      "category": "unit",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_macro_store.py",
-      "category": "broker",
-      "test_count": 17
-    },
-    {
-      "path": "tests/unit/test_dom.py",
-      "category": "unit",
-      "test_count": 24
-    },
-    {
-      "path": "tests/unit/test_lstm_signal_layer_full.py",
-      "category": "unit",
-      "test_count": 28
-    },
-    {
-      "path": "tests/unit/test_core_startup_factories3.py",
-      "category": "unit",
-      "test_count": 62
-    },
-    {
-      "path": "tests/unit/test_core_secrets_manager.py",
-      "category": "unit",
-      "test_count": 35
-    },
-    {
-      "path": "tests/unit/test_cme_comex_connector.py",
-      "category": "unit",
-      "test_count": 42
-    },
-    {
-      "path": "tests/unit/test_risk_intra_trade_monitor.py",
-      "category": "risk",
-      "test_count": 34
-    },
-    {
-      "path": "tests/unit/test_auto_heal_github_pr.py",
-      "category": "security",
-      "test_count": 30
-    },
-    {
-      "path": "tests/unit/test_risk_drawdown_tracker.py",
-      "category": "risk",
-      "test_count": 45
-    },
-    {
-      "path": "tests/unit/test_deep_ensemble.py",
-      "category": "unit",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_compliance_full.py",
-      "category": "unit",
-      "test_count": 55
-    },
-    {
-      "path": "tests/unit/test_risk_stress_test.py",
-      "category": "risk",
-      "test_count": 21
-    },
-    {
-      "path": "tests/unit/test_execution_engine_deep.py",
-      "category": "risk",
-      "test_count": 44
-    },
-    {
-      "path": "tests/unit/test_broker_sdk_guards.py",
-      "category": "broker",
-      "test_count": 27
-    },
-    {
-      "path": "tests/unit/test_coverage_boost_ml.py",
-      "category": "unit",
-      "test_count": 52
-    },
-    {
-      "path": "tests/unit/test_online_learning.py",
-      "category": "unit",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_retry_policy.py",
-      "category": "unit",
-      "test_count": 21
-    },
-    {
-      "path": "tests/unit/test_ml_models.py",
-      "category": "ml",
-      "test_count": 104
-    },
-    {
-      "path": "tests/unit/test_execution_modules.py",
-      "category": "risk",
-      "test_count": 43
-    },
-    {
-      "path": "tests/unit/test_execution_coverage12.py",
-      "category": "risk",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_execution_async_engine.py",
-      "category": "risk",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_brain.py",
-      "category": "ml",
-      "test_count": 49
-    },
-    {
-      "path": "tests/unit/test_execution_coverage8.py",
-      "category": "risk",
-      "test_count": 38
-    },
-    {
-      "path": "tests/unit/test_phases_17_26.py",
-      "category": "unit",
-      "test_count": 29
-    },
-    {
-      "path": "tests/unit/test_broker_failover.py",
-      "category": "broker",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_strategies.py",
-      "category": "unit",
-      "test_count": 17
-    },
-    {
-      "path": "tests/unit/test_monte_carlo.py",
-      "category": "unit",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_strategy_signal_paths.py",
-      "category": "unit",
-      "test_count": 38
-    },
-    {
-      "path": "tests/unit/test_fill_wiring.py",
-      "category": "unit",
-      "test_count": 17
-    },
-    {
-      "path": "tests/unit/test_risk_self_trade_prevention.py",
-      "category": "risk",
-      "test_count": 20
-    },
-    {
-      "path": "tests/unit/test_enhanced_smart_router.py",
-      "category": "unit",
-      "test_count": 44
-    },
-    {
-      "path": "tests/unit/test_execution_oms.py",
-      "category": "risk",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_adaptive_edge_selector_batch2.py",
-      "category": "ml",
-      "test_count": 66
-    },
-    {
-      "path": "tests/unit/test_core_acceleration.py",
-      "category": "unit",
-      "test_count": 9
-    },
-    {
-      "path": "tests/unit/test_brokers_prop_firms_coverage.py",
-      "category": "broker",
-      "test_count": 73
-    },
-    {
-      "path": "tests/unit/test_sniper_entry_engine_batch2.py",
-      "category": "unit",
-      "test_count": 44
-    },
-    {
-      "path": "tests/unit/test_circuit_breaker_deep.py",
-      "category": "risk",
-      "test_count": 28
-    },
-    {
-      "path": "tests/unit/test_execution_full.py",
-      "category": "risk",
-      "test_count": 62
-    },
-    {
-      "path": "tests/unit/test_core_component_registry.py",
-      "category": "unit",
-      "test_count": 19
-    },
-    {
-      "path": "tests/unit/test_brokers_coverage_boost.py",
-      "category": "broker",
-      "test_count": 72
+      "test_count": 14
     },
     {
       "path": "tests/unit/test_analytics_deep_coverage.py",
@@ -863,89 +468,34 @@
       "test_count": 47
     },
     {
-      "path": "tests/unit/test_sniper_entry_engine_batch4.py",
+      "path": "tests/unit/test_async_engine_comprehensive.py",
       "category": "unit",
-      "test_count": 43
+      "test_count": 65
     },
     {
-      "path": "tests/unit/test_feature_flags.py",
-      "category": "unit",
-      "test_count": 24
-    },
-    {
-      "path": "tests/unit/test_feature_cache.py",
-      "category": "unit",
-      "test_count": 16
-    },
-    {
-      "path": "tests/unit/test_config.py",
-      "category": "unit",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_live_safe_threshold.py",
-      "category": "unit",
-      "test_count": 50
-    },
-    {
-      "path": "tests/unit/test_invoices.py",
-      "category": "unit",
-      "test_count": 17
-    },
-    {
-      "path": "tests/unit/test_property_based.py",
+      "path": "tests/unit/test_backtest_engine.py",
       "category": "risk",
-      "test_count": 25
+      "test_count": 10
     },
     {
-      "path": "tests/unit/test_social_feed.py",
-      "category": "api",
+      "path": "tests/unit/test_twelve_data_source.py",
+      "category": "unit",
       "test_count": 27
     },
     {
-      "path": "tests/unit/test_social.py",
-      "category": "api",
+      "path": "tests/unit/test_coverage_boost_ml_features.py",
+      "category": "unit",
+      "test_count": 35
+    },
+    {
+      "path": "tests/unit/test_coverage_boost_backtest_market.py",
+      "category": "unit",
+      "test_count": 33
+    },
+    {
+      "path": "tests/unit/test_phases_17_26.py",
+      "category": "unit",
       "test_count": 29
-    },
-    {
-      "path": "tests/unit/test_core_router_registry.py",
-      "category": "unit",
-      "test_count": 9
-    },
-    {
-      "path": "tests/unit/test_brokers_base_retry.py",
-      "category": "broker",
-      "test_count": 28
-    },
-    {
-      "path": "tests/unit/test_superadmin.py",
-      "category": "unit",
-      "test_count": 55
-    },
-    {
-      "path": "tests/unit/test_async_engine.py",
-      "category": "unit",
-      "test_count": 53
-    },
-    {
-      "path": "tests/unit/test_zmq_bridge_start_stop.py",
-      "category": "unit",
-      "test_count": 16
-    },
-    {
-      "path": "tests/unit/test_execution_coverage10.py",
-      "category": "risk",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_risk_manager.py",
-      "category": "risk",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_risk_analytics_coverage.py",
-      "category": "risk",
-      "test_count": 79
     },
     {
       "path": "tests/unit/test_experimental_modules.py",
@@ -953,119 +503,19 @@
       "test_count": 39
     },
     {
-      "path": "tests/unit/test_order_flow.py",
-      "category": "unit",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_core.py",
-      "category": "unit",
-      "test_count": 5
-    },
-    {
-      "path": "tests/unit/test_gatekeeper_deep.py",
-      "category": "unit",
+      "path": "tests/unit/test_risk_modules_coverage.py",
+      "category": "risk",
       "test_count": 69
     },
     {
-      "path": "tests/unit/test_risk_rules.py",
-      "category": "risk",
-      "test_count": 19
-    },
-    {
-      "path": "tests/unit/test_backtesting_data_sources.py",
-      "category": "risk",
-      "test_count": 50
-    },
-    {
-      "path": "tests/unit/test_phases_17_26_extended.py",
+      "path": "tests/unit/test_real_data_backtest.py",
       "category": "unit",
-      "test_count": 112
+      "test_count": 31
     },
     {
-      "path": "tests/unit/test_redis_tls.py",
-      "category": "unit",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_execution_coverage5.py",
-      "category": "risk",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_auth_analytics_backtest_coverage.py",
-      "category": "api",
-      "test_count": 37
-    },
-    {
-      "path": "tests/unit/test_execution_sl_tp_monitor.py",
-      "category": "risk",
-      "test_count": 20
-    },
-    {
-      "path": "tests/unit/test_geopolitical_warn_once.py",
-      "category": "unit",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_geopolitical_risk.py",
-      "category": "unit",
-      "test_count": 42
-    },
-    {
-      "path": "tests/unit/test_ml_pipeline_coverage.py",
-      "category": "ml",
-      "test_count": 64
-    },
-    {
-      "path": "tests/unit/test_compliance_deep_coverage.py",
-      "category": "unit",
-      "test_count": 56
-    },
-    {
-      "path": "tests/unit/test_all_strategies_extended.py",
-      "category": "ml",
-      "test_count": 116
-    },
-    {
-      "path": "tests/unit/test_execution_coverage11.py",
-      "category": "risk",
-      "test_count": 14
-    },
-    {
-      "path": "tests/unit/test_trade_executor_comprehensive.py",
-      "category": "unit",
-      "test_count": 55
-    },
-    {
-      "path": "tests/unit/test_sniper_entry_engine_batch3.py",
-      "category": "unit",
-      "test_count": 48
-    },
-    {
-      "path": "tests/unit/test_risk_coverage.py",
-      "category": "risk",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_risk_orchestrator_coverage.py",
-      "category": "risk",
-      "test_count": 75
-    },
-    {
-      "path": "tests/unit/test_analytics.py",
-      "category": "ml",
-      "test_count": 19
-    },
-    {
-      "path": "tests/unit/test_core_risk_init.py",
-      "category": "unit",
-      "test_count": 16
-    },
-    {
-      "path": "tests/unit/test_risk.py",
-      "category": "risk",
-      "test_count": 10
+      "path": "tests/unit/test_auto_heal_github_pr.py",
+      "category": "security",
+      "test_count": 30
     },
     {
       "path": "tests/unit/test_core_email_service.py",
@@ -1073,74 +523,129 @@
       "test_count": 16
     },
     {
-      "path": "tests/unit/test_execution_coverage9.py",
+      "path": "tests/unit/test_sub_accounts_api.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_kill_switch_coverage.py",
       "category": "risk",
+      "test_count": 35
+    },
+    {
+      "path": "tests/unit/test_ml_pipeline_full.py",
+      "category": "ml",
+      "test_count": 32
+    },
+    {
+      "path": "tests/unit/test_ml_robust_predictor.py",
+      "category": "ml",
+      "test_count": 28
+    },
+    {
+      "path": "tests/unit/test_backtesting_data_sources.py",
+      "category": "risk",
+      "test_count": 50
+    },
+    {
+      "path": "tests/unit/test_signals_router.py",
+      "category": "ml",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_alert_engine_extended.py",
+      "category": "unit",
+      "test_count": 46
+    },
+    {
+      "path": "tests/unit/test_core_component_registry.py",
+      "category": "unit",
       "test_count": 19
     },
     {
-      "path": "tests/unit/test_core_domain.py",
+      "path": "tests/unit/test_mcc_unit.py",
       "category": "unit",
-      "test_count": 30
+      "test_count": 46
     },
     {
-      "path": "tests/unit/test_ml_regime_signal_macro.py",
+      "path": "tests/unit/test_ml_live_inference.py",
       "category": "ml",
-      "test_count": 41
+      "test_count": 49
     },
     {
-      "path": "tests/unit/test_phase_20_26.py",
+      "path": "tests/unit/test_async_engine.py",
       "category": "unit",
-      "test_count": 131
+      "test_count": 53
     },
     {
-      "path": "tests/unit/test_model_registry_gates.py",
-      "category": "ml",
-      "test_count": 45
-    },
-    {
-      "path": "tests/unit/test_smart_router_comprehensive.py",
+      "path": "tests/unit/test_hopefx_brain.py",
       "category": "unit",
       "test_count": 49
     },
     {
-      "path": "tests/unit/test_walk_forward.py",
+      "path": "tests/unit/test_sentry_config.py",
       "category": "unit",
-      "test_count": 15
+      "test_count": 23
     },
     {
-      "path": "tests/unit/test_risk_gatekeeper_coverage.py",
+      "path": "tests/unit/test_risk_manager_coverage.py",
       "category": "risk",
-      "test_count": 97
+      "test_count": 152
     },
     {
-      "path": "tests/unit/test_core_event_bus.py",
+      "path": "tests/unit/test_core_position_reconciler_extended.py",
+      "category": "unit",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_compliance_coverage.py",
+      "category": "unit",
+      "test_count": 54
+    },
+    {
+      "path": "tests/unit/test_strategy_signal_paths.py",
+      "category": "unit",
+      "test_count": 38
+    },
+    {
+      "path": "tests/unit/test_ibkr_broker_extended.py",
+      "category": "broker",
+      "test_count": 63
+    },
+    {
+      "path": "tests/unit/test_risk_fia_compliance.py",
+      "category": "risk",
+      "test_count": 50
+    },
+    {
+      "path": "tests/unit/test_redis_tick_writer.py",
       "category": "unit",
       "test_count": 34
     },
     {
-      "path": "tests/unit/test_execution_coverage_boost.py",
-      "category": "risk",
-      "test_count": 162
-    },
-    {
-      "path": "tests/unit/test_core_strategy_orchestra.py",
+      "path": "tests/unit/test_concurrency.py",
       "category": "unit",
-      "test_count": 39
+      "test_count": 11
     },
     {
-      "path": "tests/unit/test_execution_coverage.py",
-      "category": "risk",
-      "test_count": 42
+      "path": "tests/unit/test_adaptive_edge_selector_batch2.py",
+      "category": "ml",
+      "test_count": 66
     },
     {
-      "path": "tests/unit/test_risk_pre_trade_gate_full.py",
-      "category": "risk",
-      "test_count": 49
-    },
-    {
-      "path": "tests/unit/test_compliance_all.py",
+      "path": "tests/unit/test_superadmin.py",
       "category": "unit",
-      "test_count": 33
+      "test_count": 55
+    },
+    {
+      "path": "tests/unit/test_broker_sdk_guards.py",
+      "category": "broker",
+      "test_count": 27
+    },
+    {
+      "path": "tests/unit/test_sniper_entry_engine_batch2.py",
+      "category": "unit",
+      "test_count": 44
     },
     {
       "path": "tests/unit/test_ml_inference_engine.py",
@@ -1148,19 +653,74 @@
       "test_count": 25
     },
     {
-      "path": "tests/unit/test_brokers_smart_router_coverage.py",
-      "category": "broker",
-      "test_count": 53
+      "path": "tests/unit/test_risk_calculations.py",
+      "category": "risk",
+      "test_count": 6
     },
     {
-      "path": "tests/unit/test_market_scanner.py",
-      "category": "unit",
+      "path": "tests/unit/test_ml_training.py",
+      "category": "ml",
       "test_count": 30
     },
     {
-      "path": "tests/unit/test_billing_webhook.py",
-      "category": "api",
-      "test_count": 10
+      "path": "tests/unit/test_coverage_boost_ml_misc.py",
+      "category": "unit",
+      "test_count": 22
+    },
+    {
+      "path": "tests/unit/test_push_notifications.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_risk_coverage.py",
+      "category": "risk",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_ml_inference_training.py",
+      "category": "ml",
+      "test_count": 52
+    },
+    {
+      "path": "tests/unit/test_invoices.py",
+      "category": "unit",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_research_router.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_model_card.py",
+      "category": "ml",
+      "test_count": 11
+    },
+    {
+      "path": "tests/unit/test_core_main_loop.py",
+      "category": "unit",
+      "test_count": 22
+    },
+    {
+      "path": "tests/unit/test_oms_comprehensive.py",
+      "category": "unit",
+      "test_count": 76
+    },
+    {
+      "path": "tests/unit/test_ml_models.py",
+      "category": "ml",
+      "test_count": 104
+    },
+    {
+      "path": "tests/unit/test_brain_api_endpoints.py",
+      "category": "ml",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_sltp_monitor_comprehensive.py",
+      "category": "unit",
+      "test_count": 36
     },
     {
       "path": "tests/unit/test_component_status_extended.py",
@@ -1168,12 +728,437 @@
       "test_count": 27
     },
     {
-      "path": "tests/unit/test_brokers.py",
+      "path": "tests/unit/test_alert_engine.py",
+      "category": "unit",
+      "test_count": 31
+    },
+    {
+      "path": "tests/unit/test_patterns.py",
+      "category": "unit",
+      "test_count": 96
+    },
+    {
+      "path": "tests/unit/test_multi_source_feed.py",
+      "category": "unit",
+      "test_count": 61
+    },
+    {
+      "path": "tests/unit/test_ml_advanced_predictor.py",
+      "category": "ml",
+      "test_count": 33
+    },
+    {
+      "path": "tests/unit/test_payments.py",
+      "category": "api",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_signal_engine_functions.py",
+      "category": "ml",
+      "test_count": 48
+    },
+    {
+      "path": "tests/unit/test_macro_store.py",
       "category": "broker",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_execution_coverage10.py",
+      "category": "risk",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_core_event_bus_legacy.py",
+      "category": "unit",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_transaction_costs.py",
+      "category": "unit",
+      "test_count": 20
+    },
+    {
+      "path": "tests/unit/test_circuit_breaker_deep.py",
+      "category": "risk",
+      "test_count": 28
+    },
+    {
+      "path": "tests/unit/test_execution_coverage11.py",
+      "category": "risk",
+      "test_count": 14
+    },
+    {
+      "path": "tests/unit/test_coverage_boost_execution.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_brokers_init.py",
+      "category": "broker",
+      "test_count": 29
+    },
+    {
+      "path": "tests/unit/test_kill_switch_coverage2.py",
+      "category": "risk",
+      "test_count": 46
+    },
+    {
+      "path": "tests/unit/test_execution_coverage13.py",
+      "category": "risk",
+      "test_count": 41
+    },
+    {
+      "path": "tests/unit/test_risk_intra_trade_monitor.py",
+      "category": "risk",
+      "test_count": 34
+    },
+    {
+      "path": "tests/unit/test_advanced_risk_analytics.py",
+      "category": "unit",
+      "test_count": 59
+    },
+    {
+      "path": "tests/unit/test_risk_self_trade_prevention.py",
+      "category": "risk",
+      "test_count": 20
+    },
+    {
+      "path": "tests/unit/test_execution_oms.py",
+      "category": "risk",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_core_all.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_brokers_deep_coverage.py",
+      "category": "broker",
+      "test_count": 201
+    },
+    {
+      "path": "tests/unit/test_core_acceleration.py",
+      "category": "unit",
+      "test_count": 9
+    },
+    {
+      "path": "tests/unit/test_analytics.py",
+      "category": "ml",
+      "test_count": 19
+    },
+    {
+      "path": "tests/unit/test_risk_position_sizing.py",
+      "category": "risk",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_sniper_entry_engine_batch1.py",
+      "category": "unit",
+      "test_count": 56
+    },
+    {
+      "path": "tests/unit/test_service_circuit_breakers.py",
+      "category": "unit",
+      "test_count": 19
+    },
+    {
+      "path": "tests/unit/test_ml_pipeline_coverage.py",
+      "category": "ml",
+      "test_count": 64
+    },
+    {
+      "path": "tests/unit/test_ml_target.py",
+      "category": "ml",
+      "test_count": 11
+    },
+    {
+      "path": "tests/unit/test_prop_firms.py",
+      "category": "risk",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_execution_coverage2.py",
+      "category": "risk",
+      "test_count": 70
+    },
+    {
+      "path": "tests/unit/test_monetization.py",
+      "category": "unit",
+      "test_count": 40
+    },
+    {
+      "path": "tests/unit/test_execution_coverage8.py",
+      "category": "risk",
+      "test_count": 38
+    },
+    {
+      "path": "tests/unit/test_core_router_registry.py",
+      "category": "unit",
+      "test_count": 9
+    },
+    {
+      "path": "tests/unit/test_risk_gatekeeper_coverage.py",
+      "category": "risk",
+      "test_count": 97
+    },
+    {
+      "path": "tests/unit/test_kill_switch_integration.py",
+      "category": "risk",
+      "test_count": 6
+    },
+    {
+      "path": "tests/unit/test_broker_factory_yaml.py",
+      "category": "broker",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_enhanced_smart_router.py",
+      "category": "unit",
+      "test_count": 44
+    },
+    {
+      "path": "tests/unit/test_broker_metrics_integration.py",
+      "category": "broker",
+      "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_sniper_entry_engine_batch4.py",
+      "category": "unit",
+      "test_count": 43
+    },
+    {
+      "path": "tests/unit/test_execution_full.py",
+      "category": "risk",
+      "test_count": 62
+    },
+    {
+      "path": "tests/unit/test_coverage_boost_router_trade.py",
+      "category": "unit",
+      "test_count": 36
+    },
+    {
+      "path": "tests/unit/test_geopolitical_warn_once.py",
+      "category": "unit",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_order_flow.py",
+      "category": "unit",
+      "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_execution_coverage4.py",
+      "category": "risk",
+      "test_count": 24
+    },
+    {
+      "path": "tests/unit/test_parabolic_regime.py",
+      "category": "unit",
+      "test_count": 31
+    },
+    {
+      "path": "tests/unit/test_risk_analytics_full.py",
+      "category": "risk",
+      "test_count": 71
+    },
+    {
+      "path": "tests/unit/test_core_env_validator.py",
+      "category": "unit",
+      "test_count": 15
+    },
+    {
+      "path": "tests/unit/test_brokers_manager_full.py",
+      "category": "broker",
+      "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_custom_indicators_api.py",
+      "category": "unit",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_ml_models_sizer.py",
+      "category": "ml",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_execution_engine_deep.py",
+      "category": "risk",
+      "test_count": 44
+    },
+    {
+      "path": "tests/unit/test_backtesting.py",
+      "category": "risk",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_core_domain.py",
+      "category": "unit",
+      "test_count": 30
+    },
+    {
+      "path": "tests/unit/test_live_safe_threshold.py",
+      "category": "unit",
+      "test_count": 50
+    },
+    {
+      "path": "tests/unit/test_core_full.py",
+      "category": "unit",
+      "test_count": 79
+    },
+    {
+      "path": "tests/unit/test_brokers_ohlcv_risk_fia.py",
+      "category": "broker",
+      "test_count": 39
+    },
+    {
+      "path": "tests/unit/test_tca_comprehensive.py",
+      "category": "unit",
+      "test_count": 38
+    },
+    {
+      "path": "tests/unit/test_risk.py",
+      "category": "risk",
+      "test_count": 10
+    },
+    {
+      "path": "tests/unit/test_teams_router.py",
+      "category": "unit",
+      "test_count": 20
+    },
+    {
+      "path": "tests/unit/test_alpha_vantage_source.py",
+      "category": "unit",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_deep_ensemble.py",
+      "category": "unit",
+      "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_brokers_smart_router_coverage.py",
+      "category": "broker",
+      "test_count": 53
+    },
+    {
+      "path": "tests/unit/test_brokers_prop_firms_coverage.py",
+      "category": "broker",
+      "test_count": 73
+    },
+    {
+      "path": "tests/unit/test_risk_properties.py",
+      "category": "risk",
+      "test_count": 8
+    },
+    {
+      "path": "tests/unit/test_fill_tracker.py",
+      "category": "unit",
+      "test_count": 16
+    },
+    {
+      "path": "tests/unit/test_email_triggers.py",
+      "category": "unit",
       "test_count": 12
     },
     {
-      "path": "tests/unit/test_ml_extended.py",
+      "path": "tests/unit/test_core_risk_init.py",
+      "category": "unit",
+      "test_count": 16
+    },
+    {
+      "path": "tests/unit/test_simple_backtesting_modules.py",
+      "category": "unit",
+      "test_count": 57
+    },
+    {
+      "path": "tests/unit/test_enhanced_ml_predictor.py",
+      "category": "unit",
+      "test_count": 41
+    },
+    {
+      "path": "tests/unit/test_execution_coverage12.py",
+      "category": "risk",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_all_strategies_extended.py",
+      "category": "ml",
+      "test_count": 116
+    },
+    {
+      "path": "tests/unit/test_broker_connectors.py",
+      "category": "broker",
+      "test_count": 147
+    },
+    {
+      "path": "tests/unit/test_drift_monitor.py",
+      "category": "unit",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_execution_coverage5.py",
+      "category": "risk",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_institutional_flow.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_dom.py",
+      "category": "unit",
+      "test_count": 24
+    },
+    {
+      "path": "tests/unit/test_compliance_deep_coverage.py",
+      "category": "unit",
+      "test_count": 56
+    },
+    {
+      "path": "tests/unit/test_nuclear_strategy_agent.py",
+      "category": "unit",
+      "test_count": 106
+    },
+    {
+      "path": "tests/unit/test_component_status.py",
+      "category": "unit",
+      "test_count": 8
+    },
+    {
+      "path": "tests/unit/test_coverage_boost_ml.py",
+      "category": "unit",
+      "test_count": 52
+    },
+    {
+      "path": "tests/unit/test_diagnostics.py",
+      "category": "unit",
+      "test_count": 46
+    },
+    {
+      "path": "tests/unit/test_phases_17_26_extended.py",
+      "category": "unit",
+      "test_count": 112
+    },
+    {
+      "path": "tests/unit/test_fixes.py",
+      "category": "unit",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_ml_regime_signal_macro.py",
+      "category": "ml",
+      "test_count": 41
+    },
+    {
+      "path": "tests/unit/test_brain.py",
+      "category": "ml",
+      "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_sharpe_circuit_breaker.py",
       "category": "ml",
       "test_count": 39
     },
@@ -1183,364 +1168,19 @@
       "test_count": 21
     },
     {
-      "path": "tests/unit/test_coverage_boost_oms_pm.py",
-      "category": "unit",
-      "test_count": 36
-    },
-    {
-      "path": "tests/unit/test_order_flow_dashboard.py",
-      "category": "unit",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_ml_models_sizer.py",
-      "category": "ml",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_sentry_config.py",
-      "category": "unit",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_ibkr_broker_extended.py",
-      "category": "broker",
-      "test_count": 63
-    },
-    {
       "path": "tests/unit/test_all_strategies.py",
       "category": "ml",
       "test_count": 16
     },
     {
-      "path": "tests/unit/test_execution_coverage3.py",
+      "path": "tests/unit/test_core_startup_factories3.py",
+      "category": "unit",
+      "test_count": 62
+    },
+    {
+      "path": "tests/unit/test_property_based.py",
       "category": "risk",
       "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_sltp_monitor_comprehensive.py",
-      "category": "unit",
-      "test_count": 36
-    },
-    {
-      "path": "tests/unit/test_execution_coverage2.py",
-      "category": "risk",
-      "test_count": 70
-    },
-    {
-      "path": "tests/unit/test_auth_router_jwt_secret.py",
-      "category": "api",
-      "test_count": 8
-    },
-    {
-      "path": "tests/unit/test_oms_comprehensive.py",
-      "category": "unit",
-      "test_count": 76
-    },
-    {
-      "path": "tests/unit/test_ml_pipeline_full.py",
-      "category": "ml",
-      "test_count": 32
-    },
-    {
-      "path": "tests/unit/test_api.py",
-      "category": "api",
-      "test_count": 154
-    },
-    {
-      "path": "tests/unit/test_core_signal_engine.py",
-      "category": "unit",
-      "test_count": 53
-    },
-    {
-      "path": "tests/unit/test_adaptive_edge_selector_batch1.py",
-      "category": "ml",
-      "test_count": 48
-    },
-    {
-      "path": "tests/unit/test_cache.py",
-      "category": "unit",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_core_outbox_extended.py",
-      "category": "unit",
-      "test_count": 17
-    },
-    {
-      "path": "tests/unit/test_execution_coverage13.py",
-      "category": "risk",
-      "test_count": 41
-    },
-    {
-      "path": "tests/unit/test_compliance_coverage.py",
-      "category": "unit",
-      "test_count": 54
-    },
-    {
-      "path": "tests/unit/test_mtf_fusion.py",
-      "category": "unit",
-      "test_count": 24
-    },
-    {
-      "path": "tests/unit/test_risk_analytics_full.py",
-      "category": "risk",
-      "test_count": 71
-    },
-    {
-      "path": "tests/unit/test_performance_monitor.py",
-      "category": "unit",
-      "test_count": 37
-    },
-    {
-      "path": "tests/unit/test_push_notifications.py",
-      "category": "unit",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_execution_coverage7.py",
-      "category": "risk",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_kill_switch_coverage.py",
-      "category": "risk",
-      "test_count": 35
-    },
-    {
-      "path": "tests/unit/test_llm_sandbox.py",
-      "category": "unit",
-      "test_count": 34
-    },
-    {
-      "path": "tests/unit/test_tick_feed.py",
-      "category": "unit",
-      "test_count": 49
-    },
-    {
-      "path": "tests/unit/test_tca_comprehensive.py",
-      "category": "unit",
-      "test_count": 38
-    },
-    {
-      "path": "tests/unit/test_signal_pipeline_e2e.py",
-      "category": "ml",
-      "test_count": 8
-    },
-    {
-      "path": "tests/unit/test_db_store_keys.py",
-      "category": "unit",
-      "test_count": 18
-    },
-    {
-      "path": "tests/unit/test_risk_circuit_breakers.py",
-      "category": "risk",
-      "test_count": 74
-    },
-    {
-      "path": "tests/unit/test_brokers_extended_coverage.py",
-      "category": "broker",
-      "test_count": 47
-    },
-    {
-      "path": "tests/unit/test_ml_training.py",
-      "category": "ml",
-      "test_count": 30
-    },
-    {
-      "path": "tests/unit/test_core_all.py",
-      "category": "unit",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_ml_position_sizer.py",
-      "category": "ml",
-      "test_count": 16
-    },
-    {
-      "path": "tests/unit/test_sharpe_circuit_breaker.py",
-      "category": "ml",
-      "test_count": 39
-    },
-    {
-      "path": "tests/unit/test_nuclear_strategy_agent.py",
-      "category": "unit",
-      "test_count": 106
-    },
-    {
-      "path": "tests/unit/test_coverage_boost_sltp_tca.py",
-      "category": "unit",
-      "test_count": 40
-    },
-    {
-      "path": "tests/unit/test_advanced_patterns.py",
-      "category": "ml",
-      "test_count": 27
-    },
-    {
-      "path": "tests/unit/test_streaming.py",
-      "category": "unit",
-      "test_count": 27
-    },
-    {
-      "path": "tests/unit/test_enhanced_engine_cost_model.py",
-      "category": "unit",
-      "test_count": 37
-    },
-    {
-      "path": "tests/unit/test_tca.py",
-      "category": "unit",
-      "test_count": 54
-    },
-    {
-      "path": "tests/unit/test_signals_router.py",
-      "category": "ml",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_backtest_engine.py",
-      "category": "risk",
-      "test_count": 10
-    },
-    {
-      "path": "tests/unit/test_concurrency.py",
-      "category": "unit",
-      "test_count": 11
-    },
-    {
-      "path": "tests/unit/test_core_main_loop.py",
-      "category": "unit",
-      "test_count": 22
-    },
-    {
-      "path": "tests/unit/test_ml_target.py",
-      "category": "ml",
-      "test_count": 11
-    },
-    {
-      "path": "tests/unit/test_broker_factory_yaml.py",
-      "category": "broker",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_config_vault_coverage.py",
-      "category": "unit",
-      "test_count": 50
-    },
-    {
-      "path": "tests/unit/test_backtesting_data_validator.py",
-      "category": "risk",
-      "test_count": 27
-    },
-    {
-      "path": "tests/unit/test_brokers_coverage_gap2.py",
-      "category": "broker",
-      "test_count": 34
-    },
-    {
-      "path": "tests/unit/test_brokers_direct_mode.py",
-      "category": "broker",
-      "test_count": 39
-    },
-    {
-      "path": "tests/unit/test_core_event_bus_legacy.py",
-      "category": "unit",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_ml_daily_aggregator.py",
-      "category": "ml",
-      "test_count": 20
-    },
-    {
-      "path": "tests/unit/test_advanced_order_flow.py",
-      "category": "unit",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_brokers_manager_full.py",
-      "category": "broker",
-      "test_count": 49
-    },
-    {
-      "path": "tests/unit/test_brokers_init.py",
-      "category": "broker",
-      "test_count": 29
-    },
-    {
-      "path": "tests/unit/test_feature_stability.py",
-      "category": "unit",
-      "test_count": 15
-    },
-    {
-      "path": "tests/unit/test_brokers_paper_trading_coverage.py",
-      "category": "broker",
-      "test_count": 102
-    },
-    {
-      "path": "tests/unit/test_anomaly_weighting.py",
-      "category": "ml",
-      "test_count": 19
-    },
-    {
-      "path": "tests/unit/test_live_trading_gate.py",
-      "category": "unit",
-      "test_count": 37
-    },
-    {
-      "path": "tests/unit/test_ml_robust_predictor.py",
-      "category": "ml",
-      "test_count": 28
-    },
-    {
-      "path": "tests/unit/test_startup_factories.py",
-      "category": "unit",
-      "test_count": 32
-    },
-    {
-      "path": "tests/unit/test_ml.py",
-      "category": "ml",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_signal_engine_functions.py",
-      "category": "ml",
-      "test_count": 48
-    },
-    {
-      "path": "tests/unit/test_nuclear_supervisor.py",
-      "category": "unit",
-      "test_count": 31
-    },
-    {
-      "path": "tests/unit/test_notifications.py",
-      "category": "unit",
-      "test_count": 13
-    },
-    {
-      "path": "tests/unit/test_component_status.py",
-      "category": "unit",
-      "test_count": 8
-    },
-    {
-      "path": "tests/unit/test_patterns.py",
-      "category": "unit",
-      "test_count": 96
-    },
-    {
-      "path": "tests/unit/test_core_startup_factories2.py",
-      "category": "unit",
-      "test_count": 35
-    },
-    {
-      "path": "tests/unit/test_risk_prop_engine.py",
-      "category": "risk",
-      "test_count": 37
-    },
-    {
-      "path": "tests/unit/test_ml_live_inference.py",
-      "category": "ml",
-      "test_count": 49
     },
     {
       "path": "tests/unit/test_coverage_boost_ml2.py",
@@ -1553,124 +1193,29 @@
       "test_count": 23
     },
     {
-      "path": "tests/unit/test_coverage_boost_ml_features.py",
-      "category": "unit",
-      "test_count": 35
-    },
-    {
-      "path": "tests/unit/test_pnl_reconciler.py",
-      "category": "unit",
-      "test_count": 44
-    },
-    {
-      "path": "tests/unit/test_mtf_ensemble_leakage.py",
-      "category": "unit",
-      "test_count": 12
-    },
-    {
-      "path": "tests/unit/test_brokers_low_coverage.py",
-      "category": "broker",
-      "test_count": 230
-    },
-    {
-      "path": "tests/unit/test_sniper_entry_engine_batch5.py",
-      "category": "unit",
-      "test_count": 26
-    },
-    {
-      "path": "tests/unit/test_market_data_coverage.py",
-      "category": "broker",
-      "test_count": 61
-    },
-    {
-      "path": "tests/unit/test_payments.py",
-      "category": "api",
-      "test_count": 21
-    },
-    {
-      "path": "tests/unit/test_drift_monitor.py",
-      "category": "unit",
-      "test_count": 25
-    },
-    {
-      "path": "tests/unit/test_audit_fixes.py",
-      "category": "unit",
-      "test_count": 32
-    },
-    {
-      "path": "tests/unit/test_cpp_shim_connector.py",
-      "category": "unit",
-      "test_count": 36
-    },
-    {
-      "path": "tests/unit/test_brokers_ohlcv_risk_fia.py",
-      "category": "broker",
-      "test_count": 39
-    },
-    {
-      "path": "tests/unit/test_broker_metrics_integration.py",
-      "category": "broker",
-      "test_count": 23
-    },
-    {
-      "path": "tests/unit/test_coverage_boost_backtest_market.py",
-      "category": "unit",
-      "test_count": 33
-    },
-    {
-      "path": "tests/unit/test_kill_switch_integration.py",
-      "category": "risk",
-      "test_count": 6
-    },
-    {
-      "path": "tests/unit/test_kill_switch_coverage2.py",
-      "category": "risk",
-      "test_count": 46
-    },
-    {
-      "path": "tests/unit/test_monetization.py",
-      "category": "unit",
-      "test_count": 40
-    },
-    {
-      "path": "tests/unit/test_execution_redis_state.py",
-      "category": "risk",
-      "test_count": 15
-    },
-    {
-      "path": "tests/unit/test_market_data_modules.py",
-      "category": "broker",
-      "test_count": 212
-    },
-    {
-      "path": "tests/unit/test_brokers_connectors_full.py",
-      "category": "broker",
-      "test_count": 76
-    },
-    {
-      "path": "tests/unit/test_core_env_validator.py",
+      "path": "tests/unit/test_feature_stability.py",
       "category": "unit",
       "test_count": 15
     },
     {
-      "path": "tests/unit/test_real_data_backtest.py",
-      "category": "unit",
-      "test_count": 31
+      "path": "tests/unit/test_risk_analytics_coverage.py",
+      "category": "risk",
+      "test_count": 79
     },
     {
-      "path": "tests/unit/test_enhanced_backtest_engine.py",
-      "category": "unit",
-      "test_count": 63
+      "path": "tests/unit/test_security.py",
+      "category": "security",
+      "test_count": 29
     },
     {
-      "path": "tests/unit/test_diagnostics.py",
-      "category": "unit",
-      "test_count": 46
+      "path": "tests/unit/test_analysis_modules.py",
+      "category": "ml",
+      "test_count": 108
     },
     {
-      "path": "tests/unit/test_core_risk_advanced_engine.py",
+      "path": "tests/unit/test_compliance_full.py",
       "category": "unit",
-      "test_count": 7
+      "test_count": 55
     },
     {
       "path": "tests/unit/test_news.py",
@@ -1678,39 +1223,504 @@
       "test_count": 59
     },
     {
+      "path": "tests/unit/test_core_circuit_breaker.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_feature_cache.py",
+      "category": "unit",
+      "test_count": 16
+    },
+    {
+      "path": "tests/unit/test_cme_comex_connector.py",
+      "category": "unit",
+      "test_count": 42
+    },
+    {
+      "path": "tests/unit/test_brokers_coverage_boost.py",
+      "category": "broker",
+      "test_count": 72
+    },
+    {
+      "path": "tests/unit/test_notifications.py",
+      "category": "unit",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_prom_metrics.py",
+      "category": "unit",
+      "test_count": 3
+    },
+    {
+      "path": "tests/unit/test_enhanced_backtest_engine.py",
+      "category": "unit",
+      "test_count": 63
+    },
+    {
+      "path": "tests/unit/test_social.py",
+      "category": "api",
+      "test_count": 29
+    },
+    {
+      "path": "tests/unit/test_market_scanner.py",
+      "category": "unit",
+      "test_count": 30
+    },
+    {
+      "path": "tests/unit/test_core_outbox_extended.py",
+      "category": "unit",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_advanced_order_flow.py",
+      "category": "unit",
+      "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_nuclear_supervisor.py",
+      "category": "unit",
+      "test_count": 31
+    },
+    {
+      "path": "tests/unit/test_fill_wiring.py",
+      "category": "unit",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_risk_pre_trade_gate_full.py",
+      "category": "risk",
+      "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_execution_coverage_boost.py",
+      "category": "risk",
+      "test_count": 162
+    },
+    {
+      "path": "tests/unit/test_ml_coverage.py",
+      "category": "ml",
+      "test_count": 34
+    },
+    {
+      "path": "tests/unit/test_advanced_patterns.py",
+      "category": "ml",
+      "test_count": 27
+    },
+    {
+      "path": "tests/unit/test_risk_prop_enforcer.py",
+      "category": "risk",
+      "test_count": 36
+    },
+    {
+      "path": "tests/unit/test_retry_policy.py",
+      "category": "unit",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_performance_monitor.py",
+      "category": "unit",
+      "test_count": 37
+    },
+    {
+      "path": "tests/unit/test_market_data_coverage.py",
+      "category": "broker",
+      "test_count": 61
+    },
+    {
+      "path": "tests/unit/test_core_config_store.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_brokers_low_coverage.py",
+      "category": "broker",
+      "test_count": 230
+    },
+    {
+      "path": "tests/unit/test_streaming.py",
+      "category": "unit",
+      "test_count": 27
+    },
+    {
+      "path": "tests/unit/test_order_flow_dashboard.py",
+      "category": "unit",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_brokers_init_async.py",
+      "category": "broker",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_core_signal_engine.py",
+      "category": "unit",
+      "test_count": 53
+    },
+    {
+      "path": "tests/unit/test_core_secrets_manager.py",
+      "category": "unit",
+      "test_count": 35
+    },
+    {
+      "path": "tests/unit/test_market_data_modules.py",
+      "category": "broker",
+      "test_count": 213
+    },
+    {
+      "path": "tests/unit/test_charting.py",
+      "category": "unit",
+      "test_count": 27
+    },
+    {
+      "path": "tests/unit/test_walk_forward.py",
+      "category": "unit",
+      "test_count": 15
+    },
+    {
+      "path": "tests/unit/test_execution_sl_tp_monitor.py",
+      "category": "risk",
+      "test_count": 20
+    },
+    {
+      "path": "tests/unit/test_brokers_direct_mode.py",
+      "category": "broker",
+      "test_count": 39
+    },
+    {
+      "path": "tests/unit/test_execution_coverage3.py",
+      "category": "risk",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_execution_redis_state.py",
+      "category": "risk",
+      "test_count": 15
+    },
+    {
+      "path": "tests/unit/test_startup_factories.py",
+      "category": "unit",
+      "test_count": 32
+    },
+    {
+      "path": "tests/unit/test_feature_flags.py",
+      "category": "unit",
+      "test_count": 24
+    },
+    {
+      "path": "tests/unit/test_execution_async_engine.py",
+      "category": "risk",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_compliance_all.py",
+      "category": "unit",
+      "test_count": 33
+    },
+    {
+      "path": "tests/unit/test_ml_daily_aggregator.py",
+      "category": "ml",
+      "test_count": 20
+    },
+    {
+      "path": "tests/unit/test_risk_rules.py",
+      "category": "risk",
+      "test_count": 19
+    },
+    {
+      "path": "tests/unit/test_pnl_reconciler.py",
+      "category": "unit",
+      "test_count": 44
+    },
+    {
+      "path": "tests/unit/test_live_trading_gate.py",
+      "category": "unit",
+      "test_count": 37
+    },
+    {
+      "path": "tests/unit/test_yfinance_source.py",
+      "category": "unit",
+      "test_count": 20
+    },
+    {
+      "path": "tests/unit/test_adaptive_edge_selector_batch1.py",
+      "category": "ml",
+      "test_count": 48
+    },
+    {
+      "path": "tests/unit/test_auth_router_jwt_secret.py",
+      "category": "api",
+      "test_count": 8
+    },
+    {
+      "path": "tests/unit/test_brokers.py",
+      "category": "broker",
+      "test_count": 12
+    },
+    {
+      "path": "tests/unit/test_anomaly_weighting.py",
+      "category": "ml",
+      "test_count": 19
+    },
+    {
+      "path": "tests/unit/test_llm_sandbox.py",
+      "category": "unit",
+      "test_count": 34
+    },
+    {
+      "path": "tests/unit/test_coverage_gate_boost.py",
+      "category": "unit",
+      "test_count": 123
+    },
+    {
+      "path": "tests/unit/test_core_risk_advanced_engine.py",
+      "category": "unit",
+      "test_count": 7
+    },
+    {
+      "path": "tests/unit/test_phase_20_26.py",
+      "category": "unit",
+      "test_count": 131
+    },
+    {
+      "path": "tests/unit/test_position_manager_comprehensive.py",
+      "category": "unit",
+      "test_count": 54
+    },
+    {
+      "path": "tests/unit/test_auth_coverage.py",
+      "category": "api",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_tca.py",
+      "category": "unit",
+      "test_count": 54
+    },
+    {
+      "path": "tests/unit/test_risk_notification_extended.py",
+      "category": "risk",
+      "test_count": 47
+    },
+    {
+      "path": "tests/unit/test_gatekeeper_deep.py",
+      "category": "unit",
+      "test_count": 69
+    },
+    {
+      "path": "tests/unit/test_brokers_base_retry.py",
+      "category": "broker",
+      "test_count": 28
+    },
+    {
+      "path": "tests/unit/test_online_learning.py",
+      "category": "unit",
+      "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_core_strategy_orchestra.py",
+      "category": "unit",
+      "test_count": 39
+    },
+    {
+      "path": "tests/unit/test_cpp_shim_connector.py",
+      "category": "unit",
+      "test_count": 36
+    },
+    {
+      "path": "tests/unit/test_time_and_sales.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_model_registry_gates.py",
+      "category": "ml",
+      "test_count": 45
+    },
+    {
+      "path": "tests/unit/test_mtf_fusion.py",
+      "category": "unit",
+      "test_count": 24
+    },
+    {
+      "path": "tests/unit/test_coverage_boost_oms_pm.py",
+      "category": "unit",
+      "test_count": 36
+    },
+    {
+      "path": "tests/unit/test_risk_prop_engine.py",
+      "category": "risk",
+      "test_count": 37
+    },
+    {
+      "path": "tests/unit/test_coverage_boost_sltp_tca.py",
+      "category": "unit",
+      "test_count": 40
+    },
+    {
+      "path": "tests/unit/test_brokers_connectors_full.py",
+      "category": "broker",
+      "test_count": 76
+    },
+    {
+      "path": "tests/unit/test_risk_stress_test.py",
+      "category": "risk",
+      "test_count": 21
+    },
+    {
+      "path": "tests/unit/test_sniper_entry_engine_batch5.py",
+      "category": "unit",
+      "test_count": 26
+    },
+    {
+      "path": "tests/unit/test_risk_circuit_breakers.py",
+      "category": "risk",
+      "test_count": 74
+    },
+    {
+      "path": "tests/unit/test_execution_coverage9.py",
+      "category": "risk",
+      "test_count": 19
+    },
+    {
+      "path": "tests/unit/test_risk_orchestrator_coverage.py",
+      "category": "risk",
+      "test_count": 75
+    },
+    {
+      "path": "tests/unit/test_monte_carlo.py",
+      "category": "unit",
+      "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_geopolitical_risk.py",
+      "category": "unit",
+      "test_count": 42
+    },
+    {
+      "path": "tests/unit/test_trading_auth.py",
+      "category": "unit",
+      "test_count": 32
+    },
+    {
+      "path": "tests/unit/test_strategies.py",
+      "category": "unit",
+      "test_count": 17
+    },
+    {
+      "path": "tests/unit/test_risk_manager.py",
+      "category": "risk",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_redis_tls.py",
+      "category": "unit",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_core_startup_factories2.py",
+      "category": "unit",
+      "test_count": 35
+    },
+    {
+      "path": "tests/unit/test_horizon5_oos_split.py",
+      "category": "unit",
+      "test_count": 22
+    },
+    {
       "path": "tests/unit/test_core_startup_factories.py",
       "category": "unit",
       "test_count": 27
     },
     {
-      "path": "tests/unit/test_alert_engine_extended.py",
+      "path": "tests/unit/test_trade_executor_comprehensive.py",
       "category": "unit",
-      "test_count": 46
+      "test_count": 55
     },
     {
-      "path": "tests/unit/test_mcc_unit.py",
+      "path": "tests/unit/test_auth_analytics_backtest_coverage.py",
+      "category": "api",
+      "test_count": 37
+    },
+    {
+      "path": "tests/unit/test_lstm_signal_layer_full.py",
       "category": "unit",
-      "test_count": 46
+      "test_count": 28
     },
     {
-      "path": "tests/unit/test_ml_inference_training.py",
-      "category": "ml",
-      "test_count": 52
+      "path": "tests/unit/test_core_event_bus.py",
+      "category": "unit",
+      "test_count": 34
     },
     {
-      "path": "tests/unit/test_model_card.py",
-      "category": "ml",
-      "test_count": 11
+      "path": "tests/unit/test_broker_failover.py",
+      "category": "broker",
+      "test_count": 13
     },
     {
-      "path": "tests/unit/test_risk_properties.py",
+      "path": "tests/unit/test_execution_coverage.py",
       "category": "risk",
-      "test_count": 8
+      "test_count": 42
     },
     {
-      "path": "tests/unit/test_backtesting.py",
+      "path": "tests/unit/test_replay_router.py",
+      "category": "unit",
+      "test_count": 29
+    },
+    {
+      "path": "tests/unit/test_backtesting_data_validator.py",
       "category": "risk",
-      "test_count": 17
+      "test_count": 27
+    },
+    {
+      "path": "tests/unit/test_zmq_bridge_start_stop.py",
+      "category": "unit",
+      "test_count": 16
+    },
+    {
+      "path": "tests/unit/test_social_feed.py",
+      "category": "api",
+      "test_count": 27
+    },
+    {
+      "path": "tests/unit/test_config.py",
+      "category": "unit",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_brokers_paper_trading_coverage.py",
+      "category": "broker",
+      "test_count": 102
+    },
+    {
+      "path": "tests/unit/test_ml_position_sizer.py",
+      "category": "ml",
+      "test_count": 16
+    },
+    {
+      "path": "tests/unit/test_audit_fixes.py",
+      "category": "unit",
+      "test_count": 32
+    },
+    {
+      "path": "tests/unit/test_db_store_keys.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_execution_coverage7.py",
+      "category": "risk",
+      "test_count": 25
+    },
+    {
+      "path": "tests/unit/test_nuclear_streamer.py",
+      "category": "unit",
+      "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_sniper_entry_engine_batch3.py",
+      "category": "unit",
+      "test_count": 48
     },
     {
       "path": "tests/unit/test_cache_config.py",
@@ -1718,19 +1728,94 @@
       "test_count": 122
     },
     {
-      "path": "tests/unit/test_mobile.py",
+      "path": "tests/unit/test_core.py",
       "category": "unit",
-      "test_count": 14
+      "test_count": 5
     },
     {
-      "path": "tests/test_unit/test_ml.py",
+      "path": "tests/unit/test_brokers_coverage_gap2.py",
+      "category": "broker",
+      "test_count": 34
+    },
+    {
+      "path": "tests/unit/test_brokers_extended_coverage.py",
+      "category": "broker",
+      "test_count": 47
+    },
+    {
+      "path": "tests/unit/test_risk_drawdown_tracker.py",
+      "category": "risk",
+      "test_count": 45
+    },
+    {
+      "path": "tests/unit/test_chaos.py",
+      "category": "unit",
+      "test_count": 34
+    },
+    {
+      "path": "tests/unit/test_execution_modules.py",
+      "category": "risk",
+      "test_count": 43
+    },
+    {
+      "path": "tests/unit/test_api.py",
+      "category": "api",
+      "test_count": 132
+    },
+    {
+      "path": "tests/unit/test_tick_feed.py",
+      "category": "unit",
+      "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_billing_webhook.py",
+      "category": "api",
+      "test_count": 10
+    },
+    {
+      "path": "tests/unit/test_signal_pipeline_e2e.py",
       "category": "ml",
-      "test_count": 3
+      "test_count": 8
     },
     {
-      "path": "tests/test_chaos/test_failure_modes.py",
+      "path": "tests/unit/test_core_live_trading_gate.py",
       "category": "unit",
-      "test_count": 19
+      "test_count": 29
+    },
+    {
+      "path": "tests/unit/test_enhanced_engine_cost_model.py",
+      "category": "unit",
+      "test_count": 37
+    },
+    {
+      "path": "tests/unit/test_execution_coverage6.py",
+      "category": "risk",
+      "test_count": 37
+    },
+    {
+      "path": "tests/unit/test_smart_router_comprehensive.py",
+      "category": "unit",
+      "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_cache.py",
+      "category": "unit",
+      "test_count": 18
+    },
+    {
+      "path": "tests/unit/test_ml.py",
+      "category": "ml",
+      "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_ml_extended.py",
+      "category": "ml",
+      "test_count": 39
+    },
+    {
+      "path": "tests/unit/test_config_vault_coverage.py",
+      "category": "unit",
+      "test_count": 50
     },
     {
       "path": "tests/system/test_deployment_infrastructure.py",
@@ -1743,34 +1828,24 @@
       "test_count": 45
     },
     {
-      "path": "tests/e2e/test_trading_flow.py",
-      "category": "e2e",
-      "test_count": 12
+      "path": "tests/test_unit/test_ml.py",
+      "category": "ml",
+      "test_count": 3
     },
     {
-      "path": "tests/e2e/test_dashboard_realtime.py",
-      "category": "e2e",
-      "test_count": 43
+      "path": "scripts/test_migrations.py",
+      "category": "unit",
+      "test_count": 0
     },
     {
-      "path": "tests/e2e/test_full_pipeline_wiring.py",
-      "category": "e2e",
-      "test_count": 29
+      "path": "scripts/test_ibkr_connection.py",
+      "category": "broker",
+      "test_count": 0
     },
     {
-      "path": "tests/e2e/test_auth_billing_trading.py",
-      "category": "e2e",
-      "test_count": 41
-    },
-    {
-      "path": "tests/e2e/test_websocket_e2e.py",
-      "category": "e2e",
-      "test_count": 7
-    },
-    {
-      "path": "tests/test_integration/test_full_pipeline.py",
-      "category": "e2e",
-      "test_count": 5
+      "path": "security/test_scanner.py",
+      "category": "unit",
+      "test_count": 0
     },
     {
       "path": "locust/load_tests.py",
@@ -1778,10 +1853,10 @@
       "test_count": 0
     },
     {
-      "path": "security/test_scanner.py",
+      "path": "risk/stress_test.py",
       "category": "unit",
       "test_count": 0
     }
   ],
-  "last_indexed": "2026-04-23T12:20:49.769944+00:00"
+  "last_indexed": "2026-05-03T18:28:41.124199+00:00"
 }
