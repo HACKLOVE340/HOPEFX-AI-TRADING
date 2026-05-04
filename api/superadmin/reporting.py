@@ -198,7 +198,7 @@ async def generate_report(
     reports[0] = report
     _save_reports(reports)
 
-    await _log_superadmin_action(user.sub, "report_generate", {"type": report_type, "period": period, "report_id": report_id})
+    _log_superadmin_action(user, "report_generate", {"type": report_type, "period": period, "report_id": report_id})
     return {"ok": True, "report": report}
 
 
@@ -259,5 +259,5 @@ async def delete_report(
             rc.delete(f"superadmin:report:data:{report_id}")
     except Exception:  # nosec B110
         pass
-    await _log_superadmin_action(user.sub, "report_delete", {"report_id": report_id})
+    _log_superadmin_action(user, "report_delete", {"report_id": report_id})
     return {"ok": True}

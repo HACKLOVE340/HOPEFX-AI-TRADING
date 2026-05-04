@@ -167,7 +167,7 @@ async def create_alert_rule(
     rules = _load_alert_rules()
     rules.append(rule)
     _save_alert_rules(rules)
-    await _log_superadmin_action(user.sub, "alert_rule_create", {"rule_id": rule_id})
+    _log_superadmin_action(user, "alert_rule_create", {"rule_id": rule_id})
     return {"ok": True, "rule": rule}
 
 
@@ -185,7 +185,7 @@ async def update_alert_rule(
                     r[k] = v
             r["updated_at"] = _utcnow().isoformat()
             _save_alert_rules(rules)
-            await _log_superadmin_action(user.sub, "alert_rule_update", {"rule_id": rule_id})
+            _log_superadmin_action(user, "alert_rule_update", {"rule_id": rule_id})
             return {"ok": True, "rule": r}
     raise HTTPException(status_code=404, detail="Alert rule not found")
 
@@ -201,7 +201,7 @@ async def delete_alert_rule(
     if len(rules) == before:
         raise HTTPException(status_code=404, detail="Alert rule not found")
     _save_alert_rules(rules)
-    await _log_superadmin_action(user.sub, "alert_rule_delete", {"rule_id": rule_id})
+    _log_superadmin_action(user, "alert_rule_delete", {"rule_id": rule_id})
     return {"ok": True}
 
 
@@ -219,7 +219,7 @@ async def silence_alert_rule(
             r["silenced_until"] = (_utcnow() + timedelta(minutes=duration_minutes)).isoformat()
             r["silenced_by"] = user.sub
             _save_alert_rules(rules)
-            await _log_superadmin_action(user.sub, "alert_rule_silence", {"rule_id": rule_id, "minutes": duration_minutes})
+            _log_superadmin_action(user, "alert_rule_silence", {"rule_id": rule_id, "minutes": duration_minutes})
             return {"ok": True, "silenced_until": r["silenced_until"]}
     raise HTTPException(status_code=404, detail="Alert rule not found")
 
@@ -253,7 +253,7 @@ async def test_alert_rule(
     rule["last_fired"] = _utcnow().isoformat()
     _save_alert_rules(rules)
     _append_alert_history(rule_id, rule["name"], rule["severity"], "Test fire by superadmin")
-    await _log_superadmin_action(user.sub, "alert_rule_test", {"rule_id": rule_id})
+    _log_superadmin_action(user, "alert_rule_test", {"rule_id": rule_id})
     return {"ok": True, "sent_channels": sent_channels}
 
 

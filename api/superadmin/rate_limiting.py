@@ -106,7 +106,7 @@ async def create_rate_limit_rule(
     rules = _load_rules()
     rules.append(rule)
     _save_rules(rules)
-    await _log_superadmin_action(user.sub, "rate_limit_create", {"rule_id": rule_id})
+    _log_superadmin_action(user, "rate_limit_create", {"rule_id": rule_id})
     return {"ok": True, "rule": rule}
 
 
@@ -125,7 +125,7 @@ async def update_rate_limit_rule(
                     r[k] = v
             r["updated_at"] = _utcnow().isoformat()
             _save_rules(rules)
-            await _log_superadmin_action(user.sub, "rate_limit_update", {"rule_id": rule_id})
+            _log_superadmin_action(user, "rate_limit_update", {"rule_id": rule_id})
             return {"ok": True, "rule": r}
     raise HTTPException(status_code=404, detail="Rule not found")
 
@@ -142,7 +142,7 @@ async def delete_rate_limit_rule(
     if len(rules) == before:
         raise HTTPException(status_code=404, detail="Rule not found")
     _save_rules(rules)
-    await _log_superadmin_action(user.sub, "rate_limit_delete", {"rule_id": rule_id})
+    _log_superadmin_action(user, "rate_limit_delete", {"rule_id": rule_id})
     return {"ok": True}
 
 
@@ -178,7 +178,7 @@ async def reset_rate_limit_counter(
             rc.delete(f"{_HITS_PREFIX}{rule_id}")
     except Exception:  # nosec B110
         pass
-    await _log_superadmin_action(user.sub, "rate_limit_reset", {"rule_id": rule_id})
+    _log_superadmin_action(user, "rate_limit_reset", {"rule_id": rule_id})
     return {"ok": True, "rule_id": rule_id}
 
 

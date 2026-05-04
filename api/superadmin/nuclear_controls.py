@@ -153,7 +153,7 @@ async def nuclear_halt(
         pass
 
     _append_nuclear_log("HALT", {"reason": reason}, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_halt", {"reason": reason})
+    _log_superadmin_action(user, "nuclear_halt", {"reason": reason})
     return {"ok": True, "kill_switch_active": True, "reason": reason}
 
 
@@ -181,7 +181,7 @@ async def nuclear_resume(
         pass
 
     _append_nuclear_log("RESUME", {}, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_resume", {})
+    _log_superadmin_action(user, "nuclear_resume", {})
     return {"ok": True, "kill_switch_active": False}
 
 
@@ -207,7 +207,7 @@ async def activate_hedge(
         logger.warning("Hedge activate via orchestrator: %s", exc)
 
     _append_nuclear_log("HEDGE_ACTIVATE", body, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_hedge_activate", body)
+    _log_superadmin_action(user, "nuclear_hedge_activate", body)
     return {"ok": True, "hedge_active": True}
 
 
@@ -231,7 +231,7 @@ async def deactivate_hedge(
         logger.warning("Hedge deactivate via orchestrator: %s", exc)
 
     _append_nuclear_log("HEDGE_DEACTIVATE", {}, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_hedge_deactivate", {})
+    _log_superadmin_action(user, "nuclear_hedge_deactivate", {})
     return {"ok": True, "hedge_active": False}
 
 
@@ -261,7 +261,7 @@ async def max_risk_override(
         logger.warning("Risk override apply: %s", exc)
 
     _append_nuclear_log("RISK_OVERRIDE", body, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_risk_override", body)
+    _log_superadmin_action(user, "nuclear_risk_override", body)
     return {"ok": True, "override": override}
 
 

@@ -765,6 +765,23 @@ async def get_marketplace_stats(user: TokenPayload = Depends(get_current_user)):
     return strategy_marketplace.get_marketplace_stats()
 
 
+@router.get("/marketplace/subscriptions", summary="User's marketplace subscriptions")
+async def get_marketplace_subscriptions(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the calling user's active marketplace strategy subscriptions.
+    """
+    try:
+        from database.simple_store import db_get
+
+        purchases = db_get(f"marketplace:purchases:{user.sub}") or []
+        return {"subscriptions": purchases if isinstance(purchases, list) else []}
+    except Exception:
+        logger.exception(
+            "Failed to load marketplace subscriptions for user %s", user.sub
+        )
+        return {"subscriptions": []}
+
+
 # ==========================
 # Analytics Endpoints
 # ==========================

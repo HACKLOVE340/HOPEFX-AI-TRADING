@@ -209,7 +209,7 @@ async def trigger_backup(
     except Exception:  # nosec B110
         pass
 
-    await _log_superadmin_action(user.sub, "backup_trigger", {"backup_id": backup_id, "type": backup_type})
+    _log_superadmin_action(user, "backup_trigger", {"backup_id": backup_id, "type": backup_type})
     return {"ok": True, "backup": record}
 
 
@@ -272,12 +272,12 @@ async def run_job_now(
             job = sched.get_job(job_id)
             if job:
                 job.modify(next_run_time=_utcnow())
-                await _log_superadmin_action(user.sub, "job_run_now", {"job_id": job_id})
+                _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
                 return {"ok": True, "job_id": job_id, "triggered_at": _utcnow().isoformat()}
     except Exception as exc:
         logger.warning("Job run now: %s", exc)
 
-    await _log_superadmin_action(user.sub, "job_run_now", {"job_id": job_id})
+    _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
     return {"ok": True, "job_id": job_id, "triggered_at": _utcnow().isoformat(), "note": "Scheduler not available — job queued"}
 
 
@@ -386,7 +386,7 @@ async def revoke_system_api_key(
             rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "api_key_revoke", {"key_id": key_id})
+    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id})
     return {"ok": True}
 
 

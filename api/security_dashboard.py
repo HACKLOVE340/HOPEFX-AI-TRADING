@@ -207,6 +207,60 @@ async def get_lockdown_status(
     }
 
 
+class LockdownRequest(BaseModel):
+    enable: bool = True
+    reason: str = "Manual lockdown by admin"
+
+
+@router.post("/lockdown", response_model=None, summary="Toggle platform lockdown (admin)")
+async def activate_lockdown(
+    req: LockdownRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """
+    Toggle the platform-wide lockdown.
+
+    The frontend sends ``{ enable: true }`` to activate and ``{ enable: false }``
+    to deactivate, matching the ``adminApi.lockdown(enable)`` call shape.
+
+    - ``enable=true``  → activate lockdown (halt trading, block new sessions)
+    - ``enable=false`` → clear/deactivate lockdown (delegates to clear logic)
+    """
+    global _lockdown_state
+
+    # ── Disable path ─────────────────────────────────────────────────────────
+    if not req.enable:
+        try:
+            from security.lockdown import get_lockdown_manager
+
+            mgr = get_lockdown_manager()
+            mgr.clear(cleared_by=user.sub)
+            logger.warning("Lockdown DISABLED by admin: user=%s", user.sub)
+            return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
+        except Exception as _exc:
+            logger.debug("Lockdown manager unavailable (disable path), using in-memory: %s", _exc)
+
+        _lockdown_state = {"active": False, "reason": None, "activated_at": None}
+        logger.warning("Lockdown DISABLED (in-memory): user=%s", user.sub)
+        return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
+
+    # ── Enable path ──────────────────────────────────────────────────────────
+    activated_at = datetime.now(UTC).isoformat()
+    try:
+        from security.lockdown import get_lockdown_manager
+
+        mgr = get_lockdown_manager()
+        mgr.activate(reason=req.reason, activated_by=user.sub)
+        logger.warning("Lockdown ACTIVATED by admin: user=%s reason=%s", user.sub, req.reason)
+        return {"status": "active", "lockdown_active": True, "reason": req.reason, "activated_by": user.sub, "activated_at": activated_at}
+    except Exception as _exc:
+        logger.debug("Lockdown manager unavailable (enable path), using in-memory: %s", _exc)
+
+    _lockdown_state = {"active": True, "reason": req.reason, "activated_at": activated_at}
+    logger.warning("Lockdown ACTIVATED (in-memory): user=%s reason=%s", user.sub, req.reason)
+    return {"status": "active", "lockdown_active": True, "reason": req.reason, "activated_by": user.sub, "activated_at": activated_at}
+
+
 @router.post(
     "/lockdown/clear",
     response_model=None,

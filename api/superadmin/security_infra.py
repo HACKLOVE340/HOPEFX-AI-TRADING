@@ -126,7 +126,7 @@ async def trigger_self_healer_scan(
     except Exception as exc:
         logger.warning("Self-healer scan: %s", exc)
         result["note"] = "Self-healer not available"
-    await _log_superadmin_action(user.sub, "self_healer_scan", {})
+    _log_superadmin_action(user, "self_healer_scan", {})
     return result
 
 
@@ -273,7 +273,7 @@ async def add_waf_rule(
             rc.set(_WAF_RULES_KEY, json.dumps(rules), ex=86400 * 30)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "waf_rule_add", {"rule_id": rule_id})
+    _log_superadmin_action(user, "waf_rule_add", {"rule_id": rule_id})
     return {"ok": True, "rule": rule}
 
 
@@ -318,7 +318,7 @@ async def revoke_api_key(
             rc.set(_API_KEYS_KEY, json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "api_key_revoke", {"key_id": key_id, "reason": reason})
+    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id, "reason": reason})
     return {"ok": True}
 
 
@@ -422,7 +422,7 @@ async def rotate_hsm_key(
             rc.set(f"hsm:key:{key_id}:ref", new_key_ref, ex=86400 * 365)
     except Exception:  # nosec B110
         pass
-    await _log_superadmin_action(user.sub, "hsm_key_rotate", {"key_id": key_id})
+    _log_superadmin_action(user, "hsm_key_rotate", {"key_id": key_id})
     return {"ok": True, "key_id": key_id, "new_ref": new_key_ref, "rotated_at": _utcnow().isoformat()}
 
 
@@ -473,5 +473,5 @@ async def trigger_antivirus_scan(
     except Exception:  # nosec B110
         pass
 
-    await _log_superadmin_action(user.sub, "antivirus_scan", {"scan_id": scan_id})
+    _log_superadmin_action(user, "antivirus_scan", {"scan_id": scan_id})
     return {"ok": True, "result": result}
