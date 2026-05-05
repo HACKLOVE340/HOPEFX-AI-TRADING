@@ -522,9 +522,16 @@ async def _run_checks() -> dict[str, Any]:
 
         def _sync_check():
             from sqlalchemy import create_engine, text as _text
+            # Normalise async driver prefixes to their sync equivalents so
+            # create_engine (sync) can open the connection without aiosqlite/asyncpg.
+            sync_url = db_url
+            if sync_url.startswith("sqlite+aiosqlite://"):
+                sync_url = sync_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+            elif sync_url.startswith("postgresql+asyncpg://"):
+                sync_url = sync_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
             _engine = create_engine(
-                db_url,
-                connect_args={"check_same_thread": False} if "sqlite" in db_url else {},
+                sync_url,
+                connect_args={"check_same_thread": False} if "sqlite" in sync_url else {},
                 pool_pre_ping=True,
             )
             with _engine.connect() as conn:

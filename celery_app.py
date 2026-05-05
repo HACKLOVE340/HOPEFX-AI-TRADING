@@ -208,7 +208,33 @@ if _CELERY_AVAILABLE:
     )
 else:
     # Provide a no-op stub so imports don't fail when Celery is absent.
+    class _NoOpInspect:
+        """Mimics celery.app.control.Inspect — all methods return None."""
+
+        def active(self, *a, **kw):
+            return None
+
+        def stats(self, *a, **kw):
+            return None
+
+        def ping(self, *a, **kw):
+            return None
+
+        def registered(self, *a, **kw):
+            return None
+
+    class _NoOpControl:
+        """Mimics celery.app.control.Control."""
+
+        def inspect(self, *a, **kw) -> _NoOpInspect:
+            return _NoOpInspect()
+
+        def broadcast(self, *a, **kw):
+            return None
+
     class _NoOpCelery:  # type: ignore[no-redef]
+        control = _NoOpControl()
+
         def task(self, *args, **kwargs):
             def decorator(fn):
                 return fn
