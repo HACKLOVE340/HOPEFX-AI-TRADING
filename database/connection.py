@@ -460,6 +460,7 @@ try:
         async_sessionmaker,
         create_async_engine,
     )
+    from sqlalchemy.pool import NullPool, StaticPool
 
     ASYNC_SQLALCHEMY_AVAILABLE = True
 except ImportError:
@@ -467,6 +468,8 @@ except ImportError:
     AsyncSession = None  # type: ignore[assignment,misc]
     async_sessionmaker = None  # type: ignore[assignment]
     create_async_engine = None  # type: ignore[assignment]
+    NullPool = None  # type: ignore[assignment,misc]
+    StaticPool = None  # type: ignore[assignment,misc]
 
 
 class AsyncDatabaseManager:
@@ -546,15 +549,28 @@ class AsyncDatabaseManager:
         elif "aiosqlite" in async_url:
             connect_args = {"check_same_thread": False}
 
-        self._engine = create_async_engine(
-            async_url,
-            pool_size=self.pool_size,
-            max_overflow=self.max_overflow,
-            pool_recycle=self.pool_recycle,
-            pool_pre_ping=self.pool_pre_ping,
-            echo=self.echo,
-            connect_args=connect_args,
-        )
+        # SQLite (aiosqlite) does not support QueuePool — use StaticPool so a
+        # single shared connection is reused across async tasks.  pool_size and
+        # max_overflow are QueuePool-only kwargs and must be omitted.
+        if "aiosqlite" in async_url:
+            self._engine = create_async_engine(
+                async_url,
+                poolclass=StaticPool,
+                pool_recycle=self.pool_recycle,
+                pool_pre_ping=self.pool_pre_ping,
+                echo=self.echo,
+                connect_args=connect_args,
+            )
+        else:
+            self._engine = create_async_engine(
+                async_url,
+                pool_size=self.pool_size,
+                max_overflow=self.max_overflow,
+                pool_recycle=self.pool_recycle,
+                pool_pre_ping=self.pool_pre_ping,
+                echo=self.echo,
+                connect_args=connect_args,
+            )
         self._session_factory = async_sessionmaker(
             bind=self._engine,
             class_=AsyncSession,
