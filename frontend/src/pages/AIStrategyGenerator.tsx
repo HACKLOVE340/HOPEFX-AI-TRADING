@@ -6,11 +6,12 @@
  *           POST /api/brain/deploy-strategy
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
+import { useToast } from '../components/Toast';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,14 +58,72 @@ const pct = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}%`;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Streaming token display ───────────────────────────────────────────────────
+
+const StreamingOutput: React.FC<{ tokens: string; done: boolean }> = ({ tokens, done }) => {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [tokens]);
+
+  return (
+    <div style={{ background: '#0a0f1a', border: '1px solid #1e2d3d', borderRadius: 8, padding: '12px 14px', fontFamily: 'monospace', fontSize: 12, color: '#94a3b8', maxHeight: 200, overflowY: 'auto', lineHeight: 1.6 }}>
+      <span style={{ color: '#4ade80' }}>{tokens}</span>
+      {!done && <span style={{ animation: 'pulse 1s infinite', color: '#3b82f6' }}>▋</span>}
+      <div ref={endRef} />
+    </div>
+  );
+};
+
+// ── Strategy diff viewer ──────────────────────────────────────────────────────
+
+const StrategyDiff: React.FC<{ oldCode: string; newCode: string }> = ({ oldCode, newCode }) => {
+  const oldLines = oldCode.split('\n');
+  const newLines = newCode.split('\n');
+  const maxLen   = Math.max(oldLines.length, newLines.length);
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontFamily: 'monospace', fontSize: 11 }}>
+      <div>
+        <div style={{ fontSize: 10, color: '#f87171', marginBottom: 4, fontWeight: 700 }}>− Previous</div>
+        <div style={{ background: '#0a0f1a', border: '1px solid #1e2d3d', borderRadius: 6, padding: '8px 10px', maxHeight: 200, overflowY: 'auto' }}>
+          {oldLines.map((line, i) => {
+            const changed = line !== (newLines[i] ?? '');
+            return (
+              <div key={i} style={{ color: changed ? '#f87171' : '#475569', background: changed ? 'rgba(248,113,113,0.08)' : 'transparent', padding: '0 2px' }}>
+                {line || ' '}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 10, color: '#4ade80', marginBottom: 4, fontWeight: 700 }}>+ New</div>
+        <div style={{ background: '#0a0f1a', border: '1px solid #1e2d3d', borderRadius: 6, padding: '8px 10px', maxHeight: 200, overflowY: 'auto' }}>
+          {newLines.map((line, i) => {
+            const changed = line !== (oldLines[i] ?? '');
+            return (
+              <div key={i} style={{ color: changed ? '#4ade80' : '#475569', background: changed ? 'rgba(74,222,128,0.08)' : 'transparent', padding: '0 2px' }}>
+                {line || ' '}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AIStrategyGenerator: React.FC = () => {
-  const navigate = useNavigate();
+  const toast = useToast();
 
   const [prompt, setPrompt]         = useState('');
   const [symbol, setSymbol]         = useState('XAU_USD');
   const [timeframe, setTimeframe]   = useState('H1');
   const [stage, setStage]           = useState<Stage>('idle');
   const [result, setResult]         = useState<GenerateResponse | null>(null);
+  const [prevCode, setPrevCode]     = useState<string>('');
+  const [showDiff, setShowDiff]     = useState(false);
+  const [streamTokens, setStreamTokens] = useState('');
+  const [streamDone, setStreamDone] = useState(false);
   const [deploying, setDeploying]   = useState(false);
   const [deployMsg, setDeployMsg]   = useState('');
   const [codeExpanded, setCodeExpanded] = useState(false);
@@ -104,23 +163,65 @@ const AIStrategyGenerator: React.FC = () => {
     setStage('generating');
     setResult(null);
     setDeployMsg('');
+    setStreamTokens('');
+    setStreamDone(false);
+    setShowDiff(false);
 
+    // Try streaming endpoint first, fall back to regular
+    try {
+      const streamUrl = `/api/brain/generate-strategy/stream`;
+      const token = useStore.getState().token;
+      const resp = await fetch(streamUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ prompt, symbol, timeframe }),
+      });
+
+      if (resp.ok && resp.headers.get('content-type')?.includes('text/event-stream')) {
+        const reader = resp.body!.getReader();
+        const decoder = new TextDecoder();
+        let accumulated = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          // SSE format: "data: <token>\n\n"
+          for (const line of chunk.split('\n')) {
+            if (line.startsWith('data: ')) {
+              const payload = line.slice(6);
+              if (payload === '[DONE]') { setStreamDone(true); break; }
+              try {
+                const parsed = JSON.parse(payload) as { token?: string; result?: GenerateResponse };
+                if (parsed.token) { accumulated += parsed.token; setStreamTokens(accumulated); }
+                if (parsed.result) {
+                  const d = parsed.result;
+                  if (result?.strategy_code) setPrevCode(result.strategy_code);
+                  setResult(d);
+                  setStage(d.success ? 'done' : 'error');
+                  setStreamDone(true);
+                  if (d.success) { loadHistory(); toast.success('Strategy generated.'); }
+                }
+              } catch { accumulated += payload; setStreamTokens(accumulated); }
+            }
+          }
+        }
+        return;
+      }
+    } catch { /* fall through to regular */ }
+
+    // Regular (non-streaming) fallback
     try {
       const res = await aiStrategyApi.generate({ prompt, symbol, timeframe });
       const d = res.data as GenerateResponse;
+      if (result?.strategy_code) setPrevCode(result.strategy_code);
       setResult(d);
       setStage(d.success ? 'done' : 'error');
-      if (d.success) loadHistory();
+      setStreamDone(true);
+      if (d.success) { loadHistory(); toast.success('Strategy generated.'); }
     } catch (err: unknown) {
-      setResult({
-        success: false,
-        strategy_name: '',
-        strategy_code: '',
-        backtest: null,
-        iterations: 0,
-        error: (err as { message?: string })?.message ?? 'Unknown error',
-      });
+      setResult({ success: false, strategy_name: '', strategy_code: '', backtest: null, iterations: 0, error: (err as { message?: string })?.message ?? 'Unknown error' });
       setStage('error');
+      setStreamDone(true);
     }
   };
 
@@ -128,18 +229,15 @@ const AIStrategyGenerator: React.FC = () => {
     if (!result?.strategy_code) return;
     setDeploying(true);
     setDeployMsg('');
-
     try {
-      await aiStrategyApi.deploy({
-        strategy_name: result.strategy_name,
-        strategy_code: result.strategy_code,
-        symbol,
-        mode: 'paper',
-      });
+      await aiStrategyApi.deploy({ strategy_name: result.strategy_name, strategy_code: result.strategy_code, symbol, mode: 'paper' });
       setDeployMsg('Strategy deployed to paper trading.');
+      toast.success(`"${result.strategy_name}" deployed to paper trading.`);
       loadHistory();
     } catch (err: unknown) {
-      setDeployMsg(`Deploy failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      const msg = `Deploy failed: ${err instanceof Error ? err.message : 'Unknown error'}`;
+      setDeployMsg(msg);
+      toast.error(msg);
     } finally {
       setDeploying(false);
     }
@@ -190,22 +288,10 @@ const AIStrategyGenerator: React.FC = () => {
               </button>
             ))}
             <div style={{ width: 1, height: 20, background: '#334155' }} />
-            <button onClick={() => navigate('/ai-chart')}
-              style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📈 AI Charts
-            </button>
-            <button onClick={() => navigate('/pattern-detector')}
-              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              🔍 Patterns
-            </button>
-            <button onClick={() => navigate('/walk-forward')}
-              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📊 Walk-Forward
-            </button>
-            <button onClick={() => navigate('/ab-testing')}
-              style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              ⚡ A/B Test
-            </button>
+            <Link to="/ai-chart"         style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📈 AI Charts</Link>
+            <Link to="/pattern-detector" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🔍 Patterns</Link>
+            <Link to="/walk-forward"     style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📊 Walk-Forward</Link>
+            <Link to="/ab-testing"       style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>⚡ A/B Test</Link>
           </div>
         }
       />
@@ -314,6 +400,14 @@ const AIStrategyGenerator: React.FC = () => {
         </button>
       </div>
 
+      {/* Streaming output while generating */}
+      {stage === 'generating' && streamTokens && (
+        <div style={s.card}>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Generating strategy…</div>
+          <StreamingOutput tokens={streamTokens} done={streamDone} />
+        </div>
+      )}
+
       {/* Results */}
       {result && (
         <div style={s.card}>
@@ -321,8 +415,25 @@ const AIStrategyGenerator: React.FC = () => {
             <>
               <div style={s.resultHeader}>
                 <span style={s.strategyName}>{result.strategy_name}</span>
-                <span style={s.badge}>✓ Generated in {result.iterations} iteration{result.iterations !== 1 ? 's' : ''}</span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={s.badge}>✓ Generated in {result.iterations} iteration{result.iterations !== 1 ? 's' : ''}</span>
+                  {prevCode && prevCode !== result.strategy_code && (
+                    <button
+                      onClick={() => setShowDiff((v) => !v)}
+                      style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 6, color: '#fbbf24', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 10px' }}
+                    >
+                      {showDiff ? 'Hide Diff' : '⟷ Show Diff'}
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Strategy diff viewer */}
+              {showDiff && prevCode && (
+                <div style={{ marginBottom: 16 }}>
+                  <StrategyDiff oldCode={prevCode} newCode={result.strategy_code} />
+                </div>
+              )}
 
               {/* Backtest metrics */}
               {result.backtest && (
@@ -376,17 +487,17 @@ const AIStrategyGenerator: React.FC = () => {
                 >
                   {deploying ? '⏳ Deploying…' : '🚀 Deploy to Paper Trading'}
                 </button>
-                <button
-                  onClick={() => navigate('/walk-forward')}
+                <Link
+                  to="/walk-forward"
                   style={{
                     background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
                     borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 600,
-                    cursor: 'pointer', padding: '9px 16px', fontFamily: 'inherit',
+                    padding: '9px 16px', textDecoration: 'none', display: 'inline-block',
                   }}
                   title="Validate this strategy with walk-forward testing"
                 >
                   📈 Walk-Forward Validate
-                </button>
+                </Link>
                 {deployMsg && (
                   <span style={{ color: deployMsg.startsWith('Deploy failed') ? '#f87171' : '#4ade80', fontSize: 14 }}>
                     {deployMsg}
