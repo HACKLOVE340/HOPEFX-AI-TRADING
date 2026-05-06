@@ -6,9 +6,10 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components';
-import { tradingApi } from '../hooks/useApi';
+import { tradingApi, signalsApi } from '../hooks/useApi';
+import { useToast } from '../components/Toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -65,9 +66,11 @@ interface PatternCardProps {
   pattern: DetectedPattern;
   symbol: string;
   onTrade: (p: DetectedPattern) => void;
+  onAlert: (p: DetectedPattern) => void;
+  alertSet: boolean;
 }
 
-const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) => {
+const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade, onAlert, alertSet }) => {
   const bullish = pattern.direction === 'bullish';
   const dirColor = bullish ? '#4ade80' : '#f87171';
   const barColor = confidenceColor(pattern.confidence);
@@ -136,20 +139,36 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
         </p>
       )}
 
-      {pattern.confidence >= 0.5 && (
+      <div style={{ display: 'flex', gap: 8 }}>
+        {pattern.confidence >= 0.5 && (
+          <button
+            onClick={() => onTrade(pattern)}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
+              fontSize: 13, fontFamily: 'inherit',
+              background: bullish ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+              border: `1px solid ${bullish ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
+              color: bullish ? '#4ade80' : '#f87171',
+            }}
+          >
+            ⚡ {bullish ? 'BUY' : 'SELL'} {symbol}
+          </button>
+        )}
         <button
-          onClick={() => onTrade(pattern)}
+          onClick={() => onAlert(pattern)}
+          title={alertSet ? 'Alert set' : 'Set alert for this pattern'}
           style={{
-            width: '100%', padding: '8px 0', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
+            padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
             fontSize: 13, fontFamily: 'inherit',
-            background: bullish ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-            border: `1px solid ${bullish ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-            color: bullish ? '#4ade80' : '#f87171',
+            background: alertSet ? 'rgba(251,191,36,0.18)' : 'rgba(251,191,36,0.08)',
+            border: `1px solid ${alertSet ? 'rgba(251,191,36,0.6)' : 'rgba(251,191,36,0.25)'}`,
+            color: '#fbbf24',
+            transition: 'all 0.15s',
           }}
         >
-          ⚡ {bullish ? 'BUY' : 'SELL'} {symbol} — Trade This Pattern
+          {alertSet ? '🔔 Alert Set' : '🔔'}
         </button>
-      )}
+      </div>
     </div>
   );
 };
@@ -158,12 +177,14 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
 
 const PatternDetector: React.FC = () => {
   const navigate = useNavigate();
-  const [symbol, setSymbol]     = useState<string>('XAU/USD');
+  const toast    = useToast();
+  const [symbol, setSymbol]       = useState<string>('XAU/USD');
   const [timeframe, setTimeframe] = useState<string>('1h');
-  const [minConf, setMinConf]   = useState<number>(0.5);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
-  const [data, setData]         = useState<PatternResponse | null>(null);
+  const [minConf, setMinConf]     = useState<number>(0.5);
+  const [loading, setLoading]     = useState(false);
+  const [error, setError]         = useState<string | null>(null);
+  const [data, setData]           = useState<PatternResponse | null>(null);
+  const [alertedKeys, setAlertedKeys] = useState<Set<string>>(new Set());
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -195,10 +216,31 @@ const PatternDetector: React.FC = () => {
           direction: p.direction === 'bullish' ? 'BUY' : 'SELL',
           stop_loss: p.stop_loss,
           take_profit: p.target_price,
-        }
-      }
+        },
+      },
     });
   };
+
+  const handleAlert = useCallback(async (p: DetectedPattern) => {
+    const key = `${p.pattern_type}-${p.start_index}`;
+    if (alertedKeys.has(key)) return;
+    try {
+      await signalsApi.setAlert({
+        symbol,
+        timeframe,
+        pattern_type: p.pattern_type,
+        direction: p.direction,
+        confidence_threshold: p.confidence,
+        entry_price: p.entry_price,
+        target_price: p.target_price,
+        stop_loss: p.stop_loss,
+      });
+      setAlertedKeys(prev => new Set([...prev, key]));
+      toast.success(`Alert set for ${formatPatternName(p.pattern_type)} on ${symbol}`);
+    } catch {
+      toast.error('Failed to set alert. Check your connection.');
+    }
+  }, [alertedKeys, symbol, timeframe, toast]);
 
   // Auto-scan on mount and when params change
   useEffect(() => { scan(); }, [scan]);
@@ -215,18 +257,11 @@ const PatternDetector: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
-              📈 AI Charts
-            </button>
-            <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
-              🤖 AI Strategy
-            </button>
-            <button onClick={() => navigate('/walk-forward')} style={s.navBtn}>
-              📊 Walk-Forward
-            </button>
-            <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
-              🛡 Risk Calc
-            </button>
+            <Link to="/ai-chart-dashboard" style={s.navLink}>📈 AI Charts</Link>
+            <Link to="/ai-strategy"        style={s.navLink}>🤖 AI Strategy</Link>
+            <Link to="/walk-forward"       style={s.navLink}>📊 Walk-Forward</Link>
+            <Link to="/risk-calculator"    style={s.navLink}>🛡 Risk Calc</Link>
+            <Link to="/correlation"        style={s.navLink}>📊 Correlation</Link>
           </div>
         }
       />
@@ -319,9 +354,19 @@ const PatternDetector: React.FC = () => {
               <strong style={{ color: '#94a3b8' }}>{data.symbol}</strong> / {timeframe}
             </div>
             <div style={s.grid}>
-              {data.patterns.map((p, i) => (
-                <PatternCard key={`${p.pattern_type}-${p.start_index}-${i}`} pattern={p} symbol={symbol} onTrade={handleTrade} />
-              ))}
+              {data.patterns.map((p, i) => {
+                const key = `${p.pattern_type}-${p.start_index}`;
+                return (
+                  <PatternCard
+                    key={`${key}-${i}`}
+                    pattern={p}
+                    symbol={symbol}
+                    onTrade={handleTrade}
+                    onAlert={handleAlert}
+                    alertSet={alertedKeys.has(key)}
+                  />
+                );
+              })}
             </div>
           </div>
         )
@@ -387,6 +432,11 @@ const s: Record<string, React.CSSProperties> = {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
     color: '#94a3b8', cursor: 'pointer', fontSize: 12, fontWeight: 600,
     padding: '6px 14px', fontFamily: 'inherit',
+  },
+  navLink: {
+    background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
+    color: '#94a3b8', fontSize: 12, fontWeight: 600,
+    padding: '6px 14px', textDecoration: 'none', display: 'inline-block',
   },
 };
 
