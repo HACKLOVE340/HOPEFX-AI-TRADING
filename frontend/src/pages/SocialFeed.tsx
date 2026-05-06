@@ -181,6 +181,7 @@ const SocialFeed: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Community Signal Feed"
+        icon="📡"
         subtitle="High-confidence AI signals from the community (≥70% confidence)"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -293,7 +294,7 @@ const SocialFeed: React.FC = () => {
                 💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
               </button>
               <button
-                onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol, direction: item.direction } } })}
+                onClick={() => { window.location.href = '/trade'; }}
                 style={{
                   marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
                   background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',

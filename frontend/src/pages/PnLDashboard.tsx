@@ -399,6 +399,7 @@ const PnLDashboard: React.FC = () => {
 
       <PageHeader
         title="P&L Dashboard"
+        icon="💹"
         subtitle="Real fills from the live engine — no synthetic data"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

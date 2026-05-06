@@ -353,6 +353,7 @@ const SubAccounts: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Sub-Accounts & Teams"
+        icon="👥"
         subtitle="Manage trading accounts, risk limits, and team access across brokers."
         breadcrumbs={[
           { label: 'Home',    href: '/home' },
@@ -366,10 +367,10 @@ const SubAccounts: React.FC = () => {
         }
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => navigate('/trade')}
-              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <Link to="/trade"
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
               ⚡ Trade
-            </button>
+            </Link>
             <button onClick={() => setShowCreateAcc(true)} style={s.primaryBtn}>+ Sub-Account</button>
             <button onClick={() => setShowCreateTeam(true)} style={s.secondaryBtn}>+ Team</button>
           </div>

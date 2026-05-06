@@ -301,6 +301,7 @@ const Settings: React.FC = () => {
       <div style={S.page}>
         <PageHeader
           title="Settings"
+        icon="⚙️"
           subtitle="Manage your account, trading preferences, integrations, and platform configuration."
           breadcrumbs={[
             { label: 'Home',    href: '/home' },

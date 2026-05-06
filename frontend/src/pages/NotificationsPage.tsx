@@ -178,7 +178,7 @@ const NotificationsPage: React.FC = () => {
           icon="🔔"
           title="No notifications"
           description={filter === 'unread' ? 'No unread notifications — you\'re all caught up!' : 'Notifications for trades, alerts, and system events will appear here.'}
-          action={filter === 'unread' ? { label: 'View all', onClick: () => setFilter('all') } : undefined}
+          action={filter === 'unread' ? <button onClick={() => setFilter('all')} style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>View all</button> : undefined}
         />
       )}
       {items.map(n => (
@@ -230,7 +230,7 @@ const NotificationsPage: React.FC = () => {
               )}
               {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
                 <button
-                  onClick={e => { e.stopPropagation(); navigate('/trade'); }}
+                  onClick={e => e.stopPropagation()}
                   style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                 >
                   ⚡ Trade

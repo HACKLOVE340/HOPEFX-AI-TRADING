@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 import { Breadcrumb } from '../components/Breadcrumb';
+import { PageHeader } from '../components/PageHeader';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -188,11 +189,22 @@ const StatusPage: React.FC = () => {
 
   return (
     <div style={styles.page}>
-      {/* Breadcrumbs */}
-      <Breadcrumb items={[
-        { label: 'Home', href: '/home' },
-        { label: 'System Status' },
-      ]} style={{ marginBottom: 16 }} />
+      <PageHeader
+        title="System Status"
+        icon="🟢"
+        subtitle="Real-time health of all platform services"
+        breadcrumbs={[
+          { label: 'Home', href: '/home' },
+          { label: 'System Status' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/docs" style={{ padding: '6px 12px', background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.4)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📖 Docs</Link>
+            <Link to="/dashboard" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📊 Dashboard</Link>
+            <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻ Refresh</button>
+          </div>
+        }
+      />
 
       {/* Banner */}
       <div style={{

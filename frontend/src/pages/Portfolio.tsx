@@ -591,6 +591,7 @@ const Portfolio: React.FC = () => {
 
       <PageHeader
         title="Portfolio"
+        icon="💼"
         subtitle="Balances, equity curve, allocation, and trade history"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

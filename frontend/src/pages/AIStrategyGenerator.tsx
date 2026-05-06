@@ -271,6 +271,7 @@ const AIStrategyGenerator: React.FC = () => {
       )}
       <PageHeader
         title="AI Strategy Generator"
+        icon="🤖"
         subtitle="Describe your trading idea in plain English. The AI generates strategy code, runs a backtest, and deploys to paper trading."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

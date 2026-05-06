@@ -80,7 +80,7 @@ const COTHistoryChart: React.FC<{ history: { date: string; net: number }[] }> = 
       <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
       <Tooltip
         contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
-        formatter={(v: number) => [v.toLocaleString(), 'Net Long']}
+        formatter={(v: any) => [v.toLocaleString(), 'Net Long']}
         labelStyle={{ color: '#94a3b8' }}
       />
       <ReferenceLine y={0} stroke="#334155" />
@@ -154,6 +154,7 @@ const CorrelationDashboard: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Correlation & Sentiment"
+        icon="🔗"
         subtitle="Rolling correlations between gold, FX, equities, and macro indicators."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -314,12 +315,12 @@ const CorrelationDashboard: React.FC = () => {
               )}
               <div style={{ fontSize: 12, color: '#475569', marginTop: 12, lineHeight: 1.5 }}>{cot.note}</div>
               <div style={{ fontSize: 11, color: '#334155', marginTop: 6 }}>Source: {cot.source}</div>
-              <button
-                onClick={() => navigate('/trade', { state: { signal: { symbol: 'XAU/USD', direction: cot.sentiment === 'BULLISH' ? 'BUY' : 'SELL' } } })}
-                style={{ marginTop: 16, width: '100%', padding: '9px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', background: cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)', border: `1px solid ${cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`, color: cot.sentiment === 'BULLISH' ? '#4ade80' : '#f87171' }}
+              <Link
+                to="/trade"
+                style={{ marginTop: 16, display: 'block', textAlign: 'center', padding: '9px 0', borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: 'none', background: cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)', border: `1px solid ${cot.sentiment === 'BULLISH' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`, color: cot.sentiment === 'BULLISH' ? '#4ade80' : '#f87171' }}
               >
                 ⚡ Trade XAU/USD — {cot.sentiment}
-              </button>
+              </Link>
             </div>
           )}
 

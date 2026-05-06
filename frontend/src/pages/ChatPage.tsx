@@ -311,6 +311,7 @@ const ChatPage: React.FC = () => {
       <div style={{ padding: '10px 20px 0', borderBottom: '1px solid #1e293b', background: '#0d1421', flexShrink: 0 }}>
         <PageHeader
           title="💬 Chat"
+        icon="💬"
           subtitle="Community rooms, support, and team messaging"
           breadcrumbs={[
             { label: 'Dashboard', href: '/dashboard' },
@@ -411,18 +412,18 @@ const ChatPage: React.FC = () => {
               )}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => navigate('/trade')}
-                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '5px 10px' }}>
+              <Link to="/trade"
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, color: '#60a5fa', fontSize: 11, fontWeight: 700, textDecoration: 'none', padding: '5px 10px', display: 'inline-flex', alignItems: 'center' }}>
                 ⚡ Trade
-              </button>
-              <button onClick={() => navigate('/signals')}
-                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 6, color: '#a78bfa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '5px 10px' }}>
+              </Link>
+              <Link to="/signals"
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 6, color: '#a78bfa', fontSize: 11, fontWeight: 700, textDecoration: 'none', padding: '5px 10px', display: 'inline-flex', alignItems: 'center' }}>
                 📡 Signals
-              </button>
-              <button onClick={() => navigate('/teams')}
-                style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: 6, color: '#06b6d4', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '5px 10px' }}>
+              </Link>
+              <Link to="/teams"
+                style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: 6, color: '#06b6d4', fontSize: 11, fontWeight: 700, textDecoration: 'none', padding: '5px 10px', display: 'inline-flex', alignItems: 'center' }}>
                 👥 Teams
-              </button>
+              </Link>
             </div>
           </div>
         )}

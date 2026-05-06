@@ -259,6 +259,7 @@ const WalkForward: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Walk-Forward Validation"
+        icon="📈"
         subtitle={`${data.strategy ?? '—'} · ${data.symbol ?? '—'} · ${(data.folds ?? []).length} folds`}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

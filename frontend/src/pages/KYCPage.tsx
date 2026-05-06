@@ -200,6 +200,7 @@ const KYCPage: React.FC = () => {
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 20px' }}>
       <PageHeader
         title="Identity Verification (KYC)"
+        icon="🪪"
         subtitle="Complete verification to unlock full trading features and higher withdrawal limits."
         breadcrumbs={[
           { label: 'Home',    href: '/home' },

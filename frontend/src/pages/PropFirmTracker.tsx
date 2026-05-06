@@ -285,6 +285,7 @@ const PropFirmTracker: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Prop Firm Challenge Tracker"
+        icon="🛡️"
         subtitle="Monitor drawdown limits, daily loss caps, and profit targets in real time."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

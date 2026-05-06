@@ -620,7 +620,8 @@ const Dashboard: React.FC = () => {
       <PageHeader
         title="Dashboard"
         subtitle="Real-time trading overview"
-        breadcrumbs={[{ label: 'Dashboard' }]}
+        icon="📊"
+        breadcrumbs={[{ label: "Dashboard" }]}
         badge={<WsBadge />}
         actions={
           <Link

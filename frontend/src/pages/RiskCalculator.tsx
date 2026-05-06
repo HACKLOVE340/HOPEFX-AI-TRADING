@@ -287,6 +287,7 @@ const RiskCalculator: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Risk / Reward Calculator"
+        icon="🧮"
         subtitle="Calculate position size, pip value, and margin before every trade."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

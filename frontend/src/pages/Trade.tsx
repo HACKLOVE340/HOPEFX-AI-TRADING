@@ -471,6 +471,7 @@ const Trade: React.FC = () => {
 
       <PageHeader
         title="Trade"
+        icon="💹"
         subtitle="Real-time execution — market, limit and stop orders"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

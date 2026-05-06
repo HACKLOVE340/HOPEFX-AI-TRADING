@@ -370,6 +370,7 @@ const SecurityDashboard: React.FC = () => {
     <div style={pageStyle}>
       <PageHeader
         title="Security Operations"
+        icon="🛡️"
         subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring and incident response."
         breadcrumbs={[
           { label: 'Home',        href: '/home' },

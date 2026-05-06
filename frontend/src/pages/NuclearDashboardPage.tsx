@@ -28,6 +28,7 @@ const NuclearDashboardPage: React.FC = () => (
     }}>
       <PageHeader
         title="☢ Nuclear AI Dashboard"
+        icon="☢️"
         subtitle="Real-time nuclear risk intelligence · geopolitical threat scoring · XAU/USD safe-haven impact"
         breadcrumbs={[
           { label: 'Dashboard',    href: '/dashboard' },

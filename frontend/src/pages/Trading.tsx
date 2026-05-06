@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -158,14 +158,14 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
       )}
 
       {/* Quick nav */}
-      <button onClick={() => navigate('/journal')}
-        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+      <Link to="/journal"
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors" style={{ textDecoration: 'none' }}>
         📓 Journal
-      </button>
-      <button onClick={() => navigate('/risk-calculator')}
-        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
+      </Link>
+      <Link to="/risk-calculator"
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors" style={{ textDecoration: 'none' }}>
         🛡 Risk Calc
-      </button>
+      </Link>
 
       {/* WS status */}
       <span className={cn(

@@ -192,6 +192,7 @@ const Wallet: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Wallet & Payments"
+        icon="💰"
         subtitle="Manage your balance, transactions, subscriptions, and payment methods"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -199,14 +200,14 @@ const Wallet: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => navigate('/trade')}
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer' }}>
+            <Link to="/trade"
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '8px 16px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
               ⚡ Trade
-            </button>
-            <button onClick={() => navigate('/upgrade')}
-              style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, color: '#f59e0b', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer' }}>
+            </Link>
+            <Link to="/upgrade"
+              style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, color: '#f59e0b', fontSize: 12, fontWeight: 700, padding: '8px 16px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
               ⭐ Upgrade
-            </button>
+            </Link>
           </div>
         }
       />

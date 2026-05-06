@@ -249,6 +249,7 @@ const PatternDetector: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Pattern Detector"
+        icon="🔍"
         subtitle="AI-powered chart pattern recognition for XAU/USD and major instruments"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

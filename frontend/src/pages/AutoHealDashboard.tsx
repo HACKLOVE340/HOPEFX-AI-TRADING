@@ -454,6 +454,7 @@ const AutoHealDashboard: React.FC = () => {
     <div style={pageStyle}>
       <PageHeader
         title="Auto-Heal & Antivirus"
+        icon="🩺"
         subtitle="Code integrity monitor · Self-healing engine · Malware scanner"
         breadcrumbs={[
           { label: 'Home',        href: '/home' },

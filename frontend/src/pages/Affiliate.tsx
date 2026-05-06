@@ -26,6 +26,14 @@ const LEVEL_RATES: Record<string,string>  = { bronze:'10%', silver:'15%', gold:'
 const fmt = (n:number,d=2) => n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtUSD = (n:number) => '$'+fmt(n);
 function extractErr(err:unknown,fb:string):string { const d=(err as {response?:{data?:{detail?:string}}})?.response?.data?.detail; return d??(err instanceof Error?err.message:fb); }
+
+const st: Record<string, React.CSSProperties> = {
+  badge:       { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: '0.04em' },
+  metricCard:  { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 10, padding: '16px 20px', flex: 1 },
+  metricValue: { fontSize: 22, fontWeight: 800, color: '#f8fafc', marginBottom: 4 },
+  metricLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' },
+  metricSub:   { fontSize: 12, color: '#94a3b8', marginTop: 2 },
+};
 const statusBadge=(s:string)=>{ const m:Record<string,{bg:string;color:string}>={pending:{bg:'#1e3a5f',color:'#60a5fa'},converted:{bg:'#14532d',color:'#4ade80'},paid:{bg:'#1a2e1a',color:'#22c55e'},expired:{bg:'#2d1b1b',color:'#f87171'},cancelled:{bg:'#2d1b1b',color:'#f87171'},active:{bg:'#14532d',color:'#4ade80'}}; const c=m[s]??{bg:'#1e293b',color:'#94a3b8'}; return <span style={{...st.badge,background:c.bg,color:c.color}}>{s}</span>; };
 const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value,sub})=>(<div style={st.metricCard}><div style={st.metricValue}>{value}</div><div style={st.metricLabel}>{label}</div>{sub&&<div style={st.metricSub}>{sub}</div>}</div>);
 
@@ -117,7 +125,8 @@ const Affiliate:React.FC=()=>{
 
   if(!userId)return(
     <div style={{maxWidth:900,margin:'0 auto',padding:'32px 16px'}}>
-      <PageHeader title="Affiliate Program" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}/>
+      <PageHeader title="Affiliate Program"
+        icon="🤝" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}/>
       <EmptyState icon="🔒" title="Sign in required" description="Please log in to view your affiliate dashboard."/>
     </div>
   );
@@ -320,7 +329,7 @@ const Affiliate:React.FC=()=>{
                       <CartesianGrid strokeDasharray="3 3" stroke="#0f172a"/>
                       <XAxis dataKey="period" tick={{fontSize:9,fill:'#64748b'}} tickLine={false} axisLine={false}/>
                       <YAxis tick={{fontSize:9,fill:'#64748b'}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>`$${v}`}/>
-                      <Tooltip contentStyle={{background:'#0f172a',border:'1px solid #334155',borderRadius:6,fontSize:11}} formatter={(v:number)=>[fmtUSD(v),'Commission']} labelStyle={{color:'#94a3b8'}}/>
+                      <Tooltip contentStyle={{background:'#0f172a',border:'1px solid #334155',borderRadius:6,fontSize:11}} formatter={(v:any)=>[fmtUSD(v as number),'Commission']} labelStyle={{color:'#94a3b8'}}/>
                       <Bar dataKey="amount" radius={[3,3,0,0]} fill="#4ade80"/>
                     </BarChart>
                   </ResponsiveContainer>

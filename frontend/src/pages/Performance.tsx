@@ -302,6 +302,7 @@ const Performance: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Performance"
+        icon="🏆"
         subtitle="Live trading results — updated continuously"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

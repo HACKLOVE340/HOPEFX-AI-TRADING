@@ -273,6 +273,7 @@ const ReplayPage: React.FC = () => {
     <div style={{ padding: '24px 28px', maxWidth: 1300, margin: '0 auto' }}>
       <PageHeader
         title="Market Replay"
+        icon="⏪"
         subtitle="Bar-by-bar historical replay with live strategy testing — enterprise tier"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

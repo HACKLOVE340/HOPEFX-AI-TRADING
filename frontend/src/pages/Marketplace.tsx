@@ -65,7 +65,7 @@ const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = 
   const p = strategy.performance;
   // Build sparkline data from equity_curve if available, else synthesise from return
   const sparkData: number[] = (strategy as unknown as { equity_curve?: number[] }).equity_curve
-    ?? (p ? Array.from({ length: 12 }, (_, i) => 10000 * (1 + (p.return_pct / 100) * (i / 11))) : []);
+    ?? (p ? Array.from({ length: 12 }, (_, i) => 10000 * (1 + ((p.total_return_pct ?? 0) / 100) * (i / 11))) : []);
   return (
     <div
       onClick={()=>onSelect(strategy)}
@@ -146,7 +146,7 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
   const p=strategy.performance;
   const [confirmOpen,setConfirmOpen]=useState(false);
   const sparkData: number[] = (strategy as unknown as { equity_curve?: number[] }).equity_curve
-    ?? (p ? Array.from({length:12},(_,i)=>10000*(1+(p.total_return_pct/100)*(i/11))) : []);
+    ?? (p ? Array.from({length:12},(_,i)=>10000*(1+((p.total_return_pct??0)/100)*(i/11))) : []);
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
       <div style={{background:'#0f172a',border:'1px solid #334155',borderRadius:16,padding:24,width:'100%',maxWidth:680,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 25px 50px rgba(0,0,0,0.5)'}} onClick={e=>e.stopPropagation()}>
@@ -320,6 +320,7 @@ const Marketplace: React.FC = () => {
     <div style={{maxWidth:1100,margin:'0 auto',padding:'32px 16px',color:'#f1f5f9',minHeight:'100vh'}}>
       <PageHeader
         title="Strategy Marketplace"
+        icon="🛒"
         subtitle={stats ? `${stats.total_strategies.toLocaleString()} strategies · ${stats.total_subscribers.toLocaleString()} subscribers` : 'Browse, purchase, and review AI trading strategies'}
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -328,9 +329,9 @@ const Marketplace: React.FC = () => {
         badge={<span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:20,background:'rgba(59,130,246,0.15)',color:'#60a5fa',border:'1px solid rgba(59,130,246,0.3)'}}>LIVE</span>}
         actions={
           <div style={{display:'flex',gap:8}}>
-            <button onClick={()=>navigate('/copy-trading')} style={{padding:'7px 14px',background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:8,color:'#34d399',fontSize:12,fontWeight:600,cursor:'pointer'}}>🔁 Copy Trading</button>
-            <button onClick={()=>navigate('/signals')} style={{padding:'7px 14px',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:8,color:'#a78bfa',fontSize:12,fontWeight:600,cursor:'pointer'}}>📡 Signals</button>
-            <button onClick={()=>navigate('/ai-strategy')} style={{padding:'8px 18px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:700,cursor:'pointer'}}>🤖 Build Strategy</button>
+            <Link to="/copy-trading" style={{padding:'7px 14px',background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:8,color:'#34d399',fontSize:12,fontWeight:600,textDecoration:'none'}}>🔁 Copy Trading</Link>
+            <Link to="/signals" style={{padding:'7px 14px',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:8,color:'#a78bfa',fontSize:12,fontWeight:600,textDecoration:'none'}}>📡 Signals</Link>
+            <Link to="/ai-strategy" style={{padding:'8px 18px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:700,textDecoration:'none'}}>🤖 Build Strategy</Link>
           </div>
         }
       />
@@ -387,7 +388,7 @@ const Marketplace: React.FC = () => {
             <div style={{display:'flex',justifyContent:'center',padding:'64px 0'}}><Spinner size="lg"/></div>
           ) : !loadErr && visible.length===0 ? (
             <EmptyState icon="🔍" title="No strategies found" description="Try adjusting your search or category filters."
-              action={{label:'Clear filters',onClick:()=>{setSearch('');setCategory('all');}}}/>
+              action={<button onClick={()=>{setSearch('');setCategory('all');}} style={{padding:'8px 18px',background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}}>Clear filters</button>}/>
           ) : (
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:16}}>
               {visible.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}
@@ -400,7 +401,7 @@ const Marketplace: React.FC = () => {
         <div>
           {myListings.length===0 ? (
             <EmptyState icon="📦" title="No listings yet" description="Build and publish your own AI trading strategy to the marketplace."
-              action={{label:'Build a strategy',onClick:()=>navigate('/ai-strategy')}}/>
+              action={<Link to="/ai-strategy" style={{padding:'8px 18px',background:'#3b82f6',borderRadius:8,color:'#fff',fontSize:13,fontWeight:600,textDecoration:'none',display:'inline-block'}}>🤖 Build Strategy</Link>}/>
           ) : (
             <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:16}}>
               {myListings.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}

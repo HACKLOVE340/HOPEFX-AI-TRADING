@@ -431,11 +431,12 @@ const WhitelabelAdmin: React.FC = () => {
             setPreview(updated);
           }}
         />
-      )}}
+      )}
 
       {/* Header */}
       <PageHeader
         title="Whitelabel Tenants"
+        icon="🏷️"
         subtitle="Manage prop-firm and reseller branded deployments."
         breadcrumbs={[
           { label: 'Home',        href: '/home' },

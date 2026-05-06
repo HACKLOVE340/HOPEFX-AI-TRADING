@@ -68,6 +68,7 @@ const Leaderboard: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Global Leaderboard"
+        icon="🥇"
         subtitle="Top traders ranked by performance. Click a trader to copy their strategy."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

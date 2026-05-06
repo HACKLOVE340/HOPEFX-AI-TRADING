@@ -18,6 +18,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useStore } from '../store';
 import {
   eliteApi,
   type SupportTicketPayload,
@@ -632,7 +633,7 @@ const EliteDashboard: React.FC = () => {
           icon="⭐"
           title="Elite Plan Required"
           description="Dedicated support, custom development, and sub-accounts are exclusive to Elite subscribers ($10,000/mo)."
-          action={{ label: 'Upgrade to Elite', onClick: () => window.location.href = '/checkout' }}
+          action={<Link to="/checkout" style={{ padding: '8px 18px', background: '#f59e0b', borderRadius: 8, color: '#000', fontSize: 13, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>⭐ Upgrade to Elite</Link>}
         />
         <div style={{ textAlign: 'center', marginTop: 12 }}>
           <Link to="/pricing" style={{ color: '#94a3b8', fontSize: 13, textDecoration: 'none', padding: '8px 18px', border: '1px solid #334155', borderRadius: 6, display: 'inline-block' }}>

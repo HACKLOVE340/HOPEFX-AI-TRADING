@@ -303,6 +303,7 @@ const GeopoliticalRiskPage: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Geopolitical Risk Intelligence"
+        icon="🌍"
         subtitle="Live conflict, sanctions, nuclear, infrastructure and instability data — XAU/USD safe-haven impact"
         breadcrumbs={[
           { label: 'Dashboard',    href: '/dashboard' },

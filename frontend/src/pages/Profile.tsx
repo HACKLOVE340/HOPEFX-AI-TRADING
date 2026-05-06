@@ -141,7 +141,8 @@ const Profile: React.FC = () => {
 
   if (loading) return (
     <div style={s.page}>
-      <PageHeader title="Profile" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Profile'}]}/>
+      <PageHeader title="Profile"
+        icon="👤" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Profile'}]}/>
       <div style={{display:'flex',justifyContent:'center',padding:'60px 0'}}><Spinner size="lg"/></div>
     </div>
   );
@@ -160,6 +161,7 @@ const Profile: React.FC = () => {
   return (
     <div style={s.page}>
       <PageHeader
+        icon="👤"
         title={isOwn ? 'My Profile' : `${profile.display_name || profile.username}'s Profile`}
         subtitle={isOwn ? 'Manage your public trading profile' : `@${profile.username}`}
         breadcrumbs={[
@@ -168,14 +170,14 @@ const Profile: React.FC = () => {
         ]}
         actions={
           <div style={{display:'flex',gap:8}}>
-            <button onClick={()=>navigate('/trade')}
-              style={{padding:'7px 12px',background:'rgba(59,130,246,0.12)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:7,color:'#60a5fa',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+            <Link to="/trade"
+              style={{padding:'7px 12px',background:'rgba(59,130,246,0.12)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:7,color:'#60a5fa',fontSize:12,fontWeight:700,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:4}}>
               ⚡ Trade
-            </button>
-            <button onClick={()=>navigate('/leaderboard')}
-              style={{padding:'7px 12px',background:'rgba(245,158,11,0.12)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:7,color:'#f59e0b',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+            </Link>
+            <Link to="/leaderboard"
+              style={{padding:'7px 12px',background:'rgba(245,158,11,0.12)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:7,color:'#f59e0b',fontSize:12,fontWeight:700,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:4}}>
               🏆 Leaderboard
-            </button>
+            </Link>
           </div>
         }
       />
@@ -226,14 +228,14 @@ const Profile: React.FC = () => {
           {avatarErr && <div style={s.inlineError}>{avatarErr}</div>}
         </div>
         <div style={s.headerActions}>
-          <button onClick={() => navigate('/trade')}
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <Link to="/trade"
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             ⚡ Trade
-          </button>
-          <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          </Link>
+          <Link to="/leaderboard"
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             🏆 Leaderboard
-          </button>
+          </Link>
           {isOwn ? (
             <>
               <Link
@@ -302,17 +304,16 @@ const Profile: React.FC = () => {
             icon="📦"
             title="No strategies yet"
             description={isOwn ? 'Build and publish your first AI trading strategy.' : 'This trader has no published strategies.'}
-            action={isOwn ? {label:'Build a strategy',onClick:()=>navigate('/ai-strategy')} : undefined}
+            action={isOwn ? <Link to="/ai-strategy" style={{padding:'8px 18px',background:'#3b82f6',borderRadius:8,color:'#fff',fontSize:13,fontWeight:600,textDecoration:'none',display:'inline-block'}}>🤖 Build Strategy</Link> : undefined}
           />
         ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {strategies.map(str=>(
-              <div key={str.strategy_id} style={{...s.stratRow,cursor:'pointer'}}
-                onClick={()=>navigate('/marketplace')}>
+              <Link key={str.strategy_id} to="/marketplace" style={{...s.stratRow,cursor:'pointer',textDecoration:'none',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
                 <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers.toLocaleString()} subscribers</span>
                 <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Math.round(str.rating ?? 0))} {(str.rating ?? 0).toFixed(1)}</span>
-              </div>
+              </Link>
             ))}
           </div>
         )}

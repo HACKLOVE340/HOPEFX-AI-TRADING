@@ -378,6 +378,7 @@ const WatchlistPage: React.FC = () => {
 
       <PageHeader
         title="Watchlist"
+        icon="👁️"
         subtitle="Live prices. Drag to reorder. Click symbol to chart."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

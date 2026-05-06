@@ -189,6 +189,7 @@ const CustomIndicators: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Custom Indicator Builder"
+        icon="📐"
         subtitle="Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

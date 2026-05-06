@@ -44,6 +44,7 @@ const SystemReliability: React.FC = () => (
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <PageHeader
           title="System Reliability Dashboard"
+        icon="🔬"
           subtitle="Real-time end-to-end connectivity, OTel tracing, self-test suite, environment audit, and system metrics for every platform component."
           breadcrumbs={[
             { label: 'Home',        href: '/home' },

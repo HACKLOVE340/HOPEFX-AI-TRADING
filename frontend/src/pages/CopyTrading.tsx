@@ -227,6 +227,7 @@ const CopyTrading: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Copy Trading Marketplace"
+        icon="🔁"
         subtitle="Mirror top traders automatically. Allocate capital and start earning."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -268,7 +269,7 @@ const CopyTrading: React.FC = () => {
                     🔍 Browse Traders
                   </button>
                   <button
-                    onClick={() => navigate('/leaderboard')}
+                    onClick={() => { window.location.href = '/leaderboard'; }}
                     style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     🏆 Leaderboard

@@ -188,6 +188,7 @@ const ABTesting: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Strategy A/B Testing"
+        icon="⚗️"
         subtitle="Run two strategies in parallel on paper. Auto-select winner after N days."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

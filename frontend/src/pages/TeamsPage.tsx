@@ -266,7 +266,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis dataKey="date" tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fontSize: 9, fill: '#64748b' }} tickLine={false} axisLine={false} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`$${v.toFixed(2)}`, 'P&L']} labelStyle={{ color: '#94a3b8' }} />
+                    <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }} formatter={(v: any) => [`$${v.toFixed(2)}`, 'P&L']} labelStyle={{ color: '#94a3b8' }} />
                     <Area type="monotone" dataKey="pnl" stroke={color} strokeWidth={2} fill="url(#teamPnlGrad)" dot={false} />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -413,7 +413,7 @@ const TeamsPage: React.FC = () => {
               icon="👥"
               title="No teams yet"
               description="Create a team to collaborate with other traders on shared strategies and P&L."
-              action={{ label: '+ New Team', onClick: () => setShowCreate(true) }}
+              action={<button onClick={() => setShowCreate(true)} style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>+ New Team</button>}
             />
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

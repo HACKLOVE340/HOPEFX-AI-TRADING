@@ -294,6 +294,7 @@ const EconomicCalendar: React.FC = () => {
     <div style={s.page}>
       <PageHeader
         title="Economic Calendar"
+        icon="📅"
         subtitle="Upcoming market-moving events. Red = high impact on gold/USD."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },

@@ -290,7 +290,7 @@ const SuperAdminDashboard: React.FC = () => {
       if (engineHealth?.kill_switch_active) {
         await superadminApi.resumeTrading?.();
       } else {
-        await superadminApi.killSwitch?.();
+        await superadminApi.killSwitch?.(true);
       }
       setShowKillConfirm(false);
     } catch { setKillErr('Kill switch toggle failed'); }
