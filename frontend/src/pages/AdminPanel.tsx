@@ -16,7 +16,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi';
+import { api, adminApi } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -88,13 +88,16 @@ const fmtDate = (iso: string) => {
   }
 };
 
-const severityColor = (sev: string) =>
-  sev === 'critical' ? '#f87171' : sev === 'warning' ? '#fbbf24' : '#60a5fa';
+const severityColor = (sev: string | undefined | null) => {
+  const s = sev ?? '';
+  return s === 'critical' ? '#f87171' : s === 'warning' ? '#fbbf24' : '#60a5fa';
+};
 
-const eventColor = (type: string) => {
-  if (type.includes('fail') || type.includes('ban') || type.includes('block')) return '#f87171';
-  if (type.includes('warn') || type.includes('withdraw')) return '#fbbf24';
-  if (type.includes('trade') || type.includes('signal')) return '#60a5fa';
+const eventColor = (type: string | undefined | null) => {
+  const t = type ?? '';
+  if (t.includes('fail') || t.includes('ban') || t.includes('block')) return '#f87171';
+  if (t.includes('warn') || t.includes('withdraw')) return '#fbbf24';
+  if (t.includes('trade') || t.includes('signal')) return '#60a5fa';
   return '#94a3b8';
 };
 
@@ -318,15 +321,77 @@ const AdminPanel: React.FC = () => {
     setError(null);
     try {
       const [ovRes, auditRes, alertsRes] = await Promise.allSettled([
-        api.get<AdminOverview>('/admin/overview'),
-        api.get<{ events: AuditEvent[] }>('/admin/audit-log?limit=8'),
-        api.get<{ alerts: AdminAlert[] }>('/admin/alerts'),
+        adminApi.overview(),
+        adminApi.auditLog({ limit: 8 }),
+        adminApi.alerts(),
       ]);
       if (!mountedRef.current) return;
-      if (ovRes.status === 'fulfilled') setOverview(ovRes.value.data);
-      if (auditRes.status === 'fulfilled') setAuditEvents(auditRes.value.data.events ?? []);
-      if (alertsRes.status === 'fulfilled') setAlerts(alertsRes.value.data.alerts ?? []);
-      if (ovRes.status === 'rejected') setError('Failed to load admin overview.');
+
+      if (ovRes.status === 'fulfilled') {
+        const d = ovRes.value.data as Record<string, unknown>;
+        // Backend may return nested { data: {...} } or flat object
+        const ov = (d && typeof d === 'object' && 'data' in d && d.data && typeof d.data === 'object')
+          ? d.data as Record<string, unknown>
+          : d;
+        setOverview({
+          total_users:           Number(ov.total_users ?? 0),
+          active_users_24h:      Number(ov.active_users_24h ?? 0),
+          total_trades_today:    Number(ov.total_trades_today ?? 0),
+          open_positions:        Number(ov.open_positions ?? 0),
+          revenue_today_usd:     Number(ov.revenue_today_usd ?? 0),
+          revenue_mtd_usd:       Number(ov.revenue_mtd_usd ?? 0),
+          platform_uptime_pct:   Number(ov.platform_uptime_pct ?? 100),
+          active_subscriptions:  Number(ov.active_subscriptions ?? 0),
+          pending_withdrawals:   Number(ov.pending_withdrawals ?? 0),
+          flagged_accounts:      Number(ov.flagged_accounts ?? 0),
+          ml_model_accuracy:     Number(ov.ml_model_accuracy ?? 0),
+          ws_connections:        Number(ov.ws_connections ?? 0),
+        });
+      } else {
+        setError('Failed to load admin overview.');
+      }
+
+      if (auditRes.status === 'fulfilled') {
+        const d = auditRes.value.data as Record<string, unknown>;
+        const events = Array.isArray(d)
+          ? d
+          : Array.isArray(d.events)
+          ? d.events
+          : [];
+        setAuditEvents((events as unknown[]).map((e) => {
+          const ev = (e ?? {}) as Record<string, unknown>;
+          return {
+            event_id:   String(ev.event_id ?? ev.id ?? Math.random()),
+            user_id:    String(ev.user_id ?? ''),
+            event_type: String(ev.event_type ?? ev.type ?? ''),
+            detail:     String(ev.detail ?? ev.message ?? ''),
+            ip_address: String(ev.ip_address ?? ev.ip ?? ''),
+            created_at: String(ev.created_at ?? ev.timestamp ?? new Date().toISOString()),
+          } as AuditEvent;
+        }));
+      }
+
+      if (alertsRes.status === 'fulfilled') {
+        const d = alertsRes.value.data as Record<string, unknown>;
+        const alerts = Array.isArray(d)
+          ? d
+          : Array.isArray(d.alerts)
+          ? d.alerts
+          : Array.isArray(d.items)
+          ? d.items
+          : [];
+        setAlerts((alerts as unknown[]).map((a) => {
+          const al = (a ?? {}) as Record<string, unknown>;
+          return {
+            id:         String(al.id ?? Math.random()),
+            severity:   (al.severity ?? 'info') as AdminAlert['severity'],
+            title:      String(al.title ?? al.name ?? ''),
+            message:    String(al.message ?? al.detail ?? ''),
+            created_at: String(al.created_at ?? al.timestamp ?? new Date().toISOString()),
+            resolved:   Boolean(al.resolved),
+          } as AdminAlert;
+        }));
+      }
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       setError(err instanceof Error ? err.message : 'Unknown error');
@@ -386,12 +451,12 @@ const AdminPanel: React.FC = () => {
         <>
           {/* KPI Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16, padding: '0 24px 24px' }}>
-            <KpiCard label="Total Users"      value={overview ? overview.total_users.toLocaleString() : '—'}          sub={overview ? `${overview.active_users_24h} active (24h)` : undefined}                                accent="#3b82f6" />
-            <KpiCard label="Trades Today"     value={overview ? overview.total_trades_today.toLocaleString() : '—'}    sub={overview ? `${overview.open_positions} open positions` : undefined}                              accent="#22c55e" />
-            <KpiCard label="Revenue Today"    value={overview ? fmtUSD(overview.revenue_today_usd) : '—'}              sub={overview ? `MTD: ${fmtUSD(overview.revenue_mtd_usd)}` : undefined}                               accent="#f59e0b" />
-            <KpiCard label="Active Subs"      value={overview ? overview.active_subscriptions.toLocaleString() : '—'}  sub={overview ? `${overview.pending_withdrawals} pending withdrawals` : undefined}                    accent="#8b5cf6" />
-            <KpiCard label="Platform Uptime"  value={overview ? `${overview.platform_uptime_pct.toFixed(2)}%` : '—'}   sub={overview ? `${overview.ws_connections} WS connections` : undefined}                              accent="#06b6d4" />
-            <KpiCard label="ML Accuracy"      value={overview ? `${(overview.ml_model_accuracy * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? `⚠️ ${overview.flagged_accounts} flagged` : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
+            <KpiCard label="Total Users"      value={overview ? Number(overview.total_users).toLocaleString() : '—'}          sub={overview ? `${overview.active_users_24h} active (24h)` : undefined}                                accent="#3b82f6" />
+            <KpiCard label="Trades Today"     value={overview ? Number(overview.total_trades_today).toLocaleString() : '—'}    sub={overview ? `${overview.open_positions} open positions` : undefined}                              accent="#22c55e" />
+            <KpiCard label="Revenue Today"    value={overview ? fmtUSD(Number(overview.revenue_today_usd)) : '—'}              sub={overview ? `MTD: ${fmtUSD(Number(overview.revenue_mtd_usd))}` : undefined}                               accent="#f59e0b" />
+            <KpiCard label="Active Subs"      value={overview ? Number(overview.active_subscriptions).toLocaleString() : '—'}  sub={overview ? `${overview.pending_withdrawals} pending withdrawals` : undefined}                    accent="#8b5cf6" />
+            <KpiCard label="Platform Uptime"  value={overview ? `${Number(overview.platform_uptime_pct).toFixed(2)}%` : '—'}   sub={overview ? `${overview.ws_connections} WS connections` : undefined}                              accent="#06b6d4" />
+            <KpiCard label="ML Accuracy"      value={overview ? `${(Number(overview.ml_model_accuracy) * 100).toFixed(1)}%` : '—'} sub={overview && overview.flagged_accounts > 0 ? `⚠️ ${overview.flagged_accounts} flagged` : 'No flagged accounts'} accent={overview && overview.flagged_accounts > 0 ? '#f87171' : '#22c55e'} />
           </div>
 
           {/* Active Alerts */}
@@ -429,9 +494,9 @@ const AdminPanel: React.FC = () => {
             ) : auditEvents.map(ev => (
               <div key={ev.event_id} style={rowStyle}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: eventColor(ev.event_type), flexShrink: 0 }} />
-                <span style={{ fontSize: 11, fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type}</span>
-                <span style={{ flex: 1, color: '#94a3b8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail}</span>
-                <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{ev.ip_address}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: eventColor(ev.event_type), minWidth: 160, flexShrink: 0 }}>{ev.event_type || '—'}</span>
+                <span style={{ flex: 1, color: '#94a3b8', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.detail || '—'}</span>
+                <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{ev.ip_address || '—'}</span>
                 <span style={{ fontSize: 11, color: '#475569', flexShrink: 0 }}>{fmtDate(ev.created_at)}</span>
               </div>
             ))}
