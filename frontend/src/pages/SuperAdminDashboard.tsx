@@ -15,12 +15,14 @@
  */
 
 import React, { useState, Suspense, lazy, Component, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isSuperAdmin } from '../lib/subscription';
 import type { SuperAdminTab } from './superadmin/types';
 import { SuperAdminNavContext } from './superadmin/types';
 import { SAStyles, Spinner } from './superadmin/ui';
 import { superadminApi } from '../hooks/useApi';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 // ── Section error boundary ────────────────────────────────────────────────────
 
@@ -240,6 +242,15 @@ const SuperAdminDashboard: React.FC = () => {
       <SAStyles />
 
       <div style={styles.page}>
+        {/* ── Breadcrumbs ── */}
+        <div style={{ maxWidth: 1400, margin: '0 auto 12px' }}>
+          <Breadcrumb items={[
+            { label: 'Home',        href: '/home' },
+            { label: 'Admin Panel', href: '/admin' },
+            { label: 'Super Admin' },
+          ]} />
+        </div>
+
         {/* ── Page header ── */}
         <div style={styles.header}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -388,6 +399,40 @@ const SuperAdminDashboard: React.FC = () => {
               </Suspense>
             </SectionErrorBoundary>
           </main>
+        </div>
+
+        {/* ── Cross-links ── */}
+        <div style={{ maxWidth: 1400, margin: '24px auto 0', borderTop: '1px solid #1e293b', paddingTop: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+            Platform Sections
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+            {[
+              { icon: '🔧', label: 'Admin Panel',          desc: 'Platform overview & KPIs',         to: '/admin' },
+              { icon: '🔍', label: 'Audit Log',            desc: 'Full event trail with filters',    to: '/audit' },
+              { icon: '🛡️', label: 'Security Dashboard',  desc: 'Threats, IPs, lockdown controls',  to: '/security' },
+              { icon: '🩺', label: 'Auto-Heal',            desc: 'Self-healing & fix approvals',     to: '/auto-heal' },
+              { icon: '🏷️', label: 'Whitelabel Admin',     desc: 'Tenant branding & feature flags',  to: '/whitelabel' },
+              { icon: '🔬', label: 'System Reliability',   desc: 'OTel tracing & self-test suite',   to: '/system-reliability' },
+              { icon: '🟢', label: 'System Status',        desc: 'Component health & uptime',        to: '/status' },
+              { icon: '📖', label: 'Docs',                 desc: 'Platform documentation',           to: '/docs' },
+            ].map(({ icon, label, desc, to }) => (
+              <Link
+                key={to}
+                to={to}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0a1628', border: '1px solid #1e293b', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#0f1f35'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0a1628'; }}
+              >
+                <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
+                  <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{desc}</div>
+                </div>
+                <span style={{ marginLeft: 'auto', color: '#1e293b', fontSize: 16 }}>›</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </>
