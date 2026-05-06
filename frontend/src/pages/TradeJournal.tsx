@@ -13,8 +13,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
+import { useToast } from '../components/Toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -81,8 +82,124 @@ function pnlColor(pnl: number | null): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Tag autocomplete ──────────────────────────────────────────────────────────
+
+const TagAutocomplete: React.FC<{
+  value: string[];
+  onChange: (tags: string[]) => void;
+  suggestions: string[];
+}> = ({ value, onChange, suggestions }) => {
+  const [input, setInput]   = useState('');
+  const [open, setOpen]     = useState(false);
+  const filtered = suggestions.filter(
+    (s) => s.toLowerCase().includes(input.toLowerCase()) && !value.includes(s),
+  );
+
+  const add = (tag: string) => {
+    const t = tag.trim().toLowerCase();
+    if (t && !value.includes(t)) onChange([...value, t]);
+    setInput(''); setOpen(false);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 8px', background: '#0a0f1a', border: '1px solid #1e2d3d', borderRadius: 6, minHeight: 36 }}>
+        {value.map((t) => (
+          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#1e3a5f', color: '#60a5fa', borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>
+            {t}
+            <button onClick={() => onChange(value.filter((x) => x !== t))} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 12 }}>×</button>
+          </span>
+        ))}
+        <input
+          value={input}
+          onChange={(e) => { setInput(e.target.value); setOpen(true); }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && input) { e.preventDefault(); add(input); } }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Add tag…"
+          style={{ background: 'none', border: 'none', outline: 'none', color: '#94a3b8', fontSize: 12, minWidth: 80, flex: 1 }}
+        />
+      </div>
+      {open && filtered.length > 0 && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, marginTop: 2, maxHeight: 160, overflowY: 'auto' }}>
+          {filtered.map((s) => (
+            <button key={s} onMouseDown={() => add(s)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#1e2d3d'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Emotion calendar ──────────────────────────────────────────────────────────
+
+const EmotionCalendar: React.FC<{ trades: JournalEntry[] }> = ({ trades }) => {
+  // Build a map of date → dominant emotion
+  const byDate: Record<string, string[]> = {};
+  for (const t of trades) {
+    if (!t.emotion) continue;
+    const d = t.opened_at.slice(0, 10);
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d]!.push(t.emotion);
+  }
+
+  // Last 35 days
+  const days: { date: string; emotion: string | null }[] = [];
+  for (let i = 34; i >= 0; i--) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const emotions = byDate[key] ?? [];
+    // Pick most frequent
+    const freq: Record<string, number> = {};
+    for (const e of emotions) freq[e] = (freq[e] ?? 0) + 1;
+    const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    days.push({ date: key, emotion: dominant });
+  }
+
+  const EMOTION_COLOR: Record<string, string> = {
+    patient: '#00e676', disciplined: '#00e676',
+    fomo: '#ff1744', revenge: '#ff1744', overconfident: '#ff9800',
+    hesitant: '#fbbf24', fearful: '#f87171',
+  };
+
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>Emotion Calendar — last 35 days</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+        {days.map(({ date, emotion }) => (
+          <div
+            key={date}
+            title={`${date}${emotion ? ` — ${EMOTION_EMOJI[emotion] ?? ''} ${emotion}` : ''}`}
+            style={{
+              height: 22, borderRadius: 3,
+              background: emotion ? (EMOTION_COLOR[emotion] ?? '#334155') + '55' : '#0f172a',
+              border: `1px solid ${emotion ? (EMOTION_COLOR[emotion] ?? '#334155') + '88' : '#1e2d3d'}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 10, cursor: 'default',
+            }}
+          >
+            {emotion ? (EMOTION_EMOJI[emotion] ?? '') : ''}
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+        {Object.entries(EMOTION_EMOJI).map(([em, emoji]) => (
+          <span key={em} style={{ fontSize: 10, color: '#475569', display: 'flex', alignItems: 'center', gap: 3 }}>
+            {emoji} {em}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const TradeJournal: React.FC = () => {
-  const navigate = useNavigate();
+  const toast = useToast();
   const [tab, setTab]             = useState<Tab>('trades');
   const [trades, setTrades]       = useState<JournalEntry[]>([]);
   const [mistakes, setMistakes]   = useState<JournalEntry[]>([]);
@@ -92,7 +209,10 @@ const TradeJournal: React.FC = () => {
   const [editForm, setEditForm]   = useState<Partial<JournalEntry>>({});
   const [saving, setSaving]       = useState(false);
   const [saveErr, setSaveErr]     = useState<string | null>(null);
-  const [filterTag, setFilterTag] = useState('');
+  const [filterTag, setFilterTag]         = useState('');
+  const [uploadingId, setUploadingId]     = useState<string | null>(null);
+  const [screenshotUrls, setScreenshotUrls] = useState<Record<string, string>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -141,11 +261,30 @@ const TradeJournal: React.FC = () => {
     try {
       await journalApi.updateTrade(editing, editForm as Record<string, unknown>);
       setEditing(null);
+      toast.success('Journal entry saved.');
       await fetchAll();
     } catch (err: unknown) {
-      setSaveErr(err instanceof Error ? err.message : 'Failed to save journal entry. Please try again.');
+      const msg = err instanceof Error ? err.message : 'Failed to save journal entry.';
+      setSaveErr(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleScreenshotUpload = async (tradeId: string, file: File) => {
+    setUploadingId(tradeId);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await journalApi.uploadScreenshot(tradeId, form);
+      const url = (res.data as { url: string }).url;
+      setScreenshotUrls((prev) => ({ ...prev, [tradeId]: url }));
+      toast.success('Screenshot uploaded.');
+    } catch {
+      toast.error('Screenshot upload failed.');
+    } finally {
+      setUploadingId(null);
     }
   };
 
@@ -167,30 +306,10 @@ const TradeJournal: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => navigate('/trade')}
-              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              ⚡ Trade
-            </button>
-            <button
-              onClick={() => navigate('/performance')}
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              📈 Performance
-            </button>
-            <button
-              onClick={() => navigate('/risk-calculator')}
-              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🛡 Risk Calc
-            </button>
-            <button
-              onClick={() => navigate('/portfolio')}
-              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              💼 Portfolio
-            </button>
+            <Link to="/trade"            style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>⚡ Trade</Link>
+            <Link to="/performance"      style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>📈 Performance</Link>
+            <Link to="/risk-calculator"  style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>🛡 Risk Calc</Link>
+            <Link to="/portfolio"        style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>💼 Portfolio</Link>
           </div>
         }
       />
@@ -224,18 +343,8 @@ const TradeJournal: React.FC = () => {
               description="Entries are created automatically when you close a trade. Make your first trade to start building your journal."
               action={
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => navigate('/trade')}
-                    style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    ⚡ Start Trading
-                  </button>
-                  <button
-                    onClick={() => navigate('/signals')}
-                    style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    📡 View Signals
-                  </button>
+                  <Link to="/trade"   style={{ padding: '8px 18px', background: '#3b82f6', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>⚡ Start Trading</Link>
+                  <Link to="/signals" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>📡 View Signals</Link>
                 </div>
               }
             />
@@ -257,13 +366,14 @@ const TradeJournal: React.FC = () => {
                     {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
                   </span>
                   {entry.closed_at && (
-                    <button
-                      onClick={() => navigate('/trade', { state: { signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } } })}
-                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
+                    <Link
+                      to="/trade"
+                      state={{ signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } }}
+                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', textDecoration: 'none' }}
                       title="Open a new trade with the same symbol and direction"
                     >
                       🔁 Re-trade
-                    </button>
+                    </Link>
                   )}
                   <button onClick={() => editing === entry.trade_id ? setEditing(null) : startEdit(entry)} style={s.editBtn}>
                     {editing === entry.trade_id ? 'Cancel' : 'Edit'}
@@ -289,6 +399,15 @@ const TradeJournal: React.FC = () => {
               {/* Notes */}
               {entry.notes && <p style={s.notes}>{entry.notes}</p>}
 
+              {/* Screenshot thumbnail */}
+              {screenshotUrls[entry.trade_id] && (
+                <img
+                  src={screenshotUrls[entry.trade_id]}
+                  alt="Trade screenshot"
+                  style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, border: '1px solid #1e2d3d', marginTop: 8, objectFit: 'contain' }}
+                />
+              )}
+
               {/* Edit form */}
               {editing === entry.trade_id && (
                 <div style={s.editForm}>
@@ -297,14 +416,11 @@ const TradeJournal: React.FC = () => {
                     style={s.textarea} rows={3} />
 
                   <label style={s.label}>Tags</label>
-                  <div style={s.tagPicker}>
-                    {TRADE_TAGS.map((t) => (
-                      <button key={t} onClick={() => toggleTag(t)}
-                        style={{ ...s.tagPickerBtn, ...(editForm.tags?.includes(t) ? s.tagPickerBtnActive : {}) }}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
+                  <TagAutocomplete
+                    value={editForm.tags ?? []}
+                    onChange={(tags) => setEditForm({ ...editForm, tags })}
+                    suggestions={[...TRADE_TAGS, ...trades.flatMap((t) => t.tags)].filter((v, i, a) => a.indexOf(v) === i)}
+                  />
 
                   <label style={s.label}>Emotion</label>
                   <div style={s.tagPicker}>
@@ -326,9 +442,33 @@ const TradeJournal: React.FC = () => {
                       placeholder="What rule did you break?" style={{ ...s.input, marginTop: 6 }} />
                   )}
 
-                  {saveErr && (
-                    <div style={s.saveErrBox}>{saveErr}</div>
-                  )}
+                  {/* Screenshot upload */}
+                  <label style={{ ...s.label, marginTop: 10 }}>Screenshot</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleScreenshotUpload(entry.trade_id, file);
+                        e.target.value = '';
+                      }}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingId === entry.trade_id}
+                      style={{ ...s.tagPickerBtn, padding: '5px 12px' }}
+                    >
+                      {uploadingId === entry.trade_id ? 'Uploading…' : '📷 Upload screenshot'}
+                    </button>
+                    {screenshotUrls[entry.trade_id] && (
+                      <span style={{ fontSize: 11, color: '#4ade80' }}>✓ Uploaded</span>
+                    )}
+                  </div>
+
+                  {saveErr && <div style={s.saveErrBox}>{saveErr}</div>}
                   <button onClick={saveEdit} disabled={saving} style={s.saveBtn}>
                     {saving ? 'Saving…' : 'Save'}
                   </button>
@@ -380,6 +520,12 @@ const TradeJournal: React.FC = () => {
             </div>
           )}
           {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
+
+          {/* Emotion calendar */}
+          <h3 style={s.sectionTitle}>Emotion Calendar</h3>
+          <div style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+            <EmotionCalendar trades={trades} />
+          </div>
         </div>
       )}
 

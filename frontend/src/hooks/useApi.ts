@@ -1277,6 +1277,10 @@ export const journalApi = {
   export:           (format: 'csv' | 'json' = 'csv')         =>
                       api.get(`/journal/export?format=${format}`, { responseType: 'blob' }),
   tags:             ()                                        => api.get('/journal/tags'),
+  uploadScreenshot: (tradeId: string, form: FormData)         =>
+                      api.post(`/journal/trades/${tradeId}/screenshot`, form, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      }),
 };
 
 // ── Prop Firm API ─────────────────────────────────────────────────────────────
