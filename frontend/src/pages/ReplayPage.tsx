@@ -12,11 +12,21 @@
  * Requires: enterprise plan
  */
 
-import React, { useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
+
+// Playback speed options (ms between auto-step ticks)
+const SPEED_OPTIONS: { label: string; ms: number }[] = [
+  { label: '0.25×', ms: 2000 },
+  { label: '0.5×',  ms: 1000 },
+  { label: '1×',    ms: 500  },
+  { label: '2×',    ms: 250  },
+  { label: '4×',    ms: 125  },
+  { label: '8×',    ms: 60   },
+];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -148,7 +158,6 @@ const SYMBOLS    = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSD', 'US30', 'N
 const TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
 
 const ReplayPage: React.FC = () => {
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<ReplaySession | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -159,6 +168,9 @@ const ReplayPage: React.FC = () => {
   const [runBars, setRunBars]       = useState(10);
   const autoRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [autoPlay, setAutoPlay]     = useState(false);
+  const [speedIdx, setSpeedIdx]     = useState(2); // default 1×
+  const selectedRef = useRef<ReplaySession | null>(null);
+  selectedRef.current = selected;
 
   const { data, isLoading } = useQuery({
     queryKey: ['replay-sessions'],
@@ -203,18 +215,57 @@ const ReplayPage: React.FC = () => {
     },
   });
 
+  const stopAutoPlay = useCallback(() => {
+    if (autoRef.current) { clearInterval(autoRef.current); autoRef.current = null; }
+    setAutoPlay(false);
+  }, []);
+
+  const startAutoPlay = useCallback((ms: number) => {
+    if (autoRef.current) clearInterval(autoRef.current);
+    setAutoPlay(true);
+    autoRef.current = setInterval(() => {
+      const s = selectedRef.current;
+      if (!s || s.status === 'completed') { stopAutoPlay(); return; }
+      stepMut.mutate(s.session_id);
+    }, ms);
+  }, [stepMut, stopAutoPlay]);
+
   const toggleAutoPlay = useCallback(() => {
     if (!selected) return;
-    if (autoPlay) {
-      if (autoRef.current) clearInterval(autoRef.current);
-      setAutoPlay(false);
-    } else {
-      setAutoPlay(true);
-      autoRef.current = setInterval(() => {
-        stepMut.mutate(selected.session_id);
-      }, 500);
-    }
-  }, [autoPlay, selected, stepMut]);
+    if (autoPlay) { stopAutoPlay(); }
+    else { startAutoPlay(SPEED_OPTIONS[speedIdx].ms); }
+  }, [autoPlay, selected, speedIdx, startAutoPlay, stopAutoPlay]);
+
+  // When speed changes mid-play, restart interval at new speed
+  const handleSpeedChange = useCallback((idx: number) => {
+    setSpeedIdx(idx);
+    if (autoPlay) { startAutoPlay(SPEED_OPTIONS[idx].ms); }
+  }, [autoPlay, startAutoPlay]);
+
+  // Keyboard navigation: Space=play/pause, →=step, ←=nothing (no rewind), Esc=close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+      if (e.key === ' ' || e.key === 'Space') {
+        e.preventDefault();
+        toggleAutoPlay();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const s = selectedRef.current;
+        if (s && s.status !== 'completed') stepMut.mutate(s.session_id);
+      } else if (e.key === 'Escape') {
+        stopAutoPlay();
+        setSelected(null);
+      } else if (e.key === '+' || e.key === '=') {
+        setSpeedIdx(i => { const n = Math.min(i + 1, SPEED_OPTIONS.length - 1); if (autoPlay) startAutoPlay(SPEED_OPTIONS[n].ms); return n; });
+      } else if (e.key === '-') {
+        setSpeedIdx(i => { const n = Math.max(i - 1, 0); if (autoPlay) startAutoPlay(SPEED_OPTIONS[n].ms); return n; });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [toggleAutoPlay, stepMut, stopAutoPlay, autoPlay, startAutoPlay]);
 
   const sessions = data?.sessions ?? [];
 
@@ -229,25 +280,19 @@ const ReplayPage: React.FC = () => {
           { label: 'Market Replay' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => navigate('/ai-chart')}
-              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/ai-chart"
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               📈 AI Charts
-            </button>
-            <button
-              onClick={() => navigate('/walk-forward')}
-              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/walk-forward"
+              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               📊 Walk-Forward
-            </button>
-            <button
-              onClick={() => navigate('/ai-strategy')}
-              style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/ai-strategy"
+              style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               🤖 AI Strategy
-            </button>
+            </Link>
             <button onClick={() => setShowCreate((s: boolean) => !s)}
               style={{ padding: '7px 16px', background: '#3b82f6', color: '#fff', border: 'none',
                 borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -380,9 +425,10 @@ const ReplayPage: React.FC = () => {
             </div>
 
             {/* Controls */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
               <button onClick={() => stepMut.mutate(selected.session_id)}
                 disabled={stepMut.isPending || selected.status === 'completed'}
+                title="Step one bar (→)"
                 style={{ padding: '8px 16px', background: '#3b82f6', color: '#fff', border: 'none',
                   borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   opacity: (stepMut.isPending || selected.status === 'completed') ? 0.5 : 1 }}>
@@ -390,12 +436,28 @@ const ReplayPage: React.FC = () => {
               </button>
               <button onClick={toggleAutoPlay}
                 disabled={selected.status === 'completed'}
+                title="Play/Pause (Space)"
                 style={{ padding: '8px 16px',
                   background: autoPlay ? '#ef4444' : '#22c55e',
                   color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer',
                   opacity: selected.status === 'completed' ? 0.5 : 1 }}>
-                {autoPlay ? '⏸ Pause' : '▶ Auto'}
+                {autoPlay ? '⏸ Pause' : '▶ Play'}
               </button>
+
+              {/* Speed selector */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: '2px 4px' }}>
+                {SPEED_OPTIONS.map((opt, i) => (
+                  <button key={opt.label} onClick={() => handleSpeedChange(i)}
+                    style={{
+                      padding: '4px 8px', borderRadius: 4, border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                      background: speedIdx === i ? '#3b82f6' : 'transparent',
+                      color: speedIdx === i ? '#fff' : '#64748b',
+                    }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <input type="number" value={runBars} onChange={e => setRunBars(Number(e.target.value))}
                   min={1} max={500} style={{ width: 60, background: '#0f172a', border: '1px solid #334155',
@@ -411,6 +473,13 @@ const ReplayPage: React.FC = () => {
               {selected.status === 'completed' && (
                 <span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>✓ Completed</span>
               )}
+            </div>
+            {/* Keyboard hint */}
+            <div style={{ fontSize: 10, color: '#334155', marginBottom: 16 }}>
+              Keyboard: <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: '#64748b' }}>Space</kbd> play/pause ·
+              <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: '#64748b', marginLeft: 4 }}>→</kbd> step ·
+              <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: '#64748b', marginLeft: 4 }}>+/-</kbd> speed ·
+              <kbd style={{ background: '#1e293b', padding: '1px 5px', borderRadius: 3, color: '#64748b', marginLeft: 4 }}>Esc</kbd> close
             </div>
 
             {/* Trade log */}
