@@ -1,21 +1,47 @@
-import React, { useState, useEffect, useCallback } from 'react';
+/**
+ * CryptoCheckout — crypto payment flow for plan upgrades.
+ *
+ * Wires to:
+ *   GET  /api/billing/plans                    — live plan catalogue
+ *   GET  /api/payments/crypto/rates            — live USD exchange rates
+ *   POST /api/payments/crypto/address          — generate deposit address
+ *   GET  /api/payments/crypto/status/{id}      — real confirmation polling
+ *   GET  /api/billing/payments/flutterwave/status
+ *   POST /api/billing/payments/flutterwave/init
+ *
+ * Fixes vs previous version:
+ *   - Rates response shape: backend returns { rates: { BTC: { usd_per_coin } } }
+ *     — now correctly parsed instead of treating flat keys as rates.
+ *   - Confirmation polling: replaced setInterval counter with real
+ *     GET /api/payments/crypto/status/{id} polling every 5 s.
+ *   - Plan pre-selection: reads ?plan= and ?billing= from URL search params.
+ *   - Plan list: fetched from /api/billing/plans at runtime; hardcoded
+ *     constants are fallback-only while the request is in-flight.
+ */
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
+import { PageHeader } from '../components/PageHeader';
+import { PLAN_COLORS } from '../lib/subscription';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type CryptoOption = 'BTC' | 'ETH' | 'USDT';
-type USDTNetwork = 'TRC20' | 'ERC20' | 'BEP20';
+type USDTNetwork  = 'TRC20' | 'ERC20' | 'BEP20';
 type CheckoutStep = 'select' | 'address' | 'confirming' | 'complete';
 
 interface Plan {
   id: string;
   name: string;
   price_usd: number;
+  price_usd_monthly?: number;
   features: string[];
 }
 
 interface DepositAddress {
+  payment_id: string;
   address: string;
   qr_code: string;
   network: string;
@@ -23,17 +49,26 @@ interface DepositAddress {
   confirmations_required: number;
   amount_crypto: number;
   expires_at: string;
+  rate_usd?: number;
 }
 
+interface PaymentStatus {
+  payment_id: string;
+  status: 'pending' | 'confirming' | 'complete' | 'expired' | 'failed';
+  confirmations: number;
+  confirmations_required: number;
+  currency: string;
+  amount_crypto: number;
+  tx_hash?: string | null;
+}
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Plans loaded from /api/billing/plans at runtime; these are the fallback
-// defaults used only while the API call is in-flight.
-const PLANS: Plan[] = [
+/** Fallback plan list used only while /api/billing/plans is loading. */
+const FALLBACK_PLANS: Plan[] = [
   { id: 'starter',      name: 'Starter',      price_usd: 1800,  features: ['3 strategies', '1 broker', 'Live trading'] },
-  { id: 'professional', name: 'Professional', price_usd: 4500,  features: ['7 strategies', '3 brokers', 'AI signals', 'Backtesting', 'API access'] },
-  { id: 'enterprise',   name: 'Enterprise',   price_usd: 7500,  features: ['Unlimited strategies', 'All brokers', 'White-label', 'News integration'] },
-  { id: 'elite',        name: 'Elite',        price_usd: 10000, features: ['Everything in Enterprise', 'Dedicated support', 'Custom development'] },
+  { id: 'professional', name: 'Professional', price_usd: 4500,  features: ['7 strategies', '3 brokers', 'AI signals', 'Backtesting'] },
+  { id: 'enterprise',   name: 'Enterprise',   price_usd: 7500,  features: ['Unlimited strategies', 'All brokers', 'White-label'] },
+  { id: 'elite',        name: 'Elite',        price_usd: 10000, features: ['Everything in Enterprise', 'Dedicated support'] },
 ];
 
 const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: string; networks?: USDTNetwork[] }> = {
@@ -42,12 +77,7 @@ const CRYPTO_META: Record<CryptoOption, { name: string; color: string; icon: str
   USDT: { name: 'Tether',   color: '#26a17b', icon: '₮', networks: ['TRC20', 'ERC20', 'BEP20'] },
 };
 
-// Default rates used only for display before live rates load
-const DEFAULT_RATES: Record<CryptoOption, number> = {
-  BTC:  0,
-  ETH:  0,
-  USDT: 1.0,
-};
+const POLL_INTERVAL_MS = 5000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -59,132 +89,213 @@ const fmtCrypto = (amount: number, currency: CryptoOption) => {
   return amount.toFixed(decimals) + ' ' + currency;
 };
 
-function buildQRDataURL(text: string): string {
-  // Generates a QR code image via api.qrserver.com (real public service).
-  // To remove the external dependency, replace with a bundled library such as
-  // qrcode.react: `<QRCodeSVG value={text} size={180} />`
-  const encoded = encodeURIComponent(text);
-  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encoded}&bgcolor=1e293b&color=f1f5f9&margin=10`;
+function buildQRUrl(text: string): string {
+  return (
+    'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' +
+    encodeURIComponent(text) +
+    '&bgcolor=1e293b&color=f1f5f9&margin=10'
+  );
 }
 
+function extractError(err: unknown, fallback: string): string {
+  return (
+    (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+    (err as { message?: string })?.message ??
+    fallback
+  );
+}
+
+async function copyToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+}
+
+/**
+ * Parse the rates response from /api/payments/crypto/rates.
+ * Backend returns: { rates: { BTC: { usd_per_coin: N }, ETH: { usd_per_coin: N }, ... } }
+ * or flat: { BTC: N, ETH: N, ... }
+ */
+function parseRates(data: unknown): Record<CryptoOption, number> {
+  const d = data as Record<string, unknown>;
+  // Nested shape: { rates: { BTC: { usd_per_coin: N } } }
+  if (d.rates && typeof d.rates === 'object') {
+    const r = d.rates as Record<string, { usd_per_coin?: number } | number>;
+    const get = (k: string): number => {
+      const v = r[k];
+      if (typeof v === 'number') return v;
+      if (v && typeof v === 'object' && 'usd_per_coin' in v) return (v as { usd_per_coin: number }).usd_per_coin;
+      return 0;
+    };
+    return { BTC: get('BTC'), ETH: get('ETH'), USDT: get('USDT') || 1 };
+  }
+  // Flat shape: { BTC: N, ETH: N, USDT: N }
+  const get = (k: string): number => {
+    const v = d[k] ?? d[k.toLowerCase()];
+    return typeof v === 'number' ? v : 0;
+  };
+  return { BTC: get('BTC'), ETH: get('ETH'), USDT: get('USDT') || 1 };
+}
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-const PlanCard: React.FC<{
-  plan: Plan;
-  selected: boolean;
-  onSelect: () => void;
-}> = ({ plan, selected, onSelect }) => (
-  <div
-    onClick={onSelect}
-    style={{
-      ...styles.planCard,
-      border: `2px solid ${selected ? '#3b82f6' : '#334155'}`,
+const PlanCard: React.FC<{ plan: Plan; selected: boolean; onSelect: () => void }> = ({
+  plan, selected, onSelect,
+}) => {
+  const accent = PLAN_COLORS[plan.id as keyof typeof PLAN_COLORS] ?? '#475569';
+  return (
+    <div onClick={onSelect} style={{
       background: selected ? '#1e3a5f' : '#1e293b',
-      cursor: 'pointer',
-    }}
-  >
-    <div style={styles.planName}>{plan.name}</div>
-    <div style={styles.planPrice}>${plan.price_usd}<span style={styles.planPer}>/mo</span></div>
-    <ul style={styles.planFeatures}>
-      {plan.features.map((f) => <li key={f}>{f}</li>)}
-    </ul>
-    {selected && <div style={styles.selectedMark}>✓ Selected</div>}
-  </div>
-);
+      border: '2px solid ' + (selected ? accent : '#334155'),
+      borderRadius: 12, padding: '16px 14px', cursor: 'pointer',
+      transition: 'border-color 0.15s, background 0.15s',
+    }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: accent,
+        textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
+        {plan.name}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', marginBottom: 8 }}>
+        ${plan.price_usd.toLocaleString()}
+        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>/mo</span>
+      </div>
+      <ul style={{ margin: 0, padding: '0 0 0 14px', fontSize: 12, color: '#94a3b8', lineHeight: 1.7 }}>
+        {plan.features.slice(0, 3).map(f => <li key={f}>{f}</li>)}
+      </ul>
+      {selected && (
+        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: accent }}>✓ Selected</div>
+      )}
+    </div>
+  );
+};
 
-const CryptoButton: React.FC<{
-  currency: CryptoOption;
-  selected: boolean;
-  onSelect: () => void;
-}> = ({ currency, selected, onSelect }) => {
+const CryptoButton: React.FC<{ currency: CryptoOption; selected: boolean; onSelect: () => void }> = ({
+  currency, selected, onSelect,
+}) => {
   const meta = CRYPTO_META[currency];
   return (
-    <button
-      onClick={onSelect}
-      style={{
-        ...styles.cryptoBtn,
-        border: `2px solid ${selected ? meta.color : '#334155'}`,
-        background: selected ? meta.color + '18' : '#1e293b',
-      }}
-    >
-      <span style={{ ...styles.cryptoIcon, color: meta.color }}>{meta.icon}</span>
-      <div>
-        <div style={styles.cryptoName}>{meta.name}</div>
-        <div style={styles.cryptoTicker}>{currency}</div>
+    <button onClick={onSelect} style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+      border: '2px solid ' + (selected ? meta.color : '#334155'),
+      background: selected ? meta.color + '18' : '#1e293b',
+      borderRadius: 10, cursor: 'pointer', flex: 1, minWidth: 100,
+    }}>
+      <span style={{ fontSize: 22, color: meta.color }}>{meta.icon}</span>
+      <div style={{ textAlign: 'left' }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>{meta.name}</div>
+        <div style={{ fontSize: 11, color: '#64748b' }}>{currency}</div>
       </div>
     </button>
   );
 };
 
+/** Countdown timer that re-renders every second. */
+const ExpiryCountdown: React.FC<{ expiresAt: string }> = ({ expiresAt }) => {
+  const [remaining, setRemaining] = useState(0);
+  useEffect(() => {
+    const tick = () => {
+      const ms = new Date(expiresAt).getTime() - Date.now();
+      setRemaining(Math.max(0, Math.floor(ms / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [expiresAt]);
+  const mins = Math.floor(remaining / 60);
+  const secs = remaining % 60;
+  const urgent = remaining < 300;
+  return (
+    <span style={{ color: urgent ? '#ef4444' : '#f1f5f9', fontWeight: 700 }}>
+      {mins}:{secs.toString().padStart(2, '0')}
+    </span>
+  );
+};
 // ── Main component ────────────────────────────────────────────────────────────
 
-interface CryptoCheckoutProps {
-  /** Pre-select a plan by id */
-  initialPlanId?: string;
-}
+const CryptoCheckout: React.FC = () => {
+  const currentUser   = useStore(selectUser);
+  const navigate      = useNavigate();
+  const [searchParams] = useSearchParams();
 
-const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
-  const currentUser = useStore(selectUser);
-  const [step, setStep] = useState<CheckoutStep>('select');
-  const [selectedPlan, setSelectedPlan] = useState<Plan>(
-    PLANS.find((p) => p.id === initialPlanId) ?? PLANS[1]
+  // URL params: ?plan=starter&billing=monthly
+  const urlPlanId  = searchParams.get('plan') ?? '';
+  const urlBilling = searchParams.get('billing') ?? 'monthly';
+
+  const [plans, setPlans]                   = useState<Plan[]>(FALLBACK_PLANS);
+  const [plansLoading, setPlansLoading]     = useState(true);
+  const [step, setStep]                     = useState<CheckoutStep>('select');
+  const [selectedPlan, setSelectedPlan]     = useState<Plan>(
+    FALLBACK_PLANS.find(p => p.id === urlPlanId) ?? FALLBACK_PLANS[0]
   );
   const [selectedCrypto, setSelectedCrypto] = useState<CryptoOption>('BTC');
-  const [usdtNetwork, setUsdtNetwork] = useState<USDTNetwork>('TRC20');
-  const [depositInfo, setDepositInfo] = useState<DepositAddress | null>(null);
+  const [usdtNetwork, setUsdtNetwork]       = useState<USDTNetwork>('TRC20');
+  const [depositInfo, setDepositInfo]       = useState<DepositAddress | null>(null);
   const [loadingAddress, setLoadingAddress] = useState(false);
-  const [addressError, setAddressError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [confirmations, setConfirmations] = useState(0);
-  const [pollingTimer, setPollingTimer] = useState<ReturnType<typeof setInterval> | null>(null);
-  const [liveRates, setLiveRates]   = useState<Record<CryptoOption, number>>(DEFAULT_RATES);
-  const [ratesErr, setRatesErr]     = useState<string | null>(null);
-  // Flutterwave — shown as primary option for West/Central Africa
+  const [addressError, setAddressError]     = useState<string | null>(null);
+  const [copied, setCopied]                 = useState(false);
+  const [qrError, setQrError]               = useState(false);
+  const [paymentStatus, setPaymentStatus]   = useState<PaymentStatus | null>(null);
+  const [liveRates, setLiveRates]           = useState<Record<CryptoOption, number>>({ BTC: 0, ETH: 0, USDT: 1 });
+  const [ratesErr, setRatesErr]             = useState<string | null>(null);
   const [showFlutterwave, setShowFlutterwave] = useState(false);
-  const [flwLoading, setFlwLoading] = useState(false);
-  const [flwEnabled, setFlwEnabled] = useState(false);
+  const [flwLoading, setFlwLoading]         = useState(false);
+  const [flwEnabled, setFlwEnabled]         = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch live crypto rates and Flutterwave status on mount
+  // Fetch live plans from API
   useEffect(() => {
-    api.get<Record<string, number>>('/payments/crypto/rates')
+    api.get<{ plans: Array<{ id: string; name: string; price_usd_monthly: number; highlights?: string[]; features?: string[] }> }>('/billing/plans')
       .then(r => {
-        const data = r.data as Record<string, number>;
-        setLiveRates({
-          BTC:  data.BTC  ?? data.btc  ?? DEFAULT_RATES.BTC,
-          ETH:  data.ETH  ?? data.eth  ?? DEFAULT_RATES.ETH,
-          USDT: data.USDT ?? data.usdt ?? DEFAULT_RATES.USDT,
-        });
+        const fetched: Plan[] = (r.data.plans ?? []).map(p => ({
+          id: p.id,
+          name: p.name,
+          price_usd: p.price_usd_monthly ?? 0,
+          features: p.highlights ?? p.features ?? [],
+        })).filter(p => p.id !== 'free');
+        if (fetched.length > 0) {
+          setPlans(fetched);
+          // Re-apply URL plan selection against live data
+          const match = fetched.find(p => p.id === urlPlanId);
+          if (match) setSelectedPlan(match);
+          else setSelectedPlan(fetched[0]);
+        }
       })
       .catch(() => {
-        // DEFAULT_RATES has BTC/ETH = 0 which would show $0 amounts.
-        // Warn the user so they know the displayed crypto amounts are unavailable.
-        setRatesErr('Live crypto rates unavailable. Crypto amounts cannot be calculated until rates load.');
-      });
+        // Keep FALLBACK_PLANS; apply URL selection
+        const match = FALLBACK_PLANS.find(p => p.id === urlPlanId);
+        if (match) setSelectedPlan(match);
+      })
+      .finally(() => setPlansLoading(false));
+  }, [urlPlanId]);
 
-    // Flutterwave availability is a non-critical feature flag
+  // Fetch live rates + Flutterwave status + geo
+  useEffect(() => {
+    api.get('/payments/crypto/rates')
+      .then(r => setLiveRates(parseRates(r.data)))
+      .catch(() => setRatesErr('Live rates unavailable — crypto amounts cannot be calculated.'));
+
     api.get<{ enabled: boolean }>('/billing/payments/flutterwave/status')
       .then(r => setFlwEnabled(r.data.enabled))
-      .catch((err: unknown) => {
-        console.warn('[CryptoCheckout] Flutterwave status check failed:', err);
-      });
+      .catch(() => {});
 
-    // Geo detection is a non-critical UX hint
     fetch('https://ipapi.co/json/')
       .then(r => r.json())
-      .then((d: { continent_code?: string }) => {
-        if (d.continent_code === 'AF') setShowFlutterwave(true);
-      })
-      .catch((err: unknown) => {
-        console.warn('[CryptoCheckout] Geo detection failed:', err);
-      });
+      .then((d: { continent_code?: string }) => { if (d.continent_code === 'AF') setShowFlutterwave(true); })
+      .catch(() => {});
   }, []);
 
   // Cleanup polling on unmount
-  useEffect(() => () => { if (pollingTimer) clearInterval(pollingTimer); }, [pollingTimer]);
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const fetchDepositAddress = useCallback(async () => {
     setLoadingAddress(true);
     setAddressError(null);
+    setQrError(false);
     try {
       const network = selectedCrypto === 'USDT' ? usdtNetwork : undefined;
       const res = await api.post<DepositAddress>('/payments/crypto/address', {
@@ -195,190 +306,173 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
         user_id: currentUser?.id ?? '',
       });
       setDepositInfo(res.data);
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      setAddressError(detail ?? 'Failed to generate deposit address. Please try again.');
-      setDepositInfo(null);
+      setStep('address');
+    } catch (err) {
+      setAddressError(extractError(err, 'Failed to generate deposit address. Please try again.'));
     } finally {
       setLoadingAddress(false);
     }
-  }, [selectedCrypto, usdtNetwork, selectedPlan]);
+  }, [selectedCrypto, usdtNetwork, selectedPlan, currentUser]);
+
+  /** Start real polling against GET /api/payments/crypto/status/{id} */
+  const startPolling = useCallback((paymentId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get<PaymentStatus>('/payments/crypto/status/' + paymentId);
+        setPaymentStatus(res.data);
+        if (res.data.status === 'complete') {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setStep('complete');
+        } else if (res.data.status === 'expired' || res.data.status === 'failed') {
+          clearInterval(pollRef.current!);
+          pollRef.current = null;
+          setAddressError('Payment ' + res.data.status + '. Please start a new checkout.');
+          setStep('select');
+        }
+      } catch {
+        // Non-fatal — keep polling
+      }
+    }, POLL_INTERVAL_MS);
+  }, []);
+
+  const handleConfirmSent = () => {
+    if (!depositInfo) return;
+    setStep('confirming');
+    setPaymentStatus(null);
+    startPolling(depositInfo.payment_id);
+  };
 
   const handleFlutterwavePay = async () => {
     setFlwLoading(true);
     try {
-      const res = await api.post<{ payment_link: string; tx_ref: string }>('/billing/payments/flutterwave/init',
-        { amount: selectedPlan.price_usd, currency: 'USD', plan: selectedPlan.id }
-      );
-      // Redirect to Flutterwave hosted checkout
+      const res = await api.post<{ payment_link: string }>('/billing/payments/flutterwave/init', {
+        amount: selectedPlan.price_usd, currency: 'USD', plan: selectedPlan.id,
+      });
       window.location.href = res.data.payment_link;
-    } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })
-        ?.response?.data?.detail;
-      alert(detail ?? 'Flutterwave payment init failed. Please try crypto payment.');
+    } catch (err) {
+      alert(extractError(err, 'Flutterwave payment init failed. Please try crypto payment.'));
     } finally {
       setFlwLoading(false);
     }
   };
 
-  const handleProceed = async () => {
-    await fetchDepositAddress();
-    // Only advance if address was successfully generated (no error set)
-    setStep((prev) => {
-      // addressError is set inside fetchDepositAddress; check depositInfo instead
-      return prev; // will be updated by the effect below
-    });
-  };
-
-  // Advance to address step once depositInfo is populated
-  useEffect(() => {
-    if (depositInfo && step === 'select') {
-      setStep('address');
-    }
-  }, [depositInfo]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleConfirmSent = () => {
-    setStep('confirming');
-    setConfirmations(0);
-    // Simulate confirmation polling
-    let count = 0;
-    const required = depositInfo?.confirmations_required ?? 3;
-    const timer = setInterval(() => {
-      count += 1;
-      setConfirmations(count);
-      if (count >= required) {
-        clearInterval(timer);
-        setStep('complete');
-      }
-    }, 2000);
-    setPollingTimer(timer);
-  };
-
-  const copyAddress = () => {
+  const copyAddress = async () => {
     if (!depositInfo) return;
-    navigator.clipboard.writeText(depositInfo.address).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    });
+    await copyToClipboard(depositInfo.address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   const meta = CRYPTO_META[selectedCrypto];
+  const cryptoAmount = liveRates[selectedCrypto] > 0
+    ? selectedPlan.price_usd / liveRates[selectedCrypto]
+    : null;
 
-  // ── Step: Select plan + crypto ────────────────────────────────────────────
+  const breadcrumbs = [
+    { label: 'Dashboard', href: '/dashboard' },
+    { label: 'Upgrade', href: '/upgrade' },
+    { label: 'Checkout' },
+  ];
+  // ── Step: Select ───────────────────────────────────────────────────────────
   if (step === 'select') {
     return (
-      <div style={styles.page}>
-        <h1 style={styles.heading}>Crypto Checkout</h1>
-        <p style={styles.subheading}>Pay with Bitcoin, Ethereum, or USDT — no card required.</p>
-        {ratesErr && (
-          <div style={styles.ratesWarning}>{ratesErr}</div>
-        )}
+      <div style={st.page}>
+        <PageHeader title="Crypto Checkout" subtitle="Pay with Bitcoin, Ethereum, or USDT — no card required."
+          breadcrumbs={breadcrumbs}
+          actions={<Link to="/upgrade" style={st.headerLink}>← All Plans</Link>}
+        />
+        {ratesErr && <div style={st.warnBox}>{ratesErr}</div>}
+        {addressError && <div style={st.errorBox}>{addressError}</div>}
 
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>1. Choose a plan</h2>
-          <div style={styles.planGrid}>
-            {PLANS.map((p) => (
-              <PlanCard
-                key={p.id}
-                plan={p}
-                selected={selectedPlan.id === p.id}
-                onSelect={() => setSelectedPlan(p)}
-              />
-            ))}
-          </div>
-        </section>
-
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>2. Choose cryptocurrency</h2>
-          <div style={styles.cryptoGrid}>
-            {(Object.keys(CRYPTO_META) as CryptoOption[]).map((c) => (
-              <CryptoButton
-                key={c}
-                currency={c}
-                selected={selectedCrypto === c}
-                onSelect={() => setSelectedCrypto(c)}
-              />
-            ))}
-          </div>
-
-          {selectedCrypto === 'USDT' && (
-            <div style={styles.networkRow}>
-              <span style={styles.networkLabel}>Network:</span>
-              {(['TRC20', 'ERC20', 'BEP20'] as USDTNetwork[]).map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setUsdtNetwork(n)}
-                  style={{
-                    ...styles.networkBtn,
-                    background: usdtNetwork === n ? '#26a17b22' : 'transparent',
-                    border: `1px solid ${usdtNetwork === n ? '#26a17b' : '#334155'}`,
-                    color: usdtNetwork === n ? '#26a17b' : '#94a3b8',
-                  }}
-                >
-                  {n}
-                </button>
+        <section style={st.section}>
+          <h2 style={st.sectionTitle}>1. Choose a plan</h2>
+          {plansLoading ? (
+            <div style={{ color: '#64748b', fontSize: 14 }}>Loading plans…</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+              {plans.map(p => (
+                <PlanCard key={p.id} plan={p} selected={selectedPlan.id === p.id}
+                  onSelect={() => setSelectedPlan(p)} />
               ))}
             </div>
           )}
         </section>
 
-        {/* Flutterwave — primary option for Africa */}
-        {showFlutterwave && flwEnabled && (
-          <div style={styles.flwBanner}>
-            <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>
-              Pay with Flutterwave
+        <section style={st.section}>
+          <h2 style={st.sectionTitle}>2. Choose cryptocurrency</h2>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {(Object.keys(CRYPTO_META) as CryptoOption[]).map(c => (
+              <CryptoButton key={c} currency={c} selected={selectedCrypto === c}
+                onSelect={() => setSelectedCrypto(c)} />
+            ))}
+          </div>
+          {selectedCrypto === 'USDT' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: '#64748b' }}>Network:</span>
+              {(['TRC20', 'ERC20', 'BEP20'] as USDTNetwork[]).map(n => (
+                <button key={n} onClick={() => setUsdtNetwork(n)} style={{
+                  padding: '5px 14px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+                  background: usdtNetwork === n ? '#26a17b22' : 'transparent',
+                  border: '1px solid ' + (usdtNetwork === n ? '#26a17b' : '#334155'),
+                  color: usdtNetwork === n ? '#26a17b' : '#94a3b8',
+                }}>{n}</button>
+              ))}
             </div>
+          )}
+        </section>
+
+        {showFlutterwave && flwEnabled && (
+          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+            padding: '20px 24px', marginBottom: 20 }}>
+            <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: 6 }}>Pay with Flutterwave</div>
             <p style={{ fontSize: 13, color: '#94a3b8', margin: '0 0 12px' }}>
               Recommended for West &amp; Central Africa — card, bank transfer, mobile money.
             </p>
-            <button
-              onClick={handleFlutterwavePay}
-              disabled={flwLoading}
-              style={{ ...styles.proceedBtn, background: '#f5a623', opacity: flwLoading ? 0.7 : 1 }}
-            >
-              {flwLoading ? 'Redirecting…' : `Pay $${selectedPlan.price_usd} with Flutterwave →`}
+            <button onClick={handleFlutterwavePay} disabled={flwLoading} style={{
+              ...st.proceedBtn, background: '#f5a623', opacity: flwLoading ? 0.7 : 1,
+            }}>
+              {flwLoading ? 'Redirecting…' : 'Pay $' + selectedPlan.price_usd.toLocaleString() + ' with Flutterwave →'}
             </button>
           </div>
         )}
 
-        <div style={styles.summaryBar}>
+        <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
+          padding: '16px 20px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <span style={styles.summaryPlan}>{selectedPlan.name}</span>
-            <span style={styles.summaryPrice}> — ${selectedPlan.price_usd}/mo</span>
-            {liveRates[selectedCrypto] > 0 && (
-              <span style={styles.summaryCrypto}>
-                {' '}≈ {fmtCrypto(selectedPlan.price_usd * liveRates[selectedCrypto], selectedCrypto)}
+            <span style={{ fontWeight: 700, color: '#f1f5f9' }}>{selectedPlan.name}</span>
+            <span style={{ color: '#64748b' }}> — ${selectedPlan.price_usd.toLocaleString()}/mo</span>
+            {cryptoAmount !== null && (
+              <span style={{ color: '#94a3b8', fontSize: 13 }}>
+                {' '}≈ {fmtCrypto(cryptoAmount, selectedCrypto)}
               </span>
             )}
           </div>
-          <button onClick={handleProceed} disabled={loadingAddress} style={{ ...styles.proceedBtn, opacity: loadingAddress ? 0.7 : 1 }}>
-            {loadingAddress ? 'Generating address…' : `Pay with ${meta.name} →`}
+          <button onClick={fetchDepositAddress} disabled={loadingAddress} style={{
+            ...st.proceedBtn, opacity: loadingAddress ? 0.7 : 1,
+          }}>
+            {loadingAddress ? 'Generating address…' : 'Pay with ' + meta.name + ' →'}
           </button>
         </div>
-        {addressError && (
-          <div style={{ color: '#f87171', fontSize: 13, marginTop: 8, padding: '8px 12px', background: '#450a0a', borderRadius: 6 }}>
-            {addressError}
-          </div>
-        )}
       </div>
     );
   }
 
-  // ── Step: Show deposit address ────────────────────────────────────────────
+  // ── Step: Address ───────────────────────────────────────────────────────────
   if (step === 'address' && depositInfo) {
-    const expiresIn = Math.max(0, Math.round((new Date(depositInfo.expires_at).getTime() - Date.now()) / 60000));
     return (
-      <div style={styles.page}>
-        <button onClick={() => setStep('select')} style={styles.backBtn}>← Back</button>
-        <h1 style={styles.heading}>Send Payment</h1>
-
-        <div style={styles.addressCard}>
-          <div style={styles.addressHeader}>
-            <span style={{ color: meta.color, fontSize: 28 }}>{meta.icon}</span>
+      <div style={st.page}>
+        <PageHeader title="Send Payment" breadcrumbs={breadcrumbs}
+          actions={<button onClick={() => setStep('select')} style={st.backBtn}>← Back</button>}
+        />
+        <div style={st.card}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+            <span style={{ color: meta.color, fontSize: 32 }}>{meta.icon}</span>
             <div>
-              <div style={styles.addressTitle}>Send exactly</div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc' }}>
+              <div style={{ fontSize: 13, color: '#64748b' }}>Send exactly</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#f8fafc' }}>
                 {fmtCrypto(depositInfo.amount_crypto, selectedCrypto)}
               </div>
               <div style={{ fontSize: 13, color: '#64748b' }}>
@@ -387,35 +481,51 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
             </div>
           </div>
 
-          <div style={styles.qrSection}>
-            <img
-              src={buildQRDataURL(depositInfo.address)}
-              alt="Payment QR code"
-              style={styles.qrImage}
-            />
+          {/* QR code */}
+          <div style={{ display: 'flex', justifyContent: 'center', margin: '16px 0' }}>
+            {!qrError ? (
+              <img src={buildQRUrl(depositInfo.address)} alt="Payment QR code"
+                style={{ width: 180, height: 180, borderRadius: 8, display: 'block' }}
+                onError={() => setQrError(true)} />
+            ) : (
+              <div style={{ width: 180, height: 180, background: '#0f172a', border: '1px solid #334155',
+                borderRadius: 8, display: 'flex', flexDirection: 'column', alignItems: 'center',
+                justifyContent: 'center', gap: 8 }}>
+                <span style={{ fontSize: 32 }}>📷</span>
+                <div style={{ fontSize: 11, color: '#64748b', textAlign: 'center', padding: '0 12px' }}>
+                  QR unavailable — copy address below
+                </div>
+              </div>
+            )}
           </div>
 
-          <div style={styles.addressBox}>
-            <div style={styles.addressLabel}>Deposit address</div>
-            <div style={styles.addressRow}>
-              <code style={styles.addressText}>{depositInfo.address}</code>
-              <button onClick={copyAddress} style={styles.copyBtn}>
+          {/* Address */}
+          <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+            padding: '12px 14px', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, color: '#475569', marginBottom: 6 }}>Deposit address</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <code style={{ flex: 1, fontSize: 12, color: '#94a3b8', wordBreak: 'break-all',
+                lineHeight: 1.5 }}>{depositInfo.address}</code>
+              <button onClick={copyAddress} style={{ ...st.copyBtn, flexShrink: 0 }}>
                 {copied ? '✅' : 'Copy'}
               </button>
             </div>
           </div>
 
-          <div style={styles.warningBox}>
-            ⚠️ Send only <strong>{selectedCrypto}</strong> on the <strong>{depositInfo.network.toUpperCase()}</strong> network.
+          <div style={{ background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
+            padding: '10px 14px', fontSize: 13, color: '#fbbf24', marginBottom: 14 }}>
+            ⚠️ Send only <strong>{selectedCrypto}</strong> on the{' '}
+            <strong>{depositInfo.network.toUpperCase()}</strong> network.
             Sending a different asset will result in permanent loss.
           </div>
 
-          <div style={styles.infoRow}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13,
+            color: '#64748b', marginBottom: 20 }}>
             <span>Confirmations required: <strong style={{ color: '#f8fafc' }}>{depositInfo.confirmations_required}</strong></span>
-            <span>Address expires in: <strong style={{ color: expiresIn < 5 ? '#ef4444' : '#f8fafc' }}>{expiresIn} min</strong></span>
+            <span>Expires in: <ExpiryCountdown expiresAt={depositInfo.expires_at} /></span>
           </div>
 
-          <button onClick={handleConfirmSent} style={styles.confirmBtn}>
+          <button onClick={handleConfirmSent} style={st.proceedBtn}>
             I've sent the payment →
           </button>
         </div>
@@ -423,49 +533,63 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
     );
   }
 
-  // ── Step: Waiting for confirmations ──────────────────────────────────────
+  // ── Step: Confirming ────────────────────────────────────────────────────────
   if (step === 'confirming' && depositInfo) {
     const required = depositInfo.confirmations_required;
-    const pct = Math.min(100, (confirmations / required) * 100);
+    const confirmed = paymentStatus?.confirmations ?? 0;
+    const pct = Math.min(100, required > 0 ? (confirmed / required) * 100 : 0);
     return (
-      <div style={styles.page}>
-        <h1 style={styles.heading}>Confirming Payment</h1>
-        <div style={styles.addressCard}>
-          <div style={{ textAlign: 'center', padding: '24px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-            <div style={{ fontSize: 18, fontWeight: 600, color: '#f8fafc', marginBottom: 8 }}>
-              Waiting for blockchain confirmations
-            </div>
-            <div style={{ color: '#64748b', marginBottom: 24 }}>
-              {confirmations} / {required} confirmations
-            </div>
-            <div style={styles.progressTrack}>
-              <div style={{ ...styles.progressBar, width: `${pct}%`, background: meta.color }} />
-            </div>
-            <div style={{ fontSize: 13, color: '#64748b', marginTop: 12 }}>
-              This typically takes {selectedCrypto === 'BTC' ? '30–60 minutes' : '2–5 minutes'}.
-            </div>
+      <div style={st.page}>
+        <PageHeader title="Confirming Payment" breadcrumbs={breadcrumbs} />
+        <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: '#f8fafc', marginBottom: 8 }}>
+            Waiting for blockchain confirmations
+          </div>
+          <div style={{ color: '#64748b', marginBottom: 24 }}>
+            {confirmed} / {required} confirmations
+            {paymentStatus?.tx_hash && (
+              <div style={{ fontSize: 12, marginTop: 6, wordBreak: 'break-all' }}>
+                TX: {paymentStatus.tx_hash}
+              </div>
+            )}
+          </div>
+          <div style={{ width: '100%', height: 8, background: '#1e293b', borderRadius: 4,
+            overflow: 'hidden', marginBottom: 16 }}>
+            <div style={{ height: '100%', borderRadius: 4, background: meta.color,
+              width: pct + '%', transition: 'width 0.5s ease' }} />
+          </div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>
+            This typically takes {selectedCrypto === 'BTC' ? '30–60 minutes' : '2–5 minutes'}.
+            This page polls automatically every {POLL_INTERVAL_MS / 1000} seconds.
           </div>
         </div>
       </div>
     );
   }
 
-  // ── Step: Complete ────────────────────────────────────────────────────────
+  // ── Step: Complete ──────────────────────────────────────────────────────────
   if (step === 'complete') {
     return (
-      <div style={styles.page}>
-        <div style={styles.successCard}>
+      <div style={st.page}>
+        <PageHeader title="Payment Confirmed" breadcrumbs={breadcrumbs} />
+        <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: '#f8fafc', marginBottom: 8 }}>
             Payment confirmed!
           </h2>
-          <p style={{ color: '#94a3b8', marginBottom: 24 }}>
+          <p style={{ color: '#94a3b8', marginBottom: 28 }}>
             Your <strong style={{ color: '#f8fafc' }}>{selectedPlan.name}</strong> subscription is now active.
           </p>
-          <button onClick={() => setStep('select')} style={styles.proceedBtn}>
-            Back to checkout
-          </button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => navigate('/dashboard')} style={st.proceedBtn}>
+              Go to Dashboard →
+            </button>
+            <Link to="/settings" style={{ ...st.proceedBtn, background: '#334155',
+              textDecoration: 'none', display: 'inline-block' }}>
+              Account Settings
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -476,108 +600,23 @@ const CryptoCheckout: React.FC<CryptoCheckoutProps> = ({ initialPlanId }) => {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    maxWidth: 760,
-    margin: '0 auto',
-    padding: '32px 16px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    color: '#f1f5f9',
-    background: '#0f172a',
-    minHeight: '100vh',
-  },
-  heading: { fontSize: 28, fontWeight: 700, marginBottom: 6, color: '#f8fafc' },
-  subheading: { color: '#64748b', marginBottom: 32, fontSize: 15 },
-  ratesWarning: { background: 'rgba(251,191,36,0.1)', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#fbbf24', marginBottom: 20 },
-  section: { marginBottom: 32 },
-  sectionTitle: { fontSize: 16, fontWeight: 600, color: '#94a3b8', marginBottom: 14, textTransform: 'uppercase', letterSpacing: 0.5 },
-  planGrid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 },
-  planCard: {
-    border: '2px solid #334155', borderRadius: 10, padding: '18px 16px',
-    transition: 'border-color 0.15s, background 0.15s',
-  },
-  planName: { fontSize: 16, fontWeight: 700, color: '#e2e8f0', marginBottom: 6 },
-  planPrice: { fontSize: 28, fontWeight: 800, color: '#f8fafc', marginBottom: 12 },
-  planPer: { fontSize: 14, fontWeight: 400, color: '#64748b' },
-  planFeatures: { listStyle: 'none', padding: 0, margin: 0, fontSize: 13, color: '#94a3b8', lineHeight: 1.8 },
-  selectedMark: { marginTop: 12, fontSize: 13, color: '#3b82f6', fontWeight: 600 },
-  cryptoGrid: { display: 'flex', gap: 12, flexWrap: 'wrap' },
-  cryptoBtn: {
-    display: 'flex', alignItems: 'center', gap: 12,
-    padding: '14px 20px', border: '2px solid #334155', borderRadius: 10,
-    cursor: 'pointer', transition: 'all 0.15s', minWidth: 140,
-  },
-  cryptoIcon: { fontSize: 28, fontWeight: 700 },
-  cryptoName: { fontSize: 14, fontWeight: 600, color: '#e2e8f0' },
-  cryptoTicker: { fontSize: 12, color: '#64748b' },
-  networkRow: { display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 },
-  networkLabel: { fontSize: 13, color: '#64748b' },
-  networkBtn: {
-    padding: '6px 14px', border: '1px solid #334155', borderRadius: 6,
-    fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s',
-  },
-  flwBanner: {
-    background: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.3)',
-    borderRadius: 10, padding: '16px 20px', marginTop: 8,
-  },
-  summaryBar: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 10,
-    padding: '16px 20px', marginTop: 8,
-  },
-  summaryPlan: { fontSize: 16, fontWeight: 700, color: '#f8fafc' },
-  summaryPrice: { fontSize: 15, color: '#94a3b8' },
-  summaryCrypto: { fontSize: 14, color: '#60a5fa' },
-  proceedBtn: {
-    padding: '12px 24px', background: '#3b82f6', color: '#fff',
-    border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer',
-  },
-  backBtn: {
-    background: 'transparent', border: 'none', color: '#64748b',
-    fontSize: 14, cursor: 'pointer', marginBottom: 20, padding: 0,
-  },
-  addressCard: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
-    padding: '28px 24px',
-  },
-  addressHeader: { display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 },
-  addressTitle: { fontSize: 13, color: '#64748b', marginBottom: 4 },
-  qrSection: { display: 'flex', justifyContent: 'center', marginBottom: 24 },
-  qrImage: { width: 180, height: 180, borderRadius: 8, border: '1px solid #334155' },
-  addressBox: {
-    background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-    padding: '12px 16px', marginBottom: 16,
-  },
-  addressLabel: { fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
-  addressRow: { display: 'flex', alignItems: 'center', gap: 10 },
-  addressText: {
-    flex: 1, fontSize: 13, color: '#93c5fd', wordBreak: 'break-all',
-    fontFamily: 'monospace',
-  },
-  copyBtn: {
-    padding: '6px 14px', background: '#3b82f6', color: '#fff',
-    border: 'none', borderRadius: 6, fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap',
-  },
-  warningBox: {
-    background: '#2d1b1b', border: '1px solid #7f1d1d', borderRadius: 8,
-    padding: '12px 16px', fontSize: 13, color: '#fca5a5', marginBottom: 16,
-  },
-  infoRow: {
-    display: 'flex', justifyContent: 'space-between',
-    fontSize: 13, color: '#64748b', marginBottom: 20,
-  },
-  confirmBtn: {
-    width: '100%', padding: '14px', background: '#22c55e', color: '#fff',
-    border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer',
-  },
-  progressTrack: {
-    width: '100%', height: 8, background: '#1e293b', borderRadius: 4, overflow: 'hidden',
-  },
-  progressBar: { height: '100%', borderRadius: 4, transition: 'width 0.5s ease' },
-  successCard: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
-    padding: '48px 32px', textAlign: 'center',
-  },
+const st: Record<string, React.CSSProperties> = {
+  page:       { maxWidth: 800, margin: '0 auto', padding: '32px 16px', color: '#f1f5f9' },
+  section:    { marginBottom: 28 },
+  sectionTitle: { fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: '0 0 12px' },
+  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 16 },
+  proceedBtn: { padding: '12px 24px', background: '#3b82f6', color: '#fff', border: 'none',
+    borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  backBtn:    { background: 'none', border: '1px solid #334155', borderRadius: 6,
+    color: '#94a3b8', fontSize: 13, padding: '6px 14px', cursor: 'pointer' },
+  copyBtn:    { background: '#334155', border: 'none', borderRadius: 6,
+    color: '#e2e8f0', fontSize: 12, padding: '5px 12px', cursor: 'pointer' },
+  headerLink: { fontSize: 13, color: '#64748b', textDecoration: 'none',
+    padding: '6px 14px', border: '1px solid #334155', borderRadius: 6 },
+  warnBox:    { background: '#451a03', border: '1px solid #92400e', borderRadius: 8,
+    padding: '10px 14px', color: '#fbbf24', fontSize: 13, marginBottom: 16 },
+  errorBox:   { background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8,
+    padding: '10px 14px', color: '#f87171', fontSize: 13, marginBottom: 16 },
 };
 
 export default CryptoCheckout;
