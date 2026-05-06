@@ -17,13 +17,15 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   eliteApi,
   type SupportTicketPayload,
   type CustomDevPayload,
 } from '../hooks/useApi';
 import { useStore } from '../store';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
@@ -276,7 +278,7 @@ function TicketList({ refresh }: { refresh: number }) {
       {loading ? (
         <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
       ) : tickets.length === 0 ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>No tickets yet.</div>
+        <EmptyState icon="🎫" title="No tickets yet" description="Submit a support ticket above and it will appear here." />
       ) : (
         tickets.map(t => (
           <div key={t.ticket_id} style={s.row}>
@@ -464,7 +466,7 @@ function CustomDevList({ refresh }: { refresh: number }) {
       {loading ? (
         <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
       ) : reqs.length === 0 ? (
-        <div style={{ color: '#64748b', fontSize: 13 }}>No requests yet.</div>
+        <EmptyState icon="📦" title="No development requests yet" description="Submit a custom development request above and it will appear here." />
       ) : (
         reqs.map(r => (
           <div key={r.request_id} style={s.row}>
@@ -506,46 +508,67 @@ const EliteDashboard: React.FC = () => {
 
   if (!isElite) {
     return (
-      <div style={s.gate}>
-        <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: '#f59e0b', marginBottom: 8 }}>
-          Elite Plan Required
+      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 40px' }}>
+        <PageHeader
+          title="Elite Dashboard"
+          breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Elite' }]}
+        />
+        <EmptyState
+          icon="⭐"
+          title="Elite Plan Required"
+          description="Dedicated support, custom development, and sub-accounts are exclusive to Elite subscribers ($10,000/mo)."
+          action={{ label: 'Upgrade to Elite', onClick: () => navigate('/checkout') }}
+        />
+        <div style={{ textAlign: 'center', marginTop: 12 }}>
+          <button onClick={() => navigate('/pricing')} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', fontSize: 13, padding: '8px 18px', cursor: 'pointer' }}>
+            View all plans
+          </button>
         </div>
-        <div style={{ fontSize: 14, color: '#94a3b8', maxWidth: 400, margin: '0 auto 24px' }}>
-          Sub-accounts, dedicated support, and custom development are exclusive
-          to Elite subscribers ($10,000/mo).
-        </div>
-        <button style={s.btn} onClick={() => navigate('/checkout')}>
-          Upgrade to Elite
-        </button>
-        <button style={{ ...s.btnSec, marginLeft: 12 }} onClick={() => navigate('/pricing')}>
-          View all plans
-        </button>
       </div>
     );
   }
 
   return (
     <div style={s.page}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
-        <div style={s.heading}>⭐ Elite Dashboard</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => navigate('/walk-forward')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📈 Walk-Forward
-          </button>
-          <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🤖 AI Strategy
-          </button>
-          <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🏆 Leaderboard
-          </button>
-        </div>
-      </div>
-      <div style={s.sub}>
-        Dedicated support · Custom development · Sub-accounts · White-label
+      <PageHeader
+        title="Elite Dashboard"
+        subtitle="Dedicated support · Custom development · Sub-accounts · White-label"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Elite' }]}
+        badge={<span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>ELITE</span>}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigate('/walk-forward')}
+              style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              📈 Walk-Forward
+            </button>
+            <button onClick={() => navigate('/ai-strategy')}
+              style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🤖 AI Strategy
+            </button>
+            <button onClick={() => navigate('/leaderboard')}
+              style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🏆 Leaderboard
+            </button>
+          </div>
+        }
+      />
+
+      {/* Cross-links */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap', fontSize: 13 }}>
+        {[
+          { to: '/sub-accounts', label: '🗂 Sub-Accounts' },
+          { to: '/whitelabel', label: '🏷 White-label' },
+          { to: '/teams', label: '👥 Teams' },
+          { to: '/wallet', label: '💳 Wallet' },
+          { to: '/settings', label: '⚙️ Settings' },
+          { to: '/chat', label: '💬 Chat' },
+        ].map(({ to, label }) => (
+          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+            {label}
+          </Link>
+        ))}
       </div>
 
       {/* Account manager + ticket form */}
