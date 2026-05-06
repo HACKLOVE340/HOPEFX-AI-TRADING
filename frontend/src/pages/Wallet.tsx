@@ -11,8 +11,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -187,18 +190,46 @@ const Wallet: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ ...s.title, marginBottom: 0 }}>Wallet & Payments</h1>
-        <button
-          onClick={() => navigate('/trade')}
-          style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 13, fontWeight: 700, padding: '9px 18px', cursor: 'pointer' }}
-        >
-          ⚡ Start Trading
-        </button>
+      <PageHeader
+        title="Wallet & Payments"
+        subtitle="Manage your balance, transactions, subscriptions, and payment methods"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Wallet' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigate('/trade')}
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer' }}>
+              ⚡ Trade
+            </button>
+            <button onClick={() => navigate('/upgrade')}
+              style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, color: '#f59e0b', fontSize: 12, fontWeight: 700, padding: '8px 16px', cursor: 'pointer' }}>
+              ⭐ Upgrade
+            </button>
+          </div>
+        }
+      />
+
+      {/* Cross-links */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', fontSize: 13 }}>
+        {[
+          { to: '/affiliate', label: '💰 Affiliate' },
+          { to: '/kyc', label: '🪪 KYC' },
+          { to: '/settings', label: '⚙️ Settings' },
+          { to: '/pricing', label: '📋 Pricing' },
+          { to: '/portfolio', label: '💼 Portfolio' },
+        ].map(({ to, label }) => (
+          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+            {label}
+          </Link>
+        ))}
       </div>
 
       {balanceErr && (
-        <div style={s.errBanner}>⚠️ {balanceErr}</div>
+        <ErrorBanner message={balanceErr} onDismiss={() => {}} />
       )}
 
       {/* Balance card — shows action buttons immediately; numbers filled in after load */}
@@ -281,12 +312,10 @@ const Wallet: React.FC = () => {
       {/* Transactions */}
       {tab === 'transactions' && (
         <div style={s.txList}>
-          {txLoading && <p style={{ color: '#64748b', padding: '20px 0' }}>Loading transactions…</p>}
-          {!txLoading && txErr && (
-            <p style={{ color: '#f87171', padding: '20px 0' }}>⚠️ {txErr}</p>
-          )}
+          {txLoading && <p style={{ color: '#64748b', padding: '20px 0', textAlign: 'center' }}>Loading transactions…</p>}
+          {!txLoading && txErr && <ErrorBanner message={txErr} onDismiss={() => {}} />}
           {!txLoading && !txErr && transactions.length === 0 && (
-            <p style={{ color: '#64748b', padding: '20px 0' }}>No transactions yet.</p>
+            <EmptyState icon="📋" title="No transactions yet" description="Your deposits, withdrawals, and subscription payments will appear here." />
           )}
           {transactions.map((tx) => (
             <div key={tx.id} style={s.txRow}>
@@ -376,11 +405,11 @@ const Wallet: React.FC = () => {
       {tab === 'payment-methods' && (
         <div style={s.subCard}>
           {pmLoading ? (
-            <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>Loading payment methods…</div>
+            <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16, textAlign: 'center' }}>Loading payment methods…</div>
           ) : pmErr ? (
-            <div style={{ color: '#f87171', fontSize: 13, marginBottom: 16 }}>⚠️ {pmErr}</div>
+            <ErrorBanner message={pmErr} onDismiss={() => {}} />
           ) : paymentMethods.length === 0 ? (
-            <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>No payment methods saved.</div>
+            <EmptyState icon="💳" title="No payment methods saved" description="Add a card or crypto wallet to enable deposits and withdrawals." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
               {paymentMethods.map((pm) => (
