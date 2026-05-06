@@ -51,7 +51,8 @@ const EVENT_CATEGORIES: Record<string, BadgeVariant> = {
   'signal.copied': 'info',
 };
 
-function eventVariant(type: string): BadgeVariant {
+function eventVariant(type: string | undefined | null): BadgeVariant {
+  if (!type || typeof type !== 'string') return 'neutral';
   for (const [key, variant] of Object.entries(EVENT_CATEGORIES)) {
     if (type.includes(key)) return variant;
   }
@@ -104,7 +105,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortable: true,
     render: (row) => (
       <Badge variant={eventVariant(row.event_type)}>
-        {row.event_type}
+        {row.event_type ?? '—'}
       </Badge>
     ),
   },
@@ -162,10 +163,10 @@ const AuditLog: React.FC = () => {
       const res = await adminApi.auditLog(params);
       if (!mountedRef.current) return;
       const d = res.data as AuditResponse;
-      setEvents(d.events ?? []);
-      setTotal(d.total ?? 0);
-      setPage(d.page ?? pg);
-      setPages(d.pages ?? 1);
+      setEvents(Array.isArray(d.events) ? d.events : []);
+      setTotal(typeof d.total === 'number' ? d.total : 0);
+      setPage(typeof d.page === 'number' ? d.page : pg);
+      setPages(typeof d.pages === 'number' ? d.pages : 1);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       const msg = e instanceof Error ? e.message : 'Failed to load audit log';
