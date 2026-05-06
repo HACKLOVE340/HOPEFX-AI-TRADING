@@ -14,6 +14,7 @@
 import React, { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader, EmptyState } from '../components';
 import { researchApi } from '../hooks/useApi';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -275,20 +276,36 @@ const ResearchPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#e2e8f0' }}>Research</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-            AI-powered market analysis notebooks — enterprise tier
-          </p>
-        </div>
-        <button onClick={() => setShowCreate(true)}
-          style={{ padding: '9px 18px', background: '#8b5cf6', color: '#fff', border: 'none',
-            borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          + New Notebook
-        </button>
-      </div>
+      <PageHeader
+        title="Research"
+        subtitle="AI-powered market analysis notebooks — enterprise tier"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
+          { label: 'Research' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => navigate('/geopolitical')}
+              style={{ padding: '7px 14px', background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🌍 Geopolitical
+            </button>
+            <button
+              onClick={() => navigate('/signals')}
+              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📡 Signals
+            </button>
+            <button onClick={() => setShowCreate(true)}
+              style={{ padding: '7px 16px', background: '#8b5cf6', color: '#fff', border: 'none',
+                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              + New Notebook
+            </button>
+          </div>
+        }
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '320px 1fr' : '1fr', gap: 20 }}>
         {/* Notebook list */}
@@ -297,12 +314,19 @@ const ResearchPage: React.FC = () => {
             <div style={{ color: '#64748b', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading notebooks…</div>
           )}
           {!nbLoading && notebooks.length === 0 && (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
-              padding: 40, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🔬</div>
-              <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>No research notebooks yet</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Create one to start AI-powered market analysis</div>
-            </div>
+            <EmptyState
+              icon="🔬"
+              title="No research notebooks yet"
+              description="Create a notebook to run AI-powered market analysis, backtest hypotheses, and generate insights."
+              action={
+                <button
+                  onClick={() => setShowCreate(true)}
+                  style={{ padding: '8px 18px', background: '#8b5cf6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  + New Notebook
+                </button>
+              }
+            />
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {notebooks.map(nb => (

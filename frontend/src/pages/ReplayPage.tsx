@@ -14,6 +14,7 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
 
@@ -219,34 +220,42 @@ const ReplayPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 1300, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#e2e8f0' }}>Market Replay</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-            Bar-by-bar historical replay with live strategy testing — enterprise tier
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => navigate('/walk-forward')}
-            style={{ padding: '9px 16px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-          >
-            📊 Walk-Forward
-          </button>
-          <button
-            onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '9px 16px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-          >
-            🤖 AI Strategy
-          </button>
-          <button onClick={() => setShowCreate(s => !s)}
-            style={{ padding: '9px 18px', background: '#3b82f6', color: '#fff', border: 'none',
-              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            + New Session
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Market Replay"
+        subtitle="Bar-by-bar historical replay with live strategy testing — enterprise tier"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
+          { label: 'Market Replay' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => navigate('/ai-chart')}
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📈 AI Charts
+            </button>
+            <button
+              onClick={() => navigate('/walk-forward')}
+              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📊 Walk-Forward
+            </button>
+            <button
+              onClick={() => navigate('/ai-strategy')}
+              style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🤖 AI Strategy
+            </button>
+            <button onClick={() => setShowCreate((s: boolean) => !s)}
+              style={{ padding: '7px 16px', background: '#3b82f6', color: '#fff', border: 'none',
+                borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              + New Session
+            </button>
+          </div>
+        }
+      />
 
       {/* Create form */}
       {showCreate && (

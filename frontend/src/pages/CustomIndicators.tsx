@@ -4,6 +4,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 
@@ -113,26 +114,43 @@ const CustomIndicators: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Custom Indicator Builder</h1>
-          <p style={s.subtitle}>Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies.</p>
-        </div>
-        <div style={{ display:'flex', gap:8 }}>
-          <button
-            onClick={() => navigate('/ai-strategy')}
-            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:7, color:'#a78bfa', fontSize:12, fontWeight:700, padding:'7px 14px', cursor:'pointer' }}
-          >
-            🤖 AI Strategy
-          </button>
-          <button
-            onClick={() => navigate('/walk-forward')}
-            style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)', borderRadius:7, color:'#60a5fa', fontSize:12, fontWeight:700, padding:'7px 14px', cursor:'pointer' }}
-          >
-            📊 Walk-Forward Test
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Custom Indicator Builder"
+        subtitle="Define indicator formulas using EMA, SMA, RSI. Preview on chart. Save for use in strategies."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'AI Strategy', href: '/ai-strategy' },
+          { label: 'Custom Indicators' },
+        ]}
+        actions={
+          <div style={{ display:'flex', gap:8 }}>
+            <button
+              onClick={() => navigate('/ai-chart')}
+              style={{ background:'rgba(59,130,246,0.12)', border:'1px solid rgba(59,130,246,0.35)', borderRadius:7, color:'#60a5fa', fontSize:12, fontWeight:600, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              📈 AI Charts
+            </button>
+            <button
+              onClick={() => navigate('/ai-strategy')}
+              style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:7, color:'#a78bfa', fontSize:12, fontWeight:600, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              🤖 AI Strategy
+            </button>
+            <button
+              onClick={() => navigate('/walk-forward')}
+              style={{ background:'rgba(96,165,250,0.12)', border:'1px solid rgba(96,165,250,0.35)', borderRadius:7, color:'#60a5fa', fontSize:12, fontWeight:600, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              📊 Walk-Forward
+            </button>
+            <button
+              onClick={() => navigate('/pattern-detector')}
+              style={{ background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', borderRadius:7, color:'#fbbf24', fontSize:12, fontWeight:600, padding:'6px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              🔍 Patterns
+            </button>
+          </div>
+        }
+      />
 
       <div style={s.grid}>
         {/* Builder */}

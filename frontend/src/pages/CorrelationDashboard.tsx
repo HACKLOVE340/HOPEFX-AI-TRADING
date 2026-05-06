@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { api } from '../hooks/useApi';
 
 interface CorrelationData {
@@ -73,25 +74,42 @@ const CorrelationDashboard: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Correlation & Sentiment</h1>
-          <p style={s.subtitle}>Rolling correlations between gold, FX, equities, and macro indicators.</p>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-          <span style={{ fontSize:13, color:'#94a3b8' }}>Window:</span>
-          {[14,30,60,90].map(w => (
-            <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
-          ))}
-          <div style={{ width:1, height:24, background:'#334155', margin:'0 4px' }} />
-          <button
-            onClick={() => navigate('/ai-strategy')}
-            style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'#a78bfa', fontSize:12, fontWeight:700, padding:'5px 12px', cursor:'pointer' }}
-          >
-            🤖 Generate Strategy
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Correlation & Sentiment"
+        subtitle="Rolling correlations between gold, FX, equities, and macro indicators."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
+          { label: 'Correlation' },
+        ]}
+        actions={
+          <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+            <span style={{ fontSize:12, color:'#64748b', fontWeight:600 }}>Window:</span>
+            {[14,30,60,90].map(w => (
+              <button key={w} style={{ ...s.wBtn, ...(window===w ? s.wBtnActive : {}) }} onClick={() => setWindow(w)}>{w}d</button>
+            ))}
+            <div style={{ width:1, height:20, background:'#334155', margin:'0 2px' }} />
+            <button
+              onClick={() => navigate('/geopolitical')}
+              style={{ background:'rgba(251,191,36,0.12)', border:'1px solid rgba(251,191,36,0.35)', borderRadius:6, color:'#fbbf24', fontSize:12, fontWeight:600, padding:'5px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              🌍 Geopolitical
+            </button>
+            <button
+              onClick={() => navigate('/ai-strategy')}
+              style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:6, color:'#a78bfa', fontSize:12, fontWeight:600, padding:'5px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              🤖 AI Strategy
+            </button>
+            <button
+              onClick={() => navigate('/performance')}
+              style={{ background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.35)', borderRadius:6, color:'#4ade80', fontSize:12, fontWeight:600, padding:'5px 12px', cursor:'pointer', fontFamily:'inherit' }}
+            >
+              📈 Performance
+            </button>
+          </div>
+        }
+      />
 
       {loading ? <div style={s.dim}>Loading…</div> : loadErr ? (
         <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', gap: 12 }}>

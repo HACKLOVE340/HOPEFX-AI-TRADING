@@ -353,14 +353,25 @@ const TCADashboard: React.FC = () => {
       <PageHeader
         title="Transaction Cost Analysis"
         subtitle="Signal-price vs fill-price slippage across all brokers and sessions"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
+          { label: 'TCA' },
+        ]}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {loading && <span style={{ color: '#64748b', fontSize: 11 }}>Updating…</span>}
             <button
+              onClick={() => navigate('/performance')}
+              style={{ ...pg.btn, background: 'rgba(74,222,128,0.1)', borderColor: 'rgba(74,222,128,0.3)', color: '#4ade80' }}
+            >
+              📈 Performance
+            </button>
+            <button
               onClick={() => navigate('/pnl')}
               style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
             >
-              💹 View P&L Impact
+              💹 P&L
             </button>
             <button style={pg.btn} onClick={refresh} disabled={loading}>Refresh</button>
             <button style={pg.btnCsv} onClick={() => exportCSV(filteredRecords)} disabled={filteredRecords.length === 0}>
