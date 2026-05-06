@@ -84,16 +84,18 @@ const MobilePage: React.FC = () => {
     } finally { setRegistering(false); }
   };
 
-  const FEATURES = config?.features ?? [
-    'Live price alerts',
-    'One-tap trade execution',
-    'Real-time P&L tracking',
-    'AI signal notifications',
-    'Biometric authentication',
-    'Portfolio overview',
-    'Copy trading management',
-    'Secure 2FA push approval',
-  ];
+  const FEATURES: string[] = Array.isArray(config?.features) && config!.features.length > 0
+    ? config!.features
+    : [
+        'Live price alerts',
+        'One-tap trade execution',
+        'Real-time P&L tracking',
+        'AI signal notifications',
+        'Biometric authentication',
+        'Portfolio overview',
+        'Copy trading management',
+        'Secure 2FA push approval',
+      ];
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
