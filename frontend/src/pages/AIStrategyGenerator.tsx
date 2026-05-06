@@ -8,6 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
 
@@ -170,34 +171,44 @@ const AIStrategyGenerator: React.FC = () => {
           AI backend: <strong>{llmBackend}</strong> — ready
         </div>
       )}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>AI Strategy Generator</h1>
-          <p style={s.subtitle}>
-            Describe your trading idea in plain English. The AI generates Python strategy code,
-            runs a backtest, and lets you deploy it to paper trading in one click.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {(['generate', 'history'] as const).map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} style={{
-              ...s.tabBtn,
-              ...(activeTab === t ? s.tabBtnActive : {}),
-            }}>
-              {t === 'generate' ? '✨ Generate' : `📋 History (${history.length})`}
+      <PageHeader
+        title="AI Strategy Generator"
+        subtitle="Describe your trading idea in plain English. The AI generates strategy code, runs a backtest, and deploys to paper trading."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
+          { label: 'AI Strategy' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            {(['generate', 'history'] as const).map(t => (
+              <button key={t} onClick={() => setActiveTab(t)} style={{
+                ...s.tabBtn,
+                ...(activeTab === t ? s.tabBtnActive : {}),
+              }}>
+                {t === 'generate' ? '✨ Generate' : `📋 History (${history.length})`}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: '#334155' }} />
+            <button onClick={() => navigate('/ai-chart')}
+              style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              📈 AI Charts
             </button>
-          ))}
-          <div style={{ width: 1, height: 20, background: '#334155' }} />
-          <button onClick={() => navigate('/pattern-detector')}
-            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🔍 Patterns
-          </button>
-          <button onClick={() => navigate('/ab-testing')}
-            style={{ padding: '6px 13px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ A/B Test
-          </button>
-        </div>
-      </div>
+            <button onClick={() => navigate('/pattern-detector')}
+              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🔍 Patterns
+            </button>
+            <button onClick={() => navigate('/walk-forward')}
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              📊 Walk-Forward
+            </button>
+            <button onClick={() => navigate('/ab-testing')}
+              style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              ⚡ A/B Test
+            </button>
+          </div>
+        }
+      />
 
       {/* ── History tab ── */}
       {activeTab === 'history' && (

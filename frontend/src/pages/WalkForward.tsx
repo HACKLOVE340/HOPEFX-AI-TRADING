@@ -10,6 +10,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
 
@@ -216,35 +217,46 @@ const WalkForward: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Walk-Forward Validation</h1>
-          <p style={s.subtitle}>
-            {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => navigate('/ai-strategy')}
-            style={{
-              padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
-              background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
-              color: '#a78bfa', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-            }}
-          >
-            🤖 Generate Strategy
-          </button>
-          <div style={s.searchRow}>
-            <input
-              style={s.searchInput}
-              placeholder="Run ID…"
-              value={inputId}
-              onChange={(e) => setInputId(e.target.value)}
-            />
-            <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
+      <PageHeader
+        title="Walk-Forward Validation"
+        subtitle={`${data.strategy ?? '—'} · ${data.symbol ?? '—'} · ${(data.folds ?? []).length} folds`}
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'AI Strategy', href: '/ai-strategy' },
+          { label: 'Walk-Forward' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => navigate('/ai-strategy')}
+              style={{ padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+            >
+              🤖 AI Strategy
+            </button>
+            <button
+              onClick={() => navigate('/ab-testing')}
+              style={{ padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+            >
+              ⚡ A/B Test
+            </button>
+            <button
+              onClick={() => navigate('/pattern-detector')}
+              style={{ padding: '6px 12px', borderRadius: 6, cursor: 'pointer', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+            >
+              🔍 Patterns
+            </button>
+            <div style={s.searchRow}>
+              <input
+                style={s.searchInput}
+                placeholder="Run ID…"
+                value={inputId}
+                onChange={(e) => setInputId(e.target.value)}
+              />
+              <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Summary metrics */}
       <div style={s.metricsRow}>

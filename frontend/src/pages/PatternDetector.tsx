@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { tradingApi } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -204,23 +205,32 @@ const PatternDetector: React.FC = () => {
 
   return (
     <div style={s.page}>
-      {/* Header */}
+      <PageHeader
+        title="Pattern Detector"
+        subtitle="AI-powered chart pattern recognition for XAU/USD and major instruments"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'AI Strategy', href: '/ai-strategy' },
+          { label: 'Pattern Detector' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
+              📈 AI Charts
+            </button>
+            <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
+              🤖 AI Strategy
+            </button>
+            <button onClick={() => navigate('/walk-forward')} style={s.navBtn}>
+              📊 Walk-Forward
+            </button>
+            <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
+              🛡 Risk Calc
+            </button>
+          </div>
+        }
+      />
       <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Pattern Detector</h1>
-          <p style={s.subtitle}>AI-powered chart pattern recognition for XAU/USD and major instruments</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
-            🧠 AI Chart
-          </button>
-          <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
-            🤖 AI Strategy
-          </button>
-          <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
-            🛡 Risk Calc
-          </button>
-        </div>
 
         {/* Controls */}
         <div style={s.controls}>

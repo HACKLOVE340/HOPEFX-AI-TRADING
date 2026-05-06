@@ -16,7 +16,7 @@
 
 import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AIChart } from '../components/charts/AIChart';
 import { cn } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
@@ -223,12 +223,51 @@ export default function AIChartDashboard() {
     <div className="flex flex-col h-screen bg-[#080c14] overflow-hidden">
 
       {/* ── Top bar ────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a0f1a] border-b border-[#1e2d3d] shrink-0">
-        <div>
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-[#0a0f1a] border-b border-[#1e2d3d] shrink-0 flex-wrap">
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-600 shrink-0">
+          <Link to="/dashboard" className="hover:text-slate-400 transition-colors no-underline text-slate-600">Dashboard</Link>
+          <span className="text-slate-700">›</span>
+          <span className="text-slate-400 font-medium">AI Charts</span>
+        </div>
+        <div className="w-px h-4 bg-[#1e2d3d] shrink-0" />
+        <div className="shrink-0">
           <h1 className="text-[14px] font-bold text-slate-100 leading-tight">AI Chart Dashboard</h1>
           <p className="text-[11px] text-slate-500">Multi-symbol AI analysis</p>
         </div>
         <div className="flex-1" />
+        {/* Cross-links */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => navigate('/watchlist')}
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+            style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)' }}
+          >
+            👁 Watchlist
+          </button>
+          <button
+            onClick={() => navigate('/pattern-detector')}
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}
+          >
+            🔍 Patterns
+          </button>
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+            style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.2)' }}
+          >
+            🧠 Strategy
+          </button>
+          <button
+            onClick={() => navigate('/signals')}
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+            style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)' }}
+          >
+            📡 Signals
+          </button>
+        </div>
+        <div className="w-px h-4 bg-[#1e2d3d] shrink-0" />
         <TfSelector value={timeframe} onChange={setTimeframe} />
       </div>
 

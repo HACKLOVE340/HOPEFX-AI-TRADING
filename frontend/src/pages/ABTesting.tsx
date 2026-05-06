@@ -4,6 +4,7 @@
  */
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { api } from '../hooks/useApi';
 
 interface ABResult {
@@ -111,22 +112,35 @@ const ABTesting: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Strategy A/B Testing</h1>
-          <p style={s.subtitle}>Run two strategies in parallel on paper. Auto-select winner after N days.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/ai-strategy')}
-            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            🤖 AI Strategy
-          </button>
-          <button onClick={() => navigate('/walk-forward')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📈 Walk-Forward
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Strategy A/B Testing"
+        subtitle="Run two strategies in parallel on paper. Auto-select winner after N days."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'AI Strategy', href: '/ai-strategy' },
+          { label: 'A/B Testing' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => navigate('/ai-strategy')}
+              style={{ padding: '6px 12px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🤖 AI Strategy
+            </button>
+            <button onClick={() => navigate('/walk-forward')}
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              📊 Walk-Forward
+            </button>
+            <button onClick={() => navigate('/pattern-detector')}
+              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🔍 Patterns
+            </button>
+            <button onClick={() => navigate('/performance')}
+              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              📈 Performance
+            </button>
+          </div>
+        }
+      />
 
       <div style={s.grid}>
         {/* Config */}
