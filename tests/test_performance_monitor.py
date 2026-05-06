@@ -302,8 +302,9 @@ class TestFireRollbackAlert:
         mock_app_state = MagicMock()
         mock_app_state.alert_engine = mock_ae
 
+        # The production code imports from core.app_state, not from app.
         with patch.dict(sys.modules, {"core.outbox": MagicMock(write_outbox_event_standalone=MagicMock())}):
-            with patch.dict(sys.modules, {"app": MagicMock(app_state=mock_app_state)}):
+            with patch.dict(sys.modules, {"core.app_state": MagicMock(app_state=mock_app_state)}):
                 self.mon._fire_rollback_alert("v2", "v1", "reason")
 
         mock_ae.send_alert.assert_called_once()

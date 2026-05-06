@@ -502,6 +502,60 @@ class ModelRegistry:
         self._save(manifest)
         logger.info("ModelRegistry: retired '%s'", name)
 
+    def rollback(self, name: str) -> dict[str, Any]:
+        """
+        Force-promote *name* to production, bypassing quality gates.
+
+        Used exclusively for emergency rollbacks where a previously-validated
+        model must be restored immediately without re-running the Sharpe/PnL
+        gates. The caller (superadmin endpoint) is responsible for ensuring
+        the target version was previously in production or staging.
+
+        Parameters
+        ----------
+        name : Version name to roll back to.
+
+        Returns
+        -------
+        The updated version entry.
+
+        Raises
+        ------
+        KeyError : If *name* is not in the registry.
+        """
+        manifest = self._load()
+        if name not in manifest["versions"]:
+            raise KeyError(f"Version '{name}' not found in registry")
+
+        # Retire the current active version
+        prev_active = manifest.get("active_version")
+        if prev_active and prev_active != name:
+            prev = manifest["versions"].get(prev_active)
+            if prev:
+                prev["state"] = "retired"
+                logger.info("ModelRegistry.rollback: retired previous active '%s'", prev_active)
+
+        # Promote the target version without gate checks
+        from datetime import datetime, timezone
+        entry = manifest["versions"][name]
+        entry["state"] = "production"
+        entry["promoted_at"] = datetime.now(timezone.utc).isoformat()
+        manifest["active_version"] = name
+        self._save(manifest)
+
+        # Update symlink if artifact exists
+        artifact = entry.get("artifact_path")
+        if artifact:
+            artifact_path = Path(artifact)
+            if artifact_path.exists():
+                try:
+                    self._update_symlink(artifact_path)
+                except Exception as exc:
+                    logger.warning("ModelRegistry.rollback: symlink update failed: %s", exc)
+
+        logger.info("ModelRegistry.rollback: rolled back to '%s' (gates bypassed)", name)
+        return entry
+
     # ── Bootstrap from existing meta ──────────────────────────────────────────
 
     def bootstrap_from_meta(

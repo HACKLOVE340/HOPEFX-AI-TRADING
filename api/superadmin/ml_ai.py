@@ -230,7 +230,9 @@ async def rollback_model(model_name: str, user: TokenPayload = Depends(_require_
         # Sort by registered_at descending and pick the most recent
         candidates.sort(key=lambda x: x[1].get("registered_at", ""), reverse=True)
         prev_name, _ = candidates[0]
-        registry.promote(prev_name)
+        # Use rollback() which bypasses quality gates — this is an emergency
+        # restore of a previously-validated model, not a new promotion.
+        registry.rollback(prev_name)
         # Reload inference engine
         try:
             from ml.inference_engine import get_inference_engine

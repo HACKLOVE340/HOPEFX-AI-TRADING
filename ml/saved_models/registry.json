@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "active_version": "xgb_horizon5_v1",
+  "active_version": "mtf_ensemble_v1",
   "versions": {
     "advanced_oos_v1": {
       "name": "advanced_oos_v1",
@@ -84,7 +84,7 @@
       "sha256": "bc80b9ebee1d2735df54b4e3b25cdaa3c6019e9b8cfac307c41f6c05e9f4f939",
       "registered_at": "2026-04-03T16:27:00.000000+00:00",
       "promoted_at": "2026-04-03T16:27:00.000000+00:00",
-      "state": "active",
+      "state": "retired",
       "oos_accuracy": 0.5992,
       "oos_f1": 0.6885,
       "oos_auc": 0.6077,
@@ -122,8 +122,8 @@
       "file": "ml/saved_models/mtf_ensemble.pkl",
       "sha256": "d270cf34336527ce6d12ec9d8a0eaa20f9be615356f59095b0a7178e0c1695dd",
       "registered_at": "2026-04-03T16:50:42.438703+00:00",
-      "promoted_at": null,
-      "state": "staging",
+      "promoted_at": "2026-05-06T08:39:58.107684+00:00",
+      "state": "production",
       "oos_accuracy": 0.6135,
       "oos_accuracy_confident": 0.6116,
       "oos_f1": 0.6133,

@@ -1051,6 +1051,8 @@ class TestAssessRiskAndSize:
             "probability": 0.72,
             "confidence": 0.75,
             "direction": "BUY",
+            # Use TRENDING_UP (scalar=1.0) so regime scaling does not reduce size
+            "regime": "TRENDING_UP",
         }
 
     async def test_risk_manager_blocks_returns_none(self):

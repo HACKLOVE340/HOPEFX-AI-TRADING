@@ -372,6 +372,12 @@ _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
     "/favicon.ico",
     "/ws",          # WebSocket — auth is checked inside the handler
     "/api/status",  # lightweight status page
+    "/",            # root — serves static HTML, no data dependency
+    "/godmode",     # dashboard — static HTML
+    "/stream",      # stream dashboard — static HTML
+    "/paper-trading",  # paper trading page — static HTML
+    "/pricing",     # pricing page — static HTML
+    "/admin",       # admin dashboard — static HTML
 )
 
 

@@ -368,7 +368,9 @@ class TestMarketDataCache:
             "bar_open_ts": 1_700_000_000.0,
         }
         cache.store_bar("XAUUSD", "1m", bar)
-        r.zadd.assert_called_once()
+        # store_bar uses a pipeline; verify pipeline().zadd was called
+        pipe = r.pipeline.return_value
+        pipe.zadd.assert_called_once()
 
     def test_ping_returns_false_on_redis_error(self):
         r = MagicMock()

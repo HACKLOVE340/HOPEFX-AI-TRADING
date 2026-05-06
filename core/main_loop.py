@@ -328,13 +328,25 @@ def _verify_model_registry() -> None:
         if ok:
             logger.info("ModelRegistry: %s", msg)
         else:
-            logger.critical(
-                "ModelRegistry: INTEGRITY FAILURE — %s. "
-                "The model artifact may be corrupted or tampered with. "
-                "Re-train and re-register before starting.",
-                msg,
-            )
-            sys.exit(1)
+            # In paper/test mode the artifact may not exist yet — warn but
+            # do not abort.  In live production mode, a missing or corrupt
+            # artifact is fatal: we must not trade with an unverified model.
+            _app_env = os.getenv("APP_ENV", "development").lower()
+            _paper = os.getenv("PAPER_TRADING", "false").lower() in ("1", "true", "yes")
+            if _app_env == "production" and not _paper:
+                logger.critical(
+                    "ModelRegistry: INTEGRITY FAILURE — %s. "
+                    "The model artifact may be corrupted or tampered with. "
+                    "Re-train and re-register before starting.",
+                    msg,
+                )
+                sys.exit(1)
+            else:
+                logger.warning(
+                    "ModelRegistry: integrity check failed (%s) — continuing in %s mode.",
+                    msg,
+                    "paper" if _paper else _app_env,
+                )
 
     except Exception as exc:
         # Registry check failure is non-fatal in development; fatal in production

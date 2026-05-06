@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
 
 from api.auth import TokenPayload, get_current_user, require_role
 from pydantic import BaseModel, Field
@@ -327,7 +327,7 @@ async def kyc_documents_alias(user: TokenPayload = Depends(get_current_user)):
 @kyc_alias_router.post("/documents", summary="Upload KYC document")
 async def kyc_upload_document_alias(
     user: TokenPayload = Depends(get_current_user),
-    file: "UploadFile | None" = None,
+    file: UploadFile | None = None,
     doc_type: str = "identity",
 ):
     """Upload a KYC document.
@@ -340,7 +340,6 @@ async def kyc_upload_document_alias(
     import os as _os
     import uuid
     from datetime import datetime, timezone
-    from fastapi import UploadFile
 
     doc_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
