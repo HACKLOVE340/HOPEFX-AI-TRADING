@@ -8,10 +8,11 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
+import { useToast } from '../components/Toast';
 
 function extractApiError(err: unknown, fallback: string): string {
   const detail = (err as { response?: { data?: { detail?: string } } })
@@ -108,16 +109,19 @@ const LeaderCard: React.FC<{
 
 const CopyTrading: React.FC = () => {
   const navigate = useNavigate();
+  const toast    = useToast();
   const [leaders, setLeaders]           = useState<Leader[]>([]);
   const [loading, setLoading]           = useState(true);
   const [loadErr, setLoadErr]           = useState('');
   const [selected, setSelected]         = useState<string | null>(null);
   const [allocation, setAllocation]     = useState(10000);
+  const [riskPct, setRiskPct]           = useState(10); // max drawdown stop %
   const [sortBy, setSortBy]             = useState<'return' | 'sharpe' | 'followers'>('return');
   const [copying, setCopying]           = useState(false);
   const [copyMsg, setCopyMsg]           = useState('');
   const [sessions, setSessions]         = useState<ActiveSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [stopConfirmId, setStopConfirmId] = useState<string | null>(null);
   const [stoppingId, setStoppingId]     = useState<string | null>(null);
   const [updatingId, setUpdatingId]     = useState<string | null>(null);
   const [editAlloc, setEditAlloc]       = useState<Record<string, number>>({});
@@ -172,23 +176,34 @@ const CopyTrading: React.FC = () => {
     setCopying(true);
     setCopyMsg('');
     try {
-      await copyTradingApi.startCopy(selected, { allocation_amount: allocation });
-      setCopyMsg(`Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()}`);
+      await copyTradingApi.startCopy(selected, {
+        allocation_amount: allocation,
+        max_drawdown_stop_pct: riskPct,
+      });
+      const msg = `Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()} · Stop at ${riskPct}% DD`;
+      setCopyMsg(msg);
+      toast.success(msg);
       setSelected(null);
       await loadSessions();
       setActiveTab('active');
     } catch (e: unknown) {
-      setCopyMsg(`Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`);
+      const msg = `Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`;
+      setCopyMsg(msg);
+      toast.error(msg);
     }
     setCopying(false);
   };
 
   const handleStopCopy = async (traderId: string) => {
+    setStopConfirmId(null);
     setStoppingId(traderId);
     try {
       await copyTradingApi.stopCopy(traderId);
+      toast.success('Copy session stopped.');
       await loadSessions();
-    } catch { /* non-fatal */ }
+    } catch {
+      toast.error('Failed to stop copy session.');
+    }
     finally { setStoppingId(null); }
   };
 
@@ -229,18 +244,8 @@ const CopyTrading: React.FC = () => {
               </button>
             ))}
             <div style={{ width: 1, height: 24, background: '#334155' }} />
-            <button
-              onClick={() => navigate('/leaderboard')}
-              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🏆 Leaderboard
-            </button>
-            <button
-              onClick={() => navigate('/signals')}
-              style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              📡 Signals
-            </button>
+            <Link to="/leaderboard" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>🏆 Leaderboard</Link>
+            <Link to="/signals"     style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>📡 Signals</Link>
           </div>
         }
       />
@@ -329,13 +334,26 @@ const CopyTrading: React.FC = () => {
                   </button>
                 </div>
 
-                <button
-                  onClick={() => handleStopCopy(sess.trader_id)}
-                  disabled={stoppingId === sess.trader_id}
-                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
-                >
-                  {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
-                </button>
+                {stopConfirmId === sess.trader_id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8 }}>
+                    <span style={{ fontSize: 13, color: '#fca5a5' }}>Stop copying {sess.trader_name}?</span>
+                    <button
+                      onClick={() => handleStopCopy(sess.trader_id)}
+                      disabled={stoppingId === sess.trader_id}
+                      style={{ background: '#7f1d1d', border: 'none', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '5px 12px' }}
+                    >
+                      {stoppingId === sess.trader_id ? 'Stopping…' : 'Confirm Stop'}
+                    </button>
+                    <button onClick={() => setStopConfirmId(null)} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '5px 10px' }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setStopConfirmId(sess.trader_id)}
+                    style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
+                  >
+                    ⏹ Stop Copying
+                  </button>
+                )}
               </div>
             );
           })}
@@ -379,24 +397,50 @@ const CopyTrading: React.FC = () => {
           <h3 style={s.cardTitle}>Start Copying — {selectedLeader.name}</h3>
 
           <div style={s.allocationGrid}>
-            <div>
-              <label style={s.label}>Allocation Amount</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div>
+                <label style={s.label}>
+                  Allocation Amount: <strong style={{ color: '#f1f5f9' }}>${allocation.toLocaleString()}</strong>
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <input
+                    type="range"
+                    min={1000}
+                    max={100000}
+                    step={1000}
+                    value={allocation}
+                    onChange={(e) => setAllocation(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: '#3b82f6' }}
+                  />
+                  <input
+                    type="number"
+                    value={allocation}
+                    onChange={(e) => setAllocation(Number(e.target.value))}
+                    style={{ ...s.input, width: 120 }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={s.label}>
+                  Max Drawdown Stop: <strong style={{ color: '#f87171' }}>{riskPct}%</strong>
+                  <span style={{ color: '#475569', fontWeight: 400, marginLeft: 8 }}>
+                    (stop at −${(allocation * riskPct / 100).toLocaleString()} loss)
+                  </span>
+                </label>
                 <input
                   type="range"
-                  min={1000}
-                  max={100000}
-                  step={1000}
-                  value={allocation}
-                  onChange={(e) => setAllocation(Number(e.target.value))}
-                  style={{ flex: 1 }}
+                  min={2}
+                  max={50}
+                  step={1}
+                  value={riskPct}
+                  onChange={(e) => setRiskPct(Number(e.target.value))}
+                  style={{ width: '100%', accentColor: '#f87171' }}
                 />
-                <input
-                  type="number"
-                  value={allocation}
-                  onChange={(e) => setAllocation(Number(e.target.value))}
-                  style={{ ...s.input, width: 120 }}
-                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginTop: 2 }}>
+                  <span>2% (Conservative)</span>
+                  <span>25% (Moderate)</span>
+                  <span>50% (Aggressive)</span>
+                </div>
               </div>
             </div>
 
