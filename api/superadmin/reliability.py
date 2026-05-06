@@ -58,6 +58,7 @@ async def _probe_database() -> dict[str, Any]:
 
         def _sync_probe() -> None:
             from sqlalchemy import create_engine, text as _text
+            from sqlalchemy.pool import NullPool as _NullPool
 
             # Strip async driver prefixes — create_engine is sync-only.
             sync_url = db_url
@@ -65,10 +66,13 @@ async def _probe_database() -> dict[str, Any]:
                 sync_url = sync_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
             elif sync_url.startswith("postgresql+asyncpg://"):
                 sync_url = sync_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+            is_sqlite = "sqlite" in sync_url
             engine = create_engine(
                 sync_url,
-                connect_args={"check_same_thread": False} if "sqlite" in sync_url else {},
-                pool_pre_ping=True,
+                # NullPool: no idle connections held — avoids file-lock conflicts
+                # with the main engine when this probe runs concurrently.
+                poolclass=_NullPool,
+                connect_args={"check_same_thread": False, "timeout": 10} if is_sqlite else {},
             )
             with engine.connect() as conn:
                 conn.execute(_text("SELECT 1"))
