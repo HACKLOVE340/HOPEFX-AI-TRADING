@@ -13,7 +13,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
@@ -32,6 +32,166 @@ interface Alert {
   ip: string;
   ts: string;
 }
+
+interface GeoInfo {
+  country?: string;
+  country_code?: string;
+  city?: string;
+  region?: string;
+  org?: string;
+  lat?: number;
+  lon?: number;
+  isp?: string;
+}
+
+interface ThreatDetail {
+  ip: string;
+  geo: GeoInfo;
+  intent: string;
+  severity: number;
+  time: string;
+  raw?: string;
+  attack_count?: number;
+}
+
+// ── IP Geolocation API helper ─────────────────────────────────────────────────
+
+async function fetchGeoInfo(ip: string): Promise<GeoInfo> {
+  try {
+    const { data } = await api.get<GeoInfo>(`/security/geo/${encodeURIComponent(ip)}`);
+    return data ?? {};
+  } catch {
+    return {};
+  }
+}
+
+async function blockIp(ip: string): Promise<void> {
+  await api.post('/security/block-ip', { ip });
+}
+
+// ── Threat Drill-Down Modal ───────────────────────────────────────────────────
+
+const ThreatModal: React.FC<{
+  threat: ThreatDetail;
+  onClose: () => void;
+  onBlock: (ip: string) => Promise<void>;
+  alreadyBlocked: boolean;
+}> = ({ threat, onClose, onBlock, alreadyBlocked }) => {
+  const [geo, setGeo]         = useState<GeoInfo>(threat.geo ?? {});
+  const [geoLoading, setGeoLoading] = useState(false);
+  const [blocking, setBlocking]     = useState(false);
+  const [blocked, setBlocked]       = useState(alreadyBlocked);
+  const [blockErr, setBlockErr]     = useState('');
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (threat.ip && !geo.country) {
+      setGeoLoading(true);
+      fetchGeoInfo(threat.ip)
+        .then(g => setGeo(g))
+        .finally(() => setGeoLoading(false));
+    }
+  }, [threat.ip]);
+
+  const handleBlock = async () => {
+    setBlocking(true); setBlockErr('');
+    try {
+      await onBlock(threat.ip);
+      setBlocked(true);
+    } catch { setBlockErr('Block failed — try again'); }
+    finally { setBlocking(false); }
+  };
+
+  const severityColor = threat.severity >= 0.8 ? '#ef4444' : threat.severity >= 0.5 ? '#f59e0b' : '#22c55e';
+  const flagEmoji = geo.country_code ? String.fromCodePoint(...[...geo.country_code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65)) : '🌐';
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div style={{ background: '#0d1421', border: '1px solid #334155', borderRadius: 14, padding: 28, maxWidth: 580, width: '100%', boxShadow: '0 24px 64px rgba(0,0,0,0.7)' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 22, marginBottom: 4 }}>🚨</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', fontFamily: 'monospace' }}>{threat.ip}</div>
+            <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{new Date(threat.time).toLocaleString()}</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>✕</button>
+        </div>
+
+        {/* Severity bar */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700, textTransform: 'uppercase' }}>Severity</span>
+            <span style={{ fontSize: 12, color: severityColor, fontWeight: 700 }}>{(threat.severity * 100).toFixed(0)}%</span>
+          </div>
+          <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${threat.severity * 100}%`, background: severityColor, borderRadius: 3, transition: 'width 0.5s' }} />
+          </div>
+        </div>
+
+        {/* Details grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: 'Intent',    value: threat.intent,                    color: '#f59e0b' },
+            { label: 'Raw Event', value: threat.raw ?? '—',                color: '#94a3b8' },
+            { label: 'Attacks',   value: String(threat.attack_count ?? 1), color: '#f87171' },
+            { label: 'Time',      value: new Date(threat.time).toLocaleTimeString(), color: '#94a3b8' },
+          ].map(({ label, value, color }) => (
+            <div key={label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
+              <div style={{ fontSize: 13, color, fontFamily: 'monospace', textTransform: 'capitalize' }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Geolocation */}
+        <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            IP Geolocation {geoLoading && <span style={{ color: '#3b82f6' }}>· Loading…</span>}
+          </div>
+          {geo.country ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <div style={{ fontSize: 13, color: '#e2e8f0' }}>{flagEmoji} {geo.country}</div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>{geo.city}{geo.region ? `, ${geo.region}` : ''}</div>
+              <div style={{ fontSize: 12, color: '#64748b', fontFamily: 'monospace' }}>{geo.org ?? geo.isp ?? '—'}</div>
+              {geo.lat && geo.lon && (
+                <div style={{ fontSize: 11, color: '#475569' }}>{geo.lat.toFixed(2)}, {geo.lon.toFixed(2)}</div>
+              )}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, color: '#475569' }}>{geoLoading ? 'Fetching geolocation…' : 'Geolocation unavailable'}</div>
+          )}
+        </div>
+
+        {/* Actions */}
+        {blockErr && <div style={{ fontSize: 12, color: '#f87171', marginBottom: 8 }}>{blockErr}</div>}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => void handleBlock()}
+            disabled={blocking || blocked}
+            style={{
+              flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', cursor: blocked ? 'not-allowed' : 'pointer',
+              background: blocked ? '#14532d' : '#ef4444', color: '#fff', fontSize: 13, fontWeight: 700,
+              opacity: blocking ? 0.7 : 1,
+            }}
+          >
+            {blocked ? '✓ IP Blocked' : blocking ? 'Blocking…' : '🚫 Block IP'}
+          </button>
+          <Link to={`/audit?ip=${threat.ip}`}
+            style={{ flex: 1, textAlign: 'center', padding: '9px 0', borderRadius: 8, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', color: '#a78bfa', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+            📋 Audit Trail
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -89,7 +249,6 @@ async function clearLockdown(): Promise<void> {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const SecurityDashboard: React.FC = () => {
-  const navigate = useNavigate();
   const [attacks, setAttacks] = useState<AttackLog>({});
   const [lockdown, setLockdown] = useState<LockdownStatus>({ lockdown_active: false });
   const [blockedIPs, setBlockedIPs] = useState<string[]>([]);
@@ -100,6 +259,8 @@ const SecurityDashboard: React.FC = () => {
   const [togglingLockdown, setTogglingLockdown] = useState(false);
   const [unblockingIp, setUnblockingIp]         = useState<string | null>(null);
   const [unblockErr, setUnblockErr]             = useState<string | null>(null);
+  const [drillThreat, setDrillThreat]           = useState<ThreatDetail | null>(null);
+  const [blockingIp, setBlockingIp]             = useState<string | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -172,6 +333,29 @@ const SecurityDashboard: React.FC = () => {
     } finally {
       setUnblockingIp(null);
     }
+  };
+
+  const handleBlockIp = async (ip: string): Promise<void> => {
+    setBlockingIp(ip);
+    try {
+      await blockIp(ip);
+      setBlockedIPs(prev => prev.includes(ip) ? prev : [...prev, ip]);
+    } finally {
+      setBlockingIp(null);
+    }
+  };
+
+  const openThreatDrill = (ip: string) => {
+    const record = attacks[ip];
+    if (!record) return;
+    setDrillThreat({
+      ip,
+      geo:    record.geo ?? {},
+      intent: record.intent ?? 'unknown',
+      severity: record.severity ?? 0.5,
+      time:   record.time ?? new Date().toISOString(),
+      raw:    record.raw,
+    });
   };
 
   // Derived stats
@@ -283,14 +467,35 @@ const SecurityDashboard: React.FC = () => {
         />
       </div>
 
-      {/* Intent breakdown */}
+      {/* Intent breakdown + clickable threat IPs */}
       {totalAttacks > 0 && (
-        <div style={intentRowStyle}>
-          {Object.entries(intentCounts).map(([intent, count]) => (
-            <span key={intent} style={intentChipStyle(intent)}>
-              {intent}: {count}
-            </span>
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={intentRowStyle}>
+            {Object.entries(intentCounts).map(([intent, count]) => (
+              <span key={intent} style={intentChipStyle(intent)}>
+                {intent}: {count}
+              </span>
+            ))}
+          </div>
+          {/* Top threats — click to drill down */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {Object.entries(attacks)
+              .sort(([, a], [, b]) => b.severity - a.severity)
+              .slice(0, 12)
+              .map(([ip, rec]) => (
+                <button key={ip} onClick={() => openThreatDrill(ip)}
+                  style={{
+                    background: rec.severity >= 0.8 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)',
+                    border: `1px solid ${rec.severity >= 0.8 ? 'rgba(239,68,68,0.4)' : 'rgba(245,158,11,0.3)'}`,
+                    borderRadius: 6, color: rec.severity >= 0.8 ? '#f87171' : '#fbbf24',
+                    cursor: 'pointer', fontSize: 11, fontFamily: 'monospace', padding: '3px 10px',
+                  }}
+                  title={`${rec.intent} · severity ${(rec.severity * 100).toFixed(0)}% — click to drill down`}
+                >
+                  {ip}
+                </button>
+              ))}
+          </div>
         </div>
       )}
 
@@ -355,21 +560,45 @@ const SecurityDashboard: React.FC = () => {
           ) : (
             <div style={ipListStyle}>
               {alerts.slice(0, 20).map((alert, i) => (
-                <div key={i} style={alertRowStyle}>
+                <div key={i} style={{ ...alertRowStyle, cursor: 'pointer' }}
+                  onClick={() => {
+                    const rec = attacks[alert.ip];
+                    if (rec) openThreatDrill(alert.ip);
+                  }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#ef4444', fontSize: 10 }}>⬤</span>
                     <span style={ipTextStyle}>{alert.type.toUpperCase()}</span>
                     <span style={{ color: '#94a3b8', fontSize: 11 }}>{alert.ip}</span>
                   </div>
-                  <span style={timeStyle}>
-                    {alert.ts ? new Date(alert.ts).toLocaleTimeString() : '—'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={timeStyle}>
+                      {alert.ts ? new Date(alert.ts).toLocaleTimeString() : '—'}
+                    </span>
+                    {!blockedIPs.includes(alert.ip) && (
+                      <button
+                        onClick={e => { e.stopPropagation(); void handleBlockIp(alert.ip); }}
+                        disabled={blockingIp === alert.ip}
+                        style={{ padding: '2px 8px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 4, color: '#f87171', fontSize: 10, cursor: 'pointer' }}>
+                        {blockingIp === alert.ip ? '…' : '🚫 Block'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* Threat drill-down modal */}
+      {drillThreat && (
+        <ThreatModal
+          threat={drillThreat}
+          onClose={() => setDrillThreat(null)}
+          onBlock={handleBlockIp}
+          alreadyBlocked={blockedIPs.includes(drillThreat.ip)}
+        />
+      )}
 
       {/* Cross-links */}
       <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20, marginTop: 8 }}>
