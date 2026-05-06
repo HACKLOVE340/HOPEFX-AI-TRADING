@@ -2,8 +2,8 @@
  * Strategy A/B Testing (Task 42)
  * Run two strategies in parallel on paper, auto-select winner.
  */
-import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components';
 import { api } from '../hooks/useApi';
 
@@ -35,6 +35,57 @@ const STRATEGIES = [
   'BollingerBands','SMCICTStrategy','EMAcrossover',
   'MeanReversion','Breakout','Stochastic',
 ];
+
+// ── Win-rate bar ──────────────────────────────────────────────────────────────
+
+const WinRateBar: React.FC<{ stratA: StratResult; stratB: StratResult; winner: string }> = ({ stratA, stratB, winner }) => {
+  const total = stratA.win_rate + stratB.win_rate;
+  const pctA  = total > 0 ? (stratA.win_rate / total) * 100 : 50;
+  const pctB  = 100 - pctA;
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#64748b', marginBottom: 4 }}>
+        <span style={{ color: '#60a5fa', fontWeight: 600 }}>{stratA.strategy}</span>
+        <span style={{ color: '#94a3b8' }}>Win Rate</span>
+        <span style={{ color: '#a78bfa', fontWeight: 600 }}>{stratB.strategy}</span>
+      </div>
+      <div style={{ display: 'flex', height: 20, borderRadius: 10, overflow: 'hidden', background: '#0f172a' }}>
+        <div style={{ width: `${pctA}%`, background: winner === stratA.strategy ? '#3b82f6' : '#1e3a5f', transition: 'width 0.6s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 700 }}>
+          {stratA.win_rate.toFixed(1)}%
+        </div>
+        <div style={{ width: `${pctB}%`, background: winner === stratB.strategy ? '#8b5cf6' : '#2d1b69', transition: 'width 0.6s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 700 }}>
+          {stratB.win_rate.toFixed(1)}%
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Significance meter ────────────────────────────────────────────────────────
+
+const SignificanceMeter: React.FC<{ pValue: number; significant: boolean }> = ({ pValue, significant }) => {
+  const confidence = Math.max(0, Math.min(100, (1 - pValue) * 100));
+  const color = significant ? '#4ade80' : pValue < 0.1 ? '#facc15' : '#f87171';
+  const label = significant ? 'Statistically Significant' : pValue < 0.1 ? 'Approaching Significance' : 'Not Significant';
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 6 }}>
+        <span style={{ color: '#64748b' }}>Statistical Confidence</span>
+        <span style={{ color, fontWeight: 700 }}>{confidence.toFixed(1)}% — {label}</span>
+      </div>
+      <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${confidence}%`, background: `linear-gradient(90deg, #334155, ${color})`, borderRadius: 4, transition: 'width 0.6s ease' }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginTop: 3 }}>
+        <span>p = {pValue.toFixed(4)}</span>
+        <span>α = 0.05 threshold</span>
+        <div style={{ width: 1, height: 8, background: '#3b82f6', position: 'relative', top: -11, left: `calc(95% - 1px)` }} />
+      </div>
+    </div>
+  );
+};
+
+// ── Metric row ────────────────────────────────────────────────────────────────
 
 const MetricRow: React.FC<{ label: string; a: string; b: string; winner: string; stratA: string; stratB: string }> = ({
   label, a, b, winner, stratA, stratB,
@@ -74,20 +125,42 @@ const ABTesting: React.FC = () => {
   const [runError, setRunError] = useState<string | null>(null);
   const [loadErr, setLoadErr]   = useState<string | null>(null);
   const [selected, setSelected] = useState<ABResult | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Auto-poll every 5s while any test is in 'running' status
+  const startPoll = useCallback(() => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await api.get('/advanced/ab-tests');
+        const fresh: ABResult[] = res.data.tests || res.data || [];
+        setTests(fresh);
+        const anyRunning = fresh.some(t => t.status === 'running');
+        if (!anyRunning && pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      } catch { /* non-fatal */ }
+    }, 5000);
+  }, []);
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   const load = useCallback(async () => {
     setLoadErr(null);
     setLoadingTests(true);
     try {
       const res = await api.get('/advanced/ab-tests');
-      setTests(res.data.tests || res.data || []);
+      const fresh: ABResult[] = res.data.tests || res.data || [];
+      setTests(fresh);
+      if (fresh.some(t => t.status === 'running')) startPoll();
     } catch (err) {
       setTests([]);
       setLoadErr(extractErrorMessage(err, 'Failed to load test history. Ensure the API is running.'));
     } finally {
       setLoadingTests(false);
     }
-  }, []);
+  }, [startPoll]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -101,6 +174,7 @@ const ABTesting: React.FC = () => {
       });
       setTests(prev => [res.data, ...prev]);
       setSelected(res.data);
+      if (res.data.status === 'running') startPoll();
     } catch (err) {
       setRunError(extractErrorMessage(err, 'Failed to start A/B test. Check strategy names and try again.'));
     } finally {
@@ -121,23 +195,11 @@ const ABTesting: React.FC = () => {
           { label: 'A/B Testing' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button onClick={() => navigate('/ai-strategy')}
-              style={{ padding: '6px 12px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              🤖 AI Strategy
-            </button>
-            <button onClick={() => navigate('/walk-forward')}
-              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📊 Walk-Forward
-            </button>
-            <button onClick={() => navigate('/pattern-detector')}
-              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              🔍 Patterns
-            </button>
-            <button onClick={() => navigate('/performance')}
-              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
-              📈 Performance
-            </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Link to="/ai-strategy"      style={navLink('#06b6d4')}>🤖 AI Strategy</Link>
+            <Link to="/walk-forward"     style={navLink('#8b5cf6')}>📊 Walk-Forward</Link>
+            <Link to="/pattern-detector" style={navLink('#fbbf24')}>🔍 Patterns</Link>
+            <Link to="/performance"      style={navLink('#4ade80')}>📈 Performance</Link>
           </div>
         }
       />
@@ -172,16 +234,30 @@ const ABTesting: React.FC = () => {
         {sel && (
           <div style={s.card}>
             <div style={s.cardTitle}>Results — {sel.symbol}</div>
+            {/* Auto-winner banner */}
             <div style={{ ...s.winnerBanner, border: `1px solid ${sel.significant ? '#4ade80' : '#facc15'}` }}>
-              <div style={{ fontSize:12, color:'#94a3b8' }}>Winner</div>
-              <div style={{ fontSize:20, fontWeight:800, color: sel.significant ? '#4ade80' : '#facc15' }}>
-                {sel.winner}
-              </div>
-              <div style={{ fontSize:12, color:'#64748b' }}>
-                p={sel.p_value} · {sel.significant ? 'Statistically significant' : 'Not significant yet'}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize:12, color:'#94a3b8' }}>
+                    {sel.status === 'running' ? '⏳ Running…' : sel.significant ? '🏆 Auto-Winner' : '⚖ Inconclusive'}
+                  </div>
+                  <div style={{ fontSize:20, fontWeight:800, color: sel.significant ? '#4ade80' : '#facc15' }}>
+                    {sel.winner || '—'}
+                  </div>
+                </div>
+                {sel.status === 'running' && (
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#facc15', animation: 'pulse 1.5s infinite' }} />
+                )}
               </div>
             </div>
-            <div style={{ fontSize:12, color:'#94a3b8', margin:'12px 0 4px' }}>{sel.recommendation}</div>
+
+            {/* Win-rate bar */}
+            <WinRateBar stratA={sel.strategy_a} stratB={sel.strategy_b} winner={sel.winner} />
+
+            {/* Significance meter */}
+            <SignificanceMeter pValue={sel.p_value} significant={sel.significant} />
+
+            <div style={{ fontSize:12, color:'#94a3b8', margin:'4px 0 12px' }}>{sel.recommendation}</div>
             <div style={{ display:'flex', gap:8, marginBottom:8 }}>
               <div style={{ flex:1, textAlign:'center', fontSize:12, fontWeight:700, color:'#60a5fa' }}>{sel.strategy_a.strategy}</div>
               <div style={{ width:140 }} />
@@ -228,6 +304,11 @@ const ABTesting: React.FC = () => {
     </div>
   );
 };
+
+const navLink = (color: string): React.CSSProperties => ({
+  padding: '6px 12px', background: `${color}1a`, border: `1px solid ${color}55`,
+  borderRadius: 7, color, fontSize: 12, fontWeight: 600, textDecoration: 'none',
+});
 
 const s: Record<string, React.CSSProperties> = {
   page: { minHeight:'100vh', background:'#0f172a', color:'#f8fafc', fontFamily:"'Inter',system-ui,sans-serif", padding:24 },
