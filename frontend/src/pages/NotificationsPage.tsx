@@ -9,10 +9,13 @@
  *   WS   /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+import { Spinner } from '../components/Spinner';
 
 interface Notification {
   id: string;
@@ -113,48 +116,70 @@ const NotificationsPage: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#f1f5f9', margin: 0 }}>
-            Notifications {unreadCount > 0 && (
-              <span style={{ fontSize: 14, background: '#3b82f6', color: '#fff', borderRadius: 12, padding: '2px 8px', marginLeft: 8 }}>
-                {unreadCount}
-              </span>
-            )}
-          </h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Real-time alerts and updates</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {(['all', 'unread'] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              background: filter === f ? '#1e3a5f' : '#1e293b',
-              border: `1px solid ${filter === f ? '#3b82f6' : '#334155'}`,
-              borderRadius: 8, color: filter === f ? '#60a5fa' : '#64748b',
-              cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '6px 14px',
+      <PageHeader
+        title="Notifications"
+        subtitle="Real-time alerts and platform updates"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Notifications' },
+        ]}
+        badge={unreadCount > 0 ? (
+          <span style={{ fontSize: 12, background: '#3b82f6', color: '#fff', borderRadius: 12, padding: '2px 8px', fontWeight: 700 }}>
+            {unreadCount}
+          </span>
+        ) : undefined}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            {(['all', 'unread'] as const).map(f => (
+              <button key={f} onClick={() => setFilter(f)} style={{
+                background: filter === f ? '#1e3a5f' : '#1e293b',
+                border: `1px solid ${filter === f ? '#3b82f6' : '#334155'}`,
+                borderRadius: 8, color: filter === f ? '#60a5fa' : '#64748b',
+                cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px',
+              }}>
+                {f === 'all' ? 'All' : `Unread (${unreadCount})`}
+              </button>
+            ))}
+            <button onClick={markAllRead} disabled={markingAll || unreadCount === 0} style={{
+              background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
+              color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '6px 12px',
+              opacity: unreadCount === 0 ? 0.5 : 1,
             }}>
-              {f === 'all' ? 'All' : `Unread (${unreadCount})`}
+              {markingAll ? '…' : '✓ Mark all read'}
             </button>
-          ))}
-          <button onClick={markAllRead} disabled={markingAll || unreadCount === 0} style={{
-            background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-            color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 14px',
-          }}>
-            {markingAll ? '…' : '✓ Mark all read'}
-          </button>
-        </div>
+          </div>
+        }
+      />
+
+      {/* Cross-links */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', fontSize: 13 }}>
+        {[
+          { to: '/alerts', label: '🚨 Price Alerts' },
+          { to: '/settings', label: '⚙️ Notification Settings' },
+          { to: '/chat', label: '💬 Chat' },
+          { to: '/security', label: '🔒 Security' },
+        ].map(({ to, label }) => (
+          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+            {label}
+          </Link>
+        ))}
       </div>
 
       {/* List */}
       {loading && page === 1 && (
-        <div style={{ textAlign: 'center', color: '#64748b', padding: 48 }}>Loading…</div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+          <Spinner size="lg" />
+        </div>
       )}
       {!loading && items.length === 0 && (
-        <div style={{ textAlign: 'center', color: '#475569', padding: 64 }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🔔</div>
-          <div style={{ fontSize: 16, fontWeight: 600, color: '#64748b' }}>No notifications</div>
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>You're all caught up!</div>
-        </div>
+        <EmptyState
+          icon="🔔"
+          title="No notifications"
+          description={filter === 'unread' ? 'No unread notifications — you\'re all caught up!' : 'Notifications for trades, alerts, and system events will appear here.'}
+          action={filter === 'unread' ? { label: 'View all', onClick: () => setFilter('all') } : undefined}
+        />
       )}
       {items.map(n => (
         <div
