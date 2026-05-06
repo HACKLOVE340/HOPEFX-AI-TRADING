@@ -535,6 +535,16 @@ const Performance: React.FC = () => {
       <div style={s.apiNote}>
         Raw data: <a href="/api/performance/public" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontFamily: 'monospace' }}>/api/performance/public</a> — no authentication required.
       </div>
+
+      {/* Cross-links */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
+        <Link to="/pnl" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💰 P&L Dashboard</Link>
+        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
+        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
+        <Link to="/tca" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 TCA</Link>
+        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
+        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 Walk-Forward</Link>
+      </div>
     </div>
   );
 };
