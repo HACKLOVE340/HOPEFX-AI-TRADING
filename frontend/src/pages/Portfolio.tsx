@@ -18,6 +18,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import {
   useStore,
@@ -443,35 +444,42 @@ const Portfolio: React.FC = () => {
   return (
     <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
 
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[18px] font-bold text-slate-100">Portfolio</h1>
-          <p className="text-[12px] text-slate-500 mt-0.5">
-            Balances, equity curve, allocation, and trade history
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate('/trade')}
-            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors"
-          >
-            ⚡ Trade
-          </button>
-          <button
-            onClick={() => navigate('/journal')}
-            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors"
-          >
-            📓 Journal
-          </button>
-          <button
-            onClick={handleExport}
-            className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
-          >
-            ↓ Export CSV
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Portfolio"
+        subtitle="Balances, equity curve, allocation, and trade history"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Portfolio' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/performance')}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors"
+            >
+              📊 Analytics
+            </button>
+            <button
+              onClick={() => navigate('/trade')}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors"
+            >
+              ⚡ Trade
+            </button>
+            <button
+              onClick={() => navigate('/journal')}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors"
+            >
+              📓 Journal
+            </button>
+            <button
+              onClick={handleExport}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
+            >
+              ↓ Export CSV
+            </button>
+          </div>
+        }
+      />
 
       {/* Account balances */}
       <AccountSummary />
@@ -490,6 +498,26 @@ const Portfolio: React.FC = () => {
 
       {/* Closed trade history */}
       <TradeHistory />
+
+      {/* Cross-links */}
+      <div className="flex flex-wrap gap-2 pt-2 border-t border-[#1e2d3d]">
+        {[
+          { label: '📈 AI Charts',      path: '/ai-chart' },
+          { label: '📊 Performance',    path: '/performance' },
+          { label: '💰 P&L Dashboard',  path: '/pnl' },
+          { label: '🛡 Risk Calculator', path: '/risk-calculator' },
+          { label: '📓 Trade Journal',  path: '/journal' },
+          { label: '👁 Watchlist',      path: '/watchlist' },
+        ].map(({ label, path }) => (
+          <button
+            key={path}
+            onClick={() => navigate(path)}
+            className="px-3 py-1.5 rounded text-[11px] bg-transparent border border-[#1e2d3d] text-slate-500 hover:text-slate-300 hover:border-[#334155] transition-colors cursor-pointer"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 };

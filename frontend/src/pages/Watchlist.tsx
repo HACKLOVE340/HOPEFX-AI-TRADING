@@ -12,6 +12,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { PageHeader, EmptyState } from '../components';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -178,10 +179,36 @@ const WatchlistPage: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <h1 style={s.title}>Watchlist</h1>
-        <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
-      </div>
+      <PageHeader
+        title="Watchlist"
+        subtitle="Live prices refresh every 5 s. Click a symbol to open its chart."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Watchlist' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => navigate('/ai-chart')}
+              style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📈 Charts
+            </button>
+            <button
+              onClick={() => navigate('/alerts')}
+              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🔔 Alerts
+            </button>
+            <button
+              onClick={() => navigate('/trade')}
+              style={{ padding: '6px 12px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ⚡ Trade
+            </button>
+          </div>
+        }
+      />
 
       <div style={s.addRow}>
         <select value={addSymbol} onChange={(e) => setAddSymbol(e.target.value)} style={s.select}>
@@ -197,9 +224,33 @@ const WatchlistPage: React.FC = () => {
       </div>
 
       {loading ? (
-        <div style={s.empty}>Loading…</div>
+        <div style={{ ...s.table, padding: 0 }}>
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} style={{ height: 52, borderBottom: '1px solid #1e293b', background: i % 2 === 0 ? '#0d1421' : '#0a0f1a', animation: 'pulse 1.5s ease-in-out infinite' }} />
+          ))}
+        </div>
       ) : enrichedItems.length === 0 ? (
-        <div style={s.empty}>Your watchlist is empty. Use the dropdown above to start tracking.</div>
+        <EmptyState
+          icon="👁"
+          title="Your watchlist is empty"
+          description="Track live prices for your favourite instruments. Use the dropdown above to add symbols."
+          action={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => navigate('/ai-chart')}
+                style={{ padding: '8px 16px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                📈 Browse Charts
+              </button>
+              <button
+                onClick={() => navigate('/signals')}
+                style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                📡 Signal Feed
+              </button>
+            </div>
+          }
+        />
       ) : (
         <div style={s.table}>
           <div style={s.tableHeader}>
@@ -212,13 +263,19 @@ const WatchlistPage: React.FC = () => {
             <span style={{ width: 140, textAlign: 'center' }}>Actions</span>
           </div>
           {enrichedItems.map((item) => (
-            <div key={item.symbol} style={s.tableRow}>
+            <div
+              key={item.symbol}
+              style={s.tableRow}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = '#0d1421'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+            >
               <span
-                style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}
-                onClick={() => navigate('/ai-chart')}
+                style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={() => navigate('/ai-chart', { state: { symbol: item.symbol } })}
                 title={`Open ${item.symbol} chart`}
               >
                 {item.symbol}
+                <span style={{ fontSize: 10, color: '#475569' }}>↗</span>
               </span>
               <span style={{ width: 90, textAlign: 'right', color: '#f87171', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.bid)}</span>
               <span style={{ width: 90, textAlign: 'right', color: '#4ade80', fontSize: 13, fontWeight: 600 }}>{formatPrice(item.symbol, item.ask)}</span>
@@ -232,13 +289,13 @@ const WatchlistPage: React.FC = () => {
               <span style={{ width: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <button
                   onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol.slice(0, 3) + '/' + item.symbol.slice(3) } } })}
-                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 8px' }}
+                  style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '3px 8px', fontFamily: 'inherit' }}
                   title={`Trade ${item.symbol}`}
                 >
                   ⚡ Trade
                 </button>
                 <button
-                  onClick={() => navigate('/alerts')}
+                  onClick={() => navigate('/alerts', { state: { symbol: item.symbol } })}
                   style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}
                   title={`Set alert for ${item.symbol}`}
                 >
@@ -253,6 +310,28 @@ const WatchlistPage: React.FC = () => {
                 </button>
               </span>
             </div>
+          ))}
+        </div>
+      )}
+
+      {/* Cross-links footer */}
+      {enrichedItems.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          {[
+            { label: '📊 Portfolio', path: '/portfolio' },
+            { label: '📈 AI Charts', path: '/ai-chart' },
+            { label: '📡 Signals',   path: '/signals' },
+            { label: '📓 Journal',   path: '/journal' },
+          ].map(({ label, path }) => (
+            <button
+              key={path}
+              onClick={() => navigate(path)}
+              style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s' }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#475569'; (e.currentTarget as HTMLButtonElement).style.borderColor = '#1e293b'; }}
+            >
+              {label}
+            </button>
           ))}
         </div>
       )}

@@ -22,7 +22,7 @@
  */
 
 import React, { Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
@@ -43,14 +43,16 @@ const QuickActionBar: React.FC = () => {
   const pnlColor = unrealisedPnl >= 0 ? '#22c55e' : '#ef4444';
 
   const actions = [
-    { label: '⚡ Trade',           path: '/trade',          color: '#3b82f6' },
-    { label: '📊 Analytics',       path: '/performance',    color: '#8b5cf6' },
-    { label: '🧠 AI Strategy',     path: '/ai-strategy',    color: '#06b6d4' },
-    { label: '🌍 Geopolitical',    path: '/geopolitical',   color: '#f59e0b' },
-    { label: '📓 Journal',         path: '/journal',        color: '#10b981' },
+    { label: '⚡ Trade',           path: '/trade',           color: '#3b82f6' },
+    { label: '📊 Portfolio',       path: '/portfolio',       color: '#8b5cf6' },
+    { label: '📈 Analytics',       path: '/performance',     color: '#06b6d4' },
+    { label: '🧠 AI Strategy',     path: '/ai-strategy',     color: '#f59e0b' },
+    { label: '🌍 Geopolitical',    path: '/geopolitical',    color: '#f97316' },
+    { label: '📓 Journal',         path: '/journal',         color: '#10b981' },
     { label: '🛡 Risk Calc',       path: '/risk-calculator', color: '#ec4899' },
-    { label: '📡 Signal Feed',     path: '/signals',         color: '#a78bfa' },
-    { label: '🔁 Copy Trading',    path: '/copy-trading',   color: '#34d399' },
+    { label: '📡 Signals',         path: '/signals',         color: '#a78bfa' },
+    { label: '🔁 Copy Trading',    path: '/copy-trading',    color: '#34d399' },
+    { label: '👁 Watchlist',       path: '/watchlist',       color: '#38bdf8' },
   ];
 
   return (
@@ -61,6 +63,22 @@ const QuickActionBar: React.FC = () => {
       borderBottom: '1px solid #1a2e4a',
       overflowX: 'auto', flexShrink: 0,
     }}>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginRight: 4 }}>
+        <Link
+          to="/dashboard"
+          style={{ fontSize: 10, color: '#475569', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+        >
+          HOME
+        </Link>
+        <span style={{ fontSize: 10, color: '#1e293b' }}>›</span>
+        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
+      </div>
+
+      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+
       {/* Today P&L */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
