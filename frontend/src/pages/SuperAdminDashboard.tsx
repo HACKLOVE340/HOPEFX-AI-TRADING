@@ -24,6 +24,70 @@ import { SAStyles, Spinner } from './superadmin/ui';
 import { superadminApi } from '../hooks/useApi';
 import { Breadcrumb } from '../components/Breadcrumb';
 
+// ── Kill-switch confirm dialog ────────────────────────────────────────────────
+
+const KillSwitchConfirm: React.FC<{
+  currentlyActive: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ currentlyActive, onConfirm, onCancel }) => {
+  const [typed, setTyped] = useState('');
+  const required = currentlyActive ? 'RESUME TRADING' : 'KILL SWITCH';
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onCancel]);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={e => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div style={{ background: '#0d1421', border: `2px solid ${currentlyActive ? '#22c55e' : '#ef4444'}`, borderRadius: 14, padding: 32, maxWidth: 440, width: '100%', boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}>
+        <div style={{ fontSize: 32, textAlign: 'center', marginBottom: 12 }}>{currentlyActive ? '🔓' : '🛑'}</div>
+        <div style={{ fontSize: 18, fontWeight: 800, color: currentlyActive ? '#4ade80' : '#f87171', textAlign: 'center', marginBottom: 8 }}>
+          {currentlyActive ? 'Resume Trading?' : 'Activate Kill Switch?'}
+        </div>
+        <div style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center', marginBottom: 20, lineHeight: 1.6 }}>
+          {currentlyActive
+            ? 'This will re-enable the trading engine and allow new positions to be opened.'
+            : 'This will immediately halt all trading activity, close open positions, and block new orders.'}
+        </div>
+        <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+            Type <strong style={{ color: currentlyActive ? '#4ade80' : '#f87171', fontFamily: 'monospace' }}>{required}</strong> to confirm:
+          </div>
+          <input
+            autoFocus
+            value={typed}
+            onChange={e => setTyped(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && typed === required) onConfirm(); }}
+            style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: '#f1f5f9', fontFamily: 'monospace', fontSize: 14, boxSizing: 'border-box' }}
+            placeholder={required}
+          />
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onCancel}
+            style={{ flex: 1, padding: '10px 0', background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={typed !== required}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: typed === required ? 'pointer' : 'not-allowed',
+              background: typed === required ? (currentlyActive ? '#16a34a' : '#dc2626') : '#1e293b',
+              color: typed === required ? '#fff' : '#475569', fontSize: 13, fontWeight: 700,
+              transition: 'background 0.2s',
+            }}>
+            {currentlyActive ? '▶ Resume Trading' : '🛑 Activate Kill Switch'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ── Section error boundary ────────────────────────────────────────────────────
 
 class SectionErrorBoundary extends Component<
@@ -187,14 +251,51 @@ function useEngineHealth(): EngineHealth | null {
 
 // ── Main dashboard ────────────────────────────────────────────────────────────
 
+const REFRESH_INTERVAL = 30; // seconds
+
 const SuperAdminDashboard: React.FC = () => {
   const user = useStore(selectUser);
   const [activeTab, setActiveTab] = useState<SuperAdminTab>('overview');
   const [sectionLoadedAt, setSectionLoadedAt] = useState<Date>(new Date());
+  const [refreshKey, setRefreshKey]           = useState(0);
+  const [countdown, setCountdown]             = useState(REFRESH_INTERVAL);
+  const [autoRefresh, setAutoRefresh]         = useState(true);
+  const [showKillConfirm, setShowKillConfirm] = useState(false);
+  const [togglingKill, setTogglingKill]       = useState(false);
+  const [killErr, setKillErr]                 = useState('');
   const engineHealth = useEngineHealth();
 
   // Reset the "loaded at" timestamp whenever the active tab changes
-  useEffect(() => { setSectionLoadedAt(new Date()); }, [activeTab]);
+  useEffect(() => { setSectionLoadedAt(new Date()); setCountdown(REFRESH_INTERVAL); }, [activeTab]);
+
+  // Auto-refresh countdown
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          setRefreshKey(k => k + 1);
+          setSectionLoadedAt(new Date());
+          return REFRESH_INTERVAL;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [autoRefresh]);
+
+  const handleKillSwitch = async () => {
+    setTogglingKill(true); setKillErr('');
+    try {
+      if (engineHealth?.kill_switch_active) {
+        await superadminApi.resumeTrading?.();
+      } else {
+        await superadminApi.killSwitch?.();
+      }
+      setShowKillConfirm(false);
+    } catch { setKillErr('Kill switch toggle failed'); }
+    finally { setTogglingKill(false); }
+  };
 
   if (!user || !isSuperAdmin(user.role)) return null;
 
@@ -240,6 +341,13 @@ const SuperAdminDashboard: React.FC = () => {
   return (
     <>
       <SAStyles />
+      {showKillConfirm && (
+        <KillSwitchConfirm
+          currentlyActive={engineHealth?.kill_switch_active ?? false}
+          onConfirm={() => void handleKillSwitch()}
+          onCancel={() => setShowKillConfirm(false)}
+        />
+      )}
 
       <div style={styles.page}>
         {/* ── Breadcrumbs ── */}
@@ -379,17 +487,51 @@ const SuperAdminDashboard: React.FC = () => {
                   <div style={{ fontSize: 12, color: '#475569' }}>{activeTabDef.description}</div>
                 </div>
               </div>
-              {/* Data freshness timestamp */}
-              <div style={{ fontSize: 11, color: '#334155', textAlign: 'right' as const }}>
-                <div>Loaded</div>
-                <div style={{ color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
-                  {sectionLoadedAt.toLocaleTimeString()}
+              {/* Auto-refresh controls + kill switch */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Kill switch button */}
+                <button
+                  onClick={() => setShowKillConfirm(true)}
+                  disabled={togglingKill}
+                  style={{
+                    padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                    background: engineHealth?.kill_switch_active ? '#14532d' : '#450a0a',
+                    color: engineHealth?.kill_switch_active ? '#4ade80' : '#f87171',
+                  }}
+                  title={engineHealth?.kill_switch_active ? 'Resume trading' : 'Activate kill switch'}
+                >
+                  {engineHealth?.kill_switch_active ? '▶ Resume' : '🛑 Kill Switch'}
+                </button>
+                {killErr && <span style={{ fontSize: 10, color: '#f87171' }}>{killErr}</span>}
+
+                {/* Auto-refresh toggle + countdown */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: '4px 10px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)}
+                      style={{ accentColor: '#3b82f6', width: 12, height: 12 }} />
+                    <span style={{ fontSize: 10, color: '#64748b' }}>Auto</span>
+                  </label>
+                  {autoRefresh && (
+                    <span style={{ fontSize: 10, color: '#475569', fontFamily: 'monospace', minWidth: 20 }}>{countdown}s</span>
+                  )}
+                  <button onClick={() => { setRefreshKey(k => k + 1); setSectionLoadedAt(new Date()); setCountdown(REFRESH_INTERVAL); }}
+                    style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}
+                    title="Refresh now">
+                    ↻
+                  </button>
+                </div>
+
+                {/* Loaded at */}
+                <div style={{ fontSize: 10, color: '#334155', textAlign: 'right' as const }}>
+                  <div style={{ color: '#475569', fontVariantNumeric: 'tabular-nums' }}>
+                    {sectionLoadedAt.toLocaleTimeString()}
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Section content */}
-            <SectionErrorBoundary key={activeTab} tab={activeTabDef.label}>
+            <SectionErrorBoundary key={`${activeTab}-${refreshKey}`} tab={activeTabDef.label}>
               <Suspense fallback={<SectionFallback />}>
                 <SuperAdminNavContext.Provider value={navCtx}>
                   <div style={{ animation: 'sa-fadein 0.2s ease' }}>
