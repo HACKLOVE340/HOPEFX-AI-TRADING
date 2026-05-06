@@ -191,13 +191,60 @@ async def retrain_model(model_name: str, user: TokenPayload = Depends(_require_s
 @router.post("/ml/deploy")
 async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     _log_superadmin_action(user, "deploy_model", f"{body.model}@{body.version}")
-    return {"ok": True, "model": body.model, "version": body.version, "status": "deploy_queued"}
+    try:
+        from ml.model_registry import get_registry
+        registry = get_registry()
+        registry.promote(body.model)
+        # Reload the inference engine so it picks up the newly promoted model
+        try:
+            from ml.inference_engine import get_inference_engine
+            engine = get_inference_engine()
+            if hasattr(engine, "reload"):
+                await engine.reload() if hasattr(engine.reload, "__await__") else engine.reload()
+        except Exception as exc:
+            logger.warning("deploy_model: inference engine reload failed: %s", exc)
+        return {"ok": True, "model": body.model, "version": body.version, "status": "deployed"}
+    except Exception as exc:
+        logger.warning("deploy_model %s@%s failed: %s", body.model, body.version, exc)
+        raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}") from exc
 
 
 @router.post("/ml/rollback/{model_name}")
 async def rollback_model(model_name: str, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     _log_superadmin_action(user, "rollback_model", model_name)
-    return {"ok": True, "model": model_name, "status": "rollback_queued"}
+    try:
+        from ml.model_registry import get_registry
+        registry = get_registry()
+        # Demote the current active version back to staging, then promote the
+        # previous production version if one exists.
+        manifest = registry._load()
+        versions = manifest.get("versions", {})
+        active = manifest.get("active_version")
+        # Find the most recent non-active production or staging version
+        candidates = [
+            (name, info) for name, info in versions.items()
+            if name != active and info.get("state") in ("production", "staging")
+        ]
+        if not candidates:
+            raise HTTPException(status_code=404, detail="No previous version available for rollback")
+        # Sort by registered_at descending and pick the most recent
+        candidates.sort(key=lambda x: x[1].get("registered_at", ""), reverse=True)
+        prev_name, _ = candidates[0]
+        registry.promote(prev_name)
+        # Reload inference engine
+        try:
+            from ml.inference_engine import get_inference_engine
+            engine = get_inference_engine()
+            if hasattr(engine, "reload"):
+                await engine.reload() if hasattr(engine.reload, "__await__") else engine.reload()
+        except Exception as exc:
+            logger.warning("rollback_model: inference engine reload failed: %s", exc)
+        return {"ok": True, "model": model_name, "rolled_back_to": prev_name, "status": "rolled_back"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("rollback_model %s failed: %s", model_name, exc)
+        raise HTTPException(status_code=500, detail=f"Rollback failed: {exc}") from exc
 
 
 @router.get("/ml/metrics")

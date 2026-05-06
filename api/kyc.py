@@ -324,17 +324,69 @@ async def kyc_documents_alias(user: TokenPayload = Depends(get_current_user)):
         return {"documents": [], "total": 0}
 
 
-@kyc_alias_router.post("/documents", summary="Upload KYC document (alias)")
-async def kyc_upload_document_alias(user: TokenPayload = Depends(get_current_user)):
-    """Upload a KYC document — returns a placeholder URL."""
-    from datetime import datetime, timezone
+@kyc_alias_router.post("/documents", summary="Upload KYC document")
+async def kyc_upload_document_alias(
+    user: TokenPayload = Depends(get_current_user),
+    file: "UploadFile | None" = None,
+    doc_type: str = "identity",
+):
+    """Upload a KYC document.
+
+    Accepts a multipart file upload. The file is stored in the configured
+    object store (S3/GCS via OBJECT_STORE_BUCKET env var) or falls back to
+    the local filesystem under ``data/kyc_uploads/``. Document metadata is
+    persisted to the DB store keyed by user ID.
+    """
+    import os as _os
     import uuid
+    from datetime import datetime, timezone
+    from fastapi import UploadFile
+
+    doc_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    file_url: str | None = None
+
+    if file is not None:
+        content = await file.read()
+        filename = f"{user.sub}/{doc_id}_{file.filename or 'document'}"
+
+        # Try S3/GCS object store first
+        bucket = _os.getenv("OBJECT_STORE_BUCKET")
+        if bucket:
+            try:
+                import boto3  # type: ignore[import]
+                s3 = boto3.client("s3")
+                s3.put_object(
+                    Bucket=bucket,
+                    Key=f"kyc/{filename}",
+                    Body=content,
+                    ContentType=file.content_type or "application/octet-stream",
+                    ServerSideEncryption="AES256",
+                )
+                file_url = f"s3://{bucket}/kyc/{filename}"
+            except Exception as exc:
+                logger.warning("S3 upload failed, falling back to local storage: %s", exc)
+
+        # Local filesystem fallback
+        if file_url is None:
+            upload_dir = _os.path.join("data", "kyc_uploads", user.sub)
+            _os.makedirs(upload_dir, exist_ok=True)
+            local_path = _os.path.join(upload_dir, f"{doc_id}_{file.filename or 'document'}")
+            with open(local_path, "wb") as fh:
+                fh.write(content)
+            file_url = local_path
+            logger.info("KYC document stored locally: %s", local_path)
+
     doc = {
-        "id": str(uuid.uuid4()),
-        "type": "identity",
+        "id": doc_id,
+        "type": doc_type,
         "status": "pending",
-        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+        "uploaded_at": now_iso,
+        "file_url": file_url,
+        "filename": file.filename if file else None,
+        "content_type": file.content_type if file else None,
     }
+
     try:
         from api.db_store import db_get, db_set
         record = db_get(f"kyc:{user.sub}") or {}
@@ -342,6 +394,7 @@ async def kyc_upload_document_alias(user: TokenPayload = Depends(get_current_use
         docs.append(doc)
         record["documents"] = docs
         db_set(f"kyc:{user.sub}", record, changed_by=user.sub)
-    except Exception:  # nosec B110
-        pass
+    except Exception as exc:
+        logger.warning("Failed to persist KYC document metadata: %s", exc)
+
     return {"success": True, "document": doc}
