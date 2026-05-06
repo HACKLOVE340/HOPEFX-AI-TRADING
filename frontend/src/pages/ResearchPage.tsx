@@ -11,9 +11,9 @@
  * Requires: enterprise plan
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
 import { researchApi } from '../hooks/useApi';
 
@@ -131,10 +131,102 @@ function MetricsGrid({ metrics }: { metrics: Record<string, number> }) {
             {key.replace(/_/g, ' ')}
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#e2e8f0' }}>
-            {typeof val === 'number' ? val.toFixed(2) : val}
+            {typeof val === 'number' ? val.toFixed(2) : String(val)}
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ── Execution status bar ──────────────────────────────────────────────────────
+
+const EXEC_STEPS = ['Initialising', 'Fetching data', 'Running analysis', 'Generating signals', 'Finalising'];
+
+function ExecutionStatus({ notebookId, onComplete }: { notebookId: string; onComplete: (nb: Notebook) => void }) {
+  const [step, setStep]       = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  const startRef = useRef(Date.now());
+  const qc = useQueryClient();
+
+  // Tick elapsed time
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - startRef.current) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Advance visual step every ~2s
+  useEffect(() => {
+    const id = setInterval(() => setStep(s => Math.min(s + 1, EXEC_STEPS.length - 1)), 2000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Poll notebook status every 3s until completed/error
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const res = await researchApi.getNotebook(notebookId);
+        const nb = res.data as Notebook;
+        if (nb.status === 'completed' || nb.status === 'error') {
+          clearInterval(id);
+          qc.invalidateQueries({ queryKey: ['research-notebooks'] });
+          onComplete(nb);
+        }
+      } catch { /* ignore polling errors */ }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [notebookId, onComplete, qc]);
+
+  const pct = ((step + 1) / EXEC_STEPS.length) * 100;
+
+  return (
+    <div style={{ background: '#0f172a', border: '1px solid #1e3a5f', borderRadius: 10, padding: '20px 24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#f59e0b' }}>
+          ⏳ {EXEC_STEPS[step]}…
+        </div>
+        <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{elapsed}s elapsed</div>
+      </div>
+      <div style={{ height: 6, background: '#1e293b', borderRadius: 3, overflow: 'hidden', marginBottom: 12 }}>
+        <div style={{
+          height: '100%', borderRadius: 3,
+          background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+          width: `${pct}%`, transition: 'width 1.5s ease',
+        }} />
+      </div>
+      <div style={{ display: 'flex', gap: 0 }}>
+        {EXEC_STEPS.map((s, i) => (
+          <div key={s} style={{ flex: 1, textAlign: 'center' }}>
+            <div style={{
+              width: 10, height: 10, borderRadius: '50%', margin: '0 auto 4px',
+              background: i <= step ? '#3b82f6' : '#1e293b',
+              border: `2px solid ${i <= step ? '#3b82f6' : '#334155'}`,
+              transition: 'background 0.4s',
+            }} />
+            <div style={{ fontSize: 9, color: i <= step ? '#60a5fa' : '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {s}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Rich output renderer ──────────────────────────────────────────────────────
+
+function OutputSection({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+        <span style={{ color: '#475569', fontSize: 12 }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div style={{ padding: '0 16px 16px' }}>{children}</div>}
     </div>
   );
 }
@@ -232,10 +324,10 @@ function CreateModal({ templates, onClose, onCreate, creating }: CreateModalProp
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 const ResearchPage: React.FC = () => {
-  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<Notebook | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [runningId, setRunningId]   = useState<string | null>(null);
 
   const { data: nbData, isLoading: nbLoading } = useQuery({
     queryKey: ['research-notebooks'],
@@ -256,9 +348,9 @@ const ResearchPage: React.FC = () => {
 
   const runMut = useMutation({
     mutationFn: (id: string) => researchApi.runNotebook(id),
-    onSuccess: (res) => {
+    onSuccess: (_res, id) => {
       qc.invalidateQueries({ queryKey: ['research-notebooks'] });
-      setSelected(res.data as Notebook);
+      setRunningId(id);
     },
   });
 
@@ -285,19 +377,19 @@ const ResearchPage: React.FC = () => {
           { label: 'Research' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => navigate('/geopolitical')}
-              style={{ padding: '7px 14px', background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/geopolitical"
+              style={{ padding: '7px 14px', background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               🌍 Geopolitical
-            </button>
-            <button
-              onClick={() => navigate('/signals')}
-              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/signals"
+              style={{ padding: '7px 14px', background: 'rgba(167,139,250,0.12)', color: '#a78bfa', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               📡 Signals
-            </button>
+            </Link>
+            <Link to="/ai-chart"
+              style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', color: '#60a5fa', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 8, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+              📈 AI Charts
+            </Link>
             <button onClick={() => setShowCreate(true)}
               style={{ padding: '7px 16px', background: '#8b5cf6', color: '#fff', border: 'none',
                 borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -368,12 +460,12 @@ const ResearchPage: React.FC = () => {
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
-                  onClick={() => runMut.mutate(selected.notebook_id)}
-                  disabled={runMut.isPending || selected.status === 'running'}
+                  onClick={() => { runMut.mutate(selected.notebook_id); }}
+                  disabled={runMut.isPending || selected.status === 'running' || runningId === selected.notebook_id}
                   style={{ padding: '7px 14px', background: '#22c55e', color: '#fff', border: 'none',
                     borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    opacity: (runMut.isPending || selected.status === 'running') ? 0.5 : 1 }}>
-                  {selected.status === 'running' ? '⏳ Running…' : '▶ Run'}
+                    opacity: (runMut.isPending || selected.status === 'running' || runningId === selected.notebook_id) ? 0.5 : 1 }}>
+                  {(selected.status === 'running' || runningId === selected.notebook_id) ? '⏳ Running…' : '▶ Run'}
                 </button>
                 <button
                   onClick={() => deleteMut.mutate(selected.notebook_id)}
@@ -394,61 +486,59 @@ const ResearchPage: React.FC = () => {
               <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 20 }}>{selected.description}</p>
             )}
 
-            {selected.results ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {/* Summary */}
-                <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: 16 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Summary
-                  </div>
-                  <p style={{ margin: 0, fontSize: 13, color: '#cbd5e1', lineHeight: 1.6 }}>{selected.results.summary}</p>
+            {/* Execution status overlay */}
+            {runningId === selected.notebook_id && (
+              <div style={{ marginBottom: 20 }}>
+                <ExecutionStatus
+                  notebookId={selected.notebook_id}
+                  onComplete={(nb) => { setSelected(nb); setRunningId(null); }}
+                />
+              </div>
+            )}
+
+            {selected.results && runningId !== selected.notebook_id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* Generated at */}
+                <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>
+                  Generated {new Date(selected.results.generated_at).toLocaleString()}
                 </div>
+
+                {/* Summary */}
+                <OutputSection label="Summary">
+                  <p style={{ margin: 0, fontSize: 13, color: '#cbd5e1', lineHeight: 1.7 }}>{selected.results.summary}</p>
+                </OutputSection>
 
                 {/* Metrics */}
                 {Object.keys(selected.results.metrics).length > 0 && (
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Metrics
-                    </div>
+                  <OutputSection label={`Metrics (${Object.keys(selected.results.metrics).length})`}>
                     <MetricsGrid metrics={selected.results.metrics} />
-                  </div>
+                  </OutputSection>
                 )}
 
                 {/* Signals */}
                 {selected.results.signals.length > 0 && (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Signals ({selected.results.signals.length})
-                      </div>
-                      <button
-                        onClick={() => navigate('/ai-strategy')}
-                        style={{
-                          padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
-                          background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',
-                          color: '#a78bfa', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
-                        }}
-                        title="Use these research signals to generate a trading strategy"
-                      >
+                  <OutputSection label={`Signals (${selected.results.signals.length})`}>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+                      <Link to="/ai-strategy"
+                        style={{ padding: '4px 12px', borderRadius: 5, background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa', fontSize: 11, fontWeight: 700, textDecoration: 'none' }}
+                        title="Use these research signals to generate a trading strategy">
                         🤖 Convert to Strategy
-                      </button>
+                      </Link>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selected.results.signals.map((s, i) => <SignalCard key={i} signal={s} />)}
                     </div>
-                  </div>
+                  </OutputSection>
                 )}
-
-                <div style={{ fontSize: 11, color: '#475569', textAlign: 'right' }}>
-                  Generated {new Date(selected.results.generated_at).toLocaleString()}
-                </div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', fontSize: 13 }}>
-                {selected.status === 'running'
-                  ? '⏳ Analysis in progress…'
-                  : 'Click ▶ Run to execute this notebook'}
-              </div>
+              !runningId && (
+                <div style={{ textAlign: 'center', padding: '40px 0', color: '#64748b', fontSize: 13 }}>
+                  {selected.status === 'running'
+                    ? '⏳ Analysis in progress…'
+                    : 'Click ▶ Run to execute this notebook'}
+                </div>
+              )
             )}
           </div>
         )}
