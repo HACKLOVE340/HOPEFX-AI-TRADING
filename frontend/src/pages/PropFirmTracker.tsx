@@ -8,7 +8,8 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+// useNavigate removed — all nav converted to Link
 import { PageHeader } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -17,6 +18,109 @@ import {
 import { propFirmExtApi } from '../hooks/useApi';
 import { usePolling } from '../hooks/usePolling';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
+
+// ── Radial Drawdown Gauge ─────────────────────────────────────────────────────
+
+interface GaugeProps {
+  value: number;   // 0–1 (current drawdown as fraction of limit)
+  limit: number;   // limit as fraction (e.g. 0.05 = 5%)
+  label: string;
+  size?: number;
+}
+
+const DrawdownGauge: React.FC<GaugeProps> = ({ value, limit, label, size = 140 }) => {
+  const pct     = Math.min(value / limit, 1);
+  const danger  = pct >= 1;
+  const warn    = pct >= 0.8;
+  const color   = danger ? '#ef4444' : warn ? '#f59e0b' : '#3b82f6';
+  const safe    = '#1e293b';
+
+  // SVG arc math
+  const r       = (size / 2) - 14;
+  const cx      = size / 2;
+  const cy      = size / 2;
+  const startAngle = -220;
+  const sweep   = 260; // degrees of arc
+  const endAngle = startAngle + sweep * pct;
+
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const arcPath = (from: number, to: number, radius: number) => {
+    const x1 = cx + radius * Math.cos(toRad(from));
+    const y1 = cy + radius * Math.sin(toRad(from));
+    const x2 = cx + radius * Math.cos(toRad(to));
+    const y2 = cy + radius * Math.sin(toRad(to));
+    const large = Math.abs(to - from) > 180 ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`;
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+      <svg width={size} height={size} style={{ overflow: 'visible' }}>
+        {/* Track */}
+        <path d={arcPath(startAngle, startAngle + sweep, r)} fill="none" stroke={safe} strokeWidth={10} strokeLinecap="round" />
+        {/* Fill */}
+        {pct > 0 && (
+          <path d={arcPath(startAngle, endAngle, r)} fill="none" stroke={color} strokeWidth={10} strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.6s ease, stroke 0.4s' }} />
+        )}
+        {/* Center text */}
+        <text x={cx} y={cy - 6} textAnchor="middle" fill={color} fontSize={18} fontWeight={700} fontFamily="monospace">
+          {(pct * 100).toFixed(0)}%
+        </text>
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="#64748b" fontSize={10}>
+          of limit
+        </text>
+        {/* Danger ring pulse */}
+        {danger && (
+          <circle cx={cx} cy={cy} r={r + 16} fill="none" stroke="#ef444440" strokeWidth={4}>
+            <animate attributeName="r" values={`${r + 14};${r + 20};${r + 14}`} dur="1.5s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.5s" repeatCount="indefinite" />
+          </circle>
+        )}
+      </svg>
+      <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textAlign: 'center' }}>{label}</div>
+      <div style={{ fontSize: 11, color: '#64748b' }}>
+        {(value * 100).toFixed(2)}% / {(limit * 100).toFixed(0)}% limit
+      </div>
+    </div>
+  );
+};
+
+// ── Daily Loss Bar (enhanced) ─────────────────────────────────────────────────
+
+const DailyLossBar: React.FC<{ value: number; limit: number }> = ({ value, limit }) => {
+  const pct   = Math.min((value / limit) * 100, 100);
+  const color = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#3b82f6';
+  const zones = [
+    { pct: 50, label: '50%', color: '#22c55e' },
+    { pct: 80, label: '80%', color: '#f59e0b' },
+    { pct: 100, label: 'LIMIT', color: '#ef4444' },
+  ];
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>📉 Daily Loss</span>
+        <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color }}>
+          {(value * 100).toFixed(2)}% / {(limit * 100).toFixed(0)}%
+        </span>
+      </div>
+      <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 8, height: 18, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, #3b82f6, ${color})`, borderRadius: 8, transition: 'width 0.6s ease' }} />
+        {/* Zone markers */}
+        {zones.map(z => (
+          <div key={z.pct} style={{ position: 'absolute', left: `${z.pct}%`, top: 0, bottom: 0, width: 1, background: z.color + '80' }}>
+            <span style={{ position: 'absolute', top: -18, left: -12, fontSize: 9, color: z.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{z.label}</span>
+          </div>
+        ))}
+      </div>
+      {pct >= 80 && (
+        <div style={{ marginTop: 6, fontSize: 11, color, fontWeight: 600 }}>
+          {pct >= 100 ? '🚨 Daily loss limit reached — trading halted' : `⚠️ Approaching daily limit — ${(100 - pct).toFixed(1)}% remaining`}
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface PropFirmStatus {
   daily_loss_pct: number;
@@ -99,7 +203,6 @@ const ProgressBar: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PropFirmTracker: React.FC = () => {
-  const navigate = useNavigate();
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
   const enabled  = hydrated && isAuth;
@@ -201,24 +304,15 @@ const PropFirmTracker: React.FC = () => {
               </button>
             ))}
             <div style={{ width: 1, height: 24, background: '#334155' }} />
-            <button
-              onClick={() => navigate('/risk-calculator')}
-              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            <Link to="/risk-calculator" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>
               🛡 Risk Calc
-            </button>
-            <button
-              onClick={() => navigate('/journal')}
-              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/journal" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>
               📓 Journal
-            </button>
-            <button
-              onClick={() => navigate('/trade')}
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/trade" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>
               ⚡ Trade
-            </button>
+            </Link>
           </div>
         }
       />
@@ -344,27 +438,29 @@ const PropFirmTracker: React.FC = () => {
             </div>
           </div>
 
-          {/* Progress bars */}
+          {/* Drawdown gauges */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            <div style={{ ...s.progressCard, display: 'flex', justifyContent: 'center', padding: '20px 16px' }}>
+              <DrawdownGauge
+                value={status.max_drawdown_pct}
+                limit={status.max_drawdown_limit}
+                label="Max Drawdown"
+                size={150}
+              />
+            </div>
+            <div style={{ ...s.progressCard, display: 'flex', justifyContent: 'center', padding: '20px 16px' }}>
+              <DrawdownGauge
+                value={status.profit_target_pct}
+                limit={1.0}
+                label="Profit Target"
+                size={150}
+              />
+            </div>
+          </div>
+
+          {/* Daily loss bar + trading days */}
           <div style={s.progressCard}>
-            <ProgressBar
-              label="Daily Loss"
-              value={status.daily_loss_pct}
-              limit={status.daily_loss_limit}
-              amount={`${(status.daily_loss_pct * 100).toFixed(2)}% / ${(status.daily_loss_limit * 100).toFixed(0)}% limit`}
-            />
-            <ProgressBar
-              label="Max Drawdown"
-              value={status.max_drawdown_pct}
-              limit={status.max_drawdown_limit}
-              amount={`${(status.max_drawdown_pct * 100).toFixed(2)}% / ${(status.max_drawdown_limit * 100).toFixed(0)}% limit`}
-            />
-            <ProgressBar
-              label="Profit Target"
-              value={status.profit_target_pct}
-              limit={1.0}
-              invert
-              amount={`$${status.profit_target_amount.toFixed(0)} / $${status.profit_target_goal.toFixed(0)}`}
-            />
+            <DailyLossBar value={status.daily_loss_pct} limit={status.daily_loss_limit} />
 
             {/* Trading days */}
             <div style={{ marginBottom: 8 }}>
@@ -381,6 +477,15 @@ const PropFirmTracker: React.FC = () => {
                 }} />
               </div>
             </div>
+
+            {/* Profit target bar */}
+            <ProgressBar
+              label="Profit Target Progress"
+              value={status.profit_target_pct}
+              limit={1.0}
+              invert
+              amount={`$${status.profit_target_amount.toFixed(0)} / $${status.profit_target_goal.toFixed(0)}`}
+            />
           </div>
 
           {/* P&L summary */}
