@@ -54,10 +54,10 @@ const ResetPassword: React.FC = () => {
     return (
       <div style={s.page}>
         <div style={s.card}>
-          <a href="/" style={s.logoLink}>
+          <Link to="/" style={s.logoLink}>
             <div style={s.logoIcon}><Activity size={14} color="#3b82f6" /></div>
             <span style={s.logo}>HOPE<span style={{ color: '#3b82f6' }}>FX</span></span>
-          </a>
+          </Link>
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               <AlertCircle size={32} color="#f87171" />
@@ -108,10 +108,10 @@ const ResetPassword: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <a href="/" style={s.logoLink}>
+        <Link to="/" style={s.logoLink}>
           <div style={s.logoIcon}><Activity size={14} color="#3b82f6" /></div>
           <span style={s.logo}>HOPE<span style={{ color: '#3b82f6' }}>FX</span></span>
-        </a>
+        </Link>
 
         {success ? (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 
 function extractApiError(err: unknown, fallback: string): string {
@@ -93,7 +93,7 @@ const Leaderboard: React.FC = () => {
           <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No traders ranked yet</div>
           <div style={{ fontSize: 13, color: '#64748b', maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
             The leaderboard populates once traders have closed positions.
-            Start trading on the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to appear here.
+            Start trading on the <Link to="/trade" style={{ color: '#60a5fa' }}>Trading</Link> page to appear here.
           </div>
         </div>
       ) : (

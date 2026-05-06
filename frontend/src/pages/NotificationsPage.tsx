@@ -188,9 +188,20 @@ const NotificationsPage: React.FC = () => {
             <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
             <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
               {n.link && (
-                <a href={n.link} style={{ fontSize: 12, color: '#3b82f6', display: 'inline-block' }}>
+                <button
+                  onClick={e => {
+                    e.stopPropagation();
+                    // Internal paths use navigate; external URLs open in new tab
+                    if (n.link!.startsWith('http')) {
+                      window.open(n.link, '_blank', 'noopener,noreferrer');
+                    } else {
+                      navigate(n.link!);
+                    }
+                  }}
+                  style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3b82f6', cursor: 'pointer', display: 'inline-block' }}
+                >
                   View details →
-                </a>
+                </button>
               )}
               {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
                 <button

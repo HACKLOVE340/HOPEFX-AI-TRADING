@@ -3,7 +3,7 @@
  * Features: edit form, avatar upload, follow/unfollow, stats, signals, strategies.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
 
@@ -183,15 +183,13 @@ const Profile: React.FC = () => {
           </button>
           {isOwn ? (
             <>
-              <a
-                href={`/profile/${profile.user_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Link
+                to={`/profile/${profile.user_id}`}
                 style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
                 title="See how your profile looks to other traders"
               >
                 👁 View Public Profile
-              </a>
+              </Link>
               <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
             </>
           ) : (
