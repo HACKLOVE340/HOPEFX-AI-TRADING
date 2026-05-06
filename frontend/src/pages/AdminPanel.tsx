@@ -15,9 +15,10 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api, adminApi } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { Badge } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
 
@@ -121,26 +122,27 @@ const KpiCard: React.FC<{
 const QuickAction: React.FC<{
   icon: string; label: string; desc: string; path: string; onClick: (p: string) => void;
 }> = ({ icon, label, desc, path, onClick }) => (
-  <button
-    onClick={() => onClick(path)}
+  <Link
+    to={path}
+    onClick={e => { e.preventDefault(); onClick(path); }}
     style={{
-      background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+      display: 'block', background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
       padding: '14px 16px', cursor: 'pointer', textAlign: 'left', color: '#f1f5f9',
-      transition: 'border-color 0.15s, background 0.15s',
+      textDecoration: 'none', transition: 'border-color 0.15s, background 0.15s',
     }}
     onMouseEnter={e => {
-      (e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6';
-      (e.currentTarget as HTMLButtonElement).style.background = '#1e293b';
+      (e.currentTarget as HTMLAnchorElement).style.borderColor = '#3b82f6';
+      (e.currentTarget as HTMLAnchorElement).style.background = '#1e293b';
     }}
     onMouseLeave={e => {
-      (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155';
-      (e.currentTarget as HTMLButtonElement).style.background = '#0f172a';
+      (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155';
+      (e.currentTarget as HTMLAnchorElement).style.background = '#0f172a';
     }}
   >
     <div style={{ fontSize: 22, marginBottom: 6 }}>{icon}</div>
     <div style={{ fontSize: 13, fontWeight: 700, color: '#f8fafc', marginBottom: 2 }}>{label}</div>
     <div style={{ fontSize: 11, color: '#64748b' }}>{desc}</div>
-  </button>
+  </Link>
 );
 
 // ── Maintenance + Broadcast Panel ─────────────────────────────────────────────
@@ -431,14 +433,26 @@ const AdminPanel: React.FC = () => {
   return (
     <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif', paddingBottom: 48 }}>
       <PageHeader
-        title="🔧 Admin Panel"
-        subtitle="Platform operations, user management, and system health"
+        title="Admin Panel"
+        subtitle="Platform operations, user management, and system health."
+        breadcrumbs={[
+          { label: 'Home',  href: '/home' },
+          { label: 'Admin Panel' },
+        ]}
+        badge={
+          alerts.filter(a => !a.resolved && a.severity === 'critical').length > 0
+            ? <Badge variant="danger" style={{ fontSize: 11 }}>
+                {alerts.filter(a => !a.resolved && a.severity === 'critical').length} Critical
+              </Badge>
+            : <Badge variant="success" style={{ fontSize: 11 }}>Operational</Badge>
+        }
         actions={
           <button
             onClick={load}
-            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: '#60a5fa', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600 }}
+            disabled={loading}
+            style={{ background: '#1e3a5f', border: '1px solid #1d4ed8', borderRadius: 6, color: '#60a5fa', fontSize: 12, cursor: 'pointer', padding: '6px 14px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}
           >
-            ↻ Refresh
+            {loading ? <Spinner size="sm" /> : '↻'} Refresh
           </button>
         }
       />
@@ -521,6 +535,42 @@ const AdminPanel: React.FC = () => {
               <QuickAction icon="🏷️" label="Whitelabel"     desc="Branding & tenant config"         path="/whitelabel" onClick={go} />
               <QuickAction icon="🟢" label="System Status"  desc="Health & uptime"                  path="/status"     onClick={go} />
               <QuickAction icon="⚡" label="Super Admin"    desc="Master control panel"             path="/superadmin" onClick={go} />
+            </div>
+          </div>
+
+          {/* Cross-links */}
+          <div style={{ padding: '0 24px 32px' }}>
+            <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+                Platform Sections
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+                {[
+                  { icon: '🔍', label: 'Audit Log',          desc: 'Full event trail with filters',       to: '/audit' },
+                  { icon: '🛡️', label: 'Security Dashboard', desc: 'Threats, blocked IPs, sessions',      to: '/security' },
+                  { icon: '🩺', label: 'Auto-Heal',          desc: 'Self-healing & fix approvals',        to: '/auto-heal' },
+                  { icon: '🏷️', label: 'Whitelabel Admin',   desc: 'Tenant branding & feature flags',     to: '/whitelabel' },
+                  { icon: '🟢', label: 'System Status',      desc: 'Component health & uptime',           to: '/status' },
+                  { icon: '⚡', label: 'Super Admin',        desc: 'Master control panel',                to: '/superadmin' },
+                  { icon: '🔬', label: 'System Reliability', desc: 'OTel tracing & self-test suite',      to: '/system-reliability' },
+                  { icon: '📖', label: 'Docs',               desc: 'Platform documentation',              to: '/docs' },
+                ].map(({ icon, label, desc, to }) => (
+                  <Link
+                    key={to}
+                    to={to}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#111827'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0d1421'; }}
+                  >
+                    <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
+                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
+                    </div>
+                    <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         </>
