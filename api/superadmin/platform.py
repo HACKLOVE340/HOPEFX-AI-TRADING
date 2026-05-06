@@ -657,8 +657,20 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
-            result["running"] = bool(getattr(eng, "_running", result["running"]))
-            result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
+            is_running = bool(getattr(eng, "_running", False))
+            result["running"] = is_running
+
+            if is_running:
+                # Engine is active — heartbeat absence is a real failure.
+                result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
+            else:
+                # Engine exists but hasn't been started (API-only mode / standby).
+                # Heartbeat absence is expected, not an error.
+                result["heartbeat_ok"] = True
+                # Only override status to "standby" if config hasn't explicitly
+                # set it to "stopped" or "paused" (e.g. via kill-switch).
+                if result.get("status") not in ("stopped", "paused"):
+                    result["status"] = "standby"
 
             # Prefer _get_status() for live positions / signals
             if callable(getattr(eng, "_get_status", None)):

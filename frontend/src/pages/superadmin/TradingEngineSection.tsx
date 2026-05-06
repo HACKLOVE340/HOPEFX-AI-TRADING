@@ -38,6 +38,7 @@ interface EngineMetrics {
 
 interface EngineStatus {
   running: boolean;
+  status?: string;  // 'running' | 'standby' | 'stopped' | 'paused'
   uptime_seconds: number;
   last_signal_at: string | null;
   positions_open: number;
@@ -130,17 +131,26 @@ const TradingEngineSection: React.FC = () => {
 
 
       {/* ── Live engine status banner ── */}
-      {status && (
+      {status && (() => {
+        const engineStatus = status.status ?? (status.running ? 'running' : 'stopped');
+        const isRunning  = status.running;
+        const isStandby  = engineStatus === 'standby';
+        const dotColor   = isRunning ? '#4ade80' : isStandby ? '#f59e0b' : '#f87171';
+        const textColor  = isRunning ? '#4ade80' : isStandby ? '#f59e0b' : '#f87171';
+        const label      = isRunning ? 'RUNNING' : isStandby ? 'STANDBY' : engineStatus.toUpperCase();
+        const bgColor    = isRunning ? '#052e16' : isStandby ? '#1c1408' : '#450a0a';
+        const borderColor = isRunning ? '#16a34a44' : isStandby ? '#d9770644' : '#dc262644';
+        return (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
           padding: '12px 18px', borderRadius: 10, marginBottom: 16,
-          background: status.running ? '#052e16' : '#450a0a',
-          border: `1px solid ${status.running ? '#16a34a44' : '#dc262644'}`,
+          background: bgColor,
+          border: `1px solid ${borderColor}`,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 9, height: 9, borderRadius: '50%', background: status.running ? '#4ade80' : '#f87171', display: 'inline-block', boxShadow: status.running ? '0 0 6px #4ade80' : 'none' }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: status.running ? '#4ade80' : '#f87171' }}>
-              Engine {status.running ? 'RUNNING' : 'STOPPED'}
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: dotColor, display: 'inline-block', boxShadow: isRunning ? '0 0 6px #4ade80' : 'none' }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: textColor }}>
+              Engine {label}
             </span>
             <span style={{ fontSize: 12, color: '#475569', marginLeft: 4 }}>{status.mode}</span>
           </div>
@@ -186,7 +196,8 @@ const TradingEngineSection: React.FC = () => {
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {confirm === 'kill' && (
         <ConfirmDialog
