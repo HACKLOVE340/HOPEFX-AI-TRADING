@@ -13,6 +13,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { Badge } from '../components/Badge';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -257,6 +259,8 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 
 const WhitelabelAdmin: React.FC = () => {
   const navigate = useNavigate();
+  const confirm  = useConfirm();
+  const toast    = useToast();
   const [tenants,    setTenants]    = useState<Tenant[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [loadErr,    setLoadErr]    = useState<string | null>(null);
@@ -291,15 +295,26 @@ const WhitelabelAdmin: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const handleAction = async (id: string, action: string) => {
-    if (action === 'delete' && !window.confirm('Delete this tenant? This cannot be undone.')) return;
+    if (action === 'delete') {
+      const ok = await confirm({
+        title:        'Delete tenant?',
+        description:  'This will permanently remove the tenant, their branding, and API key. This cannot be undone.',
+        confirmLabel: 'Delete Tenant',
+        variant:      'danger',
+      });
+      if (!ok) return;
+    }
     setActionErr(null);
     try {
       if (action === 'activate') await api.post(`/whitelabel/tenants/${id}/activate`);
       else if (action === 'suspend') await api.post(`/whitelabel/tenants/${id}/suspend`);
       else if (action === 'delete') await api.delete(`/whitelabel/tenants/${id}`);
+      toast.success(`Tenant ${action}d successfully.`);
       await load();
     } catch (err) {
-      setActionErr(extractErrorMessage(err, `Action "${action}" failed. Check permissions and try again.`));
+      const msg = extractErrorMessage(err, `Action "${action}" failed. Check permissions and try again.`);
+      setActionErr(msg);
+      toast.error(msg);
     }
   };
 

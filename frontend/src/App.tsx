@@ -28,6 +28,9 @@ import SubscriptionGate from './components/SubscriptionGate';
 import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
+import { ToastProvider } from './components/Toast';
+import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { CommandPalette } from './components/CommandPalette';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
@@ -504,30 +507,36 @@ const AppShell: React.FC = () => {
 // ── Root ──────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <ErrorBoundary>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/"                element={<LandingPage />} />
-            <Route path="/landing"         element={<LandingPage />} />
-            <Route path="/login"           element={<Login />} />
-            <Route path="/register"        element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password"  element={<ResetPassword />} />
-            <Route path="/onboarding"      element={<Onboarding />} />
-            {/* Public pages — no auth required */}
-            {/* /pricing = public marketing pricing page for unauthenticated visitors */}
-            {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
-            <Route path="/pricing"         element={<PricingPage />} />
-            <Route path="/docs"            element={<DocsPage />} />
-            <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
-            <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
-            <Route path="/privacy"         element={<PrivacyPolicy />} />
-            <Route path="/*"               element={<AppShell />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </BrowserRouter>
+    <ToastProvider>
+      <ConfirmDialogProvider>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/"                element={<LandingPage />} />
+                <Route path="/landing"         element={<LandingPage />} />
+                <Route path="/login"           element={<Login />} />
+                <Route path="/register"        element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password"  element={<ResetPassword />} />
+                <Route path="/onboarding"      element={<Onboarding />} />
+                {/* Public pages — no auth required */}
+                {/* /pricing = public marketing pricing page for unauthenticated visitors */}
+                {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
+                <Route path="/pricing"         element={<PricingPage />} />
+                <Route path="/docs"            element={<DocsPage />} />
+                <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
+                <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
+                <Route path="/privacy"         element={<PrivacyPolicy />} />
+                <Route path="/*"               element={<AppShell />} />
+              </Routes>
+              {/* Global command palette — available on all authenticated pages */}
+              <CommandPalette />
+            </Suspense>
+          </ErrorBoundary>
+        </BrowserRouter>
+      </ConfirmDialogProvider>
+    </ToastProvider>
   </QueryClientProvider>
 );
 

@@ -5,6 +5,11 @@
  *   import { Badge, Spinner, Modal, DataTable, ThemeToggle } from '../components';
  */
 
+// ── Global infrastructure ─────────────────────────────────────────────────────
+export { ToastProvider, ToastContainer, useToast, type ToastItem, type ToastVariant } from './Toast';
+export { ConfirmDialogProvider, useConfirm, type ConfirmOptions } from './ConfirmDialog';
+export { CommandPalette, useCommandActions, useCommandPalette, type CommandItem } from './CommandPalette';
+
 // ── Core UI ───────────────────────────────────────────────────────────────────
 export { AuthGuard } from './AuthGuard';
 export { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';

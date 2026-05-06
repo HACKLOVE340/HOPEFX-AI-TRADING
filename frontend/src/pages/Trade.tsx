@@ -22,6 +22,8 @@
 import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 import { PageHeader } from '../components';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
@@ -393,17 +395,26 @@ const Trade: React.FC = () => {
   const prices      = useStore((s) => s.prices);
   const allHistory  = useStore((s) => s.priceHistory);
   const qc          = useQueryClient();
+  const confirm     = useConfirm();
+  const toast       = useToast();
 
   usePositions();
 
   const handleCloseAll = async () => {
-    if (!window.confirm('Close ALL open positions? This cannot be undone.')) return;
+    const ok = await confirm({
+      title:        'Close all positions?',
+      description:  'This will market-close every open position immediately. This cannot be undone.',
+      confirmLabel: 'Close All',
+      variant:      'danger',
+    });
+    if (!ok) return;
     setClosingAll(true);
     try {
       await tradingApi.closeAllPositions();
       await qc.invalidateQueries({ queryKey: ['positions'] });
-    } catch {
-      // error surfaced by PositionsTable
+      toast.success('All positions closed.');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to close positions.');
     } finally {
       setClosingAll(false);
     }
