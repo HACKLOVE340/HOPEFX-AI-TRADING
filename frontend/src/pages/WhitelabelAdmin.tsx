@@ -9,8 +9,10 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { PageHeader } from '../components/PageHeader';
+import { Badge } from '../components/Badge';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -325,23 +327,33 @@ const WhitelabelAdmin: React.FC = () => {
       {preview && <PreviewPanel tenant={preview} onClose={() => setPreview(null)} />}
 
       {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Whitelabel Tenants</h1>
-          <p style={s.subtitle}>Manage prop-firm and reseller branded deployments.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/trade')}
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            ⚡ Trade
-          </button>
-          <button onClick={() => navigate('/performance')}
-            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            📊 Performance
-          </button>
-          <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
-        </div>
-      </div>
+      <PageHeader
+        title="Whitelabel Tenants"
+        subtitle="Manage prop-firm and reseller branded deployments."
+        breadcrumbs={[
+          { label: 'Home',        href: '/home' },
+          { label: 'Admin Panel', href: '/admin' },
+          { label: 'Whitelabel Admin' },
+        ]}
+        badge={
+          <Badge variant="info" style={{ fontSize: 11 }}>
+            {tenants.length} Tenant{tenants.length !== 1 ? 's' : ''}
+          </Badge>
+        }
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/superadmin"
+              style={{ padding: '7px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              ⚡ Super Admin
+            </Link>
+            <Link to="/admin"
+              style={{ padding: '7px 14px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              🔧 Admin
+            </Link>
+            <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
+          </div>
+        }
+      />
 
       {/* API key message */}
       {apiKeyMsg && (
@@ -404,6 +416,38 @@ const WhitelabelAdmin: React.FC = () => {
         <span style={{ color: '#60a5fa', fontWeight: 600 }}>ℹ Prop firm partnerships:</span>
         {' '}Each tenant gets a branded dashboard, their own API key, and configurable feature flags.
         Email FTMO / The5ers / Funded Next with the preview link to close deals.
+      </div>
+
+      {/* Cross-links */}
+      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20, marginTop: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          Related
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+          {[
+            { icon: '🔧', label: 'Admin Panel',          desc: 'Platform overview & KPIs',         to: '/admin' },
+            { icon: '⚡', label: 'Super Admin',          desc: 'Master control panel',             to: '/superadmin' },
+            { icon: '🛡️', label: 'Security Dashboard',  desc: 'Threats, IPs, lockdown controls',  to: '/security' },
+            { icon: '🔍', label: 'Audit Log',            desc: 'Full event trail with filters',    to: '/audit' },
+            { icon: '🟢', label: 'System Status',        desc: 'Component health & uptime',        to: '/status' },
+            { icon: '📖', label: 'Docs',                 desc: 'Platform documentation',           to: '/docs' },
+          ].map(({ icon, label, desc, to }) => (
+            <Link
+              key={to}
+              to={to}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#111827'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0d1421'; }}
+            >
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
+              </div>
+              <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
