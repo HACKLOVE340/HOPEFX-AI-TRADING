@@ -1,11 +1,6 @@
 /**
- * Breadcrumb — hierarchical navigation trail.
- *
- * Usage:
- *   <Breadcrumb items={[
- *     { label: 'Dashboard', href: '/dashboard' },
- *     { label: 'Performance' },
- *   ]} />
+ * Breadcrumb — hierarchical navigation trail with home shortcut and
+ * hover states. Supports icons per item.
  */
 
 import React from 'react';
@@ -13,7 +8,6 @@ import { Link } from 'react-router-dom';
 
 export interface BreadcrumbItem {
   label: string;
-  /** When omitted the item renders as plain text (current page). */
   href?: string;
   icon?: React.ReactNode;
 }
@@ -32,18 +26,35 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
       gap: 4,
       fontSize: 12,
       color: '#64748b',
-      marginBottom: 12,
+      marginBottom: 10,
       flexWrap: 'wrap',
       ...style,
     }}
   >
+    {/* Home anchor */}
+    <Link
+      to="/dashboard"
+      style={{
+        color: '#475569',
+        textDecoration: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 3,
+        transition: 'color 0.15s',
+        lineHeight: 1,
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+      title="Dashboard"
+    >
+      <span style={{ fontSize: 11 }}>⌂</span>
+    </Link>
+
     {items.map((item, idx) => {
       const isLast = idx === items.length - 1;
       return (
         <React.Fragment key={idx}>
-          {idx > 0 && (
-            <span style={{ color: '#334155', userSelect: 'none', fontSize: 11 }}>›</span>
-          )}
+          <span style={{ color: '#2d3f55', userSelect: 'none', fontSize: 11 }}>›</span>
           {item.href && !isLast ? (
             <Link
               to={item.href}
@@ -55,14 +66,10 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
                 gap: 4,
                 transition: 'color 0.15s',
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLAnchorElement).style.color = '#64748b';
-              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
             >
-              {item.icon && <span style={{ lineHeight: 1 }}>{item.icon}</span>}
+              {item.icon && <span style={{ lineHeight: 1, fontSize: 11 }}>{item.icon}</span>}
               {item.label}
             </Link>
           ) : (
@@ -75,7 +82,7 @@ export const Breadcrumb: React.FC<BreadcrumbProps> = ({ items, style }) => (
                 gap: 4,
               }}
             >
-              {item.icon && <span style={{ lineHeight: 1 }}>{item.icon}</span>}
+              {item.icon && <span style={{ lineHeight: 1, fontSize: 11 }}>{item.icon}</span>}
               {item.label}
             </span>
           )}
