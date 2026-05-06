@@ -16,9 +16,36 @@ interface TraderProfile {
   user_id: string; username: string; display_name: string; bio: string;
   avatar_url: string | null; country: string | null; joined_at: string;
   followers_count: number; following_count: number; is_following: boolean;
-  stats: { total_trades: number; win_rate: number; avg_pnl: number; sharpe_ratio: number; total_return_pct: number; };
-  strategies: { strategy_id: string; name: string; subscribers: number; rating: number; }[];
-  recent_signals: { signal_id: string; symbol: string; direction: string; confidence: number; pnl: number; created_at: string; }[];
+  stats: { total_trades: number; win_rate: number; avg_pnl: number; sharpe_ratio: number; total_return_pct: number; } | null;
+  strategies: { strategy_id: string; name: string; subscribers: number; rating: number; }[] | null;
+  recent_signals: { signal_id: string; symbol: string; direction: string; confidence: number; pnl: number; created_at: string; }[] | null;
+}
+
+/** Normalize raw API profile so arrays/objects are always safe to use. */
+function normalizeProfile(raw: unknown): TraderProfile {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const rawStats = (p.stats && typeof p.stats === 'object') ? (p.stats as Record<string, unknown>) : {};
+  return {
+    user_id:          String(p.user_id ?? ''),
+    username:         String(p.username ?? ''),
+    display_name:     String(p.display_name ?? p.username ?? ''),
+    bio:              String(p.bio ?? ''),
+    avatar_url:       typeof p.avatar_url === 'string' ? p.avatar_url : null,
+    country:          typeof p.country === 'string' ? p.country : null,
+    joined_at:        String(p.joined_at ?? new Date().toISOString()),
+    followers_count:  typeof p.followers_count === 'number' ? p.followers_count : 0,
+    following_count:  typeof p.following_count === 'number' ? p.following_count : 0,
+    is_following:     Boolean(p.is_following),
+    stats: {
+      total_trades:    typeof rawStats.total_trades === 'number' ? rawStats.total_trades : 0,
+      win_rate:        typeof rawStats.win_rate === 'number' ? rawStats.win_rate : 0,
+      avg_pnl:         typeof rawStats.avg_pnl === 'number' ? rawStats.avg_pnl : 0,
+      sharpe_ratio:    typeof rawStats.sharpe_ratio === 'number' ? rawStats.sharpe_ratio : 0,
+      total_return_pct: typeof rawStats.total_return_pct === 'number' ? rawStats.total_return_pct : 0,
+    },
+    strategies:      Array.isArray(p.strategies) ? p.strategies as TraderProfile['strategies'] : [],
+    recent_signals:  Array.isArray(p.recent_signals) ? p.recent_signals as TraderProfile['recent_signals'] : [],
+  };
 }
 
 interface EditForm extends Record<string, unknown> { display_name: string; bio: string; country: string; }
@@ -50,8 +77,11 @@ const Profile: React.FC = () => {
     try {
       const res = await profileApi.get(isOwn ? undefined : id);
       if (!mountedRef.current) return;
-      const d = res.data as { profile?: TraderProfile } | TraderProfile;
-      const p: TraderProfile = ('profile' in d && d.profile) ? d.profile : d as TraderProfile;
+      const d = res.data as { profile?: unknown } | unknown;
+      const raw = (d && typeof d === 'object' && 'profile' in (d as object))
+        ? (d as { profile: unknown }).profile
+        : d;
+      const p = normalizeProfile(raw);
       setProfile(p);
       setFollowing(p.is_following);
       if (isOwn) setEditForm({ display_name: p.display_name, bio: p.bio, country: p.country ?? '' });
@@ -109,7 +139,9 @@ const Profile: React.FC = () => {
   if (error)   return <div style={s.page}><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
   if (!profile) return null;
 
-  const st = profile.stats;
+  const st = profile.stats ?? { total_trades: 0, win_rate: 0, avg_pnl: 0, sharpe_ratio: 0, total_return_pct: 0 };
+  const strategies = profile.strategies ?? [];
+  const recentSignals = profile.recent_signals ?? [];
 
   return (
     <div style={s.page}>
@@ -206,15 +238,15 @@ const Profile: React.FC = () => {
       </div>
 
       {/* Strategies */}
-      {profile.strategies.length > 0 && (
+      {strategies.length > 0 && (
         <div style={s.card}>
-          <h3 style={s.cardTitle}>Strategies ({profile.strategies.length})</h3>
+          <h3 style={s.cardTitle}>Strategies ({strategies.length})</h3>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {profile.strategies.map(str=>(
+            {strategies.map(str=>(
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
                 <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers} subscribers</span>
-                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Math.round(str.rating))} {str.rating.toFixed(1)}</span>
+                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Math.round(str.rating ?? 0))} {(str.rating ?? 0).toFixed(1)}</span>
               </div>
             ))}
           </div>
@@ -222,18 +254,18 @@ const Profile: React.FC = () => {
       )}
 
       {/* Recent signals */}
-      {profile.recent_signals.length > 0 && (
+      {recentSignals.length > 0 && (
         <div style={s.card}>
           <h3 style={s.cardTitle}>Recent Signals</h3>
           <table style={s.table}>
             <thead><tr><th style={s.th}>Symbol</th><th style={s.th}>Direction</th><th style={s.th}>Confidence</th><th style={s.th}>P&L</th><th style={s.th}>Date</th></tr></thead>
             <tbody>
-              {profile.recent_signals.map(sig=>(
+              {recentSignals.map(sig=>(
                 <tr key={sig.signal_id} style={s.tr}>
                   <td style={s.td}>{sig.symbol}</td>
                   <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:600}}>{sig.direction}</span></td>
-                  <td style={s.td}>{(sig.confidence*100).toFixed(0)}%</td>
-                  <td style={{...s.td,color:sig.pnl>=0?'#4ade80':'#f87171',fontWeight:600}}>{sig.pnl>=0?'+':''}{sig.pnl.toFixed(2)}%</td>
+                  <td style={s.td}>{((sig.confidence ?? 0)*100).toFixed(0)}%</td>
+                  <td style={{...s.td,color:(sig.pnl??0)>=0?'#4ade80':'#f87171',fontWeight:600}}>{(sig.pnl??0)>=0?'+':''}{(sig.pnl??0).toFixed(2)}%</td>
                   <td style={s.td}>{new Date(sig.created_at).toLocaleDateString()}</td>
                 </tr>
               ))}
