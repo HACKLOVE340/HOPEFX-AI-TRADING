@@ -13,8 +13,9 @@
  */
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components';
+import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, Activity, Shield,
@@ -202,8 +203,113 @@ function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── Live equity flash indicator ───────────────────────────────────────────────
+
+const LiveEquityBadge: React.FC<{ equity: number | undefined }> = ({ equity }) => {
+  const flash = useFlashHighlight(equity);
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+        padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700,
+        background: flash !== 'transparent' ? flash : 'rgba(0,230,118,0.08)',
+        color: '#00e676', border: '1px solid rgba(0,230,118,0.2)',
+        transition: 'background 0.4s ease',
+      }}
+    >
+      ● LIVE {equity != null ? `$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+    </span>
+  );
+};
+
+// ── Trade distribution histogram (SVG) ────────────────────────────────────────
+
+const TradeHistogram: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
+  if (fills.length < 5) return (
+    <div className="flex items-center justify-center h-24 text-slate-600 text-xs">Need 5+ fills for histogram</div>
+  );
+
+  // Bin slippage_bps into buckets
+  const values = fills.map((f) => f.slippage_bps);
+  const min = Math.min(...values); const max = Math.max(...values);
+  const range = max - min || 1;
+  const BINS = 12;
+  const binSize = range / BINS;
+  const bins = Array.from({ length: BINS }, (_, i) => ({
+    label: (min + i * binSize).toFixed(1),
+    count: 0,
+  }));
+  for (const v of values) {
+    const idx = Math.min(Math.floor((v - min) / binSize), BINS - 1);
+    bins[idx]!.count++;
+  }
+  const maxCount = Math.max(...bins.map((b) => b.count), 1);
+  const W = 400; const H = 60;
+
+  return (
+    <div>
+      <div className="text-[10px] text-slate-500 mb-1">Slippage Distribution (bps)</div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 60 }}>
+        {bins.map((b, i) => {
+          const barH = (b.count / maxCount) * (H - 8);
+          const x = (i / BINS) * W;
+          const w = (W / BINS) - 1;
+          const isNeg = parseFloat(b.label) < 0;
+          return (
+            <g key={i}>
+              <rect x={x} y={H - barH - 4} width={w} height={barH} fill={isNeg ? '#00e676' : '#ff1744'} opacity={0.7} rx={1}>
+                <title>{b.label} bps: {b.count} fills</title>
+              </rect>
+            </g>
+          );
+        })}
+        <line x1={0} y1={H - 4} x2={W} y2={H - 4} stroke="#1e2d3d" strokeWidth={1} />
+      </svg>
+      <div className="flex justify-between text-[9px] text-slate-600 mt-0.5">
+        <span>{min.toFixed(1)} bps</span>
+        <span>0</span>
+        <span>{max.toFixed(1)} bps</span>
+      </div>
+    </div>
+  );
+};
+
+// ── MAE/MFE analysis ──────────────────────────────────────────────────────────
+
+const MAEMFEPanel: React.FC<{ fills: FillEntry[] }> = ({ fills }) => {
+  if (fills.length === 0) return null;
+
+  const slippages = fills.map((f) => f.slippage_bps);
+  const latencies = fills.map((f) => f.latency_ms);
+
+  const mae = Math.min(...slippages);  // worst adverse slippage
+  const mfe = Math.max(...slippages);  // best favorable slippage
+  const avgSlip = slippages.reduce((a, b) => a + b, 0) / slippages.length;
+  const avgLat  = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+  const p95Lat  = [...latencies].sort((a, b) => a - b)[Math.floor(latencies.length * 0.95)] ?? 0;
+
+  const metrics = [
+    { label: 'MAE (worst slippage)', value: `${mae.toFixed(2)} bps`, warn: mae < -5 },
+    { label: 'MFE (best slippage)',  value: `${mfe.toFixed(2)} bps`, warn: false },
+    { label: 'Avg Slippage',         value: `${avgSlip.toFixed(2)} bps`, warn: avgSlip > 3 },
+    { label: 'Avg Latency',          value: `${avgLat.toFixed(1)} ms`, warn: avgLat > 100 },
+    { label: 'P95 Latency',          value: `${p95Lat.toFixed(1)} ms`, warn: p95Lat > 200 },
+    { label: 'Total Fills',          value: String(fills.length), warn: false },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {metrics.map(({ label, value, warn }) => (
+        <div key={label} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0a0f1a] border border-[#1e2d3d]">
+          <span className="text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
+          <span className={`text-[14px] font-bold tabular-nums ${warn ? 'text-[#ff1744]' : 'text-slate-200'}`}>{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const PnLDashboard: React.FC = () => {
-  const navigate = useNavigate();
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
   const enabled  = hydrated && isAuth;
@@ -300,33 +406,12 @@ const PnLDashboard: React.FC = () => {
           { label: 'P&L Dashboard' },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/performance')}
-              className="flex items-center gap-2 px-3 py-1.5 text-[#4ade80] rounded-lg text-xs font-semibold"
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}
-            >
-              📈 Performance
-            </button>
-            <button
-              onClick={() => navigate('/tca')}
-              className="flex items-center gap-2 px-3 py-1.5 text-[#a78bfa] rounded-lg text-xs font-semibold"
-              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}
-            >
-              📊 TCA
-            </button>
-            <button
-              onClick={() => navigate('/journal')}
-              className="flex items-center gap-2 px-3 py-1.5 text-[#60a5fa] rounded-lg text-xs font-semibold"
-              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }}
-            >
-              📓 Journal
-            </button>
-            <button
-              onClick={handleRefresh}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-1.5 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-xs transition-colors disabled:opacity-50"
-            >
+          <div className="flex items-center gap-2 flex-wrap">
+            <LiveEquityBadge equity={summary?.equity} />
+            <Link to="/performance" className="flex items-center gap-1 px-3 py-1.5 text-[#4ade80] rounded-lg text-xs font-semibold" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', textDecoration: 'none' }}>📈 Performance</Link>
+            <Link to="/tca"         className="flex items-center gap-1 px-3 py-1.5 text-[#a78bfa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', textDecoration: 'none' }}>📊 TCA</Link>
+            <Link to="/journal"     className="flex items-center gap-1 px-3 py-1.5 text-[#60a5fa] rounded-lg text-xs font-semibold" style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', textDecoration: 'none' }}>📓 Journal</Link>
+            <button onClick={handleRefresh} disabled={isLoading} className="flex items-center gap-2 px-3 py-1.5 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-xs transition-colors disabled:opacity-50">
               <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
               {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
             </button>
@@ -509,12 +594,9 @@ const PnLDashboard: React.FC = () => {
                 <span className="text-3xl opacity-30">📋</span>
                 <p className="text-slate-400 text-sm font-medium">No fills yet</p>
                 <p className="text-slate-600 text-xs max-w-xs">The trade log populates after your first executed order.</p>
-                <button
-                  onClick={() => navigate('/trade')}
-                  className="mt-1 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition-colors"
-                >
+                <Link to="/trade" className="mt-1 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition-colors" style={{ textDecoration: 'none' }}>
                   ⚡ Place First Trade
-                </button>
+                </Link>
               </div>
             )}
           </div>
@@ -593,6 +675,37 @@ const PnLDashboard: React.FC = () => {
             )}
           </>
         )}
+
+        {/* MAE/MFE analysis */}
+        {fills.length > 0 && (
+          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+            <h3 className="text-[13px] font-semibold text-slate-200 mb-3">MAE / MFE Analysis</h3>
+            <MAEMFEPanel fills={fills} />
+          </div>
+        )}
+
+        {/* Trade distribution histogram */}
+        {fills.length >= 5 && (
+          <div className="rounded-xl border border-[#1e2d3d] bg-[#0d1421] p-4">
+            <h3 className="text-[13px] font-semibold text-slate-200 mb-3">Trade Distribution</h3>
+            <TradeHistogram fills={fills} />
+          </div>
+        )}
+
+        {/* Cross-links */}
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-[#1e2d3d]">
+          {[
+            { label: '📊 Performance',     path: '/performance' },
+            { label: '💼 Portfolio',        path: '/portfolio' },
+            { label: '📊 TCA',             path: '/tca' },
+            { label: '📓 Trade Journal',   path: '/journal' },
+            { label: '⚡ Trade',           path: '/trade' },
+          ].map(({ label, path }) => (
+            <Link key={path} to={path} className="px-3 py-1.5 rounded text-[11px] bg-transparent border border-[#1e2d3d] text-slate-500 hover:text-slate-300 hover:border-[#334155] transition-colors" style={{ textDecoration: 'none' }}>
+              {label}
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
