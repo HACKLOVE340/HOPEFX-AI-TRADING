@@ -16,7 +16,7 @@
 
 import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { AIChart } from '../components/charts/AIChart';
 import { cn } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
@@ -216,7 +216,6 @@ class ChartErrorBoundary extends React.Component<
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AIChartDashboard() {
-  const navigate = useNavigate();
   const [timeframe, setTimeframe] = useState<TF>('1h');
 
   return (
@@ -238,34 +237,26 @@ export default function AIChartDashboard() {
         <div className="flex-1" />
         {/* Cross-links */}
         <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => navigate('/watchlist')}
-            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
-            style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)' }}
-          >
+          <Link to="/watchlist"
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors no-underline"
+            style={{ background: 'rgba(56,189,248,0.08)', border: '1px solid rgba(56,189,248,0.2)' }}>
             👁 Watchlist
-          </button>
-          <button
-            onClick={() => navigate('/pattern-detector')}
-            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
-            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}
-          >
+          </Link>
+          <Link to="/pattern-detector"
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors no-underline"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
             🔍 Patterns
-          </button>
-          <button
-            onClick={() => navigate('/ai-strategy')}
-            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
-            style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.2)' }}
-          >
+          </Link>
+          <Link to="/ai-strategy"
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors no-underline"
+            style={{ background: 'rgba(6,182,212,0.08)', border: '1px solid rgba(6,182,212,0.2)' }}>
             🧠 Strategy
-          </button>
-          <button
-            onClick={() => navigate('/signals')}
-            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors"
-            style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)' }}
-          >
+          </Link>
+          <Link to="/signals"
+            className="px-2.5 py-1 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 transition-colors no-underline"
+            style={{ background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.2)' }}>
             📡 Signals
-          </button>
+          </Link>
         </div>
         <div className="w-px h-4 bg-[#1e2d3d] shrink-0" />
         <TfSelector value={timeframe} onChange={setTimeframe} />
@@ -281,14 +272,15 @@ export default function AIChartDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
           {SYMBOLS.map((sym) => (
             <div key={`${sym}-${timeframe}`} className="relative">
-              <button
-                onClick={() => navigate('/trade', { state: { signal: { symbol: sym } } })}
-                className="absolute top-2 right-2 z-10 px-2 py-1 rounded text-[10px] font-bold"
-                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', cursor: 'pointer' }}
+              <Link
+                to="/trade"
+                state={{ signal: { symbol: sym } }}
+                className="absolute top-2 right-2 z-10 px-2 py-1 rounded text-[10px] font-bold no-underline"
+                style={{ background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa' }}
                 title={`Go to Trade page for ${sym}`}
               >
                 ⚡ Trade
-              </button>
+              </Link>
               <ChartErrorBoundary label={sym}>
                 <AIChart
                   symbol={sym}
