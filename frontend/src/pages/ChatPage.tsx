@@ -8,10 +8,12 @@
  *   WS   /ws/chat/:room_id          — real-time messages
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { getWsBase } from '../lib/utils';
+import { EmptyState } from '../components/EmptyState';
+import { Spinner } from '../components/Spinner';
 
 interface ChatRoom {
   id: string;
@@ -155,40 +157,86 @@ const ChatPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', height: 'calc(100vh - 64px)', background: '#0a0f1a', overflow: 'hidden' }}>
       {/* Sidebar — room list */}
-      <div style={{ width: 260, borderRight: '1px solid #1e293b', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-        <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #1e293b' }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Chat</h2>
+      <div style={{ width: 272, borderRight: '1px solid #1e293b', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        {/* Sidebar header */}
+        <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #1e293b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: 0 }}>💬 Chat</h2>
+            <Link to="/signals" style={{ fontSize: 11, color: '#64748b', textDecoration: 'none', padding: '3px 8px', border: '1px solid #334155', borderRadius: 6 }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+              📡 Signals
+            </Link>
+          </div>
+          {/* Breadcrumb */}
+          <nav style={{ fontSize: 11, color: '#475569', display: 'flex', gap: 4, alignItems: 'center' }}>
+            <Link to="/dashboard" style={{ color: '#475569', textDecoration: 'none' }}
+              onMouseEnter={e => (e.currentTarget.style.color = '#64748b')}
+              onMouseLeave={e => (e.currentTarget.style.color = '#475569')}>
+              Dashboard
+            </Link>
+            <span>›</span>
+            <span style={{ color: '#64748b' }}>Chat</span>
+          </nav>
         </div>
+
+        {/* Room list */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
-          {loadingRooms && <div style={{ color: '#64748b', fontSize: 13, padding: 16 }}>Loading rooms…</div>}
+          {loadingRooms && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+              <Spinner size="sm" />
+            </div>
+          )}
+          {!loadingRooms && rooms.length === 0 && (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: '#475569', fontSize: 13 }}>
+              No chat rooms available
+            </div>
+          )}
           {rooms.map(room => (
             <div
               key={room.id}
               onClick={() => setActiveRoom(room)}
               style={{
-                padding: '12px 16px', cursor: 'pointer',
+                padding: '11px 16px', cursor: 'pointer',
                 background: activeRoom?.id === room.id ? '#1e293b' : 'transparent',
                 borderLeft: `3px solid ${activeRoom?.id === room.id ? '#3b82f6' : 'transparent'}`,
                 transition: 'background 0.15s',
               }}
+              onMouseEnter={e => { if (activeRoom?.id !== room.id) e.currentTarget.style.background = 'rgba(30,41,59,0.5)'; }}
+              onMouseLeave={e => { if (activeRoom?.id !== room.id) e.currentTarget.style.background = 'transparent'; }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 16 }}>{ROOM_ICONS[room.type] ?? '💬'}</span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{room.name}</span>
+                  <span style={{ fontSize: 15 }}>{ROOM_ICONS[room.type] ?? '💬'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{room.name}</span>
                 </div>
                 {room.unread_count > 0 && (
-                  <span style={{ background: '#3b82f6', color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700, padding: '1px 6px' }}>
+                  <span style={{ background: '#3b82f6', color: '#fff', borderRadius: 10, fontSize: 10, fontWeight: 700, padding: '1px 6px', minWidth: 18, textAlign: 'center' }}>
                     {room.unread_count}
                   </span>
                 )}
               </div>
               {room.last_message && (
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingLeft: 23 }}>
                   {room.last_message}
                 </div>
               )}
             </div>
+          ))}
+        </div>
+
+        {/* Sidebar footer cross-links */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1e293b', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {[
+            { to: '/teams', label: '👥 Teams' },
+            { to: '/trade', label: '⚡ Trade' },
+            { to: '/leaderboard', label: '🏆 Leaderboard' },
+          ].map(({ to, label }) => (
+            <Link key={to} to={to} style={{ fontSize: 12, color: '#64748b', textDecoration: 'none', padding: '5px 8px', borderRadius: 6, transition: 'background 0.15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#1e293b'; e.currentTarget.style.color = '#94a3b8'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b'; }}>
+              {label}
+            </Link>
           ))}
         </div>
       </div>
@@ -197,56 +245,68 @@ const ChatPage: React.FC = () => {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Room header */}
         {activeRoom && (
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 20 }}>{ROOM_ICONS[activeRoom.type] ?? '💬'}</span>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>{activeRoom.name}</div>
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 10, background: '#0d1421' }}>
+            <span style={{ fontSize: 18 }}>{ROOM_ICONS[activeRoom.type] ?? '💬'}</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#f1f5f9' }}>{activeRoom.name}</div>
               {activeRoom.description && (
-                <div style={{ fontSize: 12, color: '#64748b' }}>{activeRoom.description}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{activeRoom.description}</div>
               )}
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => navigate('/trade')}
-                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 6, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 6, color: '#60a5fa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '5px 10px' }}>
                 ⚡ Trade
               </button>
               <button onClick={() => navigate('/signals')}
-                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 6, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: '5px 12px' }}>
+                style={{ background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 6, color: '#a78bfa', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '5px 10px' }}>
                 📡 Signals
+              </button>
+              <button onClick={() => navigate('/teams')}
+                style={{ background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.3)', borderRadius: 6, color: '#06b6d4', fontSize: 11, fontWeight: 700, cursor: 'pointer', padding: '5px 10px' }}>
+                👥 Teams
               </button>
             </div>
           </div>
         )}
 
         {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {loadingMsgs && <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center' }}>Loading messages…</div>}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {loadingMsgs && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}>
+              <Spinner size="md" />
+            </div>
+          )}
           {!loadingMsgs && messages.length === 0 && (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
-              No messages yet. Be the first to say something!
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 60 }}>
+              <EmptyState
+                icon="💬"
+                title="No messages yet"
+                description="Be the first to say something in this room!"
+              />
             </div>
           )}
           {messages.map(msg => (
-            <div key={msg.id} style={{ display: 'flex', flexDirection: isOwn(msg) ? 'row-reverse' : 'row', gap: 10, alignItems: 'flex-end' }}>
+            <div key={msg.id} style={{ display: 'flex', flexDirection: isOwn(msg) ? 'row-reverse' : 'row', gap: 8, alignItems: 'flex-end' }}>
               {/* Avatar */}
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: isOwn(msg) ? '#1e3a5f' : '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: isOwn(msg) ? '#60a5fa' : '#94a3b8', flexShrink: 0 }}>
+              <div style={{ width: 30, height: 30, borderRadius: '50%', background: isOwn(msg) ? '#1e3a5f' : '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: isOwn(msg) ? '#60a5fa' : '#94a3b8', flexShrink: 0, border: `1px solid ${isOwn(msg) ? '#1e4a7f' : '#334155'}` }}>
                 {msg.username.charAt(0).toUpperCase()}
               </div>
-              <div style={{ maxWidth: '70%' }}>
+              <div style={{ maxWidth: '68%' }}>
                 {!isOwn(msg) && (
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3 }}>{msg.username}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 3, fontWeight: 600 }}>{msg.username}</div>
                 )}
                 <div style={{
                   background: isOwn(msg) ? '#1e3a5f' : '#1e293b',
                   border: `1px solid ${isOwn(msg) ? '#1e4a7f' : '#334155'}`,
                   borderRadius: isOwn(msg) ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
-                  padding: '8px 12px', fontSize: 14, color: '#f1f5f9', lineHeight: 1.5,
+                  padding: '8px 12px', fontSize: 13, color: '#f1f5f9', lineHeight: 1.55,
                 }}>
                   {msg.content}
                 </div>
-                <div style={{ fontSize: 10, color: '#475569', marginTop: 3, textAlign: isOwn(msg) ? 'right' : 'left' }}>
+                <div style={{ fontSize: 10, color: '#475569', marginTop: 2, textAlign: isOwn(msg) ? 'right' : 'left' }}>
                   {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  {msg.edited && ' (edited)'}
+                  {msg.edited && ' · edited'}
                 </div>
               </div>
             </div>
@@ -256,7 +316,7 @@ const ChatPage: React.FC = () => {
 
         {/* Input bar */}
         {activeRoom && (
-          <div style={{ padding: '12px 20px', borderTop: '1px solid #1e293b', display: 'flex', gap: 10 }}>
+          <div style={{ padding: '12px 20px', borderTop: '1px solid #1e293b', display: 'flex', gap: 10, background: '#0d1421' }}>
             <input
               ref={inputRef}
               type="text"
@@ -264,12 +324,14 @@ const ChatPage: React.FC = () => {
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={`Message #${activeRoom.name}…`}
-              style={{ flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#f1f5f9', fontSize: 14, outline: 'none', padding: '10px 14px' }}
+              style={{ flex: 1, background: '#1e293b', border: '1px solid #334155', borderRadius: 10, color: '#f1f5f9', fontSize: 14, outline: 'none', padding: '10px 14px', transition: 'border-color 0.15s' }}
+              onFocus={e => (e.currentTarget.style.borderColor = '#3b82f6')}
+              onBlur={e => (e.currentTarget.style.borderColor = '#334155')}
             />
             <button
               onClick={handleSend}
               disabled={!input.trim() || sending}
-              style={{ background: input.trim() ? '#3b82f6' : '#1e293b', border: 'none', borderRadius: 10, color: input.trim() ? '#fff' : '#475569', cursor: input.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, padding: '10px 20px' }}
+              style={{ background: input.trim() ? '#3b82f6' : '#1e293b', border: 'none', borderRadius: 10, color: input.trim() ? '#fff' : '#475569', cursor: input.trim() ? 'pointer' : 'not-allowed', fontSize: 14, fontWeight: 700, padding: '10px 20px', transition: 'background 0.15s' }}
             >
               {sending ? '…' : 'Send'}
             </button>
@@ -277,8 +339,12 @@ const ChatPage: React.FC = () => {
         )}
 
         {!activeRoom && !loadingRooms && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
-            Select a room to start chatting
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <EmptyState
+              icon="💬"
+              title="Select a room"
+              description="Choose a chat room from the sidebar to start messaging."
+            />
           </div>
         )}
       </div>
