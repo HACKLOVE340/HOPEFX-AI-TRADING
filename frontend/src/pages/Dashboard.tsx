@@ -15,8 +15,11 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
+import { PageHeader } from '../components';
+import { PanelSkeleton } from '../components/ui/Skeleton';
+import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
   useStore,
   selectAccount,
@@ -73,33 +76,47 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highli
 // Symbol keys must match the WebSocket price_tick format (slash separator).
 const WATCHED_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 
-const PriceTicker: React.FC = () => {
-  const prices = useStore((s) => s.prices);
+const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
+  const tick = useStore((st) => st.prices[sym]);
+  const flash = useFlashHighlight(tick?.mid);
+  const up    = tick ? tick.change_pct >= 0 : null;
+  const decimals =
+    sym.includes('JPY') ? 3 :
+    sym.includes('BTC') ? 0 :
+    sym.includes('XAU') ? 2 : 5;
 
   return (
-    <div style={s.ticker}>
-      {WATCHED_SYMBOLS.map((sym) => {
-        const tick  = prices[sym];
-        const up    = tick ? tick.change_pct >= 0 : null;
-        const decimals =
-          sym.includes('JPY') ? 3 :
-          sym.includes('BTC') ? 0 :
-          sym.includes('XAU') ? 2 : 5;
-        return (
-          <div key={sym} style={s.tickerItem}>
-            <span style={s.tickerSymbol}>{sym}</span>
-            <span style={s.tickerPrice}>
-              {tick ? fmt(tick.mid, decimals) : '—'}
-            </span>
-            <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
-              {tick ? fmtPct(tick.change_pct) : '—'}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+    <Link
+      to={`/ai-chart`}
+      state={{ symbol: sym }}
+      style={{
+        ...s.tickerItem,
+        background: flash,
+        transition: 'background 0.4s ease',
+        textDecoration: 'none',
+      }}
+    >
+      <span style={s.tickerSymbol}>{sym}</span>
+      <span style={s.tickerPrice}>
+        {tick ? fmt(tick.mid, decimals) : '—'}
+      </span>
+      <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
+        {tick ? fmtPct(tick.change_pct) : '—'}
+      </span>
+      {tick && (
+        <span style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>
+          {fmt(tick.bid, decimals)} / {fmt(tick.ask, decimals)}
+        </span>
+      )}
+    </Link>
   );
 };
+
+const PriceTicker: React.FC = () => (
+  <div style={s.ticker}>
+    {WATCHED_SYMBOLS.map((sym) => <TickerItem key={sym} sym={sym} />)}
+  </div>
+);
 
 // ─── Equity chart (lightweight-charts) ───────────────────────────────────────
 
@@ -187,10 +204,13 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
   return <div ref={containerRef} style={{ width: '100%', height: 240 }} />;
 };
 
-// ─── Positions table ──────────────────────────────────────────────────────────
+// ─── Positions table with real-time P&L flash highlights ─────────────────────
 
 const PositionsTable: React.FC = () => {
   const positions = useStore(selectPositions);
+  const flashColors = useFlashMap(
+    positions.map((p) => ({ id: p.id, value: p.unrealized_pnl })),
+  );
 
   if (positions.length === 0) {
     return <p style={s.empty}>No open positions.</p>;
@@ -207,7 +227,14 @@ const PositionsTable: React.FC = () => {
       </thead>
       <tbody>
         {positions.map((p) => (
-          <tr key={p.id} style={s.tr}>
+          <tr
+            key={p.id}
+            style={{
+              ...s.tr,
+              background: flashColors[p.id] ?? 'transparent',
+              transition: 'background 0.4s ease',
+            }}
+          >
             <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
             <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
               {p.side}
@@ -529,35 +556,32 @@ const QUICK_LINKS = [
   { icon: '▶️', label: 'Replay',       path: '/replay'       },
 ];
 
-const QuickNav: React.FC = () => {
-  const navigate = useNavigate();
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {QUICK_LINKS.map(({ icon, label, path }) => (
-        <button
-          key={path}
-          onClick={() => navigate(path)}
-          style={{
-            background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-            padding: '8px 14px', cursor: 'pointer', color: '#94a3b8',
-            fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'border-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6';
-            (e.currentTarget as HTMLButtonElement).style.color = '#60a5fa';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155';
-            (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8';
-          }}
-        >
-          <span>{icon}</span> {label}
-        </button>
-      ))}
-    </div>
-  );
-};
+const QuickNav: React.FC = () => (
+  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    {QUICK_LINKS.map(({ icon, label, path }) => (
+      <Link
+        key={path}
+        to={path}
+        style={{
+          background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+          padding: '8px 14px', color: '#94a3b8',
+          fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+          textDecoration: 'none', transition: 'border-color 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLAnchorElement).style.borderColor = '#3b82f6';
+          (e.currentTarget as HTMLAnchorElement).style.color = '#60a5fa';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155';
+          (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8';
+        }}
+      >
+        <span>{icon}</span> {label}
+      </Link>
+    ))}
+  </div>
+);
 
 // ─── WS status badge ──────────────────────────────────────────────────────────
 
@@ -587,45 +611,61 @@ const WsBadge: React.FC = () => {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
-  // All data is populated by AppShell's useBootstrapData (TanStack Query + WebSocket).
-  // Reading directly from the store avoids duplicate polling loops.
-  const account      = useStore(selectAccount);
-  // Equity curve is fetched by useEquityCurve() inside useBootstrapData — read from store.
+  const account       = useStore(selectAccount);
   const equityHistory = useStore(selectEquityCurve);
-
   const acc = account;
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.heading}>Dashboard</h1>
-          <p style={s.subheading}>Real-time trading overview</p>
-        </div>
-        <WsBadge />
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Real-time trading overview"
+        breadcrumbs={[{ label: 'Dashboard' }]}
+        badge={<WsBadge />}
+        actions={
+          <Link
+            to="/trade"
+            style={{
+              background: '#1d4ed8', border: '1px solid #3b82f6', borderRadius: 8,
+              color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            ⚡ New Trade
+          </Link>
+        }
+      />
 
       <PriceTicker />
 
-      <div style={s.statsGrid}>
-        <StatCard label="Balance"      value={acc ? '$' + fmt(acc.balance)                    : '—'} />
-        <StatCard label="Equity"       value={acc ? '$' + fmt(acc.equity)                     : '—'} highlight />
-        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct) : undefined} />
-        <StatCard label="Total P&L"    value={acc ? fmtUSD(acc.total_pnl)                     : '—'} positive={acc ? acc.total_pnl >= 0 : null} />
-        <StatCard label="Win Rate"     value={acc ? (acc.win_rate * 100).toFixed(1) + '%'     : '—'} positive={acc ? acc.win_rate >= 0.55 : null} />
-        <StatCard label="Sharpe"       value={acc ? acc.sharpe_ratio.toFixed(2)               : '—'} positive={acc ? acc.sharpe_ratio >= 1.5 : null} />
-        <StatCard label="Account DD"   value={acc ? (acc.max_drawdown * 100).toFixed(2) + '%' : '—'} positive={acc ? acc.max_drawdown < 0.1 : null} />
-        <StatCard label="Open Trades"  value={acc ? String(acc.open_trades)                   : '—'} />
-      </div>
+      {!acc ? (
+        <PanelSkeleton rows={3} />
+      ) : (
+        <div style={s.statsGrid}>
+          <StatCard label="Balance"     value={'$' + fmt(acc.balance)} />
+          <StatCard label="Equity"      value={'$' + fmt(acc.equity)} highlight />
+          <StatCard label="Daily P&L"   value={fmtUSD(acc.daily_pnl)} positive={acc.daily_pnl >= 0} sub={fmtPct(acc.daily_pnl_pct)} />
+          <StatCard label="Total P&L"   value={fmtUSD(acc.total_pnl)} positive={acc.total_pnl >= 0} />
+          <StatCard label="Win Rate"    value={(acc.win_rate * 100).toFixed(1) + '%'} positive={acc.win_rate >= 0.55} />
+          <StatCard label="Sharpe"      value={acc.sharpe_ratio.toFixed(2)} positive={acc.sharpe_ratio >= 1.5} />
+          <StatCard label="Account DD"  value={(acc.max_drawdown * 100).toFixed(2) + '%'} positive={acc.max_drawdown < 0.1} />
+          <StatCard label="Open Trades" value={String(acc.open_trades)} />
+        </div>
+      )}
 
       <div style={s.card}>
         <div style={s.cardHeader}>
-          <span style={s.cardTitle}>Equity Curve</span>
-          {acc && (
-            <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-              {fmtUSD(acc.total_pnl)}
-            </span>
-          )}
+          <span style={s.cardTitle}>Live Equity Curve</span>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {acc && (
+              <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+                {fmtUSD(acc.total_pnl)}
+              </span>
+            )}
+            <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>
+              Full report →
+            </Link>
+          </div>
         </div>
         {equityHistory.length === 0 ? (
           <p style={{ color: '#475569', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
@@ -638,28 +678,43 @@ const Dashboard: React.FC = () => {
 
       <div style={s.twoCol}>
         <div style={s.card}>
-          <div style={s.cardTitle}>Open Positions</div>
+          <div style={{ ...s.cardHeader, marginBottom: 10 }}>
+            <span style={s.cardTitle}>Open Positions</span>
+            <Link to="/portfolio" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>View all →</Link>
+          </div>
           <PositionsTable />
         </div>
         <div style={s.card}>
-          <div style={s.cardTitle}>Active Signals</div>
+          <div style={{ ...s.cardHeader, marginBottom: 10 }}>
+            <span style={s.cardTitle}>Active Signals</span>
+            <Link to="/ai-strategy" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Strategy gen →</Link>
+          </div>
           <SignalsPanel />
         </div>
       </div>
 
       <div style={s.twoCol}>
         <div style={s.card}>
-          <div style={{ ...s.cardTitle, marginBottom: 12 }}>Market Regime — XAU/USD</div>
+          <div style={{ ...s.cardHeader, marginBottom: 12 }}>
+            <span style={s.cardTitle}>Market Regime — XAU/USD</span>
+            <Link to="/ai-chart" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>AI Chart →</Link>
+          </div>
           <MarketRegimePanel />
         </div>
         <div style={s.card}>
-          <div style={{ ...s.cardTitle, marginBottom: 12 }}>Risk Snapshot</div>
+          <div style={{ ...s.cardHeader, marginBottom: 12 }}>
+            <span style={s.cardTitle}>Risk Snapshot</span>
+            <Link to="/risk-calculator" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Calculator →</Link>
+          </div>
           <RiskSnapshotPanel />
         </div>
       </div>
 
       <div style={s.card}>
-        <div style={s.cardTitle}>ML Model Accuracy</div>
+        <div style={{ ...s.cardHeader, marginBottom: 12 }}>
+          <span style={s.cardTitle}>ML Model Accuracy</span>
+          <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Performance →</Link>
+        </div>
         <MlAccuracyCard />
       </div>
 
