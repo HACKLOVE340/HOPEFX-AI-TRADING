@@ -512,15 +512,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <a href="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
+                <NavLink to="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
                   ← Landing
-                </a>
-                <a href="/docs" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
+                </NavLink>
+                <NavLink to="/docs" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
                   Docs
-                </a>
-                <a href="/status" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
+                </NavLink>
+                <NavLink to="/system-status" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
                   Status
-                </a>
+                </NavLink>
               </div>
               <ThemeToggle />
             </div>

@@ -458,6 +458,8 @@ const AppShell: React.FC = () => {
             {/* /upgrade = canonical Upgrade Plan; /pricing kept as alias */}
             <Route path="/upgrade"         element={wrap(<PricingPage />)} />
             <Route path="/pricing"         element={<Navigate to="/upgrade" replace />} />
+            {/* /docs inside AppShell so sidebar stays visible for logged-in users */}
+            <Route path="/docs"            element={wrap(<DocsPage />)} />
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
