@@ -18,6 +18,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useStore, selectUser } from '../store';
 import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
+import { PageHeader } from '../components/PageHeader';
+import { Badge } from '../components/Badge';
 
 // ── User-facing sections ──────────────────────────────────────────────────────
 const ProfileSection           = lazy(() => import('./settings/ProfileSection'));
@@ -297,31 +299,38 @@ const Settings: React.FC = () => {
       `}</style>
 
       <div style={S.page}>
-        <div style={S.header}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-            <h1 style={S.heading}>Settings</h1>
+        <PageHeader
+          title="Settings"
+          subtitle="Manage your account, trading preferences, integrations, and platform configuration."
+          breadcrumbs={[
+            { label: 'Home',    href: '/home' },
+            { label: 'Profile', href: '/profile' },
+            { label: 'Settings' },
+          ]}
+          badge={
+            superAdmin
+              ? <Badge variant="danger" style={{ fontSize: 11 }}>SUPER ADMIN</Badge>
+              : admin
+              ? <Badge variant="warning" style={{ fontSize: 11 }}>ADMIN</Badge>
+              : undefined
+          }
+          actions={
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => navigate('/trade')}
-                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              <Link to="/trade"
+                style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 ⚡ Trade
-              </button>
-              <button onClick={() => navigate('/journal')}
-                style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              </Link>
+              <Link to="/journal"
+                style={{ padding: '6px 14px', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)', borderRadius: 7, color: '#10b981', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 📓 Journal
-              </button>
-              <button onClick={() => navigate('/wallet')}
-                style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              </Link>
+              <Link to="/wallet"
+                style={{ padding: '6px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
                 💰 Wallet
-              </button>
+              </Link>
             </div>
-          </div>
-          <p style={S.subheading}>
-            Manage your account, trading preferences, integrations, and platform configuration.
-            {superAdmin && (
-              <span style={S.saBadge}>SUPER ADMIN — Full Platform Control</span>
-            )}
-          </p>
-        </div>
+          }
+        />
 
         <div style={S.layout}>
           <nav style={S.sidebar}>
