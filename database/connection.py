@@ -148,27 +148,55 @@ class DatabaseManager:
 
         self._initialize()
 
+    @staticmethod
+    def _normalise_sync_url(url: str) -> str:
+        """Strip async driver prefixes so create_engine (sync) can open the URL."""
+        if url.startswith("sqlite+aiosqlite://"):
+            return url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+        if url.startswith("postgresql+asyncpg://"):
+            return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        return url
+
     def _initialize(self):
         """Initialize database engine with event listeners"""
         try:
-            self._engine = create_engine(
-                self.connection_string,
-                poolclass=QueuePool,
-                pool_size=self.pool_size,
-                max_overflow=self.max_overflow,
-                pool_timeout=self.pool_timeout,
-                pool_recycle=self.pool_recycle,
-                pool_pre_ping=self.pool_pre_ping,
-                echo=self.echo,
-                connect_args={
-                    "connect_timeout": 10,
-                    "options": "-c statement_timeout=30000",  # 30s PostgreSQL
-                }
-                if "postgresql" in self.connection_string
-                else {"check_same_thread": False}  # SQLite: allow cross-thread reuse (tests & dev)
-                if "sqlite" in self.connection_string
-                else {},
-            )
+            # Normalise async driver prefixes — QueuePool / create_engine are
+            # sync-only and cannot use aiosqlite or asyncpg drivers.
+            sync_url = self._normalise_sync_url(self.connection_string)
+
+            is_sqlite = "sqlite" in sync_url
+            is_pg = "postgresql" in sync_url
+
+            if is_sqlite:
+                # SQLite does not support QueuePool with pool_size/max_overflow.
+                # Use NullPool so each call gets a fresh connection; this avoids
+                # file-lock deadlocks when alembic or other components also open
+                # the same DB file concurrently during startup.
+                from sqlalchemy.pool import NullPool as _NullPool
+                self._engine = create_engine(
+                    sync_url,
+                    poolclass=_NullPool,
+                    echo=self.echo,
+                    connect_args={"check_same_thread": False, "timeout": 30},
+                )
+            else:
+                connect_args: dict = {}
+                if is_pg:
+                    connect_args = {
+                        "connect_timeout": 10,
+                        "options": "-c statement_timeout=30000",
+                    }
+                self._engine = create_engine(
+                    sync_url,
+                    poolclass=QueuePool,
+                    pool_size=self.pool_size,
+                    max_overflow=self.max_overflow,
+                    pool_timeout=self.pool_timeout,
+                    pool_recycle=self.pool_recycle,
+                    pool_pre_ping=self.pool_pre_ping,
+                    echo=self.echo,
+                    connect_args=connect_args,
+                )
 
             # Add event listeners for metrics
             event.listen(self._engine, "checkout", self._on_checkout)
@@ -549,15 +577,15 @@ class AsyncDatabaseManager:
         elif "aiosqlite" in async_url:
             connect_args = {"check_same_thread": False}
 
-        # SQLite (aiosqlite) does not support QueuePool — use StaticPool so a
-        # single shared connection is reused across async tasks.  pool_size and
-        # max_overflow are QueuePool-only kwargs and must be omitted.
+        # SQLite (aiosqlite) does not support QueuePool — use NullPool so each
+        # call gets a fresh connection.  This avoids file-lock deadlocks when
+        # the sync engine (alembic, DatabaseManager) also opens the same DB
+        # file concurrently during startup.  pool_size and max_overflow are
+        # QueuePool-only kwargs and must be omitted for NullPool.
         if "aiosqlite" in async_url:
             self._engine = create_async_engine(
                 async_url,
-                poolclass=StaticPool,
-                pool_recycle=self.pool_recycle,
-                pool_pre_ping=self.pool_pre_ping,
+                poolclass=NullPool,
                 echo=self.echo,
                 connect_args=connect_args,
             )
