@@ -21,7 +21,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
@@ -381,6 +382,7 @@ function BottomSection() {
 
 const Trade: React.FC = () => {
   const location        = useLocation();
+  const navigate        = useNavigate();
   const signalState     = (location.state as { signal?: {
     symbol?: string; direction?: string;
     stop_loss?: number; take_profit?: number;
@@ -410,22 +412,43 @@ const Trade: React.FC = () => {
   return (
     <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
 
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[18px] font-bold text-slate-100">⚡ Trade</h1>
-          <p className="text-[12px] text-slate-500 mt-0.5">
-            Real-time execution — market, limit and stop orders
-          </p>
-        </div>
-        <button
-          onClick={handleCloseAll}
-          disabled={closingAll}
-          className="px-3 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50"
-        >
-          {closingAll ? 'Closing…' : '✕ Close All'}
-        </button>
-      </div>
+      <PageHeader
+        title="Trade"
+        subtitle="Real-time execution — market, limit and stop orders"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Trade' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/watchlist')}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors"
+            >
+              👁 Watchlist
+            </button>
+            <button
+              onClick={() => navigate('/portfolio')}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors"
+            >
+              💼 Portfolio
+            </button>
+            <button
+              onClick={() => navigate('/risk-calculator')}
+              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors"
+            >
+              🛡 Risk Calc
+            </button>
+            <button
+              onClick={handleCloseAll}
+              disabled={closingAll}
+              className="px-3 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50"
+            >
+              {closingAll ? 'Closing…' : '✕ Close All'}
+            </button>
+          </div>
+        }
+      />
 
       {/* Account metrics */}
       <AccountBar />

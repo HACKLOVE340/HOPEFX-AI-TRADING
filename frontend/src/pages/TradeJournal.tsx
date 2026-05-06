@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader, EmptyState } from '../components';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -157,26 +158,42 @@ const TradeJournal: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Trade Journal</h1>
-          <p style={s.subtitle}>Every trade logged automatically. Add notes, emotions, and tags to improve.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => navigate('/performance')}
-            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
-          >
-            📈 Performance
-          </button>
-          <button
-            onClick={() => navigate('/risk-calculator')}
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
-          >
-            🛡 Risk Calculator
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Trade Journal"
+        subtitle="Every trade logged automatically. Add notes, emotions, and tags to improve."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Trade Journal' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => navigate('/trade')}
+              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ⚡ Trade
+            </button>
+            <button
+              onClick={() => navigate('/performance')}
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📈 Performance
+            </button>
+            <button
+              onClick={() => navigate('/risk-calculator')}
+              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🛡 Risk Calc
+            </button>
+            <button
+              onClick={() => navigate('/portfolio')}
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              💼 Portfolio
+            </button>
+          </div>
+        }
+      />
 
       {/* Tabs */}
       <div style={s.tabs}>
@@ -201,14 +218,27 @@ const TradeJournal: React.FC = () => {
 
           {loading ? <div style={s.empty}>Loading…</div> :
            trades.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-              <div style={{ fontSize: 36, marginBottom: 12 }}>📓</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No journal entries yet</div>
-              <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
-                Journal entries are created automatically when you close a trade.
-                Head to the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to make your first trade.
-              </div>
-            </div>
+            <EmptyState
+              icon="📓"
+              title="No journal entries yet"
+              description="Entries are created automatically when you close a trade. Make your first trade to start building your journal."
+              action={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => navigate('/trade')}
+                    style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    ⚡ Start Trading
+                  </button>
+                  <button
+                    onClick={() => navigate('/signals')}
+                    style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    📡 View Signals
+                  </button>
+                </div>
+              }
+            />
            ) :
            trades.map((entry) => (
             <div key={entry.trade_id} style={s.tradeCard}>

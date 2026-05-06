@@ -13,6 +13,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
+import { PageHeader, EmptyState } from '../components';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -291,37 +292,52 @@ const Performance: React.FC = () => {
 
   return (
     <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Performance</h1>
-          <p style={s.subtitle}>Live paper trading results — updated continuously</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['overview', 'trades', 'weekly'] as Tab[]).map((t) => (
-              <button key={t} onClick={() => setTab(t)} style={{ ...s.tabBtn, ...(tab === t ? s.tabBtnActive : {}) }}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+      <PageHeader
+        title="Performance"
+        subtitle="Live trading results — updated continuously"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Performance' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['overview', 'trades', 'weekly'] as Tab[]).map((t) => (
+                <button key={t} onClick={() => setTab(t)} style={{ ...s.tabBtn, ...(tab === t ? s.tabBtnActive : {}) }}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => navigate('/pnl')}
+              style={{ ...s.refreshBtn, background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}
+            >
+              💰 P&L
+            </button>
+            <button
+              onClick={() => navigate('/portfolio')}
+              style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}
+            >
+              💼 Portfolio
+            </button>
+            <button
+              onClick={() => navigate('/tca')}
+              style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
+            >
+              📊 TCA
+            </button>
+            <button
+              onClick={() => navigate('/journal')}
+              style={{ ...s.refreshBtn, background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)', color: '#60a5fa' }}
+            >
+              📓 Journal
+            </button>
+            <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
+              {publicQ.isFetching ? '⟳' : '↻'} Refresh
+            </button>
           </div>
-          <button
-            onClick={() => navigate('/portfolio')}
-            style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}
-          >
-            💼 Portfolio
-          </button>
-          <button
-            onClick={() => navigate('/tca')}
-            style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
-          >
-            📊 TCA
-          </button>
-          <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
-            {publicQ.isFetching ? '⟳' : '↻'} Refresh
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Overview ──────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
@@ -329,13 +345,27 @@ const Performance: React.FC = () => {
           {publicQ.isLoading && <div style={{ padding: 24 }}><PanelSkeleton rows={4} /></div>}
           {publicQ.isError && <div style={s.errorBox}>Failed to load performance data</div>}
           {!publicQ.isLoading && !publicQ.isError && !pub && (
-            <div style={{ textAlign: 'center', padding: '48px 24px', color: '#475569' }}>
-              <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No performance data yet</div>
-              <div style={{ fontSize: 13, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
-                Make your first trade on the <Link to="/trade" style={{ color: '#60a5fa' }}>Trading</Link> page to start tracking performance metrics, equity curve, and Sharpe ratio.
-              </div>
-            </div>
+            <EmptyState
+              icon="📊"
+              title="No performance data yet"
+              description="Make your first trade to start tracking equity curve, Sharpe ratio, win rate, and drawdown metrics."
+              action={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => navigate('/trade')}
+                    style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    ⚡ Start Trading
+                  </button>
+                  <button
+                    onClick={() => navigate('/ai-strategy')}
+                    style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    🧠 AI Strategy
+                  </button>
+                </div>
+              }
+            />
           )}
           {pub && (
             <>

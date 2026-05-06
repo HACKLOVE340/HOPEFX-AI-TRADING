@@ -14,6 +14,7 @@
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import {
   TrendingUp, TrendingDown, Activity, Shield,
@@ -290,32 +291,48 @@ const PnLDashboard: React.FC = () => {
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100">Live P&amp;L Dashboard</h1>
-          <p className="text-sm text-slate-400 mt-1">
-            Real fills from the live engine — no synthetic data
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/tca')}
-            className="flex items-center gap-2 px-4 py-2 text-[#a78bfa] rounded-lg text-sm font-semibold"
-            style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}
-          >
-            📊 TCA Analysis
-          </button>
-          <button
-            onClick={handleRefresh}
-            disabled={isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-sm transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="P&L Dashboard"
+        subtitle="Real fills from the live engine — no synthetic data"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
+          { label: 'P&L Dashboard' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate('/performance')}
+              className="flex items-center gap-2 px-3 py-1.5 text-[#4ade80] rounded-lg text-xs font-semibold"
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)' }}
+            >
+              📈 Performance
+            </button>
+            <button
+              onClick={() => navigate('/tca')}
+              className="flex items-center gap-2 px-3 py-1.5 text-[#a78bfa] rounded-lg text-xs font-semibold"
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)' }}
+            >
+              📊 TCA
+            </button>
+            <button
+              onClick={() => navigate('/journal')}
+              className="flex items-center gap-2 px-3 py-1.5 text-[#60a5fa] rounded-lg text-xs font-semibold"
+              style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)' }}
+            >
+              📓 Journal
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-3 py-1.5 bg-[#1e2d3d] hover:bg-[#243447] text-slate-300 rounded-lg text-xs transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+              {lastUpdated ? `Updated ${lastUpdated}` : 'Refresh'}
+            </button>
+          </div>
+        }
+      />
 
       {/* Error */}
       {error && (
@@ -484,10 +501,22 @@ const PnLDashboard: React.FC = () => {
         </div>
 
         {fills.length === 0 ? (
-          <div className="px-5 py-12 text-center text-slate-500 text-sm">
-            {isLoading
-              ? 'Loading trade log…'
-              : 'No fills yet. The trade log will populate after the first executed order.'}
+          <div className="px-5 py-12 text-center">
+            {isLoading ? (
+              <span className="text-slate-500 text-sm">Loading trade log…</span>
+            ) : (
+              <div className="flex flex-col items-center gap-3">
+                <span className="text-3xl opacity-30">📋</span>
+                <p className="text-slate-400 text-sm font-medium">No fills yet</p>
+                <p className="text-slate-600 text-xs max-w-xs">The trade log populates after your first executed order.</p>
+                <button
+                  onClick={() => navigate('/trade')}
+                  className="mt-1 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-xs font-semibold hover:bg-blue-600/30 transition-colors"
+                >
+                  ⚡ Place First Trade
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <>
