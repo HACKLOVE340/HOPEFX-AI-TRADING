@@ -225,8 +225,11 @@ async def test_event_bus_publish_degraded_uses_local_fallback():
     received = []
     _local_bus.subscribe_local(CH_TICK, lambda m: received.append(m))
     await eb.publish(CH_TICK, {"type": "tick", "bid": 1901.0})
-    # Local fallback should have delivered
-    assert eb._metrics["errors"] == 1
+    # In degraded mode the bus routes to local fallback without incrementing
+    # errors (errors only increment when Redis fails mid-publish, not when
+    # already degraded at call time — see event_bus.py publish() fast-path).
+    assert eb._metrics["published"] == 1
+    assert eb._metrics["errors"] == 0
 
 
 @pytest.mark.asyncio

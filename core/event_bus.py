@@ -283,7 +283,8 @@ class _LocalBus:
         try:
             handlers.remove(handler)
         except ValueError:
-            pass  # already removed or never registered
+            # Handler not in list — idempotent unsubscribe is intentional  # nosec B110
+            logger.debug("unsubscribe_local: handler not found for channel %s (already removed)", channel)
 
     async def publish_local(self, channel: str, message: dict) -> None:
         for handler in list(self._handlers.get(channel, [])):

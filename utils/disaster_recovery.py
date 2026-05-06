@@ -93,8 +93,9 @@ class ContinuousBackup:
             checksum="",  # Calculated below
         )
 
-        # Calculate checksum
-        state_str = json.dumps(asdict(state), sort_keys=True)
+        # Calculate checksum over all fields except checksum itself
+        state_dict_no_checksum = {k: v for k, v in asdict(state).items() if k != "checksum"}
+        state_str = json.dumps(state_dict_no_checksum, sort_keys=True)
         state.checksum = hashlib.sha256(state_str.encode()).hexdigest()
 
         # Compress and save
