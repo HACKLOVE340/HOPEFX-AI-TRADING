@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
@@ -214,10 +214,18 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'trades' | 'weekly';
+type Period = 'weekly' | 'monthly' | 'yearly' | 'all';
+
+// Benchmark returns (annualised %) for comparison
+const BENCHMARKS: Record<string, number> = {
+  'S&P 500': 10.5,
+  'Gold':     8.2,
+  'BTC':     42.0,
+};
 
 const Performance: React.FC = () => {
-  const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab]       = useState<Tab>('overview');
+  const [period, setPeriod] = useState<Period>('all');
   const [tradeSymbol, setTradeSymbol] = useState('');
 
   const publicQ = useQuery<PublicPerformance>({
@@ -300,7 +308,8 @@ const Performance: React.FC = () => {
           { label: 'Performance' },
         ]}
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Tab selector */}
             <div style={{ display: 'flex', gap: 4 }}>
               {(['overview', 'trades', 'weekly'] as Tab[]).map((t) => (
                 <button key={t} onClick={() => setTab(t)} style={{ ...s.tabBtn, ...(tab === t ? s.tabBtnActive : {}) }}>
@@ -308,30 +317,22 @@ const Performance: React.FC = () => {
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => navigate('/pnl')}
-              style={{ ...s.refreshBtn, background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24' }}
-            >
-              💰 P&L
-            </button>
-            <button
-              onClick={() => navigate('/portfolio')}
-              style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}
-            >
-              💼 Portfolio
-            </button>
-            <button
-              onClick={() => navigate('/tca')}
-              style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
-            >
-              📊 TCA
-            </button>
-            <button
-              onClick={() => navigate('/journal')}
-              style={{ ...s.refreshBtn, background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)', color: '#60a5fa' }}
-            >
-              📓 Journal
-            </button>
+            {/* Period toggle */}
+            <div style={{ display: 'flex', gap: 2, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: 2 }}>
+              {(['weekly', 'monthly', 'yearly', 'all'] as Period[]).map((p) => (
+                <button key={p} onClick={() => setPeriod(p)} style={{
+                  ...s.tabBtn, padding: '4px 10px', fontSize: 11, border: 'none',
+                  background: period === p ? '#1e3a5f' : 'transparent',
+                  color: period === p ? '#60a5fa' : '#475569',
+                }}>
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>
+              ))}
+            </div>
+            <Link to="/pnl"       style={{ ...s.refreshBtn, background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24', textDecoration: 'none' }}>💰 P&L</Link>
+            <Link to="/portfolio" style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)',  borderColor: 'rgba(34,197,94,0.3)',  color: '#22c55e', textDecoration: 'none' }}>💼 Portfolio</Link>
+            <Link to="/tca"       style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa', textDecoration: 'none' }}>📊 TCA</Link>
+            <Link to="/journal"   style={{ ...s.refreshBtn, background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)', color: '#60a5fa', textDecoration: 'none' }}>📓 Journal</Link>
             <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
               {publicQ.isFetching ? '⟳' : '↻'} Refresh
             </button>
@@ -351,18 +352,12 @@ const Performance: React.FC = () => {
               description="Make your first trade to start tracking equity curve, Sharpe ratio, win rate, and drawdown metrics."
               action={
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => navigate('/trade')}
-                    style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
+                  <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
                     ⚡ Start Trading
-                  </button>
-                  <button
-                    onClick={() => navigate('/ai-strategy')}
-                    style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
+                  </Link>
+                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
                     🧠 AI Strategy
-                  </button>
+                  </Link>
                 </div>
               }
             />
@@ -401,6 +396,43 @@ const Performance: React.FC = () => {
               : !equityQ.isLoading && <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No equity data yet</div>
             }
           </div>
+
+          {/* Benchmark comparison */}
+          {pub && pub.avg_return_pct != null && (
+            <div style={s.card}>
+              <h3 style={{ ...s.cardTitle, marginBottom: 16 }}>Benchmark Comparison — Annualised Return</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Strategy row */}
+                {(() => {
+                  const stratReturn = pub.avg_return_pct ?? 0;
+                  const allReturns  = [stratReturn, ...Object.values(BENCHMARKS)];
+                  const maxReturn   = Math.max(...allReturns.map(Math.abs), 1);
+                  return (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', width: 80, flexShrink: 0 }}>HOPEFX</span>
+                        <div style={{ flex: 1, height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 4, background: stratReturn >= 0 ? '#00e676' : '#ff1744', width: `${Math.abs(stratReturn) / maxReturn * 100}%`, transition: 'width 0.6s ease' }} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: stratReturn >= 0 ? '#00e676' : '#ff1744', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>
+                          {stratReturn >= 0 ? '+' : ''}{stratReturn.toFixed(2)}%
+                        </span>
+                      </div>
+                      {Object.entries(BENCHMARKS).map(([name, ret]) => (
+                        <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 12, color: '#64748b', width: 80, flexShrink: 0 }}>{name}</span>
+                          <div style={{ flex: 1, height: 6, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 4, background: '#475569', width: `${Math.abs(ret) / maxReturn * 100}%` }} />
+                          </div>
+                          <span style={{ fontSize: 12, color: '#475569', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>+{ret.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Trade breakdown */}
           {tradesQ.data && <TradeBreakdown trades={tradesQ.data.trades} />}
