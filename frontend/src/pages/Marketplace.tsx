@@ -13,6 +13,28 @@ interface Strategy {
   review_count: number; subscriber_count: number; status: string; tags: string[];
   performance?: { total_return_pct?: number; sharpe_ratio?: number; max_drawdown_pct?: number; win_rate_pct?: number; };
 }
+
+/** Normalize a raw API strategy object so arrays/strings are always safe to use. */
+function normalizeStrategy(raw: unknown): Strategy {
+  const s = (raw ?? {}) as Record<string, unknown>;
+  return {
+    strategy_id:      String(s.strategy_id ?? ''),
+    name:             String(s.name ?? ''),
+    description:      String(s.description ?? ''),
+    creator_id:       String(s.creator_id ?? ''),
+    category:         String(s.category ?? 'other'),
+    price:            typeof s.price === 'number' ? s.price : 0,
+    license_type:     String(s.license_type ?? 'monthly'),
+    rating:           typeof s.rating === 'number' ? s.rating : 0,
+    review_count:     typeof s.review_count === 'number' ? s.review_count : 0,
+    subscriber_count: typeof s.subscriber_count === 'number' ? s.subscriber_count : 0,
+    status:           String(s.status ?? 'active'),
+    tags:             Array.isArray(s.tags) ? (s.tags as unknown[]).map(String) : [],
+    performance:      s.performance && typeof s.performance === 'object'
+                        ? (s.performance as Strategy['performance'])
+                        : undefined,
+  };
+}
 interface Review { review_id: string; user_id: string; rating: number; title: string; content: string; created_at: string; }
 type SortOption = 'popular'|'rating'|'newest'|'price_low'|'price_high';
 type MainTab = 'browse'|'my-listings';
@@ -126,9 +148,10 @@ const Marketplace: React.FC = () => {
       const params: Record<string,string> = { sort_by: sortBy, limit: '50' };
       if (category !== 'all') params.category = category;
       if (search) params.query = search;
-      const res = await marketplaceApi.strategies(params) as {data:{strategies:Strategy[];total:number}};
+      const res = await marketplaceApi.strategies(params) as {data:{strategies?:unknown[];total?:number}|unknown[]};
       if (!mountedRef.current) return;
-      setStrategies(res.data.strategies ?? []);
+      const raw = Array.isArray(res.data) ? res.data : ((res.data as {strategies?:unknown[]}).strategies ?? []);
+      setStrategies(raw.map(normalizeStrategy));
     } catch (err) {
       if (!mountedRef.current) return;
       if ((err as {name?:string}).name === 'CanceledError') return;
@@ -139,10 +162,11 @@ const Marketplace: React.FC = () => {
   const loadMyListings = useCallback(async () => {
     if (!currentUser?.id) return;
     try {
-      const res = await marketplaceApi.myStrategies(currentUser.id) as {data:{strategies?:Strategy[]}|Strategy[]};
+      const res = await marketplaceApi.myStrategies(currentUser.id) as {data:{strategies?:unknown[]}|unknown[]};
       if (!mountedRef.current) return;
       const d = res.data;
-      setMyListings(Array.isArray(d) ? d : (d.strategies ?? []));
+      const raw = Array.isArray(d) ? d : ((d as {strategies?:unknown[]}).strategies ?? []);
+      setMyListings(raw.map(normalizeStrategy));
     } catch {
       if (!mountedRef.current) return;
       setMyListings([]);
@@ -164,8 +188,9 @@ const Marketplace: React.FC = () => {
   const handleSelect = async (s: Strategy) => {
     setSelected(s); setReviewsErr(null);
     try {
-      const res = await marketplaceApi.strategy(s.strategy_id) as {data:{strategy:Strategy;reviews:Review[]}};
-      setSelectedReviews(res.data.reviews ?? []);
+      const res = await marketplaceApi.strategy(s.strategy_id) as {data:{strategy?:unknown;reviews?:Review[]}};
+      if (res.data.strategy) setSelected(normalizeStrategy(res.data.strategy));
+      setSelectedReviews(Array.isArray(res.data.reviews) ? res.data.reviews : []);
     } catch (err) { setSelectedReviews([]); setReviewsErr(extractErr(err,'Failed to load reviews.')); }
   };
 
@@ -179,7 +204,7 @@ const Marketplace: React.FC = () => {
 
   const visible = strategies.filter(s => {
     const q = search.toLowerCase();
-    if (q && !s.name.toLowerCase().includes(q) && !s.description.toLowerCase().includes(q) && !s.tags.some(t=>t.includes(q))) return false;
+    if (q && !s.name.toLowerCase().includes(q) && !s.description.toLowerCase().includes(q) && !(s.tags ?? []).some(t => t.toLowerCase().includes(q))) return false;
     if (category !== 'all' && s.category !== category) return false;
     return true;
   });
