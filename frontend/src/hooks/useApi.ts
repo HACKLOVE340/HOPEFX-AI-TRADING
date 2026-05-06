@@ -999,6 +999,10 @@ export const eliteApi = {
   /** List all custom development requests for the authenticated user. */
   listCustomDevReqs: (limit = 50, offset = 0) =>
     api.get('/billing/elite/custom-dev/requests', { params: { limit, offset } }),
+
+  /** Ticket event timeline for drill-down. */
+  ticketTimeline:    (ticketId: string) =>
+    api.get(`/billing/elite/support/tickets/${ticketId}/timeline`),
 };
 
 // ── Geopolitical Intelligence ──────────────────────────────────────────────────
