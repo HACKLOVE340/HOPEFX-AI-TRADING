@@ -1256,11 +1256,48 @@ export const chatApi = {
                       api.post(`/chat/rooms/${roomId}/messages`, { content: text, text, attachments }),
   deleteMessage:    (roomId: string, msgId: string)           =>
                       api.delete(`/chat/rooms/${roomId}/messages/${msgId}`),
+  addReaction:      (roomId: string, msgId: string, emoji: string) =>
+                      api.post(`/chat/rooms/${roomId}/messages/${msgId}/reactions`, { emoji }),
+  removeReaction:   (roomId: string, msgId: string, emoji: string) =>
+                      api.delete(`/chat/rooms/${roomId}/messages/${msgId}/reactions/${encodeURIComponent(emoji)}`),
+  markRead:         (roomId: string)                          => api.post(`/chat/rooms/${roomId}/read`),
   directMessages:   (userId: string, params?: Record<string, unknown>) =>
                       api.get(`/chat/dm/${userId}`, { params }),
   sendDM:           (userId: string, text: string)            =>
                       api.post(`/chat/dm/${userId}`, { content: text, text }),
   onlineUsers:      ()                                        => api.get('/chat/online'),
+};
+
+// ── Risk Calculator API ───────────────────────────────────────────────────────
+// Backend: /api/risk/calculator/*
+
+export const riskCalcApi = {
+  livePrice:        (symbol: string)                          => api.get(`/risk/live-price/${encodeURIComponent(symbol)}`),
+  history:          ()                                        => api.get('/risk/calculator/history'),
+  saveCalc:         (payload: Record<string, unknown>)        => api.post('/risk/calculator/history', payload),
+  deleteCalc:       (id: string)                              => api.delete(`/risk/calculator/history/${id}`),
+};
+
+// ── 2FA API ───────────────────────────────────────────────────────────────────
+// Backend: /api/2fa/*
+
+export const twoFactorApi = {
+  status:           (userId: string)                          => api.get(`/2fa/status/${userId}`),
+  setup:            ()                                        => api.post('/2fa/setup'),
+  verify:           (code: string)                            => api.post('/2fa/verify', { code }),
+  disable:          (code: string)                            => api.post('/2fa/disable', { code }),
+  backupCodes:      (userId: string)                          => api.get(`/2fa/backup-codes/${userId}`),
+  regenerateCodes:  ()                                        => api.post('/2fa/backup-codes/regenerate'),
+};
+
+// ── Crypto Checkout API ───────────────────────────────────────────────────────
+// Backend: /api/billing/crypto/*
+
+export const cryptoCheckoutApi = {
+  rates:            ()                                        => api.get('/billing/crypto/rates'),
+  createOrder:      (payload: Record<string, unknown>)        => api.post('/billing/crypto/order', payload),
+  orderStatus:      (orderId: string)                         => api.get(`/billing/crypto/order/${orderId}`),
+  cancelOrder:      (orderId: string)                         => api.post(`/billing/crypto/order/${orderId}/cancel`),
 };
 
 // ── Journal API ───────────────────────────────────────────────────────────────
