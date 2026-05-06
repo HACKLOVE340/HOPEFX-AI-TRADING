@@ -1,14 +1,18 @@
 /**
  * Risk/Reward Calculator
  *
- * Pure-frontend widget. No backend required.
- * Calculates R:R ratio, position size, pip value, margin, and max loss.
+ * Wires to:
+ *   GET /api/risk/live-price/:symbol   — live mid price for entry auto-fill
+ *   GET /api/risk/calculator/history   — saved calculation history
+ *   POST /api/risk/calculator/history  — save a calculation
+ *   DELETE /api/risk/calculator/history/:id — delete saved calc
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components';
 import { useStore, selectAccount } from '../store';
+import { riskCalcApi } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,6 +37,20 @@ interface CalcResult {
   marginRequired: number;
   maxLoss: number;
   breakEvenWinRate: number;
+}
+
+interface SavedCalc {
+  id: string;
+  symbol: string;
+  entry_price: number;
+  stop_loss: number;
+  take_profit: number;
+  lot_size: number;
+  rr_ratio: number;
+  risk_amount: number;
+  reward_amount: number;
+  saved_at: string;
+  label?: string;
 }
 
 // ─── Symbol config ────────────────────────────────────────────────────────────
@@ -137,7 +155,6 @@ const ResultRow: React.FC<{ label: string; value: string; highlight?: boolean }>
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const RiskCalculator: React.FC = () => {
-  const navigate = useNavigate();
   const account = useStore(selectAccount);
   const prices  = useStore((s) => s.prices);
 
@@ -151,6 +168,16 @@ const RiskCalculator: React.FC = () => {
     leverage:       '100',
   });
 
+  const [livePrice, setLivePrice]   = useState<number | null>(null);
+  const [livePriceAge, setLivePriceAge] = useState<number>(0);
+  const [history, setHistory]       = useState<SavedCalc[]>([]);
+  const [saving, setSaving]         = useState(false);
+  const [saveMsg, setSaveMsg]       = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [calcLabel, setCalcLabel]   = useState('');
+  const priceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ageTimerRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Auto-populate balance from live account data
   useEffect(() => {
     if (account?.balance && account.balance > 0) {
@@ -158,18 +185,97 @@ const RiskCalculator: React.FC = () => {
     }
   }, [account?.balance]);
 
-  // Auto-populate entry price from live price feed when symbol changes
+  // Live price feed: poll /api/risk/live-price/:symbol every 5s
   useEffect(() => {
+    let mounted = true;
+    const fetchPrice = async () => {
+      try {
+        const res = await riskCalcApi.livePrice(state.symbol.replace('/', '_'));
+        const d = res.data as { mid?: number; price?: number; bid?: number; ask?: number };
+        const price = d.mid ?? d.price ?? (d.bid && d.ask ? (d.bid + d.ask) / 2 : null);
+        if (price && mounted) {
+          setLivePrice(price);
+          setLivePriceAge(0);
+          // Only auto-fill entry if user hasn't typed one
+          setState(prev => prev.entryPrice === '' ? { ...prev, entryPrice: price.toFixed(price < 10 ? 5 : 2) } : prev);
+        }
+      } catch { /* fall back to store prices */ }
+    };
+    fetchPrice();
+    priceTimerRef.current = setInterval(fetchPrice, 5000);
+    ageTimerRef.current   = setInterval(() => setLivePriceAge(a => a + 1), 1000);
+    return () => {
+      mounted = false;
+      if (priceTimerRef.current) clearInterval(priceTimerRef.current);
+      if (ageTimerRef.current)   clearInterval(ageTimerRef.current);
+    };
+  }, [state.symbol]);
+
+  // Fallback: use store prices if API unavailable
+  useEffect(() => {
+    if (livePrice) return;
     const tick = prices[state.symbol];
     if (tick?.mid && tick.mid > 0) {
-      setState((prev) => ({ ...prev, entryPrice: tick.mid.toFixed(2) }));
+      setState((prev) => prev.entryPrice === '' ? { ...prev, entryPrice: tick.mid.toFixed(2) } : prev);
     }
-  }, [state.symbol, prices]);
+  }, [state.symbol, prices, livePrice]);
+
+  // Load history
+  const loadHistory = useCallback(async () => {
+    try {
+      const res = await riskCalcApi.history();
+      const d = res.data as SavedCalc[] | { history?: SavedCalc[] };
+      setHistory(Array.isArray(d) ? d : (d.history ?? []));
+    } catch { setHistory([]); }
+  }, []);
+
+  useEffect(() => { loadHistory(); }, [loadHistory]);
 
   const set = useCallback((key: keyof CalcState) => (v: string) =>
     setState((prev) => ({ ...prev, [key]: v })), []);
 
   const result = calculate(state);
+
+  const handleSave = async () => {
+    if (!result) return;
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      await riskCalcApi.saveCalc({
+        symbol:       state.symbol,
+        entry_price:  parseFloat(state.entryPrice),
+        stop_loss:    parseFloat(state.stopLoss),
+        take_profit:  parseFloat(state.takeProfit),
+        lot_size:     result.lotSize,
+        rr_ratio:     result.rrRatio,
+        risk_amount:  result.riskAmount,
+        reward_amount: result.rewardAmount,
+        label:        calcLabel || undefined,
+      });
+      setSaveMsg('✓ Saved');
+      setCalcLabel('');
+      await loadHistory();
+    } catch { setSaveMsg('⚠ Save failed'); }
+    finally { setSaving(false); setTimeout(() => setSaveMsg(''), 3000); }
+  };
+
+  const handleDeleteHistory = async (id: string) => {
+    try {
+      await riskCalcApi.deleteCalc(id);
+      setHistory(prev => prev.filter(h => h.id !== id));
+    } catch { /* non-fatal */ }
+  };
+
+  const loadFromHistory = (h: SavedCalc) => {
+    setState(prev => ({
+      ...prev,
+      symbol:      h.symbol,
+      entryPrice:  h.entry_price.toString(),
+      stopLoss:    h.stop_loss.toString(),
+      takeProfit:  h.take_profit.toString(),
+    }));
+    setShowHistory(false);
+  };
 
   const rrColor =
     !result          ? '#64748b' :
@@ -188,25 +294,26 @@ const RiskCalculator: React.FC = () => {
           { label: 'Risk Calculator' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => navigate('/trade')}
-              style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {/* Live price indicator */}
+            {livePrice && (
+              <div style={{ fontSize: 11, color: livePriceAge < 10 ? '#22c55e' : '#f59e0b', fontFamily: 'monospace', padding: '4px 10px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 6 }}>
+                ● {state.symbol} {livePrice.toFixed(livePrice < 10 ? 5 : 2)} <span style={{ color: '#475569' }}>{livePriceAge}s</span>
+              </div>
+            )}
+            <button onClick={() => setShowHistory(h => !h)}
+              style={{ padding: '6px 12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              📋 History {history.length > 0 ? `(${history.length})` : ''}
+            </button>
+            <Link to="/trade" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               ⚡ Trade
-            </button>
-            <button
-              onClick={() => navigate('/journal')}
-              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/journal" style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               📓 Journal
-            </button>
-            <button
-              onClick={() => navigate('/prop-firm')}
-              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
+            </Link>
+            <Link to="/prop-firm" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
               🛡 Prop Firm
-            </button>
+            </Link>
           </div>
         }
       />
@@ -297,26 +404,41 @@ const RiskCalculator: React.FC = () => {
           )}
 
           {result && (
-            <button
-              onClick={() => navigate('/trade', {
-                state: {
+            <>
+              <Link
+                to="/trade"
+                state={{
                   signal: {
                     symbol: state.symbol,
                     direction: parseFloat(state.takeProfit) > parseFloat(state.entryPrice) ? 'BUY' : 'SELL',
                     stop_loss: parseFloat(state.stopLoss),
                     take_profit: parseFloat(state.takeProfit),
                   }
-                }
-              })}
-              style={{
-                width: '100%', padding: '10px 0', borderRadius: 8, cursor: 'pointer',
-                background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                color: '#60a5fa', fontSize: 14, fontWeight: 700, fontFamily: 'inherit',
-                marginBottom: 16,
-              }}
-            >
-              ⚡ Apply to Trade — {state.symbol}
-            </button>
+                }}
+                style={{
+                  display: 'block', width: '100%', padding: '10px 0', borderRadius: 8,
+                  background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
+                  color: '#60a5fa', fontSize: 14, fontWeight: 700, textDecoration: 'none',
+                  textAlign: 'center', marginBottom: 10, boxSizing: 'border-box',
+                }}
+              >
+                ⚡ Apply to Trade — {state.symbol}
+              </Link>
+              {/* Save calculation */}
+              <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+                <input
+                  value={calcLabel}
+                  onChange={e => setCalcLabel(e.target.value)}
+                  placeholder="Label (optional)"
+                  style={{ flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f8fafc', fontSize: 12, padding: '6px 10px', outline: 'none' }}
+                />
+                <button onClick={() => void handleSave()} disabled={saving}
+                  style={{ padding: '6px 14px', background: '#8b5cf6', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+                  {saving ? '…' : '💾 Save'}
+                </button>
+                {saveMsg && <span style={{ fontSize: 11, color: saveMsg.startsWith('✓') ? '#22c55e' : '#f87171', alignSelf: 'center' }}>{saveMsg}</span>}
+              </div>
+            </>
           )}
 
           <div style={s.divider} />
@@ -329,6 +451,47 @@ const RiskCalculator: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Saved history panel ── */}
+      {showHistory && (
+        <div style={{ marginTop: 24, background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={s.cardTitle}>Saved Calculations</div>
+            <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          </div>
+          {history.length === 0 ? (
+            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No saved calculations yet.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {history.map(h => (
+                <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 14px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 2 }}>
+                      {h.label || h.symbol} · 1:{h.rr_ratio.toFixed(2)} R:R
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>
+                      Entry {h.entry_price} · SL {h.stop_loss} · TP {h.take_profit} · {h.lot_size.toFixed(4)} lots
+                    </div>
+                    <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
+                      {new Date(h.saved_at).toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => loadFromHistory(h)}
+                      style={{ padding: '4px 10px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, cursor: 'pointer' }}>
+                      Load
+                    </button>
+                    <button onClick={() => void handleDeleteHistory(h.id)}
+                      style={{ padding: '4px 10px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, color: '#f87171', fontSize: 11, cursor: 'pointer' }}>
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
