@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api as sharedApi } from '../hooks/useApi';
 import {
   useQuery,
@@ -361,18 +361,9 @@ const TCADashboard: React.FC = () => {
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {loading && <span style={{ color: '#64748b', fontSize: 11 }}>Updating…</span>}
-            <button
-              onClick={() => navigate('/performance')}
-              style={{ ...pg.btn, background: 'rgba(74,222,128,0.1)', borderColor: 'rgba(74,222,128,0.3)', color: '#4ade80' }}
-            >
-              📈 Performance
-            </button>
-            <button
-              onClick={() => navigate('/pnl')}
-              style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
-            >
-              💹 P&L
-            </button>
+            <Link to="/performance" style={{ ...pg.btn, background: 'rgba(74,222,128,0.1)', borderColor: 'rgba(74,222,128,0.3)', color: '#4ade80', textDecoration: 'none' }}>📈 Performance</Link>
+            <Link to="/pnl"         style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa', textDecoration: 'none' }}>💹 P&amp;L</Link>
+            <Link to="/correlation" style={{ ...pg.btn, background: 'rgba(96,165,250,0.1)',  borderColor: 'rgba(96,165,250,0.3)',  color: '#60a5fa', textDecoration: 'none' }}>📊 Correlation</Link>
             <button style={pg.btn} onClick={refresh} disabled={loading}>Refresh</button>
             <button style={pg.btnCsv} onClick={() => exportCSV(filteredRecords)} disabled={filteredRecords.length === 0}>
               ↓ CSV
@@ -663,6 +654,28 @@ const TCADashboard: React.FC = () => {
             </table>
           </div>
         )}
+      </div>
+
+      {/* Cross-links */}
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '16px 20px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Related Analytics</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {[
+            { to: '/performance',  color: '#4ade80', icon: '📈', label: 'Performance' },
+            { to: '/pnl',          color: '#a78bfa', icon: '💹', label: 'P&L Dashboard' },
+            { to: '/correlation',  color: '#60a5fa', icon: '📊', label: 'Correlation' },
+            { to: '/ab-testing',   color: '#34d399', icon: '⚡', label: 'A/B Testing' },
+            { to: '/walk-forward', color: '#fbbf24', icon: '🔁', label: 'Walk-Forward' },
+            { to: '/trade',        color: '#f87171', icon: '⚡', label: 'Trade' },
+          ].map(({ to, color, icon, label }) => (
+            <Link key={to} to={to} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#0f172a', borderRadius: 7, border: '1px solid #1e293b', textDecoration: 'none', fontSize: 12, fontWeight: 600, color }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = color)}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e293b')}
+            >
+              {icon} {label}
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );
