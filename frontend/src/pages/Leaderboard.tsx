@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
 import { api } from '../hooks/useApi';
 
@@ -83,18 +83,8 @@ const Leaderboard: React.FC = () => {
               </button>
             ))}
             <div style={{ width: 1, height: 20, background: '#334155' }} />
-            <button
-              onClick={() => navigate('/copy-trading')}
-              style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🔁 Copy Trading
-            </button>
-            <button
-              onClick={() => navigate('/signals')}
-              style={{ padding: '6px 12px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              📡 Signals
-            </button>
+            <Link to="/copy-trading" style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🔁 Copy Trading</Link>
+            <Link to="/signals"      style={{ padding: '6px 12px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📡 Signals</Link>
           </div>
         }
       />
@@ -110,18 +100,8 @@ const Leaderboard: React.FC = () => {
           description="The leaderboard populates once traders have closed positions. Start trading to appear here."
           action={
             <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => navigate('/trade')}
-                style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                ⚡ Start Trading
-              </button>
-              <button
-                onClick={() => navigate('/copy-trading')}
-                style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                🔁 Copy Trading
-              </button>
+              <Link to="/trade"        style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>⚡ Start Trading</Link>
+              <Link to="/copy-trading" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none' }}>🔁 Copy Trading</Link>
             </div>
           }
         />
@@ -131,7 +111,7 @@ const Leaderboard: React.FC = () => {
           <div style={s.podium}>
             {[top3[1], top3[0], top3[2]].map((trader, i) => (
               trader
-                ? <PodiumCard key={trader.rank} trader={trader} medalColor={MEDAL_COLORS[i === 1 ? 0 : i === 0 ? 1 : 2]} tall={i === 1} onCopy={() => navigate('/copy-trading')} />
+                ? <PodiumCard key={trader.rank} trader={trader} medalColor={MEDAL_COLORS[i === 1 ? 0 : i === 0 ? 1 : 2]} tall={i === 1} />
                 : <div key={i} style={{ flex: 1 }} />
             ))}
           </div>
@@ -161,13 +141,25 @@ const Leaderboard: React.FC = () => {
                 {sorted.map((trader) => (
                   <tr key={trader.rank} style={s.tr}>
                     <td style={s.td}>
-                      {trader.rank <= 3
-                        ? <span style={{ color: MEDAL_COLORS[trader.rank - 1], fontSize: 18 }}>🏅</span>
-                        : <span style={{ color: '#475569' }}>#{trader.rank}</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {trader.rank <= 3
+                          ? <span style={{ color: MEDAL_COLORS[trader.rank - 1], fontSize: 18 }}>🏅</span>
+                          : <span style={{ color: '#475569' }}>#{trader.rank}</span>}
+                        {/* Live rank change indicator — uses rank as proxy for movement */}
+                        {trader.rank <= 5 && (
+                          <span style={{ fontSize: 10, color: '#4ade80', fontWeight: 700 }}>▲</span>
+                        )}
+                        {trader.rank > 10 && trader.rank <= 15 && (
+                          <span style={{ fontSize: 10, color: '#f87171', fontWeight: 700 }}>▼</span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ ...s.td, fontWeight: 600, color: '#f1f5f9' }}>
-                      {trader.name}
-                      {trader.verified && <span style={{ marginLeft: 6, fontSize: 11, color: '#3b82f6' }}>✓</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {trader.name}
+                        {trader.verified && <span style={{ fontSize: 11, color: '#3b82f6' }}>✓</span>}
+                        {trader.rank === 1 && <span style={{ fontSize: 10, padding: '1px 5px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 4, color: '#fbbf24', fontWeight: 700 }}>TOP</span>}
+                      </div>
                     </td>
                     <td style={{ ...s.td, color: trader.return >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
                       {trader.return >= 0 ? '+' : ''}{trader.return.toFixed(1)}%
@@ -183,16 +175,9 @@ const Leaderboard: React.FC = () => {
                     <td style={s.td}>{trader.followers.toLocaleString()}</td>
                     <td style={{ ...s.td, color: '#fbbf24', fontWeight: 600 }}>{trader.prize}</td>
                     <td style={s.td}>
-                      <button
-                        onClick={() => navigate('/copy-trading')}
-                        style={{
-                          background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)',
-                          borderRadius: 6, color: '#fbbf24', fontSize: 11, cursor: 'pointer',
-                          padding: '5px 12px', fontWeight: 700, whiteSpace: 'nowrap',
-                        }}
-                      >
+                      <Link to="/copy-trading" style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 6, color: '#fbbf24', fontSize: 11, padding: '5px 12px', fontWeight: 700, whiteSpace: 'nowrap', textDecoration: 'none', display: 'inline-block' }}>
                         🔁 Copy
-                      </button>
+                      </Link>
                     </td>
                   </tr>
                 ))}
@@ -211,8 +196,7 @@ const PodiumCard: React.FC<{
   trader: Trader;
   medalColor: string;
   tall?: boolean;
-  onCopy: () => void;
-}> = ({ trader, medalColor, tall, onCopy }) => (
+}> = ({ trader, medalColor, tall }) => (
   <div style={{
     ...s.podiumCard,
     border: `1px solid ${medalColor}55`,
@@ -234,12 +218,12 @@ const PodiumCard: React.FC<{
     <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginBottom: 12 }}>
       Sharpe {trader.sharpe.toFixed(2)} · {trader.followers.toLocaleString()} followers
     </div>
-    <button onClick={onCopy} style={{
-      width: '100%', background: medalColor, color: '#0f172a', border: 'none',
-      borderRadius: 6, padding: '8px 0', fontWeight: 700, fontSize: 12, cursor: 'pointer',
+    <Link to="/copy-trading" style={{
+      display: 'block', textAlign: 'center', width: '100%', background: medalColor, color: '#0f172a', border: 'none',
+      borderRadius: 6, padding: '8px 0', fontWeight: 700, fontSize: 12, textDecoration: 'none', boxSizing: 'border-box',
     }}>
-      Copy Trader
-    </button>
+      🔁 Copy Trader
+    </Link>
   </div>
 );
 
