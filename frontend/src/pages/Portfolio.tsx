@@ -17,8 +17,9 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components';
+import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
 import {
   useStore,
@@ -363,45 +364,137 @@ const TradeHistory: React.FC = () => {
   );
 };
 
-// ── Allocation breakdown ──────────────────────────────────────────────────────
+// ── Allocation pie chart (SVG) ────────────────────────────────────────────────
 
-const AllocationBreakdown: React.FC = () => {
-  const positions = useStore(selectPositions);
+const PIE_COLORS = ['#3b82f6','#00e676','#f59e0b','#a78bfa','#f87171','#38bdf8','#fb923c'];
 
-  if (positions.length === 0) return null;
-
-  // Group by symbol, sum notional exposure
-  const bySymbol: Record<string, { long: number; short: number }> = {};
-  for (const p of positions) {
-    if (!bySymbol[p.symbol]) bySymbol[p.symbol] = { long: 0, short: 0 };
-    const notional = p.size * p.current_price;
-    if (p.side === 'long') bySymbol[p.symbol]!.long  += notional;
-    else                   bySymbol[p.symbol]!.short += notional;
-  }
-
-  const totalNotional = Object.values(bySymbol).reduce(
-    (acc, v) => acc + v.long + v.short, 0,
-  );
+const AllocationPie: React.FC<{ slices: { label: string; value: number; pct: number }[] }> = ({ slices }) => {
+  const R = 60; const CX = 80; const CY = 80;
+  let cumAngle = -Math.PI / 2;
+  const paths = slices.map((s, i) => {
+    const angle = (s.pct / 100) * 2 * Math.PI;
+    const x1 = CX + R * Math.cos(cumAngle);
+    const y1 = CY + R * Math.sin(cumAngle);
+    cumAngle += angle;
+    const x2 = CX + R * Math.cos(cumAngle);
+    const y2 = CY + R * Math.sin(cumAngle);
+    const large = angle > Math.PI ? 1 : 0;
+    return { d: `M${CX},${CY} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z`, color: PIE_COLORS[i % PIE_COLORS.length]!, label: s.label, pct: s.pct };
+  });
 
   return (
-    <Panel title="Allocation by Symbol">
-      <div className="flex flex-col gap-2">
-        {Object.entries(bySymbol).map(([sym, { long, short }]) => {
-          const total = long + short;
-          const pct   = totalNotional > 0 ? (total / totalNotional) * 100 : 0;
+    <div className="flex items-center gap-6 flex-wrap">
+      <svg width={160} height={160} viewBox="0 0 160 160">
+        {paths.map((p, i) => (
+          <path key={i} d={p.d} fill={p.color} opacity={0.85} stroke="#0a0f1a" strokeWidth={1.5}>
+            <title>{p.label}: {p.pct.toFixed(1)}%</title>
+          </path>
+        ))}
+        <circle cx={CX} cy={CY} r={28} fill="#0a0f1a" />
+        <text x={CX} y={CY + 4} textAnchor="middle" fill="#94a3b8" fontSize={10} fontWeight={600}>
+          {slices.length} pos
+        </text>
+      </svg>
+      <div className="flex flex-col gap-1.5">
+        {paths.map((p, i) => (
+          <div key={i} className="flex items-center gap-2 text-[11px]">
+            <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: p.color }} />
+            <span className="text-slate-300 font-medium w-16">{p.label}</span>
+            <span className="text-slate-500 tabular-nums">{p.pct.toFixed(1)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Drawdown chart (SVG) ──────────────────────────────────────────────────────
+
+const DrawdownChart: React.FC<{ equityPoints: { t: number; v: number }[] }> = ({ equityPoints }) => {
+  if (equityPoints.length < 2) return (
+    <div className="flex items-center justify-center h-24 text-slate-600 text-[12px]">Not enough data</div>
+  );
+  const W = 600; const H = 80;
+  // Compute running max and drawdown %
+  let peak = equityPoints[0]!.v;
+  const dd = equityPoints.map((p) => {
+    if (p.v > peak) peak = p.v;
+    return { t: p.t, dd: peak > 0 ? ((p.v - peak) / peak) * 100 : 0 };
+  });
+  const minDd = Math.min(...dd.map((d) => d.dd));
+  const minT  = dd[0]!.t; const maxT = dd[dd.length - 1]!.t; const rangeT = maxT - minT || 1;
+  const coords = dd.map((d) => ({
+    x: ((d.t - minT) / rangeT) * W,
+    y: minDd < 0 ? (d.dd / minDd) * H : 0,
+  }));
+  const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+  const fillPath = `${linePath} L${W},${H} L0,${H} Z`;
+  const maxDdPct = Math.abs(minDd).toFixed(2);
+
+  return (
+    <div>
+      <div className="flex justify-between text-[10px] text-slate-500 mb-1">
+        <span>Drawdown</span>
+        <span className="text-[#ff1744] font-semibold">Max: -{maxDdPct}%</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80 }} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#ff1744" stopOpacity={0.4} />
+            <stop offset="100%" stopColor="#ff1744" stopOpacity={0.05} />
+          </linearGradient>
+        </defs>
+        <path d={fillPath} fill="url(#ddGrad)" />
+        <path d={linePath} fill="none" stroke="#ff1744" strokeWidth={1.5} />
+      </svg>
+    </div>
+  );
+};
+
+// ── Per-symbol P&L sparklines ─────────────────────────────────────────────────
+
+const SymbolPnLSparklines: React.FC = () => {
+  const positions = useStore(selectPositions);
+  if (positions.length === 0) return null;
+
+  const bySymbol: Record<string, { pnl: number; side: string }[]> = {};
+  for (const p of positions) {
+    if (!bySymbol[p.symbol]) bySymbol[p.symbol] = [];
+    bySymbol[p.symbol]!.push({ pnl: p.unrealized_pnl, side: p.side });
+  }
+
+  return (
+    <Panel title="Open Positions — P&L by Symbol">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {Object.entries(bySymbol).map(([sym, entries]) => {
+          const totalPnl = entries.reduce((s, e) => s + e.pnl, 0);
+          const isPos    = totalPnl >= 0;
           return (
-            <div key={sym} className="flex items-center gap-3">
-              <span className="text-[12px] font-semibold text-slate-200 w-20 flex-shrink-0">{sym}</span>
-              <div className="flex-1 h-2 rounded bg-[#0d1421] overflow-hidden">
+            <div key={sym} className="flex flex-col gap-1 px-3 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d]">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] font-bold text-slate-200">{sym}</span>
+                <span className={cn('text-[11px] font-semibold tabular-nums', isPos ? 'text-[#00e676]' : 'text-[#ff1744]')}>
+                  {isPos ? '+' : ''}${totalPnl.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {entries.map((e, i) => (
+                  <span key={i} className={cn('text-[9px] px-1 py-0.5 rounded', e.side === 'long' ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff1744]/10 text-[#ff1744]')}>
+                    {e.side === 'long' ? '▲' : '▼'} ${e.pnl.toFixed(2)}
+                  </span>
+                ))}
+              </div>
+              {/* Mini P&L bar */}
+              <div className="h-1 rounded bg-[#1e2d3d] overflow-hidden mt-1">
                 <div
-                  className="h-2 rounded transition-all"
-                  style={{ width: `${pct}%`, background: '#3b82f6' }}
+                  className="h-1 rounded transition-all"
+                  style={{
+                    width: `${Math.min(Math.abs(totalPnl) / 100 * 100, 100)}%`,
+                    background: isPos ? '#00e676' : '#ff1744',
+                    marginLeft: isPos ? 0 : 'auto',
+                  }}
                 />
               </div>
-              <span className="text-[11px] text-slate-400 tabular-nums w-12 text-right">{pct.toFixed(1)}%</span>
-              <span className="text-[11px] text-slate-500 tabular-nums w-24 text-right">
-                ${total.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-              </span>
             </div>
           );
         })}
@@ -410,20 +503,71 @@ const AllocationBreakdown: React.FC = () => {
   );
 };
 
+// ── Allocation breakdown ──────────────────────────────────────────────────────
+
+const AllocationBreakdown: React.FC = () => {
+  const positions = useStore(selectPositions);
+
+  if (positions.length === 0) return null;
+
+  const bySymbol: Record<string, { long: number; short: number }> = {};
+  for (const p of positions) {
+    if (!bySymbol[p.symbol]) bySymbol[p.symbol] = { long: 0, short: 0 };
+    const notional = p.size * p.current_price;
+    if (p.side === 'long') bySymbol[p.symbol]!.long  += notional;
+    else                   bySymbol[p.symbol]!.short += notional;
+  }
+
+  const totalNotional = Object.values(bySymbol).reduce((acc, v) => acc + v.long + v.short, 0);
+  const slices = Object.entries(bySymbol).map(([label, { long, short }]) => ({
+    label,
+    value: long + short,
+    pct: totalNotional > 0 ? ((long + short) / totalNotional) * 100 : 0,
+  }));
+
+  return (
+    <Panel title="Allocation by Symbol">
+      <div className="flex flex-col gap-4">
+        <AllocationPie slices={slices} />
+        <div className="flex flex-col gap-2">
+          {slices.map(({ label, value, pct }, i) => (
+            <div key={label} className="flex items-center gap-3">
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
+              <span className="text-[12px] font-semibold text-slate-200 w-20 flex-shrink-0">{label}</span>
+              <div className="flex-1 h-1.5 rounded bg-[#0d1421] overflow-hidden">
+                <div className="h-1.5 rounded transition-all" style={{ width: `${pct}%`, background: PIE_COLORS[i % PIE_COLORS.length] }} />
+              </div>
+              <span className="text-[11px] text-slate-400 tabular-nums w-12 text-right">{pct.toFixed(1)}%</span>
+              <span className="text-[11px] text-slate-500 tabular-nums w-24 text-right">
+                ${value.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Panel>
+  );
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Portfolio: React.FC = () => {
-  const navigate = useNavigate();
-  // Prefetch all data on mount
   useEquityCurve();
   usePositions();
+  const equityHistory = useStore(selectEquityCurve);
+  const toast = useToast();
+
+  const equityPoints = useMemo(() =>
+    equityHistory.map((p) => ({ t: new Date(p.timestamp).getTime() / 1000, v: p.equity })),
+    [equityHistory],
+  );
 
   const handleExport = async () => {
     try {
       const res = await tradingApi.trades(1000);
       const raw = res.data as TradeRecord[] | { trades: TradeRecord[] };
       const trades = Array.isArray(raw) ? raw : (raw?.trades ?? []);
-      if (trades.length === 0) { alert('No trades to export.'); return; }
+      if (trades.length === 0) { toast.warning('No trades to export.'); return; }
       const headers = ['id','symbol','side','quantity','entry_price','exit_price','pnl','opened_at','closed_at'];
       const csv = [
         headers.join(','),
@@ -436,8 +580,9 @@ const Portfolio: React.FC = () => {
       const a    = document.createElement('a');
       a.href = url; a.download = `hopefx-trades-${new Date().toISOString().slice(0,10)}.csv`;
       a.click(); URL.revokeObjectURL(url);
+      toast.success('Trade history exported.');
     } catch {
-      alert('Export failed. Please try again.');
+      toast.error('Export failed. Please try again.');
     }
   };
 
@@ -453,69 +598,56 @@ const Portfolio: React.FC = () => {
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/performance')}
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors"
-            >
+            <Link to="/performance" className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors" style={{ textDecoration: 'none' }}>
               📊 Analytics
-            </button>
-            <button
-              onClick={() => navigate('/trade')}
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors"
-            >
+            </Link>
+            <Link to="/trade" className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors" style={{ textDecoration: 'none' }}>
               ⚡ Trade
-            </button>
-            <button
-              onClick={() => navigate('/journal')}
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors"
-            >
+            </Link>
+            <Link to="/journal" className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors" style={{ textDecoration: 'none' }}>
               📓 Journal
-            </button>
-            <button
-              onClick={handleExport}
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors"
-            >
+            </Link>
+            <button onClick={handleExport} className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors">
               ↓ Export CSV
             </button>
           </div>
         }
       />
 
-      {/* Account balances */}
       <AccountSummary />
-
-      {/* Equity curve */}
       <EquityCurveChart />
 
-      {/* Performance metrics */}
+      {/* Drawdown chart */}
+      {equityPoints.length >= 2 && (
+        <Panel title="Drawdown">
+          <DrawdownChart equityPoints={equityPoints} />
+        </Panel>
+      )}
+
       <PerformanceMetrics />
-
-      {/* Allocation breakdown */}
+      <SymbolPnLSparklines />
       <AllocationBreakdown />
-
-      {/* Open positions */}
       <PositionsTable />
-
-      {/* Closed trade history */}
       <TradeHistory />
 
       {/* Cross-links */}
       <div className="flex flex-wrap gap-2 pt-2 border-t border-[#1e2d3d]">
         {[
-          { label: '📈 AI Charts',      path: '/ai-chart' },
-          { label: '📊 Performance',    path: '/performance' },
-          { label: '💰 P&L Dashboard',  path: '/pnl' },
+          { label: '📈 AI Charts',       path: '/ai-chart' },
+          { label: '📊 Performance',     path: '/performance' },
+          { label: '💰 P&L Dashboard',   path: '/pnl' },
           { label: '🛡 Risk Calculator', path: '/risk-calculator' },
-          { label: '📓 Trade Journal',  path: '/journal' },
-          { label: '👁 Watchlist',      path: '/watchlist' },
+          { label: '📓 Trade Journal',   path: '/journal' },
+          { label: '👁 Watchlist',       path: '/watchlist' },
         ].map(({ label, path }) => (
-          <button
+          <Link
             key={path}
-            onClick={() => navigate(path)}
-            className="px-3 py-1.5 rounded text-[11px] bg-transparent border border-[#1e2d3d] text-slate-500 hover:text-slate-300 hover:border-[#334155] transition-colors cursor-pointer"
+            to={path}
+            className="px-3 py-1.5 rounded text-[11px] bg-transparent border border-[#1e2d3d] text-slate-500 hover:text-slate-300 hover:border-[#334155] transition-colors"
+            style={{ textDecoration: 'none' }}
           >
             {label}
-          </button>
+          </Link>
         ))}
       </div>
     </div>
