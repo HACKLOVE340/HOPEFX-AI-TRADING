@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader, EmptyState } from '../components';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -169,26 +170,44 @@ const SocialFeed: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Community Signal Feed</h1>
-          <p style={s.subtitle}>High-confidence AI signals from the community (≥70% confidence)</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#64748b' }}>Share my signals:</span>
-          <button
-            onClick={handleOptToggle}
-            disabled={optLoading || optedIn === null}
-            style={{
-              ...s.toggleBtn,
-              background: optedIn ? '#059669' : '#334155',
-              color: optedIn ? '#fff' : '#94a3b8',
-            }}
-          >
-            {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Community Signal Feed"
+        subtitle="High-confidence AI signals from the community (≥70% confidence)"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Community', href: '/leaderboard' },
+          { label: 'Signal Feed' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => navigate('/leaderboard')}
+              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🏆 Leaderboard
+            </button>
+            <button
+              onClick={() => navigate('/copy-trading')}
+              style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🔁 Copy Trading
+            </button>
+            <div style={{ width: 1, height: 20, background: '#334155' }} />
+            <span style={{ fontSize: 12, color: '#64748b' }}>Share signals:</span>
+            <button
+              onClick={handleOptToggle}
+              disabled={optLoading || optedIn === null}
+              style={{
+                ...s.toggleBtn,
+                background: optedIn ? '#059669' : '#334155',
+                color: optedIn ? '#fff' : '#94a3b8',
+              }}
+            >
+              {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
+            </button>
+          </div>
+        }
+      />
 
       {/* Symbol filters */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -219,7 +238,27 @@ const SocialFeed: React.FC = () => {
       {error && <div style={s.errorBox}>{error}</div>}
 
       {filteredItems.length === 0 && !loading && !error && (
-        <div style={s.empty}>No signals yet. Check back soon or opt in to share yours.</div>
+        <EmptyState
+          icon="📡"
+          title="No signals yet"
+          description="Community signals appear here once traders opt in to share. You can also opt in above to contribute your own."
+          action={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => navigate('/ai-chart')}
+                style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                📈 AI Charts
+              </button>
+              <button
+                onClick={() => navigate('/leaderboard')}
+                style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🏆 Leaderboard
+              </button>
+            </div>
+          }
+        />
       )}
 
       <div style={s.feed}>

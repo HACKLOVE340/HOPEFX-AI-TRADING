@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { PageHeader, EmptyState } from '../components';
 import { api } from '../hooks/useApi';
 
 function extractApiError(err: unknown, fallback: string): string {
@@ -65,37 +66,65 @@ const Leaderboard: React.FC = () => {
 
   return (
     <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Global Leaderboard</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-            Top traders ranked by performance. Click a trader to copy their strategy.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {(['monthly', 'quarterly', 'all'] as const).map((p) => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ ...s.periodBtn, ...(period === p ? s.periodBtnActive : {}) }}>
-              {p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
+      <PageHeader
+        title="Global Leaderboard"
+        subtitle="Top traders ranked by performance. Click a trader to copy their strategy."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Community' },
+          { label: 'Leaderboard' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {(['monthly', 'quarterly', 'all'] as const).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)}
+                style={{ ...s.periodBtn, ...(period === p ? s.periodBtnActive : {}) }}>
+                {p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 20, background: '#334155' }} />
+            <button
+              onClick={() => navigate('/copy-trading')}
+              style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🔁 Copy Trading
             </button>
-          ))}
-        </div>
-      </div>
+            <button
+              onClick={() => navigate('/signals')}
+              style={{ padding: '6px 12px', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📡 Signals
+            </button>
+          </div>
+        }
+      />
 
       {loading ? (
         <p style={{ color: '#64748b', padding: '40px 0' }}>Loading leaderboard…</p>
       ) : loadErr ? (
         <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : traders.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>🏆</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No traders ranked yet</div>
-          <div style={{ fontSize: 13, color: '#64748b', maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
-            The leaderboard populates once traders have closed positions.
-            Start trading on the <Link to="/trade" style={{ color: '#60a5fa' }}>Trading</Link> page to appear here.
-          </div>
-        </div>
+        <EmptyState
+          icon="🏆"
+          title="No traders ranked yet"
+          description="The leaderboard populates once traders have closed positions. Start trading to appear here."
+          action={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => navigate('/trade')}
+                style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                ⚡ Start Trading
+              </button>
+              <button
+                onClick={() => navigate('/copy-trading')}
+                style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                🔁 Copy Trading
+              </button>
+            </div>
+          }
+        />
       ) : (
         <>
           {/* Podium — top 3 */}

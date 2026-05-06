@@ -7,6 +7,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useStore, selectAccount } from '../store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -178,10 +179,37 @@ const RiskCalculator: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <h1 style={s.title}>Risk / Reward Calculator</h1>
-        <p style={s.subtitle}>Calculate position size, pip value, and margin before every trade.</p>
-      </div>
+      <PageHeader
+        title="Risk / Reward Calculator"
+        subtitle="Calculate position size, pip value, and margin before every trade."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Trade', href: '/trade' },
+          { label: 'Risk Calculator' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => navigate('/trade')}
+              style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ⚡ Trade
+            </button>
+            <button
+              onClick={() => navigate('/journal')}
+              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📓 Journal
+            </button>
+            <button
+              onClick={() => navigate('/prop-firm')}
+              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🛡 Prop Firm
+            </button>
+          </div>
+        }
+      />
 
       <div style={s.grid}>
         {/* ── Inputs ── */}

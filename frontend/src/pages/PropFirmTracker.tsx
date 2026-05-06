@@ -9,6 +9,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -179,36 +180,48 @@ const PropFirmTracker: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <span style={{ fontSize: 28 }}>🛡️</span>
-        <h1 style={s.title}>Prop Firm Challenge Tracker</h1>
-        {statusIcon && <span style={{ fontSize: 22 }}>{statusIcon}</span>}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {(['live', 'history', 'alerts', 'daily'] as const).map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} style={{
-              background: activeTab === t ? '#1e3a5f' : '#1e293b',
-              border: `1px solid ${activeTab === t ? '#3b82f6' : '#334155'}`,
-              borderRadius: 8, color: activeTab === t ? '#60a5fa' : '#64748b',
-              cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px',
-            }}>
-              {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
+      <PageHeader
+        title="Prop Firm Challenge Tracker"
+        subtitle="Monitor drawdown limits, daily loss caps, and profit targets in real time."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Tools', href: '/risk-calculator' },
+          { label: 'Prop Firm Tracker' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            {(['live', 'history', 'alerts', 'daily'] as const).map(t => (
+              <button key={t} onClick={() => setActiveTab(t)} style={{
+                background: activeTab === t ? '#1e3a5f' : '#1e293b',
+                border: `1px solid ${activeTab === t ? '#3b82f6' : '#334155'}`,
+                borderRadius: 8, color: activeTab === t ? '#60a5fa' : '#64748b',
+                cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px', fontFamily: 'inherit',
+              }}>
+                {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
+              </button>
+            ))}
+            <div style={{ width: 1, height: 24, background: '#334155' }} />
+            <button
+              onClick={() => navigate('/risk-calculator')}
+              style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🛡 Risk Calc
             </button>
-          ))}
-          <div style={{ width: 1, height: 24, background: '#334155' }} />
-          <button
-            onClick={() => navigate('/risk-calculator')}
-            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
-          >
-            🛡 Risk Calc
-          </button>
-          <button
-            onClick={() => navigate('/trade')}
-            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
-          >
-            ⚡ Trade
-          </button>
-        </div>
-      </div>
+            <button
+              onClick={() => navigate('/journal')}
+              style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📓 Journal
+            </button>
+            <button
+              onClick={() => navigate('/trade')}
+              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ⚡ Trade
+            </button>
+          </div>
+        }
+      />
 
       {/* ── History Tab ── */}
       {activeTab === 'history' && (
