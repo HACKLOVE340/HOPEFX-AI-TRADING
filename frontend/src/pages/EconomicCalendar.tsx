@@ -17,6 +17,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader } from '../components';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
 import { useStore, selectMacro } from '../store';
@@ -244,12 +245,36 @@ const EconomicCalendar: React.FC = () => {
 
   return (
     <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>📅 Economic Calendar</h1>
-          <p style={s.subtitle}>Upcoming market-moving events. Red = high impact on gold/USD.</p>
-        </div>
+      <PageHeader
+        title="Economic Calendar"
+        subtitle="Upcoming market-moving events. Red = high impact on gold/USD."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Economic Calendar' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/geopolitical')}
+              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              🌍 Geopolitical
+            </button>
+            <button
+              onClick={() => navigate('/correlation')}
+              style={{ padding: '6px 12px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              📊 Correlation
+            </button>
+            <button
+              onClick={() => navigate('/trade')}
+              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ⚡ Trade
+            </button>
+          </div>
+        }
+      />
 
         {/* Auto-pause toggle */}
         <div style={s.autoPauseCard}>
@@ -277,7 +302,6 @@ const EconomicCalendar: React.FC = () => {
             <div style={{ fontSize: 12, color: '#f87171', marginTop: 6 }}>{pauseErr}</div>
           )}
         </div>
-      </div>
 
       {/* Blackout banner */}
       {macro?.is_blackout && (

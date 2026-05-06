@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { PageHeader, EmptyState } from '../components';
 import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts } from '../store';
 
@@ -176,15 +177,34 @@ const PriceAlerts: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Price Alerts</h1>
-          <p style={s.subtitle}>Get notified via Discord, Telegram, or email when price conditions are met.</p>
-        </div>
-        <button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
-          {showForm ? '✕ Cancel' : '+ Create Alert'}
-        </button>
-      </div>
+      <PageHeader
+        title="Price Alerts"
+        subtitle="Get notified via Discord, Telegram, or email when price conditions are met."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Watchlist', href: '/watchlist' },
+          { label: 'Price Alerts' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/watchlist')}
+              style={{ padding: '6px 12px', background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 7, color: '#38bdf8', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              👁 Watchlist
+            </button>
+            <button
+              onClick={() => navigate('/trade')}
+              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+            >
+              ⚡ Trade
+            </button>
+            <button onClick={() => setShowForm(!showForm)} style={s.createBtn}>
+              {showForm ? '✕ Cancel' : '+ Create Alert'}
+            </button>
+          </div>
+        }
+      />
 
       {/* Create form */}
       {showForm && (
@@ -267,7 +287,21 @@ const PriceAlerts: React.FC = () => {
       {/* Active alerts */}
       {tab === 'active' && (
         loading ? <div style={s.empty}>Loading…</div> :
-        alerts.length === 0 ? <div style={s.empty}>No alerts yet. Create one above.</div> :
+        alerts.length === 0 ? (
+          <EmptyState
+            icon="🔔"
+            title="No alerts yet"
+            description="Create a price alert to get notified when your target levels are hit."
+            action={
+              <button
+                onClick={() => setShowForm(true)}
+                style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                + Create Alert
+              </button>
+            }
+          />
+        ) :
         alerts.map((alert) => (
           <div key={alert.id} style={s.alertRow}>
             <div style={{ ...s.statusDot, background: STATUS_COLOR[alert.status] ?? '#475569' }} />
