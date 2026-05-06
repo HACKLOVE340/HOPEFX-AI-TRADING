@@ -4,7 +4,7 @@
  * reactions (👍/👎), comments, copy counts.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader, EmptyState } from '../components';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
@@ -27,6 +27,9 @@ function extractErr(err: unknown, fb: string): string {
 const SocialFeed: React.FC = () => {
   const navigate = useNavigate();
   const user = useStore(s => s.user);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsFlash, setWsFlash]         = useState(false);
+  const [typingSignals, setTypingSignals] = useState<Record<string, boolean>>({});
   const [items, setItems]           = useState<FeedItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string|null>(null);
@@ -74,7 +77,7 @@ const SocialFeed: React.FC = () => {
 
   useEffect(() => { loadFeed(1, true); }, [loadFeed]);
 
-  // WebSocket — inject new signals in real-time
+  // WebSocket — inject new signals in real-time with animated indicator
   const wsToken = useStore(s => s.token);
   useEffect(() => {
     if (!wsToken) return;
@@ -82,11 +85,17 @@ const SocialFeed: React.FC = () => {
     let ws: WebSocket | null = null;
     try {
       ws = new WebSocket(wsUrl);
+      ws.onopen  = () => { if (mountedRef.current) setWsConnected(true); };
+      ws.onclose = () => { if (mountedRef.current) setWsConnected(false); };
+      ws.onerror = () => { if (mountedRef.current) setWsConnected(false); };
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string) as { type?: string; signal?: FeedItem };
           if (msg.type === 'new_signal' && msg.signal) {
             setItems(prev => [msg.signal!, ...prev].slice(0, 200));
+            // Flash the WS indicator on new signal
+            setWsFlash(true);
+            setTimeout(() => setWsFlash(false), 800);
           }
         } catch { /* ignore malformed frames */ }
       };
@@ -180,18 +189,13 @@ const SocialFeed: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => navigate('/leaderboard')}
-              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🏆 Leaderboard
-            </button>
-            <button
-              onClick={() => navigate('/copy-trading')}
-              style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🔁 Copy Trading
-            </button>
+            {/* WS live indicator */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: wsConnected ? 'rgba(74,222,128,0.08)' : 'rgba(100,116,139,0.08)', border: `1px solid ${wsConnected ? 'rgba(74,222,128,0.3)' : '#334155'}`, borderRadius: 20 }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: wsConnected ? (wsFlash ? '#fff' : '#4ade80') : '#475569', transition: 'background 0.2s', boxShadow: wsConnected && wsFlash ? '0 0 8px #4ade80' : 'none' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: wsConnected ? '#4ade80' : '#475569' }}>{wsConnected ? 'LIVE' : 'OFFLINE'}</span>
+            </div>
+            <Link to="/leaderboard"  style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🏆 Leaderboard</Link>
+            <Link to="/copy-trading" style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)',  border: '1px solid rgba(52,211,153,0.3)',  borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🔁 Copy Trading</Link>
             <div style={{ width: 1, height: 20, background: '#334155' }} />
             <span style={{ fontSize: 12, color: '#64748b' }}>Share signals:</span>
             <button
@@ -244,18 +248,8 @@ const SocialFeed: React.FC = () => {
           description="Community signals appear here once traders opt in to share. You can also opt in above to contribute your own."
           action={
             <div style={{ display: 'flex', gap: 8 }}>
-              <button
-                onClick={() => navigate('/ai-chart')}
-                style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                📈 AI Charts
-              </button>
-              <button
-                onClick={() => navigate('/leaderboard')}
-                style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-              >
-                🏆 Leaderboard
-              </button>
+              <Link to="/ai-chart-dashboard" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>📈 AI Charts</Link>
+              <Link to="/leaderboard"        style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none' }}>🏆 Leaderboard</Link>
             </div>
           }
         />
@@ -321,17 +315,33 @@ const SocialFeed: React.FC = () => {
                   </div>
                 ))}
                 {user && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <input
-                      value={commentText}
-                      onChange={e => setCommentText(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && submitComment(item.signal_id)}
-                      placeholder="Add a comment…"
-                      style={s.commentInput}
-                    />
-                    <button onClick={() => submitComment(item.signal_id)} disabled={submitting || !commentText.trim()} style={s.commentBtn}>
-                      {submitting ? '…' : 'Post'}
-                    </button>
+                  <div style={{ marginTop: 10 }}>
+                    {typingSignals[item.signal_id] && (
+                      <div style={{ fontSize: 11, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ display: 'inline-flex', gap: 2 }}>
+                          {[0,1,2].map(i => (
+                            <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#475569', display: 'inline-block', animation: `bounce 1.2s ${i * 0.2}s infinite` }} />
+                          ))}
+                        </span>
+                        typing…
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        value={commentText}
+                        onChange={e => {
+                          setCommentText(e.target.value);
+                          setTypingSignals(prev => ({ ...prev, [item.signal_id]: e.target.value.length > 0 }));
+                        }}
+                        onBlur={() => setTypingSignals(prev => ({ ...prev, [item.signal_id]: false }))}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { submitComment(item.signal_id); setTypingSignals(prev => ({ ...prev, [item.signal_id]: false })); } }}
+                        placeholder="Add a comment…"
+                        style={s.commentInput}
+                      />
+                      <button onClick={() => { submitComment(item.signal_id); setTypingSignals(prev => ({ ...prev, [item.signal_id]: false })); }} disabled={submitting || !commentText.trim()} style={s.commentBtn}>
+                        {submitting ? '…' : 'Post'}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
