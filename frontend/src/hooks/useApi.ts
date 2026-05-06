@@ -1016,10 +1016,11 @@ export const geopoliticalApi = {
 // Backend: /api/watchlist/* (api/watchlist.py)
 
 export const watchlistApi = {
-  list:   ()               => api.get('/watchlist'),
-  add:    (symbol: string) => api.post(`/watchlist/${encodeURIComponent(symbol)}`),
-  remove: (symbol: string) => api.delete(`/watchlist/${encodeURIComponent(symbol)}`),
-  prices: ()               => api.get('/watchlist/prices'),
+  list:    ()                        => api.get('/watchlist'),
+  add:     (symbol: string)          => api.post(`/watchlist/${encodeURIComponent(symbol)}`),
+  remove:  (symbol: string)          => api.delete(`/watchlist/${encodeURIComponent(symbol)}`),
+  prices:  ()                        => api.get('/watchlist/prices'),
+  reorder: (symbols: string[])       => api.put('/watchlist/order', { symbols }),
 };
 
 // ── Strategy Marketplace ──────────────────────────────────────────────────────
