@@ -13,12 +13,13 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../components/GlobalAttackMap';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
+import { Badge } from '../components/Badge';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -185,21 +186,33 @@ const SecurityDashboard: React.FC = () => {
     <div style={pageStyle}>
       <PageHeader
         title="Security Operations"
-        subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring"
+        subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring and incident response."
+        breadcrumbs={[
+          { label: 'Home',        href: '/home' },
+          { label: 'Admin Panel', href: '/admin' },
+          { label: 'Security Operations' },
+        ]}
+        badge={
+          lockdown.lockdown_active
+            ? <Badge variant="danger" style={{ fontSize: 11 }}>⚠ LOCKDOWN</Badge>
+            : highSeverity > 0
+            ? <Badge variant="warning" style={{ fontSize: 11 }}>{highSeverity} High Severity</Badge>
+            : <Badge variant="success" style={{ fontSize: 11 }}>● Monitoring</Badge>
+        }
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => navigate('/')}
-              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              📊 Dashboard
-            </button>
-            <button onClick={() => navigate('/audit')}
-              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <Link to="/audit"
+              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
               📋 Audit Log
-            </button>
-            <button onClick={() => navigate('/admin')}
-              style={{ padding: '6px 14px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              🛡 Admin Panel
-            </button>
+            </Link>
+            <Link to="/auto-heal"
+              style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              🩺 Auto-Heal
+            </Link>
+            <Link to="/admin"
+              style={{ padding: '6px 14px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+              🔧 Admin
+            </Link>
           </div>
         }
       />
@@ -355,6 +368,38 @@ const SecurityDashboard: React.FC = () => {
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Cross-links */}
+      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20, marginTop: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          Related
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
+          {[
+            { icon: '🔧', label: 'Admin Panel',          desc: 'Platform overview & KPIs',         to: '/admin' },
+            { icon: '🔍', label: 'Audit Log',            desc: 'Full event trail with filters',    to: '/audit' },
+            { icon: '🩺', label: 'Auto-Heal',            desc: 'Self-healing & fix approvals',     to: '/auto-heal' },
+            { icon: '🏷️', label: 'Whitelabel Admin',     desc: 'Tenant branding & feature flags',  to: '/whitelabel' },
+            { icon: '⚡', label: 'Super Admin',          desc: 'Master control panel',             to: '/superadmin' },
+            { icon: '🔬', label: 'System Reliability',   desc: 'OTel tracing & self-test suite',   to: '/system-reliability' },
+          ].map(({ icon, label, desc, to }) => (
+            <Link
+              key={to}
+              to={to}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#111827'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0d1421'; }}
+            >
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
+              </div>
+              <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>
