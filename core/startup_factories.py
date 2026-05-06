@@ -214,7 +214,14 @@ class _ConfigDatabaseDefaults:
     max_overflow: int = 10
 
     def get_connection_string(self) -> str:
-        return os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+        url = os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+        # Normalise async driver prefixes so callers that pass this URL to
+        # sync create_engine don't get a QueuePool/driver mismatch error.
+        if url.startswith("sqlite+aiosqlite://"):
+            url = url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+        elif url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        return url
 
 
 class _ConfigNamespace:
@@ -266,6 +273,14 @@ async def init_database(s: Any) -> Any:
     from database.models import Base
 
     conn_str = s.config.database.get_connection_string()
+
+    # Normalise async driver prefixes — create_engine (sync) cannot use
+    # aiosqlite or asyncpg.  _ConfigDatabaseDefaults.get_connection_string()
+    # already normalises, but other config implementations may not.
+    if conn_str.startswith("sqlite+aiosqlite://"):
+        conn_str = conn_str.replace("sqlite+aiosqlite://", "sqlite://", 1)
+    elif conn_str.startswith("postgresql+asyncpg://"):
+        conn_str = conn_str.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
 
     # Block SQLite in multi-worker deployments — concurrent OS-process writes
     # corrupt the database.  PostgreSQL is required for any production setup.
@@ -348,6 +363,13 @@ async def init_database(s: Any) -> Any:
                     f"-c application_name={app_name}"
                 ),
             }
+
+    # SQLite: use NullPool so each call gets a fresh connection and no idle
+    # connection holds the file lock while alembic runs in a thread executor.
+    if is_sqlite:
+        from sqlalchemy.pool import NullPool as _NullPool
+        engine_kwargs["poolclass"] = _NullPool
+        engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 
     engine = create_engine(conn_str, **engine_kwargs)
     try:
