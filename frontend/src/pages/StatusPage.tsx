@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
+import { Breadcrumb } from '../components/Breadcrumb';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -187,6 +188,12 @@ const StatusPage: React.FC = () => {
 
   return (
     <div style={styles.page}>
+      {/* Breadcrumbs */}
+      <Breadcrumb items={[
+        { label: 'Home', href: '/home' },
+        { label: 'System Status' },
+      ]} style={{ marginBottom: 16 }} />
+
       {/* Banner */}
       <div style={{
         ...styles.banner,
@@ -201,10 +208,14 @@ const StatusPage: React.FC = () => {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/')}
-            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          <Link to="/home"
+            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
             📊 Dashboard
-          </button>
+          </Link>
+          <Link to="/docs"
+            style={{ padding: '6px 14px', background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.4)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+            📖 Docs
+          </Link>
           <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
         </div>
       </div>
@@ -297,6 +308,37 @@ const StatusPage: React.FC = () => {
             </div>
           ))
         )}
+      </div>
+
+      {/* Cross-links */}
+      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20, marginBottom: 16 }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          Related
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+          {[
+            { icon: '🔬', label: 'System Reliability', desc: 'OTel tracing & self-tests',       to: '/system-reliability' },
+            { icon: '🩺', label: 'Auto-Heal',          desc: 'Self-healing & fix approvals',    to: '/auto-heal' },
+            { icon: '🛡️', label: 'Security Ops',       desc: 'Threats & lockdown controls',     to: '/security' },
+            { icon: '🔧', label: 'Admin Panel',        desc: 'Platform overview & KPIs',        to: '/admin' },
+            { icon: '📖', label: 'Docs',               desc: 'Platform documentation',          to: '/docs' },
+          ].map(({ icon, label, desc, to }) => (
+            <Link
+              key={to}
+              to={to}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#475569'; (e.currentTarget as HTMLAnchorElement).style.background = '#243044'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#1e293b'; }}
+            >
+              <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
+              </div>
+              <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div style={styles.footer}>
