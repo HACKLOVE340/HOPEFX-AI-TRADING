@@ -37,11 +37,11 @@ const DriftBar: React.FC<{ value: number }> = ({ value }) => {
 
 interface RLStatus {
   status: string;
-  episode: number;
-  total_reward: number;
-  win_rate: number;
-  last_updated: string;
-  model_version: string;
+  episode: number | null | undefined;
+  total_reward: number | null | undefined;
+  win_rate: number | null | undefined;
+  last_updated: string | null | undefined;
+  model_version: string | null | undefined;
 }
 
 interface MLStatus {
@@ -167,14 +167,14 @@ const MLAISection: React.FC = () => {
       {/* RL Agent */}
       {rlStatus && (
         <SectionCard title="RL Agent" icon="🤖" accent="#a78bfa"
-          subtitle={`Model v${rlStatus.model_version} · Last updated ${fmtDate(rlStatus.last_updated)}`}
+          subtitle={`Model v${rlStatus.model_version ?? '1.0'} · Last updated ${fmtDate(rlStatus.last_updated ?? null)}`}
           actions={<ActionBtn label="Refresh" onClick={load} icon="🔄" size="sm" />}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12, marginBottom: 16 }}>
             {[
-              { label: 'Status',       value: <StatusBadge status={rlStatus.status} size="sm" /> },
-              { label: 'Episode',      value: rlStatus.episode.toLocaleString() },
-              { label: 'Total Reward', value: rlStatus.total_reward.toFixed(2) },
-              { label: 'Win Rate',     value: `${(rlStatus.win_rate * 100).toFixed(1)}%` },
+              { label: 'Status',       value: <StatusBadge status={rlStatus.status ?? 'unknown'} size="sm" /> },
+              { label: 'Episode',      value: (rlStatus.episode ?? 0).toLocaleString() },
+              { label: 'Total Reward', value: (rlStatus.total_reward ?? 0).toFixed(2) },
+              { label: 'Win Rate',     value: `${((rlStatus.win_rate ?? 0) * 100).toFixed(1)}%` },
             ].map(m => (
               <div key={m.label} style={{ background: '#1e293b', borderRadius: 8, padding: '10px 12px' }}>
                 <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>{m.label}</div>

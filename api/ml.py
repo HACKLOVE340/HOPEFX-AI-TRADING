@@ -1396,26 +1396,75 @@ async def rl_walk_forward(
 
 @router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
-    """Return saved RL model files and their sizes."""
+    """Return RL agent runtime status and saved model inventory.
+
+    Reads live state from Redis (key ``rl:agent:status``) when available,
+    falling back to model-file metadata so the response always has the
+    fields the frontend RLStatus interface requires.
+    """
+    import json as _json
+    import time as _time
+    from datetime import datetime, timezone
+
     from ml.rl_agent import _MODEL_DIR
 
+    # ── Model file inventory ──────────────────────────────────────────────────
     models = []
+    latest_mtime: float = 0.0
+    latest_version = "1.0"
     if Path(_MODEL_DIR).is_dir():
         for fname in sorted(os.listdir(_MODEL_DIR)):
             if fname.endswith(".zip"):
                 fpath = Path(_MODEL_DIR) / fname
+                mtime = os.path.getmtime(fpath)
                 models.append(
                     {
                         "name": fname,
                         "size_kb": round(os.path.getsize(fpath) / 1024, 1),
-                        "modified": os.path.getmtime(fpath),
+                        "modified": mtime,
                     }
                 )
+                if mtime > latest_mtime:
+                    latest_mtime = mtime
+                    # Derive a version string from the filename stem if possible
+                    # e.g. hopefx_ppo_v2.zip → "2.0"
+                    stem = Path(fname).stem
+                    parts = stem.rsplit("_v", 1)
+                    latest_version = f"{parts[-1]}.0" if len(parts) == 2 else "1.0"
+
+    # ── Live agent state from Redis ───────────────────────────────────────────
+    agent_state: dict = {}
+    try:
+        from cache.redis_client import get_sync_redis_client
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("rl:agent:status")
+            if raw:
+                agent_state = _json.loads(raw)
+    except Exception:  # nosec B110 — Redis optional
+        pass
+
+    # ── Build response with guaranteed fields ─────────────────────────────────
+    now_iso = datetime.now(timezone.utc).isoformat()
+    last_updated = agent_state.get(
+        "last_updated",
+        datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat()
+        if latest_mtime
+        else now_iso,
+    )
 
     return {
-        "model_dir": _MODEL_DIR,
-        "models": models,
-        "count": len(models),
+        # Fields required by the frontend RLStatus interface
+        "status":        agent_state.get("status", "idle" if models else "no_model"),
+        "episode":       int(agent_state.get("episode", 0)),
+        "total_reward":  float(agent_state.get("total_reward", 0.0)),
+        "win_rate":      float(agent_state.get("win_rate", 0.0)),
+        "last_updated":  last_updated,
+        "model_version": agent_state.get("model_version", latest_version),
+        # Extended fields for the model inventory table
+        "model_dir":     _MODEL_DIR,
+        "models":        models,
+        "count":         len(models),
     }
 
 
