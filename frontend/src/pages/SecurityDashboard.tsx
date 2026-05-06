@@ -192,9 +192,13 @@ const SecurityDashboard: React.FC = () => {
               style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📊 Dashboard
             </button>
-            <button onClick={() => navigate('/audit-log')}
+            <button onClick={() => navigate('/audit')}
               style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               📋 Audit Log
+            </button>
+            <button onClick={() => navigate('/admin')}
+              style={{ padding: '6px 14px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🛡 Admin Panel
             </button>
           </div>
         }

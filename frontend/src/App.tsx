@@ -470,6 +470,8 @@ const AppShell: React.FC = () => {
             {/* Admin */}
             <Route path="/admin"        element={wrap(adminOnly(<AdminPanel />))} />
             <Route path="/audit"        element={wrap(adminOnly(<AuditLog />))} />
+            <Route path="/audit-log"    element={<Navigate to="/audit" replace />} />
+            <Route path="/backtest"     element={<Navigate to="/ai-strategy" replace />} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />

@@ -204,8 +204,8 @@ const WalkForward: React.FC = () => {
             <button onClick={() => load()} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
               ↻ Retry
             </button>
-            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
-              📊 Go to Backtesting
+            <button onClick={() => navigate('/ai-strategy')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+              🧠 AI Strategy
             </button>
           </div>
         </div>

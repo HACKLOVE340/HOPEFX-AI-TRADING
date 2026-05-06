@@ -1058,7 +1058,7 @@ function Footer() {
               ['/marketplace',   'Marketplace'],
               ['/geopolitical',  'Geopolitical Risk'],
               ['/nuclear',       'AI Dashboard'],
-              ['/news',          'Market News'],
+              ['/signals',       'Market News'],
             ] as [string, string][]).map(([h, l]) => (
               <a
                 key={l}

@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
@@ -333,7 +333,7 @@ const Performance: React.FC = () => {
               <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No performance data yet</div>
               <div style={{ fontSize: 13, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
-                Make your first trade on the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to start tracking performance metrics, equity curve, and Sharpe ratio.
+                Make your first trade on the <Link to="/trade" style={{ color: '#60a5fa' }}>Trading</Link> page to start tracking performance metrics, equity curve, and Sharpe ratio.
               </div>
             </div>
           )}

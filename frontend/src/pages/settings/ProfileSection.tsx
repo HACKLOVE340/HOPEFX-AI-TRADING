@@ -1,5 +1,6 @@
 // settings/ProfileSection.tsx — Profile & account identity settings
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../hooks/useApi';
 import { useStore } from '../../store';
 import type { ProfileSettings } from './types';
@@ -12,6 +13,7 @@ const DEFAULT: ProfileSettings = {
 };
 
 const ProfileSection: React.FC = () => {
+  const navigate = useNavigate();
   const user = useStore((s) => s.user);
   const setAuth = useStore((s) => s.setAuth);
   const token = useStore((s) => s.token);
@@ -198,19 +200,18 @@ const ProfileSection: React.FC = () => {
             Quick Actions
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-            <a
-              href="/profile/me"
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={() => navigate('/profile')}
               style={{
                 padding: '8px 16px', borderRadius: 8,
                 background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-                color: '#60a5fa', fontSize: 13, textDecoration: 'none',
+                color: '#60a5fa', fontSize: 13, cursor: 'pointer',
                 display: 'inline-flex', alignItems: 'center', gap: 6,
+                fontFamily: 'inherit',
               }}
             >
               👁 View Public Profile
-            </a>
+            </button>
             <button
               onClick={() => {
                 localStorage.removeItem('hopefx_onboarding_complete');
