@@ -16,8 +16,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { PageHeader } from '../components';
+import { useToast } from '../components/Toast';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
 import { useStore, selectMacro } from '../store';
@@ -88,29 +89,61 @@ function formatDate(iso: string): string {
 
 // ── Event Row ─────────────────────────────────────────────────────────────────
 
-const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = ({ event: ev, onPlanTrade }) => {
-  const color = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
-  const flag  = FLAG[ev.country] ?? '🌐';
-  const isHighImpact = ev.importance === 'high' || ev.importance === 'critical';
+// ── Live countdown hook ───────────────────────────────────────────────────────
+
+function useLiveCountdown(scheduledTime: string): string {
+  const [display, setDisplay] = useState('');
+  useEffect(() => {
+    const update = () => {
+      const diff = Math.floor((new Date(scheduledTime).getTime() - Date.now()) / 1000);
+      if (diff <= 0) { setDisplay('Now'); return; }
+      const h = Math.floor(diff / 3600);
+      const m = Math.floor((diff % 3600) / 60);
+      const s = diff % 60;
+      if (h > 0) setDisplay(`${h}h ${m}m`);
+      else if (m > 0) setDisplay(`${m}m ${s}s`);
+      else setDisplay(`${s}s`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [scheduledTime]);
+  return display;
+}
+
+const EventRow: React.FC<{ event: CalendarEvent; subscribed: boolean; onSubscribe: () => void }> = ({ event: ev, subscribed, onSubscribe }) => {
+  const color      = IMPORTANCE_COLOR[ev.importance] ?? '#64748b';
+  const flag       = FLAG[ev.country] ?? '🌐';
+  const isHigh     = ev.importance === 'high' || ev.importance === 'critical';
+  const countdown  = useLiveCountdown(ev.scheduled_time);
+  const isImminent = ev.minutes_until > 0 && ev.minutes_until <= 30;
 
   return (
-    <div style={{ ...s.eventRow, borderLeft: `3px solid ${color}` }}>
+    <div style={{
+      ...s.eventRow,
+      borderLeft: `3px solid ${color}`,
+      background: isImminent ? 'rgba(249,115,22,0.04)' : undefined,
+    }}>
       <div style={s.eventTime}>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{formatTime(ev.scheduled_time)}</div>
-        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>{formatCountdown(ev.minutes_until)}</div>
+        <div style={{
+          fontSize: 11, marginTop: 2, fontWeight: isImminent ? 700 : 400,
+          color: isImminent ? '#f97316' : '#475569',
+          fontFamily: 'monospace',
+        }}>
+          {countdown}
+        </div>
       </div>
 
       <div style={s.eventMain}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 16 }}>{flag}</span>
           <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{ev.title}</span>
           {ev.currency && <span style={s.currencyBadge}>{ev.currency}</span>}
+          {isImminent && <span style={{ fontSize: 10, color: '#f97316', fontWeight: 700 }}>⚠ IMMINENT</span>}
         </div>
         <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
           {IMPORTANCE_LABEL[ev.importance]}
-          {ev.minutes_until <= 60 && ev.minutes_until > 0 && (
-            <span style={{ color: '#f97316', marginLeft: 8 }}>⚠ Approaching</span>
-          )}
         </div>
       </div>
 
@@ -138,20 +171,30 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
             }}>{ev.actual}</span>
           </div>
         )}
-        {isHighImpact && onPlanTrade && (
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          {isHigh && (
+            <Link
+              to="/trade"
+              style={{ padding: '3px 10px', borderRadius: 4, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', color: '#60a5fa', fontSize: 10, fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}
+              title="Plan a trade around this event"
+            >
+              ⚡ Trade
+            </Link>
+          )}
           <button
-            onClick={onPlanTrade}
+            onClick={onSubscribe}
             style={{
-              padding: '3px 10px', borderRadius: 4, cursor: 'pointer',
-              background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)',
-              color: '#60a5fa', fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
+              padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 10, fontWeight: 700,
+              background: subscribed ? 'rgba(0,230,118,0.1)' : 'transparent',
+              border: `1px solid ${subscribed ? 'rgba(0,230,118,0.4)' : '#334155'}`,
+              color: subscribed ? '#00e676' : '#64748b',
               whiteSpace: 'nowrap',
             }}
-            title="Navigate to Trade page to plan a trade around this event"
+            title={subscribed ? 'Unsubscribe from this event' : 'Subscribe to get notified'}
           >
-            ⚡ Plan Trade
+            {subscribed ? '🔔 On' : '🔕 Off'}
           </button>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -161,13 +204,17 @@ const EventRow: React.FC<{ event: CalendarEvent; onPlanTrade?: () => void }> = (
 
 type Tab = 'calendar' | 'macro';
 
+type ImpactFilter = 'all' | 'critical' | 'high' | 'medium' | 'low';
+
 const EconomicCalendar: React.FC = () => {
-  const navigate = useNavigate();
+  const toast = useToast();
   const [tab, setTab]               = useState<Tab>('calendar');
   const [events, setEvents]         = useState<CalendarEvent[]>([]);
   const [loading, setLoading]       = useState(true);
   const [fetchErr, setFetchErr]     = useState<string | null>(null);
   const [filter, setFilter]         = useState<'all' | 'high'>('all');
+  const [impactFilter, setImpactFilter] = useState<ImpactFilter>('all');
+  const [subscribed, setSubscribed] = useState<Set<string>>(new Set());
   const [autoPause, setAutoPause]   = useState<AutoPauseConfig>({ enabled: false, minutes_before: 30, min_importance: 'high' });
   const [pauseErr, setPauseErr]     = useState<string | null>(null);
   const [savingPause, setSavingPause] = useState(false);
@@ -253,25 +300,10 @@ const EconomicCalendar: React.FC = () => {
           { label: 'Economic Calendar' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button
-              onClick={() => navigate('/geopolitical')}
-              style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              🌍 Geopolitical
-            </button>
-            <button
-              onClick={() => navigate('/correlation')}
-              style={{ padding: '6px 12px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              📊 Correlation
-            </button>
-            <button
-              onClick={() => navigate('/trade')}
-              style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-            >
-              ⚡ Trade
-            </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Link to="/geopolitical" style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🌍 Geopolitical</Link>
+            <Link to="/correlation"  style={{ padding: '6px 12px', background: 'rgba(96,165,250,0.1)',  border: '1px solid rgba(96,165,250,0.3)',  borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📊 Correlation</Link>
+            <Link to="/trade"        style={{ padding: '6px 12px', background: 'rgba(74,222,128,0.1)',  border: '1px solid rgba(74,222,128,0.3)',  borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>⚡ Trade</Link>
           </div>
         }
       />
@@ -336,17 +368,33 @@ const EconomicCalendar: React.FC = () => {
       {/* ── Calendar tab ──────────────────────────────────────────────────── */}
       {tab === 'calendar' && (
         <>
-          {/* Filter tabs */}
-          <div style={{ ...s.tabs, marginBottom: 16 }}>
+          {/* Filter row: legacy high/all + impact chips */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             {(['all', 'high'] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{ ...s.tab, ...(filter === f ? s.tabActive : {}) }}
-              >
-                {f === 'all' ? 'All Events (7 days)' : '🔴 High Impact Only'}
+              <button key={f} onClick={() => setFilter(f)} style={{ ...s.tab, ...(filter === f ? s.tabActive : {}) }}>
+                {f === 'all' ? 'All Events' : '🔴 High Impact'}
               </button>
             ))}
+            <span style={{ color: '#334155', fontSize: 12 }}>|</span>
+            {(['all', 'critical', 'high', 'medium', 'low'] as ImpactFilter[]).map((imp) => {
+              const active = impactFilter === imp;
+              const color  = imp === 'all' ? '#64748b' : (IMPORTANCE_COLOR[imp] ?? '#64748b');
+              return (
+                <button
+                  key={imp}
+                  onClick={() => setImpactFilter(imp)}
+                  style={{
+                    padding: '4px 12px', borderRadius: 20, cursor: 'pointer', fontSize: 11, fontWeight: 600,
+                    border: `1px solid ${active ? color : '#334155'}`,
+                    background: active ? `${color}22` : 'transparent',
+                    color: active ? color : '#64748b',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {imp === 'all' ? 'All Impact' : IMPORTANCE_LABEL[imp]}
+                </button>
+              );
+            })}
           </div>
 
           {loading ? (
@@ -356,14 +404,42 @@ const EconomicCalendar: React.FC = () => {
           ) : events.length === 0 ? (
             <div style={s.empty}>No events found.</div>
           ) : (
-            Object.entries(grouped).map(([date, dayEvents]) => (
-              <div key={date} style={s.dayGroup}>
-                <div style={s.dayHeader}>{date}</div>
-                {dayEvents.map((ev, i) => (
-                  <EventRow key={i} event={ev} onPlanTrade={() => navigate('/trade')} />
-                ))}
-              </div>
-            ))
+            Object.entries(grouped)
+              .map(([date, dayEvents]) => {
+                const filtered = dayEvents.filter((ev) =>
+                  impactFilter === 'all' || ev.importance === impactFilter,
+                );
+                if (filtered.length === 0) return null;
+                return (
+                  <div key={date} style={s.dayGroup}>
+                    <div style={s.dayHeader}>{date}</div>
+                    {filtered.map((ev, i) => {
+                      const key = `${ev.title}-${ev.scheduled_time}`;
+                      return (
+                        <EventRow
+                          key={i}
+                          event={ev}
+                          subscribed={subscribed.has(key)}
+                          onSubscribe={() => {
+                            setSubscribed((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(key)) {
+                                next.delete(key);
+                                toast.info(`Unsubscribed from ${ev.title}`);
+                              } else {
+                                next.add(key);
+                                toast.success(`Subscribed to ${ev.title}`);
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })
+              .filter(Boolean)
           )}
         </>
       )}
