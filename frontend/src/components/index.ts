@@ -6,6 +6,7 @@
  */
 
 export { AuthGuard } from './AuthGuard';
+export { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
 export { Badge, type BadgeVariant } from './Badge';
 export { Spinner } from './Spinner';
 export { Modal } from './Modal';
