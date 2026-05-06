@@ -209,7 +209,12 @@ if _CELERY_AVAILABLE:
 else:
     # Provide a no-op stub so imports don't fail when Celery is absent.
     class _NoOpInspect:
-        """Mimics celery.app.control.Inspect — all methods return None."""
+        """Mimics celery.app.control.Inspect — all methods return None.
+
+        Callers that check ``if stats:`` or ``if ping:`` treat None as
+        "no workers available", which is the correct behaviour when Celery
+        is not installed.
+        """
 
         def active(self, *a, **kw):
             return None
@@ -223,13 +228,43 @@ else:
         def registered(self, *a, **kw):
             return None
 
+        def reserved(self, *a, **kw):
+            return None
+
+        def scheduled(self, *a, **kw):
+            return None
+
+        def active_queues(self, *a, **kw):
+            return None
+
+        def conf(self, *a, **kw):
+            return None
+
+        def report(self, *a, **kw):
+            return None
+
     class _NoOpControl:
         """Mimics celery.app.control.Control."""
 
-        def inspect(self, *a, **kw) -> _NoOpInspect:
+        def inspect(self, *a, **kw) -> "_NoOpInspect":
             return _NoOpInspect()
 
         def broadcast(self, *a, **kw):
+            return None
+
+        def revoke(self, *a, **kw):
+            return None
+
+        def rate_limit(self, *a, **kw):
+            return None
+
+        def purge(self, *a, **kw):
+            return 0
+
+        def ping(self, *a, **kw):
+            return None
+
+        def shutdown(self, *a, **kw):
             return None
 
     class _NoOpCelery:  # type: ignore[no-redef]
@@ -243,6 +278,9 @@ else:
 
         def conf(self):
             """No-op configuration accessor for the null Celery stub."""
+            return None
+
+        def send_task(self, *a, **kw):
             return None
 
     app = _NoOpCelery()  # type: ignore[assignment]
