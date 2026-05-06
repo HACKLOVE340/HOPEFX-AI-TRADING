@@ -19,11 +19,12 @@
  *   DELETE /api/trading/positions
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
+import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { PageHeader } from '../components';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
@@ -68,10 +69,12 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
   const change    = tick?.change_pct ?? 0;
   const isUp      = change >= 0;
   const sparkData = history.slice(-40).map((t) => t.mid);
+  const flash     = useFlashHighlight(tick?.mid);
 
   return (
     <button
       onClick={onClick}
+      style={{ background: selected ? undefined : flash, transition: 'background 0.4s ease' }}
       className={cn(
         'flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border text-left transition-all',
         'min-w-[148px] flex-shrink-0',
@@ -380,18 +383,37 @@ function BottomSection() {
   );
 }
 
+// ── Keyboard shortcut hint bar ────────────────────────────────────────────────
+
+const KeyboardHints: React.FC = () => (
+  <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[#1e2d3d] text-[10px] text-slate-600">
+    {[
+      ['1–6', 'Select symbol'],
+      ['B', 'Buy market'],
+      ['S', 'Sell market'],
+      ['Esc', 'Cancel / deselect'],
+      ['Cmd+K', 'Command palette'],
+    ].map(([key, desc]) => (
+      <span key={key} className="flex items-center gap-1">
+        <kbd className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-slate-400 font-mono text-[9px]">{key}</kbd>
+        <span>{desc}</span>
+      </span>
+    ))}
+  </div>
+);
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Trade: React.FC = () => {
-  const location        = useLocation();
-  const navigate        = useNavigate();
-  const signalState     = (location.state as { signal?: {
+  const location    = useLocation();
+  const signalState = (location.state as { signal?: {
     symbol?: string; direction?: string;
     stop_loss?: number; take_profit?: number;
   } } | null)?.signal;
 
   const [selectedSymbol, setSelectedSymbol] = useState(signalState?.symbol ?? 'XAU/USD');
   const [closingAll, setClosingAll]         = useState(false);
+  const [pendingSide, setPendingSide]       = useState<'buy' | 'sell' | null>(null);
   const prices      = useStore((s) => s.prices);
   const allHistory  = useStore((s) => s.priceHistory);
   const qc          = useQueryClient();
@@ -400,7 +422,7 @@ const Trade: React.FC = () => {
 
   usePositions();
 
-  const handleCloseAll = async () => {
+  const handleCloseAll = useCallback(async () => {
     const ok = await confirm({
       title:        'Close all positions?',
       description:  'This will market-close every open position immediately. This cannot be undone.',
@@ -418,7 +440,31 @@ const Trade: React.FC = () => {
     } finally {
       setClosingAll(false);
     }
-  };
+  }, [confirm, qc, toast]);
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when typing in an input/textarea
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // 1–6: select symbol by index
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx >= 0 && idx < SYMBOLS.length) {
+        setSelectedSymbol(SYMBOLS[idx]);
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'b': setPendingSide('buy');  break;
+        case 's': setPendingSide('sell'); break;
+        case 'escape': setPendingSide(null); break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
@@ -432,24 +478,27 @@ const Trade: React.FC = () => {
         ]}
         actions={
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate('/watchlist')}
+            <Link
+              to="/watchlist"
               className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors"
+              style={{ textDecoration: 'none' }}
             >
               👁 Watchlist
-            </button>
-            <button
-              onClick={() => navigate('/portfolio')}
+            </Link>
+            <Link
+              to="/portfolio"
               className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors"
+              style={{ textDecoration: 'none' }}
             >
               💼 Portfolio
-            </button>
-            <button
-              onClick={() => navigate('/risk-calculator')}
+            </Link>
+            <Link
+              to="/risk-calculator"
               className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors"
+              style={{ textDecoration: 'none' }}
             >
               🛡 Risk Calc
-            </button>
+            </Link>
             <button
               onClick={handleCloseAll}
               disabled={closingAll}
@@ -467,9 +516,12 @@ const Trade: React.FC = () => {
       {/* Risk bar */}
       <RiskBar />
 
-      {/* Symbol selector strip */}
+      {/* Keyboard shortcut hints */}
+      <KeyboardHints />
+
+      {/* Symbol selector strip — numbers 1-6 select via keyboard */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
-        {SYMBOLS.map((sym) => (
+        {SYMBOLS.map((sym, i) => (
           <SymbolCard
             key={sym}
             symbol={sym}
@@ -485,10 +537,16 @@ const Trade: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
         <OrderEntryForm
           symbol={selectedSymbol}
-          defaultSide={signalState?.direction === 'SELL' ? 'sell' : signalState?.direction === 'BUY' ? 'buy' : undefined}
+          defaultSide={
+            pendingSide ??
+            (signalState?.direction === 'SELL' ? 'sell' : signalState?.direction === 'BUY' ? 'buy' : undefined)
+          }
           defaultSl={signalState?.stop_loss ? String(signalState.stop_loss) : undefined}
           defaultTp={signalState?.take_profit ? String(signalState.take_profit) : undefined}
-          onOrderPlaced={() => qc.invalidateQueries({ queryKey: ['positions'] })}
+          onOrderPlaced={() => {
+            setPendingSide(null);
+            void qc.invalidateQueries({ queryKey: ['positions'] });
+          }}
         />
         <div className="flex flex-col gap-4">
           <PositionsTable symbol={selectedSymbol} />
