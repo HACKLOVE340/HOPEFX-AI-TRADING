@@ -52,9 +52,22 @@ const RateLimitingSection: React.FC = () => {
         superadminApi.rateLimitViolations(),
       ]);
       if (!mountedRef.current) return;
-      setRules(rRes.data.rules ?? rRes.data);
-      setStats(sRes.data);
-      setViolations(vRes.data.violations ?? vRes.data);
+      const rulesRaw = rRes.data.rules ?? rRes.data;
+      setRules(Array.isArray(rulesRaw) ? rulesRaw : []);
+
+      // Backend returns either {total_requests, blocked_requests} or
+      // {stats: [{endpoint, hits}, ...]}. Normalise to the expected shape.
+      const sd = sRes.data ?? {};
+      if (typeof sd.total_requests === 'number') {
+        setStats({ total_requests: sd.total_requests, blocked_requests: sd.blocked_requests ?? 0 });
+      } else {
+        const statsArr: { hits?: number }[] = Array.isArray(sd.stats) ? sd.stats : [];
+        const total = statsArr.reduce((acc, s) => acc + (s.hits ?? 0), 0);
+        setStats({ total_requests: total, blocked_requests: 0 });
+      }
+
+      const violRaw = vRes.data.violations ?? vRes.data;
+      setViolations(Array.isArray(violRaw) ? violRaw : []);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load rate limit data');

@@ -82,7 +82,8 @@ const AuditTrailSection: React.FC = () => {
       if (categoryFilter) params.category = categoryFilter;
       const res = await superadminApi.immutableAuditLog(params);
       if (!mountedRef.current) return;
-      setRecords(res.data.records ?? res.data.events ?? res.data);
+      const raw = res.data.records ?? res.data.events ?? res.data.entries ?? res.data;
+      setRecords(Array.isArray(raw) ? raw : []);
       setTotal(res.data.total ?? 0);
       setPage(p);
     } catch (e: unknown) {
@@ -114,7 +115,8 @@ const AuditTrailSection: React.FC = () => {
       if (sysSearch) params.search = sysSearch;
       const res = await superadminApi.auditLog(params);
       if (!mountedRef.current) return;
-      setSysEntries(res.data.entries ?? res.data ?? []);
+      const sysRaw = res.data.entries ?? res.data.events ?? res.data;
+      setSysEntries(Array.isArray(sysRaw) ? sysRaw : []);
       setSysTotal(res.data.total ?? 0);
       setSysPage(p);
     } catch {

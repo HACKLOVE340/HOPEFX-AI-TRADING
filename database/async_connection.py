@@ -166,15 +166,30 @@ class AsyncPoolMetrics:
 # ── Pool configuration ────────────────────────────────────────────────────────
 
 
+def _resolve_async_db_url() -> str:
+    """Return an async-compatible database URL.
+
+    Priority:
+    1. ASYNC_DATABASE_URL env var (explicit async DSN)
+    2. DATABASE_URL — auto-converted: sqlite:// → sqlite+aiosqlite://
+    3. Default PostgreSQL asyncpg DSN
+    """
+    url = os.environ.get("ASYNC_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    if url.startswith("sqlite:///") and "+aiosqlite" not in url:
+        url = url.replace("sqlite:///", "sqlite+aiosqlite:///", 1)
+    elif url.startswith("sqlite://") and "+aiosqlite" not in url:
+        url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    elif url.startswith("postgresql://") and "asyncpg" not in url:
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url or "postgresql+asyncpg://hopefx:hopefx@localhost:5432/hopefx"
+
+
 @dataclass
 class AsyncPoolConfig:
     """Configuration for the async connection pool."""
 
     database_url: str = field(
-        default_factory=lambda: os.environ.get(
-            "DATABASE_URL",
-            "postgresql+asyncpg://hopefx:hopefx@localhost:5432/hopefx",
-        )
+        default_factory=lambda: _resolve_async_db_url()
     )
     pool_size: int = field(
         default_factory=lambda: int(os.environ.get("DB_POOL_SIZE", "10"))
@@ -236,12 +251,19 @@ class AsyncConnectionPool:
         """Create the async engine and session factory."""
         pool_class = NullPool if self.config.use_null_pool else AsyncAdaptedQueuePool
 
+        _is_sqlite = self.config.database_url.startswith("sqlite")
+        # SQLite does not support connection pool parameters; use StaticPool or
+        # NullPool to avoid "pool_size/max_overflow not supported" errors.
+        if _is_sqlite:
+            from sqlalchemy.pool import StaticPool
+            pool_class = StaticPool
+
         engine_kwargs: dict[str, Any] = {
             "echo": self.config.echo,
-            "pool_pre_ping": self.config.pool_pre_ping,
+            "pool_pre_ping": not _is_sqlite,  # StaticPool has no pre-ping
             "poolclass": pool_class,
         }
-        if not self.config.use_null_pool:
+        if not self.config.use_null_pool and not _is_sqlite:
             engine_kwargs.update(
                 {
                     "pool_size": self.config.pool_size,
@@ -250,6 +272,9 @@ class AsyncConnectionPool:
                     "pool_recycle": self.config.pool_recycle,
                 }
             )
+        if _is_sqlite:
+            # aiosqlite requires connect_args for thread safety
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
 
         self._engine = create_async_engine(
             self.config.database_url,

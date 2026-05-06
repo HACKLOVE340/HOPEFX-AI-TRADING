@@ -85,10 +85,21 @@ const SecurityInfraSection: React.FC = () => {
         superadminApi.securityInfraLog(),
       ]);
       if (!mountedRef.current) return;
-      setHealer(hRes.data);
-      setAv(aRes.data);
-      setHsm(hsmRes.data);
-      setInfraLog(lRes.data.entries ?? lRes.data.events ?? []);
+      // Normalise self-healer response — backend may return a subset of fields.
+      const hd = hRes.data ?? {};
+      setHealer({
+        status:          hd.status          ?? 'unknown',
+        tracked_files:   hd.tracked_files   ?? hd.files_tracked   ?? 0,
+        last_scan:       hd.last_scan       ?? hd.last_run        ?? null,
+        patches_applied: hd.patches_applied ?? hd.heals_today     ?? 0,
+        quarantined:     Array.isArray(hd.quarantined) ? hd.quarantined : [],
+        violations:      Array.isArray(hd.violations)  ? hd.violations  :
+                         Array.isArray(hd.heal_log)    ? hd.heal_log.map((e: string) => ({ file: e, reason: 'healed', detected_at: '' })) : [],
+      });
+      setAv(aRes.data ?? null);
+      setHsm(hsmRes.data ?? null);
+      const logRaw = lRes.data.entries ?? lRes.data.events ?? lRes.data;
+      setInfraLog(Array.isArray(logRaw) ? logRaw : []);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
       setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load security infrastructure data');

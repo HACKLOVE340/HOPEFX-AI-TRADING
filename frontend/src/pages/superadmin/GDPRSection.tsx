@@ -55,8 +55,10 @@ const GDPRSection: React.FC = () => {
         superadminApi.retentionPolicies(),
       ]);
       if (!mountedRef.current) return;
-      setRequests(rRes.data.requests ?? rRes.data);
-      const p: RetentionPolicy[] = pRes.data.policies ?? pRes.data;
+      const reqRaw = rRes.data.requests ?? rRes.data;
+      setRequests(Array.isArray(reqRaw) ? reqRaw : []);
+      const polRaw = pRes.data.policies ?? pRes.data;
+      const p: RetentionPolicy[] = Array.isArray(polRaw) ? polRaw : [];
       setPolicies(p);
       // Initialise edit map with current values
       const edits: Record<string, number> = {};
