@@ -13,10 +13,13 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+import { Spinner } from '../components/Spinner';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -289,29 +292,47 @@ const TeamsPage: React.FC = () => {
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: 1200, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#e2e8f0' }}>Teams</h1>
-          <p style={{ margin: '4px 0 0', fontSize: 13, color: '#64748b' }}>
-            Collaborative trading with shared strategies and P&L — enterprise tier
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button onClick={() => navigate('/leaderboard')}
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            🏆 Leaderboard
-          </button>
-          <button onClick={() => navigate('/copy-trading')}
-            style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, color: '#34d399', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            🔁 Copy Trading
-          </button>
-          <button onClick={() => setShowCreate(s => !s)}
-            style={{ padding: '9px 18px', background: '#06b6d4', color: '#fff', border: 'none',
-              borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            + New Team
-          </button>
-        </div>
+      <PageHeader
+        title="Teams"
+        subtitle="Collaborative trading with shared strategies and P&L — enterprise tier"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Teams' },
+        ]}
+        badge={<span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'rgba(6,182,212,0.15)', color: '#06b6d4', border: '1px solid rgba(6,182,212,0.3)' }}>ENTERPRISE</span>}
+        actions={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => navigate('/leaderboard')}
+              style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8, color: '#f59e0b', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              🏆 Leaderboard
+            </button>
+            <button onClick={() => navigate('/copy-trading')}
+              style={{ padding: '7px 14px', background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.35)', borderRadius: 8, color: '#34d399', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              🔁 Copy Trading
+            </button>
+            <button onClick={() => setShowCreate(s => !s)}
+              style={{ padding: '8px 18px', background: '#06b6d4', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              + New Team
+            </button>
+          </div>
+        }
+      />
+
+      {/* Cross-links */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', fontSize: 13 }}>
+        {[
+          { to: '/sub-accounts', label: '🗂 Sub-Accounts' },
+          { to: '/performance', label: '📊 Performance' },
+          { to: '/signals', label: '📡 Signals' },
+          { to: '/affiliate', label: '💰 Affiliate' },
+          { to: '/chat', label: '💬 Team Chat' },
+        ].map(({ to, label }) => (
+          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
+            {label}
+          </Link>
+        ))}
       </div>
 
       {/* Create form */}
@@ -352,14 +373,18 @@ const TeamsPage: React.FC = () => {
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '280px 1fr' : '1fr', gap: 20 }}>
         {/* Team list */}
         <div>
-          {isLoading && <div style={{ color: '#64748b', fontSize: 13, padding: 20, textAlign: 'center' }}>Loading…</div>}
-          {!isLoading && teams.length === 0 && (
-            <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12,
-              padding: 40, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>👥</div>
-              <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>No teams yet</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Create a team to collaborate with other traders</div>
+          {isLoading && (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <Spinner size="md" />
             </div>
+          )}
+          {!isLoading && teams.length === 0 && (
+            <EmptyState
+              icon="👥"
+              title="No teams yet"
+              description="Create a team to collaborate with other traders on shared strategies and P&L."
+              action={{ label: '+ New Team', onClick: () => setShowCreate(true) }}
+            />
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {teams.map(t => (
