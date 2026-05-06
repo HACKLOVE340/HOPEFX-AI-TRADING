@@ -1,12 +1,16 @@
 // settings/ApiKeysSection.tsx — Create, list, and revoke API keys
 import React, { useState, useEffect } from 'react';
 import { api } from '../../hooks/useApi';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { useToast } from '../../components/Toast';
 import type { ApiKey } from './types';
 import { Card, SectionHeader, Field, Input, Button, StatusBadge } from './ui';
 
 const SCOPE_OPTIONS = ['read', 'trade', 'admin'];
 
 const ApiKeysSection: React.FC = () => {
+  const confirm = useConfirm();
+  const toast   = useToast();
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -53,13 +57,21 @@ const ApiKeysSection: React.FC = () => {
   };
 
   const handleRevoke = async (keyId: string) => {
-    if (!window.confirm('Revoke this API key? This cannot be undone.')) return;
+    const ok = await confirm({
+      title: 'Revoke API key?',
+      description: 'This key will stop working immediately. Any integrations using it will break.',
+      confirmLabel: 'Revoke key',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setRevoking(keyId);
     try {
       await api.delete(`/settings/api-keys/${keyId}`);
       setKeys((prev) => prev.filter((k) => k.key_id !== keyId));
       if (revealedKey?.key_id === keyId) setRevealedKey(null);
+      toast.success('API key revoked.');
     } catch (err: unknown) {
+      toast.error('Failed to revoke key.');
       console.warn('[Settings/ApiKeys] revoke:', err);
     } finally {
       setRevoking(null);
