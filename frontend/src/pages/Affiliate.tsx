@@ -3,9 +3,12 @@
  * Tabs: Overview · Referrals · Commissions · Leaderboard
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorBanner } from '../components/ErrorBanner';
 
 interface AffiliateMetrics { total_referrals: number; converted_referrals: number; total_revenue: number; total_commissions: number; pending_commissions: number; conversion_rate: number; }
 interface AffiliateAccount { affiliate_id: string; code: string; level: 'bronze'|'silver'|'gold'|'platinum'; commission_rate: number; status: string; }
@@ -101,72 +104,153 @@ const Affiliate:React.FC=()=>{
     navigator.clipboard.writeText(`${window.location.origin}/?ref=${account.code}`).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
   };
 
-  if(!userId)return(<div style={st.page}><p style={{color:'#94a3b8'}}>Please log in to view your affiliate dashboard.</p></div>);
-  if(loading)return(<div style={st.page}><p style={{color:'#94a3b8'}}>Loading affiliate data…</p></div>);
-  if(apiError)return(<div style={st.page}><h1 style={st.heading}>Affiliate Program</h1><div style={st.errorBox}><strong>Error:</strong> {apiError}<button onClick={loadData} style={st.retryBtn}>Retry</button></div></div>);
+  if(!userId)return(
+    <div style={{maxWidth:900,margin:'0 auto',padding:'32px 16px'}}>
+      <PageHeader title="Affiliate Program" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}/>
+      <EmptyState icon="🔒" title="Sign in required" description="Please log in to view your affiliate dashboard."/>
+    </div>
+  );
+  if(loading)return(
+    <div style={{maxWidth:900,margin:'0 auto',padding:'32px 16px'}}>
+      <PageHeader title="Affiliate Program" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}/>
+      <div style={{color:'#64748b',fontSize:14,padding:'40px 0',textAlign:'center'}}>Loading affiliate data…</div>
+    </div>
+  );
+  if(apiError)return(
+    <div style={{maxWidth:900,margin:'0 auto',padding:'32px 16px'}}>
+      <PageHeader title="Affiliate Program" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}/>
+      <ErrorBanner message={apiError} onDismiss={()=>loadData()}/>
+    </div>
+  );
 
   if(!account)return(
-    <div style={st.page}>
-      <h1 style={st.heading}>Affiliate Program</h1>
-      <div style={st.enrollCard}>
-        <h2 style={{fontSize:22,marginBottom:12,color:'#f8fafc'}}>Earn by referring traders</h2>
-        <p style={{color:'#94a3b8',marginBottom:24,lineHeight:1.6}}>Share your referral link and earn recurring commissions. Commissions range from <strong style={{color:'#f8fafc'}}>10% (Bronze)</strong> to <strong style={{color:'#a78bfa'}}>25% (Platinum)</strong>.</p>
-        <div style={st.tierGrid}>{Object.entries(LEVEL_RATES).map(([level,rate])=>(<div key={level} style={{...st.tierCard,border:`1px solid ${LEVEL_COLORS[level]}`}}><div style={{color:LEVEL_COLORS[level],fontWeight:700,textTransform:'capitalize',marginBottom:4}}>{level}</div><div style={{fontSize:24,fontWeight:800,color:'#f8fafc'}}>{rate}</div><div style={{fontSize:12,color:'#64748b'}}>commission</div></div>))}</div>
-        <button onClick={handleSignup} disabled={signupLoading} style={{...st.primaryBtn,marginTop:24,opacity:signupLoading?0.6:1}}>{signupLoading?'Joining…':'Join the affiliate program'}</button>
+    <div style={{maxWidth:900,margin:'0 auto',padding:'32px 16px',color:'#f1f5f9'}}>
+      <PageHeader
+        title="Affiliate Program"
+        subtitle="Earn recurring commissions by referring traders to HOPEFX"
+        breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}
+        actions={<button onClick={()=>navigate('/leaderboard')} style={{padding:'7px 14px',background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:8,color:'#f59e0b',fontSize:12,fontWeight:600,cursor:'pointer'}}>🏆 Leaderboard</button>}
+      />
+      <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'32px 28px',maxWidth:600}}>
+        <h2 style={{fontSize:20,marginBottom:12,color:'#f8fafc',fontWeight:700}}>Earn by referring traders</h2>
+        <p style={{color:'#94a3b8',marginBottom:24,lineHeight:1.6,fontSize:14}}>Share your referral link and earn recurring commissions. Commissions range from <strong style={{color:'#f8fafc'}}>10% (Bronze)</strong> to <strong style={{color:'#a78bfa'}}>25% (Platinum)</strong>.</p>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24}}>
+          {Object.entries(LEVEL_RATES).map(([level,rate])=>(
+            <div key={level} style={{background:'#0f172a',border:`1px solid ${LEVEL_COLORS[level]}`,borderRadius:8,padding:'14px 10px',textAlign:'center'}}>
+              <div style={{color:LEVEL_COLORS[level],fontWeight:700,textTransform:'capitalize',marginBottom:4,fontSize:13}}>{level}</div>
+              <div style={{fontSize:22,fontWeight:800,color:'#f8fafc'}}>{rate}</div>
+              <div style={{fontSize:11,color:'#64748b'}}>commission</div>
+            </div>
+          ))}
+        </div>
+        <button onClick={handleSignup} disabled={signupLoading} style={{padding:'11px 28px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:600,cursor:'pointer',opacity:signupLoading?0.6:1}}>
+          {signupLoading?'Joining…':'Join the affiliate program'}
+        </button>
       </div>
     </div>
   );
 
   const referralLink=`${window.location.origin}/?ref=${account.code}`;
   return(
-    <div style={st.page}>
-      <div style={st.pageHeader}>
-        <div>
-          <h1 style={st.heading}>Affiliate Program</h1>
-          <div style={{display:'flex',alignItems:'center',gap:10}}>
-            <span style={{...st.levelBadge,background:LEVEL_COLORS[account.level]+'22',color:LEVEL_COLORS[account.level],border:`1px solid ${LEVEL_COLORS[account.level]}`}}>{account.level.toUpperCase()}</span>
-            <span style={{color:'#64748b',fontSize:14}}>{(account.commission_rate*100).toFixed(0)}% commission · {statusBadge(account.status)}</span>
+    <div style={{maxWidth:900,margin:'0 auto',padding:'32px 16px',color:'#f1f5f9'}}>
+      <PageHeader
+        title="Affiliate Program"
+        subtitle="Earn recurring commissions by referring traders"
+        breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}
+        badge={
+          <span style={{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:20,letterSpacing:1,background:LEVEL_COLORS[account.level]+'22',color:LEVEL_COLORS[account.level],border:`1px solid ${LEVEL_COLORS[account.level]}`}}>
+            {account.level.toUpperCase()}
+          </span>
+        }
+        actions={
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>navigate('/copy-trading')} style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:12,fontWeight:500}}>🔁 Copy Trading</button>
+            <button onClick={()=>navigate('/leaderboard')} style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:12,fontWeight:500}}>🏆 Leaderboard</button>
+            <button onClick={loadData} style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:12}}>↻ Refresh</button>
           </div>
+        }
+      />
+
+      {/* Cross-links */}
+      <div style={{display:'flex',gap:16,marginBottom:24,flexWrap:'wrap',fontSize:13}}>
+        {[
+          {to:'/marketplace',label:'🛒 Marketplace'},
+          {to:'/copy-trading',label:'🔁 Copy Trading'},
+          {to:'/leaderboard',label:'🏆 Leaderboard'},
+          {to:'/wallet',label:'💳 Wallet'},
+          {to:'/performance',label:'📊 Performance'},
+        ].map(({to,label})=>(
+          <Link key={to} to={to} style={{color:'#64748b',textDecoration:'none'}}
+            onMouseEnter={e=>(e.currentTarget.style.color='#94a3b8')}
+            onMouseLeave={e=>(e.currentTarget.style.color='#64748b')}>
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      {/* Referral link card */}
+      <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 20px',marginBottom:24}}>
+        <div style={{fontSize:11,color:'#64748b',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5}}>Your referral link</div>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <code style={{flex:1,background:'#0f172a',border:'1px solid #475569',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#93c5fd',wordBreak:'break-all'}}>{referralLink}</code>
+          <button onClick={copyLink} style={{padding:'8px 16px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:6,fontSize:13,cursor:'pointer',whiteSpace:'nowrap',fontWeight:600}}>
+            {copied?'✅ Copied':'Copy link'}
+          </button>
         </div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          <button onClick={()=>navigate('/copy-trading')} style={st.refreshBtn}>🔁 Copy Trading</button>
-          <button onClick={()=>navigate('/leaderboard')} style={st.refreshBtn}>🏆 Leaderboard</button>
-          <button onClick={loadData} style={st.refreshBtn}>↻ Refresh</button>
+        <div style={{fontSize:12,color:'#64748b',marginTop:8}}>
+          Code: <strong style={{color:'#94a3b8'}}>{account.code}</strong>
+          <span style={{marginLeft:16,color:'#64748b'}}>{(account.commission_rate*100).toFixed(0)}% commission rate</span>
+          <span style={{marginLeft:8}}>{statusBadge(account.status)}</span>
         </div>
       </div>
 
-      <div style={st.linkCard}>
-        <div style={st.linkLabel}>Your referral link</div>
-        <div style={st.linkRow}><code style={st.linkCode}>{referralLink}</code><button onClick={copyLink} style={st.copyBtn}>{copied?'✅ Copied':'Copy link'}</button></div>
-        <div style={{fontSize:12,color:'#64748b',marginTop:8}}>Code: <strong style={{color:'#94a3b8'}}>{account.code}</strong></div>
-      </div>
-
-      <div style={st.tabs}>
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid #1e293b'}}>
         {(['overview','referrals','commissions','leaderboard'] as Tab[]).map(tab=>(
-          <button key={tab} onClick={()=>setActiveTab(tab)} style={{...st.tab,...(activeTab===tab?st.tabActive:{})}}>{tab.charAt(0).toUpperCase()+tab.slice(1)}</button>
+          <button key={tab} onClick={()=>setActiveTab(tab)} style={{padding:'10px 20px',background:'transparent',border:'none',color:activeTab===tab?'#3b82f6':'#64748b',fontSize:14,cursor:'pointer',borderBottom:`2px solid ${activeTab===tab?'#3b82f6':'transparent'}`,fontWeight:activeTab===tab?600:400,transition:'color 0.15s',textTransform:'capitalize'}}>
+            {tab.charAt(0).toUpperCase()+tab.slice(1)}
+          </button>
         ))}
       </div>
 
       {activeTab==='overview'&&metrics&&(
         <>
-          <div style={st.metricsGrid}>
-            <MetricCard label="Total referrals" value={String(metrics.total_referrals)}/>
-            <MetricCard label="Converted" value={String(metrics.converted_referrals)} sub={`${fmt(metrics.conversion_rate,1)}% rate`}/>
-            <MetricCard label="Total earned" value={fmtUSD(metrics.total_commissions)}/>
-            <MetricCard label="Pending payout" value={fmtUSD(metrics.pending_commissions)} sub="Next payout: 1st of month"/>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
+            <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 18px'}}>
+              <div style={{fontSize:24,fontWeight:700,color:'#f8fafc',marginBottom:4}}>{metrics.total_referrals}</div>
+              <div style={{fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5}}>Total referrals</div>
+            </div>
+            <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 18px'}}>
+              <div style={{fontSize:24,fontWeight:700,color:'#f8fafc',marginBottom:4}}>{metrics.converted_referrals}</div>
+              <div style={{fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5}}>Converted</div>
+              <div style={{fontSize:12,color:'#4ade80',marginTop:4}}>{fmt(metrics.conversion_rate,1)}% rate</div>
+            </div>
+            <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 18px'}}>
+              <div style={{fontSize:24,fontWeight:700,color:'#f8fafc',marginBottom:4}}>{fmtUSD(metrics.total_commissions)}</div>
+              <div style={{fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5}}>Total earned</div>
+            </div>
+            <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 18px'}}>
+              <div style={{fontSize:24,fontWeight:700,color:'#f8fafc',marginBottom:4}}>{fmtUSD(metrics.pending_commissions)}</div>
+              <div style={{fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5}}>Pending payout</div>
+              <div style={{fontSize:12,color:'#94a3b8',marginTop:4}}>Next: 1st of month</div>
+            </div>
           </div>
-          <div style={st.card}>
-            <h3 style={st.cardTitle}>Request Commission Withdrawal</h3>
+          <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16}}>
+            <h3 style={{fontSize:15,fontWeight:600,color:'#e2e8f0',marginBottom:4,marginTop:0}}>Request Commission Withdrawal</h3>
             <p style={{color:'#64748b',fontSize:13,marginBottom:12}}>Minimum withdrawal: <strong style={{color:'#94a3b8'}}>$50.00</strong></p>
             <div style={{display:'flex',gap:10,alignItems:'center'}}>
-              <input type="number" min="0" step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)" style={st.input}/>
-              <button onClick={handleWithdraw} disabled={withdrawing||!withdrawAmt} style={{...st.primaryBtn,opacity:withdrawing||!withdrawAmt?0.6:1}}>{withdrawing?'Processing…':'Withdraw'}</button>
+              <input type="number" min="0" step="0.01" value={withdrawAmt} onChange={e=>setWithdrawAmt(e.target.value)} placeholder="Amount (USD)"
+                style={{background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,width:180,outline:'none'}}/>
+              <button onClick={handleWithdraw} disabled={withdrawing||!withdrawAmt}
+                style={{padding:'10px 24px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:600,cursor:'pointer',opacity:withdrawing||!withdrawAmt?0.6:1}}>
+                {withdrawing?'Processing…':'Withdraw'}
+              </button>
             </div>
             {withdrawMsg&&<div style={{marginTop:10,fontSize:13,color:withdrawMsg.includes('success')?'#4ade80':'#f87171'}}>{withdrawMsg}</div>}
           </div>
-          <div style={st.card}>
-            <h3 style={st.cardTitle}>How commissions work</h3>
-            <ul style={st.howList}>
+          <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16}}>
+            <h3 style={{fontSize:15,fontWeight:600,color:'#e2e8f0',marginBottom:12,marginTop:0}}>How commissions work</h3>
+            <ul style={{color:'#94a3b8',fontSize:14,lineHeight:2,paddingLeft:20,margin:0}}>
               <li>Share your referral link — anyone who signs up through it is tracked for 30 days.</li>
               <li>When a referral subscribes to any paid plan, you earn a commission on their monthly fee.</li>
               <li>Commissions are paid out on the 1st of each month via your registered payment method.</li>
@@ -177,37 +261,84 @@ const Affiliate:React.FC=()=>{
       )}
 
       {activeTab==='referrals'&&(
-        <div style={st.card}>
-          <h3 style={st.cardTitle}>Referral history</h3>
-          {subErrors.referrals&&<div style={st.subError}>{subErrors.referrals}</div>}
-          {referrals.length===0&&!subErrors.referrals?(<p style={{color:'#64748b',fontSize:14}}>No referrals yet. Share your link to get started.</p>):(
-            <table style={st.table}><thead><tr><th style={st.th}>User ID</th><th style={st.th}>Status</th><th style={st.th}>Referred</th><th style={st.th}>Converted</th><th style={st.th}>Commission</th></tr></thead>
-            <tbody>{referrals.map(r=>(<tr key={r.referral_id} style={st.tr}><td style={{...st.td,fontFamily:'monospace',fontSize:12}}>{r.referred_user_id}</td><td style={st.td}>{statusBadge(r.status)}</td><td style={st.td}>{new Date(r.created_at).toLocaleDateString()}</td><td style={st.td}>{r.converted_at?new Date(r.converted_at).toLocaleDateString():'—'}</td><td style={st.td}>{r.commission_amount!=null?fmtUSD(r.commission_amount):'—'}</td></tr>))}</tbody></table>
+        <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16}}>
+          <h3 style={{fontSize:15,fontWeight:600,color:'#e2e8f0',marginBottom:16,marginTop:0}}>Referral history</h3>
+          {subErrors.referrals&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#f87171',marginBottom:12}}>{subErrors.referrals}</div>}
+          {referrals.length===0&&!subErrors.referrals ? (
+            <EmptyState icon="🔗" title="No referrals yet" description="Share your referral link to start earning commissions."/>
+          ) : (
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead><tr>
+                {['User ID','Status','Referred','Converted','Commission'].map(h=>(
+                  <th key={h} style={{textAlign:'left',fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>{referrals.map(r=>(
+                <tr key={r.referral_id} style={{borderBottom:'1px solid #1e293b'}}>
+                  <td style={{padding:'10px 12px',fontSize:12,color:'#cbd5e1',fontFamily:'monospace'}}>{r.referred_user_id}</td>
+                  <td style={{padding:'10px 12px'}}>{statusBadge(r.status)}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{new Date(r.created_at).toLocaleDateString()}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{r.converted_at?new Date(r.converted_at).toLocaleDateString():'—'}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#4ade80',fontWeight:600}}>{r.commission_amount!=null?fmtUSD(r.commission_amount):'—'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
           )}
         </div>
       )}
 
       {activeTab==='commissions'&&(
-        <div style={st.card}>
-          <h3 style={st.cardTitle}>Commission history ({commissions.length})</h3>
-          {subErrors.commissions&&<div style={st.subError}>{subErrors.commissions}</div>}
-          {commissions.length===0&&!subErrors.commissions?(<p style={{color:'#64748b',fontSize:14}}>No commissions yet.</p>):(
-            <table style={st.table}><thead><tr><th style={st.th}>Period</th><th style={st.th}>Amount</th><th style={st.th}>Status</th><th style={st.th}>Paid At</th></tr></thead>
-            <tbody>{commissions.map(c=>(<tr key={c.commission_id} style={st.tr}><td style={st.td}>{c.period}</td><td style={{...st.td,color:'#4ade80',fontWeight:600}}>{fmtUSD(c.amount)}</td><td style={st.td}>{statusBadge(c.status)}</td><td style={st.td}>{c.paid_at?new Date(c.paid_at).toLocaleDateString():'—'}</td></tr>))}</tbody></table>
+        <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16}}>
+          <h3 style={{fontSize:15,fontWeight:600,color:'#e2e8f0',marginBottom:16,marginTop:0}}>Commission history ({commissions.length})</h3>
+          {subErrors.commissions&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#f87171',marginBottom:12}}>{subErrors.commissions}</div>}
+          {commissions.length===0&&!subErrors.commissions ? (
+            <EmptyState icon="💰" title="No commissions yet" description="Commissions appear here once your referrals subscribe to a paid plan."/>
+          ) : (
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead><tr>
+                {['Period','Amount','Status','Paid At'].map(h=>(
+                  <th key={h} style={{textAlign:'left',fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>{commissions.map(c=>(
+                <tr key={c.commission_id} style={{borderBottom:'1px solid #1e293b'}}>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{c.period}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#4ade80',fontWeight:600}}>{fmtUSD(c.amount)}</td>
+                  <td style={{padding:'10px 12px'}}>{statusBadge(c.status)}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{c.paid_at?new Date(c.paid_at).toLocaleDateString():'—'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
           )}
         </div>
       )}
 
       {activeTab==='leaderboard'&&(
-        <div style={st.card}>
+        <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-            <h3 style={{...st.cardTitle,marginBottom:0}}>Top affiliates</h3>
-            <button onClick={()=>navigate('/leaderboard')} style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'#60a5fa',fontSize:12,fontWeight:600,padding:'4px 12px',cursor:'pointer'}}>View full leaderboard →</button>
+            <h3 style={{fontSize:15,fontWeight:600,color:'#e2e8f0',margin:0}}>Top affiliates</h3>
+            <button onClick={()=>navigate('/leaderboard')} style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'#60a5fa',fontSize:12,fontWeight:600,padding:'5px 12px',cursor:'pointer'}}>
+              View full leaderboard →
+            </button>
           </div>
-          {subErrors.leaderboard&&<div style={st.subError}>{subErrors.leaderboard}</div>}
+          {subErrors.leaderboard&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#f87171',marginBottom:12}}>{subErrors.leaderboard}</div>}
           {!subErrors.leaderboard&&(
-            <table style={st.table}><thead><tr><th style={st.th}>#</th><th style={st.th}>Code</th><th style={st.th}>Level</th><th style={st.th}>Conversions</th><th style={st.th}>Earned</th></tr></thead>
-            <tbody>{leaderboard.map(e=>(<tr key={e.affiliate_id} style={{...st.tr,background:e.affiliate_id===account.affiliate_id?'#1e3a5f':undefined}}><td style={st.td}>{e.rank===1?'🥇':e.rank===2?'🥈':e.rank===3?'🥉':e.rank}</td><td style={{...st.td,fontFamily:'monospace',color:'#e2e8f0'}}>{e.code}</td><td style={{...st.td,color:LEVEL_COLORS[e.level]??'#94a3b8',textTransform:'capitalize'}}>{e.level}</td><td style={st.td}>{e.converted_referrals}</td><td style={{...st.td,color:'#4ade80'}}>{fmtUSD(e.total_commissions)}</td></tr>))}</tbody></table>
+            <table style={{width:'100%',borderCollapse:'collapse'}}>
+              <thead><tr>
+                {['#','Code','Level','Conversions','Earned'].map(h=>(
+                  <th key={h} style={{textAlign:'left',fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>{leaderboard.map(e=>(
+                <tr key={e.affiliate_id} style={{borderBottom:'1px solid #1e293b',background:e.affiliate_id===account.affiliate_id?'rgba(30,58,95,0.5)':undefined}}>
+                  <td style={{padding:'10px 12px',fontSize:14,color:'#cbd5e1'}}>{e.rank===1?'🥇':e.rank===2?'🥈':e.rank===3?'🥉':e.rank}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#e2e8f0',fontFamily:'monospace'}}>{e.code}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:LEVEL_COLORS[e.level]??'#94a3b8',textTransform:'capitalize',fontWeight:600}}>{e.level}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{e.converted_referrals}</td>
+                  <td style={{padding:'10px 12px',fontSize:13,color:'#4ade80',fontWeight:600}}>{fmtUSD(e.total_commissions)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
           )}
         </div>
       )}
@@ -215,41 +346,6 @@ const Affiliate:React.FC=()=>{
   );
 };
 
-const st:Record<string,React.CSSProperties>={
-  page:{maxWidth:900,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'#f1f5f9',background:'#0f172a',minHeight:'100vh'},
-  pageHeader:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:28},
-  heading:{fontSize:28,fontWeight:700,marginBottom:6,color:'#f8fafc'},
-  levelBadge:{fontSize:11,fontWeight:700,padding:'2px 10px',borderRadius:20,letterSpacing:1},
-  refreshBtn:{background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:13,padding:'6px 12px'},
-  enrollCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'32px 28px',maxWidth:600},
-  tierGrid:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12},
-  tierCard:{background:'#0f172a',borderRadius:8,padding:'14px 10px',textAlign:'center'},
-  primaryBtn:{padding:'10px 24px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:600,cursor:'pointer'},
-  linkCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 20px',marginBottom:24},
-  linkLabel:{fontSize:12,color:'#64748b',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5},
-  linkRow:{display:'flex',alignItems:'center',gap:12},
-  linkCode:{flex:1,background:'#0f172a',border:'1px solid #475569',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#93c5fd',wordBreak:'break-all'},
-  copyBtn:{padding:'8px 16px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:6,fontSize:13,cursor:'pointer',whiteSpace:'nowrap'},
-  tabs:{display:'flex',gap:4,marginBottom:20,borderBottom:'1px solid #1e293b'},
-  tab:{padding:'10px 20px',background:'transparent',border:'none',color:'#64748b',fontSize:14,cursor:'pointer',borderBottom:'2px solid transparent',fontWeight:500},
-  tabActive:{color:'#3b82f6',borderBottom:'2px solid #3b82f6'},
-  metricsGrid:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20},
-  metricCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'16px 18px'},
-  metricValue:{fontSize:26,fontWeight:700,color:'#f8fafc',marginBottom:4},
-  metricLabel:{fontSize:12,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5},
-  metricSub:{fontSize:12,color:'#4ade80',marginTop:4},
-  card:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16},
-  cardTitle:{fontSize:16,fontWeight:600,color:'#e2e8f0',marginBottom:16,marginTop:0},
-  input:{background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,width:180,outline:'none'},
-  subError:{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#f87171',marginBottom:12},
-  errorBox:{background:'#450a0a',border:'1px solid #dc2626',borderRadius:10,padding:'20px 24px',color:'#fca5a5'},
-  retryBtn:{marginLeft:16,background:'transparent',border:'1px solid #dc2626',color:'#fca5a5',borderRadius:6,padding:'4px 12px',cursor:'pointer'},
-  howList:{color:'#94a3b8',fontSize:14,lineHeight:2,paddingLeft:20,margin:0},
-  table:{width:'100%',borderCollapse:'collapse'},
-  th:{textAlign:'left',fontSize:12,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'},
-  tr:{borderBottom:'1px solid #1e293b'},
-  td:{padding:'10px 12px',fontSize:14,color:'#cbd5e1'},
-  badge:{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:20,textTransform:'capitalize'},
-};
+
 
 export default Affiliate;
