@@ -6,6 +6,10 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+import { ErrorBanner } from '../components/ErrorBanner';
+import { Spinner } from '../components/Spinner';
 
 function extractErr(err: unknown, fb: string): string {
   const d = (err as {response?:{data?:{detail?:string}}})?.response?.data?.detail;
@@ -135,8 +139,18 @@ const Profile: React.FC = () => {
     finally { setFollowLoading(false); }
   };
 
-  if (loading) return <div style={s.page}><p style={{color:'#94a3b8'}}>Loading profile…</p></div>;
-  if (error)   return <div style={s.page}><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
+  if (loading) return (
+    <div style={s.page}>
+      <PageHeader title="Profile" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Profile'}]}/>
+      <div style={{display:'flex',justifyContent:'center',padding:'60px 0'}}><Spinner size="lg"/></div>
+    </div>
+  );
+  if (error) return (
+    <div style={s.page}>
+      <PageHeader title="Profile" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Profile'}]}/>
+      <ErrorBanner message={error} onDismiss={loadProfile}/>
+    </div>
+  );
   if (!profile) return null;
 
   const st = profile.stats ?? { total_trades: 0, win_rate: 0, avg_pnl: 0, sharpe_ratio: 0, total_return_pct: 0 };
@@ -145,6 +159,45 @@ const Profile: React.FC = () => {
 
   return (
     <div style={s.page}>
+      <PageHeader
+        title={isOwn ? 'My Profile' : `${profile.display_name || profile.username}'s Profile`}
+        subtitle={isOwn ? 'Manage your public trading profile' : `@${profile.username}`}
+        breadcrumbs={[
+          {label:'Dashboard',href:'/dashboard'},
+          ...(isOwn ? [{label:'Profile'}] : [{label:'Traders',href:'/leaderboard'},{label:profile.username}]),
+        ]}
+        actions={
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>navigate('/trade')}
+              style={{padding:'7px 12px',background:'rgba(59,130,246,0.12)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:7,color:'#60a5fa',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+              ⚡ Trade
+            </button>
+            <button onClick={()=>navigate('/leaderboard')}
+              style={{padding:'7px 12px',background:'rgba(245,158,11,0.12)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:7,color:'#f59e0b',fontSize:12,fontWeight:700,cursor:'pointer'}}>
+              🏆 Leaderboard
+            </button>
+          </div>
+        }
+      />
+
+      {/* Cross-links */}
+      <div style={{display:'flex',gap:16,marginBottom:24,flexWrap:'wrap',fontSize:13}}>
+        {[
+          {to:'/performance',label:'📊 Performance'},
+          {to:'/journal',label:'📓 Journal'},
+          {to:'/portfolio',label:'💼 Portfolio'},
+          {to:'/signals',label:'📡 Signals'},
+          {to:'/settings',label:'⚙️ Settings'},
+          {to:'/kyc',label:'🪪 KYC'},
+        ].map(({to,label})=>(
+          <Link key={to} to={to} style={{color:'#64748b',textDecoration:'none'}}
+            onMouseEnter={e=>(e.currentTarget.style.color='#94a3b8')}
+            onMouseLeave={e=>(e.currentTarget.style.color='#64748b')}>
+            {label}
+          </Link>
+        ))}
+      </div>
+
       {/* Header */}
       <div style={s.header}>
         <div style={s.avatarWrap}>
@@ -236,32 +289,61 @@ const Profile: React.FC = () => {
       </div>
 
       {/* Strategies */}
-      {strategies.length > 0 && (
-        <div style={s.card}>
-          <h3 style={s.cardTitle}>Strategies ({strategies.length})</h3>
+      {/* Strategies */}
+      <div style={s.card}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h3 style={{...s.cardTitle,marginBottom:0}}>Strategies ({strategies.length})</h3>
+          <Link to="/marketplace" style={{fontSize:12,color:'#60a5fa',textDecoration:'none',padding:'4px 10px',border:'1px solid rgba(59,130,246,0.3)',borderRadius:6,background:'rgba(59,130,246,0.08)'}}>
+            Browse Marketplace →
+          </Link>
+        </div>
+        {strategies.length === 0 ? (
+          <EmptyState
+            icon="📦"
+            title="No strategies yet"
+            description={isOwn ? 'Build and publish your first AI trading strategy.' : 'This trader has no published strategies.'}
+            action={isOwn ? {label:'Build a strategy',onClick:()=>navigate('/ai-strategy')} : undefined}
+          />
+        ) : (
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {strategies.map(str=>(
-              <div key={str.strategy_id} style={s.stratRow}>
+              <div key={str.strategy_id} style={{...s.stratRow,cursor:'pointer'}}
+                onClick={()=>navigate('/marketplace')}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
-                <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers} subscribers</span>
+                <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers.toLocaleString()} subscribers</span>
                 <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Math.round(str.rating ?? 0))} {(str.rating ?? 0).toFixed(1)}</span>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Recent signals */}
-      {recentSignals.length > 0 && (
-        <div style={s.card}>
-          <h3 style={s.cardTitle}>Recent Signals</h3>
+      <div style={s.card}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <h3 style={{...s.cardTitle,marginBottom:0}}>Recent Signals</h3>
+          <Link to="/signals" style={{fontSize:12,color:'#a78bfa',textDecoration:'none',padding:'4px 10px',border:'1px solid rgba(167,139,250,0.3)',borderRadius:6,background:'rgba(167,139,250,0.08)'}}>
+            View all signals →
+          </Link>
+        </div>
+        {recentSignals.length === 0 ? (
+          <EmptyState
+            icon="📡"
+            title="No signals yet"
+            description={isOwn ? 'Your recent AI signals will appear here.' : 'This trader has no recent signals.'}
+          />
+        ) : (
           <table style={s.table}>
-            <thead><tr><th style={s.th}>Symbol</th><th style={s.th}>Direction</th><th style={s.th}>Confidence</th><th style={s.th}>P&L</th><th style={s.th}>Date</th></tr></thead>
+            <thead><tr>
+              {['Symbol','Direction','Confidence','P&L','Date'].map(h=>(
+                <th key={h} style={s.th}>{h}</th>
+              ))}
+            </tr></thead>
             <tbody>
               {recentSignals.map(sig=>(
                 <tr key={sig.signal_id} style={s.tr}>
-                  <td style={s.td}>{sig.symbol}</td>
-                  <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:600}}>{sig.direction}</span></td>
+                  <td style={{...s.td,fontWeight:600,color:'#e2e8f0'}}>{sig.symbol}</td>
+                  <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:700,fontSize:12,padding:'2px 8px',borderRadius:4,background:sig.direction==='BUY'?'rgba(74,222,128,0.1)':'rgba(248,113,113,0.1)'}}>{sig.direction}</span></td>
                   <td style={s.td}>{((sig.confidence ?? 0)*100).toFixed(0)}%</td>
                   <td style={{...s.td,color:(sig.pnl??0)>=0?'#4ade80':'#f87171',fontWeight:600}}>{(sig.pnl??0)>=0?'+':''}{(sig.pnl??0).toFixed(2)}%</td>
                   <td style={s.td}>{new Date(sig.created_at).toLocaleDateString()}</td>
@@ -269,8 +351,8 @@ const Profile: React.FC = () => {
               ))}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
