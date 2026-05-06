@@ -3,13 +3,14 @@
  * Tabs: Browse · My Listings
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
+import { Sparkline } from '../components/ui/Sparkline';
 
 interface Strategy {
   strategy_id: string; name: string; description: string; creator_id: string;
@@ -62,6 +63,9 @@ const PerfBadge: React.FC<{label:string;value:string;positive?:boolean}> = ({lab
 
 const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = ({strategy,onSelect}) => {
   const p = strategy.performance;
+  // Build sparkline data from equity_curve if available, else synthesise from return
+  const sparkData: number[] = (strategy as unknown as { equity_curve?: number[] }).equity_curve
+    ?? (p ? Array.from({ length: 12 }, (_, i) => 10000 * (1 + (p.return_pct / 100) * (i / 11))) : []);
   return (
     <div
       onClick={()=>onSelect(strategy)}
@@ -85,7 +89,10 @@ const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = 
           }
         </div>
       </div>
-      <h3 style={{fontSize:15,fontWeight:700,color:'#f8fafc',margin:'0 0 8px'}}>{strategy.name}</h3>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
+        <h3 style={{fontSize:15,fontWeight:700,color:'#f8fafc',margin:0,flex:1}}>{strategy.name}</h3>
+        {sparkData.length>1&&<Sparkline data={sparkData} width={72} height={28}/>}
+      </div>
       <p style={{fontSize:13,color:'#94a3b8',lineHeight:1.6,margin:'0 0 12px',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{strategy.description}</p>
       {p&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
         {p.total_return_pct!=null&&<PerfBadge label="Return" value={`+${fmt(p.total_return_pct)}%`}/>}
@@ -137,6 +144,9 @@ const ReviewModal: React.FC<{strategyId:string;onClose:()=>void;onSubmitted:()=>
 
 const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void;onSubscribe:(s:Strategy)=>void;subscribed:boolean;purchaseError:string|null;reviewsErr:string|null;onReview:()=>void}> = ({strategy,reviews,onClose,onSubscribe,subscribed,purchaseError,reviewsErr,onReview}) => {
   const p=strategy.performance;
+  const [confirmOpen,setConfirmOpen]=useState(false);
+  const sparkData: number[] = (strategy as unknown as { equity_curve?: number[] }).equity_curve
+    ?? (p ? Array.from({length:12},(_,i)=>10000*(1+(p.total_return_pct/100)*(i/11))) : []);
   return(
     <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
       <div style={{background:'#0f172a',border:'1px solid #334155',borderRadius:16,padding:24,width:'100%',maxWidth:680,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 25px 50px rgba(0,0,0,0.5)'}} onClick={e=>e.stopPropagation()}>
@@ -160,19 +170,39 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
           </div>
           <button onClick={onClose} style={{marginLeft:16,background:'none',border:'none',color:'#64748b',cursor:'pointer',fontSize:20,lineHeight:1,flexShrink:0}}>✕</button>
         </div>
-        <p style={{color:'#94a3b8',fontSize:14,lineHeight:1.7,marginBottom:20}}>{strategy.description}</p>
+        <p style={{color:'#94a3b8',fontSize:14,lineHeight:1.7,marginBottom:16}}>{strategy.description}</p>
+        {sparkData.length>1&&<div style={{marginBottom:16}}><Sparkline data={sparkData} width={300} height={48}/></div>}
         {p&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:24}}>
           {p.total_return_pct!=null&&<PerfBadge label="Total return" value={`+${fmt(p.total_return_pct)}%`}/>}
           {p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)}/>}
           {p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(p.max_drawdown_pct)}%`} positive={false}/>}
           {p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}
         </div>}
-        <div style={{display:'flex',gap:10,marginBottom:16}}>
-          <button onClick={()=>onSubscribe(strategy)} disabled={subscribed} style={{flex:1,background:'#3b82f6',color:'#fff',border:'none',borderRadius:10,padding:'13px 0',fontSize:14,fontWeight:600,cursor:'pointer',opacity:subscribed?0.6:1}}>
-            {subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}
-          </button>
-          {subscribed&&<button onClick={onReview} style={{background:'#334155',color:'#e2e8f0',border:'none',borderRadius:10,padding:'13px 16px',fontSize:14,fontWeight:600,cursor:'pointer'}}>✍ Review</button>}
-        </div>
+        {/* Purchase confirmation */}
+        {confirmOpen&&!subscribed?(
+          <div style={{background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.35)',borderRadius:10,padding:'14px 16px',marginBottom:12}}>
+            <div style={{fontSize:14,fontWeight:600,color:'#f1f5f9',marginBottom:6}}>Confirm Purchase</div>
+            <div style={{fontSize:13,color:'#94a3b8',marginBottom:12}}>
+              Subscribe to <strong style={{color:'#f1f5f9'}}>{strategy.name}</strong> for{' '}
+              <strong style={{color:'#60a5fa'}}>{strategy.price===0?'Free':`$${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</strong>?
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button onClick={()=>{setConfirmOpen(false);onSubscribe(strategy);}} style={{flex:1,background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontSize:13,fontWeight:700,cursor:'pointer'}}>
+                ✅ Confirm
+              </button>
+              <button onClick={()=>setConfirmOpen(false)} style={{flex:1,background:'#334155',color:'#94a3b8',border:'none',borderRadius:8,padding:'10px 0',fontSize:13,cursor:'pointer'}}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ):(
+          <div style={{display:'flex',gap:10,marginBottom:16}}>
+            <button onClick={()=>subscribed?undefined:setConfirmOpen(true)} disabled={subscribed} style={{flex:1,background:'#3b82f6',color:'#fff',border:'none',borderRadius:10,padding:'13px 0',fontSize:14,fontWeight:600,cursor:subscribed?'default':'pointer',opacity:subscribed?0.6:1}}>
+              {subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}
+            </button>
+            {subscribed&&<button onClick={onReview} style={{background:'#334155',color:'#e2e8f0',border:'none',borderRadius:10,padding:'13px 16px',fontSize:14,fontWeight:600,cursor:'pointer'}}>✍ Review</button>}
+          </div>
+        )}
         {purchaseError&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#f87171',marginBottom:12}}>{purchaseError}</div>}
         {reviewsErr&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#f87171',marginBottom:12}}>{reviewsErr}</div>}
         {reviews.length>0&&(
