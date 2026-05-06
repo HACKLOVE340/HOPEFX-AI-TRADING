@@ -3,12 +3,16 @@
  * Tabs: Overview · Referrals · Commissions · Leaderboard
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { useToast } from '../components/Toast';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts';
 
 interface AffiliateMetrics { total_referrals: number; converted_referrals: number; total_revenue: number; total_commissions: number; pending_commissions: number; conversion_rate: number; }
 interface AffiliateAccount { affiliate_id: string; code: string; level: 'bronze'|'silver'|'gold'|'platinum'; commission_rate: number; status: string; }
@@ -27,6 +31,7 @@ const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value
 
 const Affiliate:React.FC=()=>{
   const navigate=useNavigate();
+  const toast=useToast();
   const user=useStore(s=>s.user); const userId=user?.id;
   const [account,setAccount]=useState<AffiliateAccount|null>(null);
   const [metrics,setMetrics]=useState<AffiliateMetrics|null>(null);
@@ -101,7 +106,13 @@ const Affiliate:React.FC=()=>{
 
   const copyLink=()=>{
     if(!account)return;
-    navigator.clipboard.writeText(`${window.location.origin}/?ref=${account.code}`).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
+    const url=`${window.location.origin}/?ref=${account.code}`;
+    navigator.clipboard.writeText(url).then(()=>{
+      setCopied(true);
+      toast.success('Referral link copied to clipboard!');
+      if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);
+    }).catch(()=>toast.error('Failed to copy link.'));
   };
 
   if(!userId)return(
@@ -129,7 +140,12 @@ const Affiliate:React.FC=()=>{
         title="Affiliate Program"
         subtitle="Earn recurring commissions by referring traders to HOPEFX"
         breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Affiliate'}]}
-        actions={<button onClick={()=>navigate('/leaderboard')} style={{padding:'7px 14px',background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:8,color:'#f59e0b',fontSize:12,fontWeight:600,cursor:'pointer'}}>🏆 Leaderboard</button>}
+        actions={
+          <div style={{display:'flex',gap:8}}>
+            <Link to="/leaderboard"  style={{padding:'7px 14px',background:'rgba(245,158,11,0.1)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:8,color:'#f59e0b',fontSize:12,fontWeight:600,textDecoration:'none'}}>🏆 Leaderboard</Link>
+            <Link to="/marketplace"  style={{padding:'7px 14px',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:8,color:'#a78bfa',fontSize:12,fontWeight:600,textDecoration:'none'}}>🛒 Marketplace</Link>
+          </div>
+        }
       />
       <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'32px 28px',maxWidth:600}}>
         <h2 style={{fontSize:20,marginBottom:12,color:'#f8fafc',fontWeight:700}}>Earn by referring traders</h2>
@@ -164,8 +180,8 @@ const Affiliate:React.FC=()=>{
         }
         actions={
           <div style={{display:'flex',gap:8}}>
-            <button onClick={()=>navigate('/copy-trading')} style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:12,fontWeight:500}}>🔁 Copy Trading</button>
-            <button onClick={()=>navigate('/leaderboard')} style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:12,fontWeight:500}}>🏆 Leaderboard</button>
+            <Link to="/copy-trading" style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',fontSize:12,fontWeight:500,textDecoration:'none'}}>🔁 Copy Trading</Link>
+            <Link to="/leaderboard"  style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',fontSize:12,fontWeight:500,textDecoration:'none'}}>🏆 Leaderboard</Link>
             <button onClick={loadData} style={{padding:'7px 12px',background:'transparent',border:'1px solid #334155',borderRadius:6,color:'#94a3b8',cursor:'pointer',fontSize:12}}>↻ Refresh</button>
           </div>
         }
@@ -294,21 +310,38 @@ const Affiliate:React.FC=()=>{
           {commissions.length===0&&!subErrors.commissions ? (
             <EmptyState icon="💰" title="No commissions yet" description="Commissions appear here once your referrals subscribe to a paid plan."/>
           ) : (
-            <table style={{width:'100%',borderCollapse:'collapse'}}>
-              <thead><tr>
-                {['Period','Amount','Status','Paid At'].map(h=>(
-                  <th key={h} style={{textAlign:'left',fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'}}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>{commissions.map(c=>(
-                <tr key={c.commission_id} style={{borderBottom:'1px solid #1e293b'}}>
-                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{c.period}</td>
-                  <td style={{padding:'10px 12px',fontSize:13,color:'#4ade80',fontWeight:600}}>{fmtUSD(c.amount)}</td>
-                  <td style={{padding:'10px 12px'}}>{statusBadge(c.status)}</td>
-                  <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{c.paid_at?new Date(c.paid_at).toLocaleDateString():'—'}</td>
-                </tr>
-              ))}</tbody>
-            </table>
+            <>
+              {/* Commission bar chart */}
+              {commissions.length>1&&(
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Monthly Commission Chart</div>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={commissions.slice().reverse().map(c=>({period:c.period,amount:c.amount,fill:c.status==='paid'?'#4ade80':'#60a5fa'}))} margin={{top:4,right:4,left:-20,bottom:0}}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#0f172a"/>
+                      <XAxis dataKey="period" tick={{fontSize:9,fill:'#64748b'}} tickLine={false} axisLine={false}/>
+                      <YAxis tick={{fontSize:9,fill:'#64748b'}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>`$${v}`}/>
+                      <Tooltip contentStyle={{background:'#0f172a',border:'1px solid #334155',borderRadius:6,fontSize:11}} formatter={(v:number)=>[fmtUSD(v),'Commission']} labelStyle={{color:'#94a3b8'}}/>
+                      <Bar dataKey="amount" radius={[3,3,0,0]} fill="#4ade80"/>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                <thead><tr>
+                  {['Period','Amount','Status','Paid At'].map(h=>(
+                    <th key={h} style={{textAlign:'left',fontSize:11,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'}}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{commissions.map(c=>(
+                  <tr key={c.commission_id} style={{borderBottom:'1px solid #1e293b'}}>
+                    <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{c.period}</td>
+                    <td style={{padding:'10px 12px',fontSize:13,color:'#4ade80',fontWeight:600}}>{fmtUSD(c.amount)}</td>
+                    <td style={{padding:'10px 12px'}}>{statusBadge(c.status)}</td>
+                    <td style={{padding:'10px 12px',fontSize:13,color:'#cbd5e1'}}>{c.paid_at?new Date(c.paid_at).toLocaleDateString():'—'}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </>
           )}
         </div>
       )}
@@ -317,9 +350,9 @@ const Affiliate:React.FC=()=>{
         <div style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
             <h3 style={{fontSize:15,fontWeight:600,color:'#e2e8f0',margin:0}}>Top affiliates</h3>
-            <button onClick={()=>navigate('/leaderboard')} style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'#60a5fa',fontSize:12,fontWeight:600,padding:'5px 12px',cursor:'pointer'}}>
+            <Link to="/leaderboard" style={{background:'rgba(96,165,250,0.1)',border:'1px solid rgba(96,165,250,0.3)',borderRadius:6,color:'#60a5fa',fontSize:12,fontWeight:600,padding:'5px 12px',textDecoration:'none'}}>
               View full leaderboard →
-            </button>
+            </Link>
           </div>
           {subErrors.leaderboard&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'8px 12px',fontSize:13,color:'#f87171',marginBottom:12}}>{subErrors.leaderboard}</div>}
           {!subErrors.leaderboard&&(
