@@ -30,7 +30,7 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
 
 const TRADE_CROSS_LINKS = [
-  { label: 'Trading Terminal', href: '/trading',        icon: '🖥️', color: '#3b82f6' },
+  { label: 'Trading Terminal', href: '/terminal',       icon: '🖥️', color: '#3b82f6' },
   { label: 'Dashboard',        href: '/dashboard',      icon: '📊', color: '#60a5fa' },
   { label: 'Watchlist',        href: '/watchlist',      icon: '👁',  color: '#34d399' },
   { label: 'Risk Calculator',  href: '/risk-calculator',icon: '🛡',  color: '#f59e0b' },

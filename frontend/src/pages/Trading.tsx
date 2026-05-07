@@ -11,7 +11,7 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 const TRADING_CROSS_LINKS = [
   { label: 'Dashboard',       href: '/dashboard',       icon: '📊', color: '#60a5fa' },
   { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
-  { label: 'Watchlist',       href: '/watchlist',       icon: '👁',  color: '#34d399' },
+  { label: 'AI Chart',        href: '/ai-chart',        icon: '📈', color: '#34d399' },
   { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#f59e0b' },
   { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
   { label: 'Copy Trading',    href: '/copy-trading',    icon: '🔁', color: '#f97316' },
