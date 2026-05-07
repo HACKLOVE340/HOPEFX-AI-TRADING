@@ -2,6 +2,9 @@
  * Wallet & Payments — balance overview, transaction history, subscriptions,
  * and saved payment methods.
  *
+ * Mobile-first: balance card stacks on xs, tabs scroll horizontally,
+ * transaction rows wrap gracefully on small screens.
+ *
  * Wires to: GET  /api/billing/balance
  *           GET  /api/billing/transactions
  *           GET  /api/billing/subscription
@@ -10,20 +13,19 @@
  *           POST /api/payments/withdraw
  */
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { MetricCard } from '../components/MetricCard';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+import { Spinner } from '../components/Spinner';
 
 function extractApiError(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: string } } })
-    ?.response?.data?.detail;
-  return detail ?? fallback;
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+  return detail ?? (err instanceof Error ? err.message : fallback);
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -55,39 +57,105 @@ interface PaymentMethod {
 }
 
 const TYPE_ICON: Record<string, string> = {
-  deposit:      '↓',
-  withdrawal:   '↑',
-  subscription: '🔄',
-  copy_fee:     '📊',
-  refund:       '↩',
+  deposit: '↓', withdrawal: '↑', subscription: '🔄', copy_fee: '📊', refund: '↩',
 };
-
 const TYPE_COLOR: Record<string, string> = {
-  deposit:      '#4ade80',
-  withdrawal:   '#f87171',
-  subscription: '#94a3b8',
-  copy_fee:     '#fbbf24',
-  refund:       '#60a5fa',
+  deposit: '#4ade80', withdrawal: '#f87171', subscription: '#94a3b8',
+  copy_fee: '#fbbf24', refund: '#60a5fa',
+};
+const STATUS_COLOR: Record<string, string> = {
+  completed: '#4ade80', pending: '#fbbf24', failed: '#f87171',
 };
 
-const STATUS_COLOR: Record<string, string> = {
-  completed: '#4ade80',
-  pending:   '#fbbf24',
-  failed:    '#f87171',
+type WalletTab = 'overview' | 'transactions' | 'subscriptions' | 'payment-methods';
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+const AmountForm: React.FC<{
+  mode: 'deposit' | 'withdraw';
+  onConfirm: (amount: string) => Promise<void>;
+  onCancel: () => void;
+}> = ({ mode, onConfirm, onCancel }) => {
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy]     = useState(false);
+  const [msg, setMsg]       = useState('');
+
+  const handle = async () => {
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      setMsg('Enter a valid amount.'); return;
+    }
+    setBusy(true); setMsg('');
+    try { await onConfirm(amount); }
+    catch (e) { setMsg(extractApiError(e, `${mode === 'deposit' ? 'Deposit' : 'Withdrawal'} failed.`)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
+      <h3 className="text-slate-100 text-base font-semibold mb-4 mt-0">
+        {mode === 'deposit' ? 'Deposit Funds' : 'Withdraw Funds'}
+      </h3>
+      <label className="block text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">
+        Amount (USD)
+      </label>
+      <input
+        type="number"
+        min="1"
+        value={amount}
+        onChange={e => setAmount(e.target.value)}
+        placeholder="e.g. 1000"
+        className="w-full bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2.5 text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors mb-3"
+      />
+      {/* Quick-amount chips */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {['100', '500', '1000', '5000'].map(v => (
+          <button key={v} onClick={() => setAmount(v)}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold border cursor-pointer transition-colors ${
+              amount === v
+                ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                : 'bg-terminal-raised border-terminal-border text-slate-500 hover:text-slate-300'
+            }`}>
+            ${v}
+          </button>
+        ))}
+      </div>
+      {msg && (
+        <div className={`text-xs rounded px-3 py-2 mb-3 ${
+          msg.includes('failed') || msg.includes('valid')
+            ? 'bg-red-950/40 border border-red-900 text-red-400'
+            : 'bg-green-950/40 border border-green-900 text-green-400'
+        }`}>{msg}</div>
+      )}
+      <div className="flex gap-2">
+        <button
+          onClick={handle}
+          disabled={busy || !amount}
+          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold cursor-pointer transition-colors disabled:opacity-50 border-0"
+        >
+          {busy ? 'Processing…' : 'Confirm'}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-5 py-2.5 bg-terminal-raised border border-terminal-border text-slate-400 rounded-lg text-sm font-semibold cursor-pointer hover:border-slate-500 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
 
 const Wallet: React.FC = () => {
-  const navigate = useNavigate();
-  const [tab, setTab]                   = useState<'overview' | 'transactions' | 'subscriptions' | 'payment-methods'>('overview');
-  const [transactions, setTxs]          = useState<Transaction[]>([]);
-  const [txLoading, setTxLoading]       = useState(true);
+  const [tab, setTab]                   = useState<WalletTab>('overview');
   const [balance, setBalance]           = useState(0);
   const [frozen, setFrozen]             = useState(0);
-  const [pending, setPending]           = useState(0);
+  const [pendingBal, setPendingBal]     = useState(0);
   const [balanceLoading, setBalanceLoading] = useState(true);
   const [balanceErr, setBalanceErr]     = useState('');
+  const [transactions, setTxs]          = useState<Transaction[]>([]);
+  const [txLoading, setTxLoading]       = useState(true);
   const [txErr, setTxErr]               = useState('');
   const [subscription, setSub]          = useState<Subscription | null>(null);
   const [subLoading, setSubLoading]     = useState(true);
@@ -95,102 +163,78 @@ const Wallet: React.FC = () => {
   const [paymentMethods, setPMs]        = useState<PaymentMethod[]>([]);
   const [pmLoading, setPmLoading]       = useState(true);
   const [pmErr, setPmErr]               = useState('');
-  const [showDeposit, setShowDeposit]   = useState(false);
-  const [showWithdraw, setShowWithdraw] = useState(false);
-  const [amount, setAmount]             = useState('');
-  const [processing, setProcessing]     = useState(false);
-  const [msg, setMsg]                   = useState('');
+  const [actionMode, setActionMode]     = useState<'deposit' | 'withdraw' | null>(null);
+  const [actionMsg, setActionMsg]       = useState('');
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    // Balance
-    api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance', { signal: controller.signal })
-      .then((r) => {
-        setBalance(r.data?.balance ?? 0);
-        setFrozen(r.data?.frozen ?? 0);
-        setPending(r.data?.pending ?? 0);
-        setBalanceErr('');
-      })
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'CanceledError') return;
-        console.warn('[Wallet] Failed to load balance:', err);
-        setBalanceErr(extractApiError(err, 'Failed to load balance.'));
-      })
-      .finally(() => setBalanceLoading(false));
-
-    // Transactions
-    api.get<{ transactions: Transaction[] }>('/billing/transactions', { signal: controller.signal })
-      .then((r) => { setTxs(r.data?.transactions ?? []); setTxErr(''); })
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'CanceledError') return;
-        console.warn('[Wallet] Failed to load transactions:', err);
-        setTxErr(extractApiError(err, 'Failed to load transactions.'));
-        setTxs([]);
-      })
-      .finally(() => setTxLoading(false));
-
-    // Subscription
-    api.get<Subscription>('/billing/subscription', { signal: controller.signal })
-      .then((r) => { setSub(r.data ?? null); setSubErr(''); })
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'CanceledError') return;
-        console.warn('[Wallet] Failed to load subscription:', err);
-        setSubErr(extractApiError(err, 'Failed to load subscription.'));
-        setSub(null);
-      })
-      .finally(() => setSubLoading(false));
-
-    // Payment methods
-    api.get<{ methods: PaymentMethod[] } | PaymentMethod[]>('/billing/payment-methods', { signal: controller.signal })
-      .then((r) => {
-        const data = Array.isArray(r.data) ? r.data : (r.data as { methods: PaymentMethod[] }).methods ?? [];
-        setPMs(data);
-        setPmErr('');
-      })
-      .catch((err: unknown) => {
-        if (err instanceof Error && err.name === 'CanceledError') return;
-        console.warn('[Wallet] Failed to load payment methods:', err);
-        setPmErr(extractApiError(err, 'Failed to load payment methods.'));
-        setPMs([]);
-      })
-      .finally(() => setPmLoading(false));
-
-    return () => controller.abort();
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
-  const handleDeposit = async () => {
-    if (!amount) return;
-    setProcessing(true);
-    setMsg('');
-    try {
-      await api.post('/payments/deposit', { amount: parseFloat(amount) });
-      setMsg(`Deposit of $${amount} initiated.`);
-      setShowDeposit(false);
-      setAmount('');
-    } catch { setMsg('Deposit failed.'); }
-    setProcessing(false);
-  };
+  useEffect(() => {
+    const ctrl = new AbortController();
 
-  const handleWithdraw = async () => {
-    if (!amount) return;
-    setProcessing(true);
-    setMsg('');
-    try {
-      await api.post('/payments/withdraw', { amount: parseFloat(amount) });
-      setMsg(`Withdrawal of $${amount} submitted.`);
-      setShowWithdraw(false);
-      setAmount('');
-    } catch { setMsg('Withdrawal failed.'); }
-    setProcessing(false);
-  };
+    api.get<{ balance: number; frozen: number; pending: number }>(
+      '/billing/balance', { signal: ctrl.signal })
+      .then(r => { setBalance(r.data?.balance ?? 0); setFrozen(r.data?.frozen ?? 0); setPendingBal(r.data?.pending ?? 0); })
+      .catch(e => { if ((e as {name?:string}).name !== 'CanceledError') setBalanceErr(extractApiError(e, 'Failed to load balance.')); })
+      .finally(() => { if (mountedRef.current) setBalanceLoading(false); });
 
-  const totalDeposited  = transactions.filter((t) => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
-  const totalWithdrawn  = Math.abs(transactions.filter((t) => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));
-  const totalFees       = Math.abs(transactions.filter((t) => ['subscription', 'copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
+    api.get<{ transactions: Transaction[] } | Transaction[]>(
+      '/billing/transactions', { signal: ctrl.signal })
+      .then(r => { const d = Array.isArray(r.data) ? r.data : (r.data as {transactions:Transaction[]}).transactions ?? []; setTxs(d); })
+      .catch(e => { if ((e as {name?:string}).name !== 'CanceledError') setTxErr(extractApiError(e, 'Failed to load transactions.')); })
+      .finally(() => { if (mountedRef.current) setTxLoading(false); });
+
+    api.get<Subscription>('/billing/subscription', { signal: ctrl.signal })
+      .then(r => setSub(r.data ?? null))
+      .catch(e => { if ((e as {name?:string}).name !== 'CanceledError') setSubErr(extractApiError(e, 'Failed to load subscription.')); })
+      .finally(() => { if (mountedRef.current) setSubLoading(false); });
+
+    api.get<{ methods: PaymentMethod[] } | PaymentMethod[]>(
+      '/billing/payment-methods', { signal: ctrl.signal })
+      .then(r => { const d = Array.isArray(r.data) ? r.data : (r.data as {methods:PaymentMethod[]}).methods ?? []; setPMs(d); })
+      .catch(e => { if ((e as {name?:string}).name !== 'CanceledError') setPmErr(extractApiError(e, 'Failed to load payment methods.')); })
+      .finally(() => { if (mountedRef.current) setPmLoading(false); });
+
+    return () => ctrl.abort();
+  }, []);
+
+  const handleDeposit = useCallback(async (amount: string) => {
+    await api.post('/payments/deposit', { amount: parseFloat(amount) });
+    setActionMsg(`Deposit of $${amount} initiated.`);
+    setActionMode(null);
+    // Refresh balance
+    const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
+    setBalance(r.data?.balance ?? balance);
+    setFrozen(r.data?.frozen ?? frozen);
+    setPendingBal(r.data?.pending ?? pendingBal);
+  }, [balance, frozen, pendingBal]);
+
+  const handleWithdraw = useCallback(async (amount: string) => {
+    await api.post('/payments/withdraw', { amount: parseFloat(amount) });
+    setActionMsg(`Withdrawal of $${amount} submitted.`);
+    setActionMode(null);
+    const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
+    setBalance(r.data?.balance ?? balance);
+    setFrozen(r.data?.frozen ?? frozen);
+    setPendingBal(r.data?.pending ?? pendingBal);
+  }, [balance, frozen, pendingBal]);
+
+  const totalDeposited = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
+  const totalWithdrawn = Math.abs(transactions.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));
+  const totalFees      = Math.abs(transactions.filter(t => ['subscription','copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
+
+  const TABS: { id: WalletTab; label: string; icon: string }[] = [
+    { id: 'overview',         label: 'Overview',         icon: '📊' },
+    { id: 'transactions',     label: 'Transactions',     icon: '📋' },
+    { id: 'subscriptions',    label: 'Subscription',     icon: '⭐' },
+    { id: 'payment-methods',  label: 'Payment Methods',  icon: '💳' },
+  ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
       <PageHeader
         title="Wallet & Payments"
         icon="💰"
@@ -201,194 +245,221 @@ const Wallet: React.FC = () => {
           { label: 'Wallet' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex gap-2 flex-wrap">
             <Link to="/trade"
-              style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '8px 16px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              className="px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-xs font-bold no-underline hover:bg-green-500/20 transition-colors">
               ⚡ Trade
             </Link>
-            <Link to="/upgrade"
-              style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 8, color: '#f59e0b', fontSize: 12, fontWeight: 700, padding: '8px 16px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+            <Link to="/pricing"
+              className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-bold no-underline hover:bg-amber-500/20 transition-colors">
               ⭐ Upgrade
             </Link>
           </div>
         }
       />
 
-      <CrossLinkBar title="Quick Links" style={{ marginBottom: 20 }} links={[
-        { label: '🤝 Affiliate',  href: '/affiliate', color: '#4ade80' },
-        { label: '🪪 KYC',        href: '/kyc',        color: '#60a5fa' },
-        { label: '⚙️ Settings',  href: '/settings',   color: '#a78bfa' },
-        { label: '📋 Pricing',    href: '/pricing',    color: '#fbbf24' },
-        { label: '💼 Portfolio',  href: '/portfolio',  color: '#34d399' },
-        { label: '💳 Checkout',   href: '/checkout',   color: '#f97316' },
-      ]}/>
+      <CrossLinkBar links={[
+        { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
+        { label: '🪪 KYC',       href: '/kyc',        color: '#60a5fa' },
+        { label: '⚙️ Settings', href: '/settings',   color: '#a78bfa' },
+        { label: '📋 Pricing',   href: '/pricing',    color: '#fbbf24' },
+        { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
+      ]} className="mb-5" />
 
-      {balanceErr && (
-        <ErrorBanner message={balanceErr} onDismiss={() => {}} />
-      )}
+      {balanceErr && <ErrorBanner message={balanceErr} onDismiss={() => setBalanceErr('')} />}
 
-      {/* Balance card — shows action buttons immediately; numbers filled in after load */}
-      <div style={s.balanceCard}>
-        <div>
-          <div style={s.balanceLabel}>Available Balance</div>
-          {balanceLoading ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 24, height: 24, border: '3px solid #334155', borderTopColor: '#f59e0b',
-                borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-              <span style={{ color: '#64748b', fontSize: 14 }}>Loading wallet…</span>
+      {/* Balance hero card */}
+      <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
+              Available Balance
             </div>
-          ) : (
-            <>
-              <div style={s.balanceValue}>${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-              <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
-                Frozen: ${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })} · Pending: ${pending.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {balanceLoading ? (
+              <div className="flex items-center gap-3">
+                <Spinner size="sm" />
+                <span className="text-slate-500 text-sm">Loading wallet…</span>
               </div>
-            </>
-          )}
-        </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={() => { setShowDeposit(true); setShowWithdraw(false); setMsg(''); }} style={s.depositBtn}>
-            ↓ Deposit
-          </button>
-          <button onClick={() => { setShowWithdraw(true); setShowDeposit(false); setMsg(''); }} style={s.withdrawBtn}>
-            ↑ Withdraw
-          </button>
+            ) : (
+              <>
+                <div className="text-3xl sm:text-4xl font-black text-amber-400 tabular-nums tracking-tight">
+                  ${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                <div className="text-slate-500 text-xs mt-1.5 flex gap-3 flex-wrap">
+                  <span>Frozen: <span className="text-slate-400">${frozen.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
+                  <span>Pending: <span className="text-slate-400">${pendingBal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span></span>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex gap-2 sm:flex-shrink-0">
+            <button
+              onClick={() => { setActionMode('deposit'); setActionMsg(''); }}
+              className="flex-1 sm:flex-none px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-bold cursor-pointer transition-colors border-0"
+            >
+              ↓ Deposit
+            </button>
+            <button
+              onClick={() => { setActionMode('withdraw'); setActionMsg(''); }}
+              className="flex-1 sm:flex-none px-5 py-2.5 bg-terminal-raised border border-terminal-border text-slate-300 rounded-lg text-sm font-bold cursor-pointer hover:border-slate-500 transition-colors"
+            >
+              ↑ Withdraw
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Deposit / Withdraw form */}
-      {(showDeposit || showWithdraw) && (
-        <div style={s.actionCard}>
-          <h3 style={s.cardTitle}>{showDeposit ? 'Deposit Funds' : 'Withdraw Funds'}</h3>
-          <label style={s.label}>Amount (USD)</label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="e.g. 1000"
-            style={s.input}
-          />
-          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-            <button
-              onClick={showDeposit ? handleDeposit : handleWithdraw}
-              disabled={processing || !amount}
-              style={{ ...s.confirmBtn, opacity: processing || !amount ? 0.6 : 1 }}
-            >
-              {processing ? 'Processing…' : 'Confirm'}
-            </button>
-            <button onClick={() => { setShowDeposit(false); setShowWithdraw(false); }} style={s.cancelBtn}>
-              Cancel
-            </button>
-          </div>
-          {msg && <div style={{ marginTop: 10, fontSize: 13, color: msg.includes('failed') || msg.includes('error') ? '#f87171' : '#4ade80' }}>{msg}</div>}
+      {/* Action success message */}
+      {actionMsg && (
+        <div className="bg-green-950/40 border border-green-900 rounded-lg px-4 py-3 text-green-400 text-sm mb-4">
+          {actionMsg}
+          <button onClick={() => setActionMsg('')} className="ml-3 text-green-600 hover:text-green-400 bg-transparent border-0 cursor-pointer text-base leading-none">×</button>
         </div>
       )}
 
-      {/* Tabs */}
-      <div style={s.tabs}>
-        {(['overview', 'transactions', 'subscriptions', 'payment-methods'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)}
-            style={{ ...s.tab, ...(tab === t ? s.tabActive : {}) }}>
-            {t.replace('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+      {/* Deposit / Withdraw form */}
+      {actionMode && (
+        <AmountForm
+          mode={actionMode}
+          onConfirm={actionMode === 'deposit' ? handleDeposit : handleWithdraw}
+          onCancel={() => setActionMode(null)}
+        />
+      )}
+
+      {/* Tabs — horizontal scroll on mobile */}
+      <div className="flex overflow-x-auto border-b border-terminal-border mb-5 gap-0"
+        style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap cursor-pointer transition-colors bg-transparent border-0 border-b-2 ${
+              tab === t.id
+                ? 'text-blue-400 border-b-blue-500'
+                : 'text-slate-500 border-b-transparent hover:text-slate-300'
+            }`}
+            style={{ borderBottom: tab === t.id ? '2px solid #3b82f6' : '2px solid transparent' }}
+          >
+            <span className="text-xs">{t.icon}</span>
+            <span>{t.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Overview */}
+      {/* ── Overview ── */}
       {tab === 'overview' && (
-        <div style={s.statsGrid}>
-          <StatCard icon="↓" label="Total Deposited"  value={`$${totalDeposited.toLocaleString()}`}  color="#4ade80" />
-          <StatCard icon="↑" label="Total Withdrawn"  value={`$${totalWithdrawn.toLocaleString()}`}  color="#f87171" />
-          <StatCard icon="💸" label="Total Fees Paid" value={`$${totalFees.toFixed(2)}`}             color="#fbbf24" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <MetricCard icon="↓" label="Total Deposited"
+            value={`$${totalDeposited.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+            accent="green" />
+          <MetricCard icon="↑" label="Total Withdrawn"
+            value={`$${totalWithdrawn.toLocaleString('en-US', { minimumFractionDigits: 2 })}`}
+            accent="red" />
+          <MetricCard icon="💸" label="Total Fees Paid"
+            value={`$${totalFees.toFixed(2)}`}
+            accent="amber" />
         </div>
       )}
 
-      {/* Transactions */}
+      {/* ── Transactions ── */}
       {tab === 'transactions' && (
-        <div style={s.txList}>
-          {txLoading && <p style={{ color: '#64748b', padding: '20px 0', textAlign: 'center' }}>Loading transactions…</p>}
-          {!txLoading && txErr && <ErrorBanner message={txErr} onDismiss={() => {}} />}
-          {!txLoading && !txErr && transactions.length === 0 && (
-            <EmptyState icon="📋" title="No transactions yet" description="Your deposits, withdrawals, and subscription payments will appear here." />
+        <div>
+          {txLoading && (
+            <div className="flex justify-center py-12"><Spinner size="lg" /></div>
           )}
-          {transactions.map((tx) => (
-            <div key={tx.id} style={s.txRow}>
-              <div style={{
-                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                background: `${TYPE_COLOR[tx.type]}22`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 16, color: TYPE_COLOR[tx.type],
-              }}>
+          {!txLoading && txErr && <ErrorBanner message={txErr} onDismiss={() => setTxErr('')} />}
+          {!txLoading && !txErr && transactions.length === 0 && (
+            <EmptyState icon="📋" title="No transactions yet"
+              description="Your deposits, withdrawals, and subscription payments will appear here." />
+          )}
+          {!txLoading && transactions.map(tx => (
+            <div key={tx.id}
+              className="flex items-center gap-3 sm:gap-4 bg-terminal-surface border border-terminal-border rounded-xl px-3 sm:px-4 py-3 mb-2 hover:border-slate-600 transition-colors">
+              {/* Icon */}
+              <div className="w-9 h-9 rounded-full flex items-center justify-center text-base flex-shrink-0"
+                style={{ background: `${TYPE_COLOR[tx.type]}22`, color: TYPE_COLOR[tx.type] }}>
                 {TYPE_ICON[tx.type]}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>
-                  {tx.type.replace('_', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="text-slate-200 text-sm font-semibold capitalize">
+                  {tx.type.replace('_', ' ')}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b' }}>{tx.method} · {tx.date}</div>
+                <div className="text-slate-500 text-xs mt-0.5 truncate">
+                  {tx.method} · {tx.date}
+                </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: tx.amount >= 0 ? '#4ade80' : '#f87171' }}>
+              {/* Amount + status */}
+              <div className="text-right flex-shrink-0">
+                <div className={`text-sm font-bold tabular-nums ${tx.amount >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {tx.amount >= 0 ? '+' : ''}${Math.abs(tx.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
-                <div style={{ fontSize: 11, color: STATUS_COLOR[tx.status] }}>{tx.status}</div>
+                <div className="text-2xs font-semibold capitalize mt-0.5"
+                  style={{ color: STATUS_COLOR[tx.status] }}>
+                  {tx.status}
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Subscriptions */}
+      {/* ── Subscription ── */}
       {tab === 'subscriptions' && (
-        <div style={s.subCard}>
-          {subLoading ? (
-            <div style={{ color: '#64748b', fontSize: 14 }}>Loading subscription…</div>
-          ) : subErr ? (
-            <div style={{ color: '#f87171', fontSize: 13 }}>⚠️ {subErr}</div>
-          ) : !subscription ? (
-            <div style={{ color: '#64748b', fontSize: 14 }}>No active subscription.</div>
-          ) : (
+        <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6">
+          {subLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
+          {!subLoading && subErr && <ErrorBanner message={subErr} onDismiss={() => setSubErr('')} />}
+          {!subLoading && !subErr && !subscription && (
+            <EmptyState icon="⭐" title="No active subscription"
+              description="Subscribe to unlock AI signals, copy trading, and advanced analytics."
+              action={
+                <Link to="/pricing"
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold no-underline transition-colors">
+                  View Plans
+                </Link>
+              }
+            />
+          )}
+          {!subLoading && !subErr && subscription && (
             <>
-              <div style={s.subRow}>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
                 <div>
-                  <div style={{ fontWeight: 700, color: '#f1f5f9', textTransform: 'capitalize' }}>
-                    {subscription.tier} Plan
-                  </div>
-                  <div style={{ fontSize: 13, color: '#64748b' }}>
+                  <div className="text-slate-100 text-lg font-bold capitalize">{subscription.tier} Plan</div>
+                  <div className="text-slate-500 text-sm mt-0.5">
                     {subscription.renewal_date
                       ? `Renews monthly · Next: ${subscription.renewal_date}`
                       : 'No renewal date'}
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div className="text-right sm:flex-shrink-0">
                   {subscription.price_monthly != null && (
-                    <div style={{ fontSize: 18, fontWeight: 700, color: '#fbbf24' }}>
+                    <div className="text-amber-400 text-xl font-black tabular-nums">
                       ${subscription.price_monthly}/mo
                     </div>
                   )}
-                  <div style={{
-                    fontSize: 11,
-                    color: subscription.status === 'active' ? '#4ade80' : '#fbbf24',
-                    textTransform: 'capitalize',
-                  }}>
+                  <div className={`text-xs font-semibold capitalize mt-0.5 ${
+                    subscription.status === 'active' ? 'text-green-400' : 'text-amber-400'
+                  }`}>
                     {subscription.status}
                   </div>
                 </div>
               </div>
               {subscription.features.length > 0 && (
-                <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {subscription.features.map((f) => (
-                    <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8' }}>
-                      <span style={{ color: '#4ade80' }}>✓</span> {f}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                  {subscription.features.map(f => (
+                    <div key={f} className="flex items-center gap-2 text-slate-400 text-sm">
+                      <span className="text-green-400 flex-shrink-0">✓</span> {f}
                     </div>
                   ))}
                 </div>
               )}
-              <div style={{ borderTop: '1px solid #334155', paddingTop: 12, marginTop: 14, display: 'flex', gap: 10 }}>
-                <button style={s.addMethodBtn}>Upgrade Plan</button>
+              <div className="border-t border-terminal-border pt-4 flex gap-2 flex-wrap">
+                <Link to="/pricing"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold no-underline transition-colors">
+                  Upgrade Plan
+                </Link>
                 {subscription.status === 'active' && (
-                  <button style={s.cancelSubBtn}>Cancel Subscription</button>
+                  <button className="px-4 py-2 bg-transparent border border-red-900 text-red-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-red-950/40 transition-colors">
+                    Cancel Subscription
+                  </button>
                 )}
               </div>
             </>
@@ -396,30 +467,35 @@ const Wallet: React.FC = () => {
         </div>
       )}
 
-      {/* Payment methods */}
+      {/* ── Payment Methods ── */}
       {tab === 'payment-methods' && (
-        <div style={s.subCard}>
-          {pmLoading ? (
-            <div style={{ color: '#64748b', fontSize: 14, marginBottom: 16, textAlign: 'center' }}>Loading payment methods…</div>
-          ) : pmErr ? (
-            <ErrorBanner message={pmErr} onDismiss={() => {}} />
-          ) : paymentMethods.length === 0 ? (
-            <EmptyState icon="💳" title="No payment methods saved" description="Add a card or crypto wallet to enable deposits and withdrawals." />
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-              {paymentMethods.map((pm) => (
-                <div key={pm.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0f172a', borderRadius: 8, padding: '12px 16px', border: '1px solid #334155' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ width: 36, height: 36, borderRadius: 8, background: '#1e3a5f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>💳</div>
+        <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6">
+          {pmLoading && <div className="flex justify-center py-8"><Spinner size="md" /></div>}
+          {!pmLoading && pmErr && <ErrorBanner message={pmErr} onDismiss={() => setPmErr('')} />}
+          {!pmLoading && !pmErr && paymentMethods.length === 0 && (
+            <EmptyState icon="💳" title="No payment methods saved"
+              description="Add a card or crypto wallet to enable deposits and withdrawals." />
+          )}
+          {!pmLoading && !pmErr && paymentMethods.length > 0 && (
+            <div className="flex flex-col gap-2 mb-4">
+              {paymentMethods.map(pm => (
+                <div key={pm.id}
+                  className="flex items-center justify-between gap-3 bg-terminal-raised border border-terminal-border rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg bg-blue-950 flex items-center justify-center text-lg flex-shrink-0">
+                      💳
+                    </div>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9', textTransform: 'capitalize' }}>
+                      <div className="text-slate-200 text-sm font-semibold capitalize">
                         {pm.brand} •••• {pm.last4}
                       </div>
-                      <div style={{ fontSize: 12, color: '#64748b' }}>Expires {pm.exp_month}/{pm.exp_year}</div>
+                      <div className="text-slate-500 text-xs">
+                        Expires {pm.exp_month}/{pm.exp_year}
+                      </div>
                     </div>
                   </div>
                   {pm.is_default && (
-                    <span style={{ fontSize: 11, background: 'rgba(74,222,128,0.1)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 4, padding: '2px 8px' }}>
+                    <span className="text-2xs font-bold px-2 py-0.5 rounded bg-green-500/10 border border-green-500/30 text-green-400 flex-shrink-0">
                       Default
                     </span>
                   )}
@@ -427,64 +503,23 @@ const Wallet: React.FC = () => {
               ))}
             </div>
           )}
-          <button style={s.addMethodBtn}>+ Add Payment Method</button>
+          {!pmLoading && (
+            <button className="px-4 py-2.5 bg-blue-950 border border-blue-500/40 text-blue-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-900/40 transition-colors">
+              + Add Payment Method
+            </button>
+          )}
         </div>
       )}
 
-      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '🤝 Affiliate',   href: '/affiliate',  color: '#4ade80' },
-        { label: '🪪 KYC',         href: '/kyc',         color: '#60a5fa' },
-        { label: '⭐ Upgrade',     href: '/upgrade',     color: '#fbbf24' },
-        { label: '📋 Pricing',     href: '/pricing',     color: '#a78bfa' },
-        { label: '💼 Portfolio',   href: '/portfolio',   color: '#34d399' },
-        { label: '⚙️ Settings',   href: '/settings',    color: '#94a3b8' },
-      ]}/>
+      <CrossLinkBar title="Related" className="mt-8" links={[
+        { label: '🤝 Affiliate', href: '/affiliate', color: '#4ade80' },
+        { label: '🪪 KYC',       href: '/kyc',        color: '#60a5fa' },
+        { label: '⭐ Upgrade',   href: '/pricing',    color: '#fbbf24' },
+        { label: '💼 Portfolio', href: '/portfolio',  color: '#34d399' },
+        { label: '⚙️ Settings', href: '/settings',   color: '#94a3b8' },
+      ]} />
     </div>
   );
-};
-
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-const StatCard: React.FC<{ icon: string; label: string; value: string; color: string }> = ({ icon, label, value, color }) => (
-  <div style={s.statCard}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-      <div style={{ width: 32, height: 32, borderRadius: 8, background: `${color}22`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color }}>
-        {icon}
-      </div>
-      <span style={{ fontSize: 13, color: '#64748b' }}>{label}</span>
-    </div>
-    <div style={{ fontSize: 22, fontWeight: 700, color: '#f1f5f9' }}>{value}</div>
-  </div>
-);
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const s: Record<string, React.CSSProperties> = {
-  page:          { padding: 24, maxWidth: 900, margin: '0 auto' },
-  errBanner:     { background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171', marginBottom: 12 },
-  title:         { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 20px' },
-  balanceCard:   { background: 'linear-gradient(135deg, #1c1a0a 0%, #0f172a 100%)', border: '1px solid #f59e0b55', borderRadius: 12, padding: '24px 28px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 },
-  balanceLabel:  { fontSize: 13, color: '#fbbf24', fontWeight: 600, marginBottom: 4 },
-  balanceValue:  { fontSize: 36, fontWeight: 800, color: '#f1f5f9' },
-  depositBtn:    { background: '#f59e0b', border: 'none', borderRadius: 8, color: '#0f172a', fontSize: 14, fontWeight: 700, cursor: 'pointer', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 6 },
-  withdrawBtn:   { background: 'transparent', border: '1px solid #f59e0b55', borderRadius: 8, color: '#fbbf24', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 18px', display: 'flex', alignItems: 'center', gap: 6 },
-  actionCard:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20, marginBottom: 20 },
-  cardTitle:     { fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 14px' },
-  label:         { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6 },
-  input:         { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '9px 12px', fontSize: 14, boxSizing: 'border-box' },
-  confirmBtn:    { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '9px 20px' },
-  cancelBtn:     { background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#64748b', fontSize: 14, cursor: 'pointer', padding: '9px 16px' },
-  tabs:          { display: 'flex', gap: 4, marginBottom: 20, borderBottom: '1px solid #1e293b', paddingBottom: 0 },
-  tab:           { background: 'transparent', border: 'none', borderBottom: '2px solid transparent', color: '#64748b', cursor: 'pointer', fontSize: 14, fontWeight: 500, padding: '10px 16px', textTransform: 'capitalize' },
-  tabActive:     { borderBottomColor: '#f59e0b', color: '#fbbf24' },
-  statsGrid:     { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 },
-  statCard:      { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
-  txList:        { display: 'flex', flexDirection: 'column', gap: 2 },
-  txRow:         { display: 'flex', alignItems: 'center', gap: 14, background: '#1e293b', borderRadius: 8, padding: '12px 16px' },
-  subCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 20 },
-  subRow:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  cancelSubBtn:  { background: 'transparent', border: '1px solid #7f1d1d', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 13, padding: '7px 14px' },
-  addMethodBtn:  { background: '#1e3a5f', border: '1px solid #3b82f6', borderRadius: 8, color: '#60a5fa', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 18px' },
 };
 
 export default Wallet;
