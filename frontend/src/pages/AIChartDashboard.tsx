@@ -67,7 +67,7 @@ function RegimeStrip() {
   const wsStatus = useStore(selectWsStatus);
 
   const { data: regime } = useQuery<MarketRegime>({
-    queryKey: ['regime-strip'],
+    queryKey: ['regime'],
     queryFn:  async () => {
       const r = await tradingApi.regime();
       return r.data as MarketRegime;
@@ -78,7 +78,7 @@ function RegimeStrip() {
   });
 
   const { data: brain } = useQuery<BrainState>({
-    queryKey: ['brain-state-strip'],
+    queryKey: ['brain-state'],
     queryFn:  async () => {
       const r = await tradingApi.brainState();
       return r.data as BrainState;
