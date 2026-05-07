@@ -295,19 +295,14 @@ const SocialFeed: React.FC = () => {
         </div>
       )}
 
-      {/* Opt-in call-to-action — shown prominently when user hasn't opted in */}
+      {/* Opt-in CTA */}
       {optedIn === false && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08))',
-          border: '1px solid rgba(59,130,246,0.25)',
-          borderRadius: 12, padding: '20px 24px', marginBottom: 20,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
-        }}>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-br from-blue-500/8 to-violet-500/8 border border-blue-500/25 rounded-xl p-4 sm:p-5 mb-5">
+          <div className="min-w-0">
+            <div className="text-slate-100 text-sm font-bold mb-1">
               📡 Share your AI signals with the community
             </div>
-            <div style={{ fontSize: 13, color: '#94a3b8', maxWidth: 480 }}>
+            <div className="text-slate-400 text-xs leading-relaxed max-w-md">
               Opt in to broadcast your high-confidence signals (≥70%) to other traders.
               Build your reputation on the leaderboard and earn copy-trading followers.
             </div>
@@ -315,12 +310,8 @@ const SocialFeed: React.FC = () => {
           <button
             onClick={handleOptToggle}
             disabled={optLoading}
-            style={{
-              padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer',
-              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-              border: 'none', color: '#fff', opacity: optLoading ? 0.6 : 1,
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}
+            className="flex-shrink-0 px-5 py-2.5 rounded-lg font-bold text-sm cursor-pointer border-0 text-white transition-opacity disabled:opacity-60 whitespace-nowrap"
+            style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}
           >
             {optLoading ? 'Enabling…' : '✅ Enable Signal Sharing'}
           </button>
@@ -334,174 +325,188 @@ const SocialFeed: React.FC = () => {
           description={
             optedIn === false
               ? 'Be the first to share — opt in above to broadcast your AI signals to the community.'
-              : 'Community signals appear here once traders opt in to share. You can also opt in above to contribute your own.'
+              : 'Community signals appear here once traders opt in to share.'
           }
           action={
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Link to="/ai-chart-dashboard" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>📈 AI Charts</Link>
-              <Link to="/leaderboard"        style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none' }}>🏆 Leaderboard</Link>
+            <div className="flex gap-2">
+              <Link to="/ai-chart-dashboard"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold no-underline transition-colors">
+                📈 AI Charts
+              </Link>
+              <Link to="/leaderboard"
+                className="px-4 py-2 bg-transparent border border-terminal-border text-slate-400 rounded-lg text-sm no-underline hover:border-slate-500 hover:text-slate-300 transition-colors">
+                🏆 Leaderboard
+              </Link>
             </div>
           }
         />
       )}
 
-      <div style={s.feed}>
-        {filteredItems.map(item => (
-          <div key={item.signal_id} style={s.card}>
-            <div style={s.cardTop}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ ...s.dirBadge, background: item.direction === 'BUY' ? '#14532d' : '#450a0a', color: item.direction === 'BUY' ? '#4ade80' : '#f87171' }}>
-                  {item.direction}
+      {/* Signal cards */}
+      <div className="flex flex-col gap-3">
+        {filteredItems.map(item => {
+          const isBuy = item.direction === 'BUY';
+          return (
+            <div key={item.signal_id}
+              className="bg-terminal-surface border border-terminal-border rounded-xl p-3 sm:p-4">
+              {/* Card top row */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className={`text-2xs font-bold px-2 py-0.5 rounded ${
+                    isBuy ? 'bg-green-950 text-green-400' : 'bg-red-950 text-red-400'
+                  }`}>
+                    {item.direction}
+                  </span>
+                  <span className="text-slate-100 text-sm sm:text-base font-bold">{item.symbol}</span>
+                  <span className="text-2xs bg-blue-950 text-blue-400 px-2 py-0.5 rounded-full">
+                    {(item.confidence * 100).toFixed(0)}% conf
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <span>by <strong className="text-slate-400">{item.username}</strong></span>
+                  <span className="hidden sm:inline">{new Date(item.created_at).toLocaleTimeString()}</span>
+                </div>
+              </div>
+
+              {/* Metrics row — wraps on mobile */}
+              <div className="flex gap-4 sm:gap-6 mb-3 flex-wrap text-xs">
+                <span className="text-slate-500">
+                  Entry: <strong className="text-slate-200">${item.entry_price.toFixed(4)}</strong>
                 </span>
-                <span style={s.symbol}>{item.symbol}</span>
-                <span style={s.confidence}>{(item.confidence * 100).toFixed(0)}% conf</span>
+                <span className={item.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  P&L: <strong>{item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(2)}%</strong>
+                </span>
+                <span className="text-slate-500">
+                  Copies: <strong className="text-slate-300">{item.copies}</strong>
+                </span>
+                <span className="text-slate-600 sm:hidden">
+                  {new Date(item.created_at).toLocaleTimeString()}
+                </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 13, color: '#64748b' }}>by <strong style={{ color: '#94a3b8' }}>{item.username}</strong></span>
-                <span style={{ fontSize: 11, color: '#475569' }}>{new Date(item.created_at).toLocaleTimeString()}</span>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => handleReact(item.signal_id, 'up')}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 bg-transparent border border-terminal-border rounded-lg text-xs cursor-pointer transition-colors hover:border-slate-500 ${
+                    item.your_reaction === 'up' ? 'text-green-400 border-green-800' : 'text-slate-500'
+                  }`}>
+                  👍 {item.thumbs_up}
+                </button>
+                <button onClick={() => handleReact(item.signal_id, 'down')}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 bg-transparent border border-terminal-border rounded-lg text-xs cursor-pointer transition-colors hover:border-slate-500 ${
+                    item.your_reaction === 'down' ? 'text-red-400 border-red-800' : 'text-slate-500'
+                  }`}>
+                  👎 {item.thumbs_down}
+                </button>
+                <button onClick={() => toggleExpand(item.signal_id)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-transparent border border-terminal-border rounded-lg text-slate-500 text-xs cursor-pointer hover:border-slate-500 hover:text-slate-300 transition-colors">
+                  💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
+                </button>
+                <Link
+                  to="/trade"
+                  state={{ signal: { symbol: item.symbol, direction: item.direction, entry_price: item.entry_price } }}
+                  className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold no-underline transition-colors ${
+                    isBuy
+                      ? 'bg-green-500/12 border border-green-500/40 text-green-400 hover:bg-green-500/20'
+                      : 'bg-red-500/12 border border-red-500/40 text-red-400 hover:bg-red-500/20'
+                  }`}
+                >
+                  ⚡ Trade
+                </Link>
               </div>
-            </div>
 
-            <div style={s.metrics}>
-              <span style={s.metric}>Entry: <strong>${item.entry_price.toFixed(4)}</strong></span>
-              <span style={{ ...s.metric, color: item.pnl >= 0 ? '#4ade80' : '#f87171' }}>
-                P&L: <strong>{item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(2)}%</strong>
-              </span>
-              <span style={s.metric}>Copies: <strong>{item.copies}</strong></span>
-            </div>
-
-            <div style={s.actions}>
-              <button onClick={() => handleReact(item.signal_id, 'up')}
-                style={{ ...s.reactBtn, color: item.your_reaction === 'up' ? '#4ade80' : '#64748b' }}>
-                👍 {item.thumbs_up}
-              </button>
-              <button onClick={() => handleReact(item.signal_id, 'down')}
-                style={{ ...s.reactBtn, color: item.your_reaction === 'down' ? '#f87171' : '#64748b' }}>
-                👎 {item.thumbs_down}
-              </button>
-              <button onClick={() => toggleExpand(item.signal_id)} style={s.commentToggle}>
-                💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
-              </button>
-              <Link
-                to="/trade"
-                state={{
-                  signal: {
-                    symbol: item.symbol,
-                    direction: item.direction,
-                    entry_price: item.entry_price,
-                  }
-                }}
-                style={{
-                  marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
-                  background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-                  border: `1px solid ${item.direction === 'BUY' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-                  color: item.direction === 'BUY' ? '#4ade80' : '#f87171',
-                  textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
-                }}
-              >
-                ⚡ Trade
-              </Link>
-            </div>
-
-            {expanded === item.signal_id && (
-              <div style={s.commentsSection}>
-                {(comments[item.signal_id] ?? []).map(c => (
-                  <div key={c.comment_id} style={s.comment}>
-                    <strong style={{ color: '#94a3b8', fontSize: 12 }}>{c.username}</strong>
-                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{new Date(c.created_at).toLocaleTimeString()}</span>
-                    <p style={{ margin: '4px 0 0', fontSize: 13, color: '#cbd5e1' }}>{c.text}</p>
-                  </div>
-                ))}
-                {user && (
-                  <div style={{ marginTop: 10 }}>
-                    {typingSignals[item.signal_id] && (
-                      <div style={{ fontSize: 11, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ display: 'inline-flex', gap: 2 }}>
-                          {[0,1,2].map(i => (
-                            <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#475569', display: 'inline-block', animation: `bounce 1.2s ${i * 0.2}s infinite` }} />
-                          ))}
-                        </span>
-                        typing…
+              {/* Comments section */}
+              {expanded === item.signal_id && (
+                <div className="mt-3 pt-3 border-t border-terminal-border flex flex-col gap-2">
+                  {(comments[item.signal_id] ?? []).map(c => (
+                    <div key={c.comment_id} className="bg-terminal-raised rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <strong className="text-slate-400 text-xs">{c.username}</strong>
+                        <span className="text-slate-600 text-2xs">{new Date(c.created_at).toLocaleTimeString()}</span>
                       </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <input
-                        value={commentText}
-                        onChange={e => {
-                          setCommentText(e.target.value);
-                          setTypingSignals(prev => ({ ...prev, [item.signal_id]: e.target.value.length > 0 }));
-                        }}
-                        onBlur={() => setTypingSignals(prev => ({ ...prev, [item.signal_id]: false }))}
-                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { submitComment(item.signal_id); setTypingSignals(prev => ({ ...prev, [item.signal_id]: false })); } }}
-                        placeholder="Add a comment…"
-                        style={s.commentInput}
-                      />
-                      <button onClick={() => { submitComment(item.signal_id); setTypingSignals(prev => ({ ...prev, [item.signal_id]: false })); }} disabled={submitting || !commentText.trim()} style={s.commentBtn}>
-                        {submitting ? '…' : 'Post'}
-                      </button>
+                      <p className="text-slate-300 text-xs leading-relaxed m-0">{c.text}</p>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+                  ))}
+                  {user && (
+                    <div className="mt-1">
+                      {typingSignals[item.signal_id] && (
+                        <div className="flex items-center gap-1.5 text-slate-600 text-2xs mb-1">
+                          {[0,1,2].map(i => (
+                            <span key={i} className="w-1 h-1 rounded-full bg-slate-600 inline-block animate-bounce"
+                              style={{ animationDelay: `${i * 0.2}s` }} />
+                          ))}
+                          typing…
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          value={commentText}
+                          onChange={e => {
+                            setCommentText(e.target.value);
+                            setTypingSignals(prev => ({ ...prev, [item.signal_id]: e.target.value.length > 0 }));
+                          }}
+                          onBlur={() => setTypingSignals(prev => ({ ...prev, [item.signal_id]: false }))}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              submitComment(item.signal_id);
+                              setTypingSignals(prev => ({ ...prev, [item.signal_id]: false }));
+                            }
+                          }}
+                          placeholder="Add a comment…"
+                          className="flex-1 bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2 text-slate-200 text-xs outline-none focus:border-blue-500 transition-colors placeholder-slate-600"
+                        />
+                        <button
+                          onClick={() => { submitComment(item.signal_id); setTypingSignals(prev => ({ ...prev, [item.signal_id]: false })); }}
+                          disabled={submitting || !commentText.trim()}
+                          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold cursor-pointer border-0 transition-colors disabled:opacity-50"
+                        >
+                          {submitting ? '…' : 'Post'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {loading && <div style={s.dim}>Loading signals…</div>}
+      {loading && (
+        <div className="text-center text-slate-500 text-sm py-6">Loading signals…</div>
+      )}
 
       {!loading && hasMore && items.length > 0 && (
-        <div style={{ textAlign: 'center', marginTop: 20 }}>
-          <button onClick={loadMore} style={s.loadMoreBtn}>Load more</button>
+        <div className="text-center mt-5">
+          <button onClick={loadMore}
+            className="px-6 py-2.5 bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-sm cursor-pointer hover:border-slate-500 hover:text-slate-200 transition-colors">
+            Load more
+          </button>
         </div>
       )}
 
       {optedIn !== null && (
-        <div style={s.infoBanner}>
+        <div className={`mt-5 px-4 py-3 rounded-xl text-xs border ${
+          optedIn
+            ? 'bg-green-950/30 border-green-900 text-green-400'
+            : 'bg-terminal-raised border-terminal-border text-slate-500'
+        }`}>
           {optedIn
             ? '✅ Your high-confidence signals are visible to the community. Toggle off to stop sharing.'
             : '💡 Opt in to share your AI signals with the community and build your reputation.'}
         </div>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/leaderboard" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🥇 Leaderboard</Link>
-        <Link to="/copy-trading" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔁 Copy Trading</Link>
-        <Link to="/chat" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💬 Chat</Link>
-        <Link to="/marketplace" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛒 Marketplace</Link>
-        <Link to="/teams" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>👥 Teams</Link>
-      </div>
+      <CrossLinkBar title="Related" className="mt-6" links={[
+        { label: '🥇 Leaderboard',  href: '/leaderboard',  color: '#f59e0b' },
+        { label: '🔁 Copy Trading', href: '/copy-trading', color: '#34d399' },
+        { label: '💬 Chat',         href: '/chat',         color: '#06b6d4' },
+        { label: '🛒 Marketplace',  href: '/marketplace',  color: '#a78bfa' },
+        { label: '👥 Teams',        href: '/teams',        color: '#60a5fa' },
+      ]} />
     </div>
   );
 };
 
-const s: Record<string, React.CSSProperties> = {
-  page:           { maxWidth: 800, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui,-apple-system,sans-serif', color: '#f1f5f9', background: '#0f172a', minHeight: '100vh' },
-  header:         { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  title:          { fontSize: 24, fontWeight: 700, color: '#f8fafc', margin: '0 0 4px' },
-  subtitle:       { fontSize: 13, color: '#64748b', margin: 0 },
-  toggleBtn:      { border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px', transition: 'background 0.2s' },
-  errorBox:       { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#f87171' },
-  empty:          { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
-  feed:           { display: 'flex', flexDirection: 'column', gap: 12 },
-  card:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
-  cardTop:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  dirBadge:       { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 },
-  symbol:         { fontSize: 15, fontWeight: 700, color: '#f1f5f9' },
-  confidence:     { fontSize: 11, background: '#1e3a5f', color: '#60a5fa', padding: '2px 8px', borderRadius: 10 },
-  metrics:        { display: 'flex', gap: 20, marginBottom: 10 },
-  metric:         { fontSize: 13, color: '#64748b' },
-  actions:        { display: 'flex', gap: 8 },
-  reactBtn:       { background: 'transparent', border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '4px 10px' },
-  commentToggle:  { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 13, padding: '4px 10px', marginLeft: 'auto' },
-  commentsSection:{ borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
-  comment:        { padding: '6px 0', borderBottom: '1px solid #0f172a' },
-  commentInput:   { flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 13, padding: '6px 10px', outline: 'none' },
-  commentBtn:     { background: '#3b82f6', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 13, padding: '6px 14px' },
-  dim:            { color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 },
-  loadMoreBtn:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 14, padding: '10px 28px' },
-  infoBanner:     { marginTop: 24, background: '#1e293b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#94a3b8', border: '1px solid #334155' },
-};
 
 export default SocialFeed;
