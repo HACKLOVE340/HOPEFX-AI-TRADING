@@ -154,6 +154,25 @@ async def nuclear_halt(
 
     _append_nuclear_log("HALT", {"reason": reason}, user.sub)
     _log_superadmin_action(user, "nuclear_halt", {"reason": reason})
+
+    # Broadcast nuclear_halt to all connected WebSocket clients so the
+    # frontend can display the emergency halt banner immediately.
+    try:
+        from api.ws_live import manager as _ws_manager
+        import asyncio as _asyncio
+
+        _halt_msg = {
+            "type": "nuclear_halt",
+            "data": {
+                "reason": reason,
+                "activated_by": user.sub,
+                "timestamp": _utcnow().isoformat(),
+            },
+        }
+        _asyncio.create_task(_ws_manager.broadcast("system", _halt_msg))
+    except Exception as _ws_err:
+        logger.debug("nuclear_halt WS broadcast skipped: %s", _ws_err)
+
     return {"ok": True, "kill_switch_active": True, "reason": reason}
 
 
@@ -182,6 +201,25 @@ async def nuclear_resume(
 
     _append_nuclear_log("RESUME", {}, user.sub)
     _log_superadmin_action(user, "nuclear_resume", {})
+
+    # Broadcast system_event so the frontend clears the halt banner.
+    try:
+        from api.ws_live import manager as _ws_manager
+        import asyncio as _asyncio
+
+        _resume_msg = {
+            "type": "system_event",
+            "data": {
+                "event": "nuclear_resume",
+                "message": "Trading resumed by superadmin.",
+                "activated_by": user.sub,
+                "timestamp": _utcnow().isoformat(),
+            },
+        }
+        _asyncio.create_task(_ws_manager.broadcast("system", _resume_msg))
+    except Exception as _ws_err:
+        logger.debug("nuclear_resume WS broadcast skipped: %s", _ws_err)
+
     return {"ok": True, "kill_switch_active": False}
 
 

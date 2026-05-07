@@ -236,6 +236,9 @@ class LiveConnectionManager:
 
 # Singleton
 _manager = LiveConnectionManager()
+# Public alias so other modules (e.g. superadmin/nuclear_controls.py) can
+# broadcast system events without importing the private _manager name.
+manager = _manager
 
 
 def get_live_manager() -> LiveConnectionManager:
