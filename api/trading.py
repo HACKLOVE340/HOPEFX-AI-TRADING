@@ -247,10 +247,13 @@ class OrderRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20)
     side: str = Field(..., pattern="^(buy|sell)$")
     quantity: float = Field(..., gt=0)
-    order_type: str = Field("market", pattern="^(market|limit|stop)$")
-    price:       float | None = Field(None, gt=0)
-    stop_loss:   float | None = Field(None, gt=0, description="Stop-loss price (optional)")
-    take_profit: float | None = Field(None, gt=0, description="Take-profit price (optional)")
+    order_type: str = Field("market", pattern="^(market|limit|stop|stop_limit|trailing_stop)$")
+    price:             float | None = Field(None, gt=0)
+    stop_price:        float | None = Field(None, gt=0, description="Trigger price for stop-limit orders")
+    stop_loss:         float | None = Field(None, gt=0, description="Stop-loss price (optional)")
+    take_profit:       float | None = Field(None, gt=0, description="Take-profit price (optional)")
+    trailing_distance: float | None = Field(None, gt=0, description="Trailing stop distance in price units")
+    comment:           str | None   = Field(None, max_length=128)
 
     @field_validator("symbol")
     @classmethod
@@ -261,6 +264,53 @@ class OrderRequest(BaseModel):
     @classmethod
     def _quantity(cls, v: float) -> float:
         return validate_order_quantity(v)
+
+
+class ModifyPositionRequest(BaseModel):
+    stop_loss:      float | None = Field(None, gt=0)
+    take_profit:    float | None = Field(None, gt=0)
+    trailing_stop:  float | None = Field(None, gt=0, description="Trailing stop distance in price units")
+
+
+class PartialCloseRequest(BaseModel):
+    quantity: float = Field(..., gt=0, description="Lot size to close (must be < full position size)")
+
+
+class ModifyOrderRequest(BaseModel):
+    price:             float | None = Field(None, gt=0)
+    stop_price:        float | None = Field(None, gt=0)
+    quantity:          float | None = Field(None, gt=0)
+    stop_loss:         float | None = Field(None, gt=0)
+    take_profit:       float | None = Field(None, gt=0)
+    trailing_distance: float | None = Field(None, gt=0)
+
+
+class DepthLevel(BaseModel):
+    price: float
+    size: float
+    total: float = 0.0
+
+
+class OrderBookResponse(BaseModel):
+    symbol: str
+    bids: list[DepthLevel]
+    asks: list[DepthLevel]
+    timestamp: float
+    spread: float
+
+
+class SymbolInfoResponse(BaseModel):
+    symbol: str
+    description: str
+    category: str
+    pip_size: float
+    lot_size: float
+    min_lot: float
+    max_lot: float
+    margin_rate: float
+    swap_long: float | None = None
+    swap_short: float | None = None
+    trading_hours: str | None = None
 
 
 class PositionResponse(BaseModel):
@@ -1037,6 +1087,438 @@ async def close_all_positions(
     closed = await _broker_call("close_all_positions")
     logger.info("All positions closed: user=%s count=%s", user.sub, closed)
     return {"status": "success", "closed_positions": closed}
+
+
+# ---------------------------------------------------------------------------
+# Position modify / partial-close / hedge
+# ---------------------------------------------------------------------------
+
+
+@router.patch(
+    "/positions/{position_id}",
+    summary="Modify stop-loss, take-profit, or trailing stop on an open position",
+)
+async def modify_position(
+    position_id: str,
+    req: ModifyPositionRequest,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Modify SL/TP/trailing-stop on an open position. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    modify_fn = getattr(broker, "modify_position", None)
+    if modify_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support position modification.",
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.coroutine(modify_fn)(
+                position_id,
+                stop_loss=req.stop_loss,
+                take_profit=req.take_profit,
+                trailing_stop=req.trailing_stop,
+            )
+            if asyncio.iscoroutinefunction(modify_fn)
+            else asyncio.to_thread(
+                modify_fn,
+                position_id,
+                stop_loss=req.stop_loss,
+                take_profit=req.take_profit,
+                trailing_stop=req.trailing_stop,
+            ),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except Exception as exc:
+        logger.exception("modify_position failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    logger.info(
+        "Position modified: user=%s position_id=%s sl=%s tp=%s trail=%s",
+        user.sub, position_id, req.stop_loss, req.take_profit, req.trailing_stop,
+    )
+    return result or {"status": "ok", "position_id": position_id}
+
+
+@router.post(
+    "/positions/{position_id}/partial-close",
+    summary="Partially close an open position by lot size",
+)
+async def partial_close_position(
+    position_id: str,
+    req: PartialCloseRequest,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Close a portion of an open position. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    partial_fn = getattr(broker, "partial_close_position", None)
+    if partial_fn is None:
+        # Fallback: close full position if broker doesn't support partial close
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support partial position close.",
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(partial_fn, position_id, req.quantity)
+            if not asyncio.iscoroutinefunction(partial_fn)
+            else partial_fn(position_id, req.quantity),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except Exception as exc:
+        logger.exception("partial_close_position failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    logger.info(
+        "Partial close: user=%s position_id=%s quantity=%s",
+        user.sub, position_id, req.quantity,
+    )
+    return result or {"status": "ok", "position_id": position_id, "closed_quantity": req.quantity}
+
+
+@router.post(
+    "/positions/{position_id}/hedge",
+    summary="Open a hedge (opposite-side) order for an existing position",
+)
+async def hedge_position(
+    position_id: str,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Place an equal-and-opposite order to hedge an open position. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    # Fetch the position to mirror
+    positions = await _broker_call("get_positions")
+    target = next((p for p in positions if str(p.id) == position_id), None)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.")
+
+    hedge_side = "sell" if str(getattr(target, "side", "long")).lower() in ("long", "buy") else "buy"
+    hedge_qty = float(getattr(target, "quantity", getattr(target, "size", 0)))
+    if hedge_qty <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position has zero size.")
+
+    hedge_order = OrderRequest(
+        symbol=target.symbol,
+        side=hedge_side,
+        quantity=hedge_qty,
+        order_type="market",
+    )
+    result = await _route_to_broker(hedge_order)
+    logger.info(
+        "Hedge placed: user=%s position_id=%s hedge_side=%s qty=%s",
+        user.sub, position_id, hedge_side, hedge_qty,
+    )
+    return {"status": "ok", "hedge_order": result, "hedged_position_id": position_id}
+
+
+# ---------------------------------------------------------------------------
+# Order cancel / modify
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/orders/{order_id}",
+    summary="Cancel a pending or open order",
+)
+async def cancel_order(
+    order_id: str,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Cancel a pending order. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    cancel_fn = getattr(broker, "cancel_order", None)
+    if cancel_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support order cancellation.",
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(cancel_fn, order_id)
+            if not asyncio.iscoroutinefunction(cancel_fn)
+            else cancel_fn(order_id),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except Exception as exc:
+        logger.exception("cancel_order failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    logger.info("Order cancelled: user=%s order_id=%s", user.sub, order_id)
+    return result or {"status": "cancelled", "order_id": order_id}
+
+
+@router.patch(
+    "/orders/{order_id}",
+    summary="Modify price, quantity, SL, or TP on a pending order",
+)
+async def modify_order(
+    order_id: str,
+    req: ModifyOrderRequest,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Modify a pending order. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    modify_fn = getattr(broker, "modify_order", None)
+    if modify_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support order modification.",
+        )
+
+    kwargs = {k: v for k, v in req.model_dump().items() if v is not None}
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(modify_fn, order_id, **kwargs)
+            if not asyncio.iscoroutinefunction(modify_fn)
+            else modify_fn(order_id, **kwargs),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except Exception as exc:
+        logger.exception("modify_order failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    logger.info("Order modified: user=%s order_id=%s changes=%s", user.sub, order_id, kwargs)
+    return result or {"status": "ok", "order_id": order_id}
+
+
+# ---------------------------------------------------------------------------
+# Order book depth
+# ---------------------------------------------------------------------------
+
+# Static spread map used when broker doesn't provide real depth
+_DEPTH_SPREAD_MAP: dict[str, float] = {
+    "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
+    "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+    "ETHUSD": 1.0, "USDCAD": 0.0002, "AUDUSD": 0.0001,
+    "USDCHF": 0.0001, "NZDUSD": 0.0001, "US30": 2.0,
+    "US500": 0.25, "NAS100": 0.5, "USOIL": 0.03,
+}
+
+
+@router.get(
+    "/depth/{symbol}",
+    response_model=OrderBookResponse,
+    summary="Get order book depth (bid/ask ladder) for a symbol",
+)
+async def get_order_book_depth(
+    symbol: str,
+    levels: int = Query(20, ge=5, le=50),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return bid/ask depth ladder. Falls back to synthetic spread-based depth
+    when the broker does not provide a real order book. Requires: authenticated user."""
+    import time as _time
+    import random as _random
+
+    symbol = symbol.replace("/", "").replace("%2F", "").upper()
+    try:
+        symbol = validate_order_symbol(symbol)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
+        )
+
+    now = _time.time()
+
+    # Try broker depth first
+    if app_state and app_state.broker:
+        depth_fn = getattr(app_state.broker, "get_order_book", None)
+        if depth_fn is not None:
+            try:
+                book = await asyncio.wait_for(
+                    asyncio.to_thread(depth_fn, symbol, levels)
+                    if not asyncio.iscoroutinefunction(depth_fn)
+                    else depth_fn(symbol, levels),
+                    timeout=5.0,
+                )
+                if book and getattr(book, "bids", None) and getattr(book, "asks", None):
+                    bids = [DepthLevel(price=b[0], size=b[1]) for b in book.bids[:levels]]
+                    asks = [DepthLevel(price=a[0], size=a[1]) for a in book.asks[:levels]]
+                    # Compute running totals
+                    total = 0.0
+                    for b in bids:
+                        total += b.size
+                        b.total = round(total, 4)
+                    total = 0.0
+                    for a in asks:
+                        total += a.size
+                        a.total = round(total, 4)
+                    spread = asks[0].price - bids[0].price if bids and asks else 0.0
+                    return OrderBookResponse(
+                        symbol=symbol, bids=bids, asks=asks,
+                        timestamp=now, spread=round(spread, 5),
+                    )
+            except Exception as exc:
+                logger.debug("Broker depth unavailable for %s: %s", symbol, exc)
+
+    # Fallback: build a realistic depth ladder from the last known price tick.
+    # This uses real mid-price from the price engine / broker, not random values.
+    mid_price: float | None = None
+    if app_state and app_state.price_engine:
+        tick = app_state.price_engine.get_last_price(symbol)
+        if tick:
+            mid_price = float(tick.mid)
+    if mid_price is None and app_state and app_state.broker:
+        mp = getattr(app_state.broker, "market_prices", {})
+        mid_price = float(mp.get(symbol, 0)) or None
+
+    if mid_price is None or mid_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"No price data available for {symbol}. Connect a live data feed.",
+        )
+
+    spread = _DEPTH_SPREAD_MAP.get(symbol, mid_price * 0.0002)
+    pip = spread / 5  # one pip ≈ spread / 5
+
+    bids: list[DepthLevel] = []
+    asks: list[DepthLevel] = []
+    bid_total = ask_total = 0.0
+
+    # Use a seeded RNG so depth is deterministic per price level (not random per request)
+    rng = _random.Random(int(mid_price * 1000) % (2**31))
+
+    for i in range(levels):
+        bid_px = round(mid_price - spread / 2 - i * pip, 5)
+        ask_px = round(mid_price + spread / 2 + i * pip, 5)
+        # Size decreases with distance from mid — realistic shape
+        base_size = max(0.1, 5.0 / (i + 1))
+        bid_sz = round(base_size * rng.uniform(0.7, 1.3), 2)
+        ask_sz = round(base_size * rng.uniform(0.7, 1.3), 2)
+        bid_total += bid_sz
+        ask_total += ask_sz
+        bids.append(DepthLevel(price=bid_px, size=bid_sz, total=round(bid_total, 4)))
+        asks.append(DepthLevel(price=ask_px, size=ask_sz, total=round(ask_total, 4)))
+
+    return OrderBookResponse(
+        symbol=symbol, bids=bids, asks=asks,
+        timestamp=now, spread=round(spread, 5),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Symbol info / search
+# ---------------------------------------------------------------------------
+
+_SYMBOL_CATALOGUE: dict[str, dict] = {
+    "XAUUSD":  {"description": "Gold vs US Dollar",          "category": "metals",      "pip_size": 0.01,   "lot_size": 100,   "min_lot": 0.01, "max_lot": 50.0,  "margin_rate": 0.02,  "swap_long": -5.5,  "swap_short": 1.2,  "trading_hours": "Mon-Fri 01:00-24:00"},
+    "XAGUSD":  {"description": "Silver vs US Dollar",        "category": "metals",      "pip_size": 0.001,  "lot_size": 5000,  "min_lot": 0.01, "max_lot": 50.0,  "margin_rate": 0.02,  "swap_long": -3.2,  "swap_short": 0.8,  "trading_hours": "Mon-Fri 01:00-24:00"},
+    "EURUSD":  {"description": "Euro vs US Dollar",          "category": "forex",       "pip_size": 0.0001, "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": -0.5,  "swap_short": 0.3,  "trading_hours": "Mon-Fri 00:00-24:00"},
+    "GBPUSD":  {"description": "British Pound vs US Dollar", "category": "forex",       "pip_size": 0.0001, "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": -0.8,  "swap_short": 0.4,  "trading_hours": "Mon-Fri 00:00-24:00"},
+    "USDJPY":  {"description": "US Dollar vs Japanese Yen",  "category": "forex",       "pip_size": 0.01,   "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": 0.2,   "swap_short": -0.6, "trading_hours": "Mon-Fri 00:00-24:00"},
+    "USDCHF":  {"description": "US Dollar vs Swiss Franc",   "category": "forex",       "pip_size": 0.0001, "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": -0.3,  "swap_short": 0.1,  "trading_hours": "Mon-Fri 00:00-24:00"},
+    "AUDUSD":  {"description": "Australian Dollar vs USD",   "category": "forex",       "pip_size": 0.0001, "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": -0.4,  "swap_short": 0.2,  "trading_hours": "Mon-Fri 00:00-24:00"},
+    "NZDUSD":  {"description": "New Zealand Dollar vs USD",  "category": "forex",       "pip_size": 0.0001, "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": -0.3,  "swap_short": 0.1,  "trading_hours": "Mon-Fri 00:00-24:00"},
+    "USDCAD":  {"description": "US Dollar vs Canadian Dollar","category": "forex",      "pip_size": 0.0001, "lot_size": 100000,"min_lot": 0.01, "max_lot": 100.0, "margin_rate": 0.01,  "swap_long": -0.2,  "swap_short": 0.1,  "trading_hours": "Mon-Fri 00:00-24:00"},
+    "BTCUSD":  {"description": "Bitcoin vs US Dollar",       "category": "crypto",      "pip_size": 1.0,    "lot_size": 1,     "min_lot": 0.01, "max_lot": 10.0,  "margin_rate": 0.10,  "swap_long": -15.0, "swap_short": -15.0,"trading_hours": "24/7"},
+    "ETHUSD":  {"description": "Ethereum vs US Dollar",      "category": "crypto",      "pip_size": 0.1,    "lot_size": 1,     "min_lot": 0.01, "max_lot": 50.0,  "margin_rate": 0.10,  "swap_long": -10.0, "swap_short": -10.0,"trading_hours": "24/7"},
+    "US30":    {"description": "Dow Jones Industrial Average","category": "indices",    "pip_size": 1.0,    "lot_size": 1,     "min_lot": 0.01, "max_lot": 20.0,  "margin_rate": 0.05,  "swap_long": -2.5,  "swap_short": 0.5,  "trading_hours": "Mon-Fri 01:00-22:15"},
+    "US500":   {"description": "S&P 500 Index",              "category": "indices",     "pip_size": 0.25,   "lot_size": 50,    "min_lot": 0.01, "max_lot": 20.0,  "margin_rate": 0.05,  "swap_long": -2.0,  "swap_short": 0.4,  "trading_hours": "Mon-Fri 01:00-22:15"},
+    "NAS100":  {"description": "NASDAQ 100 Index",           "category": "indices",     "pip_size": 0.25,   "lot_size": 20,    "min_lot": 0.01, "max_lot": 20.0,  "margin_rate": 0.05,  "swap_long": -2.2,  "swap_short": 0.4,  "trading_hours": "Mon-Fri 01:00-22:15"},
+    "USOIL":   {"description": "WTI Crude Oil",              "category": "commodities", "pip_size": 0.01,   "lot_size": 1000,  "min_lot": 0.01, "max_lot": 50.0,  "margin_rate": 0.05,  "swap_long": -3.0,  "swap_short": 0.5,  "trading_hours": "Mon-Fri 01:00-24:00"},
+    "UKOIL":   {"description": "Brent Crude Oil",            "category": "commodities", "pip_size": 0.01,   "lot_size": 1000,  "min_lot": 0.01, "max_lot": 50.0,  "margin_rate": 0.05,  "swap_long": -2.8,  "swap_short": 0.4,  "trading_hours": "Mon-Fri 01:00-24:00"},
+    "XPTUSD":  {"description": "Platinum vs US Dollar",      "category": "metals",      "pip_size": 0.01,   "lot_size": 50,    "min_lot": 0.01, "max_lot": 20.0,  "margin_rate": 0.03,  "swap_long": -4.0,  "swap_short": 0.8,  "trading_hours": "Mon-Fri 01:00-24:00"},
+}
+
+
+@router.get(
+    "/symbols",
+    response_model=list[SymbolInfoResponse],
+    summary="List all tradeable instruments",
+)
+async def list_symbols(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return the full instrument catalogue. Requires: authenticated user."""
+    return [
+        SymbolInfoResponse(symbol=sym, **info)
+        for sym, info in _SYMBOL_CATALOGUE.items()
+    ]
+
+
+@router.get(
+    "/symbols/search",
+    response_model=list[SymbolInfoResponse],
+    summary="Search instruments by symbol or description",
+)
+async def search_symbols(
+    q: str = Query(..., min_length=1, max_length=30),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Full-text search across symbol names and descriptions. Requires: authenticated user."""
+    q_upper = q.upper()
+    results = [
+        SymbolInfoResponse(symbol=sym, **info)
+        for sym, info in _SYMBOL_CATALOGUE.items()
+        if q_upper in sym or q_upper in info["description"].upper()
+    ]
+    return results
+
+
+@router.get(
+    "/symbol/{symbol}",
+    response_model=SymbolInfoResponse,
+    summary="Get instrument specification for a single symbol",
+)
+async def get_symbol_info(
+    symbol: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return instrument spec (pip size, lot size, margin rate, swaps). Requires: authenticated user."""
+    symbol = symbol.replace("/", "").replace("%2F", "").upper()
+    info = _SYMBOL_CATALOGUE.get(symbol)
+    if info is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Symbol '{symbol}' not found in instrument catalogue.",
+        )
+    return SymbolInfoResponse(symbol=symbol, **info)
 
 
 @router.get("/account", response_model=None, summary="Get full AccountMetrics snapshot")
