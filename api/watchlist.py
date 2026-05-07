@@ -381,3 +381,12 @@ async def reorder_watchlist(
     # Always update in-memory cache.
     _watchlists[user.sub] = symbols
     return {"symbols": symbols, "reordered": True}
+
+
+@router.put("/order", summary="Reorder watchlist symbols (PUT alias for PATCH /order)")
+async def reorder_watchlist_put(
+    body: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """PUT alias for PATCH /order — accepts the same payload for backward compatibility."""
+    return await reorder_watchlist(body, user)
