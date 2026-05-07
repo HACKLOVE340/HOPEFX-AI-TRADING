@@ -1,6 +1,9 @@
 /**
- * Strategy A/B Testing (Task 42)
+ * Strategy A/B Testing
  * Run two strategies in parallel on paper, auto-select winner.
+ *
+ * Strategy names are fetched from GET /api/advanced/ab-tests/strategies/available
+ * so the list always matches what the backend accepts.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -30,10 +33,12 @@ interface StratResult {
   win_rate: number;
 }
 
-const STRATEGIES = [
-  'MovingAverageCrossover','RSIStrategy','MACDStrategy',
-  'BollingerBands','SMCICTStrategy','EMAcrossover',
-  'MeanReversion','Breakout','Stochastic',
+// Fallback list — matches _STRATEGY_CLASS_MAP keys in api/advanced_trading.py.
+// The component fetches the live list from the backend on mount and replaces this.
+const STRATEGIES_FALLBACK = [
+  'MovingAverageCrossover', 'RSIStrategy', 'MACDStrategy',
+  'BollingerBands', 'SMCICTStrategy', 'EMAcrossover',
+  'MeanReversion', 'Breakout', 'Stochastic',
 ];
 
 // ── Win-rate bar ──────────────────────────────────────────────────────────────
@@ -115,6 +120,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 
 const ABTesting: React.FC = () => {
   const navigate = useNavigate();
+  const [strategies, setStrategies] = useState<string[]>(STRATEGIES_FALLBACK);
   const [tests, setTests]       = useState<ABResult[]>([]);
   const [stratA, setStratA]     = useState('MovingAverageCrossover');
   const [stratB, setStratB]     = useState('RSIStrategy');
@@ -126,6 +132,22 @@ const ABTesting: React.FC = () => {
   const [loadErr, setLoadErr]   = useState<string | null>(null);
   const [selected, setSelected] = useState<ABResult | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Fetch available strategy names from backend so the selector always matches
+  // what the backend accepts — avoids the "check strategy names" 422 error.
+  useEffect(() => {
+    api.get('/advanced/ab-tests/strategies/available')
+      .then(res => {
+        const data = res.data as { strategies?: string[] };
+        if (Array.isArray(data.strategies) && data.strategies.length > 0) {
+          setStrategies(data.strategies);
+          // Reset selections to first two valid names
+          setStratA(data.strategies[0]);
+          setStratB(data.strategies[1] ?? data.strategies[0]);
+        }
+      })
+      .catch(() => { /* keep fallback list */ });
+  }, []);
 
   // Auto-poll every 5s while any test is in 'running' status
   const startPoll = useCallback(() => {
@@ -176,7 +198,15 @@ const ABTesting: React.FC = () => {
       setSelected(res.data);
       if (res.data.status === 'running') startPoll();
     } catch (err) {
-      setRunError(extractErrorMessage(err, 'Failed to start A/B test. Check strategy names and try again.'));
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const detail = extractErrorMessage(err, '');
+      if (status === 422) {
+        setRunError(detail || 'A/B test failed — strategy or market data unavailable for the selected period. Try a shorter duration or different symbol.');
+      } else if (status === 403) {
+        setRunError('A/B testing requires a Professional plan or above.');
+      } else {
+        setRunError(detail || 'Failed to start A/B test. Ensure the backend is running.');
+      }
     } finally {
       setRunning(false);
     }
@@ -211,11 +241,11 @@ const ABTesting: React.FC = () => {
           <div style={s.cardTitle}>New Test</div>
           <label style={s.label}>Strategy A</label>
           <select style={s.select} value={stratA} onChange={e => setStratA(e.target.value)}>
-            {STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
+            {strategies.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
           <label style={s.label}>Strategy B</label>
           <select style={s.select} value={stratB} onChange={e => setStratB(e.target.value)}>
-            {STRATEGIES.map(s => <option key={s} value={s}>{s}</option>)}
+            {strategies.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
           <label style={s.label}>Symbol</label>
           <select style={s.select} value={symbol} onChange={e => setSymbol(e.target.value)}>

@@ -175,9 +175,58 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
+# Canonical name → (module, class) mapping for A/B test strategy resolution.
+# Frontend sends the short display name; this maps it to the real class.
+_STRATEGY_CLASS_MAP: dict[str, tuple[str, str]] = {
+    # Short names (sent by frontend ABTesting.tsx)
+    "MovingAverageCrossover": ("strategies.ma_crossover",    "MovingAverageCrossover"),
+    "RSIStrategy":            ("strategies.rsi_strategy",    "RSIStrategy"),
+    "MACDStrategy":           ("strategies.macd_strategy",   "MACDStrategy"),
+    "BollingerBands":         ("strategies.bollinger_bands", "BollingerBandsStrategy"),
+    "SMCICTStrategy":         ("strategies.smc_ict",         "SMCICTStrategy"),
+    "EMAcrossover":           ("strategies.ema_crossover",   "EMAcrossoverStrategy"),
+    "MeanReversion":          ("strategies.mean_reversion",  "MeanReversionStrategy"),
+    "Breakout":               ("strategies.breakout",        "BreakoutStrategy"),
+    "Stochastic":             ("strategies.stochastic",      "StochasticStrategy"),
+    # Full class names (also accepted for robustness)
+    "BollingerBandsStrategy": ("strategies.bollinger_bands", "BollingerBandsStrategy"),
+    "EMAcrossoverStrategy":   ("strategies.ema_crossover",   "EMAcrossoverStrategy"),
+    "MeanReversionStrategy":  ("strategies.mean_reversion",  "MeanReversionStrategy"),
+    "BreakoutStrategy":       ("strategies.breakout",        "BreakoutStrategy"),
+    "StochasticStrategy":     ("strategies.stochastic",      "StochasticStrategy"),
+}
+
+
+def _resolve_strategy_instance(strategy_name: str):
+    """
+    Import and instantiate a strategy class by its display name.
+
+    Raises ValueError with a clear message when the name is not registered.
+    """
+    entry = _STRATEGY_CLASS_MAP.get(strategy_name)
+    if entry is None:
+        available = ", ".join(sorted(_STRATEGY_CLASS_MAP.keys()))
+        raise ValueError(
+            f"Unknown strategy '{strategy_name}'. Available: {available}"
+        )
+    module_path, class_name = entry
+    try:
+        import importlib
+        mod = importlib.import_module(module_path)
+        cls = getattr(mod, class_name)
+        return cls({})
+    except Exception as exc:
+        raise ValueError(
+            f"Failed to load strategy '{strategy_name}' from {module_path}.{class_name}: {exc}"
+        ) from exc
+
+
 def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
     """
     Run a real backtest for a named strategy using the backtesting engine.
+
+    Resolves the strategy name to a concrete class via _STRATEGY_CLASS_MAP,
+    adds it to the engine, then runs the simulation.
 
     Returns a result dict compatible with the A/B test response schema.
     Raises ValueError when the strategy is not registered or data is unavailable.
@@ -186,6 +235,9 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
         from datetime import timedelta
 
         from backtesting.engine_config import BacktestConfig, BacktestEngine
+
+        # Resolve and instantiate the strategy — raises ValueError on unknown name
+        strategy_instance = _resolve_strategy_instance(strategy_name)
 
         end_dt = datetime.now(UTC)
         start_dt = end_dt - timedelta(days=duration_days)
@@ -196,6 +248,8 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
             initial_capital=initial_capital,
         )
         engine = BacktestEngine(config=config)
+        engine.add_strategy(strategy_instance)
+
         import asyncio
 
         result = asyncio.run(engine.run())
@@ -209,6 +263,9 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
             "win_rate": round(float(result.win_rate * 100), 2),
             "equity_curve": result.equity_curve,
         }
+    except ValueError:
+        # Re-raise clean ValueError messages (unknown strategy, data unavailable)
+        raise
     except ImportError:
         raise ValueError(
             "BacktestEngine is not available. Ensure the backtest module is installed and configured."
@@ -274,6 +331,12 @@ async def get_ab_test(test_id: str, user: TokenPayload = Depends(require_plan("p
     if not t or t["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Test not found")
     return t
+
+
+@router.get("/api/advanced/ab-tests/strategies/available", summary="List available A/B test strategy names")
+async def list_ab_strategies(user: TokenPayload = Depends(require_plan("professional"))):
+    """Return the canonical strategy names accepted by POST /api/advanced/ab-tests/run."""
+    return {"strategies": sorted(_STRATEGY_CLASS_MAP.keys())}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
