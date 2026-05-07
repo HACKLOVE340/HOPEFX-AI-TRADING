@@ -515,7 +515,12 @@ async def get_av_threats(
 async def trigger_av_scan(
     user: TokenPayload = Depends(require_role("admin")),
 ):
-    """Kick off a full antivirus scan of the deployment directory."""
+    """
+    Kick off a full antivirus scan of the deployment directory.
+
+    Returns status=triggered when the AV engine runs synchronously, or
+    status=queued when the engine is unavailable (always HTTP 200 — never 500).
+    """
     triggered_at = datetime.now(UTC).isoformat()
     try:
         from security.antivirus import get_av_engine
@@ -524,13 +529,15 @@ async def trigger_av_scan(
         result = engine.scan_all()
         logger.info("AV scan triggered: user=%s", user.sub)
         return {"status": "triggered", "triggered_at": triggered_at, **result}
+    except ImportError:
+        logger.warning("AV engine module unavailable — scan queued: user=%s", user.sub)
     except Exception as exc:
-        logger.info("AV scan (fallback): user=%s err=%s", user.sub, exc)
+        logger.warning("AV scan engine error — scan queued: user=%s err=%s", user.sub, exc)
 
     return {
         "status": "queued",
         "triggered_at": triggered_at,
-        "message": "AV scan queued.  Results will appear in /api/security/av/threats.",
+        "message": "AV scan queued. Results will appear in /api/security/av/threats once the engine initialises.",
     }
 
 

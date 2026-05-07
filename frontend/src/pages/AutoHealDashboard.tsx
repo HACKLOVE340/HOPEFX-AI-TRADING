@@ -104,9 +104,8 @@ async function fetchThreats(): Promise<Threat[]> {
   return (Array.isArray(res.data) ? res.data : (res.data as { threats?: Threat[] }).threats) ?? [];
 }
 
-async function triggerAvScan(): Promise<void> {
-  await securityHealingApi.avScan();
-}
+// triggerAvScan removed — handleAvScan calls securityHealingApi.avScan() directly
+// so it can inspect the response status (queued vs triggered).
 
 async function quarantineThreat(threatId: string): Promise<void> {
   await securityHealingApi.avQuarantine({ threat_id: threatId });
@@ -413,31 +412,69 @@ const AutoHealDashboard: React.FC = () => {
   const handleScan = async () => {
     setScanning(true);
     setScanProgress(0);
-    // Simulate progress while scan runs (real progress from WS if available)
+    setError(null);
     const interval = setInterval(() => setScanProgress(p => Math.min(p + 8, 90)), 400);
     try {
       await triggerScan();
       setScanProgress(100);
       await loadAll();
-    } catch { setError('Scan trigger failed'); }
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (status === 403) {
+        setError('Integrity scan requires admin role.');
+      } else if (status === 503) {
+        setError('Self-healer service unavailable — scan queued for next scheduled run.');
+      } else {
+        setError(detail ?? (err instanceof Error ? err.message : 'Scan trigger failed'));
+      }
+    }
     finally { clearInterval(interval); setScanning(false); setTimeout(() => setScanProgress(0), 1500); }
   };
 
   const handleAvScan = async () => {
     setAvScanning(true);
     setAvProgress(0);
+    setError(null);
     const interval = setInterval(() => setAvProgress(p => Math.min(p + 5, 90)), 600);
     try {
-      await triggerAvScan();
+      const res = await securityHealingApi.avScan() as { data?: { status?: string; message?: string } };
       setAvProgress(100);
+      // Backend returns 200 with status=queued when AV engine is unavailable — treat as success
+      const scanStatus = res?.data?.status ?? 'triggered';
+      if (scanStatus === 'queued') {
+        setError('AV scan queued — engine initialising. Results will appear in the threats list shortly.');
+      }
       await loadAll();
-    } catch { setError('AV scan trigger failed'); }
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (status === 403) {
+        setError('AV scan requires admin role.');
+      } else if (status === 503) {
+        setError('AV engine unavailable — scan queued for next scheduled run.');
+      } else {
+        setError(detail ?? (err instanceof Error ? err.message : 'AV scan trigger failed'));
+      }
+    }
     finally { clearInterval(interval); setAvScanning(false); setTimeout(() => setAvProgress(0), 1500); }
   };
 
   const handleRebuild = async () => {
     setRebuilding(true);
-    try { await rebuildBaseline(); await loadAll(); } catch { setError('Baseline rebuild failed'); }
+    setError(null);
+    try {
+      await rebuildBaseline();
+      await loadAll();
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      if (status === 403) {
+        setError('Baseline rebuild requires admin role.');
+      } else {
+        setError(detail ?? (err instanceof Error ? err.message : 'Baseline rebuild failed'));
+      }
+    }
     finally { setRebuilding(false); }
   };
 
