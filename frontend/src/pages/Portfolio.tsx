@@ -301,8 +301,8 @@ const TradeHistory: React.FC = () => {
       )}
 
       {filtered.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-[12px]">
+        <div className="overflow-x-auto -webkit-overflow-scrolling-touch">
+          <table className="w-full text-[12px] min-w-[560px]">
             <thead>
               <tr className="border-b border-[#1e2d3d]">
                 {['Symbol', 'Side', 'Size', 'Entry', 'Exit', 'P&L', 'Opened', 'Closed'].map((h) => (
@@ -594,7 +594,7 @@ const Portfolio: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
+    <div className="flex flex-col gap-3 sm:gap-4 px-3 py-3 sm:px-4 sm:py-4 md:px-6 min-h-screen bg-[#0a0f1a]">
 
       <PageHeader
         title="Portfolio"
@@ -605,18 +605,18 @@ const Portfolio: React.FC = () => {
           { label: 'Portfolio' },
         ]}
         actions={
-          <div className="flex items-center gap-2">
-            <Link to="/performance" className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors" style={{ textDecoration: 'none' }}>
-              📊 Analytics
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link to="/performance" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
+              📊 <span className="hidden xs:inline ml-1">Analytics</span>
             </Link>
-            <Link to="/trade" className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors" style={{ textDecoration: 'none' }}>
-              ⚡ Trade
+            <Link to="/trade" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#052e16] border border-[#166534] text-[#4ade80] hover:bg-[#14532d]/50 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
+              ⚡ <span className="hidden xs:inline ml-1">Trade</span>
             </Link>
-            <Link to="/journal" className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors" style={{ textDecoration: 'none' }}>
-              📓 Journal
+            <Link to="/journal" className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/50 transition-colors min-h-[36px]" style={{ textDecoration: 'none' }}>
+              📓 <span className="hidden xs:inline ml-1">Journal</span>
             </Link>
-            <button onClick={handleExport} className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors">
-              ↓ Export CSV
+            <button onClick={handleExport} className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e3a5f] border border-[#1d4ed8] text-[#60a5fa] hover:bg-[#1d4ed8]/30 transition-colors min-h-[36px]">
+              ↓ <span className="hidden xs:inline ml-1">Export CSV</span>
             </button>
           </div>
         }

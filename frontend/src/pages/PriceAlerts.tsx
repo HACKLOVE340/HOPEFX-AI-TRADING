@@ -314,7 +314,7 @@ const PriceAlerts: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto px-3 py-3 sm:px-4 sm:py-6">
       <PageHeader
         title="Price Alerts"
         subtitle="Get notified via Discord, Telegram, or email when price conditions are met."
@@ -512,20 +512,20 @@ const PriceAlerts: React.FC = () => {
 // ── Tailwind-compatible style helpers (replaces inline s.xxx object) ──────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:             { padding: 24, maxWidth: 900, margin: '0 auto' },
-  createBtn:        { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 18px' },
-  card:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
+  page:             { padding: 'clamp(12px,4vw,24px)', maxWidth: 900, margin: '0 auto' },
+  createBtn:        { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '12px 18px', minHeight: 48, touchAction: 'manipulation' },
+  card:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 'clamp(14px,4vw,24px)', marginBottom: 16 },
   cardTitle:        { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' },
-  formGrid:         { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 },
+  formGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 200px), 1fr))', gap: 12, marginBottom: 16 },
   label:            { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: 500 },
-  input:            { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14, boxSizing: 'border-box' },
-  select:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
+  input:            { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16, boxSizing: 'border-box', WebkitAppearance: 'none' },
+  select:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16 },
   channelRow:       { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' },
   channelBtn:       { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', padding: '6px 14px', fontSize: 13 },
   channelBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  saveBtn:          { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 24px', marginTop: 8 },
+  saveBtn:          { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '12px 24px', marginTop: 8, minHeight: 48, width: '100%', touchAction: 'manipulation' },
   tabs:             { display: 'flex', gap: 8, marginBottom: 16 },
-  tab:              { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tab:              { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '10px 16px', fontSize: 13, minHeight: 44, touchAction: 'manipulation' },
   tabActive:        { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
   alertRow:         { display: 'flex', alignItems: 'center', gap: 12, background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', marginBottom: 8 },
   statusDot:        { width: 8, height: 8, borderRadius: '50%', flexShrink: 0 },

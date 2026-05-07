@@ -232,7 +232,7 @@ const WatchlistPage: React.FC = () => {
   const groups=groupByAsset?Array.from(new Set(displayItems.map(i=>getAssetClass(i.symbol)))):['All'];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto px-3 py-3 sm:px-4 sm:py-6">
       {alertModal&&<InlineAlertModal symbol={alertModal.symbol} currentPrice={alertModal.price} onClose={()=>setAlertModal(null)} onCreated={()=>setAlertModal(null)}/>}
 
       <PageHeader title="Watchlist" icon="👁️" subtitle="Live prices. Drag to reorder. Click symbol to open chart."
@@ -250,17 +250,18 @@ const WatchlistPage: React.FC = () => {
         }/>
 
       {/* Add row */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-5">
         <select value={addSymbol} onChange={e=>setAddSymbol(e.target.value)}
-          className="bg-terminal-raised border border-terminal-border rounded-lg text-slate-100 px-3 py-2 text-sm outline-none focus:border-blue-500 cursor-pointer">
+          className="flex-1 min-w-[140px] bg-terminal-raised border border-terminal-border rounded-lg text-slate-100 px-3 py-2.5 text-sm outline-none focus:border-blue-500 cursor-pointer"
+          style={{ fontSize: 16 }}>
           <option value="">Add symbol…</option>
           {AVAILABLE_SYMBOLS.filter(sym=>!items.find(i=>i.symbol===sym)).map(sym=><option key={sym} value={sym}>{sym}</option>)}
         </select>
         <button onClick={handleAdd} disabled={!addSymbol||adding}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 border-none rounded-lg text-white text-sm font-semibold cursor-pointer transition-colors">
+          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 border-none rounded-lg text-white text-sm font-semibold cursor-pointer transition-colors min-h-[44px]">
           {adding?'…':'+ Add'}
         </button>
-        {error&&<span className="text-red-400 text-sm">{error}</span>}
+        {error&&<span className="text-red-400 text-sm w-full">{error}</span>}
       </div>
 
       {loading?(
@@ -277,22 +278,24 @@ const WatchlistPage: React.FC = () => {
           links={[{label:'📊 Portfolio',href:'/portfolio'},{label:'📓 Journal',href:'/journal'},{label:'⚡ Trade',href:'/trade'}]}/>
       ):(
         <div className="bg-terminal-surface border border-terminal-border rounded-xl overflow-hidden">
+          {/* Scroll wrapper for narrow screens */}
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
           {/* Header */}
-          <div className="flex items-center px-4 py-2.5 border-b border-terminal-border bg-terminal-bg text-2xs font-semibold uppercase tracking-widest text-slate-500">
+          <div className="flex items-center px-4 py-2.5 border-b border-terminal-border bg-terminal-bg text-2xs font-semibold uppercase tracking-widest text-slate-500 min-w-[480px]">
             <span className="w-5 mr-1"/>
             <span className="flex-1">Symbol</span>
             <span className="w-24 text-right">Bid</span>
-            <span className="w-24 text-right">Ask</span>
-            <span className="w-20 text-right">Spread</span>
-            <span className="w-24 text-right">Mid</span>
+            <span className="w-24 text-right hidden sm:block">Ask</span>
+            <span className="w-20 text-right hidden sm:block">Spread</span>
+            <span className="w-24 text-right hidden xs:block">Mid</span>
             <span className="w-20 text-right">Change</span>
-            <span className="w-16 text-center">Trend</span>
+            <span className="w-16 text-center hidden xs:block">Trend</span>
             <span className="w-36 text-center">Actions</span>
           </div>
           {groups.map(group=>{
             const groupItems=groupByAsset?displayItems.filter(i=>getAssetClass(i.symbol)===group):displayItems;
             return(
-              <div key={group}>
+              <div key={group} className="min-w-[480px]">
                 {groupByAsset&&<div className="px-4 py-1.5 bg-terminal-bg/80 border-b border-terminal-border/60 text-2xs font-bold text-slate-600 uppercase tracking-widest">{group} ({groupItems.length})</div>}
                 {groupItems.map(item=>{
                   const globalIdx=displayItems.indexOf(item);
@@ -307,6 +310,7 @@ const WatchlistPage: React.FC = () => {
               </div>
             );
           })}
+          </div>{/* end overflow-x-auto */}
         </div>
       )}
 
