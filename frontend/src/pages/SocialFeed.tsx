@@ -225,10 +225,14 @@ const SocialFeed: React.FC = () => {
         ]}
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* WS live indicator */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: wsConnected ? 'rgba(74,222,128,0.08)' : 'rgba(100,116,139,0.08)', border: `1px solid ${wsConnected ? 'rgba(74,222,128,0.3)' : '#334155'}`, borderRadius: 20 }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: wsConnected ? (wsFlash ? '#fff' : '#4ade80') : '#475569', transition: 'background 0.2s', boxShadow: wsConnected && wsFlash ? '0 0 8px #4ade80' : 'none' }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: wsConnected ? '#4ade80' : '#475569' }}>{wsConnected ? 'LIVE' : 'OFFLINE'}</span>
+            {/* WS live indicator — OFFLINE means reconnecting, not a permanent failure */}
+            <div
+              title={wsConnected ? 'Real-time signal feed connected' : 'Reconnecting to live signal feed…'}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: wsConnected ? 'rgba(74,222,128,0.08)' : 'rgba(100,116,139,0.08)', border: `1px solid ${wsConnected ? 'rgba(74,222,128,0.3)' : '#334155'}`, borderRadius: 20, cursor: 'default' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: wsConnected ? (wsFlash ? '#fff' : '#4ade80') : '#475569', transition: 'background 0.2s', boxShadow: wsConnected && wsFlash ? '0 0 8px #4ade80' : 'none', animation: !wsConnected ? 'pulse 2s infinite' : 'none' }} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: wsConnected ? '#4ade80' : '#475569' }}>
+                {wsConnected ? 'LIVE' : 'RECONNECTING'}
+              </span>
             </div>
             <Link to="/leaderboard"  style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🏆 Leaderboard</Link>
             <Link to="/copy-trading" style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)',  border: '1px solid rgba(52,211,153,0.3)',  borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🔁 Copy Trading</Link>
@@ -277,11 +281,47 @@ const SocialFeed: React.FC = () => {
 
       {error && <div style={s.errorBox}>{error}</div>}
 
+      {/* Opt-in call-to-action — shown prominently when user hasn't opted in */}
+      {optedIn === false && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(139,92,246,0.08))',
+          border: '1px solid rgba(59,130,246,0.25)',
+          borderRadius: 12, padding: '20px 24px', marginBottom: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9', marginBottom: 4 }}>
+              📡 Share your AI signals with the community
+            </div>
+            <div style={{ fontSize: 13, color: '#94a3b8', maxWidth: 480 }}>
+              Opt in to broadcast your high-confidence signals (≥70%) to other traders.
+              Build your reputation on the leaderboard and earn copy-trading followers.
+            </div>
+          </div>
+          <button
+            onClick={handleOptToggle}
+            disabled={optLoading}
+            style={{
+              padding: '10px 24px', borderRadius: 8, fontWeight: 700, fontSize: 14, cursor: 'pointer',
+              background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+              border: 'none', color: '#fff', opacity: optLoading ? 0.6 : 1,
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            {optLoading ? 'Enabling…' : '✅ Enable Signal Sharing'}
+          </button>
+        </div>
+      )}
+
       {filteredItems.length === 0 && !loading && !error && (
         <EmptyState
           icon="📡"
-          title="No signals yet"
-          description="Community signals appear here once traders opt in to share. You can also opt in above to contribute your own."
+          title={optedIn === false ? 'No community signals yet' : 'No signals yet'}
+          description={
+            optedIn === false
+              ? 'Be the first to share — opt in above to broadcast your AI signals to the community.'
+              : 'Community signals appear here once traders opt in to share. You can also opt in above to contribute your own.'
+          }
           action={
             <div style={{ display: 'flex', gap: 8 }}>
               <Link to="/ai-chart-dashboard" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>📈 AI Charts</Link>
@@ -328,17 +368,25 @@ const SocialFeed: React.FC = () => {
               <button onClick={() => toggleExpand(item.signal_id)} style={s.commentToggle}>
                 💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
               </button>
-              <button
-                onClick={() => { window.location.href = '/trade'; }}
+              <Link
+                to="/trade"
+                state={{
+                  signal: {
+                    symbol: item.symbol,
+                    direction: item.direction,
+                    entry_price: item.entry_price,
+                  }
+                }}
                 style={{
                   marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
                   background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
                   border: `1px solid ${item.direction === 'BUY' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
                   color: item.direction === 'BUY' ? '#4ade80' : '#f87171',
+                  textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4,
                 }}
               >
                 ⚡ Trade
-              </button>
+              </Link>
             </div>
 
             {expanded === item.signal_id && (
