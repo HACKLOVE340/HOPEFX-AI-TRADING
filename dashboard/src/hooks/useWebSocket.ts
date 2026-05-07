@@ -6,6 +6,7 @@
  * - Handles all server message types including no_live_feed
  * - Exponential back-off reconnect (no page reload)
  * - Tracks no_live_feed state so the UI can show a banner
+ * - Dispatches depth, order, and position updates to the store
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
@@ -36,12 +37,19 @@ export function useWebSocket(): WsHookResult {
   const pingAt         = useRef(0)
   const unmounted      = useRef(false)
 
-  const setPrice     = useStore((s) => s.setPrice)
-  const setAccount   = useStore((s) => s.setAccount)
-  const addSignal    = useStore((s) => s.addSignal)
-  const setWsStatus  = useStore((s) => s.setWsStatus)
-  const setHeartbeat = useStore((s) => s.setHeartbeat)
-  const token        = useStore((s) => s.token)
+  const setPrice          = useStore((s) => s.setPrice)
+  const setAccount        = useStore((s) => s.setAccount)
+  const addSignal         = useStore((s) => s.addSignal)
+  const setWsStatus       = useStore((s) => s.setWsStatus)
+  const setHeartbeat      = useStore((s) => s.setHeartbeat)
+  const upsertPosition    = useStore((s) => s.upsertPosition)
+  const removePosition    = useStore((s) => s.removePosition)
+  const setPositions      = useStore((s) => s.setPositions)
+  const upsertOrder       = useStore((s) => s.upsertOrder)
+  const removeOrder       = useStore((s) => s.removeOrder)
+  const setDepth          = useStore((s) => s.setDepth)
+  const updatePositionPrice = useStore((s) => s.updatePositionPrice)
+  const token             = useStore((s) => s.token)
 
   const connect = useCallback(() => {
     if (unmounted.current) return
@@ -60,18 +68,15 @@ export function useWebSocket(): WsHookResult {
       setConnected(true)
       setWsStatus('connected')
 
-      // Authenticate immediately
       if (token) {
         ws.send(JSON.stringify({ type: 'auth', token: `Bearer ${token}` }))
       }
 
-      // Subscribe to all channels
       ws.send(JSON.stringify({
         type: 'subscribe',
-        channels: ['prices', 'signals', 'account', 'positions'],
+        channels: ['prices', 'signals', 'account', 'positions', 'orders', 'depth'],
       }))
 
-      // Periodic ping to keep connection alive and measure latency
       if (pingTimerRef.current) clearInterval(pingTimerRef.current)
       pingTimerRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -89,7 +94,6 @@ export function useWebSocket(): WsHookResult {
         clearInterval(pingTimerRef.current)
         pingTimerRef.current = null
       }
-      // Exponential back-off reconnect — never reload the page
       const delay = reconnectDelay.current
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_MS)
       reconnectTimer.current = setTimeout(connect, delay)
@@ -117,6 +121,8 @@ export function useWebSocket(): WsHookResult {
           if (tick?.symbol) {
             setNoLiveFeed(false)
             setPrice(tick)
+            // Keep position P&L live
+            updatePositionPrice(tick.symbol, tick.mid ?? tick.bid)
           }
           break
         }
@@ -126,7 +132,7 @@ export function useWebSocket(): WsHookResult {
           setNoLiveFeed(true)
           setNoLiveFeedMessage(
             (msg.message as string) ||
-            'No live broker connection. Connect a broker in Settings.'
+            'No live broker connection. Connect a broker in Settings.',
           )
           break
         }
@@ -145,16 +151,50 @@ export function useWebSocket(): WsHookResult {
           break
         }
 
+        // ── Positions ───────────────────────────────────────────────────────
+        case 'position_update': {
+          const pos = msg.data as Parameters<typeof upsertPosition>[0]
+          if (pos?.id) upsertPosition(pos)
+          break
+        }
+        case 'position_closed': {
+          const id = (msg.data as { id: string })?.id
+          if (id) removePosition(id)
+          break
+        }
+        case 'positions_snapshot': {
+          const positions = msg.data as Parameters<typeof setPositions>[0]
+          if (Array.isArray(positions)) setPositions(positions)
+          break
+        }
+
+        // ── Orders ──────────────────────────────────────────────────────────
+        case 'order_update': {
+          const order = msg.data as Parameters<typeof upsertOrder>[0]
+          if (order?.id) upsertOrder(order)
+          break
+        }
+        case 'order_cancelled': {
+          const id = (msg.data as { id: string })?.id
+          if (id) removeOrder(id)
+          break
+        }
+
+        // ── Order book depth ────────────────────────────────────────────────
+        case 'depth_update': {
+          const depth = msg.data as Parameters<typeof setDepth>[0]
+          if (depth?.symbol) setDepth(depth)
+          break
+        }
+
         // ── Heartbeat / pong ────────────────────────────────────────────────
         case 'heartbeat': {
           setHeartbeat(Date.now())
-          // Respond so the server resets its miss counter
           if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'ping' }))
           }
           break
         }
-
         case 'pong': {
           if (pingAt.current > 0) {
             setLatency(Date.now() - pingAt.current)
@@ -167,7 +207,6 @@ export function useWebSocket(): WsHookResult {
         // ── Auth responses ──────────────────────────────────────────────────
         case 'auth_ok':
           break
-
         case 'error': {
           const code = msg.code as string
           if (code === 'AUTH_FAILED' || code === 'AUTH_REQUIRED') {
@@ -176,11 +215,12 @@ export function useWebSocket(): WsHookResult {
           break
         }
 
-        // ── Legacy message types (backwards compat) ─────────────────────────
+        // ── Legacy message types ─────────────────────────────────────────────
         case 'tick':
-          if (msg.data) setPrice(msg.data as Parameters<typeof setPrice>[0])
+          if (msg.data) {
+            setPrice(msg.data as Parameters<typeof setPrice>[0])
+          }
           break
-
         case 'equity_update':
         case 'account':
           if (msg.data) setAccount(msg.data as Parameters<typeof setAccount>[0])
@@ -190,12 +230,15 @@ export function useWebSocket(): WsHookResult {
           break
       }
     }
-  }, [token, setPrice, setAccount, addSignal, setWsStatus, setHeartbeat])
+  }, [
+    token, setPrice, setAccount, addSignal, setWsStatus, setHeartbeat,
+    upsertPosition, removePosition, setPositions, upsertOrder, removeOrder,
+    setDepth, updatePositionPrice,
+  ])
 
   useEffect(() => {
     unmounted.current = false
     connect()
-
     return () => {
       unmounted.current = true
       if (pingTimerRef.current)   clearInterval(pingTimerRef.current)
