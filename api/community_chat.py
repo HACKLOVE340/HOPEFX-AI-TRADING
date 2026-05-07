@@ -168,6 +168,53 @@ def _seed_default_rooms() -> None:
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
+_REACTIONS_PREFIX = "hopefx:community:reactions:"
+_READ_PREFIX = "hopefx:community:read:"
+_MEM_REACTIONS: dict[str, dict[str, list[str]]] = {}  # msg_id -> emoji -> [user_ids]
+_MEM_READ: dict[str, set[str]] = {}  # room_id -> set of user_ids
+
+
+def _get_reactions(msg_id: str) -> dict[str, list[str]]:
+    r = _redis()
+    if r:
+        try:
+            raw = r.hgetall(f"{_REACTIONS_PREFIX}{msg_id}")
+            return {k.decode(): json.loads(v) for k, v in raw.items()}
+        except Exception:  # nosec B110
+            pass
+    return dict(_MEM_REACTIONS.get(msg_id, {}))
+
+
+def _save_reaction(msg_id: str, emoji: str, user_ids: list[str]) -> None:
+    r = _redis()
+    if r:
+        try:
+            if user_ids:
+                r.hset(f"{_REACTIONS_PREFIX}{msg_id}", emoji, json.dumps(user_ids))
+            else:
+                r.hdel(f"{_REACTIONS_PREFIX}{msg_id}", emoji)
+            return
+        except Exception:  # nosec B110
+            pass
+    if msg_id not in _MEM_REACTIONS:
+        _MEM_REACTIONS[msg_id] = {}
+    if user_ids:
+        _MEM_REACTIONS[msg_id][emoji] = user_ids
+    else:
+        _MEM_REACTIONS[msg_id].pop(emoji, None)
+
+
+def _mark_room_read(room_id: str, user_id: str) -> None:
+    r = _redis()
+    if r:
+        try:
+            r.sadd(f"{_READ_PREFIX}{room_id}", user_id)
+            return
+        except Exception:  # nosec B110
+            pass
+    _MEM_READ.setdefault(room_id, set()).add(user_id)
+
+
 class CreateRoomBody(BaseModel):
     name: str
     description: str = ""
@@ -290,6 +337,52 @@ async def delete_message(
     else:
         _MEM_MSGS[room_id] = new_msgs
     return {"success": True}
+
+
+@router.post("/rooms/{room_id}/messages/{msg_id}/reactions")
+async def add_reaction(
+    room_id: str,
+    msg_id: str,
+    body: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Add an emoji reaction to a message. Idempotent — adding the same emoji twice is a no-op."""
+    emoji = (body.get("emoji") or "").strip()
+    if not emoji:
+        raise HTTPException(status_code=422, detail="emoji is required")
+    reactions = _get_reactions(msg_id)
+    users = reactions.get(emoji, [])
+    if user.sub not in users:
+        users = users + [user.sub]
+        _save_reaction(msg_id, emoji, users)
+    return {"msg_id": msg_id, "emoji": emoji, "count": len(users), "reactions": {**reactions, emoji: users}}
+
+
+@router.delete("/rooms/{room_id}/messages/{msg_id}/reactions/{emoji}")
+async def remove_reaction(
+    room_id: str,
+    msg_id: str,
+    emoji: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Remove the current user's emoji reaction from a message."""
+    reactions = _get_reactions(msg_id)
+    users = [u for u in reactions.get(emoji, []) if u != user.sub]
+    _save_reaction(msg_id, emoji, users)
+    updated = {**reactions, emoji: users}
+    if not users:
+        updated.pop(emoji, None)
+    return {"msg_id": msg_id, "emoji": emoji, "count": len(users), "reactions": updated}
+
+
+@router.post("/rooms/{room_id}/read")
+async def mark_room_read(
+    room_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Mark all messages in a room as read for the current user."""
+    _mark_room_read(room_id, user.sub)
+    return {"room_id": room_id, "read": True}
 
 
 @router.get("/dm/{target_user_id}")
