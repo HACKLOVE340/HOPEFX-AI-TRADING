@@ -7,7 +7,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { tradingApi, signalsApi } from '../hooks/useApi';
 import { useToast } from '../components/Toast';
 
@@ -373,14 +373,14 @@ const PatternDetector: React.FC = () => {
         )
       ) : null}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/indicators" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📐 Indicators</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
+        { label: 'AI Charts',    href: '/ai-chart',     icon: '📈', color: '#06b6d4' },
+        { label: 'AI Strategy',  href: '/ai-strategy',  icon: '🤖', color: '#a78bfa' },
+        { label: 'Indicators',   href: '/indicators',   icon: '📐', color: '#f97316' },
+        { label: 'Trade',        href: '/trade',        icon: '⚡', color: '#3b82f6' },
+        { label: 'Walk-Forward', href: '/walk-forward', icon: '📊', color: '#60a5fa' },
+        { label: 'A/B Testing',  href: '/ab-testing',   icon: '⚗️', color: '#4ade80' },
+      ]} />
     </div>
   );
 };

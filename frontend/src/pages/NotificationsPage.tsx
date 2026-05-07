@@ -14,6 +14,7 @@ import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { EmptyState } from '../components/EmptyState';
 import { Spinner } from '../components/Spinner';
 
@@ -151,21 +152,13 @@ const NotificationsPage: React.FC = () => {
         }
       />
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', fontSize: 13 }}>
-        {[
-          { to: '/alerts', label: '🚨 Price Alerts' },
-          { to: '/settings', label: '⚙️ Notification Settings' },
-          { to: '/chat', label: '💬 Chat' },
-          { to: '/security', label: '🔒 Security' },
-        ].map(({ to, label }) => (
-          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
-            {label}
-          </Link>
-        ))}
-      </div>
+      <CrossLinkBar links={[
+        { label: 'Price Alerts',          href: '/alerts',   icon: '🚨', color: '#f87171' },
+        { label: 'Notification Settings', href: '/settings', icon: '⚙️', color: '#94a3b8' },
+        { label: 'Chat',                  href: '/chat',     icon: '💬', color: '#06b6d4' },
+        { label: 'Security',              href: '/security', icon: '🔒', color: '#f59e0b' },
+        { label: 'Dashboard',             href: '/dashboard',icon: '📊', color: '#4ade80' },
+      ]} style={{ marginBottom: 24 }} />
 
       {/* List */}
       {loading && page === 1 && (
