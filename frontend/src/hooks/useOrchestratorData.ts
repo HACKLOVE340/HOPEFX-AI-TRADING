@@ -15,7 +15,11 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
-import { dataLayerApi, performanceApi, tradingApi, signalsApi, mlExtendedApi, calendarApi } from '../lib/api';
+import {
+  dataLayerApi, performanceApi, tradingApi, signalsApi, mlExtendedApi, calendarApi,
+  newsApi, regimeApi, positionSizingApi, drawdownApi, allocatorApi,
+  signalEngineApi, llmApi, securityHealingApi, profilesListApi,
+} from '../lib/api';
 
 // Non-critical queries are held back for this many milliseconds after mount
 // so the initial burst of critical requests can complete first.
@@ -499,6 +503,196 @@ export function useRiskSnapshot() {
   return query;
 }
 
+// ── Latest news (every 60s, delayed 3s) ──────────────────────────────────────
+
+export function useLatestNews(symbol?: string) {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['news', 'latest', symbol ?? 'all'],
+    queryFn:  async () => {
+      const res = await newsApi.latest(symbol ? { symbol, limit: 20 } : { limit: 20 });
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── Geopolitical signal (every 5 min, delayed 3s) ─────────────────────────────
+
+export function useGeopoliticalSignal() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['geopolitical', 'signal'],
+    queryFn:  async () => {
+      const res = await newsApi.geopoliticalSignal();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 5 * 60_000,
+    staleTime:       2.5 * 60_000,
+  });
+}
+
+// ── Regime detection (every 30s, delayed 3s) ─────────────────────────────────
+
+export function useRegime(symbol?: string) {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['regime', symbol ?? 'default'],
+    queryFn:  async () => {
+      const res = await regimeApi.current(symbol);
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 30_000,
+    staleTime:       15_000,
+  });
+}
+
+// ── Position sizing metrics (every 30s, delayed 3s) ───────────────────────────
+
+export function usePositionSizing() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['position-sizing', 'risk-metrics'],
+    queryFn:  async () => {
+      const res = await positionSizingApi.riskMetrics();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 30_000,
+    staleTime:       15_000,
+  });
+}
+
+// ── Drawdown curve (every 60s, delayed 3s) ────────────────────────────────────
+
+export function useDrawdownCurve() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['drawdown', 'curve'],
+    queryFn:  async () => {
+      const res = await drawdownApi.curve();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── Portfolio allocator status (every 60s, delayed 3s) ────────────────────────
+
+export function useAllocatorStatus() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['allocator', 'status'],
+    queryFn:  async () => {
+      const res = await allocatorApi.status();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── Signal engine status (every 30s, delayed 3s) ──────────────────────────────
+
+export function useSignalEngineStatus() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['signal-engine', 'status'],
+    queryFn:  async () => {
+      const res = await signalEngineApi.status();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 30_000,
+    staleTime:       15_000,
+  });
+}
+
+// ── LLM / AI brain health (every 60s, delayed 3s) ────────────────────────────
+
+export function useLLMHealth() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['llm', 'health'],
+    queryFn:  async () => {
+      const res = await llmApi.health();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── Security healing status (every 60s, delayed 3s) ──────────────────────────
+
+export function useSecurityHealStatus() {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['security', 'heal-status'],
+    queryFn:  async () => {
+      const res = await securityHealingApi.healStatus();
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 60_000,
+    staleTime:       30_000,
+  });
+}
+
+// ── Public profiles list (every 5 min, delayed 3s) ────────────────────────────
+
+export function useProfilesList(params?: { limit?: number; sort_by?: string }) {
+  const isAuth   = useStore(selectIsAuth);
+  const hydrated = useHasHydrated();
+  const delayed  = useDelayedEnabled(BOOTSTRAP_DELAY_MS);
+
+  return useQuery({
+    queryKey: ['profiles', 'list', params],
+    queryFn:  async () => {
+      const res = await profilesListApi.list(params);
+      return res.data;
+    },
+    enabled:         hydrated && isAuth && delayed,
+    refetchInterval: 5 * 60_000,
+    staleTime:       2.5 * 60_000,
+  });
+}
+
 // ── Bootstrap all data on mount ───────────────────────────────────────────────
 
 export function useBootstrapData() {
@@ -519,4 +713,14 @@ export function useBootstrapData() {
   useHighImpactCalendar();
   useDataFeeds();
   useRiskSnapshot();
+  // Extended hooks — non-critical, delayed
+  useLatestNews();
+  useGeopoliticalSignal();
+  useRegime();
+  usePositionSizing();
+  useDrawdownCurve();
+  useAllocatorStatus();
+  useSignalEngineStatus();
+  useLLMHealth();
+  useSecurityHealStatus();
 }
