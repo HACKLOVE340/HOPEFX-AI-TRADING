@@ -126,6 +126,10 @@ const NotificationsPage: React.FC = () => {
           <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Real-time alerts and updates</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/settings')}
+            style={{ padding: '6px 13px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚙️ Settings
+          </button>
           {(['all', 'unread'] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{
               background: filter === f ? '#1e3a5f' : '#1e293b',

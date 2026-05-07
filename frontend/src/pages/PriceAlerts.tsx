@@ -267,7 +267,17 @@ const PriceAlerts: React.FC = () => {
       {/* Active alerts */}
       {tab === 'active' && (
         loading ? <div style={s.empty}>Loading…</div> :
-        alerts.length === 0 ? <div style={s.empty}>No alerts yet. Create one above.</div> :
+        alerts.length === 0 ? (
+          <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 36 }}>🔔</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No alerts yet</div>
+            <div style={{ fontSize: 13, color: '#64748b' }}>Use the form above to create your first price alert.</div>
+            <button onClick={() => navigate('/watchlist')}
+              style={{ padding: '7px 18px', background: 'rgba(251,191,36,0.15)', border: '1px solid rgba(251,191,36,0.4)', borderRadius: 8, color: '#fbbf24', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+              👁 Watchlist
+            </button>
+          </div>
+        ) :
         alerts.map((alert) => (
           <div key={alert.id} style={s.alertRow}>
             <div style={{ ...s.statusDot, background: STATUS_COLOR[alert.status] ?? '#475569' }} />

@@ -301,7 +301,11 @@ const ResearchPage: React.FC = () => {
               padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>🔬</div>
               <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>No research notebooks yet</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Create one to start AI-powered market analysis</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>Create one to start AI-powered market analysis</div>
+              <button onClick={() => navigate('/ai-strategy')}
+                style={{ padding: '7px 18px', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.4)', borderRadius: 8, color: '#4ade80', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                🤖 AI Strategy
+              </button>
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

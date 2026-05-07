@@ -219,7 +219,15 @@ const SocialFeed: React.FC = () => {
       {error && <div style={s.errorBox}>{error}</div>}
 
       {filteredItems.length === 0 && !loading && !error && (
-        <div style={s.empty}>No signals yet. Check back soon or opt in to share yours.</div>
+        <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 36 }}>📡</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No signals yet</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Check back soon or generate AI signals now.</div>
+          <button onClick={() => navigate('/signals')}
+            style={{ padding: '7px 18px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+            📡 View Signals
+          </button>
+        </div>
       )}
 
       <div style={s.feed}>

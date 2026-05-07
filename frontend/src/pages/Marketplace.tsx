@@ -212,7 +212,7 @@ const Marketplace: React.FC = () => {
           </div>
           <div style={st.categoryRow}>{CATEGORIES.map(c=><button key={c} onClick={()=>setCategory(c)} style={{...st.categoryPill,background:category===c?'#3b82f6':'#1e293b',color:category===c?'#fff':'#94a3b8',border:`1px solid ${category===c?'#3b82f6':'#334155'}`}}>{c==='all'?'All':c.replace('_',' ')}</button>)}</div>
           {loadErr&&<div style={st.errorBox}>{loadErr}</div>}
-          {loading?<p style={{color:'#64748b',padding:'40px 0'}}>Loading strategies…</p>:!loadErr&&visible.length===0?<p style={{color:'#64748b',padding:'40px 0'}}>No strategies match your filters.</p>:(
+          {loading?<p style={{color:'#64748b',padding:'40px 0'}}>Loading strategies…</p>:!loadErr&&visible.length===0?(<div style={{padding:'40px 0',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:12}}><div style={{fontSize:36}}>🛒</div><p style={{color:'#94a3b8',fontSize:15,fontWeight:600,margin:0}}>No strategies match your filters.</p><p style={{color:'#64748b',fontSize:13,margin:0}}>Try clearing your filters or browse all categories.</p><button onClick={()=>{setSearch('');setCategory('all');}} style={{padding:'7px 18px',background:'rgba(59,130,246,0.15)',border:'1px solid rgba(59,130,246,0.4)',borderRadius:8,color:'#60a5fa',fontSize:13,fontWeight:700,cursor:'pointer',marginTop:4}}>Clear Filters</button></div>):(
             <div style={st.grid}>{visible.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}</div>
           )}
         </>

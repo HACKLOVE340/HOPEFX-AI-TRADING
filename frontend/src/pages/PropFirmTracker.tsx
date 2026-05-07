@@ -216,7 +216,15 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Challenge History</h3>
           {historyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!historyQ.isLoading && (historyQ.data ?? []).length === 0 && (
-            <div style={{ color: '#475569', textAlign: 'center', padding: 32 }}>No challenge history yet.</div>
+            <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 32 }}>🏆</div>
+              <div style={{ color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No challenge history yet</div>
+              <div style={{ color: '#64748b', fontSize: 12 }}>Complete a challenge phase to see your history here.</div>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Start Trading
+              </button>
+            </div>
           )}
           {(historyQ.data ?? []).map(ch => (
             <div key={ch.challenge_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
@@ -270,7 +278,15 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Daily P&L Stats</h3>
           {dailyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!dailyQ.isLoading && (dailyQ.data ?? []).length === 0 && (
-            <div style={{ color: '#475569', textAlign: 'center', padding: 32 }}>No daily stats yet.</div>
+            <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 32 }}>📈</div>
+              <div style={{ color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No daily stats yet</div>
+              <div style={{ color: '#64748b', fontSize: 12 }}>Trade to start building your daily P&amp;L record.</div>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Start Trading
+              </button>
+            </div>
           )}
           {(dailyQ.data ?? []).length > 0 && (
             <ResponsiveContainer width="100%" height={200}>

@@ -598,10 +598,22 @@ const TCADashboard: React.FC = () => {
         </div>
 
         {filteredRecords.length === 0 ? (
-          <div style={pg.empty}>
-            {records.length === 0
-              ? 'No fill records yet — trades will appear here once the execution engine records fills.'
-              : 'No records match the current filters.'}
+          <div style={{ ...pg.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 36 }}>📊</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>
+              {records.length === 0 ? 'No fill records yet' : 'No records match the current filters'}
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 360 }}>
+              {records.length === 0
+                ? 'Trades will appear here once the execution engine records fills.'
+                : 'Try clearing your filters to see all records.'}
+            </div>
+            {records.length === 0 && (
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Start Trading
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

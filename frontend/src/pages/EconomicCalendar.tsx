@@ -330,7 +330,15 @@ const EconomicCalendar: React.FC = () => {
           ) : fetchErr ? (
             <div style={s.errorBox}>{fetchErr}</div>
           ) : events.length === 0 ? (
-            <div style={s.empty}>No events found.</div>
+            <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 36 }}>📅</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No events found</div>
+              <div style={{ fontSize: 13, color: '#64748b' }}>Try adjusting your filters or check back later.</div>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Go to Trade
+              </button>
+            </div>
           ) : (
             Object.entries(grouped).map(([date, dayEvents]) => (
               <div key={date} style={s.dayGroup}>

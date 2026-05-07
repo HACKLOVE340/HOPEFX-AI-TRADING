@@ -99,7 +99,19 @@ const CorrelationDashboard: React.FC = () => {
           <button onClick={load} style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '6px 16px' }}>Retry</button>
         </div>
       ) : (!corr && !cot) ? (
-        <div style={s.dim}>Correlation data unavailable. Ensure the data layer is running.</div>
+        <div style={{ ...s.dim, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 36 }}>🔗</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>Correlation data unavailable</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Ensure the data layer is running, then retry.</div>
+          <button onClick={load}
+            style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+            ↻ Retry
+          </button>
+          <button onClick={() => navigate('/ai-chart')}
+            style={{ padding: '7px 18px', background: 'rgba(0,212,255,0.12)', border: '1px solid rgba(0,212,255,0.35)', borderRadius: 8, color: '#00d4ff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            📊 AI Chart
+          </button>
+        </div>
       ) : (
         <div style={s.grid}>
           {/* Correlation matrix */}

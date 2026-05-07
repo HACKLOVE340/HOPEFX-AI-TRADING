@@ -178,9 +178,25 @@ const WatchlistPage: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <div style={s.header}>
-        <h1 style={s.title}>Watchlist</h1>
-        <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
+      <div style={{ ...s.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={s.title}>Watchlist</h1>
+          <p style={s.subtitle}>Live prices refresh every 5 seconds. Click a symbol to open its chart.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/trade')}
+            style={{ padding: '6px 13px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚡ Trade
+          </button>
+          <button onClick={() => navigate('/signals')}
+            style={{ padding: '6px 13px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📡 Signals
+          </button>
+          <button onClick={() => navigate('/price-alerts')}
+            style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🔔 Alerts
+          </button>
+        </div>
       </div>
 
       <div style={s.addRow}>

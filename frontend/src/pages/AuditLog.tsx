@@ -8,6 +8,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -131,6 +132,7 @@ const COLUMNS: Column<AuditEvent>[] = [
 const PAGE_SIZE = 50;
 
 const AuditLog: React.FC = () => {
+  const navigate = useNavigate();
   const [events, setEvents]     = useState<AuditEvent[]>([]);
   const [total, setTotal]       = useState(0);
   const [page, setPage]         = useState(1);
@@ -230,13 +232,23 @@ const AuditLog: React.FC = () => {
         title="Audit Log"
         subtitle={`${total.toLocaleString()} events total${liveCount > 0 ? ` · ${liveCount} live` : ''}`}
         actions={
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            style={s.exportBtn}
-          >
-            {exporting ? <Spinner size="sm" /> : '⬇ Export CSV'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button onClick={() => navigate('/security')}
+              style={{ padding: '6px 13px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🛡 Security
+            </button>
+            <button onClick={() => navigate('/auto-heal')}
+              style={{ padding: '6px 13px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              🔧 Auto-Heal
+            </button>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              style={s.exportBtn}
+            >
+              {exporting ? <Spinner size="sm" /> : '⬇ Export CSV'}
+            </button>
+          </div>
         }
       />
 

@@ -229,6 +229,20 @@ export default function AIChartDashboard() {
           <p className="text-[11px] text-slate-500">Multi-symbol AI analysis</p>
         </div>
         <div className="flex-1" />
+        <div className="flex items-center gap-2 mr-2">
+          <button onClick={() => navigate('/pattern-detector')}
+            className="px-2.5 py-1 rounded text-[11px] font-bold border border-[#334155] text-slate-400 hover:border-[#475569] hover:text-slate-200 transition-colors bg-transparent cursor-pointer">
+            🔍 Patterns
+          </button>
+          <button onClick={() => navigate('/ai-strategy')}
+            className="px-2.5 py-1 rounded text-[11px] font-bold border border-[#334155] text-slate-400 hover:border-[#475569] hover:text-slate-200 transition-colors bg-transparent cursor-pointer">
+            🤖 Strategy
+          </button>
+          <button onClick={() => navigate('/signals')}
+            className="px-2.5 py-1 rounded text-[11px] font-bold border border-[#334155] text-slate-400 hover:border-[#475569] hover:text-slate-200 transition-colors bg-transparent cursor-pointer">
+            📡 Signals
+          </button>
+        </div>
         <TfSelector value={timeframe} onChange={setTimeframe} />
       </div>
 
