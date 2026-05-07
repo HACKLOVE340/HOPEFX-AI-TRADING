@@ -494,11 +494,12 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
           </a>
         </div>
 
-        {/* Mobile hamburger */}
+        {/* Mobile hamburger — 44×44 touch target */}
         <button
-          className="md:hidden p-2 text-slate-400 hover:text-white"
+          className="md:hidden flex items-center justify-center w-11 h-11 text-slate-400 hover:text-white rounded-lg"
           onClick={() => setMobileOpen(v => !v)}
-          aria-label="Toggle menu"
+          aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={mobileOpen}
         >
           {mobileOpen ? <X size={20} /> : <Menu size={20} />}
         </button>
@@ -513,20 +514,30 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
             exit={{ opacity: 0, height: 0 }}
             className="md:hidden bg-terminal-surface border-b border-terminal-border overflow-hidden"
           >
-            <div className="px-4 py-4 flex flex-col gap-3">
+            <div className="px-4 py-3 flex flex-col">
               {NAV_LINKS.map(([href, label]) => (
                 <a
                   key={href}
                   href={href}
                   onClick={(e) => handleSmoothScroll(e, href)}
-                  className="text-sm text-slate-300 hover:text-white py-1.5 font-medium"
+                  className="flex items-center text-sm text-slate-300 hover:text-white font-medium min-h-[44px] border-b border-terminal-border/40 last:border-0"
                 >
                   {label}
                 </a>
               ))}
-              <div className="pt-2 border-t border-terminal-border flex flex-col gap-2">
-                <a href="/login" className="text-sm font-semibold text-slate-300 py-2 text-center border border-terminal-border rounded-lg">Log in</a>
-                <a href="/register" className="text-sm font-semibold bg-neon-blue text-terminal-bg py-2 text-center rounded-lg">Start free trial</a>
+              <div className="pt-3 pb-1 flex flex-col gap-2">
+                <a
+                  href="/login"
+                  className="flex items-center justify-center text-sm font-semibold text-slate-300 min-h-[44px] border border-terminal-border rounded-lg hover:border-slate-500 hover:text-white transition-colors"
+                >
+                  Log in
+                </a>
+                <a
+                  href="/register"
+                  className="flex items-center justify-center text-sm font-semibold bg-neon-blue text-terminal-bg min-h-[44px] rounded-lg hover:bg-neon-blue/90 transition-colors"
+                >
+                  Start free trial
+                </a>
               </div>
             </div>
           </motion.div>
@@ -540,7 +551,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
 
 function Hero() {
   return (
-    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-24 pb-16 overflow-hidden">
+    <section className="relative min-h-screen flex flex-col items-center justify-center text-center px-4 pt-20 sm:pt-24 pb-16 overflow-hidden">
       {/* Background grid */}
       <div className="absolute inset-0 bg-grid-terminal opacity-60 pointer-events-none" />
       {/* Radial glow */}
@@ -566,7 +577,7 @@ function Hero() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.65, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          className="text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-100 leading-[1.08] mb-6"
+          className="text-4xl xs:text-5xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-100 leading-[1.08] mb-6"
         >
           Trade{' '}
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-neon-amber to-yellow-300">
@@ -592,11 +603,11 @@ function Hero() {
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.48 }}
-          className="flex flex-wrap items-center justify-center gap-4 mb-16"
+          className="flex flex-col xs:flex-row flex-wrap items-center justify-center gap-3 mb-16 w-full"
         >
           <a
             href="/register"
-            className="inline-flex items-center gap-2 bg-neon-blue text-terminal-bg font-bold text-base px-7 py-3.5 rounded-xl hover:bg-neon-blue/90 transition-all duration-150 shadow-neon-blue hover:shadow-lg hover:-translate-y-0.5"
+            className="inline-flex items-center justify-center gap-2 bg-neon-blue text-terminal-bg font-bold text-base px-7 py-3.5 rounded-xl hover:bg-neon-blue/90 transition-all duration-150 shadow-neon-blue hover:shadow-lg hover:-translate-y-0.5 w-full xs:w-auto min-h-[48px]"
           >
             Start free trial <ArrowRight size={16} />
           </a>
@@ -607,7 +618,7 @@ function Hero() {
               const el = document.querySelector('#how-it-works') as HTMLElement | null;
               if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 64, behavior: 'smooth' });
             }}
-            className="inline-flex items-center gap-2 border border-terminal-border text-slate-300 font-semibold text-base px-7 py-3.5 rounded-xl hover:border-slate-500 hover:text-white transition-all duration-150"
+            className="inline-flex items-center justify-center gap-2 border border-terminal-border text-slate-300 font-semibold text-base px-7 py-3.5 rounded-xl hover:border-slate-500 hover:text-white transition-all duration-150 w-full xs:w-auto min-h-[48px]"
           >
             See how it works <ChevronRight size={16} />
           </a>
@@ -727,7 +738,7 @@ function HowItWorksSection() {
           </p>
         </Reveal>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 relative">
+        <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-8 relative">
           {/* Connector line (desktop) */}
           <div className="hidden lg:block absolute top-8 left-[12.5%] right-[12.5%] h-px bg-gradient-to-r from-transparent via-terminal-border to-transparent" />
 
@@ -824,7 +835,7 @@ function PricingSection() {
 
         {/* Skeleton while loading */}
         {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="rounded-2xl bg-terminal-surface border border-terminal-border p-7 animate-pulse">
                 <div className="h-4 w-24 bg-terminal-border rounded mb-4" />
@@ -842,7 +853,7 @@ function PricingSection() {
 
         {/* Plan cards */}
         {!loading && plans.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
             {plans.map((plan, i) => {
               const featured = plan.badge === 'Most popular';
               return (
@@ -994,16 +1005,16 @@ function CTABand() {
             14-day free trial on all plans. No credit card required. Cancel anytime.
             Paper trading is free forever.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          <div className="flex flex-col xs:flex-row flex-wrap items-center justify-center gap-3 w-full">
             <a
               href="/register"
-              className="inline-flex items-center gap-2 bg-neon-green text-terminal-bg font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-green/90 transition-all duration-150 shadow-neon-green hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 bg-neon-green text-terminal-bg font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-green/90 transition-all duration-150 shadow-neon-green hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
             >
               Create free account <ArrowRight size={16} />
             </a>
             <a
               href="/register?plan=elite"
-              className="inline-flex items-center gap-2 border border-neon-amber/50 text-neon-amber font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-amber/10 transition-all duration-150 hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 border border-neon-amber/50 text-neon-amber font-bold text-base px-8 py-4 rounded-xl hover:bg-neon-amber/10 transition-all duration-150 hover:-translate-y-0.5 w-full xs:w-auto min-h-[52px]"
             >
               Unlock Elite <Eye size={16} />
             </a>
@@ -1029,7 +1040,7 @@ function Footer() {
   return (
     <footer className="bg-terminal-surface border-t border-terminal-border px-4 pt-14 pb-8">
       <div className="max-w-6xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 mb-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <a href="/" className="flex items-center gap-2 mb-3 w-fit">
@@ -1254,7 +1265,7 @@ function PlatformStatsBar() {
   if (!stats && !error) {
     return (
       <div className="w-full bg-terminal-surface/60 border-b border-terminal-border">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-8">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="w-16 h-2.5 rounded bg-terminal-border/50 animate-pulse" />
@@ -1280,7 +1291,7 @@ function PlatformStatsBar() {
 
   return (
     <div className="w-full bg-terminal-surface/60 border-b border-terminal-border">
-      <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-8">
+      <div className="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
         {items.map(item => (
           <div key={item.label} className="flex items-center gap-2">
             <span className="text-xs text-slate-500">{item.label}</span>
