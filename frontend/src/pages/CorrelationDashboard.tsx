@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { api } from '../hooks/useApi';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -324,28 +324,13 @@ const CorrelationDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* ── Cross-links ── */}
-          <div style={{ ...s.card, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={s.cardTitle}>Related Tools</div>
-            {[
-              { to: '/ai-strategy',      color: '#a78bfa', icon: '🤖', label: 'AI Strategy Generator',  desc: 'Build strategies from correlation insights' },
-              { to: '/pattern-detector', color: '#fbbf24', icon: '🔍', label: 'Pattern Detector',        desc: 'Find chart patterns across symbols' },
-              { to: '/walk-forward',     color: '#60a5fa', icon: '📊', label: 'Walk-Forward Analysis',   desc: 'Validate strategy stability across folds' },
-              { to: '/ab-testing',       color: '#34d399', icon: '⚡', label: 'A/B Testing',             desc: 'Compare two strategies head-to-head' },
-              { to: '/geopolitical',     color: '#fbbf24', icon: '🌍', label: 'Geopolitical Risk',       desc: 'Macro risk events affecting correlations' },
-            ].map(({ to, color, icon, label, desc }) => (
-              <Link key={to} to={to} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: '#0f172a', borderRadius: 8, border: '1px solid #1e293b', textDecoration: 'none' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = color)}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e293b')}
-              >
-                <span style={{ fontSize: 18 }}>{icon}</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color }}>{label}</div>
-                  <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{desc}</div>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <CrossLinkBar title="Related Tools" links={[
+            { label: 'AI Strategy Generator', href: '/ai-strategy',      icon: '🤖', color: '#a78bfa' },
+            { label: 'Pattern Detector',       href: '/pattern-detector', icon: '🔍', color: '#fbbf24' },
+            { label: 'Walk-Forward Analysis',  href: '/walk-forward',     icon: '📊', color: '#60a5fa' },
+            { label: 'A/B Testing',            href: '/ab-testing',       icon: '⚗️', color: '#34d399' },
+            { label: 'Geopolitical Risk',      href: '/geopolitical',     icon: '🌍', color: '#f59e0b' },
+          ]} />
         </div>
       )}
 
