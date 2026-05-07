@@ -793,6 +793,35 @@ async def get_marketplace_subscriptions(user: TokenPayload = Depends(get_current
         return {"subscriptions": []}
 
 
+@router.delete(
+    "/marketplace/subscriptions/{strategy_id}",
+    summary="Cancel a marketplace strategy subscription",
+    status_code=200,
+)
+async def cancel_marketplace_subscription(
+    strategy_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Cancel the calling user's subscription to a marketplace strategy.
+    Removes the purchase record from the user's subscription list.
+    """
+    try:
+        from database.simple_store import db_get, db_set
+
+        purchases: list = db_get(f"marketplace:purchases:{user.sub}") or []
+        updated = [p for p in purchases if p.get("strategy_id") != strategy_id]
+        if len(updated) == len(purchases):
+            raise HTTPException(status_code=404, detail="Subscription not found")
+        db_set(f"marketplace:purchases:{user.sub}", updated)
+        return {"cancelled": True, "strategy_id": strategy_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to cancel marketplace subscription for user %s: %s", user.sub, exc)
+        raise HTTPException(status_code=500, detail="Failed to cancel subscription") from exc
+
+
 # ==========================
 # Analytics Endpoints
 # ==========================
