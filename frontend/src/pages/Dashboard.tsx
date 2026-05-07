@@ -113,8 +113,11 @@ const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
 };
 
 const PriceTicker: React.FC = () => (
-  <div style={s.ticker}>
-    {WATCHED_SYMBOLS.map((sym) => <TickerItem key={sym} sym={sym} />)}
+  /* Outer div allows horizontal scroll on mobile without affecting the page */
+  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: 12 }}>
+    <div style={{ ...s.ticker, minWidth: 'max-content' }}>
+      {WATCHED_SYMBOLS.map((sym) => <TickerItem key={sym} sym={sym} />)}
+    </div>
   </div>
 );
 
@@ -217,41 +220,43 @@ const PositionsTable: React.FC = () => {
   }
 
   return (
-    <table style={s.table}>
-      <thead>
-        <tr>
-          {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'Unreal. P&L', 'Opened'].map((h) => (
-            <th key={h} style={s.th}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {positions.map((p) => (
-          <tr
-            key={p.id}
-            style={{
-              ...s.tr,
-              background: flashColors[p.id] ?? 'transparent',
-              transition: 'background 0.4s ease',
-            }}
-          >
-            <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
-            <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
-              {p.side}
-            </td>
-            <td style={s.td}>{fmt(p.size, 2)}</td>
-            <td style={s.td}>{fmt(p.entry_price, 4)}</td>
-            <td style={s.td}>{fmt(p.current_price, 4)}</td>
-            <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-              {fmtUSD(p.unrealized_pnl)}
-            </td>
-            <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
-              {new Date(p.opened_at).toLocaleString()}
-            </td>
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <table style={{ ...s.table, minWidth: 560 }}>
+        <thead>
+          <tr>
+            {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'Unreal. P&L', 'Opened'].map((h) => (
+              <th key={h} style={s.th}>{h}</th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {positions.map((p) => (
+            <tr
+              key={p.id}
+              style={{
+                ...s.tr,
+                background: flashColors[p.id] ?? 'transparent',
+                transition: 'background 0.4s ease',
+              }}
+            >
+              <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
+              <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
+                {p.side}
+              </td>
+              <td style={s.td}>{fmt(p.size, 2)}</td>
+              <td style={s.td}>{fmt(p.entry_price, 4)}</td>
+              <td style={s.td}>{fmt(p.current_price, 4)}</td>
+              <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+                {fmtUSD(p.unrealized_pnl)}
+              </td>
+              <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
+                {new Date(p.opened_at).toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 
@@ -455,7 +460,7 @@ const MarketRegimePanel: React.FC = () => {
     regime.regime === 'ranging'       ? '#fbbf24' : '#94a3b8';
 
   return (
-    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 16 }}>
       <div>
         <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regimeColor }}>
@@ -616,7 +621,7 @@ const Dashboard: React.FC = () => {
   const acc = account;
 
   return (
-    <div style={s.page}>
+    <div className="page-content" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
       <PageHeader
         title="Dashboard"
         subtitle="Real-time trading overview"
@@ -745,37 +750,42 @@ const Dashboard: React.FC = () => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:       { padding: '24px 20px', maxWidth: 1280, margin: '0 auto' },
+  // Responsive page padding — overridden by media queries via className below
+  page:       { padding: '12px', maxWidth: 1280, margin: '0 auto', width: '100%' },
   header:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   heading:    { fontSize: 22, fontWeight: 700, color: '#f8fafc', margin: 0 },
   subheading: { fontSize: 13, color: '#64748b', margin: '2px 0 0' },
 
-  ticker:       { display: 'flex', gap: 0, overflowX: 'auto', marginBottom: 16, background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' },
-  tickerItem:   { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 120, padding: '10px 16px', borderRight: '1px solid #1e293b' },
+  // Ticker: no overflow here — wrapper div handles scroll
+  ticker:       { display: 'flex', gap: 0, background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' },
+  tickerItem:   { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110, padding: '10px 14px', borderRight: '1px solid #1e293b' },
   tickerSymbol: { fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' },
-  tickerPrice:  { fontSize: 17, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
+  tickerPrice:  { fontSize: 16, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
   tickerChange: { fontSize: 12, fontWeight: 600 },
 
-  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 14 },
-  statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 14px' },
+  // Stats grid: auto-fill so it collapses to 2 cols on mobile naturally
+  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 12 },
+  statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 12px' },
   statCardHighlight: { border: '1px solid #3b82f6', boxShadow: '0 0 12px rgba(59,130,246,0.15)' },
   statLabel:         { fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  statValue:         { fontSize: 20, fontWeight: 700, color: '#f8fafc' },
+  statValue:         { fontSize: 18, fontWeight: 700, color: '#f8fafc' },
   statSub:           { fontSize: 11, color: '#94a3b8', marginTop: 2 },
 
-  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '16px 18px', marginBottom: 14 },
+  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 14px', marginBottom: 12 },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 },
+  // twoCol: single column on mobile, 2 cols on sm+ — achieved via className
+  twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 12 },
 
   table: { width: '100%', borderCollapse: 'collapse' },
-  th:    { textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 8px', borderBottom: '1px solid #334155' },
+  th:    { textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 8px', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' },
   tr:    { borderBottom: '1px solid #0f172a' },
-  td:    { padding: '9px 8px', fontSize: 13, color: '#cbd5e1' },
+  td:    { padding: '9px 8px', fontSize: 13, color: '#cbd5e1', whiteSpace: 'nowrap' },
   empty: { color: '#64748b', fontSize: 13, margin: '8px 0' },
 
-  signalGrid:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  // signalGrid: single col on mobile, 2 cols on sm+
+  signalGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: 10 },
   signalCard:   { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' },
   signalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   signalSymbol: { fontSize: 14, fontWeight: 700, color: '#e2e8f0' },
@@ -784,8 +794,8 @@ const s: Record<string, React.CSSProperties> = {
   signalKey:    { fontSize: 11, color: '#64748b', minWidth: 72 },
   signalVal:    { fontSize: 12, fontWeight: 600, color: '#e2e8f0' },
 
-  mlGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 },
-  mlCard:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '14px 16px' },
+  mlGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 100%), 1fr))', gap: 10 },
+  mlCard:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' },
   mlName:    { fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 10 },
   mlMetrics: { display: 'flex', gap: 16 },
   mlMetric:  { display: 'flex', flexDirection: 'column', gap: 2 },
