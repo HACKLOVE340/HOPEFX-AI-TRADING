@@ -1,63 +1,107 @@
+/**
+ * PositionTable
+ *
+ * Renders open positions. Uses PositionCard in compact (table-row) mode
+ * for the trading page, and full card mode for the positions page.
+ */
+import { useEffect, useCallback } from 'react'
 import { useStore } from '../store/useStore'
+import { tradingApi } from '../hooks/useApi'
+import { PositionCard } from './PositionCard'
 
-export function PositionTable() {
-  const positions = useStore((state) => state.positions)
+interface Props {
+  compact?: boolean
+  symbol?: string  // filter to a single symbol when set
+}
 
-  if (positions.length === 0) {
+export function PositionTable({ compact = true, symbol }: Props) {
+  const positions = useStore((s) => s.positions)
+  const setPositions = useStore((s) => s.setPositions)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await tradingApi.positions()
+      const raw = Array.isArray(res.data) ? res.data : []
+      // Map API PositionResponse → store Position shape
+      setPositions(
+        raw.map((p: any) => ({
+          id: p.id,
+          symbol: p.symbol,
+          side: p.side === 'buy' || p.side === 'long' ? 'long' : 'short',
+          size: p.size ?? p.quantity ?? 0,
+          entry_price: p.entry_price ?? 0,
+          current_price: p.current_price ?? p.entry_price ?? 0,
+          unrealized_pnl: p.unrealized_pnl ?? 0,
+          realized_pnl: p.realized_pnl ?? 0,
+          stop_loss: p.stop_loss ?? null,
+          take_profit: p.take_profit ?? null,
+          margin_used: p.margin_used ?? null,
+          leverage: p.leverage ?? null,
+          opened_at: p.opened_at ?? new Date().toISOString(),
+          swap: p.swap ?? null,
+          commission: p.commission ?? null,
+        })),
+      )
+    } catch {
+      // non-fatal — positions come from WS too
+    }
+  }, [setPositions])
+
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 10_000)
+    return () => clearInterval(id)
+  }, [load])
+
+  const filtered = symbol
+    ? positions.filter((p) => p.symbol === symbol)
+    : positions
+
+  if (filtered.length === 0) {
     return (
-      <div className="bg-slate-900 rounded-lg border border-slate-800 p-8 text-center">
-        <p className="text-slate-400">No open positions</p>
-        <p className="text-sm text-slate-500 mt-1">Start trading to see positions here</p>
+      <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center">
+        <p className="text-slate-400 text-sm">No open positions</p>
+        <p className="text-xs text-slate-600 mt-1">Place an order to see positions here</p>
+      </div>
+    )
+  }
+
+  if (compact) {
+    return (
+      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+          <h3 className="font-semibold text-sm">Open Positions</h3>
+          <span className="text-xs text-slate-500">{filtered.length} position{filtered.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-xs text-slate-500 border-b border-slate-800">
+                <th className="px-3 py-2">Symbol</th>
+                <th className="px-3 py-2">Side</th>
+                <th className="px-3 py-2">Qty</th>
+                <th className="px-3 py-2">Entry</th>
+                <th className="px-3 py-2">Current</th>
+                <th className="px-3 py-2 text-right">P&amp;L</th>
+                <th className="px-3 py-2 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((pos) => (
+                <PositionCard key={pos.id} position={pos} compact />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="bg-slate-900 rounded-lg border border-slate-800 p-4">
-      <h3 className="font-semibold mb-4">Open Positions</h3>
-      <table className="w-full">
-        <thead>
-          <tr className="text-left text-sm text-slate-400">
-            <th className="pb-3">Symbol</th>
-            <th className="pb-3">Side</th>
-            <th className="pb-3">Qty</th>
-            <th className="pb-3">Entry</th>
-            <th className="pb-3">Current</th>
-            <th className="pb-3 text-right">P&L</th>
-            <th className="pb-3 text-center">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="text-sm">
-          {positions.map((pos, idx) => (
-            <tr key={idx} className="border-t border-slate-800">
-              <td className="py-3 font-medium">{pos.symbol}</td>
-              <td className="py-3">
-                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  pos.side === 'long'
-                    ? 'bg-green-500/10 text-green-400'
-                    : 'bg-red-500/10 text-red-400'
-                }`}>
-                  {pos.side.toUpperCase()}
-                </span>
-              </td>
-              <td className="py-3">{pos.size}</td>
-              <td className="py-3">{pos.entry_price.toFixed(2)}</td>
-              <td className="py-3">{pos.current_price.toFixed(2)}</td>
-              <td className={`py-3 text-right font-medium ${
-                pos.unrealized_pnl > 0 ? 'text-green-400' :
-                pos.unrealized_pnl < 0 ? 'text-red-400' : 'text-slate-400'
-              }`}>
-                {pos.unrealized_pnl > 0 ? '+' : ''}{pos.unrealized_pnl.toFixed(2)}
-              </td>
-              <td className="py-3 text-center">
-                <button className="px-3 py-1 bg-red-500/10 text-red-400 rounded text-xs hover:bg-red-500/20">
-                  Close
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {filtered.map((pos) => (
+        <PositionCard key={pos.id} position={pos} compact={false} />
+      ))}
     </div>
   )
 }
