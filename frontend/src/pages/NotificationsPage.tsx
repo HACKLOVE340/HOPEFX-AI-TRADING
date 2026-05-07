@@ -1,15 +1,16 @@
 /**
  * Notifications — real-time notification centre.
+ * Mobile-first: full-width cards, touch-friendly dismiss/action buttons.
  *
  * Wires to:
- *   GET  /api/notifications          — paginated list
- *   POST /api/notifications/:id/read — mark single read
- *   POST /api/notifications/read-all — mark all read
- *   DELETE /api/notifications/:id    — delete single
- *   WS   /ws/notifications           — real-time push
+ *   GET    /api/notifications          — paginated list
+ *   POST   /api/notifications/:id/read — mark single read
+ *   POST   /api/notifications/read-all — mark all read
+ *   DELETE /api/notifications/:id      — delete single
+ *   WS     /ws/notifications           — real-time push
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -38,21 +39,34 @@ const TYPE_ICON: Record<string, string> = {
   ai:       '🤖',
 };
 
+const TYPE_COLOR: Record<string, string> = {
+  trade:    '#4ade80',
+  alert:    '#f87171',
+  system:   '#94a3b8',
+  social:   '#a78bfa',
+  billing:  '#fbbf24',
+  security: '#f97316',
+  ai:       '#06b6d4',
+};
+
 const PAGE_SIZE = 20;
 
 const NotificationsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [items, setItems]         = useState<Notification[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [page, setPage]           = useState(1);
-  const [hasMore, setHasMore]     = useState(false);
-  const [filter, setFilter]       = useState<'all' | 'unread'>('all');
+  const [items, setItems]           = useState<Notification[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [page, setPage]             = useState(1);
+  const [hasMore, setHasMore]       = useState(false);
+  const [filter, setFilter]         = useState<'all' | 'unread'>('all');
   const [markingAll, setMarkingAll] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
+  const wsRef      = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
-  const token = useStore(s => s.token);
+  const token      = useStore(s => s.token);
 
-  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const load = useCallback(async (pg: number, flt: 'all' | 'unread') => {
     setLoading(true);
@@ -116,7 +130,7 @@ const NotificationsPage: React.FC = () => {
   const unreadCount = items.filter(n => !n.read).length;
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
+    <div className="max-w-2xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
       <PageHeader
         title="Notifications"
         subtitle="Real-time alerts and platform updates"
@@ -124,28 +138,30 @@ const NotificationsPage: React.FC = () => {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Notifications' },
         ]}
-        badge={unreadCount > 0 ? (
-          <span style={{ fontSize: 12, background: '#3b82f6', color: '#fff', borderRadius: 12, padding: '2px 8px', fontWeight: 700 }}>
-            {unreadCount}
-          </span>
-        ) : undefined}
+        badge={
+          unreadCount > 0
+            ? <span className="text-xs bg-blue-600 text-white rounded-full px-2 py-0.5 font-bold">
+                {unreadCount}
+              </span>
+            : undefined
+        }
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="flex gap-2 flex-wrap">
             {(['all', 'unread'] as const).map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{
-                background: filter === f ? '#1e3a5f' : '#1e293b',
-                border: `1px solid ${filter === f ? '#3b82f6' : '#334155'}`,
-                borderRadius: 8, color: filter === f ? '#60a5fa' : '#64748b',
-                cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px',
-              }}>
+              <button key={f} onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer transition-colors ${
+                  filter === f
+                    ? 'bg-blue-500/15 border-blue-500 text-blue-400'
+                    : 'bg-terminal-raised border-terminal-border text-slate-500 hover:text-slate-300'
+                }`}>
                 {f === 'all' ? 'All' : `Unread (${unreadCount})`}
               </button>
             ))}
-            <button onClick={markAllRead} disabled={markingAll || unreadCount === 0} style={{
-              background: '#1e293b', border: '1px solid #334155', borderRadius: 8,
-              color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '6px 12px',
-              opacity: unreadCount === 0 ? 0.5 : 1,
-            }}>
+            <button
+              onClick={markAllRead}
+              disabled={markingAll || unreadCount === 0}
+              className="px-3 py-1.5 bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-xs cursor-pointer hover:text-slate-200 transition-colors disabled:opacity-40"
+            >
               {markingAll ? '…' : '✓ Mark all read'}
             </button>
           </div>
@@ -156,90 +172,136 @@ const NotificationsPage: React.FC = () => {
         { label: 'Price Alerts',          href: '/alerts',   icon: '🚨', color: '#f87171' },
         { label: 'Notification Settings', href: '/settings', icon: '⚙️', color: '#94a3b8' },
         { label: 'Chat',                  href: '/chat',     icon: '💬', color: '#06b6d4' },
-        { label: 'Security',              href: '/security', icon: '🔒', color: '#f59e0b' },
         { label: 'Dashboard',             href: '/dashboard',icon: '📊', color: '#4ade80' },
-      ]} style={{ marginBottom: 24 }} />
+      ]} className="mb-5" />
 
-      {/* List */}
+      {/* Loading state */}
       {loading && page === 1 && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+        <div className="flex justify-center py-12">
           <Spinner size="lg" />
         </div>
       )}
+
+      {/* Empty state */}
       {!loading && items.length === 0 && (
         <EmptyState
           icon="🔔"
           title="No notifications"
-          description={filter === 'unread' ? 'No unread notifications — you\'re all caught up!' : 'Notifications for trades, alerts, and system events will appear here.'}
-          action={filter === 'unread' ? <button onClick={() => setFilter('all')} style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>View all</button> : undefined}
+          description={
+            filter === 'unread'
+              ? "No unread notifications — you're all caught up!"
+              : 'Notifications for trades, alerts, and system events will appear here.'
+          }
+          action={
+            filter === 'unread'
+              ? <button onClick={() => setFilter('all')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold cursor-pointer border-0 transition-colors">
+                  View all
+                </button>
+              : undefined
+          }
         />
       )}
-      {items.map(n => (
-        <div
-          key={n.id}
-          onClick={() => { if (!n.read) markRead(n.id); }}
-          style={{
-            background: n.read ? '#0d1421' : '#0f1e35',
-            border: `1px solid ${n.read ? '#1e293b' : '#1e3a5f'}`,
-            borderRadius: 10, padding: '14px 16px', marginBottom: 10,
-            cursor: n.read ? 'default' : 'pointer',
-            display: 'flex', gap: 14, alignItems: 'flex-start',
-            transition: 'background 0.2s',
-          }}
-        >
-          <div style={{ fontSize: 22, flexShrink: 0, marginTop: 2 }}>
-            {TYPE_ICON[n.type] ?? '🔔'}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-              <div style={{ fontWeight: n.read ? 500 : 700, color: '#f1f5f9', fontSize: 14 }}>{n.title}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                {!n.read && <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', display: 'inline-block' }} />}
-                <span style={{ fontSize: 11, color: '#64748b' }}>{new Date(n.created_at).toLocaleString()}</span>
-                <button
-                  onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
-                  style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0 }}
-                  title="Delete"
-                >×</button>
+
+      {/* Notification list */}
+      <div className="flex flex-col gap-2">
+        {items.map(n => {
+          const typeColor = TYPE_COLOR[n.type] ?? '#94a3b8';
+          return (
+            <div
+              key={n.id}
+              onClick={() => { if (!n.read) markRead(n.id); }}
+              className={`rounded-xl border transition-colors ${
+                n.read
+                  ? 'bg-terminal-bg border-terminal-border'
+                  : 'bg-blue-950/20 border-blue-900/50 cursor-pointer'
+              }`}
+            >
+              <div className="flex gap-3 p-3 sm:p-4">
+                {/* Type icon */}
+                <div
+                  className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 mt-0.5"
+                  style={{ background: `${typeColor}18`, color: typeColor }}
+                >
+                  {TYPE_ICON[n.type] ?? '🔔'}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  {/* Title row */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className={`text-sm leading-snug ${n.read ? 'font-medium text-slate-300' : 'font-bold text-slate-100'}`}>
+                      {n.title}
+                    </div>
+                    {/* Actions: unread dot + timestamp + delete */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {!n.read && (
+                        <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+                      )}
+                      <span className="text-slate-600 text-2xs hidden sm:block">
+                        {new Date(n.created_at).toLocaleString()}
+                      </span>
+                      <button
+                        onClick={e => { e.stopPropagation(); deleteNotif(n.id); }}
+                        className="text-slate-600 hover:text-slate-400 bg-transparent border-0 cursor-pointer text-lg leading-none p-0.5 min-w-[24px] min-h-[24px] flex items-center justify-center rounded transition-colors"
+                        title="Delete"
+                        aria-label="Delete notification"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Timestamp on mobile */}
+                  <div className="text-slate-600 text-2xs mt-0.5 sm:hidden">
+                    {new Date(n.created_at).toLocaleString()}
+                  </div>
+
+                  {/* Message */}
+                  <div className="text-slate-400 text-xs sm:text-sm mt-1 leading-relaxed">
+                    {n.message}
+                  </div>
+
+                  {/* Action links */}
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    {n.link && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (n.link!.startsWith('http')) {
+                            window.open(n.link, '_blank', 'noopener,noreferrer');
+                          } else {
+                            navigate(n.link!);
+                          }
+                        }}
+                        className="text-blue-400 text-xs bg-transparent border-0 cursor-pointer p-0 hover:text-blue-300 transition-colors"
+                      >
+                        View details →
+                      </button>
+                    )}
+                    {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
+                      <button
+                        onClick={e => { e.stopPropagation(); navigate('/trade'); }}
+                        className="bg-blue-500/10 border border-blue-500/30 rounded-md text-blue-400 text-2xs font-bold px-2 py-0.5 cursor-pointer hover:bg-blue-500/20 transition-colors"
+                      >
+                        ⚡ Trade
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-            <div style={{ fontSize: 13, color: '#94a3b8', marginTop: 4, lineHeight: 1.5 }}>{n.message}</div>
-            <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
-              {n.link && (
-                <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    // Internal paths use navigate; external URLs open in new tab
-                    if (n.link!.startsWith('http')) {
-                      window.open(n.link, '_blank', 'noopener,noreferrer');
-                    } else {
-                      navigate(n.link!);
-                    }
-                  }}
-                  style={{ background: 'none', border: 'none', padding: 0, fontSize: 12, color: '#3b82f6', cursor: 'pointer', display: 'inline-block' }}
-                >
-                  View details →
-                </button>
-              )}
-              {(n.type === 'trade' || n.type === 'alert' || n.type === 'ai') && (
-                <button
-                  onClick={e => e.stopPropagation()}
-                  style={{ background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
-                >
-                  ⚡ Trade
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
+          );
+        })}
+      </div>
 
+      {/* Load more */}
       {hasMore && (
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
+        <div className="text-center mt-4">
           <button
             onClick={() => load(page + 1, filter)}
             disabled={loading}
-            style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 13, padding: '8px 24px' }}
+            className="px-6 py-2.5 bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-sm cursor-pointer hover:border-slate-500 hover:text-slate-200 transition-colors disabled:opacity-50"
           >
             {loading ? 'Loading…' : 'Load more'}
           </button>
