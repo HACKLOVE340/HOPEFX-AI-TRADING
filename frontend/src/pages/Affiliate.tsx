@@ -2,7 +2,7 @@
  * Affiliate Program — full 4-tab dashboard.
  * Tabs: Overview · Referrals · Commissions · Leaderboard
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';

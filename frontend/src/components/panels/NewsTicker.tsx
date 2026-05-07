@@ -35,7 +35,7 @@ const sentimentLabel = (s: number | string | undefined): string => {
 };
 
 export function NewsTicker() {
-  const newsItems = useStore((s: { newsItems?: NewsItem[] }) => (s as { newsItems?: NewsItem[] }).newsItems ?? []);
+  const newsItems = useStore((s) => s.newsItems ?? []) as NewsItem[];
   const [paused, setPaused]   = useState(false);
   const [expanded, setExpanded] = useState(false);
   const trackRef = useRef<HTMLDivElement>(null);

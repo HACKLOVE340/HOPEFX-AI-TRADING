@@ -209,6 +209,7 @@ export interface Signal {
   readonly status:       SignalStatus;
   readonly features?:    Record<string, number>;
   readonly risk_reward?: number;
+  readonly regime?:      string;
 }
 
 // ── Account metrics ───────────────────────────────────────────────────────────

@@ -7,7 +7,7 @@
  *           DELETE /api/social/copy/{trader_id}
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';

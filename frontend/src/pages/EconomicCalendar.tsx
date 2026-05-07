@@ -15,7 +15,7 @@
  *   GET  /api/data-layer/macro         — MacroResponse (via useMacro hook)
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
