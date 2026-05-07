@@ -12,8 +12,11 @@ interface MLSignal {
   entry_price: number
   stop_loss: number
   take_profit: number
+  risk_reward: number
   generated_at: string
   status: 'active' | 'triggered' | 'expired'
+  timeframe?: string
+  regime?: string
 }
 
 interface MLHealth {

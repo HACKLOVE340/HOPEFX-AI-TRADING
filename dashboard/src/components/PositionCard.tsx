@@ -109,7 +109,8 @@ export function PositionCard({ position, compact = false }: Props) {
     setHedging(true)
     try {
       const res = await tradingApi.hedgePosition(position.id)
-      if (res.data?.hedge_order) upsertOrder(res.data.hedge_order)
+      const hedgeData = res.data as any
+      if (hedgeData?.hedge_order) upsertOrder(hedgeData.hedge_order)
     } catch (err: any) {
       showError(err?.response?.data?.detail ?? 'Hedge failed')
     } finally {

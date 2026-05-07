@@ -5,12 +5,13 @@ import { Layout } from './components/Layout'
 // ── Core pages ────────────────────────────────────────────────────────────────
 import { Dashboard }        from './pages/Dashboard'
 import { Trading }          from './pages/Trading'
+import Positioning          from './pages/Positioning'
 import { CopyTrading }      from './pages/CopyTrading'
 import { Leaderboard }      from './pages/Leaderboard'
 import { Wallet }           from './pages/Wallet'
 import { Settings }         from './pages/Settings'
 import { Performance }      from './pages/Performance'
-import { PnLDashboard }    from './pages/PnLDashboard'
+import { PnLDashboard }     from './pages/PnLDashboard'
 import PropFirmTracker      from './pages/PropFirmTracker'
 import Onboarding           from './pages/Onboarding'
 import LandingPage          from './pages/LandingPage'
@@ -90,6 +91,7 @@ function App() {
         {/* ── Authenticated pages inside Layout ─────────────────────────── */}
         <Route path="/dashboard"    element={<AuthGuard><Layout><ErrorBoundary label="Dashboard"><Dashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/trading"      element={<AuthGuard><Layout><ErrorBoundary label="Trading"><Trading /></ErrorBoundary></Layout></AuthGuard>} />
+        <Route path="/positions"    element={<AuthGuard><Layout><ErrorBoundary label="Positions"><Positioning /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/prop-firm"    element={<AuthGuard><Layout><ErrorBoundary label="Prop Firm"><PropFirmTracker /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/copy-trading" element={<AuthGuard><Layout><ErrorBoundary label="Copy Trading"><CopyTrading /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/wallet"       element={<AuthGuard><Layout><ErrorBoundary label="Wallet"><Wallet /></ErrorBoundary></Layout></AuthGuard>} />
@@ -108,7 +110,7 @@ function App() {
         <Route path="/walk-forward" element={<AuthGuard><Layout><ErrorBoundary label="Walk Forward"><WalkForward /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/profile"      element={<AuthGuard><Layout><ErrorBoundary label="Profile"><Profile /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/feed"         element={<AuthGuard><Layout><ErrorBoundary label="Social Feed"><SocialFeed /></ErrorBoundary></Layout></AuthGuard>} />
-        {/* Admin routes — require admin role (superadmin passes via rank hierarchy) */}
+        {/* Admin routes */}
         <Route path="/admin"        element={<AuthGuard requiredRole="admin"><Layout><ErrorBoundary label="Admin"><AdminPanel /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/ab-testing"   element={<AuthGuard><Layout><ErrorBoundary label="A/B Testing"><ABTesting /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/correlation"  element={<AuthGuard><Layout><ErrorBoundary label="Correlation"><CorrelationDashboard /></ErrorBoundary></Layout></AuthGuard>} />
