@@ -3,7 +3,7 @@
   "scan_interval_sec": 120,
   "patch_interval_sec": 60,
   "max_patch_bytes": 65536,
-  "aggressiveness": "aggressive",
+  "aggressiveness": "medium",
   "baseline_auto_rebuild": true,
   "quarantine_enabled": true,
   "quarantine_retention_days": 30,
@@ -30,7 +30,12 @@
     "nuclear",
     "e2e",
     "security",
-    "risk"
+    "unit",
+    "api",
+    "performance",
+    "broker",
+    "risk",
+    "ml"
   ],
   "protected_paths": "live_trading.py,risk_manager.py,ml/models/,config/secrets/",
   "auto_rollback_sensitivity": "medium",

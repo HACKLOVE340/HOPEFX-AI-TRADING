@@ -1,6 +1,6 @@
 {
-  "total": 13601,
-  "files": 369,
+  "total": 13857,
+  "files": 380,
   "by_category": {
     "e2e": 253,
     "performance": 44,
@@ -8,8 +8,8 @@
     "ml": 1712,
     "risk": 2490,
     "broker": 2207,
-    "api": 751,
-    "unit": 5977
+    "api": 775,
+    "unit": 6209
   },
   "file_list": [
     {
@@ -773,6 +773,11 @@
       "test_count": 13
     },
     {
+      "path": "tests/unit/test_auto_rollback.py",
+      "category": "unit",
+      "test_count": 24
+    },
+    {
       "path": "tests/unit/test_transaction_costs.py",
       "category": "unit",
       "test_count": 20
@@ -786,6 +791,11 @@
       "path": "tests/unit/test_execution_coverage11.py",
       "category": "risk",
       "test_count": 14
+    },
+    {
+      "path": "tests/unit/test_production_guard.py",
+      "category": "unit",
+      "test_count": 16
     },
     {
       "path": "tests/unit/test_coverage_boost_execution.py",
@@ -946,6 +956,11 @@
       "path": "tests/unit/test_order_flow.py",
       "category": "unit",
       "test_count": 23
+    },
+    {
+      "path": "tests/unit/test_two_factor.py",
+      "category": "unit",
+      "test_count": 30
     },
     {
       "path": "tests/unit/test_execution_coverage4.py",
@@ -1148,6 +1163,11 @@
       "test_count": 21
     },
     {
+      "path": "tests/unit/test_ultimate_helpers.py",
+      "category": "unit",
+      "test_count": 21
+    },
+    {
       "path": "tests/unit/test_ml_regime_signal_macro.py",
       "category": "ml",
       "test_count": 41
@@ -1233,6 +1253,11 @@
       "test_count": 16
     },
     {
+      "path": "tests/unit/test_weekly_report.py",
+      "category": "unit",
+      "test_count": 37
+    },
+    {
       "path": "tests/unit/test_cme_comex_connector.py",
       "category": "unit",
       "test_count": 42
@@ -1291,6 +1316,11 @@
       "path": "tests/unit/test_risk_pre_trade_gate_full.py",
       "category": "risk",
       "test_count": 49
+    },
+    {
+      "path": "tests/unit/test_prom_registry.py",
+      "category": "unit",
+      "test_count": 16
     },
     {
       "path": "tests/unit/test_execution_coverage_boost.py",
@@ -1363,6 +1393,11 @@
       "test_count": 35
     },
     {
+      "path": "tests/unit/test_pnl_dashboard.py",
+      "category": "unit",
+      "test_count": 25
+    },
+    {
       "path": "tests/unit/test_market_data_modules.py",
       "category": "broker",
       "test_count": 213
@@ -1423,6 +1458,11 @@
       "test_count": 20
     },
     {
+      "path": "tests/unit/test_telemetry.py",
+      "category": "unit",
+      "test_count": 23
+    },
+    {
       "path": "tests/unit/test_risk_rules.py",
       "category": "risk",
       "test_count": 19
@@ -1476,6 +1516,11 @@
       "path": "tests/unit/test_core_risk_advanced_engine.py",
       "category": "unit",
       "test_count": 7
+    },
+    {
+      "path": "tests/unit/test_api_tracing.py",
+      "category": "api",
+      "test_count": 24
     },
     {
       "path": "tests/unit/test_phase_20_26.py",
@@ -1656,6 +1701,16 @@
       "path": "tests/unit/test_broker_failover.py",
       "category": "broker",
       "test_count": 13
+    },
+    {
+      "path": "tests/unit/test_disaster_recovery.py",
+      "category": "unit",
+      "test_count": 16
+    },
+    {
+      "path": "tests/unit/test_technical_analyzer.py",
+      "category": "unit",
+      "test_count": 24
     },
     {
       "path": "tests/unit/test_execution_coverage.py",
@@ -1858,5 +1913,5 @@
       "test_count": 0
     }
   ],
-  "last_indexed": "2026-05-03T18:28:41.124199+00:00"
+  "last_indexed": "2026-05-07T18:48:43.130455+00:00"
 }
