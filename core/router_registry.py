@@ -196,6 +196,13 @@ def register_routers(
         logger.warning("KYC alias router not loaded: %s", _e)
         _kyc_alias = None
 
+    try:
+        from api.webhooks import router as _webhooks_router
+        _webhooks = _webhooks_router
+    except Exception as _e:
+        logger.warning("Webhooks router not loaded: %s", _e)
+        _webhooks = None
+
     for _router in [
         auth_router,
         trading_router,
@@ -246,6 +253,7 @@ def register_routers(
         (_community_chat_router, "Community Chat REST"),
         (_community_chat_ws_router, "Community Chat WS"),
         (_kyc_alias, "KYC alias"),
+        (_webhooks, "Webhooks (TradingView)"),
     ]:
         if _opt_router is not None:
             try:
