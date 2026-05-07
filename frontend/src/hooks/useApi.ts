@@ -418,6 +418,8 @@ export const signalsApi = {
   alerts:       ()                   => api.get('/signals/alerts'),
   deleteAlert:  (alertId: string)    => api.delete(`/signals/alerts/${alertId}`),
   engine:       ()                   => api.get('/signals/engine'),
+  /** Alias for engine() — returns signal engine status. */
+  status:       ()                   => api.get('/signals/engine'),
   channels:     ()                   => api.get('/signals/channels'),
   filterStats:  ()                   => api.get('/ml/signal-filter/stats'),
 };
