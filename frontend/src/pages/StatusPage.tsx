@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
-import { Breadcrumb } from '../components/Breadcrumb';
 import { PageHeader } from '../components/PageHeader';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -106,7 +105,6 @@ const UptimeBar: React.FC<{ history: HistoryDay[] }> = ({ history }) => (
 // ── Main component ────────────────────────────────────────────────────────────
 
 const StatusPage: React.FC = () => {
-  const navigate = useNavigate();
   const wsStatus = useStore(selectWsStatus);
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
@@ -160,12 +158,12 @@ const StatusPage: React.FC = () => {
   }, [load]);
 
   if (loading) {
-    return <div style={styles.page}><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
+    return <div className="max-w-3xl mx-auto px-4 py-6"><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
   }
 
   if (error || !data) {
     return (
-      <div style={styles.page}>
+      <div className="max-w-3xl mx-auto px-4 py-6">
         <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
           <span style={{ fontSize: 32 }}>❌</span>
           <div>
@@ -188,7 +186,7 @@ const StatusPage: React.FC = () => {
     : 100;
 
   return (
-    <div style={styles.page}>
+    <div className="max-w-3xl mx-auto px-4 py-6">
       <PageHeader
         title="System Status"
         icon="🟢"
@@ -365,7 +363,7 @@ const StatusPage: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
-  page: {
+  _page_unused: {
     maxWidth: 760,
     margin: '0 auto',
     padding: '32px 16px',
