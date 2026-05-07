@@ -213,7 +213,7 @@ const SocialFeed: React.FC = () => {
   });
 
   return (
-    <div style={s.page}>
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8 text-slate-100 min-h-screen">
       <PageHeader
         title="Community Signal Feed"
         icon="📡"
@@ -224,28 +224,37 @@ const SocialFeed: React.FC = () => {
           { label: 'Signal Feed' },
         ]}
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {/* WS live indicator — OFFLINE means reconnecting, not a permanent failure */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* WS live indicator */}
             <div
-              title={wsConnected ? 'Real-time signal feed connected' : 'Reconnecting to live signal feed…'}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: wsConnected ? 'rgba(74,222,128,0.08)' : 'rgba(100,116,139,0.08)', border: `1px solid ${wsConnected ? 'rgba(74,222,128,0.3)' : '#334155'}`, borderRadius: 20, cursor: 'default' }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: wsConnected ? (wsFlash ? '#fff' : '#4ade80') : '#475569', transition: 'background 0.2s', boxShadow: wsConnected && wsFlash ? '0 0 8px #4ade80' : 'none', animation: !wsConnected ? 'pulse 2s infinite' : 'none' }} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: wsConnected ? '#4ade80' : '#475569' }}>
+              title={wsConnected ? 'Real-time connected' : 'Reconnecting…'}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border cursor-default ${
+                wsConnected
+                  ? 'bg-green-500/8 border-green-500/30'
+                  : 'bg-slate-500/8 border-terminal-border'
+              }`}
+            >
+              <div className={`w-1.5 h-1.5 rounded-full transition-colors ${
+                wsConnected ? (wsFlash ? 'bg-white' : 'bg-green-400') : 'bg-slate-500 animate-pulse'
+              }`} />
+              <span className={`text-2xs font-bold ${wsConnected ? 'text-green-400' : 'text-slate-500'}`}>
                 {wsConnected ? 'LIVE' : 'RECONNECTING'}
               </span>
             </div>
-            <Link to="/leaderboard"  style={{ padding: '6px 12px', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🏆 Leaderboard</Link>
-            <Link to="/copy-trading" style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.1)',  border: '1px solid rgba(52,211,153,0.3)',  borderRadius: 7, color: '#34d399', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🔁 Copy Trading</Link>
-            <div style={{ width: 1, height: 20, background: '#334155' }} />
-            <span style={{ fontSize: 12, color: '#64748b' }}>Share signals:</span>
+            <Link to="/leaderboard"
+              className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-semibold no-underline hover:bg-amber-500/20 transition-colors hidden sm:inline-flex">
+              🏆 Leaderboard
+            </Link>
+            <Link to="/copy-trading"
+              className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-semibold no-underline hover:bg-emerald-500/20 transition-colors hidden sm:inline-flex">
+              🔁 Copy
+            </Link>
             <button
               onClick={handleOptToggle}
               disabled={optLoading || optedIn === null}
-              style={{
-                ...s.toggleBtn,
-                background: optedIn ? '#059669' : '#334155',
-                color: optedIn ? '#fff' : '#94a3b8',
-              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border-0 cursor-pointer transition-colors disabled:opacity-50 ${
+                optedIn ? 'bg-emerald-700 text-white' : 'bg-terminal-raised text-slate-400 hover:text-slate-200'
+              }`}
             >
               {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
             </button>
@@ -253,17 +262,18 @@ const SocialFeed: React.FC = () => {
         }
       />
 
-      {/* Symbol filters */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+      {/* Symbol filters + sort — scrollable on mobile */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1"
+        style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
         {SYMBOLS.map(sym => (
           <button
             key={sym}
             onClick={() => setSymbolFilter(sym)}
-            style={{
-              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
-              background: symbolFilter === sym ? '#3b82f6' : '#1e293b',
-              color: symbolFilter === sym ? '#fff' : '#94a3b8',
-            }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer whitespace-nowrap transition-colors flex-shrink-0 ${
+              symbolFilter === sym
+                ? 'bg-blue-600 text-white'
+                : 'bg-terminal-raised text-slate-400 hover:text-slate-200'
+            }`}
           >
             {sym}
           </button>
@@ -271,15 +281,19 @@ const SocialFeed: React.FC = () => {
         <select
           value={sortBy}
           onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          style={{ marginLeft: 'auto', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
+          className="ml-auto bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-xs px-2.5 py-1.5 outline-none cursor-pointer flex-shrink-0"
         >
-          <option value="confidence">Sort: Confidence</option>
-          <option value="return">Sort: Return</option>
-          <option value="recent">Sort: Recent</option>
+          <option value="confidence">Confidence</option>
+          <option value="return">Return</option>
+          <option value="recent">Recent</option>
         </select>
       </div>
 
-      {error && <div style={s.errorBox}>{error}</div>}
+      {error && (
+        <div className="bg-red-950/40 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-sm mb-4">
+          {error}
+        </div>
+      )}
 
       {/* Opt-in call-to-action — shown prominently when user hasn't opted in */}
       {optedIn === false && (
