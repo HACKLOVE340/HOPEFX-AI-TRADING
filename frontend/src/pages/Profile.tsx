@@ -61,7 +61,7 @@ function normalizeProfile(raw: unknown): TraderProfile {
   };
 }
 
-interface EditForm { display_name: string; bio: string; country: string; }
+interface EditForm extends Record<string, unknown> { display_name: string; bio: string; country: string; }
 
 const Profile: React.FC = () => {
   const { id } = useParams<{ id?: string }>();

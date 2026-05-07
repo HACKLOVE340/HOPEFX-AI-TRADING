@@ -281,10 +281,10 @@ const AdminPanel: React.FC = () => {
       if (auditRes.status === 'fulfilled') {
         const d = auditRes.value.data as Record<string, unknown>;
         const events = Array.isArray(d) ? d : Array.isArray(d.events) ? d.events : [];
-        setAuditEvents((events as unknown[]).map(e => {
+        setAuditEvents((events as unknown[]).map((e, idx) => {
           const ev = (e ?? {}) as Record<string, unknown>;
           return {
-            event_id:   String(ev.event_id ?? ev.id ?? Math.random()),
+            event_id:   String(ev.event_id ?? ev.id ?? `audit-${idx}`),
             user_id:    String(ev.user_id ?? ''),
             event_type: String(ev.event_type ?? ev.type ?? ''),
             detail:     String(ev.detail ?? ev.message ?? ''),
@@ -297,10 +297,10 @@ const AdminPanel: React.FC = () => {
       if (alertsRes.status === 'fulfilled') {
         const d = alertsRes.value.data as Record<string, unknown>;
         const list = Array.isArray(d) ? d : Array.isArray(d.alerts) ? d.alerts : Array.isArray(d.items) ? d.items : [];
-        setAlerts((list as unknown[]).map(a => {
+        setAlerts((list as unknown[]).map((a, idx) => {
           const al = (a ?? {}) as Record<string, unknown>;
           return {
-            id:         String(al.id ?? Math.random()),
+            id:         String(al.id ?? `alert-${idx}`),
             severity:   (al.severity ?? 'info') as AdminAlert['severity'],
             title:      String(al.title ?? al.name ?? ''),
             message:    String(al.message ?? al.detail ?? ''),

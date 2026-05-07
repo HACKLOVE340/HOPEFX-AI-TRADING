@@ -253,11 +253,14 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
           {/* P&L area chart — synthesised from total_pnl if no equity_curve provided */}
           {(() => {
             const ec = (perf as unknown as { equity_curve?: { date: string; pnl: number }[] }).equity_curve;
+            // Linear interpolation from 0 → total_pnl when no equity_curve is available.
+            // No synthetic randomness — the chart shows a straight-line approximation
+            // until the backend provides real equity_curve data.
             const chartData = ec && ec.length > 1
               ? ec
               : Array.from({ length: 8 }, (_, i) => ({
                   date: `W${i + 1}`,
-                  pnl: perf.total_pnl * ((i + 1) / 8) * (0.8 + Math.random() * 0.4),
+                  pnl: perf.total_pnl * ((i + 1) / 8),
                 }));
             const color = perf.total_pnl >= 0 ? '#22c55e' : '#ef4444';
             return (

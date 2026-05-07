@@ -13,14 +13,16 @@ export interface CrossLink {
   color?: string;
 }
 
-interface CrossLinkBarProps {
+export interface CrossLinkBarProps {
   links: CrossLink[];
   title?: string;
   style?: React.CSSProperties;
+  className?: string;
 }
 
-export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style }) => (
+export const CrossLinkBar: React.FC<CrossLinkBarProps> = ({ links, title, style, className }) => (
   <div
+    className={className}
     style={{
       borderTop: '1px solid var(--border, #1e293b)',
       paddingTop: 16,

@@ -8,10 +8,11 @@ import React from 'react';
 
 export type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-interface BadgeProps {
+export interface BadgeProps {
   variant?: BadgeVariant;
   children: React.ReactNode;
   style?: React.CSSProperties;
+  className?: string;
 }
 
 const VARIANT_STYLES: Record<BadgeVariant, React.CSSProperties> = {
@@ -22,8 +23,9 @@ const VARIANT_STYLES: Record<BadgeVariant, React.CSSProperties> = {
   neutral: { background: 'rgba(148,163,184,0.15)', color: '#94a3b8', border: '1px solid rgba(148,163,184,0.3)' },
 };
 
-export const Badge: React.FC<BadgeProps> = ({ variant = 'neutral', children, style }) => (
+export const Badge: React.FC<BadgeProps> = ({ variant = 'neutral', children, style, className }) => (
   <span
+    className={className}
     style={{
       display: 'inline-flex',
       alignItems: 'center',

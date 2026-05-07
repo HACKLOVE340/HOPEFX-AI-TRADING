@@ -6,11 +6,12 @@ import React from 'react';
 
 type Level = 'error' | 'warning' | 'info' | 'success';
 
-interface ErrorBannerProps {
+export interface ErrorBannerProps {
   level?: Level;
   message: string;
   onDismiss?: () => void;
   style?: React.CSSProperties;
+  className?: string;
 }
 
 const LEVEL_STYLES: Record<Level, { bg: string; border: string; color: string; icon: string }> = {
@@ -25,11 +26,13 @@ export const ErrorBanner: React.FC<ErrorBannerProps> = ({
   message,
   onDismiss,
   style,
+  className,
 }) => {
   const ls = LEVEL_STYLES[level];
   return (
     <div
       role="alert"
+      className={className}
       style={{
         alignItems: 'center',
         background: ls.bg,
