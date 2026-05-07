@@ -7,7 +7,7 @@
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { api } from '../hooks/useApi';
 
 interface ABResult {
@@ -333,13 +333,14 @@ const ABTesting: React.FC = () => {
         </div>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/ai-strategy"      style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/walk-forward"     style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-        <Link to="/performance"      style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
-        <Link to="/pattern-detector" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔍 Pattern Detector</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 16 }} links={[
+        { label: 'AI Strategy',     href: '/ai-strategy',      icon: '🤖', color: '#06b6d4' },
+        { label: 'Walk-Forward',    href: '/walk-forward',     icon: '📊', color: '#8b5cf6' },
+        { label: 'Performance',     href: '/performance',      icon: '📈', color: '#4ade80' },
+        { label: 'Pattern Detector',href: '/pattern-detector', icon: '🔍', color: '#fbbf24' },
+        { label: 'Backtesting',     href: '/backtest',         icon: '⚗️', color: '#f97316' },
+        { label: 'Trade Journal',   href: '/journal',          icon: '📓', color: '#a78bfa' },
+      ]} />
     </div>
   );
 };

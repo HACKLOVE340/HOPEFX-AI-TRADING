@@ -18,6 +18,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, adminApi } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -539,40 +540,17 @@ const AdminPanel: React.FC = () => {
             </div>
           </div>
 
-          {/* Cross-links */}
           <div style={{ padding: '0 24px 32px' }}>
-            <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-                Platform Sections
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-                {[
-                  { icon: '🔍', label: 'Audit Log',          desc: 'Full event trail with filters',       to: '/audit' },
-                  { icon: '🛡️', label: 'Security Dashboard', desc: 'Threats, blocked IPs, sessions',      to: '/security' },
-                  { icon: '🩺', label: 'Auto-Heal',          desc: 'Self-healing & fix approvals',        to: '/auto-heal' },
-                  { icon: '🏷️', label: 'Whitelabel Admin',   desc: 'Tenant branding & feature flags',     to: '/whitelabel' },
-                  { icon: '🟢', label: 'System Status',      desc: 'Component health & uptime',           to: '/status' },
-                  { icon: '⚡', label: 'Super Admin',        desc: 'Master control panel',                to: '/superadmin' },
-                  { icon: '🔬', label: 'System Reliability', desc: 'OTel tracing & self-test suite',      to: '/system-reliability' },
-                  { icon: '📖', label: 'Docs',               desc: 'Platform documentation',              to: '/docs' },
-                ].map(({ icon, label, desc, to }) => (
-                  <Link
-                    key={to}
-                    to={to}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#111827'; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0d1421'; }}
-                  >
-                    <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
-                      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
-                    </div>
-                    <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
+            <CrossLinkBar title="Platform Sections" links={[
+              { label: 'Audit Log',          href: '/audit',              icon: '🔍', color: '#60a5fa' },
+              { label: 'Security Dashboard', href: '/security',           icon: '🛡️', color: '#f87171' },
+              { label: 'Auto-Heal',          href: '/auto-heal',          icon: '🩺', color: '#4ade80' },
+              { label: 'Whitelabel Admin',   href: '/whitelabel',         icon: '🏷️', color: '#a78bfa' },
+              { label: 'System Status',      href: '/status',             icon: '🟢', color: '#22c55e' },
+              { label: 'Super Admin',        href: '/superadmin',         icon: '⚡', color: '#f59e0b' },
+              { label: 'System Reliability', href: '/system-reliability', icon: '🔬', color: '#06b6d4' },
+              { label: 'Docs',               href: '/docs',               icon: '📖', color: '#94a3b8' },
+            ]} />
           </div>
         </>
       )}
