@@ -7,6 +7,7 @@
 Trader Profile API
 
 Endpoints:
+  GET  /api/profiles              — paginated list of public profiles
   GET  /api/profiles/me           — current user's profile
   PUT  /api/profiles/me           — update current user's profile
   GET  /api/profiles/{trader_id}  — public profile by trader_id
@@ -78,6 +79,45 @@ def _get_or_create(user: TokenPayload) -> TraderProfile:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.get("")
+async def list_profiles(
+    limit: int = 20,
+    offset: int = 0,
+    search: str | None = None,
+    sort_by: str = "total_pnl",
+) -> dict:
+    """
+    Return a paginated list of public trader profiles.
+
+    Query params:
+      limit   — max results (default 20, max 100)
+      offset  — pagination offset
+      search  — filter by username prefix (case-insensitive)
+      sort_by — field to sort by: total_pnl | win_rate | total_trades | sharpe_ratio
+    """
+    limit = min(max(1, limit), 100)
+    all_profiles = _manager.list_profiles()
+    public = [p for p in all_profiles if getattr(p, "is_public", True)]
+
+    if search:
+        q = search.lower()
+        public = [p for p in public if p.username.lower().startswith(q)]
+
+    _sort_fields = {"total_pnl", "win_rate", "total_trades", "sharpe_ratio"}
+    if sort_by not in _sort_fields:
+        sort_by = "total_pnl"
+
+    public.sort(key=lambda p: getattr(p, sort_by, 0) or 0, reverse=True)
+
+    page = public[offset : offset + limit]
+    return {
+        "profiles": [_profile_to_response(p) for p in page],
+        "total": len(public),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/me")

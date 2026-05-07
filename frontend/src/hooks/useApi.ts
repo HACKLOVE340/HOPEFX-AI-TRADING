@@ -1286,11 +1286,13 @@ export const riskCalcApi = {
 // Backend: /api/2fa/*
 
 export const twoFactorApi = {
-  status:           (userId: string)                          => api.get(`/2fa/status/${userId}`),
+  // GET /api/2fa/status — returns { user_id, enabled, backup_codes_remaining }
+  status:           ()                                        => api.get('/2fa/status'),
   setup:            ()                                        => api.post('/2fa/setup'),
   verify:           (code: string)                            => api.post('/2fa/verify', { code }),
   disable:          (code: string)                            => api.post('/2fa/disable', { code }),
-  backupCodes:      (userId: string)                          => api.get(`/2fa/backup-codes/${userId}`),
+  // GET /api/2fa/backup-codes — generates and returns 8 one-time codes
+  backupCodes:      ()                                        => api.get('/2fa/backup-codes'),
   regenerateCodes:  ()                                        => api.post('/2fa/backup-codes/regenerate'),
 };
 
@@ -1392,4 +1394,36 @@ export const indicatorsApi = {
   preview:          (payload: Record<string, unknown>)        => api.post('/indicators/preview', payload),
   apply:            (id: string, payload: Record<string, unknown>) =>
                       api.post(`/indicators/${id}/apply`, payload),
+};
+
+// ── News API ──────────────────────────────────────────────────────────────────
+// Backend: /api/news/* (news/__init__.py create_news_router)
+
+export const newsApi = {
+  /** Latest news articles, optionally filtered by symbol. */
+  latest:           (params?: { symbol?: string; limit?: number }) =>
+                      api.get('/news/latest', { params }),
+  /** News-based sentiment score for a symbol. */
+  sentiment:        (symbol: string)                          => api.get(`/news/sentiment/${encodeURIComponent(symbol)}`),
+  /** Geopolitical risk signal for gold/USD. */
+  geopoliticalSignal: ()                                      => api.get('/news/geopolitical/signal'),
+  /** Recent geopolitical events. */
+  geopoliticalEvents: (forceRefresh = false)                  =>
+                      api.get('/news/geopolitical/events', { params: { force_refresh: forceRefresh } }),
+  /** Full geopolitical risk assessment. */
+  geopoliticalAssessment: ()                                  => api.get('/news/geopolitical/assessment'),
+  /** World Monitor deep-link views. */
+  worldMonitor:     ()                                        => api.get('/news/geopolitical/world-monitor'),
+  /** Upcoming high-impact economic events. */
+  economicUpcoming: (params?: { days?: number; importance?: string }) =>
+                      api.get('/news/economic/upcoming', { params }),
+};
+
+// ── Profiles List API ─────────────────────────────────────────────────────────
+// Backend: GET /api/profiles (api/profiles.py)
+
+export const profilesListApi = {
+  /** Paginated list of public trader profiles. */
+  list:             (params?: { limit?: number; offset?: number; search?: string; sort_by?: string }) =>
+                      api.get('/profiles', { params }),
 };
