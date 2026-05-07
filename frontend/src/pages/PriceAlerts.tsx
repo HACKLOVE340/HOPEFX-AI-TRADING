@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts } from '../store';
 import { useToast } from '../components/Toast';
@@ -314,7 +314,7 @@ const PriceAlerts: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="max-w-4xl mx-auto px-4 py-6">
       <PageHeader
         title="Price Alerts"
         subtitle="Get notified via Discord, Telegram, or email when price conditions are met."
@@ -498,24 +498,21 @@ const PriceAlerts: React.FC = () => {
         </>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/calendar" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📅 Economic Calendar</Link>
-        <Link to="/watchlist" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>👁️ Watchlist</Link>
-        <Link to="/signals" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📡 Signal Feed</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '📅 Economic Calendar', href: '/calendar',  color: '#60a5fa' },
+        { label: '👁️ Watchlist',         href: '/watchlist', color: '#a78bfa' },
+        { label: '📡 Signal Feed',        href: '/signals',   color: '#34d399' },
+        { label: '⚡ Trade',              href: '/trade',     color: '#4ade80' },
+        { label: '📊 Dashboard',          href: '/dashboard', color: '#fbbf24' },
+      ]}/>
     </div>
   );
 };
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── Tailwind-compatible style helpers (replaces inline s.xxx object) ──────────
 
 const s: Record<string, React.CSSProperties> = {
   page:             { padding: 24, maxWidth: 900, margin: '0 auto' },
-  header:           { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  title:            { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
-  subtitle:         { fontSize: 14, color: '#64748b', margin: 0 },
   createBtn:        { background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '10px 18px' },
   card:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 20 },
   cardTitle:        { fontSize: 18, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' },
