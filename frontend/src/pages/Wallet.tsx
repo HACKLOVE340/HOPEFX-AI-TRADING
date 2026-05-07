@@ -16,6 +16,7 @@ import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -189,13 +190,14 @@ const Wallet: React.FC = () => {
   const totalFees       = Math.abs(transactions.filter((t) => ['subscription', 'copy_fee'].includes(t.type)).reduce((s, t) => s + t.amount, 0));
 
   return (
-    <div style={s.page}>
+    <div className="max-w-4xl mx-auto px-4 py-6">
       <PageHeader
         title="Wallet & Payments"
         icon="💰"
         subtitle="Manage your balance, transactions, subscriptions, and payment methods"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Account',   href: '/settings' },
           { label: 'Wallet' },
         ]}
         actions={
@@ -212,22 +214,14 @@ const Wallet: React.FC = () => {
         }
       />
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap', fontSize: 13 }}>
-        {[
-          { to: '/affiliate', label: '💰 Affiliate' },
-          { to: '/kyc', label: '🪪 KYC' },
-          { to: '/settings', label: '⚙️ Settings' },
-          { to: '/pricing', label: '📋 Pricing' },
-          { to: '/portfolio', label: '💼 Portfolio' },
-        ].map(({ to, label }) => (
-          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
-            {label}
-          </Link>
-        ))}
-      </div>
+      <CrossLinkBar title="Quick Links" style={{ marginBottom: 20 }} links={[
+        { label: '🤝 Affiliate',  href: '/affiliate', color: '#4ade80' },
+        { label: '🪪 KYC',        href: '/kyc',        color: '#60a5fa' },
+        { label: '⚙️ Settings',  href: '/settings',   color: '#a78bfa' },
+        { label: '📋 Pricing',    href: '/pricing',    color: '#fbbf24' },
+        { label: '💼 Portfolio',  href: '/portfolio',  color: '#34d399' },
+        { label: '💳 Checkout',   href: '/checkout',   color: '#f97316' },
+      ]}/>
 
       {balanceErr && (
         <ErrorBanner message={balanceErr} onDismiss={() => {}} />
@@ -436,6 +430,15 @@ const Wallet: React.FC = () => {
           <button style={s.addMethodBtn}>+ Add Payment Method</button>
         </div>
       )}
+
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '🤝 Affiliate',   href: '/affiliate',  color: '#4ade80' },
+        { label: '🪪 KYC',         href: '/kyc',         color: '#60a5fa' },
+        { label: '⭐ Upgrade',     href: '/upgrade',     color: '#fbbf24' },
+        { label: '📋 Pricing',     href: '/pricing',     color: '#a78bfa' },
+        { label: '💼 Portfolio',   href: '/portfolio',   color: '#34d399' },
+        { label: '⚙️ Settings',   href: '/settings',    color: '#94a3b8' },
+      ]}/>
     </div>
   );
 };
