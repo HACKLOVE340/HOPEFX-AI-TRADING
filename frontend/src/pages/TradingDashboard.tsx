@@ -180,73 +180,65 @@ function DashboardInner() {
       </PanelErrorBoundary>
       <QuickActionBar />
 
-      {/* ── Main grid ────────────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 grid grid-cols-12 grid-rows-2 gap-2 p-2 overflow-hidden">
+      {/* ── Main grid — desktop: 12-col fixed; mobile: scrollable stack ── */}
 
-        {/* Equity curve — large center-left, spans 2 rows */}
+      {/* Desktop (lg+): original 12-col grid */}
+      <div className="hidden lg:grid flex-1 min-h-0 grid-cols-12 grid-rows-2 gap-2 p-2 overflow-hidden">
         <div className="col-span-5 row-span-2 min-h-0">
-          <Suspense fallback={<ChartSkeleton />}>
-            <EquityCurveChart />
-          </Suspense>
+          <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
         </div>
-
-        {/* Signal feed — center column, spans 2 rows (guarded) */}
         <div className="col-span-3 row-span-2 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={6} />}>
-            <LiveSignalFeedGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
         </div>
-
-        {/* Risk dashboard — cols 9-10, row 1 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={4} />}>
-            <RiskDashboardGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><RiskDashboardGuarded /></Suspense>
         </div>
-
-        {/* Order book — cols 11-12, row 1 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={8} />}>
-            <OrderBookDepthGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={8} />}><OrderBookDepthGuarded /></Suspense>
         </div>
-
-        {/* Sentiment gauge — cols 9-10, row 2 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={3} />}>
-            <SentimentGaugeGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
         </div>
-
-        {/* Microstructure — cols 11-12, row 2 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={5} />}>
-            <MicrostructurePanelGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={5} />}><MicrostructurePanelGuarded /></Suspense>
+        </div>
+      </div>
+
+      {/* Mobile/tablet (< lg): vertically scrollable single-column stack */}
+      <div className="lg:hidden flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2">
+        <div className="min-h-[260px]">
+          <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Suspense fallback={<PanelSkeleton rows={3} />}><RiskDashboardGuarded /></Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
+        </div>
+        <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
+        <div className="grid grid-cols-2 gap-2">
+          <Suspense fallback={<PanelSkeleton rows={4} />}><OrderBookDepthGuarded /></Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><MicrostructurePanelGuarded /></Suspense>
         </div>
       </div>
 
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
-      <div className="h-52 shrink-0 grid grid-cols-12 gap-2 px-2 pb-2">
-        {/* Macro calendar — left 5 cols (guarded) */}
+      {/* Desktop */}
+      <div className="hidden lg:grid h-52 shrink-0 grid-cols-12 gap-2 px-2 pb-2">
         <div className="col-span-5 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={3} />}>
-            <MacroCalendarGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
         </div>
-
-        {/* Orchestrator health — center 4 cols (guarded) */}
         <div className="col-span-4 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={4} />}>
-            <OrchestratorHealthGridGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><OrchestratorHealthGridGuarded /></Suspense>
         </div>
-
-        {/* ML model panel — right 3 cols (guarded) */}
         <div className="col-span-3 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={4} />}>
-            <MLModelPanelGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><MLModelPanelGuarded /></Suspense>
+        </div>
+      </div>
+      {/* Mobile: stack bottom panels */}
+      <div className="lg:hidden flex flex-col gap-2 px-2 pb-2">
+        <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
+        <div className="grid grid-cols-2 gap-2">
+          <Suspense fallback={<PanelSkeleton rows={3} />}><OrchestratorHealthGridGuarded /></Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><MLModelPanelGuarded /></Suspense>
         </div>
       </div>
 

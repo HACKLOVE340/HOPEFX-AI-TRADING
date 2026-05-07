@@ -837,6 +837,9 @@ function TradingPage() {
   const prices   = useStore((s) => s.prices);
   const tick     = prices[symbol];
 
+  // Mobile: tab-based layout — chart / order / positions / signals
+  const [mobilePanel, setMobilePanel] = React.useState<'chart' | 'order' | 'positions' | 'signals'>('chart');
+
   return (
     <div className="flex flex-col h-screen bg-[#060d18] text-slate-200 overflow-hidden">
       <TopBar
@@ -845,7 +848,8 @@ function TradingPage() {
         tick={tick} wsStatus={wsStatus}
       />
 
-      <div className="flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">
+      {/* ── Desktop layout (md+): side-by-side panels ── */}
+      <div className="hidden md:flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">
         {/* Left sidebar */}
         <LeftSidebar symbol={symbol} />
 
@@ -861,7 +865,7 @@ function TradingPage() {
                   key={t}
                   onClick={() => setActiveTab(t)}
                   className={cn(
-                    'px-3 py-1 rounded text-[11px] font-semibold border transition-colors capitalize',
+                    'px-3 py-1.5 rounded text-[11px] font-semibold border transition-colors capitalize min-h-[36px]',
                     activeTab === t
                       ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
                       : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
@@ -884,6 +888,76 @@ function TradingPage() {
 
         {/* Right sidebar */}
         <RightSidebar rightTab={rightTab} setRightTab={setRightTab} />
+      </div>
+
+      {/* ── Mobile layout (< md): stacked panels with bottom tab bar ── */}
+      <div className="flex md:hidden flex-col flex-1 min-h-0 overflow-hidden">
+        {/* Panel content */}
+        <div className="flex-1 min-h-0 overflow-auto">
+          {mobilePanel === 'chart' && (
+            <div className="h-full flex flex-col gap-2 p-2">
+              <ChartPanel symbol={symbol} timeframe={timeframe} tick={tick} />
+            </div>
+          )}
+          {mobilePanel === 'order' && (
+            <div className="h-full overflow-y-auto p-2">
+              <LeftSidebar symbol={symbol} />
+            </div>
+          )}
+          {mobilePanel === 'positions' && (
+            <div className="h-full overflow-auto p-2">
+              <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden">
+                <div className="flex items-center gap-1 px-3 py-2 border-b border-[#1e2d3d] shrink-0">
+                  {(['positions', 'history'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setActiveTab(t)}
+                      className={cn(
+                        'px-3 py-1.5 rounded text-[11px] font-semibold border transition-colors capitalize min-h-[36px]',
+                        activeTab === t
+                          ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
+                          : 'bg-transparent border-[#1e2d3d] text-slate-500',
+                      )}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <div className="overflow-auto">
+                  {activeTab === 'positions' && <PositionsTable symbol={symbol} />}
+                  {activeTab === 'history'   && <TradeHistoryPanel symbol={symbol} />}
+                </div>
+              </div>
+            </div>
+          )}
+          {mobilePanel === 'signals' && (
+            <div className="h-full overflow-y-auto p-2">
+              <RightSidebar rightTab={rightTab} setRightTab={setRightTab} />
+            </div>
+          )}
+        </div>
+
+        {/* Bottom tab bar */}
+        <div className="flex shrink-0 border-t border-[#1e2d3d] bg-[#0a1628] pb-safe">
+          {([
+            { id: 'chart',     label: 'Chart',    icon: '📈' },
+            { id: 'order',     label: 'Order',    icon: '⚡' },
+            { id: 'positions', label: 'Positions', icon: '📋' },
+            { id: 'signals',   label: 'Signals',  icon: '📡' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setMobilePanel(tab.id)}
+              className={cn(
+                'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition-colors min-h-[52px]',
+                mobilePanel === tab.id ? 'text-[#60a5fa]' : 'text-slate-500',
+              )}
+            >
+              <span className="text-base leading-none">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

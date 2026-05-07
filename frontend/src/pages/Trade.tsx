@@ -180,7 +180,7 @@ const AccountBar: React.FC = () => {
   const pnl        = account.total_pnl   ?? 0;
 
   return (
-    <div className="flex flex-wrap gap-4 px-4 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
       {[
         { label: 'Balance',      value: `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
         { label: 'Equity',       value: `$${equity.toLocaleString('en-US',  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
@@ -366,7 +366,7 @@ const RiskBar: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-wrap gap-4 px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
       {items.map(({ label, value, warn }) => (
         <div key={label} className="flex flex-col gap-0.5">
           <span className="text-[9px] uppercase tracking-wider text-slate-500">{label}</span>
@@ -499,7 +499,7 @@ const Trade: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
+    <div className="flex flex-col gap-3 sm:gap-4 px-3 py-3 sm:px-4 sm:py-4 md:px-6 min-h-screen bg-[#0a0f1a]">
 
       <PageHeader
         title="Trade"
@@ -510,32 +510,32 @@ const Trade: React.FC = () => {
           { label: 'Trade' },
         ]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Link
               to="/watchlist"
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
-              👁 Watchlist
+              👁 <span className="hidden xs:inline ml-1">Watchlist</span>
             </Link>
             <Link
               to="/portfolio"
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
-              💼 Portfolio
+              💼 <span className="hidden xs:inline ml-1">Portfolio</span>
             </Link>
             <Link
               to="/risk-calculator"
-              className="px-3 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
               style={{ textDecoration: 'none' }}
             >
-              🛡 Risk Calc
+              🛡 <span className="hidden xs:inline ml-1">Risk Calc</span>
             </Link>
             <button
               onClick={handleCloseAll}
               disabled={closingAll}
-              className="px-3 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50 min-h-[36px]"
             >
               {closingAll ? 'Closing…' : '✕ Close All'}
             </button>
