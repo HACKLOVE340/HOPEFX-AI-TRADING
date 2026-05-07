@@ -311,15 +311,17 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     background: 'radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.06) 0%, #0f172a 60%)',
-    padding: '20px',
+    /* Enough padding so card never touches screen edges on any phone */
+    padding: 'clamp(12px, 4vw, 24px)',
   },
   card: {
     background: '#1e293b',
     border: '1px solid #334155',
     borderRadius: 16,
-    padding: '40px 36px',
+    /* Responsive padding: 20px on narrow phones, 36px on wider screens */
+    padding: 'clamp(20px, 6vw, 40px) clamp(16px, 5vw, 36px)',
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 420,
     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
   },
   logoLink: {
@@ -331,9 +333,10 @@ const s: Record<string, React.CSSProperties> = {
     background: 'rgba(59,130,246,0.15)',
     border: '1px solid rgba(59,130,246,0.3)',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
   },
   logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
-  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 28px' },
+  tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 24px' },
   form:    { display: 'flex', flexDirection: 'column', gap: 16 },
   field:   { display: 'flex', flexDirection: 'column' },
   label: {
@@ -344,20 +347,26 @@ const s: Record<string, React.CSSProperties> = {
     background: '#0f172a',
     border: '1px solid #334155',
     borderRadius: 8,
-    padding: '11px 14px',
-    fontSize: 14,
+    padding: '12px 14px',
+    /* 16px prevents iOS Safari from zooming on focus */
+    fontSize: 16,
     color: '#f8fafc',
     outline: 'none',
     transition: 'border-color 0.15s, box-shadow 0.15s',
     width: '100%',
     boxSizing: 'border-box',
+    /* Smooth momentum scrolling on iOS */
+    WebkitAppearance: 'none',
   },
   eyeBtn: {
     position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-    background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-    display: 'flex', alignItems: 'center',
+    background: 'none', border: 'none', cursor: 'pointer',
+    /* 44×44 touch target */
+    minWidth: 44, minHeight: 44,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    touchAction: 'manipulation',
   },
-  forgotLink: { fontSize: 12, color: '#60a5fa', textDecoration: 'none', fontWeight: 500 },
+  forgotLink: { fontSize: 13, color: '#60a5fa', textDecoration: 'none', fontWeight: 500, minHeight: 44, display: 'inline-flex', alignItems: 'center' },
   totpHint:   { fontSize: 11, color: '#64748b', marginTop: 6 },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -369,13 +378,20 @@ const s: Record<string, React.CSSProperties> = {
   btn: {
     background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
     color: '#fff', border: 'none', borderRadius: 8,
-    padding: '13px', fontSize: 15, fontWeight: 700,
+    padding: '14px', fontSize: 15, fontWeight: 700,
     cursor: 'pointer', marginTop: 4,
+    /* 48px min height for comfortable touch */
+    minHeight: 48,
     transition: 'opacity 0.15s, transform 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    touchAction: 'manipulation',
+    width: '100%',
   },
-  footer: { display: 'flex', justifyContent: 'center', gap: 12, marginTop: 24, fontSize: 13 },
-  link:   { color: '#64748b', textDecoration: 'none' },
+  footer: {
+    display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+    gap: '8px 12px', marginTop: 24, fontSize: 13,
+  },
+  link: { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Login;

@@ -411,18 +411,19 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
     background: 'radial-gradient(ellipse at 50% 0%,rgba(59,130,246,0.06) 0%,#0f172a 60%)',
-    padding: '20px',
+    padding: 'clamp(12px, 4vw, 24px)',
   },
   card: {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 16,
-    padding: '40px 36px', width: '100%', maxWidth: 420,
+    padding: 'clamp(20px, 6vw, 40px) clamp(16px, 5vw, 36px)',
+    width: '100%', maxWidth: 440,
     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
   },
   logoLink: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', textDecoration: 'none', marginBottom: 4 },
   logoIcon: {
     width: 28, height: 28, borderRadius: 8,
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
   tagline: { fontSize: 13, color: '#64748b', textAlign: 'center', margin: '4px 0 16px' },
@@ -438,13 +439,18 @@ const s: Record<string, React.CSSProperties> = {
   fieldHint: { fontSize: 11, color: '#64748b', marginTop: 4 },
   input: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-    padding: '11px 14px', fontSize: 14, color: '#f8fafc', outline: 'none',
+    padding: '12px 14px',
+    fontSize: 16, /* prevents iOS zoom on focus */
+    color: '#f8fafc', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
+    WebkitAppearance: 'none',
   },
   eyeBtn: {
     position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-    background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-    display: 'flex', alignItems: 'center',
+    background: 'none', border: 'none', cursor: 'pointer',
+    minWidth: 44, minHeight: 44,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    touchAction: 'manipulation',
   },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -463,14 +469,16 @@ const s: Record<string, React.CSSProperties> = {
   },
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
-    color: '#fff', border: 'none', borderRadius: 8, padding: '13px',
+    color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
     fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4,
+    minHeight: 48, width: '100%',
     transition: 'opacity 0.15s',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    touchAction: 'manipulation',
   },
   terms:  { fontSize: 11, color: '#475569', textAlign: 'center', lineHeight: 1.6, margin: 0 },
   footer: { textAlign: 'center', marginTop: 20, fontSize: 13, color: '#64748b' },
-  link:   { color: '#64748b', textDecoration: 'none' },
+  link:   { color: '#64748b', textDecoration: 'none', minHeight: 44, display: 'inline-flex', alignItems: 'center' },
 };
 
 export default Register;
