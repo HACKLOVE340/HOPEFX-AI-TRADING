@@ -749,6 +749,59 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(require_pla
     return {"deleted": True}
 
 
+class PatchIndicatorRequest(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=60)
+    formula: str | None = None
+    symbol: str | None = None
+    color: str | None = None
+
+
+@router.patch("/api/indicators/{ind_id}", summary="Update a custom indicator")
+async def patch_indicator(
+    ind_id: str,
+    req: PatchIndicatorRequest,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    """Partial update of a saved indicator. Only provided fields are changed."""
+    ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
+    if not ind or ind["user_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+    updates = req.model_dump(exclude_none=True)
+    ind.update(updates)
+    _kv_set(f"advanced:indicator:{ind_id}", ind)
+    _indicators[ind_id] = ind
+    return ind
+
+
+@router.post("/api/indicators/{ind_id}/apply", summary="Apply a saved indicator to a symbol")
+async def apply_indicator(
+    ind_id: str,
+    payload: dict,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    """
+    Evaluate a saved indicator formula against the requested symbol and period.
+    Payload: { "symbol": "XAU/USD", "periods": 200 }
+    Returns the same shape as /indicators/preview.
+    """
+    ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
+    if not ind or ind["user_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+    symbol = payload.get("symbol", ind.get("symbol", "XAU/USD"))
+    periods = int(payload.get("periods", 200))
+    try:
+        data = _eval_indicator(ind["formula"], symbol, periods)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "id": ind_id,
+        "formula": ind["formula"],
+        "symbol": symbol,
+        "data": data,
+        "points": len(data),
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 45 — Multi-Symbol Correlation Dashboard
 # ─────────────────────────────────────────────────────────────────────────────
