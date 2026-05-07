@@ -378,7 +378,15 @@ const CopyTrading: React.FC = () => {
       ) : loadErr ? (
         <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : leaders.length === 0 ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
+        <EmptyState
+          icon="🔁"
+          title="No traders available yet"
+          description="Top traders will appear here once they publish their strategies. Check back soon."
+          links={[
+            { label: '🥇 Leaderboard', href: '/leaderboard' },
+            { label: '🛒 Marketplace', href: '/marketplace' },
+          ]}
+        />
       ) : (
         <div style={s.grid}>
           {sorted.map((leader) => (

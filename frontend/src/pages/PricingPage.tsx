@@ -523,12 +523,12 @@ const PricingPage: React.FC = () => {
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           {!isAuth && (
-            <button onClick={() => navigate('/register')} style={{
+            <Link to="/register" style={{
               padding: '12px 32px', background: '#8b5cf6', color: '#fff', border: 'none',
-              borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: 'pointer',
+              borderRadius: 8, fontSize: 15, fontWeight: 700, textDecoration: 'none', display: 'inline-block',
             }}>
               Start for free
-            </button>
+            </Link>
           )}
           <Link to={isAuth ? '/dashboard' : '/login'} style={{
             padding: '12px 32px', background: 'transparent', color: '#94a3b8',

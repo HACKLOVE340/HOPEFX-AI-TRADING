@@ -17,7 +17,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, EmptyState } from '../components';
 import { useToast } from '../components/Toast';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
@@ -403,7 +403,12 @@ const EconomicCalendar: React.FC = () => {
           ) : fetchErr ? (
             <div style={s.errorBox}>{fetchErr}</div>
           ) : events.length === 0 ? (
-            <div style={s.empty}>No events found.</div>
+            <EmptyState
+              icon="📅"
+              title="No events found"
+              description="No economic events match the current filter. Try changing the impact level or date range."
+              compact
+            />
           ) : (
             Object.entries(grouped)
               .map(([date, dayEvents]) => {

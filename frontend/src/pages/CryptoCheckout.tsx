@@ -582,9 +582,9 @@ const CryptoCheckout: React.FC = () => {
             Your <strong style={{ color: '#f8fafc' }}>{selectedPlan.name}</strong> subscription is now active.
           </p>
           <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button onClick={() => navigate('/dashboard')} style={st.proceedBtn}>
+            <Link to="/dashboard" style={{ ...st.proceedBtn, textDecoration: 'none', display: 'inline-block' }}>
               Go to Dashboard →
-            </button>
+            </Link>
             <Link to="/settings" style={{ ...st.proceedBtn, background: '#334155',
               textDecoration: 'none', display: 'inline-block' }}>
               Account Settings

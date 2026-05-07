@@ -17,7 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
-import { PageHeader } from '../components';
+import { PageHeader, EmptyState } from '../components';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
@@ -669,9 +669,13 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
         {equityHistory.length === 0 ? (
-          <p style={{ color: '#475569', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
-            No equity history yet. Start trading to see your curve.
-          </p>
+          <EmptyState
+            icon="📈"
+            title="No equity history yet"
+            description="Start trading to see your equity curve grow here."
+            links={[{ label: '⚡ Start Trading', href: '/trade' }]}
+            compact
+          />
         ) : (
           <EquityChart data={equityHistory} />
         )}

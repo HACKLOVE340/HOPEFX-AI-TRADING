@@ -10,7 +10,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, EmptyState } from '../components';
 import { useStore, selectAccount } from '../store';
 import { riskCalcApi } from '../hooks/useApi';
 
@@ -461,7 +461,12 @@ const RiskCalculator: React.FC = () => {
             <button onClick={() => setShowHistory(false)} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
           {history.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: '20px 0' }}>No saved calculations yet.</div>
+            <EmptyState
+              icon="🧮"
+              title="No saved calculations yet"
+              description="Run a calculation above and save it to build your history."
+              compact
+            />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {history.map(h => (

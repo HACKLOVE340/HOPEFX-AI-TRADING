@@ -23,6 +23,7 @@ export { CandleChart } from './CandleChart';
 export { LineChart } from './LineChart';
 export { MetricCard } from './MetricCard';
 export { EmptyState } from './EmptyState';
+export { CrossLinkBar, type CrossLink } from './CrossLinkBar';
 export { ErrorBanner } from './ErrorBanner';
 export { PageHeader, type PageTab } from './PageHeader';
 export { GlobalAttackMap, type AttackLog, type AttackRecord, type AttackGeo } from './GlobalAttackMap';

@@ -10,7 +10,7 @@
 import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // useNavigate removed — all nav converted to Link
-import { PageHeader } from '../components';
+import { PageHeader, EmptyState } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -324,7 +324,12 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Challenge History</h3>
           {historyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!historyQ.isLoading && (historyQ.data ?? []).length === 0 && (
-            <div style={{ color: '#475569', textAlign: 'center', padding: 32 }}>No challenge history yet.</div>
+            <EmptyState
+              icon="📋"
+              title="No challenge history yet"
+              description="Complete your first prop firm challenge to see historical performance here."
+              compact
+            />
           )}
           {(historyQ.data ?? []).map(ch => (
             <div key={ch.challenge_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
@@ -378,7 +383,12 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Daily P&L Stats</h3>
           {dailyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!dailyQ.isLoading && (dailyQ.data ?? []).length === 0 && (
-            <div style={{ color: '#475569', textAlign: 'center', padding: 32 }}>No daily stats yet.</div>
+            <EmptyState
+              icon="📅"
+              title="No daily stats yet"
+              description="Daily trading statistics will appear here once you start trading."
+              compact
+            />
           )}
           {(dailyQ.data ?? []).length > 0 && (
             <ResponsiveContainer width="100%" height={200}>
