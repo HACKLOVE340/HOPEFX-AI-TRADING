@@ -192,9 +192,11 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** Called after any nav-link click — used by mobile drawer to close itself */
+  onNavigate?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) => {
   const location  = useLocation();
   const navigate  = useNavigate();
   const isAuth    = useStore(selectIsAuth);
@@ -325,7 +327,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                   <NavLink
                     key={item.path}
                     to={item.path}
-                    onClick={() => setSearch('')}
+                    onClick={() => { setSearch(''); onNavigate?.(); }}
                     style={{
                       display: 'flex', alignItems: 'center',
                       gap: 10, padding: '9px 14px',
@@ -376,6 +378,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                       key={item.path}
                       to={locked ? '/upgrade' : item.path}
                       title={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
+                      onClick={onNavigate}
                       style={{
                         display: 'flex', alignItems: 'center',
                         gap: 10, padding: '9px 14px',
@@ -513,13 +516,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <NavLink to="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
+                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
                   ← Landing
                 </NavLink>
-                <NavLink to="/docs" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
+                <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
                   Docs
                 </NavLink>
-                <NavLink to="/system-status" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
+                <NavLink to="/system-status" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
                   Status
                 </NavLink>
               </div>

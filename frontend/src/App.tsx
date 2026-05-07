@@ -12,7 +12,7 @@
  * Traders see features based on their active subscription tier.
  */
 
-import React, { useState, Component, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Component, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -349,11 +349,79 @@ const superAdminOnly = (el: React.ReactNode) => (
   </AuthGuard>
 );
 
+// ── useMediaQuery hook ────────────────────────────────────────────────────────
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener('change', handler);
+    setMatches(mql.matches);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return matches;
+}
+
+// ── Mobile top bar ────────────────────────────────────────────────────────────
+interface MobileTopBarProps {
+  onMenuOpen: () => void;
+}
+const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
+  <div className="mobile-topbar">
+    <button
+      onClick={onMenuOpen}
+      aria-label="Open navigation menu"
+      style={{
+        background: 'transparent', border: 'none', color: '#94a3b8',
+        cursor: 'pointer', padding: '8px', borderRadius: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minWidth: 44, minHeight: 44,
+      }}
+    >
+      {/* Hamburger icon */}
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="2" y="4"  width="16" height="2" rx="1" fill="currentColor" />
+        <rect x="2" y="9"  width="16" height="2" rx="1" fill="currentColor" />
+        <rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor" />
+      </svg>
+    </button>
+    <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 }}>
+      HOPE<span style={{ color: '#3b82f6' }}>FX</span>
+    </span>
+    {/* Right side spacer to keep title centred */}
+    <div style={{ width: 44 }} />
+  </div>
+);
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 const AppShell: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  // On desktop: sidebar can be collapsed (icon-only). On mobile: sidebar is a drawer.
+  const [collapsed,    setCollapsed]    = useState(false);
+  const [drawerOpen,   setDrawerOpen]   = useState(false);
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (isMobile && drawerOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isMobile, drawerOpen]);
+
+  // Close drawer on route change (navigation)
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // Mark body so index.html CSS can lock the viewport height
+  useEffect(() => {
+    document.body.classList.add('app-shell-active');
+    return () => document.body.classList.remove('app-shell-active');
+  }, []);
 
   // Prefetch CSRF token on mount so it's ready before any POST/PUT/DELETE fires.
   React.useEffect(() => {
@@ -367,31 +435,60 @@ const AppShell: React.FC = () => {
   useBootstrapData();
 
   // Hold the entire shell until localStorage rehydration is complete.
-  // This prevents every child query from firing with token=null and
-  // flooding the server with 401s before the persisted token is available.
   if (!hydrated) return <PageFallback />;
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
-      background: 'var(--bg, #0f172a)',
-      color: 'var(--text, #f1f5f9)',
-      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    }}>
-      {/* Banners are in normal flow — push content down instead of overlapping */}
+    <div
+      className="app-shell"
+      style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
+    >
+      {/* Banners push content down instead of overlapping */}
       <TrialBanner />
       <NoLiveFeedBanner />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
-      <main style={{
-        flex: 1, overflow: 'hidden',
-        background: 'var(--bg, #0f172a)',
-        display: 'flex', flexDirection: 'column',
-      }}>
+
+      {/* Mobile top bar — only visible on small screens */}
+      {isMobile && <MobileTopBar onMenuOpen={() => setDrawerOpen(true)} />}
+
+      <div className="app-shell-body">
+        {/* ── Desktop sidebar (always in flow) ── */}
+        {!isMobile && (
+          <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
+        )}
+
+        {/* ── Mobile drawer overlay ── */}
+        {isMobile && drawerOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="sidebar-backdrop"
+              onClick={closeDrawer}
+              aria-hidden="true"
+            />
+            {/* Drawer — full sidebar in expanded mode, slides in from left */}
+            <div
+              className="sidebar-slide-in"
+              style={{
+                position: 'fixed', top: 0, left: 0, bottom: 0,
+                width: 'min(280px, 85vw)',
+                zIndex: 35,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+              }}
+            >
+              <Sidebar
+                collapsed={false}
+                onToggle={closeDrawer}
+                onNavigate={closeDrawer}
+              />
+            </div>
+          </>
+        )}
+
+      <main className="app-shell-main" style={{ background: 'var(--bg, #0f172a)' }}>
         {/* PageScroller: scrollable wrapper for all non-terminal pages.
             Terminal pages (TradingDashboard, ChartDashboard) manage their own
             overflow internally and use flex:1 to fill this container. */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div className="app-shell-scroller">
         <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Core */}
@@ -505,6 +602,7 @@ const AppShell: React.FC = () => {
     </div>
   );
 };
+
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
