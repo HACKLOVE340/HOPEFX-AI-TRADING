@@ -67,3 +67,5 @@ export {
   SentimentGauge,
   SentimentGaugeGuarded,
 } from './SentimentGauge';
+
+export { NewsTicker } from './NewsTicker';
