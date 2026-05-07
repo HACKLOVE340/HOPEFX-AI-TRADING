@@ -14,7 +14,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { useToast } from '../components/Toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -296,12 +296,14 @@ const TradeJournal: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="max-w-4xl mx-auto px-4 py-6">
       <PageHeader
         title="Trade Journal"
+        icon="📓"
         subtitle="Every trade logged automatically. Add notes, emotions, and tags to improve."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/performance' },
           { label: 'Trade Journal' },
         ]}
         actions={
@@ -587,15 +589,14 @@ const TradeJournal: React.FC = () => {
         </>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-          <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
-          <Link to="/pnl" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💰 P&L Dashboard</Link>
-          <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-          <Link to="/risk-calculator" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Risk Calculator</Link>
-          <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-          <Link to="/ab-testing" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚗️ A/B Testing</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '📊 Performance',     href: '/performance',     color: '#4ade80' },
+        { label: '💰 P&L Dashboard',   href: '/pnl',             color: '#60a5fa' },
+        { label: '💼 Portfolio',        href: '/portfolio',       color: '#a78bfa' },
+        { label: '🛡️ Risk Calculator', href: '/risk-calculator', color: '#f97316' },
+        { label: '📈 AI Charts',        href: '/ai-chart',        color: '#34d399' },
+        { label: '⚗️ A/B Testing',     href: '/ab-testing',      color: '#fbbf24' },
+      ]}/>
 
     </div>
   );
