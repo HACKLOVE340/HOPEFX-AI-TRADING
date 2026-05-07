@@ -476,7 +476,7 @@ async def get_affiliate_referrals(
 @router.get("/affiliate/{user_id}")
 async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
-    Get affiliate account for a user.
+    Get affiliate account for a user, including metrics and monthly breakdown.
     """
     affiliate = affiliate_manager.get_user_affiliate(user_id)
     if not affiliate:
@@ -484,9 +484,19 @@ async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_u
 
     metrics = affiliate_manager.get_affiliate_metrics(affiliate.affiliate_id)
 
+    # Monthly breakdown for the chart (last 12 months)
+    try:
+        monthly_breakdown = affiliate_manager.get_monthly_breakdown(affiliate.affiliate_id, months=12)
+    except Exception:
+        monthly_breakdown = []
+
+    # Build affiliate dict and inject payout_email from payment_details
+    aff_dict = affiliate.to_dict()
+    aff_dict.setdefault("payout_email", affiliate.payment_details.get("payout_email") or affiliate.payment_details.get("email"))
+
     return {
         "has_affiliate_account": True,
-        "affiliate": affiliate.to_dict(),
+        "affiliate": aff_dict,
         "metrics": {
             "total_referrals": metrics.total_referrals if metrics else 0,
             "converted_referrals": metrics.converted_referrals if metrics else 0,
@@ -494,6 +504,7 @@ async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_u
             "total_commissions": float(metrics.total_commissions) if metrics else 0,
             "pending_commissions": float(metrics.pending_commissions) if metrics else 0,
             "conversion_rate": metrics.conversion_rate if metrics else 0,
+            "monthly_breakdown": monthly_breakdown,
         },
     }
 

@@ -617,6 +617,78 @@ class AffiliateManager:
             for idx, a in enumerate(sorted_affiliates[:limit])
         ]
 
+    def get_commissions(self, affiliate_id: str) -> list[dict[str, Any]]:
+        """Return commission records derived from paid referrals for an affiliate."""
+        referrals = self.get_affiliate_referrals(affiliate_id)
+        records: list[dict[str, Any]] = []
+        for ref in referrals:
+            if ref.commission_amount and ref.commission_amount > 0:
+                period = (
+                    ref.converted_at.strftime("%Y-%m") if ref.converted_at else
+                    ref.created_at.strftime("%Y-%m")
+                )
+                records.append({
+                    "commission_id": f"com_{ref.referral_id[:12]}",
+                    "referral_id": ref.referral_id,
+                    "amount": float(ref.commission_amount),
+                    "status": ref.status.value,
+                    "period": period,
+                    "paid_at": ref.converted_at.isoformat() if ref.status == ReferralStatus.PAID and ref.converted_at else None,
+                })
+        return records
+
+    def request_withdrawal(self, affiliate_id: str, amount: float) -> dict[str, Any]:
+        """Request a commission withdrawal. Creates a pending payout record."""
+        import uuid
+        affiliate = self.get_affiliate(affiliate_id)
+        if not affiliate:
+            raise ValueError(f"Affiliate {affiliate_id} not found")
+        pending = self._calculate_pending_commission(affiliate_id)
+        if Decimal(str(amount)) > pending:
+            raise ValueError(
+                f"Requested amount ${amount:.2f} exceeds pending balance ${float(pending):.2f}"
+            )
+        payout_id = f"wd_{uuid.uuid4().hex[:12]}"
+        payout = Payout(
+            payout_id=payout_id,
+            affiliate_id=affiliate_id,
+            amount=Decimal(str(amount)),
+            payment_details=affiliate.payment_details,
+        )
+        self._payouts[payout_id] = payout
+        logger.info("Withdrawal requested: affiliate=%s amount=%.2f payout_id=%s", affiliate_id, amount, payout_id)
+        return {"withdrawal_id": payout_id, "amount": amount, "status": "pending"}
+
+    def update_payment_method(self, affiliate_id: str, payment_details: dict[str, Any]) -> bool:
+        """Update payment details for an affiliate."""
+        affiliate = self.get_affiliate(affiliate_id)
+        if not affiliate:
+            raise ValueError(f"Affiliate {affiliate_id} not found")
+        affiliate.payment_details.update(payment_details)
+        logger.info("Payment method updated for affiliate %s", affiliate_id)
+        return True
+
+    def get_monthly_breakdown(self, affiliate_id: str, months: int = 12) -> list[dict[str, Any]]:
+        """Return month-by-month commission and referral counts for the last N months."""
+        from collections import defaultdict
+        referrals = self.get_affiliate_referrals(affiliate_id)
+        buckets: dict[str, dict[str, Any]] = defaultdict(lambda: {"commissions": 0.0, "referrals": 0})
+        for ref in referrals:
+            month_key = ref.created_at.strftime("%Y-%m")
+            buckets[month_key]["referrals"] += 1
+            if ref.commission_amount:
+                buckets[month_key]["commissions"] += float(ref.commission_amount)
+        # Build sorted list for the last N months
+        now = datetime.now(UTC)
+        result: list[dict[str, Any]] = []
+        for i in range(months - 1, -1, -1):
+            d = now.replace(day=1) - timedelta(days=i * 30)
+            key = d.strftime("%Y-%m")
+            label = d.strftime("%b %Y")
+            bucket = buckets.get(key, {"commissions": 0.0, "referrals": 0})
+            result.append({"month": label, "commissions": bucket["commissions"], "referrals": bucket["referrals"]})
+        return result
+
     def get_stats(self) -> dict[str, Any]:
         """Get overall affiliate program statistics"""
         affiliates = list(self._affiliates.values())
