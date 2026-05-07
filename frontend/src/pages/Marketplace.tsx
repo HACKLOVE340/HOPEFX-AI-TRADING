@@ -7,6 +7,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
@@ -342,22 +343,13 @@ const Marketplace: React.FC = () => {
         }
       />
 
-      {/* Cross-links */}
-      <div style={{display:'flex',gap:16,marginBottom:24,flexWrap:'wrap',fontSize:13}}>
-        {[
-          {to:'/performance',label:'📊 Performance'},
-          {to:'/leaderboard',label:'🏆 Leaderboard'},
-          {to:'/affiliate',label:'💰 Affiliate'},
-          {to:'/journal',label:'📓 Journal'},
-          {to:'/copy-trading',label:'🔁 Copy Trading'},
-        ].map(({to,label})=>(
-          <Link key={to} to={to} style={{color:'#64748b',textDecoration:'none',transition:'color 0.15s'}}
-            onMouseEnter={e=>(e.currentTarget.style.color='#94a3b8')}
-            onMouseLeave={e=>(e.currentTarget.style.color='#64748b')}>
-            {label}
-          </Link>
-        ))}
-      </div>
+      <CrossLinkBar links={[
+        { label: 'Performance',  href: '/performance',  icon: '📊', color: '#4ade80' },
+        { label: 'Leaderboard',  href: '/leaderboard',  icon: '🏆', color: '#f59e0b' },
+        { label: 'Affiliate',    href: '/affiliate',    icon: '🤝', color: '#f97316' },
+        { label: 'Trade Journal',href: '/journal',      icon: '📓', color: '#a78bfa' },
+        { label: 'Copy Trading', href: '/copy-trading', icon: '🔁', color: '#60a5fa' },
+      ]} style={{ marginBottom: 24 }} />
 
       {/* Tabs */}
       <div style={{display:'flex',gap:4,marginBottom:24,borderBottom:'1px solid #1e293b'}}>

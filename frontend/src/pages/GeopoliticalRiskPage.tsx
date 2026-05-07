@@ -11,7 +11,7 @@
 
 import React, { memo, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import { GeopoliticalPanel } from '../features/chart-bot';
 import {
@@ -351,14 +351,14 @@ const GeopoliticalRiskPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/research" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔬 Research</Link>
-        <Link to="/correlation" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔗 Correlation</Link>
-        <Link to="/calendar" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📅 Economic Calendar</Link>
-        <Link to="/nuclear" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>☢️ Nuclear AI</Link>
-        <Link to="/signals" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📡 Signal Feed</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
+        { label: 'Research',          href: '/research',    icon: '🔬', color: '#a78bfa' },
+        { label: 'Correlation',       href: '/correlation', icon: '🔗', color: '#60a5fa' },
+        { label: 'Economic Calendar', href: '/calendar',    icon: '📅', color: '#f97316' },
+        { label: 'Nuclear AI',        href: '/nuclear',     icon: '☢️', color: '#ef4444' },
+        { label: 'Signal Feed',       href: '/signals',     icon: '📡', color: '#4ade80' },
+        { label: 'Trade XAU/USD',     href: '/trade',       icon: '⚡', color: '#fbbf24' },
+      ]} />
     </div>
   );
 };

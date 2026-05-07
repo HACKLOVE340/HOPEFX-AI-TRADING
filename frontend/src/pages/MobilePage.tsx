@@ -11,6 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
@@ -158,27 +159,7 @@ const SessionRow: React.FC<{
   </div>
 );
 
-// ── Cross-link card ───────────────────────────────────────────────────────────
 
-const CrossLinkCard: React.FC<{ icon: string; label: string; desc: string; to: string }> = ({ icon, label, desc, to }) => (
-  <Link
-    to={to}
-    style={{
-      display: 'flex', alignItems: 'center', gap: 12,
-      background: '#0d1421', border: '1px solid #1e293b',
-      borderRadius: 10, padding: '12px 16px', textDecoration: 'none',
-    }}
-    onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#111827'; }}
-    onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0d1421'; }}
-  >
-    <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
-    <div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
-      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
-    </div>
-    <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
-  </Link>
-);
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -399,18 +380,13 @@ const MobilePage: React.FC = () => {
         )}
       </div>
 
-      {/* Cross-links */}
-      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Related
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-          <CrossLinkCard icon="🔐" label="Security"       desc="2FA and session management"     to="/settings?tab=security" />
-          <CrossLinkCard icon="🔔" label="Notifications"  desc="Alert preferences"              to="/notifications" />
-          <CrossLinkCard icon="👤" label="Profile"        desc="Account information"            to="/profile" />
-          <CrossLinkCard icon="⚙️" label="Settings"       desc="Account preferences"            to="/settings" />
-        </div>
-      </div>
+      <CrossLinkBar title="Related" links={[
+        { label: 'Security',      href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
+        { label: 'Notifications', href: '/notifications',         icon: '🔔', color: '#f59e0b' },
+        { label: 'Profile',       href: '/profile',               icon: '👤', color: '#60a5fa' },
+        { label: 'Settings',      href: '/settings',              icon: '⚙️', color: '#94a3b8' },
+        { label: 'Dashboard',     href: '/dashboard',             icon: '📊', color: '#4ade80' },
+      ]} />
     </div>
   );
 };
