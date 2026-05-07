@@ -54,7 +54,13 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── risk config (all env-overridable) ─────────────────────────────────────────
-_ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY", "1000000"))
+# RISK_ACCOUNT_EQUITY takes precedence; fall back to INITIAL_BALANCE so dev
+# environments that only set INITIAL_BALANCE don't start with a 90% drawdown.
+_ACCOUNT_EQUITY = float(
+    os.getenv("RISK_ACCOUNT_EQUITY")
+    or os.getenv("INITIAL_BALANCE")
+    or "100000"
+)
 _MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
 _MIN_POSITION_PCT = float(os.getenv("RISK_MIN_POSITION_PCT", "0.001"))
 _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
