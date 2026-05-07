@@ -24,6 +24,18 @@
 import React, { Suspense } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+
+const TD_CROSS_LINKS = [
+  { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
+  { label: 'Portfolio',       href: '/portfolio',       icon: '📊', color: '#8b5cf6' },
+  { label: 'Performance',     href: '/performance',     icon: '📈', color: '#06b6d4' },
+  { label: 'AI Strategy',     href: '/ai-strategy',     icon: '🤖', color: '#f59e0b' },
+  { label: 'Journal',         href: '/journal',         icon: '📓', color: '#10b981' },
+  { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#ec4899' },
+  { label: 'Watchlist',       href: '/watchlist',       icon: '👁',  color: '#38bdf8' },
+  { label: 'Signals',         href: '/signals',         icon: '📡', color: '#a78bfa' },
+];
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
 // polling and duplicate WebSocket connections on page navigation.
@@ -237,6 +249,13 @@ function DashboardInner() {
           </Suspense>
         </div>
       </div>
+
+      {/* Cross-links footer strip */}
+      <CrossLinkBar
+        links={TD_CROSS_LINKS}
+        title="Quick Nav"
+        style={{ padding: '8px 8px 10px', margin: 0, borderTop: '1px solid #1a2e4a', background: 'rgba(6,13,24,0.8)', flexShrink: 0 }}
+      />
     </div>
   );
 }

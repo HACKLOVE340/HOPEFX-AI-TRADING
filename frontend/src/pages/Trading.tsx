@@ -6,6 +6,17 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+
+const TRADING_CROSS_LINKS = [
+  { label: 'Dashboard',       href: '/dashboard',       icon: '📊', color: '#60a5fa' },
+  { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
+  { label: 'Watchlist',       href: '/watchlist',       icon: '👁',  color: '#34d399' },
+  { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#f59e0b' },
+  { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
+  { label: 'Copy Trading',    href: '/copy-trading',    icon: '🔁', color: '#f97316' },
+  { label: 'AI Strategy',     href: '/ai-strategy',     icon: '🤖', color: '#ec4899' },
+];
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -90,6 +101,15 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 bg-[#0a1628] border-b border-[#1e2d3d] shrink-0 flex-wrap">
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-1 text-[10px] shrink-0" aria-label="Breadcrumb">
+        <Link to="/dashboard" className="text-slate-600 hover:text-slate-400 transition-colors no-underline font-semibold tracking-wide">HOME</Link>
+        <span className="text-slate-700">›</span>
+        <span className="text-slate-500 font-semibold tracking-wide">TERMINAL</span>
+      </nav>
+
+      <div className="w-px h-4 bg-[#1e2d3d]" />
+
       {/* Branding */}
       <span className="text-[13px] font-bold text-[#00d4ff] tracking-widest shrink-0">
         HOPEFX
@@ -857,6 +877,9 @@ function TradingPage() {
               {activeTab === 'signals'   && <SignalsSummaryPanel symbol={symbol} />}
             </div>
           </div>
+
+          {/* Cross-links footer */}
+          <CrossLinkBar links={TRADING_CROSS_LINKS} title="Quick Nav" style={{ padding: '8px 4px', marginTop: 0 }} />
         </div>
 
         {/* Right sidebar */}
