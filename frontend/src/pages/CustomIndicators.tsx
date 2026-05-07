@@ -10,7 +10,7 @@
  */
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
 
@@ -308,13 +308,13 @@ const CustomIndicators: React.FC = () => {
         </div>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-        <Link to="/pattern-detector" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔍 Pattern Detector</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
+        { label: 'AI Strategy',     href: '/ai-strategy',      icon: '🤖', color: '#a78bfa' },
+        { label: 'AI Charts',       href: '/ai-chart',         icon: '📈', color: '#06b6d4' },
+        { label: 'Pattern Detector',href: '/pattern-detector', icon: '🔍', color: '#fbbf24' },
+        { label: 'Walk-Forward',    href: '/walk-forward',     icon: '📊', color: '#60a5fa' },
+        { label: 'Marketplace',     href: '/marketplace',      icon: '🛒', color: '#f97316' },
+      ]} />
     </div>
   );
 };

@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import {
   BookOpen, Zap, BarChart2, Brain, Shield, Globe,
   Code2, Settings, Users, ChevronRight, ExternalLink,
@@ -375,6 +376,16 @@ const DocsPage: React.FC = () => {
             </a>
           </p>
         </div>
+
+        {/* Quick navigation */}
+        <CrossLinkBar title="Quick Links" style={{ marginBottom: 32 }} links={[
+          { label: 'Dashboard',    href: '/dashboard',  icon: '📊', color: '#3b82f6' },
+          { label: 'Trade',        href: '/trade',      icon: '⚡', color: '#4ade80' },
+          { label: 'Pricing',      href: '/pricing',    icon: '💰', color: '#f59e0b' },
+          { label: 'Status',       href: '/status',     icon: '🟢', color: '#22c55e' },
+          { label: 'AI Strategy',  href: '/ai-strategy',icon: '🤖', color: '#a78bfa' },
+          { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#fbbf24' },
+        ]} />
 
         {/* Footer links */}
         <div style={{

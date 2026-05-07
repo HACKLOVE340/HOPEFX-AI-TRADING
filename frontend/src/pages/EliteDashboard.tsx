@@ -25,6 +25,7 @@ import {
   type CustomDevPayload,
 } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { EmptyState } from '../components/EmptyState';
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
@@ -673,23 +674,14 @@ const EliteDashboard: React.FC = () => {
         }
       />
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap', fontSize: 13 }}>
-        {[
-          { to: '/sub-accounts', label: '🗂 Sub-Accounts' },
-          { to: '/whitelabel', label: '🏷 White-label' },
-          { to: '/teams', label: '👥 Teams' },
-          { to: '/wallet', label: '💳 Wallet' },
-          { to: '/settings', label: '⚙️ Settings' },
-          { to: '/chat', label: '💬 Chat' },
-        ].map(({ to, label }) => (
-          <Link key={to} to={to} style={{ color: '#64748b', textDecoration: 'none' }}
-            onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
-            onMouseLeave={e => (e.currentTarget.style.color = '#64748b')}>
-            {label}
-          </Link>
-        ))}
-      </div>
+      <CrossLinkBar links={[
+        { label: 'Sub-Accounts', href: '/sub-accounts', icon: '🗂', color: '#60a5fa' },
+        { label: 'White-label',  href: '/whitelabel',   icon: '🏷', color: '#a78bfa' },
+        { label: 'Teams',        href: '/teams',        icon: '👥', color: '#4ade80' },
+        { label: 'Wallet',       href: '/wallet',       icon: '💳', color: '#f59e0b' },
+        { label: 'Settings',     href: '/settings',     icon: '⚙️', color: '#94a3b8' },
+        { label: 'Chat',         href: '/chat',         icon: '💬', color: '#06b6d4' },
+      ]} style={{ marginBottom: 28 }} />
 
       {/* Account manager + ticket form */}
       <div style={s.grid}>
@@ -705,6 +697,14 @@ const EliteDashboard: React.FC = () => {
 
       {/* Custom dev request list — full width */}
       <CustomDevList refresh={devRefresh} />
+
+      <CrossLinkBar title="Related" style={{ marginTop: 16 }} links={[
+        { label: 'Performance',     href: '/performance',   icon: '📊', color: '#4ade80' },
+        { label: 'Portfolio',       href: '/portfolio',     icon: '💼', color: '#60a5fa' },
+        { label: 'AI Strategy',     href: '/ai-strategy',   icon: '🤖', color: '#a78bfa' },
+        { label: 'Pricing',         href: '/pricing',       icon: '💰', color: '#f59e0b' },
+        { label: 'Affiliate',       href: '/affiliate',     icon: '🤝', color: '#f97316' },
+      ]} />
     </div>
   );
 };

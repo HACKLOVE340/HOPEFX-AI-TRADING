@@ -17,7 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
@@ -727,6 +727,17 @@ const Dashboard: React.FC = () => {
         <div style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</div>
         <QuickNav />
       </div>
+
+      <CrossLinkBar title="Explore" links={[
+        { label: 'Trade',           href: '/trade',            icon: '⚡', color: '#3b82f6' },
+        { label: 'Portfolio',       href: '/portfolio',        icon: '💼', color: '#4ade80' },
+        { label: 'AI Charts',       href: '/ai-chart',         icon: '📈', color: '#06b6d4' },
+        { label: 'Signals',         href: '/signals',          icon: '📡', color: '#a78bfa' },
+        { label: 'Risk Calculator', href: '/risk-calculator',  icon: '🧮', color: '#f59e0b' },
+        { label: 'Economic Calendar',href: '/calendar',        icon: '📅', color: '#f97316' },
+        { label: 'Leaderboard',     href: '/leaderboard',      icon: '🏆', color: '#fbbf24' },
+        { label: 'Performance',     href: '/performance',      icon: '📊', color: '#22c55e' },
+      ]} />
     </div>
   );
 };
