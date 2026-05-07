@@ -17,7 +17,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { useToast } from '../components/Toast';
 import { calendarApi } from '../hooks/useApi';
 import { useMacro } from '../hooks/useOrchestratorData';
@@ -291,7 +291,7 @@ const EconomicCalendar: React.FC = () => {
   }, {});
 
   return (
-    <div style={s.page}>
+    <div className="max-w-5xl mx-auto px-4 py-6">
       <PageHeader
         title="Economic Calendar"
         icon="📅"
@@ -457,14 +457,14 @@ const EconomicCalendar: React.FC = () => {
         </div>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/geopolitical" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🌍 Geopolitical</Link>
-        <Link to="/correlation" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔗 Correlation</Link>
-        <Link to="/signals" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📡 Signal Feed</Link>
-        <Link to="/trade" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚡ Trade</Link>
-        <Link to="/alerts" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔔 Price Alerts</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '🌍 Geopolitical Risk', href: '/geopolitical', color: '#f97316' },
+        { label: '🔗 Correlation',        href: '/correlation',  color: '#a78bfa' },
+        { label: '📡 Signal Feed',        href: '/signals',      color: '#34d399' },
+        { label: '⚡ Trade',              href: '/trade',        color: '#4ade80' },
+        { label: '🔔 Price Alerts',       href: '/alerts',       color: '#fbbf24' },
+        { label: '📊 Dashboard',          href: '/dashboard',    color: '#60a5fa' },
+      ]}/>
     </div>
   );
 };
