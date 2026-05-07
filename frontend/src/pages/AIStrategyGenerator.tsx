@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
 import { useToast } from '../components/Toast';
@@ -251,7 +251,7 @@ const AIStrategyGenerator: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="max-w-4xl mx-auto px-4 py-6">
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#94a3b8' }}>
@@ -517,15 +517,14 @@ const AIStrategyGenerator: React.FC = () => {
       </>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/ai-chart" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 AI Charts</Link>
-        <Link to="/pattern-detector" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔍 Pattern Detector</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Walk-Forward</Link>
-        <Link to="/ab-testing" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>⚗️ A/B Testing</Link>
-        <Link to="/indicators" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📐 Indicators</Link>
-        <Link to="/marketplace" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛒 Marketplace</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '📈 AI Charts',        href: '/ai-chart',         color: '#60a5fa' },
+        { label: '🔍 Pattern Detector', href: '/pattern-detector', color: '#a78bfa' },
+        { label: '📊 Walk-Forward',     href: '/walk-forward',     color: '#34d399' },
+        { label: '⚗️ A/B Testing',     href: '/ab-testing',       color: '#fbbf24' },
+        { label: '📐 Indicators',       href: '/indicators',       color: '#f97316' },
+        { label: '🛒 Marketplace',      href: '/marketplace',      color: '#4ade80' },
+      ]}/>
     </div>
   );
 };
