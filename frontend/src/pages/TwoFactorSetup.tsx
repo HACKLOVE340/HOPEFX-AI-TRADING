@@ -25,6 +25,7 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { api, prefetchCsrfToken, resetCsrfCache } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
@@ -287,9 +288,10 @@ const TwoFactorSetup: React.FC = () => {
   }
 
   return (
-    <div style={s.page}>
+    <div className="max-w-2xl mx-auto px-4 py-6">
       <PageHeader
         title="Two-Factor Authentication"
+        icon="🔐"
         subtitle="Add an extra layer of security using an authenticator app."
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
@@ -517,13 +519,12 @@ const TwoFactorSetup: React.FC = () => {
         </div>
       )}
 
-      {/* Cross-links */}
-      <div style={{ marginTop: 32, padding: '16px 0', borderTop: '1px solid #1e293b',
-        display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-        <Link to="/settings" style={s.crossLink}>← Account Settings</Link>
-        <Link to="/profile" style={s.crossLink}>Profile</Link>
-        <Link to="/dashboard" style={s.crossLink}>Dashboard</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '⚙️ Settings',  href: '/settings',  color: '#60a5fa' },
+        { label: '👤 Profile',   href: '/profile',   color: '#a78bfa' },
+        { label: '🔑 API Keys',  href: '/settings',  color: '#fbbf24' },
+        { label: '📊 Dashboard', href: '/dashboard', color: '#34d399' },
+      ]}/>
     </div>
   );
 };
