@@ -64,49 +64,51 @@ const PerfBadge: React.FC<{label:string;value:string;positive?:boolean}> = ({lab
 
 const StrategyCard: React.FC<{strategy:Strategy;onSelect:(s:Strategy)=>void}> = ({strategy,onSelect}) => {
   const p = strategy.performance;
-  // Build sparkline data from equity_curve if available, else synthesise from return
   const sparkData: number[] = (strategy as unknown as { equity_curve?: number[] }).equity_curve
     ?? (p ? Array.from({ length: 12 }, (_, i) => 10000 * (1 + ((p.total_return_pct ?? 0) / 100) * (i / 11))) : []);
   return (
     <div
       onClick={()=>onSelect(strategy)}
-      style={{background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:20,cursor:'pointer',transition:'border-color 0.15s'}}
-      onMouseEnter={e=>(e.currentTarget.style.borderColor='#3b82f6')}
-      onMouseLeave={e=>(e.currentTarget.style.borderColor='#334155')}
+      className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-5 cursor-pointer transition-colors hover:border-blue-500/60 flex flex-col gap-3"
     >
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:10}}>
-        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-          <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:'rgba(59,130,246,0.15)',color:'#60a5fa',textTransform:'capitalize'}}>
+      {/* Top row: category chips + price */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex gap-1.5 flex-wrap">
+          <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 capitalize">
             {strategy.category.replace(/_/g,' ')}
           </span>
           {strategy.tags.slice(0,2).map(t=>(
-            <span key={t} style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'#1e293b',color:'#64748b',border:'1px solid #334155'}}>{t}</span>
+            <span key={t} className="text-2xs px-2 py-0.5 rounded bg-terminal-raised text-slate-500 border border-terminal-border">{t}</span>
           ))}
         </div>
-        <div style={{fontSize:14,whiteSpace:'nowrap'}}>
+        <div className="text-sm whitespace-nowrap flex-shrink-0">
           {strategy.price===0
-            ? <span style={{color:'#4ade80',fontWeight:700}}>Free</span>
-            : <span style={{color:'#f8fafc',fontWeight:700}}>${strategy.price}<span style={{color:'#64748b',fontWeight:400,fontSize:12}}>/mo</span></span>
+            ? <span className="text-green-400 font-bold">Free</span>
+            : <span className="text-slate-100 font-bold">${strategy.price}<span className="text-slate-500 font-normal text-xs">/mo</span></span>
           }
         </div>
       </div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:8}}>
-        <h3 style={{fontSize:15,fontWeight:700,color:'#f8fafc',margin:0,flex:1}}>{strategy.name}</h3>
-        {sparkData.length>1&&<Sparkline data={sparkData} width={72} height={28}/>}
+      {/* Name + sparkline */}
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-slate-100 text-sm sm:text-base font-bold m-0 flex-1 leading-snug">{strategy.name}</h3>
+        {sparkData.length>1&&<Sparkline data={sparkData} width={64} height={24}/>}
       </div>
-      <p style={{fontSize:13,color:'#94a3b8',lineHeight:1.6,margin:'0 0 12px',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden'}}>{strategy.description}</p>
-      {p&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:12}}>
+      {/* Description */}
+      <p className="text-slate-400 text-xs sm:text-sm leading-relaxed m-0 line-clamp-2">{strategy.description}</p>
+      {/* Performance badges */}
+      {p&&<div className="flex gap-2 flex-wrap">
         {p.total_return_pct!=null&&<PerfBadge label="Return" value={`+${fmt(p.total_return_pct)}%`}/>}
         {p.sharpe_ratio!=null&&<PerfBadge label="Sharpe" value={fmt(p.sharpe_ratio)}/>}
         {p.max_drawdown_pct!=null&&<PerfBadge label="Max DD" value={`-${fmt(p.max_drawdown_pct)}%`} positive={false}/>}
         {p.win_rate_pct!=null&&<PerfBadge label="Win rate" value={`${fmt(p.win_rate_pct,0)}%`}/>}
       </div>}
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:10,borderTop:'1px solid #1e293b'}}>
-        <div style={{display:'flex',alignItems:'center',gap:6}}>
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-2 border-t border-terminal-border mt-auto">
+        <div className="flex items-center gap-1.5">
           <Stars rating={strategy.rating}/>
-          <span style={{fontSize:12,color:'#94a3b8'}}>{fmt(strategy.rating)} ({strategy.review_count})</span>
+          <span className="text-slate-400 text-xs">{fmt(strategy.rating)} ({strategy.review_count})</span>
         </div>
-        <span style={{fontSize:12,color:'#64748b'}}>{strategy.subscriber_count.toLocaleString()} subscribers</span>
+        <span className="text-slate-500 text-xs">{strategy.subscriber_count.toLocaleString()} subs</span>
       </div>
     </div>
   );
@@ -122,22 +124,29 @@ const ReviewModal: React.FC<{strategyId:string;onClose:()=>void;onSubmitted:()=>
     finally{setSubmitting(false);}
   };
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div style={{background:'#0f172a',border:'1px solid #334155',borderRadius:16,padding:24,width:'100%',maxWidth:480,boxShadow:'0 25px 50px rgba(0,0,0,0.5)'}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-          <h2 style={{fontSize:18,fontWeight:700,color:'#f8fafc',margin:0}}>Write a Review</h2>
-          <button onClick={onClose} style={{background:'none',border:'none',color:'#64748b',cursor:'pointer',fontSize:20,lineHeight:1}}>✕</button>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-terminal-bg border border-terminal-border rounded-t-2xl sm:rounded-xl p-5 sm:p-6 w-full sm:max-w-lg shadow-2xl" onClick={e=>e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-slate-100 text-base font-bold m-0">Write a Review</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer text-xl leading-none p-1">✕</button>
         </div>
-        <label style={{display:'block',fontSize:11,color:'#64748b',marginBottom:8,textTransform:'uppercase',letterSpacing:0.5}}>Rating</label>
-        <div style={{display:'flex',gap:4,marginBottom:16}}>
-          {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} style={{background:'transparent',border:'none',cursor:'pointer',fontSize:24,color:n<=rating?'#f59e0b':'#334155',transition:'color 0.1s'}}>★</button>)}
+        <label className="block text-slate-500 text-2xs font-semibold uppercase tracking-wider mb-2">Rating</label>
+        <div className="flex gap-1 mb-4">
+          {[1,2,3,4,5].map(n=><button key={n} onClick={()=>setRating(n)} className="bg-transparent border-0 cursor-pointer text-2xl leading-none transition-colors p-0.5" style={{color:n<=rating?'#f59e0b':'#334155'}}>★</button>)}
         </div>
-        <label style={{display:'block',fontSize:11,color:'#64748b',marginBottom:6,textTransform:'uppercase',letterSpacing:0.5}}>Title</label>
-        <input value={title} onChange={e=>setTitle(e.target.value)} style={{width:'100%',background:'#1e293b',border:'1px solid #334155',borderRadius:8,padding:'9px 12px',color:'#f1f5f9',fontSize:14,outline:'none',boxSizing:'border-box',marginBottom:12}} placeholder="Summary of your experience"/>
-        <label style={{display:'block',fontSize:11,color:'#64748b',marginBottom:6,textTransform:'uppercase',letterSpacing:0.5}}>Review</label>
-        <textarea value={content} onChange={e=>setContent(e.target.value)} style={{width:'100%',background:'#1e293b',border:'1px solid #334155',borderRadius:8,padding:'9px 12px',color:'#f1f5f9',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'}} rows={4} placeholder="Describe your experience with this strategy…"/>
-        {err&&<div style={{marginTop:8,fontSize:13,color:'#f87171'}}>{err}</div>}
-        <button onClick={submit} disabled={submitting} style={{marginTop:16,width:'100%',background:'#3b82f6',color:'#fff',border:'none',borderRadius:10,padding:'11px 0',fontSize:14,fontWeight:600,cursor:'pointer',opacity:submitting?0.6:1}}>{submitting?'Submitting…':'Submit Review'}</button>
+        <label className="block text-slate-500 text-2xs font-semibold uppercase tracking-wider mb-1.5">Title</label>
+        <input value={title} onChange={e=>setTitle(e.target.value)}
+          className="w-full bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2.5 text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors mb-3"
+          placeholder="Summary of your experience"/>
+        <label className="block text-slate-500 text-2xs font-semibold uppercase tracking-wider mb-1.5">Review</label>
+        <textarea value={content} onChange={e=>setContent(e.target.value)}
+          className="w-full bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2.5 text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors resize-y font-sans"
+          rows={4} placeholder="Describe your experience with this strategy…"/>
+        {err&&<div className="mt-2 text-red-400 text-xs">{err}</div>}
+        <button onClick={submit} disabled={submitting}
+          className="mt-4 w-full bg-blue-600 hover:bg-blue-500 text-white border-0 rounded-xl py-3 text-sm font-bold cursor-pointer transition-colors disabled:opacity-60">
+          {submitting?'Submitting…':'Submit Review'}
+        </button>
       </div>
     </div>
   );
@@ -149,31 +158,32 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
   const sparkData: number[] = (strategy as unknown as { equity_curve?: number[] }).equity_curve
     ?? (p ? Array.from({length:12},(_,i)=>10000*(1+((p.total_return_pct??0)/100)*(i/11))) : []);
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',backdropFilter:'blur(4px)',zIndex:50,display:'flex',alignItems:'center',justifyContent:'center',padding:16}} onClick={onClose}>
-      <div style={{background:'#0f172a',border:'1px solid #334155',borderRadius:16,padding:24,width:'100%',maxWidth:680,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 25px 50px rgba(0,0,0,0.5)'}} onClick={e=>e.stopPropagation()}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
-          <div style={{flex:1,paddingRight:16}}>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-              <span style={{fontSize:11,fontWeight:600,padding:'2px 8px',borderRadius:4,background:'rgba(59,130,246,0.15)',color:'#60a5fa',textTransform:'capitalize'}}>{strategy.category.replace(/_/g,' ')}</span>
-              {strategy.tags.map(t=><span key={t} style={{fontSize:11,padding:'2px 8px',borderRadius:4,background:'#1e293b',color:'#64748b',border:'1px solid #334155'}}>{t}</span>)}
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-modal flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div className="bg-terminal-bg border border-terminal-border rounded-t-2xl sm:rounded-xl p-4 sm:p-6 w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto shadow-2xl" onClick={e=>e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex gap-1.5 flex-wrap mb-2">
+              <span className="text-2xs font-semibold px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 capitalize">{strategy.category.replace(/_/g,' ')}</span>
+              {strategy.tags.map(t=><span key={t} className="text-2xs px-2 py-0.5 rounded bg-terminal-raised text-slate-500 border border-terminal-border">{t}</span>)}
             </div>
-            <h2 style={{fontSize:20,fontWeight:700,color:'#f8fafc',margin:'0 0 6px'}}>{strategy.name}</h2>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <Stars rating={strategy.rating} size={16}/>
-              <span style={{color:'#94a3b8',fontSize:13}}>{fmt(strategy.rating)} · {strategy.review_count} reviews · {strategy.subscriber_count.toLocaleString()} subscribers</span>
+            <h2 className="text-slate-100 text-lg sm:text-xl font-bold m-0 mb-1 leading-tight">{strategy.name}</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Stars rating={strategy.rating} size={14}/>
+              <span className="text-slate-400 text-xs">{fmt(strategy.rating)} · {strategy.review_count} reviews · {strategy.subscriber_count.toLocaleString()} subs</span>
             </div>
           </div>
-          <div style={{textAlign:'right',flexShrink:0}}>
+          <div className="text-right flex-shrink-0">
             {strategy.price===0
-              ? <div style={{fontSize:28,fontWeight:800,color:'#4ade80'}}>Free</div>
-              : <><div style={{fontSize:28,fontWeight:800,color:'#f8fafc'}}>${strategy.price}</div><div style={{fontSize:13,color:'#64748b'}}>/{strategy.license_type==='one_time'?'one-time':'mo'}</div></>
+              ? <div className="text-green-400 text-2xl font-black">Free</div>
+              : <><div className="text-slate-100 text-2xl font-black">${strategy.price}</div><div className="text-slate-500 text-xs">/{strategy.license_type==='one_time'?'one-time':'mo'}</div></>
             }
           </div>
-          <button onClick={onClose} style={{marginLeft:16,background:'none',border:'none',color:'#64748b',cursor:'pointer',fontSize:20,lineHeight:1,flexShrink:0}}>✕</button>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer text-xl leading-none p-1 flex-shrink-0">✕</button>
         </div>
-        <p style={{color:'#94a3b8',fontSize:14,lineHeight:1.7,marginBottom:16}}>{strategy.description}</p>
-        {sparkData.length>1&&<div style={{marginBottom:16}}><Sparkline data={sparkData} width={300} height={48}/></div>}
-        {p&&<div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:24}}>
+        <p className="text-slate-400 text-sm leading-relaxed mb-4">{strategy.description}</p>
+        {sparkData.length>1&&<div className="mb-4"><Sparkline data={sparkData} width={280} height={44}/></div>}
+        {p&&<div className="flex gap-2 flex-wrap mb-5">
           {p.total_return_pct!=null&&<PerfBadge label="Total return" value={`+${fmt(p.total_return_pct)}%`}/>}
           {p.sharpe_ratio!=null&&<PerfBadge label="Sharpe ratio" value={fmt(p.sharpe_ratio)}/>}
           {p.max_drawdown_pct!=null&&<PerfBadge label="Max drawdown" value={`-${fmt(p.max_drawdown_pct)}%`} positive={false}/>}
@@ -181,43 +191,40 @@ const DetailModal: React.FC<{strategy:Strategy;reviews:Review[];onClose:()=>void
         </div>}
         {/* Purchase confirmation */}
         {confirmOpen&&!subscribed?(
-          <div style={{background:'rgba(59,130,246,0.08)',border:'1px solid rgba(59,130,246,0.35)',borderRadius:10,padding:'14px 16px',marginBottom:12}}>
-            <div style={{fontSize:14,fontWeight:600,color:'#f1f5f9',marginBottom:6}}>Confirm Purchase</div>
-            <div style={{fontSize:13,color:'#94a3b8',marginBottom:12}}>
-              Subscribe to <strong style={{color:'#f1f5f9'}}>{strategy.name}</strong> for{' '}
-              <strong style={{color:'#60a5fa'}}>{strategy.price===0?'Free':`$${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</strong>?
+          <div className="bg-blue-500/8 border border-blue-500/35 rounded-xl p-4 mb-3">
+            <div className="text-slate-100 text-sm font-semibold mb-1.5">Confirm Purchase</div>
+            <div className="text-slate-400 text-xs mb-3">
+              Subscribe to <strong className="text-slate-200">{strategy.name}</strong> for{' '}
+              <strong className="text-blue-400">{strategy.price===0?'Free':`$${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}</strong>?
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button onClick={()=>{setConfirmOpen(false);onSubscribe(strategy);}} style={{flex:1,background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,padding:'10px 0',fontSize:13,fontWeight:700,cursor:'pointer'}}>
-                ✅ Confirm
-              </button>
-              <button onClick={()=>setConfirmOpen(false)} style={{flex:1,background:'#334155',color:'#94a3b8',border:'none',borderRadius:8,padding:'10px 0',fontSize:13,cursor:'pointer'}}>
-                Cancel
-              </button>
+            <div className="flex gap-2">
+              <button onClick={()=>{setConfirmOpen(false);onSubscribe(strategy);}} className="flex-1 bg-blue-600 hover:bg-blue-500 text-white border-0 rounded-lg py-2.5 text-sm font-bold cursor-pointer transition-colors">✅ Confirm</button>
+              <button onClick={()=>setConfirmOpen(false)} className="flex-1 bg-terminal-raised border border-terminal-border text-slate-400 rounded-lg py-2.5 text-sm cursor-pointer hover:border-slate-500 transition-colors">Cancel</button>
             </div>
           </div>
         ):(
-          <div style={{display:'flex',gap:10,marginBottom:16}}>
-            <button onClick={()=>subscribed?undefined:setConfirmOpen(true)} disabled={subscribed} style={{flex:1,background:'#3b82f6',color:'#fff',border:'none',borderRadius:10,padding:'13px 0',fontSize:14,fontWeight:600,cursor:subscribed?'default':'pointer',opacity:subscribed?0.6:1}}>
+          <div className="flex gap-2 mb-4">
+            <button onClick={()=>subscribed?undefined:setConfirmOpen(true)} disabled={subscribed}
+              className="flex-1 bg-blue-600 hover:bg-blue-500 text-white border-0 rounded-xl py-3 text-sm font-bold cursor-pointer transition-colors disabled:opacity-60">
               {subscribed?'✅ Subscribed':strategy.price===0?'Add to my strategies':`Subscribe — $${strategy.price}/${strategy.license_type==='one_time'?'one-time':'mo'}`}
             </button>
-            {subscribed&&<button onClick={onReview} style={{background:'#334155',color:'#e2e8f0',border:'none',borderRadius:10,padding:'13px 16px',fontSize:14,fontWeight:600,cursor:'pointer'}}>✍ Review</button>}
+            {subscribed&&<button onClick={onReview} className="bg-terminal-raised border border-terminal-border text-slate-200 rounded-xl px-4 py-3 text-sm font-bold cursor-pointer hover:border-slate-500 transition-colors">✍ Review</button>}
           </div>
         )}
-        {purchaseError&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#f87171',marginBottom:12}}>{purchaseError}</div>}
-        {reviewsErr&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:8,padding:'10px 14px',fontSize:13,color:'#f87171',marginBottom:12}}>{reviewsErr}</div>}
+        {purchaseError&&<div className="bg-red-950/40 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-xs mb-3">{purchaseError}</div>}
+        {reviewsErr&&<div className="bg-red-950/40 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-xs mb-3">{reviewsErr}</div>}
         {reviews.length>0&&(
-          <div style={{marginTop:24,paddingTop:24,borderTop:'1px solid #1e293b'}}>
-            <h3 style={{fontSize:13,fontWeight:600,color:'#94a3b8',textTransform:'uppercase',letterSpacing:0.5,marginBottom:16}}>Reviews</h3>
-            <div style={{display:'flex',flexDirection:'column',gap:12}}>
+          <div className="mt-5 pt-5 border-t border-terminal-border">
+            <h3 className="text-slate-500 text-2xs font-semibold uppercase tracking-wider mb-4">Reviews</h3>
+            <div className="flex flex-col gap-3">
               {reviews.map(r=>(
-                <div key={r.review_id} style={{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:16}}>
-                  <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+                <div key={r.review_id} className="bg-terminal-raised border border-terminal-border rounded-xl p-4">
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
                     <Stars rating={r.rating}/>
-                    <strong style={{color:'#e2e8f0',fontSize:14}}>{r.title}</strong>
-                    <span style={{color:'#475569',fontSize:12,marginLeft:'auto'}}>{new Date(r.created_at).toLocaleDateString()}</span>
+                    <strong className="text-slate-200 text-sm">{r.title}</strong>
+                    <span className="text-slate-600 text-xs ml-auto">{new Date(r.created_at).toLocaleDateString()}</span>
                   </div>
-                  <p style={{color:'#94a3b8',fontSize:13,margin:0}}>{r.content}</p>
+                  <p className="text-slate-400 text-xs leading-relaxed m-0">{r.content}</p>
                 </div>
               ))}
             </div>
@@ -320,7 +327,7 @@ const Marketplace: React.FC = () => {
   });
 
   return (
-    <div style={{maxWidth:1100,margin:'0 auto',padding:'32px 16px',color:'#f1f5f9',minHeight:'100vh'}}>
+    <div className="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8 text-slate-100 min-h-screen">
       <PageHeader
         title="Strategy Marketplace"
         icon="🛒"
@@ -333,12 +340,12 @@ const Marketplace: React.FC = () => {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Marketplace' },
         ]}
-        badge={<span style={{fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:20,background:'rgba(59,130,246,0.15)',color:'#60a5fa',border:'1px solid rgba(59,130,246,0.3)'}}>LIVE</span>}
+        badge={<span className="text-2xs font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">LIVE</span>}
         actions={
-          <div style={{display:'flex',gap:8}}>
-            <Link to="/copy-trading" style={{padding:'7px 14px',background:'rgba(52,211,153,0.1)',border:'1px solid rgba(52,211,153,0.3)',borderRadius:8,color:'#34d399',fontSize:12,fontWeight:600,textDecoration:'none'}}>🔁 Copy Trading</Link>
-            <Link to="/signals" style={{padding:'7px 14px',background:'rgba(167,139,250,0.1)',border:'1px solid rgba(167,139,250,0.3)',borderRadius:8,color:'#a78bfa',fontSize:12,fontWeight:600,textDecoration:'none'}}>📡 Signals</Link>
-            <Link to="/ai-strategy" style={{padding:'8px 18px',background:'#3b82f6',color:'#fff',border:'none',borderRadius:8,fontSize:13,fontWeight:700,textDecoration:'none'}}>🤖 Build Strategy</Link>
+          <div className="flex gap-2 flex-wrap">
+            <Link to="/copy-trading" className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-semibold no-underline hover:bg-emerald-500/20 transition-colors">🔁 Copy Trading</Link>
+            <Link to="/signals" className="px-3 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-lg text-violet-400 text-xs font-semibold no-underline hover:bg-violet-500/20 transition-colors hidden sm:inline-flex">📡 Signals</Link>
+            <Link to="/ai-strategy" className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold no-underline transition-colors">🤖 Build Strategy</Link>
           </div>
         }
       />
@@ -349,12 +356,17 @@ const Marketplace: React.FC = () => {
         { label: 'Affiliate',    href: '/affiliate',    icon: '🤝', color: '#f97316' },
         { label: 'Trade Journal',href: '/journal',      icon: '📓', color: '#a78bfa' },
         { label: 'Copy Trading', href: '/copy-trading', icon: '🔁', color: '#60a5fa' },
-      ]} style={{ marginBottom: 24 }} />
+      ]} className="mb-6" />
 
       {/* Tabs */}
-      <div style={{display:'flex',gap:4,marginBottom:24,borderBottom:'1px solid #1e293b'}}>
+      <div className="flex gap-0 mb-6 border-b border-terminal-border overflow-x-auto"
+        style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
         {(['browse','my-listings'] as MainTab[]).map(tab=>(
-          <button key={tab} onClick={()=>setMainTab(tab)} style={{padding:'10px 20px',background:'transparent',border:'none',color:mainTab===tab?'#3b82f6':'#64748b',fontSize:14,cursor:'pointer',borderBottom:`2px solid ${mainTab===tab?'#3b82f6':'transparent'}`,fontWeight:mainTab===tab?600:400,transition:'color 0.15s'}}>
+          <button key={tab} onClick={()=>setMainTab(tab)}
+            className={`px-4 sm:px-5 py-2.5 bg-transparent border-0 text-sm cursor-pointer whitespace-nowrap transition-colors font-medium ${
+              mainTab===tab ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'
+            }`}
+            style={{ borderBottom: mainTab===tab ? '2px solid #3b82f6' : '2px solid transparent' }}>
             {tab==='browse'?'Browse':'My Listings'}
           </button>
         ))}
@@ -362,11 +374,12 @@ const Marketplace: React.FC = () => {
 
       {mainTab==='browse'&&(
         <>
-          <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
+          {/* Search + sort row */}
+          <div className="flex gap-2 mb-4 flex-wrap sm:flex-nowrap">
             <input type="search" placeholder="Search strategies…" value={search} onChange={e=>setSearch(e.target.value)}
-              style={{flex:1,minWidth:200,padding:'10px 14px',background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',fontSize:14,outline:'none'}}/>
+              className="flex-1 min-w-0 px-3 py-2.5 bg-terminal-raised border border-terminal-border rounded-lg text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors placeholder-slate-600"/>
             <select value={sortBy} onChange={e=>setSortBy(e.target.value as SortOption)}
-              style={{padding:'10px 14px',background:'#1e293b',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',fontSize:14,cursor:'pointer',outline:'none'}}>
+              className="px-3 py-2.5 bg-terminal-raised border border-terminal-border rounded-lg text-slate-200 text-sm cursor-pointer outline-none focus:border-blue-500 transition-colors flex-shrink-0">
               <option value="popular">Most popular</option>
               <option value="rating">Highest rated</option>
               <option value="newest">Newest</option>
@@ -374,21 +387,28 @@ const Marketplace: React.FC = () => {
               <option value="price_high">Price: high → low</option>
             </select>
           </div>
-          <div style={{display:'flex',gap:8,flexWrap:'wrap',marginBottom:24}}>
+          {/* Category chips — horizontal scroll on mobile */}
+          <div className="flex gap-2 flex-wrap mb-6 overflow-x-auto pb-1"
+            style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
             {CATEGORIES.map(c=>(
-              <button key={c} onClick={()=>setCategory(c)} style={{padding:'6px 14px',borderRadius:20,fontSize:13,cursor:'pointer',fontWeight:500,textTransform:'capitalize',background:category===c?'#3b82f6':'#1e293b',color:category===c?'#fff':'#94a3b8',border:`1px solid ${category===c?'#3b82f6':'#334155'}`,transition:'all 0.15s'}}>
+              <button key={c} onClick={()=>setCategory(c)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer capitalize whitespace-nowrap transition-all border ${
+                  category===c
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-terminal-raised border-terminal-border text-slate-400 hover:border-slate-500'
+                }`}>
                 {c==='all'?'All':c.replace(/_/g,' ')}
               </button>
             ))}
           </div>
-          {loadErr&&<div style={{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:8,padding:'12px 16px',fontSize:13,color:'#f87171',marginBottom:16}}>{loadErr}</div>}
+          {loadErr&&<div className="bg-red-950/40 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-sm mb-4">{loadErr}</div>}
           {loading ? (
-            <div style={{display:'flex',justifyContent:'center',padding:'64px 0'}}><Spinner size="lg"/></div>
+            <div className="flex justify-center py-16"><Spinner size="lg"/></div>
           ) : !loadErr && visible.length===0 ? (
             <EmptyState icon="🔍" title="No strategies found" description="Try adjusting your search or category filters."
-              action={<button onClick={()=>{setSearch('');setCategory('all');}} style={{padding:'8px 18px',background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer'}}>Clear filters</button>}/>
+              action={<button onClick={()=>{setSearch('');setCategory('all');}} className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold cursor-pointer border-0 transition-colors">Clear filters</button>}/>
           ) : (
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:16}}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {visible.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}
             </div>
           )}
@@ -399,9 +419,9 @@ const Marketplace: React.FC = () => {
         <div>
           {myListings.length===0 ? (
             <EmptyState icon="📦" title="No listings yet" description="Build and publish your own AI trading strategy to the marketplace."
-              action={<Link to="/ai-strategy" style={{padding:'8px 18px',background:'#3b82f6',borderRadius:8,color:'#fff',fontSize:13,fontWeight:600,textDecoration:'none',display:'inline-block'}}>🤖 Build Strategy</Link>}/>
+              action={<Link to="/ai-strategy" className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold no-underline transition-colors">🤖 Build Strategy</Link>}/>
           ) : (
-            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(320px,1fr))',gap:16}}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {myListings.map(s=><StrategyCard key={s.strategy_id} strategy={s} onSelect={handleSelect}/>)}
             </div>
           )}
