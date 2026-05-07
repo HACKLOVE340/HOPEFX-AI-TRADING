@@ -20,6 +20,7 @@ import { isAdmin, isSuperAdmin } from '../lib/subscription';
 import type { SettingsTab } from './settings/types';
 import { PageHeader } from '../components/PageHeader';
 import { Badge } from '../components/Badge';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 
 // ── User-facing sections ──────────────────────────────────────────────────────
 const ProfileSection           = lazy(() => import('./settings/ProfileSection'));
@@ -298,7 +299,7 @@ const Settings: React.FC = () => {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      <div style={S.page}>
+      <div className="min-h-screen bg-terminal-bg text-slate-100 px-6 py-8 box-border">
         <PageHeader
           title="Settings"
         icon="⚙️"
@@ -454,6 +455,15 @@ const Settings: React.FC = () => {
             </Suspense>
           </main>
         </div>
+
+        <CrossLinkBar title="Quick Links" style={{ marginTop: 32 }} links={[
+          { label: '📊 Dashboard',    href: '/dashboard',  color: '#60a5fa' },
+          { label: '👤 Profile',      href: '/profile',    color: '#a78bfa' },
+          { label: '🔐 2FA Setup',    href: '/2fa-setup',  color: '#f97316' },
+          { label: '💳 Wallet',       href: '/wallet',     color: '#34d399' },
+          { label: '🔑 API Keys',     href: '/settings',   color: '#fbbf24' },
+          { label: '📋 Audit Log',    href: '/audit-log',  color: '#94a3b8' },
+        ]}/>
       </div>
     </>
   );
