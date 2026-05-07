@@ -10,7 +10,7 @@
 import React, { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 // useNavigate removed — all nav converted to Link
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -282,15 +282,15 @@ const PropFirmTracker: React.FC = () => {
   const errorMsg = error instanceof Error ? error.message : error ? String(error) : null;
 
   return (
-    <div style={s.page}>
+    <div className="max-w-3xl mx-auto px-4 py-6">
       <PageHeader
         title="Prop Firm Challenge Tracker"
         icon="🛡️"
         subtitle="Monitor drawdown limits, daily loss caps, and profit targets in real time."
         breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Tools', href: '/risk-calculator' },
-          { label: 'Prop Firm Tracker' },
+          { label: 'Dashboard',    href: '/dashboard' },
+          { label: 'Tools',        href: '/risk-calculator' },
+          { label: 'Prop Tracker' },
         ]}
         actions={
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -514,14 +514,14 @@ const PropFirmTracker: React.FC = () => {
       </>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/risk-calculator" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛡️ Risk Calculator</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/copy-trading" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🔁 Copy Trading</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '🛡️ Risk Calculator', href: '/risk-calculator', color: '#f97316' },
+        { label: '📓 Trade Journal',    href: '/journal',         color: '#fbbf24' },
+        { label: '📊 Performance',      href: '/performance',     color: '#60a5fa' },
+        { label: '💼 Portfolio',         href: '/portfolio',       color: '#a78bfa' },
+        { label: '🔁 Copy Trading',     href: '/copy-trading',    color: '#34d399' },
+        { label: '📊 Dashboard',        href: '/dashboard',       color: '#94a3b8' },
+      ]}/>
     </div>
   );
 };
