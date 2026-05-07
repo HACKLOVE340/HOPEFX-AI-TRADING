@@ -19,6 +19,7 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, CrossLinkBar } from '../components';
+import { EmptyState } from '../components/EmptyState';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -285,12 +286,18 @@ const TradeHistory: React.FC = () => {
       )}
 
       {!isLoading && !isError && filtered.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-10 gap-2">
-          <span className="text-2xl opacity-30">📋</span>
-          <span className="text-[12px] text-slate-500">
-            {!trades || trades.length === 0 ? 'No closed trades yet' : `No ${filter} trades`}
-          </span>
-        </div>
+        <EmptyState
+          compact
+          icon="📋"
+          title={!trades || trades.length === 0 ? 'No closed trades yet' : `No ${filter} trades`}
+          description={!trades || trades.length === 0
+            ? 'Closed positions will appear here once you start trading.'
+            : 'Try changing the filter to see other trade types.'}
+          links={[
+            { label: 'Trade Now', href: '/trade', icon: '⚡' },
+            { label: 'Journal', href: '/journal', icon: '📓' },
+          ]}
+        />
       )}
 
       {filtered.length > 0 && (

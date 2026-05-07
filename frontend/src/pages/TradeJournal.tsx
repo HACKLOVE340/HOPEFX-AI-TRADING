@@ -337,7 +337,7 @@ const TradeJournal: React.FC = () => {
             </select>
           </div>
 
-          {loading ? <div style={s.empty}>Loading…</div> :
+          {loading ? <EmptyState compact icon="⏳" title="Loading journal…" /> :
            trades.length === 0 ? (
             <EmptyState
               icon="📓"
@@ -535,7 +535,7 @@ const TradeJournal: React.FC = () => {
       {tab === 'mistakes' && (
         <>
           {mistakes.length === 0
-            ? <div style={s.empty}>No rule deviations recorded. Keep it up! 🎯</div>
+            ? <EmptyState compact icon="🎯" title="No rule deviations recorded" description="Your trading discipline is clean. Deviations from your rules will appear here." links={[{ label: 'Trade Journal', href: '/journal', icon: '📓' }]} />
             : (
               <>
                 {/* Summary banner */}

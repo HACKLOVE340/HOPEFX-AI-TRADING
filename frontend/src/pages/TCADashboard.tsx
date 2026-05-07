@@ -476,7 +476,7 @@ const TCADashboard: React.FC = () => {
             <span style={pg.badge}>{reports.length} brokers</span>
           </div>
           {reports.length === 0 ? (
-            <div style={pg.empty}>No broker data yet — fills will appear here.</div>
+            <EmptyState compact icon="🏦" title="No broker data yet" description="Fill records will appear here once the execution engine records trades." links={[{ label: 'Trade', href: '/trade', icon: '⚡' }]} />
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={pg.table}>
@@ -523,7 +523,7 @@ const TCADashboard: React.FC = () => {
             <span style={pg.panelTitle}>Session Breakdown</span>
           </div>
           {!stats?.by_session || Object.keys(stats.by_session).length === 0 ? (
-            <div style={pg.empty}>No session data yet.</div>
+            <EmptyState compact icon="📅" title="No session data yet" description="Session breakdown appears after trades are recorded." />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {Object.entries(stats.by_session).map(([session, s]) => (
@@ -611,11 +611,15 @@ const TCADashboard: React.FC = () => {
         </div>
 
         {filteredRecords.length === 0 ? (
-          <div style={pg.empty}>
-            {records.length === 0
-              ? 'No fill records yet — trades will appear here once the execution engine records fills.'
-              : 'No records match the current filters.'}
-          </div>
+          <EmptyState
+            compact
+            icon="📋"
+            title={records.length === 0 ? 'No fill records yet' : 'No records match filters'}
+            description={records.length === 0
+              ? 'Trades will appear here once the execution engine records fills.'
+              : 'Try adjusting the symbol filter or date range.'}
+            links={records.length === 0 ? [{ label: 'Trade', href: '/trade', icon: '⚡' }] : []}
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={pg.table}>

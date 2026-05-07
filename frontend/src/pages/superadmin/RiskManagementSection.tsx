@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
   ErrorState, LoadingRows, ConfirmDialog,
@@ -298,9 +299,7 @@ const RiskManagementSection: React.FC = () => {
             </div>
           )}
           {stressTests.length === 0 && (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>
-              No stress test results yet. Run a scenario above.
-            </div>
+            <EmptyState compact icon="🧪" title="No stress test results yet" description="Run a scenario above to simulate portfolio stress conditions." />
           )}
         </SectionCard>
       )}
@@ -334,9 +333,7 @@ const RiskManagementSection: React.FC = () => {
           </div>
 
           {filteredBreaches.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
-              No prop firm breaches found.
-            </div>
+            <EmptyState compact icon="✅" title="No prop firm breaches found" description="Breach events will appear here when traders exceed their risk thresholds." />
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

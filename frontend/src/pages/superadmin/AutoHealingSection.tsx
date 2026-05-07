@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, ActionBtn, KpiTile, StatusBadge,
   Toggle, Input, Select, Divider,
@@ -763,7 +764,7 @@ const PatchHistoryPanel: React.FC<{
       subtitle="All patch attempts — applied, rejected, and rolled back"
       actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
       {patches.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No patches applied yet</div>
+        <EmptyState compact icon="🩹" title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {patches.slice().reverse().map((p, i) => (
@@ -818,7 +819,7 @@ const QuarantinePanel: React.FC<{
     subtitle="Files copied to quarantine before any modification"
     actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
     {entries.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>Quarantine is empty</div>
+      <EmptyState compact icon="🔒" title="Quarantine is empty" description="Suspicious files and processes will be isolated here when detected." />
     ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {entries.slice().reverse().map((e, i) => (

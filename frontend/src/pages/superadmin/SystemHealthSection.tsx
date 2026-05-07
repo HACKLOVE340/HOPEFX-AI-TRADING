@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
   ErrorState, LoadingRows, ConfirmDialog,
@@ -222,7 +223,7 @@ const SystemHealthSection: React.FC = () => {
 
           <SectionCard title="Backup History" icon="📦" accent="#60a5fa" noPad>
             {backups.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No backups found</div>
+              <EmptyState compact icon="💾" title="No backups found" description="Database and config backups will appear here once scheduled jobs run." />
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
@@ -292,7 +293,7 @@ const SystemHealthSection: React.FC = () => {
         <SectionCard title="API Key Audit" icon="🔑" accent="#a78bfa" noPad
           subtitle="Cross-user API key inventory — revoke compromised keys immediately">
           {apiKeys.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No API keys found</div>
+            <EmptyState compact icon="🔑" title="No API keys found" description="Platform API keys will appear here once created." />
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>

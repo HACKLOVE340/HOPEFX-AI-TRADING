@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
@@ -231,7 +232,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             {keysLoading ? (
               <div style={{ color: '#475569', fontSize: 13, padding: 24 }}>Loading keys…</div>
             ) : keys.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No API keys found.</div>
+              <EmptyState compact icon="🔑" title="No API keys found" description="Tenant API keys will appear here once generated." />
             ) : (
               keys.map(k => (
                 <div key={k.key_id} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
@@ -428,7 +429,7 @@ const WhiteLabelSection: React.FC = () => {
               </div>
             </div>
           ))}
-          {tenants.length === 0 && <div style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No tenants found.</div>}
+          {tenants.length === 0 && <EmptyState compact icon="🏷️" title="No tenants found" description="Create a whitelabel tenant to deploy a branded instance." links={[{ label: 'Whitelabel Admin', href: '/whitelabel', icon: '🏷️' }]} />}
         </div>
       </SectionCard>
     </div>

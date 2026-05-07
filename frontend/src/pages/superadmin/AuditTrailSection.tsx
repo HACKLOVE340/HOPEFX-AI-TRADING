@@ -2,6 +2,7 @@
 // Immutable hash-chained audit trail (ImmutableAuditLog) — SEC/CFTC compliant
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { EmptyState } from '../../components/EmptyState';
 
 import {
   SectionCard, ActionBtn, Select, Input,
@@ -341,7 +342,7 @@ const AuditTrailSection: React.FC = () => {
             {sysLoading ? (
               <LoadingRows rows={6} />
             ) : sysEntries.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No system audit entries found.</div>
+              <EmptyState compact icon="📋" title="No audit entries found" description="System audit events will appear here as platform actions are recorded." links={[{ label: 'Audit Log', href: '/audit', icon: '🔍' }]} />
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>

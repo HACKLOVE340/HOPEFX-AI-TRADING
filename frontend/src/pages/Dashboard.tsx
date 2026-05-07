@@ -213,7 +213,7 @@ const PositionsTable: React.FC = () => {
   );
 
   if (positions.length === 0) {
-    return <p style={s.empty}>No open positions.</p>;
+    return <EmptyState compact icon="📭" title="No open positions" description="Your live positions will appear here once you place a trade." links={[{ label: 'Trade Now', href: '/trade', icon: '⚡' }]} />;
   }
 
   return (
@@ -262,7 +262,7 @@ const SignalsPanel: React.FC = () => {
   const active  = signals.filter((sig) => sig.status === 'active').slice(0, 6);
 
   if (active.length === 0) {
-    return <p style={s.empty}>No active signals.</p>;
+    return <EmptyState compact icon="📡" title="No active signals" description="AI-generated trading signals will appear here in real-time." links={[{ label: 'Signals Feed', href: '/signals', icon: '📡' }]} />;
   }
 
   return (

@@ -14,6 +14,7 @@ import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
+import { EmptyState } from '../components/EmptyState';
 import { Badge } from '../components/Badge';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 
@@ -213,9 +214,9 @@ const DriftTable: React.FC<{ events: DriftEvent[]; loading: boolean; baselineFil
         </div>
       )}
       {loading ? (
-        <div style={emptyStyle}>Loading…</div>
+        <EmptyState compact icon="⏳" title="Loading drift events…" />
       ) : events.length === 0 ? (
-        <div style={emptyStyle}>✅ No drift detected — all files match baseline</div>
+        <EmptyState compact icon="✅" title="No drift detected" description="All files match the baseline. The system is clean." />
       ) : (
         <div style={tableWrapStyle}>
           {events.slice(0, 30).map((e, i) => (
@@ -296,9 +297,9 @@ const PatchTable: React.FC<{ patches: PatchRecord[]; loading: boolean }> = ({ pa
         <span style={panelCountStyle}>{patches.length}</span>
       </div>
       {loading ? (
-        <div style={emptyStyle}>Loading…</div>
+        <EmptyState compact icon="⏳" title="Loading patches…" />
       ) : patches.length === 0 ? (
-        <div style={emptyStyle}>No patches applied yet</div>
+        <EmptyState compact icon="🩹" title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
       ) : (
         <div style={tableWrapStyle}>
           {patches.slice(0, 20).map((p, i) => (
@@ -327,9 +328,9 @@ const ThreatTable: React.FC<{
       <span style={panelCountStyle}>{threats.length}</span>
     </div>
     {loading ? (
-      <div style={emptyStyle}>Loading…</div>
+      <EmptyState compact icon="⏳" title="Loading threats…" />
     ) : threats.length === 0 ? (
-      <div style={emptyStyle}>No threats detected</div>
+      <EmptyState compact icon="🛡️" title="No threats detected" description="The system is clean. Detected threats will appear here for review." />
     ) : (
       <div style={tableWrapStyle}>
         {threats.slice(0, 30).map((t) => (

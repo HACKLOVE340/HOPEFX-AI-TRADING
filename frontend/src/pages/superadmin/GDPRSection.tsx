@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
@@ -327,7 +328,7 @@ const GDPRSection: React.FC = () => {
           {consentLoading ? (
             <LoadingRows rows={4} />
           ) : consentLog.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No consent events found.</div>
+            <EmptyState compact icon="📜" title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>

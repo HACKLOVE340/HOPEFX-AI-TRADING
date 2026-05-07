@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, SeverityBadge, ActionBtn, Input, Select,
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
@@ -189,7 +190,7 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {events.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No security events found.</div>
+            <EmptyState compact icon="🛡️" title="No security events found" description="Security events will appear here when threats are detected." links={[{ label: 'Security Dashboard', href: '/security', icon: '🔍' }]} />
           )}
         </div>
       </SectionCard>

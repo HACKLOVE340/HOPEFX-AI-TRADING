@@ -19,6 +19,7 @@ import { GlobalAttackMap, type AttackLog, type AttackRecord } from '../component
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
 import { Badge } from '../components/Badge';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -524,7 +525,7 @@ const SecurityDashboard: React.FC = () => {
             </div>
           )}
           {blockedIPs.length === 0 ? (
-            <div style={emptyStyle}>No IPs currently blocked</div>
+            <EmptyState compact icon="✅" title="No IPs currently blocked" description="Blocked IP addresses will appear here when threats are detected." />
           ) : (
             <div style={ipListStyle}>
               {blockedIPs.map(ip => (
@@ -557,7 +558,7 @@ const SecurityDashboard: React.FC = () => {
             <span style={panelCountStyle}>{alerts.length}</span>
           </div>
           {alerts.length === 0 ? (
-            <div style={emptyStyle}>No critical alerts</div>
+            <EmptyState compact icon="🛡️" title="No critical alerts" description="Critical security alerts will appear here when high-severity threats are detected." />
           ) : (
             <div style={ipListStyle}>
               {alerts.slice(0, 20).map((alert, i) => (

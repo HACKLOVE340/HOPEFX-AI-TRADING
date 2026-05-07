@@ -399,7 +399,7 @@ const PriceAlerts: React.FC = () => {
 
       {/* Active alerts */}
       {tab === 'active' && (
-        loading ? <div style={s.empty}>Loading…</div> :
+        loading ? <EmptyState compact icon="⏳" title="Loading alerts…" /> :
         alerts.length === 0 ? (
           <EmptyState
             icon="🔔"
@@ -451,7 +451,7 @@ const PriceAlerts: React.FC = () => {
       {/* Live WS triggers */}
       {tab === 'live' && (
         wsTriggered.length === 0
-          ? <div style={s.empty}>No live triggers yet. Alerts fire here in real-time via WebSocket.</div>
+          ? <EmptyState compact icon="⚡" title="No live triggers yet" description="Alerts fire here in real-time via WebSocket when your price levels are hit." links={[{ label: 'Create Alert', href: '/alerts', icon: '🔔' }]} />
           : wsTriggered.map((t) => (
             <div key={t.id} style={{ ...s.historyRow, background: '#1e293b', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
               <span style={{ color: '#f97316', fontSize: 16 }}>⚡</span>
@@ -476,7 +476,7 @@ const PriceAlerts: React.FC = () => {
 
       {/* History */}
       {tab === 'history' && (
-        history.length === 0 ? <div style={s.empty}>No triggers yet.</div> :
+        history.length === 0 ? <EmptyState compact icon="📜" title="No trigger history yet" description="Past alert triggers will appear here once your price levels are hit." links={[{ label: 'Watchlist', href: '/watchlist', icon: '👁' }]} /> :
         <>
           <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
             <AlertTimelineChart history={history} />
