@@ -76,7 +76,8 @@ function fmtDate(iso: string): string {
 
 // ── Event category icons ──────────────────────────────────────────────────────
 
-function eventIcon(type: string): string {
+function eventIcon(type: string | undefined | null): string {
+  if (!type || typeof type !== 'string') return '📋';
   if (type.includes('login.failed') || type.includes('ban'))  return '🚨';
   if (type.includes('login'))        return '🔑';
   if (type.includes('logout'))       return '🚪';
