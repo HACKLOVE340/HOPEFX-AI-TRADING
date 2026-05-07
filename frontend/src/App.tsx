@@ -440,9 +440,11 @@ const AppShell: React.FC = () => {
 
             {/* Community */}
             <Route path="/leaderboard"  element={wrap(gated('leaderboard',  <Leaderboard />))} />
-            {/* /signals = canonical Signal Feed; /feed kept as alias */}
+            {/* /signals = canonical Signal Feed; /feed and /social kept as aliases */}
             <Route path="/signals"      element={wrap(gated('signals',      <SocialFeed />))} />
             <Route path="/feed"         element={<Navigate to="/signals" replace />} />
+            <Route path="/social"       element={<Navigate to="/signals" replace />} />
+            <Route path="/social-feed"  element={<Navigate to="/signals" replace />} />
             <Route path="/marketplace"  element={wrap(gated('marketplace',  <Marketplace />))} />
             <Route path="/affiliate"    element={wrap(gated('affiliate',    <Affiliate />))} />
 

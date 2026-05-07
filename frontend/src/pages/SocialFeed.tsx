@@ -1,7 +1,9 @@
 /**
  * Social Signal Feed — community feed of high-confidence AI signals.
- * Features: opt-in/out toggle, real-time WS signal injection, pagination,
- * reactions (👍/👎), comments, copy counts.
+ * Features: opt-in/out toggle, real-time WS signal injection with auto-reconnect,
+ * pagination, reactions (👍/👎), comments, copy counts.
+ *
+ * Routes: /signals (canonical), /social → /signals, /feed → /signals
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -77,30 +79,63 @@ const SocialFeed: React.FC = () => {
 
   useEffect(() => { loadFeed(1, true); }, [loadFeed]);
 
-  // WebSocket — inject new signals in real-time with animated indicator
+  // WebSocket — inject new signals in real-time with auto-reconnect (exponential backoff)
   const wsToken = useStore(s => s.token);
+  const wsRef2  = useRef<WebSocket | null>(null);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectDelay = useRef(1000);
+
   useEffect(() => {
     if (!wsToken) return;
-    const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onopen  = () => { if (mountedRef.current) setWsConnected(true); };
-      ws.onclose = () => { if (mountedRef.current) setWsConnected(false); };
-      ws.onerror = () => { if (mountedRef.current) setWsConnected(false); };
+    let destroyed = false;
+
+    const connect = () => {
+      if (destroyed) return;
+      const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
+      let ws: WebSocket;
+      try { ws = new WebSocket(wsUrl); } catch { return; }
+      wsRef2.current = ws;
+
+      ws.onopen = () => {
+        if (!mountedRef.current || destroyed) return;
+        setWsConnected(true);
+        reconnectDelay.current = 1000; // reset backoff on successful connect
+      };
+      ws.onclose = () => {
+        if (!mountedRef.current || destroyed) return;
+        setWsConnected(false);
+        // Exponential backoff: 1s → 2s → 4s → 8s → max 30s
+        const delay = Math.min(reconnectDelay.current, 30_000);
+        reconnectDelay.current = delay * 2;
+        reconnectTimer.current = setTimeout(connect, delay);
+      };
+      ws.onerror = () => {
+        if (!mountedRef.current || destroyed) return;
+        setWsConnected(false);
+        ws.close();
+      };
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string) as { type?: string; signal?: FeedItem };
           if (msg.type === 'new_signal' && msg.signal) {
             setItems(prev => [msg.signal!, ...prev].slice(0, 200));
-            // Flash the WS indicator on new signal
             setWsFlash(true);
             setTimeout(() => setWsFlash(false), 800);
           }
+          // heartbeat — no action needed, connection is alive
         } catch { /* ignore malformed frames */ }
       };
-    } catch { /* WS unavailable — polling only */ }
-    return () => { ws?.close(); };
+    };
+
+    connect();
+
+    return () => {
+      destroyed = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      wsRef2.current?.close();
+      wsRef2.current = null;
+      setWsConnected(false);
+    };
   }, [wsToken]);
 
   const handleOptToggle = async () => {
