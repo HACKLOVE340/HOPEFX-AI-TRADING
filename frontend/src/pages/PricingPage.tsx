@@ -16,6 +16,7 @@ import { api, pricingApi } from '../hooks/useApi';
 import { useStore, selectIsAuth } from '../store';
 import { normalisePlan } from '../lib/subscription';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -512,6 +513,14 @@ const PricingPage: React.FC = () => {
           <FAQItem key={item.question} q={item.question} a={item.answer} />
         ))}
       </div>
+
+      <CrossLinkBar title="Explore" links={[
+        { label: 'Dashboard',    href: '/dashboard',  icon: '📊', color: '#3b82f6' },
+        { label: 'Affiliate',    href: '/affiliate',  icon: '🤝', color: '#f97316' },
+        { label: 'Docs',         href: '/docs',       icon: '📖', color: '#94a3b8' },
+        { label: 'Status',       href: '/status',     icon: '🟢', color: '#22c55e' },
+        { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#f59e0b' },
+      ]} style={{ marginBottom: 32 }} />
 
       {/* CTA footer */}
       <div style={{ textAlign: 'center', padding: '40px 0', borderTop: '1px solid #1e293b' }}>

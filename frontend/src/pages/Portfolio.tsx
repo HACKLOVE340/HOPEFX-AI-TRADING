@@ -18,7 +18,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { useToast } from '../components/Toast';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -631,26 +631,14 @@ const Portfolio: React.FC = () => {
       <PositionsTable />
       <TradeHistory />
 
-      {/* Cross-links */}
-      <div className="flex flex-wrap gap-2 pt-2 border-t border-[#1e2d3d]">
-        {[
-          { label: '📈 AI Charts',       path: '/ai-chart' },
-          { label: '📊 Performance',     path: '/performance' },
-          { label: '💰 P&L Dashboard',   path: '/pnl' },
-          { label: '🛡 Risk Calculator', path: '/risk-calculator' },
-          { label: '📓 Trade Journal',   path: '/journal' },
-          { label: '👁 Watchlist',       path: '/watchlist' },
-        ].map(({ label, path }) => (
-          <Link
-            key={path}
-            to={path}
-            className="px-3 py-1.5 rounded text-[11px] bg-transparent border border-[#1e2d3d] text-slate-500 hover:text-slate-300 hover:border-[#334155] transition-colors"
-            style={{ textDecoration: 'none' }}
-          >
-            {label}
-          </Link>
-        ))}
-      </div>
+      <CrossLinkBar title="Related" links={[
+        { label: 'AI Charts',       href: '/ai-chart',        icon: '📈', color: '#06b6d4' },
+        { label: 'Performance',     href: '/performance',     icon: '📊', color: '#4ade80' },
+        { label: 'P&L Dashboard',   href: '/pnl',             icon: '💰', color: '#f59e0b' },
+        { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡', color: '#f87171' },
+        { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
+        { label: 'Watchlist',       href: '/watchlist',       icon: '👁', color: '#60a5fa' },
+      ]} />
     </div>
   );
 };

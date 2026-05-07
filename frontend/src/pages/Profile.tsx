@@ -7,6 +7,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
@@ -354,6 +355,15 @@ const Profile: React.FC = () => {
           </table>
         )}
       </div>
+
+      <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
+        { label: 'Settings',     href: '/settings',  icon: '⚙️', color: '#94a3b8' },
+        { label: 'KYC',          href: '/kyc',       icon: '🪪', color: '#60a5fa' },
+        { label: 'Security',     href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
+        { label: 'Wallet',       href: '/wallet',    icon: '💳', color: '#4ade80' },
+        { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#f59e0b' },
+        { label: 'Social Feed',  href: '/signals',   icon: '📡', color: '#a78bfa' },
+      ]} />
     </div>
   );
 };
