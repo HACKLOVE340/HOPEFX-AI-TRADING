@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
 import { useToast } from '../components/Toast';
@@ -224,7 +224,7 @@ const CopyTrading: React.FC = () => {
     : '0.00';
 
   return (
-    <div style={s.page}>
+    <div className="max-w-5xl mx-auto px-4 py-6">
       <PageHeader
         title="Copy Trading Marketplace"
         icon="🔁"
@@ -499,16 +499,14 @@ const CopyTrading: React.FC = () => {
       </>
       )}
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-          <Link to="/leaderboard" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🥇 Leaderboard</Link>
-          <Link to="/signals" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📡 Signal Feed</Link>
-          <Link to="/marketplace" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🛒 Marketplace</Link>
-          <Link to="/performance" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 Performance</Link>
-          <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-          <Link to="/affiliate" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', transition: 'all 0.15s', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤝 Affiliate</Link>
-      </div>
-
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '🥇 Leaderboard',  href: '/leaderboard',  color: '#fbbf24' },
+        { label: '📡 Signal Feed',  href: '/signals',      color: '#34d399' },
+        { label: '🛒 Marketplace',  href: '/marketplace',  color: '#a78bfa' },
+        { label: '📊 Performance',  href: '/performance',  color: '#60a5fa' },
+        { label: '💼 Portfolio',    href: '/portfolio',    color: '#f97316' },
+        { label: '🤝 Affiliate',    href: '/affiliate',    color: '#4ade80' },
+      ]}/>
     </div>
   );
 };
