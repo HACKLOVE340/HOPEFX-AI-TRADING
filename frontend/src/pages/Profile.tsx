@@ -1,8 +1,8 @@
 /**
  * Trader Profile — own profile (/profile/me) and public view (/profile/:id).
  * Mobile-first: stacked card layout on xs/sm, side-by-side on md+.
- * Wires to: GET /api/profile, GET /api/profile/:id, POST /api/profile,
- *           POST /api/profile/avatar, POST/DELETE /api/social/follow/:id
+ * Wires to: GET /api/profiles, GET /api/profiles/:id, POST /api/profiles/me,
+ *           POST /api/profiles/me/avatar, POST/DELETE /api/profiles/:id/follow
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
