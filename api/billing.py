@@ -1208,6 +1208,60 @@ async def list_support_tickets(
     }
 
 
+@router.get(
+    "/elite/support/tickets/{ticket_id}/timeline",
+    summary="Event timeline for a specific Elite support ticket",
+)
+async def get_ticket_timeline(
+    ticket_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return the event timeline for a specific Elite support ticket.
+    Timeline events include: created, status changes, replies, and resolution.
+    """
+    _assert_elite(user)
+
+    from api.db_store import db_get
+
+    ticket = db_get(f"elite:support:{ticket_id}")
+    if not ticket or not isinstance(ticket, dict):
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if ticket.get("user_id") != user.sub:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Build timeline from ticket fields — real events stored in ticket dict
+    events: list[dict] = []
+    events.append({
+        "event": "created",
+        "timestamp": ticket.get("created_at"),
+        "actor": "user",
+        "detail": f"Ticket {ticket_id} submitted with priority '{ticket.get('priority', 'normal')}'",
+    })
+
+    # Append any stored reply/status-change events
+    for ev in ticket.get("timeline_events", []):
+        events.append(ev)
+
+    # If ticket is resolved, add resolution event
+    if ticket.get("status") == "resolved" and ticket.get("resolved_at"):
+        events.append({
+            "event": "resolved",
+            "timestamp": ticket.get("resolved_at"),
+            "actor": "support",
+            "detail": ticket.get("resolution_note", "Ticket resolved"),
+        })
+
+    events.sort(key=lambda e: e.get("timestamp") or "")
+
+    return {
+        "ticket_id": ticket_id,
+        "status": ticket.get("status", "open"),
+        "timeline": events,
+        "total_events": len(events),
+    }
+
+
 # ── Custom Development Requests ───────────────────────────────────────────────
 
 
