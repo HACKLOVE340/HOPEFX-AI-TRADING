@@ -405,15 +405,21 @@ export const dataLayerApi = {
 };
 
 // ── Signals ───────────────────────────────────────────────────────────────────
+// Backend: /api/signals/* (api/signals.py — create_signals_router)
 
 export const signalsApi = {
-  active:    ()                   => api.get('/signals/active'),
-  latest:    ()                   => api.get('/signals/latest'),
-  history:   (limit = 50)         => api.get('/signals/history', { params: { limit } }),
-  summary:   ()                   => api.get('/signals/summary'),
-  analytics: ()                   => api.get('/signals/analytics'),
-  generate:  (payload: object)    => api.post('/signals/generate', payload),
-  setAlert:  (payload: object)    => api.post('/signals/alerts', payload),
+  active:       ()                   => api.get('/signals/active'),
+  latest:       ()                   => api.get('/signals/latest'),
+  history:      (limit = 50)         => api.get('/signals/history', { params: { limit } }),
+  summary:      ()                   => api.get('/signals/summary'),
+  analytics:    ()                   => api.get('/signals/analytics'),
+  generate:     (payload: object)    => api.post('/signals/generate', payload),
+  setAlert:     (payload: object)    => api.post('/signals/alerts', payload),
+  alerts:       ()                   => api.get('/signals/alerts'),
+  deleteAlert:  (alertId: string)    => api.delete(`/signals/alerts/${alertId}`),
+  engine:       ()                   => api.get('/signals/engine'),
+  channels:     ()                   => api.get('/signals/channels'),
+  filterStats:  ()                   => api.get('/ml/signal-filter/stats'),
 };
 
 // ── ML extended ───────────────────────────────────────────────────────────────
@@ -905,8 +911,11 @@ export const backtestExtApi = {
 
 export const anomalyApi = {
   status:       ()              => api.get('/ml/health'),
+  /** Anomaly alerts are surfaced via signal analytics — same endpoint as signalsApi.analytics */
   alerts:       (params?: object) => api.get('/signals/analytics', { params }),
   retrain:      (payload?: object) => api.post('/ml/retrain', payload ?? {}),
+  /** Dedicated anomaly detection status from the ML anomaly router */
+  anomalyStatus: ()             => api.get('/ml/anomaly/status'),
 };
 
 // ── Allocator ─────────────────────────────────────────────────────────────────
@@ -947,16 +956,10 @@ export const llmApi = {
 };
 
 // ── Signal Engine ─────────────────────────────────────────────────────────────
+// Alias for signalsApi — kept for backward compatibility with existing consumers.
+// New code should import signalsApi directly.
 
-export const signalEngineApi = {
-  status:       ()              => api.get('/signals/summary'),
-  active:       ()              => api.get('/signals/active'),
-  latest:       ()              => api.get('/signals/latest'),
-  history:      (limit = 50)   => api.get('/signals/history', { params: { limit } }),
-  analytics:    ()              => api.get('/signals/analytics'),
-  generate:     (payload: object) => api.post('/signals/generate', payload),
-  filterStats:  ()              => api.get('/ml/signal-filter/stats'),
-};
+export const signalEngineApi = signalsApi;
 
 // ── Elite Tier 5 ──────────────────────────────────────────────────────────────
 // All endpoints require an active Elite subscription (or admin/superadmin role).
@@ -1024,7 +1027,7 @@ export const watchlistApi = {
   add:     (symbol: string)          => api.post(`/watchlist/${encodeURIComponent(symbol)}`),
   remove:  (symbol: string)          => api.delete(`/watchlist/${encodeURIComponent(symbol)}`),
   prices:  ()                        => api.get('/watchlist/prices'),
-  reorder: (symbols: string[])       => api.put('/watchlist/order', { symbols }),
+  reorder: (symbols: string[])       => api.patch('/watchlist/order', { symbols }),
 };
 
 // ── Strategy Marketplace ──────────────────────────────────────────────────────
