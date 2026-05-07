@@ -269,7 +269,7 @@ const CopyTrading: React.FC = () => {
                     🔍 Browse Traders
                   </button>
                   <button
-                    onClick={() => { window.location.href = '/leaderboard'; }}
+                    onClick={() => navigate('/leaderboard')}
                     style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     🏆 Leaderboard

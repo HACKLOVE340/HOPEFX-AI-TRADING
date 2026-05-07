@@ -159,9 +159,10 @@ function RiskPreview({
 
 interface OrderEntryFormProps {
   symbol?:       string;
-  defaultSide?:  Side;
-  defaultSl?:    string;
-  defaultTp?:    string;
+  defaultSide?:     Side;
+  defaultLimitPx?:  string;
+  defaultSl?:       string;
+  defaultTp?:       string;
   onOrderPlaced?: () => void;
 }
 
@@ -173,7 +174,7 @@ const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: 'stop',   label: 'Stop'   },
 ];
 
-function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defaultTp, onOrderPlaced }: OrderEntryFormProps) {
+function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, defaultSl, defaultTp, onOrderPlaced }: OrderEntryFormProps) {
   const uid        = useId();
   const prices     = useStore((s) => s.prices);
   const account    = useStore((s) => s.account);
@@ -190,7 +191,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defau
   const [side,      setSide]      = useState<Side>(defaultSide ?? 'buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [qty,       setQty]       = useState('0.01');
-  const [limitPx,   setLimitPx]   = useState('');
+  const [limitPx,   setLimitPx]   = useState(defaultLimitPx ?? '');
   const [sl,        setSl]        = useState(defaultSl ?? '');
   const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);

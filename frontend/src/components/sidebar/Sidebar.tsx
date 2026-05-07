@@ -374,8 +374,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                   return (
                     <NavLink
                       key={item.path}
-                      to={item.path}
-                      title={collapsed ? item.label : undefined}
+                      to={locked ? '/upgrade' : item.path}
+                      title={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
                       style={{
                         display: 'flex', alignItems: 'center',
                         gap: 10, padding: '9px 14px',
@@ -388,6 +388,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                         justifyContent: collapsed ? 'center' : 'flex-start',
                         opacity: locked ? 0.6 : 1,
                         position: 'relative',
+                        cursor: locked ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>

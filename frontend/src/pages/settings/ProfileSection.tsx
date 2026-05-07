@@ -215,7 +215,7 @@ const ProfileSection: React.FC = () => {
             <button
               onClick={() => {
                 localStorage.removeItem('hopefx_onboarding_complete');
-                window.location.href = '/onboarding';
+                navigate('/onboarding');
               }}
               style={{
                 padding: '8px 16px', borderRadius: 8,
