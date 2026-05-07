@@ -170,7 +170,7 @@ const EmotionCalendar: React.FC<{ trades: JournalEntry[] }> = ({ trades }) => {
   return (
     <div>
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>Emotion Calendar — last 35 days</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3 }}>
         {days.map(({ date, emotion }) => (
           <div
             key={date}
@@ -296,7 +296,7 @@ const TradeJournal: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-4xl mx-auto px-3 py-3 sm:px-4 sm:py-6">
       <PageHeader
         title="Trade Journal"
         icon="📓"
@@ -307,11 +307,11 @@ const TradeJournal: React.FC = () => {
           { label: 'Trade Journal' },
         ]}
         actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link to="/trade"            style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>⚡ Trade</Link>
-            <Link to="/performance"      style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>📈 Performance</Link>
-            <Link to="/risk-calculator"  style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>🛡 Risk Calc</Link>
-            <Link to="/portfolio"        style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>💼 Portfolio</Link>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            <Link to="/trade"           style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>⚡</Link>
+            <Link to="/performance"     style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>📈</Link>
+            <Link to="/risk-calculator" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>🛡</Link>
+            <Link to="/portfolio"       style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>💼</Link>
           </div>
         }
       />
@@ -626,20 +626,20 @@ const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) =
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:            { padding: 24, maxWidth: 900, margin: '0 auto' },
+  page:            { padding: 'clamp(12px,4vw,24px)', maxWidth: 900, margin: '0 auto' },
   header:          { marginBottom: 20 },
   title:           { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:        { fontSize: 14, color: '#64748b', margin: 0 },
-  tabs:            { display: 'flex', gap: 8, marginBottom: 20 },
-  tab:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
+  tabs:            { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  tab:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '10px 14px', fontSize: 13, minHeight: 44, touchAction: 'manipulation' },
   tabActive:       { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  filterRow:       { marginBottom: 16 },
-  select:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
-  tradeCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
-  tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  filterRow:       { marginBottom: 14 },
+  select:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16 },
+  tradeCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 'clamp(10px,3vw,16px)', marginBottom: 10 },
+  tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
   sideBadge:       { borderRadius: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px' },
   deviationBadge:  { background: '#450a0a', color: '#f87171', fontSize: 11, padding: '2px 8px', borderRadius: 4 },
-  priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
+  priceRow:        { display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: 8 },
   priceItem:       { fontSize: 13, color: '#64748b' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
   tag:             { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '2px 8px' },
@@ -647,12 +647,12 @@ const s: Record<string, React.CSSProperties> = {
   editBtn:         { background: '#334155', border: 'none', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   editForm:        { borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
   label:           { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: 500 },
-  textarea:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
-  input:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' },
+  textarea:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
+  input:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16, boxSizing: 'border-box', WebkitAppearance: 'none' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
   tagPickerBtn:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
+  saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '12px 20px', marginTop: 8, minHeight: 48, width: '100%', touchAction: 'manipulation' },
   saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#f87171', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
   statCard:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px' },

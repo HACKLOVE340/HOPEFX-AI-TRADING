@@ -184,7 +184,7 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: 14, marginTop: 16 }}>
       <div style={s.card}>
         <h3 style={s.cardTitle}>Trade Breakdown</h3>
         {rows.map(({ label, value, color }) => (
@@ -299,7 +299,7 @@ const Performance: React.FC = () => {
   }, [publicQ, equityQ]);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-5xl mx-auto px-3 py-3 sm:px-4 sm:py-6">
       <PageHeader
         title="Performance"
         icon="🏆"
@@ -552,7 +552,7 @@ const Performance: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:        { padding: 24, maxWidth: 1100, margin: '0 auto' },
+  page:        { padding: 'clamp(12px,4vw,24px)', maxWidth: 1100, margin: '0 auto' },
   header:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
   title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:    { fontSize: 14, color: '#64748b', margin: 0 },
@@ -571,7 +571,7 @@ const s: Record<string, React.CSSProperties> = {
   table:       { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th:          { textAlign: 'left', color: '#475569', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', padding: '6px 10px', borderBottom: '1px solid #334155' },
   td:          { padding: '8px 10px', color: '#94a3b8', fontSize: 12 },
-  filterInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '6px 10px', fontSize: 12, outline: 'none', width: 140 },
+  filterInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px', fontSize: 16, outline: 'none', width: '100%', maxWidth: 160, WebkitAppearance: 'none' },
   apiNote:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#64748b', marginTop: 16 },
 };
 

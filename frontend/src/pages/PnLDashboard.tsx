@@ -395,7 +395,7 @@ const PnLDashboard: React.FC = () => {
   const error      = summaryQ.error ?? fillsQ.error ?? positionsQ.error;
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
 
       <PageHeader
         title="P&L Dashboard"
@@ -530,12 +530,12 @@ const PnLDashboard: React.FC = () => {
           <div className="px-5 py-4 border-b border-[#1e2d3d]">
             <h3 className="font-semibold text-slate-200">Open Positions ({positions.length})</h3>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+            <table className="w-full text-sm min-w-[640px]">
               <thead>
                 <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
                   {['Symbol', 'Direction', 'Qty', 'Entry', 'Current', 'Unrealised P&L', 'SL', 'TP', 'Opened'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                    <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -603,12 +603,12 @@ const PnLDashboard: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+              <table className="w-full text-sm min-w-[700px]">
                 <thead>
                   <tr className="text-xs text-slate-500 uppercase border-b border-[#1e2d3d]">
                     {['Time', 'Symbol', 'Dir', 'Qty', 'Fill Price', 'Expected', 'Slippage', 'Latency', 'Broker', 'Fill ID'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left font-medium">{h}</th>
+                      <th key={h} className="px-3 py-2.5 text-left font-medium whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
