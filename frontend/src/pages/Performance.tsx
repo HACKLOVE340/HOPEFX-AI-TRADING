@@ -13,7 +13,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { PageHeader, EmptyState } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -299,13 +299,14 @@ const Performance: React.FC = () => {
   }, [publicQ, equityQ]);
 
   return (
-    <div style={s.page}>
+    <div className="max-w-5xl mx-auto px-4 py-6">
       <PageHeader
         title="Performance"
         icon="🏆"
-        subtitle="Live trading results — updated continuously"
+        subtitle="Live trading results — equity curve, drawdown, trade stats"
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/pnl' },
           { label: 'Performance' },
         ]}
         actions={
@@ -536,15 +537,14 @@ const Performance: React.FC = () => {
         Raw data: <a href="/api/performance/public" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontFamily: 'monospace' }}>/api/performance/public</a> — no authentication required.
       </div>
 
-      {/* Cross-links */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '16px 0', borderTop: '1px solid #1e293b', marginTop: 8 }}>
-        <Link to="/pnl" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💰 P&L Dashboard</Link>
-        <Link to="/portfolio" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>💼 Portfolio</Link>
-        <Link to="/journal" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📓 Trade Journal</Link>
-        <Link to="/tca" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📊 TCA</Link>
-        <Link to="/ai-strategy" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>🤖 AI Strategy</Link>
-        <Link to="/walk-forward" style={{ padding: '5px 12px', background: 'transparent', border: '1px solid #1e293b', borderRadius: 6, color: '#475569', fontSize: 12, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>📈 Walk-Forward</Link>
-      </div>
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '💰 P&L Dashboard',  href: '/pnl',           color: '#60a5fa' },
+        { label: '💼 Portfolio',       href: '/portfolio',     color: '#a78bfa' },
+        { label: '📓 Trade Journal',   href: '/journal',       color: '#fbbf24' },
+        { label: '📊 TCA',             href: '/tca',           color: '#34d399' },
+        { label: '🤖 AI Strategy',     href: '/ai-strategy',   color: '#f97316' },
+        { label: '📈 Walk-Forward',    href: '/walk-forward',  color: '#4ade80' },
+      ]}/>
     </div>
   );
 };
