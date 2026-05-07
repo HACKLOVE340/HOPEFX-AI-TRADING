@@ -244,6 +244,7 @@ _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/email/webhook",  # SendGrid webhook — uses HMAC signature
     "/api/billing/webhook/stripe",  # Stripe webhook — uses HMAC-SHA256 signature, no CSRF token
     "/api/monetization/webhook/stripe",  # Stripe webhook (monetization router alias)
+    "/api/webhooks/",  # Inbound webhooks (TradingView etc.) — use HMAC-SHA256 signature auth
     "/api/health",  # health checks
     "/ws",  # WebSocket — uses JWT auth
     "/metrics",  # Prometheus scrape

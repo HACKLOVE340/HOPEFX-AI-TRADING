@@ -934,6 +934,7 @@ _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/auth/verify-email",
     "/api/billing/webhook",
     "/api/payments/webhook",
+    "/api/webhooks/",  # Inbound webhooks (TradingView etc.) — HMAC-authenticated
     "/api/health",
     "/api/auth/csrf-token",
 )
