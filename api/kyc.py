@@ -397,3 +397,13 @@ async def kyc_upload_document_alias(
         logger.warning("Failed to persist KYC document metadata: %s", exc)
 
     return {"success": True, "document": doc}
+
+
+@kyc_alias_router.post("/upload", summary="Upload KYC document (alias for /documents)")
+async def kyc_upload_alias(
+    user: TokenPayload = Depends(get_current_user),
+    file: UploadFile | None = None,
+    doc_type: str = "identity",
+):
+    """Alias for POST /api/kyc/documents — frontend calls /api/kyc/upload."""
+    return await kyc_upload_document_alias(user=user, file=file, doc_type=doc_type)
