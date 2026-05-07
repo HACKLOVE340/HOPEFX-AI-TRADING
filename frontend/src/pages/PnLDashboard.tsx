@@ -14,7 +14,7 @@
 
 import React, { useCallback, useEffect, useId, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageHeader } from '../components';
+import { PageHeader, CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -693,20 +693,14 @@ const PnLDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Cross-links */}
-        <div className="flex flex-wrap gap-2 pt-2 border-t border-[#1e2d3d]">
-          {[
-            { label: '📊 Performance',     path: '/performance' },
-            { label: '💼 Portfolio',        path: '/portfolio' },
-            { label: '📊 TCA',             path: '/tca' },
-            { label: '📓 Trade Journal',   path: '/journal' },
-            { label: '⚡ Trade',           path: '/trade' },
-          ].map(({ label, path }) => (
-            <Link key={path} to={path} className="px-3 py-1.5 rounded text-[11px] bg-transparent border border-[#1e2d3d] text-slate-500 hover:text-slate-300 hover:border-[#334155] transition-colors" style={{ textDecoration: 'none' }}>
-              {label}
-            </Link>
-          ))}
-        </div>
+        <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
+          { label: '📊 Performance',    href: '/performance',     color: '#4ade80' },
+          { label: '💼 Portfolio',       href: '/portfolio',       color: '#60a5fa' },
+          { label: '📊 TCA',            href: '/tca',             color: '#a78bfa' },
+          { label: '📓 Trade Journal',  href: '/journal',         color: '#fbbf24' },
+          { label: '⚡ Trade',          href: '/trade',           color: '#34d399' },
+          { label: '🛡️ Prop Tracker',  href: '/prop-firm',       color: '#f97316' },
+        ]}/>
       </div>
     </div>
   );
