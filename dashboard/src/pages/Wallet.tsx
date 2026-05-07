@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Wallet as WalletIcon, ArrowDownLeft, ArrowUpRight, CreditCard, RefreshCw } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 interface Transaction {
   id: number | string
@@ -45,10 +45,10 @@ export function Wallet() {
     setError(null)
     try {
       const [bal, txRes, subRes, pmRes] = await Promise.allSettled([
-        axios.get('/api/billing/balance'),
-        axios.get('/api/billing/transactions'),
-        axios.get('/api/billing/subscription'),
-        axios.get('/api/billing/payment-methods'),
+        api.get('/api/billing/balance'),
+        api.get('/api/billing/transactions'),
+        api.get('/api/billing/subscription'),
+        api.get('/api/billing/payment-methods'),
       ])
       if (bal.status === 'fulfilled') {
         setBalance(bal.value.data?.balance ?? 0)
@@ -71,7 +71,7 @@ export function Wallet() {
   const deposit = async () => {
     setActionMsg(null)
     try {
-      const res = await axios.post('/api/payments/deposit', { amount: 100, method: 'card' })
+      const res = await api.post('/api/payments/deposit', { amount: 100, method: 'card' })
       setActionMsg(res.data?.message ?? 'Deposit initiated.')
       load()
     } catch (err: unknown) {
@@ -83,7 +83,7 @@ export function Wallet() {
   const withdraw = async () => {
     setActionMsg(null)
     try {
-      const res = await axios.post('/api/payments/withdraw', { amount: 100, destination: 'bank' })
+      const res = await api.post('/api/payments/withdraw', { amount: 100, destination: 'bank' })
       setActionMsg(res.data?.message ?? 'Withdrawal initiated.')
       load()
     } catch (err: unknown) {

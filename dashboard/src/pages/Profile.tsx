@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { User, TrendingUp, Award, Copy, Shield, Edit2, Check } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 import { useStore } from '../store/useStore'
 
 interface PublicStats {
@@ -25,7 +25,7 @@ export default function Profile() {
 
   useEffect(() => {
     setLoading(true)
-    axios.get('/api/performance/public')
+    api.get('/api/performance/public')
       .then(r => setStats(r.data))
       .catch(() => setStats(null))
       .finally(() => setLoading(false))

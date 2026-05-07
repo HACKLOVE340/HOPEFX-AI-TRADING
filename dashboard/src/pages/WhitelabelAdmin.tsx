@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { Tag, Plus, Globe, Users, DollarSign, Settings, Copy, Check, Trash2 } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 interface Tenant {
   id: string
@@ -45,7 +45,7 @@ export default function WhitelabelAdmin() {
     setLoading(true)
     setError(null)
     try {
-      const r = await axios.get('/api/whitelabel/tenants')
+      const r = await api.get('/api/whitelabel/tenants')
       setTenants(r.data.tenants ?? r.data ?? [])
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -60,7 +60,7 @@ export default function WhitelabelAdmin() {
   const addTenant = async () => {
     if (!newName.trim() || !newDomain.trim()) return
     try {
-      const res = await axios.post('/api/whitelabel/tenants', { name: newName, domain: newDomain, plan: newPlan })
+      const res = await api.post('/api/whitelabel/tenants', { name: newName, domain: newDomain, plan: newPlan })
       setTenants(prev => [...prev, res.data.tenant ?? res.data])
       setNewName(''); setNewDomain(''); setShowAdd(false)
     } catch (err: unknown) {

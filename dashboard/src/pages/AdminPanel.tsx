@@ -5,7 +5,7 @@
  */
 import { useState, useEffect } from 'react'
 import { Shield, Users, Activity, AlertTriangle, Server, Database, RefreshCw, CheckCircle, XCircle } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 interface SystemStats {
   total_users: number
@@ -56,8 +56,8 @@ export default function AdminPanel() {
     setError(null)
     try {
       const [s, a] = await Promise.all([
-        axios.get('/api/admin/stats'),
-        axios.get('/api/admin/activity'),
+        api.get('/api/admin/stats'),
+        api.get('/api/admin/activity'),
       ])
       setStats(s.data ?? EMPTY_STATS)
       setActivity(a.data.entries ?? a.data ?? [])
@@ -73,7 +73,7 @@ export default function AdminPanel() {
 
   const toggleKillSwitch = async () => {
     try {
-      await axios.post(`/api/admin/kill-switch/${killSwitchActive ? 'deactivate' : 'activate'}`)
+      await api.post(`/api/admin/kill-switch/${killSwitchActive ? 'deactivate' : 'activate'}`)
       setKillSwitchActive(k => !k)
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail

@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { BarChart2, Play, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 interface WFResult {
   window_id: number
@@ -38,11 +38,11 @@ export default function WalkForward() {
   useEffect(() => {
     const loadLatest = async () => {
       try {
-        const res = await axios.get('/api/backtesting/walk-forward/latest')
+        const res = await api.get('/api/backtesting/walk-forward/latest')
         if (res.data) setData(res.data)
       } catch {
         try {
-          const res = await axios.get('/api/backtesting/walk-forward')
+          const res = await api.get('/api/backtesting/walk-forward')
           if (res.data) setData(res.data)
         } catch {
           // No existing results — show empty state
@@ -56,7 +56,7 @@ export default function WalkForward() {
     setLoading(true)
     setRunError(null)
     try {
-      const res = await axios.post('/api/backtesting/walk-forward', { symbol: 'XAU_USD', timeframe: 'H1' })
+      const res = await api.post('/api/backtesting/walk-forward', { symbol: 'XAU_USD', timeframe: 'H1' })
       setData(res.data)
     } catch {
       setRunError('Walk-forward analysis failed. Please try again.')

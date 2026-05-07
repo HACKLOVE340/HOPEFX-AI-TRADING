@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Users, TrendingUp, Star, DollarSign, RefreshCw } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 interface Leader {
   id: string
@@ -29,7 +29,7 @@ export function CopyTrading() {
     setLoading(true)
     setError(null)
     try {
-      const res = await axios.get('/api/leaderboard')
+      const res = await api.get('/api/leaderboard')
       const data = res.data.leaders ?? res.data ?? []
       setLeaders(data)
     } catch (err: unknown) {
@@ -47,7 +47,7 @@ export function CopyTrading() {
     setCopying(true)
     setCopyMsg(null)
     try {
-      await axios.post(`/api/social/copy/${selectedLeader}`, { allocation_usd: allocation })
+      await api.post(`/api/social/copy/${selectedLeader}`, { allocation_usd: allocation })
       setCopyMsg('Copy trading started successfully.')
       setSelectedLeader(null)
     } catch (err: unknown) {
