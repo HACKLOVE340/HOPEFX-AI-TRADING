@@ -24,6 +24,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { PLAN_COLORS } from '../lib/subscription';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -456,6 +457,13 @@ const CryptoCheckout: React.FC = () => {
             {loadingAddress ? 'Generating address…' : 'Pay with ' + meta.name + ' →'}
           </button>
         </div>
+
+        <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+          { label: '💳 Wallet',       href: '/wallet',   color: '#60a5fa' },
+          { label: '💎 Pricing',      href: '/pricing',  color: '#a78bfa' },
+          { label: '⚙️ Settings',    href: '/settings', color: '#34d399' },
+          { label: '📊 Dashboard',   href: '/dashboard',color: '#fbbf24' },
+        ]}/>
       </div>
     );
   }
@@ -601,7 +609,7 @@ const CryptoCheckout: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const st: Record<string, React.CSSProperties> = {
-  page:       { maxWidth: 800, margin: '0 auto', padding: '32px 16px', color: '#f1f5f9' },
+  page:       { maxWidth: 800, margin: '0 auto', padding: '24px 16px', color: '#f1f5f9' },
   section:    { marginBottom: 28 },
   sectionTitle: { fontSize: 15, fontWeight: 700, color: '#e2e8f0', margin: '0 0 12px' },
   card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 24, marginBottom: 16 },
