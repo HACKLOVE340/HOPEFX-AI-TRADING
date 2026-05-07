@@ -286,8 +286,10 @@ const Marketplace: React.FC = () => {
     let mounted = true;
     marketplaceApi.stats().then(r => {
       if (!mounted) return;
-      const d = (r as {data:{total_strategies:number;total_subscribers:number}}).data;
-      if (d?.total_strategies != null) setStats(d);
+      const d = (r as {data:{total_strategies?:number;total_subscribers?:number}|null}).data;
+      if (d && typeof d.total_strategies === 'number' && typeof d.total_subscribers === 'number') {
+        setStats({ total_strategies: d.total_strategies, total_subscribers: d.total_subscribers });
+      }
     }).catch(() => {});
     return () => { mounted = false; };
   }, []);
@@ -321,7 +323,11 @@ const Marketplace: React.FC = () => {
       <PageHeader
         title="Strategy Marketplace"
         icon="🛒"
-        subtitle={stats ? `${stats.total_strategies.toLocaleString()} strategies · ${stats.total_subscribers.toLocaleString()} subscribers` : 'Browse, purchase, and review AI trading strategies'}
+        subtitle={
+          stats?.total_strategies != null && stats?.total_subscribers != null
+            ? `${stats.total_strategies.toLocaleString()} strategies · ${stats.total_subscribers.toLocaleString()} subscribers`
+            : 'Browse, purchase, and review AI trading strategies'
+        }
         breadcrumbs={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Marketplace' },
