@@ -16,7 +16,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../hooks/useApi';
+import { api, superadminApi } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -149,9 +149,12 @@ const MaintenanceBroadcastPanel: React.FC = () => {
   const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
-    api.get<MaintenanceStatus>('/admin/maintenance')
-      .then(r => setMaint(r.data))
-      .catch(() => {/* non-fatal — endpoint may require superadmin */});
+    api.get<MaintenanceStatus>('/admin/settings/system')
+      .then(r => setMaint({
+        maintenance_mode: Boolean(r.data.maintenance_mode),
+        maintenance_message: String(r.data.maintenance_message ?? ''),
+      }))
+      .catch(() => {/* non-fatal */});
   }, []);
 
   const flash = (msg: string) => {
@@ -162,9 +165,9 @@ const MaintenanceBroadcastPanel: React.FC = () => {
   const toggleMaintenance = async () => {
     setSaving(true);
     try {
-      await api.post('/admin/maintenance', {
-        enabled: !maint.maintenance_mode,
-        message: maint.maintenance_message,
+      await api.post('/admin/settings/system', {
+        maintenance_mode: !maint.maintenance_mode,
+        maintenance_message: maint.maintenance_message,
       });
       setMaint(m => ({ ...m, maintenance_mode: !m.maintenance_mode }));
       flash(`Maintenance mode ${!maint.maintenance_mode ? 'enabled' : 'disabled'}`);
@@ -179,7 +182,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
     if (!broadcast.title || !broadcast.body) return;
     setSaving(true);
     try {
-      await api.post('/admin/broadcast', broadcast);
+      await superadminApi.broadcastMessage(broadcast);
       setBroadcast({ title: '', body: '', type: 'info' });
       flash('Broadcast sent to all active users ✓');
     } catch {
