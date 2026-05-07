@@ -367,7 +367,11 @@ const ReplayPage: React.FC = () => {
               padding: 40, textAlign: 'center' }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>📈</div>
               <div style={{ fontSize: 14, color: '#94a3b8', marginBottom: 8 }}>No replay sessions</div>
-              <div style={{ fontSize: 12, color: '#64748b' }}>Create a session to replay historical market data</div>
+              <div style={{ fontSize: 12, color: '#64748b', marginBottom: 16 }}>Create a session to replay historical market data</div>
+              <button onClick={() => navigate('/ai-chart')}
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                📊 Open AI Chart
+              </button>
             </div>
           )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
