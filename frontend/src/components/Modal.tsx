@@ -1,28 +1,43 @@
 /**
  * Modal — accessible dialog overlay.
  *
+ * Mobile-first: full-screen sheet on xs, centered panel on sm+.
  * Features:
  * - Focus trap (Tab / Shift+Tab cycle within modal)
  * - Escape key closes
  * - Click-outside closes (optional)
  * - Portal renders into document.body
  * - ARIA role="dialog" + aria-modal + aria-labelledby
+ * - Size variants: sm | md | lg | xl | full
  */
 
 import React, { useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
   title?: string;
-  /** Max width of the dialog panel (default 520px) */
+  /** Semantic size variant (overrides maxWidth) */
+  size?: ModalSize;
+  /** Legacy max-width override in px */
   maxWidth?: number;
-  /** Close when clicking the backdrop (default true) */
   closeOnBackdrop?: boolean;
   children: React.ReactNode;
   footer?: React.ReactNode;
+  /** Extra class on the panel */
+  panelClassName?: string;
 }
+
+const SIZE_CLASSES: Record<ModalSize, string> = {
+  sm:   'sm:max-w-sm',
+  md:   'sm:max-w-lg',
+  lg:   'sm:max-w-2xl',
+  xl:   'sm:max-w-4xl',
+  full: 'sm:max-w-full sm:m-4',
+};
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
@@ -31,13 +46,15 @@ export const Modal: React.FC<ModalProps> = ({
   open,
   onClose,
   title,
-  maxWidth = 520,
+  size = 'md',
+  maxWidth,
   closeOnBackdrop = true,
   children,
   footer,
+  panelClassName = '',
 }) => {
-  const panelRef  = useRef<HTMLDivElement>(null);
-  const titleId   = useRef(`modal-title-${Math.random().toString(36).slice(2)}`).current;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const titleId  = useRef(`modal-title-${Math.random().toString(36).slice(2)}`).current;
 
   // Focus first focusable element on open
   useEffect(() => {
@@ -55,6 +72,14 @@ export const Modal: React.FC<ModalProps> = ({
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
+
+  // Prevent body scroll when open
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
 
   // Focus trap
   const handleKeyDown = useCallback(
@@ -83,10 +108,12 @@ export const Modal: React.FC<ModalProps> = ({
 
   if (!open) return null;
 
+  const sizeCls = SIZE_CLASSES[size];
+
   return createPortal(
     <div
       role="presentation"
-      style={styles.backdrop}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-modal p-0 sm:p-4"
       onClick={closeOnBackdrop ? onClose : undefined}
     >
       <div
@@ -96,16 +123,22 @@ export const Modal: React.FC<ModalProps> = ({
         aria-labelledby={title ? titleId : undefined}
         onKeyDown={handleKeyDown}
         onClick={(e) => e.stopPropagation()}
-        style={{ ...styles.panel, maxWidth }}
+        className={`bg-terminal-surface border border-terminal-border rounded-t-2xl sm:rounded-xl shadow-2xl flex flex-col w-full ${sizeCls} max-h-[92vh] sm:max-h-[90vh] outline-none ${panelClassName}`}
+        style={maxWidth ? { maxWidth } : undefined}
       >
         {/* Header */}
         {title && (
-          <div style={styles.header}>
-            <h2 id={titleId} style={styles.title}>{title}</h2>
+          <div className="flex items-center justify-between border-b border-terminal-border px-4 sm:px-5 py-3.5 flex-shrink-0">
+            <h2
+              id={titleId}
+              className="text-slate-100 text-base font-semibold m-0 leading-tight"
+            >
+              {title}
+            </h2>
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              style={styles.closeBtn}
+              className="text-slate-500 hover:text-slate-300 bg-transparent border-0 cursor-pointer text-lg leading-none p-1 rounded transition-colors min-w-touch min-h-touch flex items-center justify-center"
             >
               ✕
             </button>
@@ -113,72 +146,18 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* Body */}
-        <div style={styles.body}>{children}</div>
+        <div className="text-slate-200 flex-1 overflow-y-auto p-4 sm:p-5">
+          {children}
+        </div>
 
         {/* Footer */}
-        {footer && <div style={styles.footer}>{footer}</div>}
+        {footer && (
+          <div className="border-t border-terminal-border flex gap-2 justify-end px-4 sm:px-5 py-3 flex-shrink-0 flex-wrap">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body,
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  backdrop: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.6)',
-    backdropFilter: 'blur(2px)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    padding: 16,
-  },
-  panel: {
-    background: 'var(--surface, #1e293b)',
-    border: '1px solid var(--border, #334155)',
-    borderRadius: 12,
-    boxShadow: '0 24px 48px rgba(0,0,0,0.4)',
-    display: 'flex',
-    flexDirection: 'column',
-    maxHeight: '90vh',
-    outline: 'none',
-    width: '100%',
-  },
-  header: {
-    alignItems: 'center',
-    borderBottom: '1px solid var(--border, #334155)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '16px 20px',
-  },
-  title: {
-    color: 'var(--text, #f1f5f9)',
-    fontSize: 16,
-    fontWeight: 600,
-    margin: 0,
-  },
-  closeBtn: {
-    background: 'transparent',
-    border: 'none',
-    color: 'var(--text-muted, #64748b)',
-    cursor: 'pointer',
-    fontSize: 14,
-    lineHeight: 1,
-    padding: 4,
-  },
-  body: {
-    color: 'var(--text, #f1f5f9)',
-    flex: 1,
-    overflowY: 'auto',
-    padding: '20px',
-  },
-  footer: {
-    borderTop: '1px solid var(--border, #334155)',
-    display: 'flex',
-    gap: 8,
-    justifyContent: 'flex-end',
-    padding: '12px 20px',
-  },
 };
