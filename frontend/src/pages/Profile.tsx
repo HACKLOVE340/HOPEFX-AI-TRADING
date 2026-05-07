@@ -1,9 +1,11 @@
 /**
  * Trader Profile — own profile (/profile/me) and public view (/profile/:id).
- * Features: edit form, avatar upload, follow/unfollow, stats, signals, strategies.
+ * Mobile-first: stacked card layout on xs/sm, side-by-side on md+.
+ * Wires to: GET /api/profile, GET /api/profile/:id, POST /api/profile,
+ *           POST /api/profile/avatar, POST/DELETE /api/social/follow/:id
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { PageHeader } from '../components/PageHeader';
@@ -11,9 +13,10 @@ import { CrossLinkBar } from '../components/CrossLinkBar';
 import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { Spinner } from '../components/Spinner';
+import { MetricCard } from '../components/MetricCard';
 
 function extractErr(err: unknown, fb: string): string {
-  const d = (err as {response?:{data?:{detail?:string}}})?.response?.data?.detail;
+  const d = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
   return d ?? (err instanceof Error ? err.message : fb);
 }
 
@@ -21,61 +24,69 @@ interface TraderProfile {
   user_id: string; username: string; display_name: string; bio: string;
   avatar_url: string | null; country: string | null; joined_at: string;
   followers_count: number; following_count: number; is_following: boolean;
-  stats: { total_trades: number; win_rate: number; avg_pnl: number; sharpe_ratio: number; total_return_pct: number; } | null;
+  stats: {
+    total_trades: number; win_rate: number; avg_pnl: number;
+    sharpe_ratio: number; total_return_pct: number;
+  } | null;
   strategies: { strategy_id: string; name: string; subscribers: number; rating: number; }[] | null;
-  recent_signals: { signal_id: string; symbol: string; direction: string; confidence: number; pnl: number; created_at: string; }[] | null;
+  recent_signals: {
+    signal_id: string; symbol: string; direction: string;
+    confidence: number; pnl: number; created_at: string;
+  }[] | null;
 }
 
-/** Normalize raw API profile so arrays/objects are always safe to use. */
 function normalizeProfile(raw: unknown): TraderProfile {
   const p = (raw ?? {}) as Record<string, unknown>;
-  const rawStats = (p.stats && typeof p.stats === 'object') ? (p.stats as Record<string, unknown>) : {};
+  const rs = (p.stats && typeof p.stats === 'object') ? (p.stats as Record<string, unknown>) : {};
   return {
-    user_id:          String(p.user_id ?? ''),
-    username:         String(p.username ?? ''),
-    display_name:     String(p.display_name ?? p.username ?? ''),
-    bio:              String(p.bio ?? ''),
-    avatar_url:       typeof p.avatar_url === 'string' ? p.avatar_url : null,
-    country:          typeof p.country === 'string' ? p.country : null,
-    joined_at:        String(p.joined_at ?? new Date().toISOString()),
-    followers_count:  typeof p.followers_count === 'number' ? p.followers_count : 0,
-    following_count:  typeof p.following_count === 'number' ? p.following_count : 0,
-    is_following:     Boolean(p.is_following),
+    user_id:         String(p.user_id ?? ''),
+    username:        String(p.username ?? ''),
+    display_name:    String(p.display_name ?? p.username ?? ''),
+    bio:             String(p.bio ?? ''),
+    avatar_url:      typeof p.avatar_url === 'string' ? p.avatar_url : null,
+    country:         typeof p.country === 'string' ? p.country : null,
+    joined_at:       String(p.joined_at ?? new Date().toISOString()),
+    followers_count: typeof p.followers_count === 'number' ? p.followers_count : 0,
+    following_count: typeof p.following_count === 'number' ? p.following_count : 0,
+    is_following:    Boolean(p.is_following),
     stats: {
-      total_trades:    typeof rawStats.total_trades === 'number' ? rawStats.total_trades : 0,
-      win_rate:        typeof rawStats.win_rate === 'number' ? rawStats.win_rate : 0,
-      avg_pnl:         typeof rawStats.avg_pnl === 'number' ? rawStats.avg_pnl : 0,
-      sharpe_ratio:    typeof rawStats.sharpe_ratio === 'number' ? rawStats.sharpe_ratio : 0,
-      total_return_pct: typeof rawStats.total_return_pct === 'number' ? rawStats.total_return_pct : 0,
+      total_trades:     typeof rs.total_trades === 'number' ? rs.total_trades : 0,
+      win_rate:         typeof rs.win_rate === 'number' ? rs.win_rate : 0,
+      avg_pnl:          typeof rs.avg_pnl === 'number' ? rs.avg_pnl : 0,
+      sharpe_ratio:     typeof rs.sharpe_ratio === 'number' ? rs.sharpe_ratio : 0,
+      total_return_pct: typeof rs.total_return_pct === 'number' ? rs.total_return_pct : 0,
     },
-    strategies:      Array.isArray(p.strategies) ? p.strategies as TraderProfile['strategies'] : [],
-    recent_signals:  Array.isArray(p.recent_signals) ? p.recent_signals as TraderProfile['recent_signals'] : [],
+    strategies:     Array.isArray(p.strategies) ? p.strategies as TraderProfile['strategies'] : [],
+    recent_signals: Array.isArray(p.recent_signals) ? p.recent_signals as TraderProfile['recent_signals'] : [],
   };
 }
 
-interface EditForm extends Record<string, unknown> { display_name: string; bio: string; country: string; }
+interface EditForm { display_name: string; bio: string; country: string; }
 
 const Profile: React.FC = () => {
-  const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const currentUser = useStore(s => s.user);
   const isOwn = !id || id === 'me' || id === currentUser?.id;
 
-  const [profile, setProfile]       = useState<TraderProfile | null>(null);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
-  const [editing, setEditing]       = useState(false);
-  const [editForm, setEditForm]     = useState<EditForm>({ display_name: '', bio: '', country: '' });
-  const [saving, setSaving]         = useState(false);
-  const [saveErr, setSaveErr]       = useState<string | null>(null);
-  const [saveOk, setSaveOk]         = useState(false);
-  const [following, setFollowing]   = useState(false);
+  const [profile, setProfile]             = useState<TraderProfile | null>(null);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+  const [editing, setEditing]             = useState(false);
+  const [editForm, setEditForm]           = useState<EditForm>({ display_name: '', bio: '', country: '' });
+  const [saving, setSaving]               = useState(false);
+  const [saveErr, setSaveErr]             = useState<string | null>(null);
+  const [saveOk, setSaveOk]               = useState(false);
+  const [following, setFollowing]         = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarErr, setAvatarErr]   = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarErr, setAvatarErr]         = useState<string | null>(null);
+  const fileRef    = useRef<HTMLInputElement>(null);
   const mountedRef = useRef(true);
-  useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const loadProfile = useCallback(async () => {
     setLoading(true); setError(null);
@@ -84,15 +95,14 @@ const Profile: React.FC = () => {
       if (!mountedRef.current) return;
       const d = res.data as { profile?: unknown } | unknown;
       const raw = (d && typeof d === 'object' && 'profile' in (d as object))
-        ? (d as { profile: unknown }).profile
-        : d;
+        ? (d as { profile: unknown }).profile : d;
       const p = normalizeProfile(raw);
       setProfile(p);
       setFollowing(p.is_following);
       if (isOwn) setEditForm({ display_name: p.display_name, bio: p.bio, country: p.country ?? '' });
     } catch (err) {
       if (!mountedRef.current) return;
-      if ((err as {name?:string}).name === 'CanceledError') return;
+      if ((err as { name?: string }).name === 'CanceledError') return;
       setError(extractErr(err, 'Failed to load profile.'));
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -109,9 +119,7 @@ const Profile: React.FC = () => {
       await loadProfile();
     } catch (err) {
       setSaveErr(extractErr(err, 'Failed to save profile.'));
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,195 +133,290 @@ const Profile: React.FC = () => {
       await loadProfile();
     } catch (err) {
       setAvatarErr(extractErr(err, 'Avatar upload failed.'));
-    } finally {
-      setAvatarUploading(false);
-    }
+    } finally { setAvatarUploading(false); }
   };
 
   const handleFollow = async () => {
     if (!profile) return;
     setFollowLoading(true);
     try {
-      if (following) { await profileApi.unfollow(profile.user_id); setFollowing(false); setProfile(p => p ? { ...p, followers_count: p.followers_count - 1 } : p); }
-      else           { await profileApi.follow(profile.user_id);   setFollowing(true);  setProfile(p => p ? { ...p, followers_count: p.followers_count + 1 } : p); }
-    } catch { /* ignore */ }
+      if (following) {
+        await profileApi.unfollow(profile.user_id);
+        setFollowing(false);
+        setProfile(p => p ? { ...p, followers_count: p.followers_count - 1 } : p);
+      } else {
+        await profileApi.follow(profile.user_id);
+        setFollowing(true);
+        setProfile(p => p ? { ...p, followers_count: p.followers_count + 1 } : p);
+      }
+    } catch { /* non-fatal */ }
     finally { setFollowLoading(false); }
   };
 
   if (loading) return (
-    <div style={s.page}>
-      <PageHeader title="Profile"
-        icon="👤" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Profile'}]}/>
-      <div style={{display:'flex',justifyContent:'center',padding:'60px 0'}}><Spinner size="lg"/></div>
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <PageHeader title="Profile" icon="👤"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile' }]} />
+      <div className="flex justify-center py-16"><Spinner size="lg" /></div>
     </div>
   );
+
   if (error) return (
-    <div style={s.page}>
-      <PageHeader title="Profile" breadcrumbs={[{label:'Dashboard',href:'/dashboard'},{label:'Profile'}]}/>
-      <ErrorBanner message={error} onDismiss={loadProfile}/>
+    <div className="max-w-3xl mx-auto px-4 py-6">
+      <PageHeader title="Profile"
+        breadcrumbs={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile' }]} />
+      <ErrorBanner message={error} onDismiss={loadProfile} />
     </div>
   );
+
   if (!profile) return null;
 
   const st = profile.stats ?? { total_trades: 0, win_rate: 0, avg_pnl: 0, sharpe_ratio: 0, total_return_pct: 0 };
-  const strategies = profile.strategies ?? [];
+  const strategies    = profile.strategies ?? [];
   const recentSignals = profile.recent_signals ?? [];
+  const displayName   = profile.display_name || profile.username;
 
   return (
-    <div style={s.page}>
+    <div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
       <PageHeader
         icon="👤"
-        title={isOwn ? 'My Profile' : `${profile.display_name || profile.username}'s Profile`}
+        title={isOwn ? 'My Profile' : `${displayName}'s Profile`}
         subtitle={isOwn ? 'Manage your public trading profile' : `@${profile.username}`}
         breadcrumbs={[
-          {label:'Dashboard',href:'/dashboard'},
-          ...(isOwn ? [{label:'Profile'}] : [{label:'Traders',href:'/leaderboard'},{label:profile.username}]),
+          { label: 'Dashboard', href: '/dashboard' },
+          ...(isOwn
+            ? [{ label: 'Profile' }]
+            : [{ label: 'Leaderboard', href: '/leaderboard' }, { label: profile.username }]
+          ),
         ]}
         actions={
-          <div style={{display:'flex',gap:8}}>
+          <div className="flex gap-2 flex-wrap">
             <Link to="/trade"
-              style={{padding:'7px 12px',background:'rgba(59,130,246,0.12)',border:'1px solid rgba(59,130,246,0.3)',borderRadius:7,color:'#60a5fa',fontSize:12,fontWeight:700,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:4}}>
+              className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-400 text-xs font-bold no-underline hover:bg-blue-500/20 transition-colors">
               ⚡ Trade
             </Link>
             <Link to="/leaderboard"
-              style={{padding:'7px 12px',background:'rgba(245,158,11,0.12)',border:'1px solid rgba(245,158,11,0.3)',borderRadius:7,color:'#f59e0b',fontSize:12,fontWeight:700,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:4}}>
+              className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-bold no-underline hover:bg-amber-500/20 transition-colors">
               🏆 Leaderboard
             </Link>
           </div>
         }
       />
 
-      {/* Cross-links */}
-      <div style={{display:'flex',gap:16,marginBottom:24,flexWrap:'wrap',fontSize:13}}>
+      {/* Quick links */}
+      <div className="flex gap-3 flex-wrap text-xs mb-6">
         {[
-          {to:'/performance',label:'📊 Performance'},
-          {to:'/journal',label:'📓 Journal'},
-          {to:'/portfolio',label:'💼 Portfolio'},
-          {to:'/signals',label:'📡 Signals'},
-          {to:'/settings',label:'⚙️ Settings'},
-          {to:'/kyc',label:'🪪 KYC'},
-        ].map(({to,label})=>(
-          <Link key={to} to={to} style={{color:'#64748b',textDecoration:'none'}}
-            onMouseEnter={e=>(e.currentTarget.style.color='#94a3b8')}
-            onMouseLeave={e=>(e.currentTarget.style.color='#64748b')}>
+          { to: '/performance', label: '📊 Performance' },
+          { to: '/journal',     label: '📓 Journal' },
+          { to: '/portfolio',   label: '💼 Portfolio' },
+          { to: '/settings',    label: '⚙️ Settings' },
+          { to: '/kyc',         label: '🪪 KYC' },
+        ].map(({ to, label }) => (
+          <Link key={to} to={to}
+            className="text-slate-500 no-underline hover:text-slate-300 transition-colors">
             {label}
           </Link>
         ))}
       </div>
 
-      {/* Header */}
-      <div style={s.header}>
-        <div style={s.avatarWrap}>
-          {profile.avatar_url
-            ? <img src={profile.avatar_url} alt="avatar" style={s.avatar}/>
-            : <div style={s.avatarPlaceholder}>{((profile.display_name || profile.username) ?? '?').charAt(0).toUpperCase()}</div>
-          }
-          {isOwn && (
-            <>
-              <button onClick={()=>fileRef.current?.click()} style={s.avatarEditBtn} title="Change avatar">
-                {avatarUploading ? '…' : '📷'}
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAvatarChange}/>
-            </>
-          )}
-        </div>
-        <div style={s.headerInfo}>
-          <h1 style={s.name}>{profile.display_name || profile.username}</h1>
-          <p style={s.username}>@{profile.username}{profile.country ? ` · ${profile.country}` : ''}</p>
-          {profile.bio && <p style={s.bio}>{profile.bio}</p>}
-          <div style={s.followRow}>
-            <span style={s.followStat}><strong>{profile.followers_count}</strong> followers</span>
-            <span style={s.followStat}><strong>{profile.following_count}</strong> following</span>
-            <span style={s.followStat}>Joined {new Date(profile.joined_at).toLocaleDateString()}</span>
+      {/* Profile header card */}
+      <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
+        <div className="flex flex-col sm:flex-row gap-4 sm:gap-5">
+          {/* Avatar */}
+          <div className="relative flex-shrink-0 self-start">
+            {profile.avatar_url
+              ? <img src={profile.avatar_url} alt="avatar"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover border-2 border-terminal-border" />
+              : <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-blue-950 border-2 border-terminal-border flex items-center justify-center text-3xl font-bold text-blue-400">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+            }
+            {isOwn && (
+              <>
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="absolute bottom-0 right-0 w-7 h-7 bg-terminal-raised border border-terminal-border rounded-full flex items-center justify-center text-sm cursor-pointer hover:bg-terminal-surface transition-colors"
+                  title="Change avatar"
+                >
+                  {avatarUploading ? '…' : '📷'}
+                </button>
+                <input ref={fileRef} type="file" accept="image/*"
+                  className="hidden" onChange={handleAvatarChange} />
+              </>
+            )}
           </div>
-          {avatarErr && <div style={s.inlineError}>{avatarErr}</div>}
-        </div>
-        <div style={s.headerActions}>
-          <Link to="/trade"
-            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            ⚡ Trade
-          </Link>
-          <Link to="/leaderboard"
-            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            🏆 Leaderboard
-          </Link>
-          {isOwn ? (
-            <>
-              <Link
-                to={`/profile/${profile.user_id}`}
-                style={{ ...s.editBtn, textDecoration: 'none', background: 'rgba(59,130,246,0.1)', border: '1px solid #1e3a5f', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13 }}
-                title="See how your profile looks to other traders"
-              >
-                👁 View Public Profile
-              </Link>
-              <button onClick={()=>setEditing(!editing)} style={s.editBtn}>{editing ? 'Cancel' : 'Edit Profile'}</button>
-            </>
-          ) : (
-            <button onClick={handleFollow} disabled={followLoading} style={{...s.followBtn, background: following ? '#334155' : '#3b82f6'}}>
-              {followLoading ? '…' : following ? 'Unfollow' : 'Follow'}
-            </button>
-          )}
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <h2 className="text-slate-100 text-xl font-bold m-0 leading-tight">{displayName}</h2>
+            <p className="text-slate-500 text-sm mt-0.5 mb-2">
+              @{profile.username}{profile.country ? ` · ${profile.country}` : ''}
+            </p>
+            {profile.bio && (
+              <p className="text-slate-400 text-sm leading-relaxed mb-3">{profile.bio}</p>
+            )}
+            <div className="flex gap-4 text-sm flex-wrap mb-3">
+              <span className="text-slate-400">
+                <strong className="text-slate-200">{profile.followers_count.toLocaleString()}</strong> followers
+              </span>
+              <span className="text-slate-400">
+                <strong className="text-slate-200">{profile.following_count.toLocaleString()}</strong> following
+              </span>
+              <span className="text-slate-500 text-xs">
+                Joined {new Date(profile.joined_at).toLocaleDateString()}
+              </span>
+            </div>
+            {avatarErr && (
+              <div className="text-red-400 text-xs bg-red-950/40 border border-red-900 rounded px-3 py-2 mb-2">
+                {avatarErr}
+              </div>
+            )}
+            {/* Action buttons */}
+            <div className="flex gap-2 flex-wrap">
+              {isOwn ? (
+                <>
+                  <button
+                    onClick={() => setEditing(v => !v)}
+                    className="px-4 py-2 bg-terminal-raised border border-terminal-border rounded-lg text-slate-300 text-sm font-semibold cursor-pointer hover:border-slate-500 transition-colors"
+                  >
+                    {editing ? 'Cancel' : 'Edit Profile'}
+                  </button>
+                  <Link to={`/profile/${profile.user_id}`}
+                    className="px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-400 text-sm font-semibold no-underline hover:bg-blue-500/20 transition-colors">
+                    👁 Public View
+                  </Link>
+                </>
+              ) : (
+                <button
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                  className={`px-5 py-2 rounded-lg text-sm font-bold cursor-pointer transition-colors border-0 ${
+                    following
+                      ? 'bg-terminal-raised text-slate-300 hover:bg-red-950/40 hover:text-red-400'
+                      : 'bg-blue-600 text-white hover:bg-blue-500'
+                  } disabled:opacity-60`}
+                >
+                  {followLoading ? '…' : following ? 'Unfollow' : 'Follow'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Edit form */}
       {editing && isOwn && (
-        <div style={s.editCard}>
-          <h3 style={s.cardTitle}>Edit Profile</h3>
-          <label style={s.label}>Display Name</label>
-          <input value={editForm.display_name} onChange={e=>setEditForm(f=>({...f,display_name:e.target.value}))} style={s.input} placeholder="Your display name"/>
-          <label style={{...s.label,marginTop:12}}>Bio</label>
-          <textarea value={editForm.bio} onChange={e=>setEditForm(f=>({...f,bio:e.target.value}))} style={s.textarea} rows={3} placeholder="Tell the community about yourself…"/>
-          <label style={{...s.label,marginTop:12}}>Country</label>
-          <input value={editForm.country} onChange={e=>setEditForm(f=>({...f,country:e.target.value}))} style={s.input} placeholder="e.g. United States"/>
-          {saveErr && <div style={s.inlineError}>{saveErr}</div>}
-          {saveOk  && <div style={s.successMsg}>Profile saved successfully.</div>}
-          <div style={{display:'flex',gap:10,marginTop:16}}>
-            <button onClick={handleSave} disabled={saving} style={{...s.saveBtn,opacity:saving?0.6:1}}>{saving?'Saving…':'Save Changes'}</button>
-            <button onClick={()=>setEditing(false)} style={s.cancelBtn}>Cancel</button>
+        <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
+          <h3 className="text-slate-100 text-base font-semibold mb-4 mt-0">Edit Profile</h3>
+          <div className="flex flex-col gap-3">
+            <div>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5 uppercase tracking-wider">
+                Display Name
+              </label>
+              <input
+                value={editForm.display_name}
+                onChange={e => setEditForm(f => ({ ...f, display_name: e.target.value }))}
+                className="w-full bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2.5 text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors"
+                placeholder="Your display name"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5 uppercase tracking-wider">Bio</label>
+              <textarea
+                value={editForm.bio}
+                onChange={e => setEditForm(f => ({ ...f, bio: e.target.value }))}
+                rows={3}
+                className="w-full bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2.5 text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors resize-y"
+                placeholder="Tell the community about yourself…"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 text-xs font-semibold mb-1.5 uppercase tracking-wider">Country</label>
+              <input
+                value={editForm.country}
+                onChange={e => setEditForm(f => ({ ...f, country: e.target.value }))}
+                className="w-full bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2.5 text-slate-200 text-sm outline-none focus:border-blue-500 transition-colors"
+                placeholder="e.g. United States"
+              />
+            </div>
+            {saveErr && (
+              <div className="text-red-400 text-xs bg-red-950/40 border border-red-900 rounded px-3 py-2">{saveErr}</div>
+            )}
+            {saveOk && (
+              <div className="text-green-400 text-xs bg-green-950/40 border border-green-900 rounded px-3 py-2">
+                Profile saved successfully.
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold cursor-pointer transition-colors disabled:opacity-60 border-0"
+              >
+                {saving ? 'Saving…' : 'Save Changes'}
+              </button>
+              <button
+                onClick={() => setEditing(false)}
+                className="px-5 py-2.5 bg-terminal-raised border border-terminal-border text-slate-400 rounded-lg text-sm font-semibold cursor-pointer hover:border-slate-500 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Stats grid */}
-      <div style={s.statsGrid}>
-        {[
-          {label:'Total Trades', value:String(st.total_trades)},
-          {label:'Win Rate',     value:`${st.win_rate?.toFixed(1) ?? '—'}%`, positive: (st.win_rate ?? 0) >= 50},
-          {label:'Avg P&L',      value:`$${st.avg_pnl?.toFixed(2) ?? '—'}`, positive: (st.avg_pnl ?? 0) >= 0},
-          {label:'Sharpe Ratio', value:st.sharpe_ratio?.toFixed(2) ?? '—', positive: (st.sharpe_ratio ?? 0) >= 1},
-          {label:'Total P&L',    value:`${st.total_return_pct >= 0 ? '+' : ''}${st.total_return_pct?.toFixed(1) ?? '—'}%`, positive: (st.total_return_pct ?? 0) >= 0},
-        ].map(({label,value,positive})=>(
-          <div key={label} style={s.statCard}>
-            <div style={{fontSize:12,color:'#64748b',marginBottom:4}}>{label}</div>
-            <div style={{fontSize:20,fontWeight:700,color:positive===undefined?'#f1f5f9':positive?'#4ade80':'#f87171'}}>{value}</div>
-          </div>
-        ))}
+      {/* Stats grid — 2 cols on xs, 3 on sm, 5 on md */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 mb-4">
+        <MetricCard label="Total Trades"  value={st.total_trades.toLocaleString()} />
+        <MetricCard label="Win Rate"      value={`${st.win_rate.toFixed(1)}%`}
+          deltaPositive={st.win_rate >= 50} />
+        <MetricCard label="Avg P&L"       value={`$${st.avg_pnl.toFixed(2)}`}
+          deltaPositive={st.avg_pnl >= 0} />
+        <MetricCard label="Sharpe Ratio"  value={st.sharpe_ratio.toFixed(2)}
+          deltaPositive={st.sharpe_ratio >= 1} />
+        <MetricCard label="Total Return"
+          value={`${st.total_return_pct >= 0 ? '+' : ''}${st.total_return_pct.toFixed(1)}%`}
+          deltaPositive={st.total_return_pct >= 0}
+          className="col-span-2 sm:col-span-1" />
       </div>
 
       {/* Strategies */}
-      {/* Strategies */}
-      <div style={s.card}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <h3 style={{...s.cardTitle,marginBottom:0}}>Strategies ({strategies.length})</h3>
-          <Link to="/marketplace" style={{fontSize:12,color:'#60a5fa',textDecoration:'none',padding:'4px 10px',border:'1px solid rgba(59,130,246,0.3)',borderRadius:6,background:'rgba(59,130,246,0.08)'}}>
-            Browse Marketplace →
+      <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-slate-100 text-base font-semibold m-0">
+            Strategies ({strategies.length})
+          </h3>
+          <Link to="/marketplace"
+            className="text-xs text-blue-400 no-underline px-3 py-1.5 border border-blue-500/30 rounded-lg bg-blue-500/8 hover:bg-blue-500/15 transition-colors">
+            Browse →
           </Link>
         </div>
         {strategies.length === 0 ? (
           <EmptyState
             icon="📦"
             title="No strategies yet"
-            description={isOwn ? 'Build and publish your first AI trading strategy.' : 'This trader has no published strategies.'}
-            action={isOwn ? <Link to="/ai-strategy" style={{padding:'8px 18px',background:'#3b82f6',borderRadius:8,color:'#fff',fontSize:13,fontWeight:600,textDecoration:'none',display:'inline-block'}}>🤖 Build Strategy</Link> : undefined}
+            description={isOwn ? 'Build and publish your first AI trading strategy.' : 'No published strategies.'}
+            action={isOwn
+              ? <Link to="/ai-strategy"
+                  className="px-4 py-2 bg-blue-600 rounded-lg text-white text-sm font-semibold no-underline hover:bg-blue-500 transition-colors">
+                  🤖 Build Strategy
+                </Link>
+              : undefined
+            }
           />
         ) : (
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {strategies.map(str=>(
-              <Link key={str.strategy_id} to="/marketplace" style={{...s.stratRow,cursor:'pointer',textDecoration:'none',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
-                <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers.toLocaleString()} subscribers</span>
-                <span style={{fontSize:13,color:'#f59e0b'}}>{'★'.repeat(Math.round(str.rating ?? 0))} {(str.rating ?? 0).toFixed(1)}</span>
+          <div className="flex flex-col gap-2">
+            {strategies.map(str => (
+              <Link key={str.strategy_id} to="/marketplace"
+                className="flex items-center justify-between gap-3 px-3 py-2.5 bg-terminal-raised border border-terminal-border rounded-lg no-underline hover:border-slate-600 transition-colors">
+                <span className="font-semibold text-slate-200 text-sm truncate">{str.name}</span>
+                <span className="text-slate-500 text-xs flex-shrink-0">
+                  {str.subscribers.toLocaleString()} subs
+                </span>
+                <span className="text-amber-400 text-xs flex-shrink-0">
+                  ★ {(str.rating ?? 0).toFixed(1)}
+                </span>
               </Link>
             ))}
           </div>
@@ -321,88 +424,72 @@ const Profile: React.FC = () => {
       </div>
 
       {/* Recent signals */}
-      <div style={s.card}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <h3 style={{...s.cardTitle,marginBottom:0}}>Recent Signals</h3>
-          <Link to="/signals" style={{fontSize:12,color:'#a78bfa',textDecoration:'none',padding:'4px 10px',border:'1px solid rgba(167,139,250,0.3)',borderRadius:6,background:'rgba(167,139,250,0.08)'}}>
-            View all signals →
+      <div className="bg-terminal-surface border border-terminal-border rounded-xl p-4 sm:p-6 mb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-slate-100 text-base font-semibold m-0">Recent Signals</h3>
+          <Link to="/signals"
+            className="text-xs text-violet-400 no-underline px-3 py-1.5 border border-violet-500/30 rounded-lg bg-violet-500/8 hover:bg-violet-500/15 transition-colors">
+            View all →
           </Link>
         </div>
         {recentSignals.length === 0 ? (
-          <EmptyState
-            icon="📡"
-            title="No signals yet"
-            description={isOwn ? 'Your recent AI signals will appear here.' : 'This trader has no recent signals.'}
-          />
+          <EmptyState icon="📡" title="No signals yet"
+            description={isOwn ? 'Your recent AI signals will appear here.' : 'No recent signals.'} />
         ) : (
-          <table style={s.table}>
-            <thead><tr>
-              {['Symbol','Direction','Confidence','P&L','Date'].map(h=>(
-                <th key={h} style={s.th}>{h}</th>
-              ))}
-            </tr></thead>
-            <tbody>
-              {recentSignals.map(sig=>(
-                <tr key={sig.signal_id} style={s.tr}>
-                  <td style={{...s.td,fontWeight:600,color:'#e2e8f0'}}>{sig.symbol}</td>
-                  <td style={s.td}><span style={{color:sig.direction==='BUY'?'#4ade80':'#f87171',fontWeight:700,fontSize:12,padding:'2px 8px',borderRadius:4,background:sig.direction==='BUY'?'rgba(74,222,128,0.1)':'rgba(248,113,113,0.1)'}}>{sig.direction}</span></td>
-                  <td style={s.td}>{((sig.confidence ?? 0)*100).toFixed(0)}%</td>
-                  <td style={{...s.td,color:(sig.pnl??0)>=0?'#4ade80':'#f87171',fontWeight:600}}>{(sig.pnl??0)>=0?'+':''}{(sig.pnl??0).toFixed(2)}%</td>
-                  <td style={s.td}>{new Date(sig.created_at).toLocaleDateString()}</td>
+          <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+            <table className="w-full border-collapse text-sm" style={{ minWidth: 480 }}>
+              <thead>
+                <tr>
+                  {['Symbol', 'Direction', 'Confidence', 'P&L', 'Date'].map(h => (
+                    <th key={h}
+                      className="text-left text-slate-500 text-2xs font-semibold uppercase tracking-wider px-3 py-2 border-b border-terminal-border bg-terminal-raised">
+                      {h}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {recentSignals.map(sig => (
+                  <tr key={sig.signal_id} className="border-b border-terminal-border/60 hover:bg-terminal-raised/40 transition-colors">
+                    <td className="px-3 py-2.5 font-semibold text-slate-200">{sig.symbol}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                        sig.direction === 'BUY'
+                          ? 'bg-green-500/10 text-green-400'
+                          : 'bg-red-500/10 text-red-400'
+                      }`}>
+                        {sig.direction}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-400 tabular-nums">
+                      {((sig.confidence ?? 0) * 100).toFixed(0)}%
+                    </td>
+                    <td className={`px-3 py-2.5 font-semibold tabular-nums ${
+                      (sig.pnl ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {(sig.pnl ?? 0) >= 0 ? '+' : ''}{(sig.pnl ?? 0).toFixed(2)}%
+                    </td>
+                    <td className="px-3 py-2.5 text-slate-500 text-xs">
+                      {new Date(sig.created_at).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
-      <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
-        { label: 'Settings',     href: '/settings',  icon: '⚙️', color: '#94a3b8' },
-        { label: 'KYC',          href: '/kyc',       icon: '🪪', color: '#60a5fa' },
-        { label: 'Security',     href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
-        { label: 'Wallet',       href: '/wallet',    icon: '💳', color: '#4ade80' },
-        { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#f59e0b' },
-        { label: 'Social Feed',  href: '/signals',   icon: '📡', color: '#a78bfa' },
+      <CrossLinkBar title="Related" links={[
+        { label: 'Settings',    href: '/settings',              icon: '⚙️', color: '#94a3b8' },
+        { label: 'KYC',         href: '/kyc',                   icon: '🪪', color: '#60a5fa' },
+        { label: 'Security',    href: '/settings?tab=security', icon: '🔐', color: '#f87171' },
+        { label: 'Wallet',      href: '/wallet',                icon: '💳', color: '#4ade80' },
+        { label: 'Leaderboard', href: '/leaderboard',           icon: '🏆', color: '#f59e0b' },
+        { label: 'Social Feed', href: '/signals',               icon: '📡', color: '#a78bfa' },
       ]} />
     </div>
   );
-};
-
-const s: Record<string,React.CSSProperties> = {
-  page:{maxWidth:860,margin:'0 auto',padding:'32px 16px',fontFamily:'system-ui,-apple-system,sans-serif',color:'#f1f5f9',background:'#0f172a',minHeight:'100vh'},
-  header:{display:'flex',gap:20,alignItems:'flex-start',marginBottom:28,background:'#1e293b',border:'1px solid #334155',borderRadius:12,padding:'24px'},
-  avatarWrap:{position:'relative',flexShrink:0},
-  avatar:{width:80,height:80,borderRadius:'50%',objectFit:'cover',border:'2px solid #334155'},
-  avatarPlaceholder:{width:80,height:80,borderRadius:'50%',background:'#1e3a5f',border:'2px solid #334155',display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,fontWeight:700,color:'#60a5fa'},
-  avatarEditBtn:{position:'absolute',bottom:0,right:0,background:'#334155',border:'none',borderRadius:'50%',width:26,height:26,cursor:'pointer',fontSize:14,display:'flex',alignItems:'center',justifyContent:'center'},
-  headerInfo:{flex:1},
-  name:{fontSize:22,fontWeight:700,color:'#f8fafc',margin:'0 0 4px'},
-  username:{fontSize:14,color:'#64748b',margin:'0 0 8px'},
-  bio:{fontSize:14,color:'#94a3b8',margin:'0 0 10px',lineHeight:1.5},
-  followRow:{display:'flex',gap:16},
-  followStat:{fontSize:13,color:'#64748b'},
-  headerActions:{flexShrink:0},
-  editBtn:{background:'#334155',border:'1px solid #475569',borderRadius:8,color:'#f1f5f9',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 16px'},
-  followBtn:{border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'8px 20px'},
-  editCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:20},
-  cardTitle:{fontSize:16,fontWeight:600,color:'#e2e8f0',marginBottom:14,marginTop:0},
-  label:{display:'block',fontSize:13,color:'#94a3b8',marginBottom:6},
-  input:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box'},
-  textarea:{width:'100%',background:'#0f172a',border:'1px solid #334155',borderRadius:8,color:'#f1f5f9',padding:'9px 12px',fontSize:14,outline:'none',boxSizing:'border-box',resize:'vertical',fontFamily:'inherit'},
-  inlineError:{background:'rgba(248,113,113,0.1)',border:'1px solid #f87171',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#f87171',marginTop:8},
-  successMsg:{background:'rgba(74,222,128,0.1)',border:'1px solid #4ade80',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#4ade80',marginTop:8},
-  saveBtn:{background:'#3b82f6',border:'none',borderRadius:8,color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,padding:'9px 20px'},
-  cancelBtn:{background:'transparent',border:'1px solid #334155',borderRadius:8,color:'#94a3b8',cursor:'pointer',fontSize:13,padding:'9px 16px'},
-  statsGrid:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:12,marginBottom:20},
-  statCard:{background:'#1e293b',border:'1px solid #334155',borderRadius:8,padding:'12px 16px'},
-  card:{background:'#1e293b',border:'1px solid #334155',borderRadius:10,padding:'20px 24px',marginBottom:16},
-  stratRow:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid #0f172a'},
-  table:{width:'100%',borderCollapse:'collapse'},
-  th:{textAlign:'left',fontSize:12,color:'#64748b',textTransform:'uppercase',letterSpacing:0.5,padding:'8px 12px',borderBottom:'1px solid #334155'},
-  tr:{borderBottom:'1px solid #1e293b'},
-  td:{padding:'10px 12px',fontSize:14,color:'#cbd5e1'},
-  errorBox:{background:'#450a0a',border:'1px solid #dc2626',borderRadius:10,padding:'20px 24px',color:'#fca5a5'},
-  retryBtn:{marginLeft:16,background:'transparent',border:'1px solid #dc2626',color:'#fca5a5',borderRadius:6,padding:'4px 12px',cursor:'pointer'},
 };
 
 export default Profile;
