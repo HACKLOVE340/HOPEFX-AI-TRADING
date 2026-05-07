@@ -18,8 +18,18 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { EmptyState } from '../components/EmptyState';
 import { Spinner } from '../components/Spinner';
+
+const TEAMS_CROSS_LINKS = [
+  { label: 'Sub-Accounts',  href: '/sub-accounts',  icon: '🏦', color: '#60a5fa' },
+  { label: 'Copy Trading',  href: '/copy-trading',  icon: '🔁', color: '#34d399' },
+  { label: 'Leaderboard',   href: '/leaderboard',   icon: '🏆', color: '#f59e0b' },
+  { label: 'Social Feed',   href: '/signals',       icon: '📡', color: '#a78bfa' },
+  { label: 'Performance',   href: '/performance',   icon: '📈', color: '#4ade80' },
+  { label: 'Trade Journal', href: '/journal',       icon: '📓', color: '#f97316' },
+];
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -448,6 +458,8 @@ const TeamsPage: React.FC = () => {
           />
         )}
       </div>
+
+      <CrossLinkBar links={TEAMS_CROSS_LINKS} title="Related" style={{ marginTop: 32 }} />
     </div>
   );
 };

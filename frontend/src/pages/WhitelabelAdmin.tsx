@@ -12,9 +12,20 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+import { EmptyState } from '../components/EmptyState';
 import { Badge } from '../components/Badge';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
+
+const WL_CROSS_LINKS = [
+  { label: 'Admin Panel',         href: '/admin',              icon: '🔧', color: '#60a5fa' },
+  { label: 'Super Admin',         href: '/superadmin',         icon: '⚡', color: '#f87171' },
+  { label: 'Security Dashboard',  href: '/security',           icon: '🛡️', color: '#f59e0b' },
+  { label: 'Audit Log',           href: '/audit',              icon: '🔍', color: '#a78bfa' },
+  { label: 'System Status',       href: '/status',             icon: '🟢', color: '#4ade80' },
+  { label: 'Docs',                href: '/docs',               icon: '📖', color: '#94a3b8' },
+];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -506,7 +517,20 @@ const WhitelabelAdmin: React.FC = () => {
       <div style={s.card}>
         {loading && <div style={s.dim}>Loading tenants…</div>}
         {!loading && filtered.length === 0 && (
-          <div style={s.empty}>No tenants yet. Click "+ New Tenant" to create one.</div>
+          <EmptyState
+            icon="🏷️"
+            title="No tenants yet"
+            description="Create a whitelabel tenant to deploy a branded prop-firm or reseller instance."
+            action={
+              <button onClick={() => setCreating(true)} style={s.createBtn}>
+                + New Tenant
+              </button>
+            }
+            links={[
+              { label: 'Admin Panel', href: '/admin', icon: '🔧' },
+              { label: 'Super Admin', href: '/superadmin', icon: '⚡' },
+            ]}
+          />
         )}
         {filtered.map((t) => (
           <TenantRow
@@ -527,36 +551,7 @@ const WhitelabelAdmin: React.FC = () => {
       </div>
 
       {/* Cross-links */}
-      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20, marginTop: 8 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Related
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-          {[
-            { icon: '🔧', label: 'Admin Panel',          desc: 'Platform overview & KPIs',         to: '/admin' },
-            { icon: '⚡', label: 'Super Admin',          desc: 'Master control panel',             to: '/superadmin' },
-            { icon: '🛡️', label: 'Security Dashboard',  desc: 'Threats, IPs, lockdown controls',  to: '/security' },
-            { icon: '🔍', label: 'Audit Log',            desc: 'Full event trail with filters',    to: '/audit' },
-            { icon: '🟢', label: 'System Status',        desc: 'Component health & uptime',        to: '/status' },
-            { icon: '📖', label: 'Docs',                 desc: 'Platform documentation',           to: '/docs' },
-          ].map(({ icon, label, desc, to }) => (
-            <Link
-              key={to}
-              to={to}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0d1421', border: '1px solid #1e293b', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#111827'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#1e293b'; (e.currentTarget as HTMLAnchorElement).style.background = '#0d1421'; }}
-            >
-              <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
-              </div>
-              <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
-            </Link>
-          ))}
-        </div>
-      </div>
+      <CrossLinkBar links={WL_CROSS_LINKS} title="Related" style={{ marginTop: 8 }} />
     </div>
   );
 };

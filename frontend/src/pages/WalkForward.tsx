@@ -11,6 +11,16 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+
+const WF_CROSS_LINKS = [
+  { label: 'AI Strategy',      href: '/ai-strategy',      icon: '🤖', color: '#a78bfa' },
+  { label: 'A/B Testing',      href: '/ab-testing',       icon: '⚡', color: '#34d399' },
+  { label: 'Pattern Detector', href: '/pattern-detector', icon: '🔍', color: '#fbbf24' },
+  { label: 'Correlation',      href: '/correlation',      icon: '📊', color: '#60a5fa' },
+  { label: 'Performance',      href: '/performance',      icon: '📈', color: '#4ade80' },
+  { label: 'Market Replay',    href: '/replay',           icon: '⏪', color: '#f97316' },
+];
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
 import {
@@ -388,24 +398,7 @@ const WalkForward: React.FC = () => {
         </div>
       )}
 
-      {/* Cross-links */}
-      <div style={{ ...s.card, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', width: '100%', marginBottom: 4 }}>Related Tools</div>
-        {[
-          { to: '/ai-strategy',      color: '#a78bfa', icon: '🤖', label: 'AI Strategy' },
-          { to: '/ab-testing',       color: '#34d399', icon: '⚡', label: 'A/B Testing' },
-          { to: '/pattern-detector', color: '#fbbf24', icon: '🔍', label: 'Patterns' },
-          { to: '/correlation',      color: '#60a5fa', icon: '📊', label: 'Correlation' },
-          { to: '/performance',      color: '#4ade80', icon: '📈', label: 'Performance' },
-        ].map(({ to, color, icon, label }) => (
-          <Link key={to} to={to} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: '#0f172a', borderRadius: 7, border: '1px solid #1e293b', textDecoration: 'none', fontSize: 12, fontWeight: 600, color }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = color)}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e293b')}
-          >
-            {icon} {label}
-          </Link>
-        ))}
-      </div>
+      <CrossLinkBar links={WF_CROSS_LINKS} title="Related Tools" style={{ marginTop: 8 }} />
     </div>
   );
 };

@@ -26,7 +26,17 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useToast } from '../components/Toast';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
 import { PageHeader } from '../components';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
+
+const TRADE_CROSS_LINKS = [
+  { label: 'Trading Terminal', href: '/trading',        icon: '🖥️', color: '#3b82f6' },
+  { label: 'Dashboard',        href: '/dashboard',      icon: '📊', color: '#60a5fa' },
+  { label: 'Watchlist',        href: '/watchlist',      icon: '👁',  color: '#34d399' },
+  { label: 'Risk Calculator',  href: '/risk-calculator',icon: '🛡',  color: '#f59e0b' },
+  { label: 'Trade Journal',    href: '/journal',        icon: '📓', color: '#a78bfa' },
+  { label: 'Copy Trading',     href: '/copy-trading',   icon: '🔁', color: '#f97316' },
+];
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
 import { OrderEntryForm } from '../components/panels/OrderEntryForm';
@@ -588,6 +598,8 @@ const Trade: React.FC = () => {
 
       {/* Bottom: all positions + trade history tabs */}
       <BottomSection />
+
+      <CrossLinkBar links={TRADE_CROSS_LINKS} title="Related" style={{ marginTop: 24 }} />
     </div>
   );
 };

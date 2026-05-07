@@ -33,7 +33,18 @@ import {
 } from 'recharts';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+import { EmptyState } from '../components/EmptyState';
 import { useStore, selectUser } from '../store';
+
+const TCA_CROSS_LINKS = [
+  { label: 'Performance',   href: '/performance',     icon: '📈', color: '#4ade80' },
+  { label: 'P&L Dashboard', href: '/pnl',             icon: '💹', color: '#a78bfa' },
+  { label: 'Correlation',   href: '/correlation',     icon: '📊', color: '#60a5fa' },
+  { label: 'Trade Journal', href: '/journal',         icon: '📓', color: '#f59e0b' },
+  { label: 'Trade',         href: '/trade',           icon: '⚡', color: '#3b82f6' },
+  { label: 'Walk-Forward',  href: '/walk-forward',    icon: '🔁', color: '#34d399' },
+];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -656,27 +667,7 @@ const TCADashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Cross-links */}
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '16px 20px' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Related Analytics</div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {[
-            { to: '/performance',  color: '#4ade80', icon: '📈', label: 'Performance' },
-            { to: '/pnl',          color: '#a78bfa', icon: '💹', label: 'P&L Dashboard' },
-            { to: '/correlation',  color: '#60a5fa', icon: '📊', label: 'Correlation' },
-            { to: '/ab-testing',   color: '#34d399', icon: '⚡', label: 'A/B Testing' },
-            { to: '/walk-forward', color: '#fbbf24', icon: '🔁', label: 'Walk-Forward' },
-            { to: '/trade',        color: '#f87171', icon: '⚡', label: 'Trade' },
-          ].map(({ to, color, icon, label }) => (
-            <Link key={to} to={to} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: '#0f172a', borderRadius: 7, border: '1px solid #1e293b', textDecoration: 'none', fontSize: 12, fontWeight: 600, color }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = color)}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = '#1e293b')}
-            >
-              {icon} {label}
-            </Link>
-          ))}
-        </div>
-      </div>
+      <CrossLinkBar links={TCA_CROSS_LINKS} title="Related Analytics" />
     </div>
   );
 };

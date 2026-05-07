@@ -3,6 +3,15 @@ import { Link } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
 import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+
+const STATUS_CROSS_LINKS = [
+  { label: 'System Reliability', href: '/system-reliability', icon: '🔬', color: '#60a5fa' },
+  { label: 'Auto-Heal',          href: '/auto-heal',          icon: '🩺', color: '#4ade80' },
+  { label: 'Security Ops',       href: '/security',           icon: '🛡️', color: '#f59e0b' },
+  { label: 'Admin Panel',        href: '/admin',              icon: '🔧', color: '#a78bfa' },
+  { label: 'Docs',               href: '/docs',               icon: '📖', color: '#94a3b8' },
+];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -320,36 +329,7 @@ const StatusPage: React.FC = () => {
         )}
       </div>
 
-      {/* Cross-links */}
-      <div style={{ borderTop: '1px solid #1e293b', paddingTop: 20, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
-          Related
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-          {[
-            { icon: '🔬', label: 'System Reliability', desc: 'OTel tracing & self-tests',       to: '/system-reliability' },
-            { icon: '🩺', label: 'Auto-Heal',          desc: 'Self-healing & fix approvals',    to: '/auto-heal' },
-            { icon: '🛡️', label: 'Security Ops',       desc: 'Threats & lockdown controls',     to: '/security' },
-            { icon: '🔧', label: 'Admin Panel',        desc: 'Platform overview & KPIs',        to: '/admin' },
-            { icon: '📖', label: 'Docs',               desc: 'Platform documentation',          to: '/docs' },
-          ].map(({ icon, label, desc, to }) => (
-            <Link
-              key={to}
-              to={to}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 16px', textDecoration: 'none' }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#475569'; (e.currentTarget as HTMLAnchorElement).style.background = '#243044'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155'; (e.currentTarget as HTMLAnchorElement).style.background = '#1e293b'; }}
-            >
-              <span style={{ fontSize: 18, flexShrink: 0 }}>{icon}</span>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{label}</div>
-                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{desc}</div>
-              </div>
-              <span style={{ marginLeft: 'auto', color: '#334155', fontSize: 16 }}>›</span>
-            </Link>
-          ))}
-        </div>
-      </div>
+      <CrossLinkBar links={STATUS_CROSS_LINKS} title="Related" style={{ marginBottom: 16 }} />
 
       <div style={styles.footer}>
         Last refreshed: {lastRefresh.toLocaleTimeString()} &nbsp;·&nbsp;
