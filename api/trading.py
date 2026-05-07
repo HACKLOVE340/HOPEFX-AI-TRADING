@@ -373,7 +373,11 @@ async def _validate_order(order: "OrderRequest") -> None:
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
+            detail=(
+                "Broker not initialised. The paper trading broker starts automatically "
+                "on server startup — if this persists, check the server logs for "
+                "startup errors (BROKER_TYPE env var defaults to 'paper')."
+            ),
         )
     try:
         from brokers.prop_firms.guard import check_prop_firm_rules
@@ -912,12 +916,13 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get all open positions. Requires: any authenticated user."""
+    """Get all open positions. Requires: any authenticated user.
+
+    Returns an empty list when the broker is not yet initialised so the
+    frontend positions table renders cleanly during cold-start.
+    """
     if not app_state or not app_state.broker:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
-        )
+        return []
 
     positions = await _broker_call("get_positions")
     result = []
@@ -964,7 +969,7 @@ async def close_position(
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
+            detail="Broker not initialised — cannot close position. The paper trading engine starts automatically on server startup.",
         )
 
     success = await _broker_call("close_position", position_id)
@@ -1026,7 +1031,7 @@ async def close_all_positions(
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
+            detail="Broker not initialised — cannot close positions. The paper trading engine starts automatically on server startup.",
         )
 
     closed = await _broker_call("close_all_positions")

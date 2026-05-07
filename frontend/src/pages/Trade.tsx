@@ -133,6 +133,28 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
   );
 };
 
+// ── Broker status banner ──────────────────────────────────────────────────────
+// Shown when the account endpoint returns no balance (broker still starting up).
+
+const BrokerStatusBanner: React.FC = () => {
+  const account  = useStore((s) => s.account);
+  const wsStatus = useStore(selectWsStatus);
+
+  // Only show when we have no account data AND WS is not connected
+  // (avoids flash during normal load)
+  if (account || wsStatus === 'connected') return null;
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#ffb800]/10 border border-[#ffb800]/30 text-[11px]">
+      <span className="text-[#ffb800] font-bold">⚠</span>
+      <span className="text-[#ffb800] font-semibold">
+        Paper trading broker is initialising — orders will be accepted once ready.
+        The account bar will populate automatically.
+      </span>
+    </div>
+  );
+};
+
 // ── Account bar ───────────────────────────────────────────────────────────────
 
 const AccountBar: React.FC = () => {
@@ -510,6 +532,9 @@ const Trade: React.FC = () => {
           </div>
         }
       />
+
+      {/* Broker readiness banner — shown only when broker is still starting */}
+      <BrokerStatusBanner />
 
       {/* Account metrics */}
       <AccountBar />

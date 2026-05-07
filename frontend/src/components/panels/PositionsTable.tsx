@@ -121,7 +121,18 @@ function CloseBtn({
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 
-function EmptyPositions() {
+function EmptyPositions({ brokerReady }: { brokerReady?: boolean }) {
+  if (brokerReady === false) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 gap-2 px-4 text-center">
+        <span className="text-2xl opacity-40">⏳</span>
+        <span className="text-[12px] text-[#ffb800]">Broker initialising</span>
+        <span className="text-[11px] text-slate-500">
+          The paper trading engine is starting up. Positions will appear here once ready.
+        </span>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col items-center justify-center py-10 gap-2">
       <span className="text-2xl opacity-30">📭</span>
@@ -140,10 +151,16 @@ interface PositionsTableProps {
 }
 
 function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
-  const positions   = useStore((s) => s.positions);
-  const removePos   = useStore((s) => s.removePosition);
+  const positions    = useStore((s) => s.positions);
+  const removePos    = useStore((s) => s.removePosition);
   const setPositions = useStore((s) => s.setPositions);
-  const qc          = useQueryClient();
+  const account      = useStore((s) => s.account);
+  const qc           = useQueryClient();
+
+  // Broker is considered ready once we have account data with a balance.
+  // null = unknown (still loading), true/false = known state.
+  const brokerReady: boolean | undefined =
+    account != null ? (account.balance != null && account.balance >= 0) : undefined;
 
   const [closingId, setClosingId]       = useState<string | null>(null);
   const [closingAll, setClosingAll]     = useState(false);
@@ -232,7 +249,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       )}
 
       {filtered.length === 0 ? (
-        <EmptyPositions />
+        <EmptyPositions brokerReady={brokerReady} />
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-[12px]">

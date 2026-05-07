@@ -270,12 +270,24 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defau
       setTp('');
       setLimitPx('');
       qc.invalidateQueries({ queryKey: ['positions'] });
+      qc.invalidateQueries({ queryKey: ['account'] });
       onOrderPlaced?.();
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (e as { message?: string })?.message ??
-        'Order failed';
+      const httpStatus = (e as { response?: { status?: number } })?.response?.status;
+      const rawDetail  = (e as { response?: { data?: { detail?: string | Record<string, unknown> } } })?.response?.data?.detail;
+      let detail: string;
+      if (typeof rawDetail === 'object' && rawDetail !== null) {
+        // Structured error from subscription gate: { error, message, required_plan }
+        detail = (rawDetail as { message?: string }).message ?? JSON.stringify(rawDetail);
+      } else if (typeof rawDetail === 'string') {
+        detail = rawDetail;
+      } else if (httpStatus === 503) {
+        detail = 'Broker not ready — the paper trading engine is still starting up. Try again in a moment.';
+      } else if (httpStatus === 403) {
+        detail = (e as { message?: string })?.message ?? 'Order rejected — check KYC status or subscription plan.';
+      } else {
+        detail = (e as { message?: string })?.message ?? 'Order failed';
+      }
       setResult({ ok: false, msg: detail });
     } finally {
       setSubmitting(false);
