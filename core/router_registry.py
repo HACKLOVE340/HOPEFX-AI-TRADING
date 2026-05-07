@@ -331,6 +331,16 @@ def register_routers(
     if signals_router is not None:
         _include_router_deduped(app, signals_router)
         logger.info("Signals router registered (/api/signals)")
+    else:
+        # Always register signals router even when not passed explicitly
+        try:
+            from api.signals import create_signals_router as _create_sig_router
+            _sig_router = _create_sig_router()
+            if _sig_router is not None:
+                _include_router_deduped(app, _sig_router)
+                logger.info("Signals router auto-registered (/api/signals)")
+        except Exception as _sig_err:
+            logger.warning("Signals router not registered: %s", _sig_err)
 
     # ── GraphQL ───────────────────────────────────────────────────────────────
     if feature_flags.GRAPHQL_API and graphql_available and graphql_router is not None:
@@ -394,6 +404,15 @@ def register_routers(
         logger.info("P&L dashboard router registered (/api/pnl)")
     except Exception as _pnl_err:
         logger.warning("P&L dashboard router not registered: %s", _pnl_err)
+
+    # ── Risk Calculator (/api/risk/live-price, /api/risk/calculator) ──────────
+    try:
+        from api.risk_calculator import router as risk_calc_router
+
+        _include_router_deduped(app, risk_calc_router)
+        logger.info("Risk calculator router registered (/api/risk)")
+    except Exception as _rc_err:
+        logger.warning("Risk calculator router not registered: %s", _rc_err)
 
     # ── SuperAdmin ────────────────────────────────────────────────────────────
     try:

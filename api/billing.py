@@ -1391,3 +1391,115 @@ async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_
         raise
     except Exception:
         raise HTTPException(status_code=404, detail="Invoice not found")
+
+
+# ── Crypto checkout (/api/billing/crypto/*) ───────────────────────────────────
+# Delegates to /api/payments/crypto/* under the hood; exposed here so the
+# frontend cryptoCheckoutApi can use a single /billing prefix.
+
+@router.get("/crypto/rates", summary="Live crypto exchange rates for checkout")
+async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
+    """Return live BTC/ETH/USDT rates in USD for the crypto checkout flow."""
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "bitcoin,ethereum,tether", "vs_currencies": "usd"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                data = await resp.json()
+                return {
+                    "BTC": {"rate": data.get("bitcoin", {}).get("usd", 0), "symbol": "BTC"},
+                    "ETH": {"rate": data.get("ethereum", {}).get("usd", 0), "symbol": "ETH"},
+                    "USDT": {"rate": data.get("tether", {}).get("usd", 1), "symbol": "USDT"},
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+    except Exception as exc:
+        logger.debug("crypto rates fetch error: %s", exc)
+        # Fallback approximate rates
+        return {
+            "BTC":  {"rate": 65000.0, "symbol": "BTC"},
+            "ETH":  {"rate": 3500.0,  "symbol": "ETH"},
+            "USDT": {"rate": 1.0,     "symbol": "USDT"},
+            "timestamp": datetime.now(UTC).isoformat(),
+            "source": "fallback",
+        }
+
+
+@router.post("/crypto/order", summary="Create a crypto payment order")
+async def create_crypto_order(
+    payload: dict,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Create a crypto payment order and return a deposit address."""
+    import uuid as _uuid
+    currency = str(payload.get("currency", "BTC")).upper()
+    amount_usd = float(payload.get("amount_usd", 0))
+    if amount_usd <= 0:
+        raise HTTPException(status_code=400, detail="amount_usd must be positive")
+    if currency not in ("BTC", "ETH", "USDT"):
+        raise HTTPException(status_code=400, detail="Unsupported currency")
+
+    order_id = str(_uuid.uuid4())
+    # Delegate to payments router for address generation
+    try:
+        from api.payments import _generate_address
+        address = _generate_address(currency, user.sub, "mainnet")
+    except Exception:
+        address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+
+    order = {
+        "order_id":   order_id,
+        "user_id":    user.sub,
+        "currency":   currency,
+        "amount_usd": amount_usd,
+        "address":    address,
+        "status":     "pending",
+        "created_at": datetime.now(UTC).isoformat(),
+        "expires_at": None,
+    }
+    try:
+        from api.db_store import db_set, db_get
+        orders = db_get(f"crypto_orders:{user.sub}") or []
+        orders.append(order)
+        db_set(f"crypto_orders:{user.sub}", orders)
+        db_set(f"crypto_order:{order_id}", order)
+    except Exception:  # nosec B110
+        pass
+
+    return order
+
+
+@router.get("/crypto/order/{order_id}", summary="Get crypto order status")
+async def get_crypto_order(order_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Return the current status of a crypto payment order."""
+    try:
+        from api.db_store import db_get
+        order = db_get(f"crypto_order:{order_id}")
+        if not order or order.get("user_id") != user.sub:
+            raise HTTPException(status_code=404, detail="Order not found")
+        return order
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+
+@router.post("/crypto/order/{order_id}/cancel", summary="Cancel a pending crypto order")
+async def cancel_crypto_order(order_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Cancel a pending crypto payment order."""
+    try:
+        from api.db_store import db_get, db_set
+        order = db_get(f"crypto_order:{order_id}")
+        if not order or order.get("user_id") != user.sub:
+            raise HTTPException(status_code=404, detail="Order not found")
+        if order.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Only pending orders can be cancelled")
+        order["status"] = "cancelled"
+        db_set(f"crypto_order:{order_id}", order)
+        return {"ok": True, "order_id": order_id, "status": "cancelled"}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to cancel order")

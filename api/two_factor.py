@@ -292,6 +292,25 @@ async def get_backup_codes(
     )
 
 
+@router.post("/backup-codes/regenerate", response_model=BackupCodesResponse)
+async def regenerate_backup_codes(
+    user: TokenPayload = Depends(get_current_user),
+) -> BackupCodesResponse:
+    """Regenerate 8 one-time backup codes, replacing any existing ones."""
+    if not _get_enabled(user.sub):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA must be enabled before regenerating backup codes.",
+        )
+    codes = [secrets.token_hex(4).upper() for _ in range(8)]
+    _set_backup_codes(user.sub, codes)
+    logger.info("Backup codes regenerated for user %s", user.sub)
+    return BackupCodesResponse(
+        codes=codes,
+        warning="Store these codes securely. Each can only be used once.",
+    )
+
+
 @router.get("/status", response_model=StatusResponse)
 async def get_2fa_status(
     user: TokenPayload = Depends(get_current_user),

@@ -29,7 +29,11 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import csv
+import io
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -495,3 +499,131 @@ async def get_weekly_report(
         }
     finally:
         db.close()
+
+
+# ── Export ────────────────────────────────────────────────────────────────────
+
+@router.get("/export", summary="Export journal entries as CSV or JSON")
+async def export_journal(
+    format: str = Query("csv", pattern="^(csv|json)$"),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Download all journal entries for the authenticated user."""
+    db = _get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM journal WHERE user_id = :uid ORDER BY created_at DESC",
+            {"uid": user.sub},
+        ).fetchall()
+        entries = [_row_to_dict(dict(r)) for r in rows]
+    except Exception:
+        entries = []
+    finally:
+        db.close()
+
+    if format == "json":
+        import json as _j
+        content = _j.dumps(entries, indent=2, default=str)
+        return StreamingResponse(
+            io.BytesIO(content.encode()),
+            media_type="application/json",
+            headers={"Content-Disposition": "attachment; filename=journal.json"},
+        )
+
+    # CSV
+    if not entries:
+        csv_content = "id,trade_id,title,notes,tags,emotion,rating,pnl,created_at\n"
+    else:
+        buf = io.StringIO()
+        fieldnames = [
+            "id", "trade_id", "title", "notes", "tags", "emotion",
+            "rating", "pnl", "setup_quality", "lessons_learned",
+            "screenshot_url", "created_at", "updated_at",
+        ]
+        writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for e in entries:
+            row = {k: e.get(k, "") for k in fieldnames}
+            if isinstance(row.get("tags"), list):
+                row["tags"] = ",".join(row["tags"])
+            writer.writerow(row)
+        csv_content = buf.getvalue()
+
+    return StreamingResponse(
+        io.BytesIO(csv_content.encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=journal.csv"},
+    )
+
+
+# ── Screenshot upload ─────────────────────────────────────────────────────────
+
+@router.post("/trades/{trade_id}/screenshot", summary="Attach a screenshot to a journal entry")
+async def upload_screenshot(
+    trade_id: str,
+    file: UploadFile = File(...),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Store a chart screenshot for a journal entry.
+
+    Saves the file to the local filesystem under ``static/screenshots/`` and
+    returns the public URL.  Falls back to a base64 data-URI when the
+    filesystem is not writable.
+    """
+    import base64
+    import os as _os2
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:  # 10 MB limit
+        raise HTTPException(status_code=413, detail="Screenshot must be under 10 MB")
+
+    # Verify the entry belongs to this user
+    db = _get_db()
+    try:
+        row = db.execute(
+            "SELECT id FROM journal WHERE id = :tid AND user_id = :uid",
+            {"tid": trade_id, "uid": user.sub},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+    finally:
+        db.close()
+
+    # Try to save to disk
+    ext = (file.filename or "screenshot.png").rsplit(".", 1)[-1].lower()
+    if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
+        ext = "png"
+    filename = f"{user.sub}_{trade_id}.{ext}"
+    save_dir = _os2.path.join("static", "screenshots")
+    url: str
+    try:
+        _os2.makedirs(save_dir, exist_ok=True)
+        filepath = _os2.path.join(save_dir, filename)
+        with open(filepath, "wb") as fh:
+            fh.write(content)
+        url = f"/static/screenshots/{filename}"
+    except Exception:
+        # Fallback: base64 data URI (not ideal for large files but functional)
+        mime = f"image/{ext}"
+        url = f"data:{mime};base64,{base64.b64encode(content).decode()}"
+
+    # Persist URL on the journal entry
+    db2 = _get_db()
+    try:
+        db2.execute(
+            "UPDATE journal SET screenshot_url = :url, updated_at = :now "
+            "WHERE id = :tid AND user_id = :uid",
+            {
+                "url": url,
+                "now": datetime.now(UTC).isoformat(),
+                "tid": trade_id,
+                "uid": user.sub,
+            },
+        )
+        db2.commit()
+    except Exception as exc:
+        logger.debug("screenshot URL persist error: %s", exc)
+    finally:
+        db2.close()
+
+    return {"screenshot_url": url, "trade_id": trade_id}

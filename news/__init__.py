@@ -277,6 +277,46 @@ def create_news_router():
                 "note": ("Sentiment engine unavailable; install textblob or vaderSentiment for live scores."),
             }
 
+    # ── /api/news/latest — recent news articles ───────────────────────────────
+    @news_router.get("/latest")
+    async def get_latest_news(
+        symbol: str = Query("XAU_USD"),
+        limit: int = Query(20, ge=1, le=100),
+    ):
+        """Return the most recent news articles for a symbol."""
+        try:
+            provider = _get_risk_provider()
+            articles = []
+            if hasattr(provider, "get_recent_news"):
+                articles = provider.get_recent_news(symbol=symbol, limit=limit)
+            elif hasattr(provider, "news_aggregator") and provider.news_aggregator:
+                articles = provider.news_aggregator.get_latest(symbol=symbol, limit=limit)
+            return {
+                "symbol": symbol.upper(),
+                "articles": articles,
+                "total": len(articles),
+            }
+        except Exception as exc:
+            logger.debug("news/latest error: %s", exc)
+            return {"symbol": symbol.upper(), "articles": [], "total": 0}
+
+    # ── /api/news/sentiment — aggregate sentiment (no symbol path param) ──────
+    @news_router.get("/sentiment")
+    async def get_aggregate_sentiment(symbol: str = Query("XAU_USD")):
+        """Return aggregate market sentiment for a symbol (query-param variant)."""
+        try:
+            provider = _get_risk_provider()
+            if hasattr(provider, "get_sentiment"):
+                result = provider.get_sentiment(symbol)
+                return result
+        except Exception as exc:
+            logger.debug("news/sentiment error: %s", exc)
+        return {
+            "symbol": symbol.upper(),
+            "sentiment_score": 0.0,
+            "label": "neutral",
+        }
+
     return news_router
 
 

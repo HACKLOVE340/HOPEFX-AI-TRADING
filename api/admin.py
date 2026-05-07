@@ -1395,3 +1395,109 @@ def update_system_settings(
             updated_keys[k] = v
     _save_system_settings(current)
     return {"ok": True, "updated": updated_keys}
+
+
+# ── Maintenance mode ──────────────────────────────────────────────────────────
+
+_maintenance_state: dict = {"maintenance_mode": False, "maintenance_message": ""}
+
+
+@router.get("/maintenance", summary="Get maintenance mode status")
+def get_maintenance(user: TokenPayload = Depends(require_role("admin"))) -> dict:
+    """Return current maintenance mode state."""
+    try:
+        from core.config_store import config_store as _cs
+        stored = _cs.get("admin:maintenance")
+        if stored:
+            return stored
+    except Exception:  # nosec B110
+        pass
+    return dict(_maintenance_state)
+
+
+@router.post("/maintenance", summary="Toggle maintenance mode")
+def set_maintenance(
+    payload: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Enable or disable maintenance mode platform-wide."""
+    enabled = bool(payload.get("enabled", False))
+    message = str(payload.get("message", ""))
+    state = {"maintenance_mode": enabled, "maintenance_message": message}
+    _maintenance_state.update(state)
+    try:
+        from core.config_store import config_store as _cs
+        _cs.set("admin:maintenance", state)
+    except Exception:  # nosec B110
+        pass
+    try:
+        import redis as _redis
+        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+        import json as _json
+        rc.set("platform:maintenance", _json.dumps(state))
+    except Exception:  # nosec B110
+        pass
+    log_activity(f"Maintenance mode {'enabled' if enabled else 'disabled'} by {user.sub}")
+    return {"ok": True, **state}
+
+
+# ── Broadcast message ─────────────────────────────────────────────────────────
+
+@router.post("/broadcast", summary="Broadcast a platform-wide message to all users")
+def broadcast_message(
+    payload: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Push a broadcast notification to all connected users via Redis pub/sub."""
+    import json as _json
+    import uuid as _uuid
+    from datetime import datetime, timezone
+
+    title   = str(payload.get("title", ""))
+    body    = str(payload.get("body", ""))
+    msg_type = str(payload.get("type", "info"))
+    if not title:
+        raise HTTPException(status_code=400, detail="title is required")
+
+    msg = {
+        "id":         str(_uuid.uuid4()),
+        "title":      title,
+        "body":       body,
+        "type":       msg_type,
+        "created_by": user.sub,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        import redis as _redis
+        rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
+        rc.lpush("platform:broadcasts", _json.dumps(msg))
+        rc.ltrim("platform:broadcasts", 0, 49)
+        rc.publish("platform:broadcast", _json.dumps(msg))
+    except Exception as exc:  # nosec B110
+        logger.debug("broadcast redis error: %s", exc)
+
+    log_activity(f"Broadcast sent by {user.sub}: [{msg_type}] {title}")
+    return {"ok": True, "message_id": msg["id"]}
+
+
+# ── Test SMTP ─────────────────────────────────────────────────────────────────
+
+@router.post("/settings/test-smtp", summary="Send a test email to verify SMTP configuration")
+async def test_smtp(
+    payload: dict,
+    user: TokenPayload = Depends(require_role("admin")),
+) -> dict:
+    """Send a test email to the admin's address to verify SMTP settings."""
+    try:
+        from core.email_service import get_email_service
+        svc = get_email_service()
+        recipient = payload.get("email") or user.sub
+        await svc.send_email(
+            to=recipient,
+            subject="HOPEFX SMTP Test",
+            body="This is a test email from the HOPEFX admin panel. SMTP is configured correctly.",
+        )
+        return {"ok": True, "sent_to": recipient}
+    except Exception as exc:
+        logger.warning("SMTP test failed: %s", exc)
+        return {"ok": False, "error": str(exc)}
