@@ -463,7 +463,9 @@ class HOPEFXBrain:
                             p.id: {
                                 "id": p.id,
                                 "symbol": p.symbol,
-                                "side": p.side.value,
+                                # Position.side is a plain str ("LONG"/"SHORT"),
+                                # not an Enum — use getattr to handle both forms.
+                                "side": p.side.value if hasattr(p.side, "value") else p.side,
                                 "quantity": p.quantity,
                                 "entry_price": p.entry_price,
                                 "current_price": p.current_price,
