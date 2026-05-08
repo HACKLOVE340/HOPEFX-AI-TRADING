@@ -108,6 +108,9 @@ class _SGDAdapter:
         self._clf = None
         self._n_updates: int = 0
         self._lock = threading.Lock()
+        # Rolling win/loss counter for adaptive class weighting (last 100 outcomes)
+        from collections import deque as _deque
+        self._recent_labels: _deque[int] = _deque(maxlen=100)
         self._init_clf()
 
     def _init_clf(self) -> None:
@@ -143,9 +146,25 @@ class _SGDAdapter:
             return
         with self._lock:
             try:
-                self._clf.partial_fit(X.reshape(1, -1), [y], classes=[0, 1])
+                self._recent_labels.append(y)
+                # Adaptive sample weight: upweight minority class to prevent
+                # drift toward loss-prediction under imbalanced fill outcomes
+                n_labels = len(self._recent_labels)
+                if n_labels >= 10:
+                    n_pos = sum(self._recent_labels)
+                    n_neg = n_labels - n_pos
+                    if y == 1 and n_pos > 0:
+                        _sw = n_neg / n_pos  # upweight wins if they're rarer
+                    elif y == 0 and n_neg > 0:
+                        _sw = n_pos / n_neg  # upweight losses if they're rarer
+                    else:
+                        _sw = 1.0
+                    _sw = max(0.1, min(_sw, 10.0))  # clamp to [0.1, 10]
+                else:
+                    _sw = 1.0
+                self._clf.partial_fit(X.reshape(1, -1), [y], classes=[0, 1], sample_weight=[_sw])
                 self._n_updates += 1
-                logger.debug("SGD adapter updated (n=%d)", self._n_updates)
+                logger.debug("SGD adapter updated (n=%d sw=%.2f)", self._n_updates, _sw)
             except Exception as exc:
                 logger.warning("SGD adapter update failed: %s", exc)
 
@@ -942,6 +961,18 @@ class HybridEnsemblePredictor:
         p_lstm = self._lstm_predict(X_seq if X_seq is not None else X) if w_lstm > 0 else 0.5
         p_rl = self._rl_predict(X.flatten()) if w_rl > 0 else 0.5
 
+        # Ensemble disagreement penalty: when components strongly disagree the
+        # blended confidence is less trustworthy. Compute std of active components
+        # and apply a discount proportional to disagreement.
+        _active_preds = [p for p, w in ((p_xgb, w_xgb), (p_lstm, w_lstm), (p_rl, w_rl)) if w > 0]
+        if len(_active_preds) > 1:
+            _disagree_std = float(np.std(_active_preds))
+            # discount blended result by up to 20% towards 0.5 when std > 0.15
+            _disagree_penalty = min(1.0, _disagree_std / 0.15) * 0.20
+        else:
+            _disagree_std = 0.0
+            _disagree_penalty = 0.0
+
         if self._meta_blend and self._meta_trained and self._meta is not None:
             # Meta-blender: Ridge on scaled [p_xgb, p_lstm, p_rl]
             try:
@@ -949,12 +980,17 @@ class HybridEnsemblePredictor:
                 if self._meta_scaler is not None:
                     meta_input = self._meta_scaler.transform(meta_input)
                 blended = float(self._meta.predict(meta_input)[0])
+                blended = float(np.clip(blended, 0.0, 1.0))
+                # Apply disagreement penalty: pull towards 0.5
+                blended = blended + (0.5 - blended) * _disagree_penalty
                 return float(np.clip(blended, 0.0, 1.0))
             except Exception:  # nosec B110 - meta-model failure falls through to weighted average
                 ...  # nosec B110
 
         # Weighted average fallback
         blended = w_xgb * p_xgb + w_lstm * p_lstm + w_rl * p_rl
+        # Apply disagreement penalty: pull towards 0.5 when components disagree
+        blended = blended + (0.5 - blended) * _disagree_penalty
         return float(np.clip(blended, 0.0, 1.0))
 
     def fit_meta(
