@@ -2,9 +2,9 @@
  * CandleChart — lightweight-charts candlestick wrapper.
  *
  * Handles:
- * - Chart creation / resize observer
+ * - Chart creation / ResizeObserver (rAF-throttled)
  * - Series update when data prop changes
- * - Real-time tick update via updateTick prop
+ * - Real-time tick update — aligned to current bar time to prevent phantom candles
  * - Dark/light theme via ThemeContext
  * - Cleanup on unmount
  */
@@ -55,6 +55,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const seriesRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const rafRef       = useRef<number>(0);
   const { theme }    = useTheme();
 
   const isDark = theme === 'dark';
@@ -95,15 +96,19 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     chartRef.current  = chart;
     seriesRef.current = series;
 
-    // Resize observer
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
-      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
     });
-    if (containerRef.current) ro.observe(containerRef.current);
+    ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       chart.remove();
       chartRef.current  = null;
@@ -126,14 +131,16 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     });
   }, [isDark]);
 
-  // Load historical data
+  // Load historical data — always scroll to the most recent candle
   useEffect(() => {
     if (!seriesRef.current || data.length === 0) return;
     seriesRef.current.setData(data.map(toChartBar));
     chartRef.current?.timeScale().fitContent();
+    chartRef.current?.timeScale().scrollToRealTime();
   }, [data]);
 
-  // Real-time tick update
+  // Real-time tick update — align to the current bar's open time so the tick
+  // updates the existing candle rather than creating a phantom future candle.
   useEffect(() => {
     if (!tick || !seriesRef.current || data.length === 0) return;
     const last = data[data.length - 1]!;
@@ -141,8 +148,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     seriesRef.current.update({
       time:  last.time as UTCTimestamp,
       open:  last.open,
-      high:  Math.max(last.high, mid),
-      low:   Math.min(last.low, mid),
+      high:  Math.max(last.high, tick.ask),
+      low:   Math.min(last.low,  tick.bid),
       close: mid,
     });
   }, [tick, data]);

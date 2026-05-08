@@ -279,7 +279,7 @@ const CoreChart: React.FC<CoreChartProps> = ({
 
     setReady(true);
 
-    // Resize observer — 60fps via rAF
+    // rAF-throttled ResizeObserver — prevents layout thrashing at 60fps
     const ro = new ResizeObserver(() => {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = requestAnimationFrame(() => {
@@ -321,34 +321,35 @@ const CoreChart: React.FC<CoreChartProps> = ({
     candleRef.current.setData(candles);
     volRef.current.setData(volumes);
     chartRef.current?.timeScale().fitContent();
+    chartRef.current?.timeScale().scrollToRealTime();
   }, [bars]);
 
   // ── Live tick updates ─────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!liveTick || !candleRef.current) return;
-    const ts = toUTC(liveTick.timestamp);
 
-    // Update last candle with live price
+    // Align to the current bar's open time — prevents phantom future candles.
     const lastBar = barsRef.current[barsRef.current.length - 1];
-    if (lastBar) {
-      const updatedCandle: CandlestickData = {
-        time:  ts,
-        open:  lastBar.open,
-        high:  Math.max(lastBar.high, liveTick.ask),
-        low:   Math.min(lastBar.low,  liveTick.bid),
-        close: liveTick.mid,
-      };
-      candleRef.current.update(updatedCandle);
-    }
+    if (!lastBar) return;
+    const barTime = toUTC(lastBar.time);
 
-    // Bid/ask lines — last 2 points to draw a flat line at current price
+    const updatedCandle: CandlestickData = {
+      time:  barTime,
+      open:  lastBar.open,
+      high:  Math.max(lastBar.high, liveTick.ask),
+      low:   Math.min(lastBar.low,  liveTick.bid),
+      close: liveTick.mid,
+    };
+    candleRef.current.update(updatedCandle);
+
+    // Bid/ask lines — use update() not setData() to avoid series reset flicker.
+    // Both lines share the same bar time so they render as horizontal price levels.
     if (bidRef.current && askRef.current) {
-      const prev = (ts - 1) as UTCTimestamp;
-      const bidData: LineData[] = [{ time: prev, value: liveTick.bid }, { time: ts, value: liveTick.bid }];
-      const askData: LineData[] = [{ time: prev, value: liveTick.ask }, { time: ts, value: liveTick.ask }];
-      bidRef.current.setData(bidData);
-      askRef.current.setData(askData);
+      const bidPoint: LineData = { time: barTime, value: liveTick.bid };
+      const askPoint: LineData = { time: barTime, value: liveTick.ask };
+      bidRef.current.update(bidPoint);
+      askRef.current.update(askPoint);
     }
   }, [liveTick]);
 

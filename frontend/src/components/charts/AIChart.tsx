@@ -143,6 +143,7 @@ export function AIChart({
   const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
@@ -196,14 +197,24 @@ export function AIChart({
     volRef.current    = vol;
     maRef.current     = ma;
 
-    const onResize = () => {
-      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
-    };
-    window.addEventListener('resize', onResize);
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    if (containerRef.current) ro.observe(containerRef.current);
 
     return () => {
-      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
       chart.remove();
+      chartRef.current  = null;
+      candleRef.current = null;
+      volRef.current    = null;
+      maRef.current     = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -235,7 +246,10 @@ export function AIChart({
 
         maRef.current?.setData(computeMA(sorted, 20));
 
-        if (initial) chartRef.current?.timeScale().fitContent();
+        if (initial) {
+          chartRef.current?.timeScale().fitContent();
+          chartRef.current?.timeScale().scrollToRealTime();
+        }
       })
       .catch((err) => {
         if (!initial) return; // silent on background refresh
@@ -261,19 +275,20 @@ export function AIChart({
   // ── Live tick update — updates the current candle's close in real time ───
 
   useEffect(() => {
-    if (!tick || !candleRef.current) return;
-    const mid  = tick.mid ?? ((tick.bid + tick.ask) / 2);
-    const time = Math.floor(
-      tick.timestamp > 1_000_000_000_000 ? tick.timestamp / 1000 : tick.timestamp,
-    ) as UTCTimestamp;
+    if (!tick || !candleRef.current || !candles.length) return;
+    // Use the last historical bar's open time so the tick updates the current
+    // candle rather than creating a phantom future candle.
+    const last = candles[candles.length - 1]!;
+    const barTime = toUTC(last.timestamp);
+    const mid = tick.mid ?? ((tick.bid + tick.ask) / 2);
     candleRef.current.update({
-      time,
-      open:  mid,
-      high:  tick.ask,
-      low:   tick.bid,
+      time:  barTime,
+      open:  last.open,
+      high:  Math.max(last.high, tick.ask),
+      low:   Math.min(last.low,  tick.bid),
       close: mid,
     });
-  }, [tick]);
+  }, [tick, candles]);
 
   // ── Apply AI overlays as price lines ─────────────────────────────────────
 
@@ -428,7 +443,7 @@ export function AIChart({
       )}
 
       {/* ── Chart ──────────────────────────────────────────────────── */}
-      <div className="relative">
+      <div className="relative" style={{ height }}>
         {(loading || analyzing) && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#060d18]/70 z-10 pointer-events-none">
             <span className="text-[11px] text-slate-500 animate-pulse">
@@ -436,17 +451,14 @@ export function AIChart({
             </span>
           </div>
         )}
-        {chartError ? (
-          <div
-            className="flex flex-col items-center justify-center gap-1"
-            style={{ height }}
-          >
+        {chartError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 z-20 bg-[#060d18]">
             <span className="text-[#ff1744] text-[11px]">⚠ {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a data feed or load historical data</span>
           </div>
-        ) : (
-          <div ref={containerRef} style={{ width: '100%', height }} />
         )}
+        {/* Container always rendered so the chart canvas has a real size on init */}
+        <div ref={containerRef} style={{ width: '100%', height }} />
       </div>
 
       {/* ── AI analysis text summary ────────────────────────────────── */}

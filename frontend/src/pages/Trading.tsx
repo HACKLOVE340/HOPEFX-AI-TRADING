@@ -192,6 +192,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
@@ -227,11 +228,24 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
     });
     chartRef.current = chart; candleRef.current = candle;
     volRef.current = vol; maRef.current = ma;
-    const onResize = () => {
-      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartRef.current  = null;
+      candleRef.current = null;
+      volRef.current    = null;
+      maRef.current     = null;
     };
-    window.addEventListener('resize', onResize);
-    return () => { window.removeEventListener('resize', onResize); chart.remove(); };
   }, []);
 
   useEffect(() => {
@@ -264,6 +278,7 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           maRef.current.setData(maData);
         }
         chartRef.current?.timeScale().fitContent();
+        chartRef.current?.timeScale().scrollToRealTime();
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
@@ -274,13 +289,20 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
   }, [symbol, timeframe, hydrated, isAuth]);
 
   useEffect(() => {
-    if (!tick || !candleRef.current) return;
+    if (!tick || !candleRef.current || !candles.length) return;
+    // Align the live tick to the current bar's open time so it updates the
+    // existing candle rather than creating a phantom future candle.
+    const last = candles[candles.length - 1]!;
+    const barTime = toUTC(last.timestamp);
+    const mid = (tick.bid + tick.ask) / 2;
     candleRef.current.update({
-      time: Math.floor(tick.timestamp / 1000) as UTCTimestamp,
-      open: tick.bid, high: Math.max(tick.bid, tick.ask),
-      low: Math.min(tick.bid, tick.ask), close: tick.ask,
+      time:  barTime,
+      open:  last.open,
+      high:  Math.max(last.high, tick.ask),
+      low:   Math.min(last.low,  tick.bid),
+      close: mid,
     });
-  }, [tick]);
+  }, [tick, candles]);
 
   useEffect(() => { volRef.current?.applyOptions({ visible: showVolume }); }, [showVolume]);
   useEffect(() => { maRef.current?.applyOptions({ visible: showMA }); }, [showMA]);
@@ -326,12 +348,13 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
           </div>
         )}
         {chartError && (
-          <div className="flex flex-col items-center justify-center h-[340px] gap-2">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-20 bg-[#060d18]">
             <span className="text-[#ff1744] text-[12px]">⚠ {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a broker or load historical data</span>
           </div>
         )}
-        <div ref={containerRef} style={{ width: '100%', height: 340, display: chartError ? 'none' : 'block' }} />
+        {/* Container is always rendered so the chart has a real size on init */}
+        <div ref={containerRef} style={{ width: '100%', height: 340 }} />
       </div>
     </div>
   );

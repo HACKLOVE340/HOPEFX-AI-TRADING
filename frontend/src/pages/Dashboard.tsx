@@ -149,11 +149,12 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    chartRef.current = createChart(containerRef.current, {
+    const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#0f172a' },
         textColor: '#64748b',
@@ -169,29 +170,40 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
       height: 240,
     });
 
-    seriesRef.current = chartRef.current.addSeries(AreaSeries, {
+    const series = chart.addSeries(AreaSeries, {
       lineColor:   '#3b82f6',
       topColor:    'rgba(59,130,246,0.25)',
       bottomColor: 'rgba(59,130,246,0.0)',
       lineWidth:   2,
     });
 
+    chartRef.current  = chart;
+    seriesRef.current = series;
+
     const points = toChartPoints(data);
     if (points.length > 0) {
-      seriesRef.current.setData(points);
-      chartRef.current.timeScale().fitContent();
+      series.setData(points);
+      chart.timeScale().fitContent();
+      chart.timeScale().scrollToRealTime();
     }
 
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
-      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
     });
     ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      chartRef.current?.remove();
+      chart.remove();
+      chartRef.current  = null;
+      seriesRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -201,6 +213,7 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
     if (points.length > 0) {
       seriesRef.current.setData(points);
       chartRef.current?.timeScale().fitContent();
+      chartRef.current?.timeScale().scrollToRealTime();
     }
   }, [data]);
 
