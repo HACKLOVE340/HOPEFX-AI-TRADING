@@ -7,6 +7,18 @@
 """
 Institutional-Grade Smart Order Router v3.0
 Multi-Venue Execution | AI-Powered Routing | Market Impact Optimization
+
+STATUS: SUPERSEDED — not wired into app.py startup.
+The production smart router is execution/smart_router.py (SmartRouter).
+brokers/smart_router.py and execution/legacy.py also contain SmartOrderRouter
+implementations that are actively used.
+
+This file contains TWAP/VWAP/IS execution strategies and a more advanced
+SmartOrderRouter with market impact modelling.  To activate it, replace the
+execution router in hopefx_engine.py with SmartOrderRouter from this module.
+Until then this file is reference/dead code and will diverge.
+
+TODO: Either wire SmartOrderRouter into hopefx_engine.py or delete this file.
 """
 
 import asyncio

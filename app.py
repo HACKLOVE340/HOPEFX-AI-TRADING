@@ -673,6 +673,9 @@ async def startup_event():
         _start_nuclear_price_bridge(app_state)
         _tasks_done.append("nuclear_price_bridge")
 
+        await _prewarm_ml_predictor(app_state)
+        _tasks_done.append("ml_predictor")
+
         _mount_gateway(app)
         _tasks_done.append("api_gateway")
 
@@ -721,6 +724,33 @@ def _push_state_to_api_modules(state) -> None:
             ...  # nosec B110
         except Exception as _e:
             logger.warning("Failed to push state to %s: %s", _mod_name, _e)
+
+
+async def _prewarm_ml_predictor(state) -> None:
+    """Pre-warm EnhancedMLPredictor at startup so the first trade is not cold.
+
+    enhanced_ml_predictor.py is the active ML backend used by trader_full.py.
+    Loading it here ensures the model is in memory before the first signal
+    arrives rather than being lazily loaded on the first trade tick.
+    """
+    model_path = os.getenv("ML_MODEL_PATH", "ml/saved_models/hopefx")
+    try:
+        from enhanced_ml_predictor import EnhancedMLPredictor
+
+        predictor = EnhancedMLPredictor()
+        import pathlib
+
+        if pathlib.Path(model_path).exists():
+            predictor.load(model_path)
+            logger.info("EnhancedMLPredictor: model pre-warmed from %s", model_path)
+        else:
+            logger.info(
+                "EnhancedMLPredictor: no saved model at %s — predictor ready for training",
+                model_path,
+            )
+        state.ml_predictor = predictor
+    except Exception as _exc:
+        logger.warning("EnhancedMLPredictor pre-warm failed (non-fatal): %s", _exc)
 
 
 async def _start_data_layer_orchestrator(state) -> None:

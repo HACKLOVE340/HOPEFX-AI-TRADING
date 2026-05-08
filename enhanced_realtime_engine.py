@@ -8,6 +8,17 @@
 =============================================================================
 HOPEFX REAL-TIME MARKET DATA ENGINE v4.0
 =============================================================================
+STATUS: SUPERSEDED — not wired into app.py startup.
+The production data feed is data_feed/engine.py (ProductionDataEngine) and
+data_feed/multi_source_feed.py (MultiSourceFeed).
+
+This file contains a more advanced ConsensusAggregator implementation with
+nanosecond timestamps and Byzantine fault tolerance.  To activate it, replace
+the data_feed startup in app.py with build_production_aggregator() from this
+module.  Until then this file is reference/dead code and will diverge.
+
+TODO: Either wire ConsensusAggregator into app.py or delete this file.
+=============================================================================
 Institutional-Grade Multi-Source Data Aggregation with Sub-Millisecond Latency
 
 Features:
@@ -17,9 +28,6 @@ Features:
 - Automatic failover and circuit breaker patterns
 - Redis-backed distributed caching
 - Real-time market microstructure analysis
-
-Author: HOPEFX Development Team
-License: Proprietary - Institutional Use Only
 =============================================================================
 """
 
