@@ -70,7 +70,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["WebSocket Live"])
 
 # Tracks last mid price per symbol for change_pct calculation
+import threading as _threading
 _last_mid: dict[str, float] = {}
+_last_mid_lock = _threading.Lock()
 
 # ── Auth / heartbeat config ───────────────────────────────────────────────────
 AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "30"))
@@ -499,10 +501,12 @@ async def _eventbus_tick_broadcaster() -> None:
                 else:
                     ts_ms = int(raw_ts)
 
-                # 4. Track previous mid for change_pct calculation
-                prev = _last_mid.get(symbol, mid)
+                # 4. Track previous mid for change_pct calculation (lock prevents
+                #    concurrent broadcaster tasks racing on the same symbol dict)
+                with _last_mid_lock:
+                    prev = _last_mid.get(symbol, mid)
+                    _last_mid[symbol] = mid
                 change = ((mid - prev) / prev * 100) if prev else 0.0
-                _last_mid[symbol] = mid
 
                 tick_data = {
                     "symbol": symbol,

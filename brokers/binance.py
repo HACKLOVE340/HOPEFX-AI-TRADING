@@ -353,6 +353,16 @@ class BinanceConnector(BrokerConnector):
             account_data = response.json()
             positions = []
 
+            # Fetch current prices in bulk for all held assets
+            try:
+                price_resp = self.session.get(f"{self.base_url}/api/v3/ticker/price")
+                price_map: dict[str, float] = {}
+                if price_resp.ok:
+                    for item in price_resp.json():
+                        price_map[item["symbol"]] = float(item["price"])
+            except Exception:  # pylint: disable=broad-exception-caught
+                price_map = {}
+
             # Convert non-zero balances to positions
             for balance in account_data["balances"]:
                 free = float(balance["free"])
@@ -360,14 +370,17 @@ class BinanceConnector(BrokerConnector):
                 total = free + locked
 
                 if total > 0:
+                    asset = balance["asset"]
+                    # Look up price in USDT pair (e.g. BTC → BTCUSDT)
+                    current_price = price_map.get(f"{asset}USDT", 0.0)
                     # Treat as a LONG position
                     position = Position(
-                        symbol=balance["asset"],
+                        symbol=asset,
                         side="LONG",
                         quantity=total,
-                        entry_price=0.0,  # Not tracked in spot trading
-                        current_price=0.0,  # Would need separate price call
-                        unrealized_pnl=0.0,  # Not calculated for spot
+                        entry_price=current_price,  # Spot has no tracked entry; use current as proxy
+                        current_price=current_price,
+                        unrealized_pnl=0.0,  # No entry price → P&L unknown for spot
                         realized_pnl=0.0,
                         timestamp=datetime.now(UTC),
                     )
