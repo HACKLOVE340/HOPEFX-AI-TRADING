@@ -186,7 +186,7 @@ class Order(Base):
     # Set by the trading engine before the first submission attempt.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
     account_id = Column(Integer, nullable=True, index=True)
-    trade_id = Column(String(50), ForeignKey("trades.trade_id"), nullable=True)
+    trade_id = Column(String(50), ForeignKey("trades.trade_id"), nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
 
     # Order details

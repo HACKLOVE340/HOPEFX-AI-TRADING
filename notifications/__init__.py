@@ -92,18 +92,38 @@ class NotificationManager:
                 logger.error("Notification processing error: %s", e)
 
     async def _dispatch(self, notification: Notification):
-        """Send to all configured channels"""
+        """Send to all configured channels with per-channel retry."""
         tasks = []
 
         if self.channels.get("discord"):
-            tasks.append(self._send_discord(notification))
+            tasks.append(self._with_retry(self._send_discord, notification, channel="discord"))
         if self.channels.get("telegram"):
-            tasks.append(self._send_telegram(notification))
+            tasks.append(self._with_retry(self._send_telegram, notification, channel="telegram"))
         if self.channels.get("webhook"):
-            tasks.append(self._send_webhook(notification))
+            tasks.append(self._with_retry(self._send_webhook, notification, channel="webhook"))
 
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _with_retry(self, send_fn, notification: Notification, channel: str) -> None:
+        """Retry a delivery function with exponential backoff (max 3 attempts)."""
+        delays = (2.0, 4.0, 8.0)
+        for attempt, delay in enumerate(delays, start=1):
+            try:
+                await send_fn(notification)
+                return
+            except Exception as exc:
+                if attempt == len(delays):
+                    logger.error(
+                        "Notification channel %s failed after %d attempts: %s",
+                        channel, attempt, exc,
+                    )
+                else:
+                    logger.warning(
+                        "Notification channel %s attempt %d/%d failed (%s) — retrying in %.0fs",
+                        channel, attempt, len(delays), exc, delay,
+                    )
+                    await asyncio.sleep(delay)
 
     @staticmethod
     def _validate_discord_url(url: str) -> bool:
@@ -159,7 +179,7 @@ class NotificationManager:
 
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
             if resp.status != 204:
-                logger.error("Discord notification failed: %s", resp.status)
+                raise RuntimeError(f"Discord webhook returned HTTP {resp.status}")
 
     @staticmethod
     def _escape_mdv2(text: str) -> str:
@@ -215,10 +235,8 @@ class NotificationManager:
         async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
             if resp.status != 200:
                 body = await resp.text()
-                logger.error(
-                    "Telegram notification failed: status=%s body=%s",
-                    resp.status,
-                    body[:200],
+                raise RuntimeError(
+                    f"Telegram sendMessage returned HTTP {resp.status}: {body[:200]}"
                 )
 
     async def _send_webhook(self, notification: Notification):
@@ -240,7 +258,7 @@ class NotificationManager:
 
         async with aiohttp.ClientSession() as session, session.post(webhook_url, json=payload) as resp:
             if resp.status >= 400:
-                logger.error("Webhook notification failed: %s", resp.status)
+                raise RuntimeError(f"Webhook endpoint returned HTTP {resp.status}")
 
     def _format_timestamp(self, timestamp: float) -> str:
         """Format timestamp for Discord"""

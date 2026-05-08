@@ -173,7 +173,7 @@ if _CELERY_AVAILABLE:
             },
             "ml-daily-full-retrain": {
                 "task": "celery_app.ml_daily_full_retrain",
-                "schedule": crontab(hour=2, minute=0),  # 02:00 UTC daily
+                "schedule": crontab(hour=22, minute=30),  # 22:30 UTC — post-US close, pre-Asia open
                 "options": {"queue": "ml"},
             },
             # ── Billing ───────────────────────────────────────────────────────

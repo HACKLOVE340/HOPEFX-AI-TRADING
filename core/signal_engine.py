@@ -1805,6 +1805,25 @@ async def _tick(app_state: Any) -> None:
         ohlcv_proxy = _build_ohlcv_proxy(data)
         _enrich_with_signal_score(signal_payload, ohlcv_proxy, symbol)
 
+        # ── Factor Attribution ────────────────────────────────────────────────
+        # Append live portfolio factor attribution (market/size/value betas and
+        # residual alpha) to the payload so subscribers can see factor P&L.
+        # Best-effort: fetches live positions from broker, falls back gracefully.
+        try:
+            _broker = getattr(app_state, "broker", None)
+            if _broker is not None:
+                _raw_pos = await _broker.get_positions()
+                _pos_map = {
+                    getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0))
+                    for p in (_raw_pos or [])
+                }
+                _total_pnl = sum(float(getattr(p, "unrealized_pnl", 0)) for p in (_raw_pos or []))
+                signal_payload = _enrich_signal_with_factors(
+                    signal_payload, _pos_map, _total_pnl, app_state=app_state
+                )
+        except Exception as _fac_exc:
+            logger.debug("Factor enrichment skipped (non-fatal): %s", _fac_exc)
+
         await _publish_and_broadcast(app_state, symbol, signal_payload)
         await _execute_if_approved(app_state, symbol, signal_payload, data=data)
 
