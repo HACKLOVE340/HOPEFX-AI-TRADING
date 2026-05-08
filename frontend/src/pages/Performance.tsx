@@ -14,7 +14,7 @@ import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { PageHeader, EmptyState, CrossLinkBar } from '../components';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -346,7 +346,11 @@ const Performance: React.FC = () => {
       {tab === 'overview' && (
         <>
           {publicQ.isLoading && <div style={{ padding: 24 }}><PanelSkeleton rows={4} /></div>}
-          {publicQ.isError && <div style={s.errorBox}>Failed to load performance data</div>}
+          {publicQ.isError && (
+            <div style={s.errorBox}>
+              {extractApiError(publicQ.error, 'Failed to load performance data')}
+            </div>
+          )}
           {!publicQ.isLoading && !publicQ.isError && !pub && (
             <EmptyState
               icon="📊"
@@ -395,7 +399,7 @@ const Performance: React.FC = () => {
             {equityQ.isLoading && <PanelSkeleton rows={3} />}
             {equityQ.isError && (
               <div style={{ textAlign: 'center', color: '#f87171', padding: 40, fontSize: 13 }}>
-                Failed to load equity curve — {(equityQ.error as Error)?.message ?? 'check your connection'}
+                Failed to load equity curve — {extractApiError(equityQ.error, 'check your connection')}
               </div>
             )}
             {!equityQ.isLoading && !equityQ.isError && (equity.length > 1
@@ -467,7 +471,7 @@ const Performance: React.FC = () => {
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
           {tradesQ.isError && (
             <div style={{ color: '#f87171', fontSize: 13 }}>
-              Failed to load trades — {(tradesQ.error as Error)?.message ?? 'authentication required'}
+              Failed to load trades — {extractApiError(tradesQ.error, 'authentication required')}
             </div>
           )}
           {filteredTrades.length > 0 && (
