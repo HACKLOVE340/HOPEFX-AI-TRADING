@@ -68,7 +68,7 @@ except ImportError:
     _TORCH_AVAILABLE = False
     _ml_logger.warning(
         "PyTorch is not installed. The following ML components will be disabled: "
-        "LSTM signal layer, RL/PPO agent (PPORLAgent), EWC online learner. "
+        "LSTM signal layer, RL/PPO agent (RLAgent), EWC online learner. "
         "Install with: pip install torch>=2.1.1  "
         "These components will fall back to stubs — predictions may be degraded."
     )
