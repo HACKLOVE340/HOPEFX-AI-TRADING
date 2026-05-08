@@ -11,6 +11,7 @@ import type { SuperAdminTab } from './superadmin/types';
 import { SuperAdminNavContext } from './superadmin/types';
 import { SAStyles, Spinner } from './superadmin/ui';
 import { superadminApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 
@@ -144,7 +145,7 @@ class SectionErrorBoundary extends Component<
     this.state = { hasError: false, message: '' };
   }
   static getDerivedStateFromError(err: unknown) {
-    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+    return { hasError: true, message: extractApiError(err, 'An error occurred') };
   }
   render() {
     if (this.state.hasError) {
