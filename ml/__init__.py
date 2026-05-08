@@ -761,4 +761,176 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         ]
         return {"models": files, "directory": str(model_dir)}
 
+    @router.get("/health")
+    async def get_health():
+        """Health alias — same payload as /status (for frontend compatibility)."""
+        return {
+            "status": "ok",
+            "module": "ML Predictions",
+            "feature_engineer": "ready",
+            "models": {
+                "lstm": "requires training",
+                "random_forest": "requires training",
+                "ensemble": "requires training",
+            },
+        }
+
+    @router.get("/features")
+    async def get_features():
+        """Return flat list of feature names produced by the feature engineer."""
+        return {
+            "feature_names": feature_engineer.feature_names,
+            "feature_count": len(feature_engineer.feature_names),
+            "groups": feature_engineer.get_feature_groups(),
+        }
+
+    @router.post("/retrain")
+    async def trigger_retrain(payload: dict = None):
+        """
+        Trigger an async ML model retrain.  Returns immediately with a job id;
+        training runs in a background thread so the HTTP response is not blocked.
+        """
+        import asyncio
+        import threading
+        import uuid
+
+        job_id = str(uuid.uuid4())
+
+        def _run_retrain():
+            try:
+                import subprocess
+                import sys
+                subprocess.run(
+                    [sys.executable, "ml/train_advanced.py", "--years", "3", "--oos-years", "1"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3600,
+                )
+            except Exception as exc:
+                _ml_logger.warning("Background retrain failed: %s", exc)
+
+        t = threading.Thread(target=_run_retrain, daemon=True)
+        t.start()
+        return {"job_id": job_id, "status": "started", "message": "Retraining started in background"}
+
+    @router.get("/drift/status")
+    async def get_drift_status():
+        """Return data-drift detection configuration and last known result."""
+        from ml.robust_predictor import DriftDetector
+
+        return {
+            "status": "ok",
+            "detector": "KolmogorovSmirnov",
+            "config": {
+                "window_size": DriftDetector.__init__.__defaults__[0] if DriftDetector.__init__.__defaults__ else 50,
+                "check_every": DriftDetector.__init__.__defaults__[1] if DriftDetector.__init__.__defaults__ and len(DriftDetector.__init__.__defaults__) > 1 else 10,
+                "p_threshold": DriftDetector.__init__.__defaults__[2] if DriftDetector.__init__.__defaults__ and len(DriftDetector.__init__.__defaults__) > 2 else 0.05,
+            },
+            "note": "Drift detector is instantiated per model; no persistent state between requests.",
+        }
+
+    @router.get("/signal-filter/stats")
+    async def get_signal_filter_stats():
+        """Return signal filter pass/block statistics."""
+        from ml.signal_filter import get_signal_filter
+        sf = get_signal_filter()
+        return sf.get_stats()
+
+    @router.get("/sharpe-circuit-breaker/status")
+    async def get_sharpe_cb_status():
+        """Return current Sharpe circuit breaker state for all tracked model versions."""
+        from ml.sharpe_circuit_breaker import get_sharpe_cb
+        cb = get_sharpe_cb()
+        return cb.get_status()
+
+    @router.get("/rl/status")
+    async def get_rl_status():
+        """Return RL agent training and deployment status."""
+        try:
+            from ml.rl_agent import RLAgent
+            model_dir = _Path(__file__).parent / "rl_models"
+            models = []
+            if model_dir.exists():
+                models = [
+                    {"name": f.name, "size_kb": round(f.stat().st_size / 1024, 1)}
+                    for f in model_dir.iterdir()
+                    if f.suffix in {".zip", ".pkl", ".pt", ".h5"}
+                ]
+            return {
+                "status": "ok",
+                "agent": "PPO/RLAgent",
+                "models": models,
+                "model_count": len(models),
+            }
+        except Exception as exc:
+            return {"status": "unavailable", "error": str(exc)}
+
+    @router.post("/rl/train")
+    async def trigger_rl_train(payload: dict = None):
+        """Trigger RL agent training in a background thread."""
+        import asyncio
+        import threading
+        import uuid
+
+        payload = payload or {}
+        job_id = str(uuid.uuid4())
+
+        def _run_rl_train():
+            try:
+                from ml.rl_agent import RLAgentTrainer
+                trainer = RLAgentTrainer()
+                asyncio.run(
+                    trainer.train(
+                        symbol=payload.get("symbol", "XAU_USD"),
+                        timeframe=payload.get("timeframe", "H1"),
+                        candles=int(payload.get("candles", 2000)),
+                        timesteps=int(payload.get("timesteps", 10_000)),
+                    )
+                )
+            except Exception as exc:
+                _ml_logger.warning("RL train background job failed: %s", exc)
+
+        threading.Thread(target=_run_rl_train, daemon=True).start()
+        return {"job_id": job_id, "status": "started", "message": "RL training started in background"}
+
+    @router.post("/rl/walk-forward")
+    async def trigger_rl_walk_forward(payload: dict = None):
+        """
+        Trigger RL walk-forward evaluation.
+
+        The endpoint fetches candles from the data layer and then runs
+        walk_forward_eval() in a background thread so the HTTP call returns
+        immediately.  Pass ``symbol`` and ``timeframe`` in the JSON body;
+        the data layer supplies the required candle history.
+        """
+        import threading
+        import uuid
+
+        payload = payload or {}
+        job_id = str(uuid.uuid4())
+        symbol = payload.get("symbol", "XAU_USD")
+        timeframe = payload.get("timeframe", "H1")
+        n_folds = int(payload.get("n_folds", 5))
+        timesteps_per_fold = int(payload.get("timesteps_per_fold", 50_000))
+
+        def _run_wf():
+            try:
+                from data_feed.oanda_feed import OandaDataFeed
+                from ml.rl_agent import walk_forward_eval
+
+                feed = OandaDataFeed()
+                candles = feed.fetch_candles(symbol=symbol, timeframe=timeframe, count=5000)
+                walk_forward_eval(
+                    candles=candles,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    n_folds=n_folds,
+                    timesteps_per_fold=timesteps_per_fold,
+                )
+            except Exception as exc:
+                _ml_logger.warning("RL walk-forward background job failed: %s", exc)
+
+        threading.Thread(target=_run_wf, daemon=True).start()
+        return {"job_id": job_id, "status": "started", "message": "Walk-forward evaluation started", "symbol": symbol}
+
     return router
