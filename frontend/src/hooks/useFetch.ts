@@ -50,7 +50,8 @@ function extractFetchError(err: unknown): string {
       return d.msg ?? d.message ?? JSON.stringify(raw);
     }
   }
-  return err instanceof Error ? err.message : 'Request failed.';
+  const msg = (err as { message?: unknown })?.message;
+  return typeof msg === 'string' && msg.length > 0 ? msg : 'Request failed.';
 }
 
 export interface FetchState<T> {
@@ -116,7 +117,7 @@ export function useFetch<T>(
       .catch((err: unknown) => {
         clearTimeout(deadlineId);
         if (mountedRef.current && !controller.signal.aborted) {
-          const name = err instanceof Error ? err.name : '';
+          const name = (err as { name?: unknown })?.name;
           if (name === 'AbortError' || name === 'CanceledError') return; // intentional cancel
           setError(extractFetchError(err));
         }
@@ -191,7 +192,7 @@ export function useFetchDeps<T>(
       .catch((err: unknown) => {
         clearTimeout(deadlineId);
         if (mountedRef.current && !controller.signal.aborted) {
-          const name = err instanceof Error ? err.name : '';
+          const name = (err as { name?: unknown })?.name;
           if (name === 'AbortError' || name === 'CanceledError') return;
           setError(extractFetchError(err));
         }
