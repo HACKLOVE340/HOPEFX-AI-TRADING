@@ -208,11 +208,12 @@ const AccountBar: React.FC = () => {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' :
-            wsStatus === 'connecting' ? 'bg-[#ffb800]' : 'bg-[#ff1744]',
+            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
-        <span className="text-[10px] text-slate-500 capitalize">{wsStatus}</span>
+        <span className="text-[10px] text-slate-500 capitalize">
+          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+        </span>
       </div>
     </div>
   );

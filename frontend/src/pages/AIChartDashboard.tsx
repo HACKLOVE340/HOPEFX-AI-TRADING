@@ -96,11 +96,12 @@ function RegimeStrip() {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' :
-            wsStatus === 'connecting' ? 'bg-[#ffb800]' : 'bg-[#ff1744]',
+            wsStatus === 'connected' ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
-        <span className="text-slate-500 capitalize">{wsStatus}</span>
+        <span className="text-slate-500 capitalize">
+          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+        </span>
       </div>
 
       <div className="w-px h-4 bg-[#1e2d3d]" />

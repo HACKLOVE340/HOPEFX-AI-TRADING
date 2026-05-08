@@ -172,7 +172,7 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
         'text-[10px] px-2 py-0.5 rounded font-bold border',
         wsStatus === 'connected'
           ? 'bg-[#00e676]/10 border-[#00e676]/30 text-[#00e676]'
-          : 'bg-[#ff1744]/10 border-[#ff1744]/30 text-[#ff1744]',
+          : 'bg-[#ffb800]/10 border-[#ffb800]/30 text-[#ffb800]',
       )}>
         {wsStatus === 'connected' ? '● LIVE' : '○ REST'}
       </span>

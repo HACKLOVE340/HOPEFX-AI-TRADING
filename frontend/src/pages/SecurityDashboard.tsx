@@ -122,7 +122,7 @@ const SecurityDashboard: React.FC = () => {
       setError(null);
     } catch (err) {
       if (!mountedRef.current) return;
-      setError('Failed to load security data — backend may be offline');
+      setError('Failed to load security data. Retrying in 15 s…');
     } finally {
       if (mountedRef.current) setLoading(false);
     }

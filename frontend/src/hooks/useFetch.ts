@@ -7,7 +7,7 @@
  *     unmounts, preventing "Can't perform a React state update on an
  *     unmounted component" crashes.
  *   - Hard deadline — if the fetch hasn't resolved in `timeoutMs` (default
- *     8 s), loading is forced false and a timeout error is shown so the page
+ *     30 s), loading is forced false and a timeout error is shown so the page
  *     never hangs.
  *   - Ref guard — skips setState calls after unmount even if the promise
  *     resolves just after the deadline fires.
@@ -68,11 +68,11 @@ export interface FetchState<T> {
  * @param fetcher   A function that performs the API call and returns a Promise
  *                  resolving to the data value.  The AbortSignal is passed as
  *                  the first argument — forward it to axios: `{ signal }`.
- * @param timeoutMs Hard deadline in milliseconds (default: 8000).
+ * @param timeoutMs Hard deadline in milliseconds (default: 30000).
  */
 export function useFetch<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
-  timeoutMs = 8_000,
+  timeoutMs = 30_000,
 ): FetchState<T> {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -102,7 +102,7 @@ export function useFetch<T>(
       if (mountedRef.current && !controller.signal.aborted) {
         controller.abort();
         setLoading(false);
-        setError('Request timed out. Please check your connection and try again.');
+        setError('Request is taking longer than expected. Click retry or wait — the server may be warming up.');
       }
     }, timeoutMs);
 
@@ -152,7 +152,7 @@ export function useFetchDeps<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deps: readonly any[],
-  timeoutMs = 8_000,
+  timeoutMs = 30_000,
 ): FetchState<T> {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -177,7 +177,7 @@ export function useFetchDeps<T>(
       if (mountedRef.current && !controller.signal.aborted) {
         controller.abort();
         setLoading(false);
-        setError('Request timed out. Please check your connection and try again.');
+        setError('Request is taking longer than expected. Click retry or wait — the server may be warming up.');
       }
     }, timeoutMs);
 

@@ -301,7 +301,7 @@ const AutoHealDashboard: React.FC = () => {
       setError(null);
     } catch {
       if (!mountedRef.current) return;
-      setError('Failed to load auto-heal data — backend may be offline');
+      setError('Failed to load auto-heal data. Retrying in 20 s…');
     } finally {
       if (mountedRef.current) setLoading(false);
     }

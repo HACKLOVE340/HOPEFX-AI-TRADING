@@ -285,19 +285,25 @@ const NoLiveFeedBanner: React.FC = () => {
   const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
   if (!showWsDown && !showNoFeed) return null;
 
-  const label =
-    showNoFeed          ? (noLiveFeedMsg ?? 'No live broker feed — prices may be delayed.') :
-    status === 'connecting' ? 'Connecting to live feed…' :
-    status === 'error'      ? 'Live feed error — using REST fallback (30 s polling)' :
-                              'No live feed — using REST fallback (prices may be delayed)';
+  // Determine severity: connecting = amber, no_live_feed = amber, error/disconnected = amber
+  // All states use amber — this is informational, not a critical error.
+  const isConnecting = status === 'connecting';
 
-  const bg     = status === 'connecting' ? '#78350f' : '#450a0a';
-  const border = status === 'connecting' ? '#92400e' : '#7f1d1d';
-  const color  = status === 'connecting' ? '#fbbf24' : '#f87171';
+  const label =
+    showNoFeed
+      ? (noLiveFeedMsg ?? 'No live broker feed — connect a broker in Settings to receive real-time prices.')
+      : isConnecting
+        ? 'Connecting to live feed…'
+        : 'No live broker feed — prices updating via REST (30 s). Connect a broker in Settings.';
+
+  // Always amber — this is an informational notice, not an error state.
+  const bg     = '#451a03';
+  const border = '#78350f';
+  const color  = '#fbbf24';
 
   return (
     <div
-      role="alert"
+      role="status"
       aria-live="polite"
       style={{
         background: bg, borderBottom: `1px solid ${border}`,
