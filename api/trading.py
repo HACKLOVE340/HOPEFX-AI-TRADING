@@ -576,16 +576,30 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
 
 async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
     """Broadcast the fill over WebSocket. Best-effort — logs on failure."""
+    trade_msg = {
+        "type": "trade_fill",
+        "data": {
+            "symbol": order.symbol,
+            "price": result.average_fill_price or 0.0,
+            "quantity": order.quantity,
+            "side": order.side,
+            "trade_id": result.id,
+        },
+    }
+    # Route through ws_live LiveConnectionManager (preferred — FastAPI WS).
+    try:
+        from api.ws_live import get_live_manager as _get_live_mgr
+
+        await _get_live_mgr().broadcast("trades", trade_msg)
+        return
+    except Exception as exc:
+        logger.debug("ws_live broadcast failed, trying ws_manager: %s", exc)
+
+    # Fallback: legacy WebSocketManager on app_state (websockets-based).
     if not (hasattr(app_state, "ws_manager") and app_state.ws_manager is not None):
         return
     try:
-        await app_state.ws_manager.broadcast_trade(
-            symbol=order.symbol,
-            price=result.average_fill_price or 0.0,
-            quantity=order.quantity,
-            side=order.side,
-            trade_id=result.id,
-        )
+        await app_state.ws_manager.broadcast(trade_msg)
     except Exception as exc:
         logger.warning("WebSocket broadcast failed: %s", exc)
 
@@ -1557,11 +1571,13 @@ async def get_account(
 
         try:
             import datetime as _dt
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TradeRepo
             from database.repositories.position_repository import PositionRepository as _PosRepo
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 _trade_repo = _TradeRepo(_db)
                 _pos_repo = _PosRepo(_db)
                 closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
@@ -1699,11 +1715,13 @@ async def get_account(
     cvar_95 = 0.0
 
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TradeRepo
         from database.repositories.position_repository import PositionRepository as _PosRepo
 
-        async with _get_async_db() as _db:
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
             _trade_repo = _TradeRepo(_db)
             _pos_repo = _PosRepo(_db)
             # Closed trades for stats — user_id=None fetches all (admin view)
@@ -2235,10 +2253,12 @@ _TRADE_CSV_FIELDS = [
 async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
     """Fetch trades from DB for the given user via TradeRepository."""
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TradeRepo
 
-        async with _get_async_db() as _db:
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
             repo = _TradeRepo(_db)
             trades = await repo.get_by_user(
                 user_id=user_id,
