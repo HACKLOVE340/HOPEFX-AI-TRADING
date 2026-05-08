@@ -404,14 +404,16 @@ class InferenceEngine:
                 )
                 return None
 
-            # Append MTF regime columns
+            # Append MTF regime columns — shift by 1 bar to enforce causal alignment
+            # (prevents the current in-progress D1/H4 bar from leaking into H1 features)
             if mtf_df is not None and not mtf_df.empty:
                 try:
-                    mtf_aligned = mtf_df.reindex(X.index).ffill().fillna(0.0)
+                    mtf_causal = mtf_df.shift(1)  # use prior completed bar only
+                    mtf_aligned = mtf_causal.reindex(X.index).ffill().fillna(0.0)
                     new_cols = [c for c in mtf_aligned.columns if c not in X.columns]
                     if new_cols:
                         X = pd.concat([X, mtf_aligned[new_cols]], axis=1)
-                        logger.debug("MTF: appended %d columns for %s", len(new_cols), symbol)
+                        logger.debug("MTF: appended %d causal columns for %s", len(new_cols), symbol)
                 except Exception as mtf_exc:
                     logger.debug("MTF append failed: %s", mtf_exc)
 

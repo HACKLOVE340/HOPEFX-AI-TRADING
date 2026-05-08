@@ -260,15 +260,17 @@ class OANDABroker:
                 resp.raise_for_status()
                 data = await resp.json()
             a = data.get("account", {})
-            nav = float(a.get("NAV", a.get("balance", 0)))
+            # balance = closed cash; NAV = balance + unrealized P&L (higher when winning, lower when losing)
+            balance = float(a.get("balance", 0))
+            nav = float(a.get("NAV", balance))  # fallback to balance when NAV absent (not to 0)
             return AccountInfo(
                 account_id=self._account_id,
                 currency=a.get("currency", "USD"),
-                balance=float(a.get("balance", 0)),
+                balance=balance,
                 nav=nav,
                 unrealized_pnl=float(a.get("unrealizedPL", 0)),
                 margin_used=float(a.get("marginUsed", 0)),
-                margin_available=float(a.get("marginAvailable", nav)),
+                margin_available=float(a.get("marginAvailable", 0)),
                 positions_count=int(a.get("openPositionCount", a.get("openTradeCount", 0))),
                 timestamp=datetime.now(UTC),
             )
