@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle, XCircle, TrendingUp, Calendar, Shield } from 'lucide-react'
+import { extractApiError } from '../lib/utils'
 
 interface PropFirmStatus {
   daily_loss_pct: number
@@ -77,7 +78,7 @@ export default function PropFirmTracker() {
       setStatus(data)
       setError(null)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to load status')
+      setError(extractApiError(e, 'Failed to load status'))
     } finally {
       setLoading(false)
     }
