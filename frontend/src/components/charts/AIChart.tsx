@@ -240,8 +240,13 @@ export function AIChart({
         chartRef.current?.timeScale().fitContent();
       })
       .catch((err) => {
+        const detail = err?.response?.data?.detail ?? err?.response?.data?.message;
         setChartError(
-          err?.response?.data?.detail ?? err?.message ?? 'Failed to load chart',
+          typeof detail === 'string'
+            ? detail
+            : detail
+              ? (detail.message ?? JSON.stringify(detail))
+              : (err?.message ?? 'Failed to load chart'),
         );
       })
       .finally(() => setLoading(false));
@@ -321,10 +326,14 @@ export function AIChart({
       setAiResult(r.data as AIResult);
       setLastAnalyzedAt(new Date().toLocaleTimeString());
     } catch (e: unknown) {
+      const errData = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
+      const detail  = errData?.detail ?? errData?.message;
       setAiError(
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-          ?? (e as { message?: string })?.message
-          ?? 'AI analysis failed',
+        typeof detail === 'string'
+          ? detail
+          : detail
+            ? ((detail as { message?: string })?.message ?? JSON.stringify(detail))
+            : ((e as { message?: string })?.message ?? 'AI analysis failed'),
       );
     } finally {
       setAnalyzing(false);
