@@ -195,6 +195,7 @@ class AdvancedPredictor:
         self._lock = threading.Lock()
         self._predict_count: int = 0
         self._abstain_count: int = 0
+        self._dl_failure_count: int = 0  # consecutive data layer injection failures
         self._version: str = "advanced_oos_v1"
         # Integrity state: None = unchecked, True = passed, False = failed
         self._integrity_ok: bool | None = None
@@ -453,11 +454,19 @@ class AdvancedPredictor:
                 from ml.features_extended import add_data_layer_features
 
                 X = add_data_layer_features(X, as_of=as_of)
+                self._dl_failure_count = 0  # reset on success
             except Exception as exc:
-                logger.debug(
-                    "AdvancedPredictor: data layer feature injection failed (non-fatal): %s",
-                    exc,
-                )
+                self._dl_failure_count += 1
+                if self._dl_failure_count % 10 == 1:
+                    logger.warning(
+                        "AdvancedPredictor: data layer unavailable for %d predictions — "
+                        "signal quality may be degraded: %s",
+                        self._dl_failure_count, exc,
+                    )
+                else:
+                    logger.debug(
+                        "AdvancedPredictor: data layer injection failed (non-fatal): %s", exc,
+                    )
 
             return X.iloc[[-1]]
         except Exception as exc:
@@ -545,7 +554,16 @@ class AdvancedPredictor:
                 mtf_last = _mtf.reindex(X.index).ffill().fillna(0.0)
                 mtf_cols = [c for c in mtf_last.columns if c not in X.columns]
                 if mtf_cols:
-                    X = pd.concat([X, mtf_last[mtf_cols]], axis=1)
+                    # Only append MTF columns that the model was actually trained on;
+                    # silently dropping unexpected MTF cols prevents dimension mismatches
+                    if self._feature_names:
+                        valid_mtf_cols = [c for c in mtf_cols if c in self._feature_names]
+                        dropped = len(mtf_cols) - len(valid_mtf_cols)
+                        if dropped > 0:
+                            logger.debug("MTF: dropped %d cols not in model feature set", dropped)
+                        mtf_cols = valid_mtf_cols
+                    if mtf_cols:
+                        X = pd.concat([X, mtf_last[mtf_cols]], axis=1)
             except Exception as exc:
                 logger.debug("MTF append failed (non-fatal): %s", exc)
 
@@ -553,11 +571,21 @@ class AdvancedPredictor:
         X = self._align_features(X)
         X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
 
-        # ── Flat-market abstain: if feature variance is near zero ─────────────
-        feat_std = float(X.values.std())
-        if feat_std < 1e-6:
+        # ── Per-feature variance check — detect data quality issues ──────────
+        feat_stds = X.values.std(axis=0)
+        zero_var_mask = feat_stds < 1e-8
+        zero_var_count = int(zero_var_mask.sum())
+        if zero_var_count == X.shape[1]:
+            # All features are flat — degenerate input
             self._abstain_count += 1
             return self._neutral(ohlcv, reason="flat_market_low_variance", t0=t0)
+        if zero_var_count > X.shape[1] * 0.5:
+            # More than half of features are zero-variance — likely missing macro/data layer
+            zero_cols = X.columns[zero_var_mask].tolist()[:10]
+            logger.warning(
+                "AdvancedPredictor: %d/%d features have zero variance %s — signal quality degraded",
+                zero_var_count, X.shape[1], zero_cols,
+            )
 
         # ── Base model probability ────────────────────────────────────────────
         try:
