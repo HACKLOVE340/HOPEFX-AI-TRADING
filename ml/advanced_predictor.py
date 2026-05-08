@@ -775,6 +775,24 @@ class HybridEnsemblePredictor:
         self._predict_count: int = 0
 
         self._check_components()
+        self._load_meta()
+
+    def _load_meta(self) -> None:
+        """Auto-load pre-trained Ridge meta-blender from saved_models/hybrid_meta.pkl."""
+        meta_path = Path(__file__).parent / "saved_models" / "hybrid_meta.pkl"
+        if not meta_path.exists():
+            return
+        try:
+            import pickle
+            with open(meta_path, "rb") as f:
+                state = pickle.load(f)
+            self._meta = state.get("meta")
+            self._meta_scaler = state.get("scaler")
+            if self._meta is not None:
+                self._meta_trained = True
+                logger.info("HybridEnsemble: loaded meta-blender from %s", meta_path)
+        except Exception as exc:
+            logger.warning("HybridEnsemble: failed to load meta-blender: %s", exc)
 
     def _check_components(self) -> None:
         """Probe which components are available without loading models."""
