@@ -752,29 +752,42 @@ class ExchangeFeed:
         _t = asyncio.create_task(self._receive_loop())
         _t.add_done_callback(lambda _: None)
 
+    async def disconnect(self):
+        """Close WebSocket and underlying HTTP session."""
+        self.connected = False
+        if hasattr(self, "ws") and self.ws and not self.ws.closed:
+            await self.ws.close()
+            self.ws = None
+        if hasattr(self, "session") and self.session and not self.session.closed:
+            await self.session.close()
+            self.session = None
+
     async def _send_subscription(self):
         """Send subscription message"""
         # Override in subclass
 
     async def _receive_loop(self):
         """Receive and process messages"""
+        import aiohttp as _aiohttp
+
         while self.connected:
             try:
                 msg = await self.ws.receive()
 
-                if msg.type == aiohttp.WSMsgType.TEXT:
+                if msg.type == _aiohttp.WSMsgType.TEXT:
                     data = json.loads(msg.data)
                     if self.callback:
                         self.callback(data, self.name)
 
-                elif msg.type == aiohttp.WSMsgType.CLOSED:
+                elif msg.type == _aiohttp.WSMsgType.CLOSED:
                     break
 
             except Exception as e:
-                logger.error(f"Feed error: {e}")
+                logger.error("Feed error: %s", e)
                 await asyncio.sleep(1)
 
-        # Reconnect
-        self.connected = False
-        await asyncio.sleep(5)
-        await self.connect()
+        # Reconnect only if still supposed to be connected
+        if self.connected:
+            self.connected = False
+            await asyncio.sleep(5)
+            await self.connect()

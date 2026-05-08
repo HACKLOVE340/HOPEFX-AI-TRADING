@@ -476,6 +476,9 @@ class OandaProvider(DataProvider):
         self.session: aiohttp.ClientSession | None = None
 
     async def connect(self) -> bool:
+        # Close any existing session before creating a new one to avoid leaks.
+        if self.session and not self.session.closed:
+            await self.session.close()
         self.session = aiohttp.ClientSession()
         return True
 
@@ -522,8 +525,9 @@ class OandaProvider(DataProvider):
                     logger.error("OANDA parse error: %s", e)
 
     async def disconnect(self):
-        if self.session:
+        if self.session and not self.session.closed:
             await self.session.close()
+            self.session = None
 
 
 class BinanceProvider(DataProvider):
