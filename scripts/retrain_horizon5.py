@@ -395,16 +395,23 @@ def write_horizon_meta(args: argparse.Namespace, report: dict) -> None:
         except Exception as _exc:
             logger.debug("Suppressed exception: %s", _exc)
 
-    existing_meta.update(
-        {
-            "horizon": args.horizon,
-            "oos_accuracy": meta["oos_accuracy"],
-            "oos_f1": meta["oos_f1"],
-            "feature_count": meta["feature_count"],
-            "validated_at": now_iso,
-            "note": meta["note"],
-        }
-    )
+    update: dict = {
+        "horizon": args.horizon,
+        "feature_count": meta["feature_count"],
+        "validated_at": now_iso,
+        "note": meta["note"],
+    }
+    # Only overwrite OOS metrics when the new run actually produced them.
+    # Smoke/CI runs with tiny datasets produce an empty OOS set (n=0), which
+    # would otherwise clobber the real production values with null.
+    if meta["oos_accuracy"] is not None:
+        update["oos_accuracy"] = meta["oos_accuracy"]
+    if meta["oos_f1"] is not None:
+        update["oos_f1"] = meta["oos_f1"]
+    if meta.get("oos_auc") is not None:
+        update["oos_auc"] = meta["oos_auc"]
+
+    existing_meta.update(update)
     oos_meta_path.write_text(json.dumps(existing_meta, indent=2))
     logger.info("advanced_oos_meta.json updated with horizon=%d", args.horizon)
 
