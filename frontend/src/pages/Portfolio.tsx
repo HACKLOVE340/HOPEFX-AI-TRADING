@@ -40,7 +40,7 @@ import { PositionsTable } from '../components/panels/PositionsTable';
 import { Panel } from '../components/ui/Panel';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { tradingApi } from '../hooks/useApi';
-import { cn, fmtPrice, fmtPnl, fmtDateTime } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
 import type { PerformanceSummary } from '../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -181,7 +181,7 @@ interface TradeRecord {
 type TradeFilter = 'all' | 'long' | 'short' | 'win' | 'loss';
 
 const TradeHistory: React.FC = () => {
-  const { data: trades, isLoading, isError } = useQuery<TradeRecord[]>({
+  const { data: trades, isLoading, isError, error: tradesError } = useQuery<TradeRecord[]>({
     queryKey: ['trades', 'history'],
     queryFn:  async () => {
       const res = await tradingApi.trades(100);
@@ -280,8 +280,8 @@ const TradeHistory: React.FC = () => {
       {isLoading && <PanelSkeleton rows={5} />}
 
       {isError && (
-        <div className="px-4 py-6 text-center text-[12px] text-slate-500">
-          Could not load trade history.
+        <div className="px-4 py-6 text-center text-[12px] text-red-400">
+          Could not load trade history — {extractApiError(tradesError, 'check your connection')}
         </div>
       )}
 
@@ -628,7 +628,7 @@ const Portfolio: React.FC = () => {
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] text-[12px]">
           <span>⚠</span>
           <span>
-            Equity curve unavailable — {(equityQuery.error as Error)?.message ?? 'check your connection'}
+            Equity curve unavailable — {extractApiError(equityQuery.error, 'check your connection')}
           </span>
         </div>
       )}
