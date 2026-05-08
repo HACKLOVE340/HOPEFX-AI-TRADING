@@ -458,7 +458,14 @@ class PaperTradingBroker(BrokerConnector):
         order_id = str(uuid.uuid4())
 
         # Get current market price — try price feed first for freshest data
-        current_price = self.market_prices.get(symbol, 0.0)
+        # Normalize symbol case to avoid case-sensitive lookup misses
+        _sym_upper = symbol.upper()
+        current_price = (
+            self.market_prices.get(symbol)
+            or self.market_prices.get(_sym_upper)
+            or self.market_prices.get(symbol.lower())
+            or 0.0
+        )
         if self._price_feed is not None:
             try:
                 broker_sym = symbol.replace("/", "")

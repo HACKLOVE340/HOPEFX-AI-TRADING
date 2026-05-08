@@ -484,7 +484,17 @@ class BinanceConnector(BrokerConnector):
 
             account_data = response.json()
 
-            # Calculate total balance in USDT equivalent
+            # Fetch current prices to convert non-USDT holdings to USDT value
+            try:
+                price_resp = self.session.get(f"{self.base_url}/api/v3/ticker/price")
+                price_map: dict[str, float] = {}
+                if price_resp.ok:
+                    for item in price_resp.json():
+                        price_map[item["symbol"]] = float(item["price"])
+            except Exception:  # pylint: disable=broad-exception-caught
+                price_map = {}
+
+            # Calculate total balance as USDT-equivalent across all assets
             total_balance = 0.0
             positions_count = 0
 
@@ -495,9 +505,13 @@ class BinanceConnector(BrokerConnector):
 
                 if total > 0:
                     positions_count += 1
-                    # For simplicity, count USDT directly, others would need price conversion
-                    if balance["asset"] == "USDT":
+                    asset = balance["asset"]
+                    if asset == "USDT":
                         total_balance += total
+                    else:
+                        # Convert to USDT via USDT pair price
+                        usdt_price = price_map.get(f"{asset}USDT", 0.0)
+                        total_balance += total * usdt_price
 
             info = AccountInfo(
                 balance=total_balance,
