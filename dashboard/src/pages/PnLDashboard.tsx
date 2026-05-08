@@ -27,6 +27,7 @@ import {
 } from 'lucide-react'
 import { EquityChart } from '../components/EquityChart'
 import { DrawdownChart } from '../components/DrawdownChart'
+import { extractApiError } from '../lib/utils'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -163,7 +164,7 @@ export function PnLDashboard() {
       setTotalFills(s.total_fills)
       setLastUpdated(new Date().toLocaleTimeString())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load P&L data')
+      setError(extractApiError(err, 'Failed to load P&L data'))
     } finally {
       setLoading(false)
     }
