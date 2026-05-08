@@ -332,18 +332,18 @@ def _score_macro_alignment(
                         votes.append(not is_long) # very low VIX = risk-on → bearish gold
                     # 15–25 = neutral, no vote
 
-        # Yield curve spread (10Y - 2Y): steepening = risk-on = bearish gold
-        if "yield_10y" in macro_df.columns and "yield_5y" in macro_df.columns:
-            y10 = macro_df["yield_10y"].dropna()
-            y2  = macro_df["yield_5y"].dropna()
-            if len(y10) >= 5 and len(y2) >= 5:
-                spread_now  = float(y10.iloc[-1] - y2.iloc[-1])
-                spread_prev = float(y10.iloc[-5] - y2.iloc[-5])
-                spread_chg  = spread_now - spread_prev
+        # Yield curve spread (10Y - 5Y): steepening = risk-on = bearish gold
+        # macro_features.py pre-computes macro_yield_spread and macro_yield_spread_chg
+        if "macro_yield_spread" in macro_df.columns and "macro_yield_spread_chg" in macro_df.columns:
+            spread_series = macro_df["macro_yield_spread"].dropna()
+            spread_chg_series = macro_df["macro_yield_spread_chg"].dropna()
+            if len(spread_series) >= 1 and len(spread_chg_series) >= 1:
+                spread_now = float(spread_series.iloc[-1])
+                spread_chg = float(spread_chg_series.iloc[-1])
                 details["yield_curve_spread"] = round(spread_now, 3)
-                details["spread_change_5d"] = round(spread_chg, 3)
+                details["spread_change_1bar"] = round(spread_chg, 3)
                 if is_gold:
-                    # Steepening (risk-on) = bearish gold
+                    # Steepening (spread rising, risk-on) = bearish gold
                     votes.append((spread_chg < 0) == is_long)
 
         if not votes:

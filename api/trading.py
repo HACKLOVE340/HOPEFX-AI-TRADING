@@ -1036,6 +1036,30 @@ async def close_position(
             detail="Broker not initialised — cannot close position. The paper trading engine starts automatically on server startup.",
         )
 
+    # Ownership check: verify the position belongs to the requesting user.
+    # Positions opened via the DB-backed path carry user_id; broker-native
+    # positions (no DB row) fall through and are allowed for role >= trader.
+    if app_state.db_session_factory is not None:
+        try:
+            from database.models import Position as _Pos
+
+            with app_state.db_session_factory() as _db:
+                _pos_row = _db.query(_Pos).filter(_Pos.id == position_id).first()
+                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub:
+                    if user.role not in ("admin", "superadmin"):
+                        logger.warning(
+                            "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
+                            user.sub, position_id, _pos_row.user_id,
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not own this position",
+                        )
+        except HTTPException:
+            raise
+        except Exception as _idor_exc:
+            logger.debug("Ownership check skipped (non-fatal): %s", _idor_exc)
+
     success = await _broker_call("close_position", position_id)
     if not success:
         raise HTTPException(
