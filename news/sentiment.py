@@ -28,7 +28,7 @@ try:
     TEXTBLOB_AVAILABLE = True
 except ImportError:
     TEXTBLOB_AVAILABLE = False
-    logger.warning("TextBlob not available. Install with: pip install textblob")
+    logger.debug("TextBlob not available — VADER is the primary analyzer")
 
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
