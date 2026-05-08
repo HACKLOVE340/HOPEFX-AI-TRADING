@@ -46,11 +46,35 @@ self_healer_scan              every 5 min     SelfHealer anomaly scan
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
+
+
+@contextlib.contextmanager
+def _redis_lock(name: str, timeout: int = 3600):
+    """Context manager: acquire a Redis SET NX distributed lock.
+
+    Raises RuntimeError when the lock is already held so the caller
+    can detect concurrent execution and exit early. Yields without
+    locking when Redis is unavailable (dev/test environments).
+    """
+    try:
+        import redis as _redis_mod  # type: ignore[import-untyped]
+        _r = _redis_mod.from_url(os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1"), socket_timeout=5)
+        acquired = _r.set(f"celery_lock:{name}", "1", nx=True, ex=timeout)
+        if not acquired:
+            raise RuntimeError(f"celery_lock:{name} already held — skipping concurrent task")
+        try:
+            yield
+        finally:
+            with contextlib.suppress(Exception):
+                _r.delete(f"celery_lock:{name}")
+    except ImportError:
+        yield  # Redis unavailable in test/dev — proceed without locking
 
 # ── Celery import guard ───────────────────────────────────────────────────────
 
@@ -325,14 +349,20 @@ def ml_hourly_online_update(self=None):
     import asyncio
 
     try:
-        from ml.hourly_trainer import HourlyTrainer
+        with _redis_lock("ml_train", timeout=420):
+            from ml.hourly_trainer import HourlyTrainer
 
-        trainer = HourlyTrainer()
-        if not trainer.enabled:
-            logger.info("ML hourly trainer disabled (ML_HOURLY_ENABLED not set)")
-            return {"status": "disabled"}
-        asyncio.run(trainer.run_online_update())
+            trainer = HourlyTrainer()
+            if not trainer.enabled:
+                logger.info("ML hourly trainer disabled (ML_HOURLY_ENABLED not set)")
+                return {"status": "disabled"}
+            asyncio.run(trainer.run_online_update())
         return {"status": "ok"}
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("ml_hourly_online_update skipped — ml_train lock already held by another task")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("ml_hourly_online_update failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
@@ -352,11 +382,17 @@ def ml_daily_full_retrain(self=None):
     import asyncio
 
     try:
-        from ml.hourly_trainer import HourlyTrainer
+        with _redis_lock("ml_train", timeout=4200):
+            from ml.hourly_trainer import HourlyTrainer
 
-        trainer = HourlyTrainer()
-        asyncio.run(trainer.run_full_retrain())
+            trainer = HourlyTrainer()
+            asyncio.run(trainer.run_full_retrain())
         return {"status": "ok"}
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("ml_daily_full_retrain skipped — ml_train lock already held by another task")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("ml_daily_full_retrain failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
@@ -376,28 +412,34 @@ def subscription_expiry_check(self=None):
     updates their tier in both the database and Stripe.
     """
     try:
-        from database.connection import SessionLocal
-        from monetization.subscription import SubscriptionManager, SubscriptionTier
+        with _redis_lock("subscription_expiry", timeout=180):
+            from database.connection import SessionLocal
+            from monetization.subscription import SubscriptionManager, SubscriptionTier
 
-        db = SessionLocal()
-        try:
-            mgr = SubscriptionManager()
-            expired = mgr.get_expired_subscriptions()
-            downgraded = 0
-            for sub in expired:
-                try:
-                    mgr.update_subscription(
-                        user_id=sub.user_id,
-                        new_tier=SubscriptionTier.FREE,
-                        reason="subscription_expired",
-                    )
-                    downgraded += 1
-                except Exception as exc:
-                    logger.warning("Failed to downgrade user %s: %s", sub.user_id, exc)
-            logger.info("subscription_expiry_check: downgraded %d subscriptions", downgraded)
-            return {"status": "ok", "downgraded": downgraded}
-        finally:
-            db.close()
+            db = SessionLocal()
+            try:
+                mgr = SubscriptionManager()
+                expired = mgr.get_expired_subscriptions()
+                downgraded = 0
+                for sub in expired:
+                    try:
+                        mgr.update_subscription(
+                            user_id=sub.user_id,
+                            new_tier=SubscriptionTier.FREE,
+                            reason="subscription_expired",
+                        )
+                        downgraded += 1
+                    except Exception as exc:
+                        logger.warning("Failed to downgrade user %s: %s", sub.user_id, exc)
+                logger.info("subscription_expiry_check: downgraded %d subscriptions", downgraded)
+                return {"status": "ok", "downgraded": downgraded}
+            finally:
+                db.close()
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("subscription_expiry_check skipped — already running")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("subscription_expiry_check failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
@@ -414,18 +456,24 @@ def affiliate_commission_payout(self=None):
     threshold and triggers the payout via the configured payment provider.
     """
     try:
-        from monetization.affiliate import AffiliateManager
+        with _redis_lock("affiliate_payout", timeout=360):
+            from monetization.affiliate import AffiliateManager
 
-        mgr = AffiliateManager()
-        result = mgr.process_pending_payouts()
-        paid_count = result.get("paid_count", 0)
-        total_paid = result.get("total_paid_usd", 0.0)
-        logger.info(
-            "affiliate_commission_payout: paid %d affiliates, total $%.2f",
-            paid_count,
-            total_paid,
-        )
+            mgr = AffiliateManager()
+            result = mgr.process_pending_payouts()
+            paid_count = result.get("paid_count", 0)
+            total_paid = result.get("total_paid_usd", 0.0)
+            logger.info(
+                "affiliate_commission_payout: paid %d affiliates, total $%.2f",
+                paid_count,
+                total_paid,
+            )
         return {"status": "ok", "paid_count": paid_count, "total_paid_usd": total_paid}
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("affiliate_commission_payout skipped — already running")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("affiliate_commission_payout failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:

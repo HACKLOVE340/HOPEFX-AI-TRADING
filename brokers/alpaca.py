@@ -78,6 +78,7 @@ class AlpacaConnector(BrokerConnector):
 
         self.connected = False
         self.session = None
+        self._request_timeout = (10, 30)  # (connect_timeout, read_timeout) seconds
 
         if not self.api_key or not self.api_secret:
             raise ValueError("Alpaca requires 'api_key' and 'api_secret' in config")
@@ -97,9 +98,14 @@ class AlpacaConnector(BrokerConnector):
                     "APCA-API-SECRET-KEY": self.api_secret,
                 },
             )
+            # Mount a default adapter with timeouts on all requests
+            _adapter = requests.adapters.HTTPAdapter()
+            self.session.mount("https://", _adapter)
+            self.session.mount("http://", _adapter)
+            self._request_timeout = (10, 30)  # (connect_timeout, read_timeout)
 
             # Test connection by fetching account
-            response = self.session.get(f"{self.base_url}/v2/account")
+            response = self.session.get(f"{self.base_url}/v2/account", timeout=self._request_timeout)
             response.raise_for_status()
 
             self.connected = True
@@ -188,7 +194,7 @@ class AlpacaConnector(BrokerConnector):
                 order_data["extended_hours"] = True
 
             # Send order
-            response = self.session.post(f"{self.base_url}/v2/orders", json=order_data)
+            response = self.session.post(f"{self.base_url}/v2/orders", json=order_data, timeout=self._request_timeout)
             response.raise_for_status()
 
             result = response.json()
@@ -233,7 +239,7 @@ class AlpacaConnector(BrokerConnector):
             return False
 
         try:
-            response = self.session.delete(f"{self.base_url}/v2/orders/{order_id}")
+            response = self.session.delete(f"{self.base_url}/v2/orders/{order_id}", timeout=self._request_timeout)
             response.raise_for_status()
 
             logger.info("Order cancelled: %s", order_id)
@@ -260,7 +266,7 @@ class AlpacaConnector(BrokerConnector):
             return None
 
         try:
-            response = self.session.get(f"{self.base_url}/v2/orders/{order_id}")
+            response = self.session.get(f"{self.base_url}/v2/orders/{order_id}", timeout=self._request_timeout)
             response.raise_for_status()
 
             result = response.json()
@@ -300,7 +306,7 @@ class AlpacaConnector(BrokerConnector):
             return []
 
         try:
-            response = self.session.get(f"{self.base_url}/v2/positions")
+            response = self.session.get(f"{self.base_url}/v2/positions", timeout=self._request_timeout)
             response.raise_for_status()
 
             positions = []
@@ -362,6 +368,7 @@ class AlpacaConnector(BrokerConnector):
             # Close entire position
             response = self.session.delete(
                 f"{self.base_url}/v2/positions/{symbol.upper()}",
+                timeout=self._request_timeout,
             )
             response.raise_for_status()
 
@@ -386,7 +393,7 @@ class AlpacaConnector(BrokerConnector):
             return None
 
         try:
-            response = self.session.get(f"{self.base_url}/v2/account")
+            response = self.session.get(f"{self.base_url}/v2/account", timeout=self._request_timeout)
             response.raise_for_status()
 
             account_data = response.json()
@@ -433,6 +440,7 @@ class AlpacaConnector(BrokerConnector):
             response = self.session.get(
                 f"{self.DATA_URL}/v2/stocks/{symbol.upper()}/bars",
                 params={"timeframe": timeframe, "limit": limit},
+                timeout=self._request_timeout,
             )
             response.raise_for_status()
 
@@ -476,6 +484,7 @@ class AlpacaConnector(BrokerConnector):
         try:
             response = self.session.get(
                 f"{self.DATA_URL}/v2/stocks/{symbol.upper()}/quotes/latest",
+                timeout=self._request_timeout,
             )
             response.raise_for_status()
 

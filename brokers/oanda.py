@@ -401,6 +401,21 @@ class OANDABroker:
                             "broker": "oanda",
                         }
 
+                    # Idempotency: duplicate submission means our first attempt
+                    # was already accepted. Return pending so the caller can
+                    # query for the actual fill rather than submitting again.
+                    if error_code == "DUPLICATE_CLIENT_ORDER_ID":
+                        logger.info(
+                            "OANDABroker: duplicate client_ref=%s — order already exists",
+                            client_ref,
+                        )
+                        return {
+                            "status": "pending",
+                            "reason": "duplicate_client_ref",
+                            "order_id": client_ref,
+                            "broker": "oanda",
+                        }
+
             except TimeoutError:
                 last_error = "timeout"
                 logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
