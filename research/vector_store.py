@@ -39,6 +39,19 @@ from typing import Any
 
 import numpy as np
 
+# Ensure `ta` is importable even when the pure-Python wheel cannot be built.
+# ta_compat injects a talib-backed shim into sys.modules["ta"] on import.
+try:
+    import ta as _ta_check  # noqa: F401
+except ImportError:
+    try:
+        from research import ta_compat as _ta_shim  # noqa: F401
+    except ImportError:
+        try:
+            import research.ta_compat as _ta_shim  # noqa: F401
+        except ImportError:
+            pass
+
 logger = logging.getLogger(__name__)
 
 # ── feature engineering ───────────────────────────────────────────────────────
