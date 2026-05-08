@@ -16,6 +16,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectTriggeredAlerts } from '../store';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,8 +115,7 @@ const PriceAlerts: React.FC = () => {
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       if ((err as {name?:string}).name === 'CanceledError') return;
-      const msg = err instanceof Error ? err.message : 'Failed to load alerts.';
-      setLoadErr(msg);
+      setLoadErr(extractApiError(err, 'Failed to load alerts.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -139,7 +139,7 @@ const PriceAlerts: React.FC = () => {
       setForm({ name: '', symbol: 'XAUUSD', condition_type: 'price_above', threshold: '', channels: ['discord'], priority: 'high' });
       await fetchAlerts();
     } catch (e: unknown) {
-      setError((e as { message?: string })?.message ?? 'Failed to create alert');
+      setError(extractApiError(e, 'Failed to create alert'));
     }
     setSaving(false);
   };
@@ -150,8 +150,7 @@ const PriceAlerts: React.FC = () => {
       await api.delete(`/alerts/${id}`);
       setAlerts((prev) => prev.filter((a) => a.id !== id));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete alert.';
-      setActionErr(msg);
+      setActionErr(extractApiError(err, 'Failed to delete alert.'));
     }
   };
 
@@ -162,8 +161,7 @@ const PriceAlerts: React.FC = () => {
       await api.post(`/alerts/${alert.id}/${action}`);
       await fetchAlerts();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : `Failed to ${action} alert.`;
-      setActionErr(msg);
+      setActionErr(extractApiError(err, `Failed to ${action} alert.`));
     }
   };
 
