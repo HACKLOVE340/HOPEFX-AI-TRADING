@@ -70,7 +70,14 @@ _FEATURE_DIM = 32
 # ── Gymnasium environment ─────────────────────────────────────────────────────
 
 
-class ForexTradingEnv:
+try:
+    import gymnasium as _gym
+    _GymEnvBase = _gym.Env
+except ImportError:
+    _GymEnvBase = object  # type: ignore[assignment,misc]
+
+
+class ForexTradingEnv(_GymEnvBase):
     """
     A Gymnasium-compatible trading environment for forex/gold.
 
@@ -358,6 +365,13 @@ class RLAgent:
                 "stable-baselines3 required: pip install stable-baselines3",
             ) from None
 
+        # Only enable tensorboard logging when tensorboard package is available
+        try:
+            import tensorboard as _tb  # noqa: F401
+            tb_log: str | None = str(Path(_MODEL_DIR) / "tb_logs")
+        except ImportError:
+            tb_log = None
+
         logger.info("Training PPO for %d timesteps …", timesteps)
         self._model = PPO(
             policy="MlpPolicy",
@@ -371,7 +385,7 @@ class RLAgent:
             clip_range=0.2,
             ent_coef=0.01,
             verbose=verbose,
-            tensorboard_log=Path(_MODEL_DIR) / "tb_logs",
+            tensorboard_log=tb_log,
         )
         self._model.learn(total_timesteps=timesteps)
         self._model.save(self.model_path)
