@@ -6,19 +6,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { profileApi } from '../hooks/useApi';
 import { useStore } from '../store';
-
-function extractErr(err: unknown, fb: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.detail
-    ?? (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.message;
-  if (typeof detail === 'string') return detail;
-  if (detail && typeof detail === 'object') {
-    const d = detail as { msg?: string; message?: string };
-    return d.msg ?? d.message ?? JSON.stringify(detail);
-  }
-  return err instanceof Error ? err.message : fb;
-}
+import { extractApiError } from '../lib/utils';
 
 interface TraderProfile {
   user_id: string; username: string; display_name: string; bio: string;
@@ -66,7 +54,7 @@ const Profile: React.FC = () => {
     } catch (err) {
       if (!mountedRef.current) return;
       if ((err as {name?:string}).name === 'CanceledError') return;
-      setError(extractErr(err, 'Failed to load profile.'));
+      setError(extractApiError(err, 'Failed to load profile.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -81,7 +69,7 @@ const Profile: React.FC = () => {
       setSaveOk(true); setEditing(false);
       await loadProfile();
     } catch (err) {
-      setSaveErr(extractErr(err, 'Failed to save profile.'));
+      setSaveErr(extractApiError(err, 'Failed to save profile.'));
     } finally {
       setSaving(false);
     }
@@ -97,7 +85,7 @@ const Profile: React.FC = () => {
       await profileApi.uploadAvatar(fd);
       await loadProfile();
     } catch (err) {
-      setAvatarErr(extractErr(err, 'Avatar upload failed.'));
+      setAvatarErr(extractApiError(err, 'Avatar upload failed.'));
     } finally {
       setAvatarUploading(false);
     }

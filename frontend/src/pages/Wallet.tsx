@@ -22,11 +22,9 @@ import { EmptyState } from '../components/EmptyState';
 import { ErrorBanner } from '../components/ErrorBanner';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Spinner } from '../components/Spinner';
+import { extractApiError } from '../lib/utils';
 
-function extractApiError(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-  return detail ?? (err instanceof Error ? err.message : fallback);
-}
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

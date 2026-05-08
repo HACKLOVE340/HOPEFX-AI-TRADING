@@ -13,6 +13,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { Eye, EyeOff, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
@@ -219,8 +220,7 @@ const Register: React.FC = () => {
       setSuccess('Account created! Redirecting to login…');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(humaniseError(detail));
+      setError(humaniseError(extractApiError(err, 'Registration failed. Please try again.')));
     } finally {
       setLoading(false);
     }

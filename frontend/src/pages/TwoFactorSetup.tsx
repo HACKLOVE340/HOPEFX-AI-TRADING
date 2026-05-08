@@ -26,6 +26,7 @@ import { useStore } from '../store';
 import { api, prefetchCsrfToken, resetCsrfCache } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
+import { extractApiError } from '../lib/utils';
 
 // ── CSRF retry helper ─────────────────────────────────────────────────────────
 
@@ -60,13 +61,7 @@ interface StatusData {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function extractError(err: unknown, fallback: string): string {
-  return (
-    (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-    (err as { message?: string })?.message ??
-    fallback
-  );
-}
+
 
 /** Build QR image URL from the otpauth URI returned by the backend. */
 function buildQRUrl(otpauthUri: string): string {
@@ -180,7 +175,7 @@ const TwoFactorSetup: React.FC = () => {
       setSetupData(res.data);
       setStep('setup');
     } catch (e) {
-      setError(extractError(e, 'Setup failed. Please try again.'));
+      setError(extractApiError(e, 'Setup failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -202,7 +197,7 @@ const TwoFactorSetup: React.FC = () => {
         setError(res.data.message ?? 'Invalid code. Please try again.');
       }
     } catch (e) {
-      setError(extractError(e, 'Verification failed. Please try again.'));
+      setError(extractApiError(e, 'Verification failed. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -217,7 +212,7 @@ const TwoFactorSetup: React.FC = () => {
       setStatus(s => ({ ...s, backup_codes_remaining: res.data.codes?.length ?? 0 }));
       setStep('backup');
     } catch (e) {
-      setError(extractError(e, 'Failed to generate backup codes.'));
+      setError(extractApiError(e, 'Failed to generate backup codes.'));
     } finally {
       setLoading(false);
     }
@@ -241,7 +236,7 @@ const TwoFactorSetup: React.FC = () => {
         setError(res.data.message ?? 'Invalid code. Please try again.');
       }
     } catch (e) {
-      setError(extractError(e, 'Disable failed. Please try again.'));
+      setError(extractApiError(e, 'Disable failed. Please try again.'));
     } finally {
       setLoading(false);
     }

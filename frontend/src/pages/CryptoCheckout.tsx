@@ -26,6 +26,7 @@ import { useStore, selectUser } from '../store';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { PLAN_COLORS } from '../lib/subscription';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -98,13 +99,7 @@ function buildQRUrl(text: string): string {
   );
 }
 
-function extractError(err: unknown, fallback: string): string {
-  return (
-    (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-    (err as { message?: string })?.message ??
-    fallback
-  );
-}
+
 
 async function copyToClipboard(text: string): Promise<void> {
   if (navigator.clipboard) {
@@ -309,7 +304,7 @@ const CryptoCheckout: React.FC = () => {
       setDepositInfo(res.data);
       setStep('address');
     } catch (err) {
-      setAddressError(extractError(err, 'Failed to generate deposit address. Please try again.'));
+      setAddressError(extractApiError(err, 'Failed to generate deposit address. Please try again.'));
     } finally {
       setLoadingAddress(false);
     }
@@ -353,7 +348,7 @@ const CryptoCheckout: React.FC = () => {
       });
       window.location.href = res.data.payment_link;
     } catch (err) {
-      alert(extractError(err, 'Flutterwave payment init failed. Please try crypto payment.'));
+      alert(extractApiError(err, 'Flutterwave payment init failed. Please try crypto payment.'));
     } finally {
       setFlwLoading(false);
     }

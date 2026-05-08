@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase } from '../lib/utils';
+import { getWsBase, extractApiError } from '../lib/utils';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -18,18 +18,6 @@ interface FeedItem {
 interface Comment { comment_id: string; username: string; text: string; created_at: string; }
 
 const PAGE_SIZE = 20;
-function extractErr(err: unknown, fb: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.detail
-    ?? (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.message;
-  if (typeof detail === 'string') return detail;
-  if (detail && typeof detail === 'object') {
-    const d = detail as { msg?: string; message?: string };
-    return d.msg ?? d.message ?? JSON.stringify(detail);
-  }
-  return err instanceof Error ? err.message : fb;
-}
 
 const SocialFeed: React.FC = () => {
   const navigate = useNavigate();
@@ -73,7 +61,7 @@ const SocialFeed: React.FC = () => {
     } catch (err) {
       if (!mountedRef.current) return;
       if ((err as {name?:string}).name === 'CanceledError') return;
-      setError(extractErr(err, 'Failed to load signal feed.'));
+      setError(extractApiError(err, 'Failed to load signal feed.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }

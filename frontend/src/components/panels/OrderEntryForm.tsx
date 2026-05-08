@@ -16,7 +16,7 @@ import { useStore, selectIsBlackout } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, cn } from '../../lib/utils';
+import { fmtPrice, cn, extractApiError } from '../../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -275,19 +275,13 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
       onOrderPlaced?.();
     } catch (e: unknown) {
       const httpStatus = (e as { response?: { status?: number } })?.response?.status;
-      const rawDetail  = (e as { response?: { data?: { detail?: string | Record<string, unknown> } } })?.response?.data?.detail;
       let detail: string;
-      if (typeof rawDetail === 'object' && rawDetail !== null) {
-        // Structured error from subscription gate: { error, message, required_plan }
-        detail = (rawDetail as { message?: string }).message ?? JSON.stringify(rawDetail);
-      } else if (typeof rawDetail === 'string') {
-        detail = rawDetail;
-      } else if (httpStatus === 503) {
+      if (httpStatus === 503) {
         detail = 'Broker not ready — the paper trading engine is still starting up. Try again in a moment.';
       } else if (httpStatus === 403) {
-        detail = (e as { message?: string })?.message ?? 'Order rejected — check KYC status or subscription plan.';
+        detail = extractApiError(e, 'Order rejected — check KYC status or subscription plan.');
       } else {
-        detail = (e as { message?: string })?.message ?? 'Order failed';
+        detail = extractApiError(e, 'Order failed');
       }
       setResult({ ok: false, msg: detail });
     } finally {

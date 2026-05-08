@@ -8,11 +8,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { api } from '../hooks/useApi';
-
-function extractApiError(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-  return detail ?? fallback;
-}
+import { extractApiError } from '../lib/utils';
 
 interface Trader {
   rank: number;

@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { affiliateApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { extractApiError } from '../lib/utils';
 
 interface AffiliateMetrics { total_referrals: number; converted_referrals: number; total_revenue: number; total_commissions: number; pending_commissions: number; conversion_rate: number; }
 interface AffiliateAccount { affiliate_id: string; code: string; level: 'bronze'|'silver'|'gold'|'platinum'; commission_rate: number; status: string; }
@@ -18,18 +19,7 @@ const LEVEL_COLORS: Record<string,string> = { bronze:'#cd7f32', silver:'#94a3b8'
 const LEVEL_RATES: Record<string,string>  = { bronze:'10%', silver:'15%', gold:'20%', platinum:'25%' };
 const fmt = (n:number,d=2) => n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtUSD = (n:number) => '$'+fmt(n);
-function extractErr(err: unknown, fb: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.detail
-    ?? (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.message;
-  if (typeof detail === 'string') return detail;
-  if (detail && typeof detail === 'object') {
-    const d = detail as { msg?: string; message?: string };
-    return d.msg ?? d.message ?? JSON.stringify(detail);
-  }
-  return err instanceof Error ? err.message : fb;
-}
+
 const statusBadge=(s:string)=>{ const m:Record<string,{bg:string;color:string}>={pending:{bg:'#1e3a5f',color:'#60a5fa'},converted:{bg:'#14532d',color:'#4ade80'},paid:{bg:'#1a2e1a',color:'#22c55e'},expired:{bg:'#2d1b1b',color:'#f87171'},cancelled:{bg:'#2d1b1b',color:'#f87171'},active:{bg:'#14532d',color:'#4ade80'}}; const c=m[s]??{bg:'#1e293b',color:'#94a3b8'}; return <span style={{...st.badge,background:c.bg,color:c.color}}>{s}</span>; };
 const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value,sub})=>(<div style={st.metricCard}><div style={st.metricValue}>{value}</div><div style={st.metricLabel}>{label}</div>{sub&&<div style={st.metricSub}>{sub}</div>}</div>);
 
@@ -70,17 +60,17 @@ const Affiliate:React.FC=()=>{
         const [rRes,cRes,lRes]=await Promise.allSettled([affiliateApi.referrals(affId),affiliateApi.commissions(affId),affiliateApi.leaderboard({limit:10})]);
         if(!mountedRef.current)return;
         if(rRes.status==='fulfilled'){const rd=rRes.value.data as {referrals?:Referral[]}|Referral[];setReferrals(Array.isArray(rd)?rd:(rd.referrals??[]));}
-        else setSubErrors(p=>({...p,referrals:extractErr(rRes.reason,'Failed to load referrals')}));
+        else setSubErrors(p=>({...p,referrals:extractApiError(rRes.reason,'Failed to load referrals')}));
         if(cRes.status==='fulfilled'){const cd=cRes.value.data as {commissions?:Commission[]}|Commission[];setCommissions(Array.isArray(cd)?cd:(cd.commissions??[]));}
-        else setSubErrors(p=>({...p,commissions:extractErr(cRes.reason,'Failed to load commissions')}));
+        else setSubErrors(p=>({...p,commissions:extractApiError(cRes.reason,'Failed to load commissions')}));
         if(lRes.status==='fulfilled'){const ld=lRes.value.data as {leaderboard?:LeaderboardEntry[]}|LeaderboardEntry[];setLeaderboard(Array.isArray(ld)?ld:(ld.leaderboard??[]));}
-        else setSubErrors(p=>({...p,leaderboard:extractErr(lRes.reason,'Failed to load leaderboard')}));
+        else setSubErrors(p=>({...p,leaderboard:extractApiError(lRes.reason,'Failed to load leaderboard')}));
       } else {
         affiliateApi.leaderboard({limit:10}).then(r=>{if(!mountedRef.current)return;const ld=r.data as {leaderboard?:LeaderboardEntry[]}|LeaderboardEntry[];setLeaderboard(Array.isArray(ld)?ld:(ld.leaderboard??[]));}).catch(()=>{});
       }
     }catch(err){
       if(!mountedRef.current)return;
-      setApiError(extractErr(err,'Failed to load affiliate data.'));
+      setApiError(extractApiError(err,'Failed to load affiliate data.'));
     }
     finally{if(mountedRef.current)setLoading(false);}
   },[userId]);
@@ -90,7 +80,7 @@ const Affiliate:React.FC=()=>{
   const handleSignup=async()=>{
     if(!userId)return; setSignupLoading(true);
     try{await affiliateApi.signup({user_id:userId});await loadData();}
-    catch(err){setApiError(extractErr(err,'Signup failed.'));}
+    catch(err){setApiError(extractApiError(err,'Signup failed.'));}
     finally{setSignupLoading(false);}
   };
 
@@ -103,7 +93,7 @@ const Affiliate:React.FC=()=>{
       await affiliateApi.withdraw(account.affiliate_id,amount);
       setWithdrawMsg(`Withdrawal of ${fmtUSD(amount)} requested successfully.`);
       setWithdrawAmt(''); await loadData();
-    }catch(err){setWithdrawMsg(extractErr(err,'Withdrawal failed.'));}
+    }catch(err){setWithdrawMsg(extractApiError(err,'Withdrawal failed.'));}
     finally{setWithdrawing(false);}
   };
 

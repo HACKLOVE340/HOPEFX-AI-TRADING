@@ -11,19 +11,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
-
-function extractApiError(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.detail
-    ?? (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data?.message;
-  if (typeof detail === 'string') return detail;
-  if (detail && typeof detail === 'object') {
-    const d = detail as { msg?: string; message?: string };
-    return d.msg ?? d.message ?? JSON.stringify(detail);
-  }
-  return err instanceof Error ? (err as Error).message : fallback;
-}
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

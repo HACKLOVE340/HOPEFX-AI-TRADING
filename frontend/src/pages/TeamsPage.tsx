@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -177,8 +178,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
               </div>
               {inviteMut.isError && (
                 <div style={{ marginTop: 6, fontSize: 12, color: '#f87171' }}>
-                  ⚠ {(inviteMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-                    ?? (inviteMut.error instanceof Error ? inviteMut.error.message : 'Invite failed')}
+                  ⚠ {extractApiError(inviteMut.error, 'Invite failed')}
                 </div>
               )}
               {inviteMut.isSuccess && (
@@ -341,8 +341,7 @@ const TeamsPage: React.FC = () => {
             </button>
             {createMut.isError && (
               <span style={{ fontSize: 12, color: '#f87171' }}>
-                ⚠ {(createMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-                  ?? (createMut.error instanceof Error ? createMut.error.message : 'Failed to create team')}
+                ⚠ {extractApiError(createMut.error, 'Failed to create team')}
               </span>
             )}
           </div>

@@ -17,6 +17,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // Playback speed options (ms between auto-step ticks)
 const SPEED_OPTIONS: { label: string; ms: number }[] = [
@@ -186,9 +187,7 @@ const ReplayPage: React.FC = () => {
       setShowCreate(false);
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? (err instanceof Error ? err.message : 'Failed to create session');
-      console.error('[ReplayPage] createSession error:', msg);
+      console.error('[ReplayPage] createSession error:', extractApiError(err, 'Failed to create session'));
     },
   });
 
@@ -351,8 +350,7 @@ const ReplayPage: React.FC = () => {
                 borderRadius: 6, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
             {createMut.isError && (
               <span style={{ fontSize: 12, color: '#f87171' }}>
-                ⚠ {(createMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-                  ?? (createMut.error instanceof Error ? createMut.error.message : 'Failed to create session')}
+                ⚠ {extractApiError(createMut.error, 'Failed to create session')}
               </span>
             )}
           </div>
