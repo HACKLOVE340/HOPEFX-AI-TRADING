@@ -18,7 +18,18 @@ const LEVEL_COLORS: Record<string,string> = { bronze:'#cd7f32', silver:'#94a3b8'
 const LEVEL_RATES: Record<string,string>  = { bronze:'10%', silver:'15%', gold:'20%', platinum:'25%' };
 const fmt = (n:number,d=2) => n.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtUSD = (n:number) => '$'+fmt(n);
-function extractErr(err:unknown,fb:string):string { const d=(err as {response?:{data?:{detail?:string}}})?.response?.data?.detail; return d??(err instanceof Error?err.message:fb); }
+function extractErr(err: unknown, fb: string): string {
+  const detail = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
+    ?.response?.data?.detail
+    ?? (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
+    ?.response?.data?.message;
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object') {
+    const d = detail as { msg?: string; message?: string };
+    return d.msg ?? d.message ?? JSON.stringify(detail);
+  }
+  return err instanceof Error ? err.message : fb;
+}
 const statusBadge=(s:string)=>{ const m:Record<string,{bg:string;color:string}>={pending:{bg:'#1e3a5f',color:'#60a5fa'},converted:{bg:'#14532d',color:'#4ade80'},paid:{bg:'#1a2e1a',color:'#22c55e'},expired:{bg:'#2d1b1b',color:'#f87171'},cancelled:{bg:'#2d1b1b',color:'#f87171'},active:{bg:'#14532d',color:'#4ade80'}}; const c=m[s]??{bg:'#1e293b',color:'#94a3b8'}; return <span style={{...st.badge,background:c.bg,color:c.color}}>{s}</span>; };
 const MetricCard:React.FC<{label:string;value:string;sub?:string}>=({label,value,sub})=>(<div style={st.metricCard}><div style={st.metricValue}>{value}</div><div style={st.metricLabel}>{label}</div>{sub&&<div style={st.metricSub}>{sub}</div>}</div>);
 

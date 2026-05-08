@@ -19,8 +19,16 @@ interface Comment { comment_id: string; username: string; text: string; created_
 
 const PAGE_SIZE = 20;
 function extractErr(err: unknown, fb: string): string {
-  const d = (err as {response?:{data?:{detail?:string}}})?.response?.data?.detail;
-  return d ?? (err instanceof Error ? err.message : fb);
+  const detail = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
+    ?.response?.data?.detail
+    ?? (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
+    ?.response?.data?.message;
+  if (typeof detail === 'string') return detail;
+  if (detail && typeof detail === 'object') {
+    const d = detail as { msg?: string; message?: string };
+    return d.msg ?? d.message ?? JSON.stringify(detail);
+  }
+  return err instanceof Error ? err.message : fb;
 }
 
 const SocialFeed: React.FC = () => {

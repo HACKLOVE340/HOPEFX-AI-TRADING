@@ -167,7 +167,7 @@ const CustomIndicators: React.FC = () => {
       const d = res.data as { data?: PreviewPoint[] } | PreviewPoint[];
       setPreview(Array.isArray(d) ? d : (d.data ?? []));
     } catch (e: unknown) {
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Formula error');
+      setError(extractErrorMessage(e, 'Formula error'));
       setPreview([]);
     }
     setLoading(false);

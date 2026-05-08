@@ -186,8 +186,16 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       onClosed?.(id);
       invalidate();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } }; message?: string })
-        ?.response?.data?.detail ?? (e as { message?: string })?.message ?? 'Close failed';
+      const _ed1 = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
+      const _d1  = _ed1?.detail ?? _ed1?.message;
+      const msg =
+        typeof _d1 === 'string'
+          ? _d1
+          : _d1
+            ? ((_d1 as { msg?: string; message?: string })?.msg
+                ?? (_d1 as { msg?: string; message?: string })?.message
+                ?? JSON.stringify(_d1))
+            : ((e as { message?: string })?.message ?? 'Close failed');
       setError(msg);
     } finally {
       setClosingId(null);
@@ -203,8 +211,16 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       setPositions([]);
       invalidate();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } }; message?: string })
-        ?.response?.data?.detail ?? (e as { message?: string })?.message ?? 'Close all failed';
+      const _ed2 = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
+      const _d2  = _ed2?.detail ?? _ed2?.message;
+      const msg =
+        typeof _d2 === 'string'
+          ? _d2
+          : _d2
+            ? ((_d2 as { msg?: string; message?: string })?.msg
+                ?? (_d2 as { msg?: string; message?: string })?.message
+                ?? JSON.stringify(_d2))
+            : ((e as { message?: string })?.message ?? 'Close all failed');
       setError(msg);
     } finally {
       setClosingAll(false);
