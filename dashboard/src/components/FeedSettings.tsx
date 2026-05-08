@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Radio, Users, Eye, EyeOff, Loader2, AlertTriangle } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { extractApiError } from '../lib/utils'
 
 interface FeedStatus {
   opted_in: boolean
@@ -37,7 +38,7 @@ export function FeedSettings() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       setStatus(await res.json())
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Could not load feed status')
+      setError(extractApiError(e, 'Could not load feed status'))
     } finally {
       setLoading(false)
     }
@@ -55,7 +56,7 @@ export function FeedSettings() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await fetchStatus()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to update feed preference')
+      setError(extractApiError(e, 'Failed to update feed preference'))
     } finally {
       setSaving(false)
     }
