@@ -1193,12 +1193,24 @@ async def update_user(
     """Update role, status, or plan for a user."""
     from api.db_store import db_get as _db_g, db_set as _db_s
     u = _db_g(f"user:{user_id}") or {"user_id": user_id}
+    _ROLE_HIERARCHY = ("user", "affiliate", "analyst", "admin", "superadmin")
     allowed_fields = {"role", "status", "plan", "email"}
+    applied: dict = {}
     for k, v in payload.items():
-        if k in allowed_fields:
-            u[k] = v
+        if k not in allowed_fields:
+            continue
+        if k == "role":
+            caller_rank = _ROLE_HIERARCHY.index(user.role) if user.role in _ROLE_HIERARCHY else 0
+            target_rank = _ROLE_HIERARCHY.index(v) if v in _ROLE_HIERARCHY else 0
+            if target_rank > caller_rank:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Cannot assign role '{v}' that exceeds your own role '{user.role}'",
+                )
+        u[k] = v
+        applied[k] = v
     _db_s(f"user:{user_id}", u)
-    return {"ok": True, "user_id": user_id, "updated": {k: v for k, v in payload.items() if k in allowed_fields}}
+    return {"ok": True, "user_id": user_id, "updated": applied}
 
 
 @router.post("/users/{user_id}/ban", summary="Ban a user")

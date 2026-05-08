@@ -35,12 +35,16 @@ an in-memory dict without requiring a live database.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 UTC = timezone.utc
+
+# Per-user async lock to serialize concurrent sub-account balance mutations.
+_TRANSFER_LOCKS: dict[str, asyncio.Lock] = {}
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
@@ -137,16 +141,27 @@ def _db_create_sub_account(data: dict) -> dict | None:
         db.close()
 
 
+_SUB_ACCOUNT_UPDATABLE_COLS: frozenset[str] = frozenset(
+    {"label", "name", "description", "active", "is_active", "max_drawdown_pct",
+     "daily_loss_limit", "broker", "broker_account_id", "updated_at"}
+)
+
+
 def _db_update_sub_account(account_id: str, owner_id: str, updates: dict) -> dict | None:
     """Update sub_accounts row. Returns updated row or None."""
     if not updates:
+        return None
+    # Allowlist column names to prevent SQL injection via key names
+    safe_updates = {k: v for k, v in updates.items() if k in _SUB_ACCOUNT_UPDATABLE_COLS}
+    if not safe_updates:
         return None
     db = _db_session()
     if db is None:
         return None
     try:
         from sqlalchemy import text as _text
-        set_parts = ", ".join(f"{k} = :{k}" for k in updates)
+        set_parts = ", ".join(f"{k} = :{k}" for k in safe_updates)
+        updates = safe_updates
         updates["account_id"] = account_id
         updates["owner_id"] = owner_id
         db.execute(
@@ -442,36 +457,40 @@ async def transfer_between_sub_accounts(
     if account_id == req.to_account_id:
         raise HTTPException(status_code=400, detail="Source and destination must be different accounts")
 
-    src = _get_account(user.sub, account_id)
-    dst = _get_account(user.sub, req.to_account_id)
+    # Serialize transfers per user to prevent double-spend TOCTOU race
+    if user.sub not in _TRANSFER_LOCKS:
+        _TRANSFER_LOCKS[user.sub] = asyncio.Lock()
+    async with _TRANSFER_LOCKS[user.sub]:
+        src = _get_account(user.sub, account_id)
+        dst = _get_account(user.sub, req.to_account_id)
 
-    if src is None:
-        raise HTTPException(status_code=404, detail="Source sub-account not found")
-    if dst is None:
-        raise HTTPException(status_code=404, detail="Destination sub-account not found")
+        if src is None:
+            raise HTTPException(status_code=404, detail="Source sub-account not found")
+        if dst is None:
+            raise HTTPException(status_code=404, detail="Destination sub-account not found")
 
-    src_bal = float(src.get("balance") or src.get("current_balance") or 0)
-    dst_bal = float(dst.get("balance") or dst.get("current_balance") or 0)
+        src_bal = float(src.get("balance") or src.get("current_balance") or 0)
+        dst_bal = float(dst.get("balance") or dst.get("current_balance") or 0)
 
-    if src_bal < req.amount:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient balance: {src_bal:.2f}",
-        )
+        if src_bal < req.amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient balance: {src_bal:.2f}",
+            )
 
-    new_src_bal = round(src_bal - req.amount, 2)
-    new_dst_bal = round(dst_bal + req.amount, 2)
+        new_src_bal = round(src_bal - req.amount, 2)
+        new_dst_bal = round(dst_bal + req.amount, 2)
 
-    src["balance"] = new_src_bal
-    src["current_balance"] = new_src_bal
-    src["updated_at"] = datetime.now(UTC).isoformat()
+        src["balance"] = new_src_bal
+        src["current_balance"] = new_src_bal
+        src["updated_at"] = datetime.now(UTC).isoformat()
 
-    dst["balance"] = new_dst_bal
-    dst["current_balance"] = new_dst_bal
-    dst["updated_at"] = datetime.now(UTC).isoformat()
+        dst["balance"] = new_dst_bal
+        dst["current_balance"] = new_dst_bal
+        dst["updated_at"] = datetime.now(UTC).isoformat()
 
-    _save_account(user.sub, src)
-    _save_account(user.sub, dst)
+        _save_account(user.sub, src)
+        _save_account(user.sub, dst)
 
     logger.info(
         "Transfer %.2f from %s to %s by user %s",
