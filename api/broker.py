@@ -349,7 +349,7 @@ async def broker_status():
                     positions = await broker.get_positions()
                     open_positions = len(positions) if positions else 0
             except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+                logger.warning("broker_status: get_positions failed: %s", _exc)
 
             broker_section = {
                 "connected": True,

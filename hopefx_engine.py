@@ -1317,7 +1317,7 @@ class HopeFXEngine:
                             )
                             self._oms.submit_order(_oms_order.id)
                         except Exception as _oms_exc:
-                            logger.debug("OMS create_order failed: %s", _oms_exc)
+                            logger.warning("OMS create_order failed: %s", _oms_exc)
 
                     # Online learner feedback
                     try:
@@ -1542,7 +1542,7 @@ class HopeFXEngine:
                     open_positions=open_pos,
                 )
         except Exception as exc:
-            logger.debug("Equity update failed: %s", exc)
+            logger.warning("Equity update failed: %s", exc)
 
     # ── status / snapshot helpers ─────────────────────────────────────────────
 

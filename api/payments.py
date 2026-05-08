@@ -95,12 +95,12 @@ def _get_db_session():
         if app_state and app_state.db_session_factory:
             return app_state.db_session_factory()  # pylint: disable=not-callable
     except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)
+        logger.warning("payments: app_state db_session_factory unavailable: %s", _exc)
     try:
         from database.connection import SessionLocal
         return SessionLocal()
     except Exception as _exc2:
-        logger.debug("SessionLocal fallback failed: %s", _exc2)
+        logger.warning("payments: SessionLocal fallback failed: %s", _exc2)
     return None
 
 

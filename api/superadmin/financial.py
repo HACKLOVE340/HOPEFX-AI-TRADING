@@ -490,7 +490,7 @@ async def run_reconciliation(
                 expected_amount += float(p.amount)
                 tx_count += 1
     except Exception as exc:
-        logger.debug("reconciliation: PaymentProcessor unavailable: %s", exc)
+        logger.warning("reconciliation: PaymentProcessor unavailable: %s", exc)
 
     if provider == "stripe":
         try:
@@ -506,7 +506,7 @@ async def run_reconciliation(
                         if start_dt <= dt < end_dt and c.get("status") == "succeeded":
                             actual_amount += (c.get("amount", 0) or 0) / 100
         except Exception as exc:
-            logger.debug("reconciliation: Stripe unavailable: %s", exc)
+            logger.warning("reconciliation: Stripe unavailable: %s", exc)
 
     if provider == "crypto":
         try:
@@ -529,7 +529,7 @@ async def run_reconciliation(
             finally:
                 db.close()
         except Exception as exc:
-            logger.debug("reconciliation: CryptoPayment DB unavailable: %s", exc)
+            logger.warning("reconciliation: CryptoPayment DB unavailable: %s", exc)
 
     discrepancy = round(actual_amount - expected_amount, 4)
     status_val = "matched" if abs(discrepancy) < 0.01 else "discrepancy"
@@ -663,7 +663,7 @@ async def list_wallets(
                 ]
                 return {"wallets": wallets, "total": total, "page": page, "page_size": page_size}
     except Exception as exc:
-        logger.debug("wallets db: %s", exc)
+        logger.warning("wallets db: %s", exc)
     return {"wallets": [], "total": 0, "page": page, "page_size": page_size}
 
 
@@ -704,7 +704,7 @@ async def list_payouts(
                 ]
                 return {"payouts": payouts, "total": total, "page": page, "page_size": page_size}
     except Exception as exc:
-        logger.debug("payouts db: %s", exc)
+        logger.warning("payouts db: %s", exc)
     return {"payouts": [], "total": 0, "page": page, "page_size": page_size}
 
 
@@ -731,7 +731,7 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
                     import json as _json
                     return {"fees": _json.loads(row.value) if isinstance(row.value, str) else row.value}
     except Exception as exc:
-        logger.debug("fee_config db: %s", exc)
+        logger.warning("fee_config db: %s", exc)
     return {
         "fees": {
             "trading_commission_pct": 0.1,
@@ -764,5 +764,5 @@ async def update_fee_config(body: dict, user: TokenPayload = Depends(_require_su
                     db.add(row)
                 db.commit()
     except Exception as exc:
-        logger.debug("fee_config update: %s", exc)
+        logger.warning("fee_config update: %s", exc)
     return {"ok": True, "fees": body}

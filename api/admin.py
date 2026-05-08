@@ -639,7 +639,7 @@ def _dashboard_trade_stats(trading_stats: dict) -> None:
         tl_stats = tl.get_stats() if hasattr(tl, "get_stats") else {}
         trading_stats["total_trades"] = tl_stats.get("total_fills", 0)
     except Exception as exc:
-        logger.debug("dashboard-data trade logger stats failed: %s", exc)
+        logger.warning("dashboard-data trade logger stats failed: %s", exc)
 
     try:
         from research.pipeline.paper_trading_gate import get_gate
@@ -1125,7 +1125,7 @@ async def list_users(
                 "last_login": str(getattr(s, "last_login", "") or (s.get("last_login", "") if isinstance(s, dict) else "")),
             })
     except Exception as exc:
-        logger.debug("list_users subscription_manager: %s", exc)
+        logger.warning("list_users subscription_manager: %s", exc)
 
     # Fallback: scan DB user keys
     if not all_users:
@@ -1136,7 +1136,7 @@ async def list_users(
                 if u and isinstance(u, dict):
                     all_users.append(u)
         except Exception as exc:
-            logger.debug("list_users db scan: %s", exc)
+            logger.warning("list_users db scan: %s", exc)
 
     # Apply filters
     if search:
@@ -1257,7 +1257,7 @@ async def reset_user_password(
         if email:
             await email_service.send_password_reset(email)
     except Exception as exc:
-        logger.debug("reset_user_password email: %s", exc)
+        logger.warning("reset_user_password email: %s", exc)
     return {"ok": True, "user_id": user_id, "message": "Password reset email queued"}
 
 
@@ -1335,7 +1335,7 @@ async def trigger_backup(
         (dst / "db_snapshot.json").write_text(_json.dumps(snapshot, default=str))
         backed_up.append("db_store")
     except Exception as exc:
-        logger.debug("backup db_store: %s", exc)
+        logger.warning("backup db_store: %s", exc)
 
     return {
         "ok": True,

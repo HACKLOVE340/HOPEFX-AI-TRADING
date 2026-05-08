@@ -934,7 +934,7 @@ class HopeFXEngine:
 
             get_clock().record_fill(trade_return=trade_return, symbol=unwind.symbol)
         except Exception as exc:
-            logger.debug("HopeFXEngine: paper clock record_fill failed: %s", exc)
+            logger.warning("HopeFXEngine: paper clock record_fill failed: %s", exc)
 
         # Remove from open positions
         self._open_positions.pop(unwind.symbol, None)
@@ -965,7 +965,7 @@ class HopeFXEngine:
                 symbol=signal.symbol,
             )
         except (RuntimeError, AttributeError, OSError, TypeError) as exc:
-            logger.debug("Lineage rejection record failed: %s", exc)
+            logger.warning("Lineage rejection record failed: %s", exc)
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 

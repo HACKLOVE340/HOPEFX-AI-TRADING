@@ -115,7 +115,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
                 )
                 overview["revenue_mtd"] = round(float(rev_row or 0.0), 2)
             except Exception as exc:
-                logger.debug("overview: revenue_mtd wallet query: %s", exc)
+                logger.warning("overview: revenue_mtd wallet query: %s", exc)
 
             # Active DB connections (PostgreSQL only; silently skipped on SQLite)
             try:
@@ -129,7 +129,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
         finally:
             db.close()
     except Exception as exc:
-        logger.debug("overview: DB unavailable: %s", exc)
+        logger.warning("overview: DB unavailable: %s", exc)
 
     # ── Revenue MTD fallback: monetization analytics ──────────────────────────
     if overview["revenue_mtd"] == 0.0:

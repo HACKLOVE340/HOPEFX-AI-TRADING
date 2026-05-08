@@ -248,7 +248,7 @@ async def _pnl_summary_from_db() -> PnLSummary:
             repo = _TR(_db)
             trades = await repo.get_by_user(user_id=None, status="closed", limit=50000)
     except Exception as exc:
-        logger.debug("_pnl_summary_from_db DB fetch failed: %s", exc)
+        logger.warning("_pnl_summary_from_db DB fetch failed: %s", exc)
         return PnLSummary(
             equity=0.0, starting_equity=0.0, total_return_pct=0.0, total_fills=0,
             open_positions=0, win_rate=None, sharpe_ratio=None, max_drawdown_pct=0.0,
@@ -358,7 +358,7 @@ async def _trade_log_from_db(
             )
         return result
     except Exception as exc:
-        logger.debug("_trade_log_from_db failed: %s", exc)
+        logger.warning("_trade_log_from_db failed: %s", exc)
         return []
 
 

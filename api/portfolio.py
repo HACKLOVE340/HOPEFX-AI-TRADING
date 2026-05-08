@@ -446,7 +446,7 @@ async def factor_risk_report(
                     if sym:
                         positions[sym] = float(getattr(p, "market_value", 0.0))
     except Exception as exc:
-        logger.debug("factor_risk_report: position fetch failed: %s", exc)
+        logger.warning("factor_risk_report: position fetch failed: %s", exc)
 
     # Factor attribution
     factor_section: dict[str, Any] = {"available": False}
@@ -521,7 +521,7 @@ async def portfolio_summary(
                 positions = await broker.get_positions()
                 open_positions = len(positions)
     except Exception as exc:
-        logger.debug("portfolio_summary: broker fetch failed: %s", exc)
+        logger.warning("portfolio_summary: broker fetch failed: %s", exc)
 
     rb = _get_rebalancer()
     if rb is not None:
@@ -569,7 +569,7 @@ async def portfolio_positions(
                     "market_value": float(getattr(p, "market_value", 0.0)),
                 })
     except Exception as exc:
-        logger.debug("portfolio_positions: broker fetch failed: %s", exc)
+        logger.warning("portfolio_positions: broker fetch failed: %s", exc)
 
     target_weights: dict[str, float] = {}
     rb = _get_rebalancer()

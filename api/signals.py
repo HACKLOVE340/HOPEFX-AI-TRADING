@@ -371,7 +371,7 @@ class RealTimeSignalService:
                     changed_by="signal_engine",
                 )
             except Exception as _dbe:
-                logger.debug("signals:active db_set failed: %s", _dbe)
+                logger.warning("signals:active db_set failed: %s", _dbe)
 
         # Persist to DB via SignalRepository (fire-and-forget, non-blocking)
         try:
