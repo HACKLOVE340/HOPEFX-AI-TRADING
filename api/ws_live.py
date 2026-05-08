@@ -272,6 +272,22 @@ _BROKER_KEY: dict[str, str] = {
     "BTC/USD": "BTC/USD",
 }
 
+# Reverse map: broker/no-slash symbol → frontend slash format
+_SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
+# Extra aliases that may arrive from various publishers
+_SLASH_SYMBOL.update({
+    "XAUUSD": "XAU/USD",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD",
+    "ETHUSD": "ETH/USD",
+    "GC=F":   "XAU/USD",
+    "EURUSD=X": "EUR/USD",
+    "GBPUSD=X": "GBP/USD",
+    "USDJPY=X": "USD/JPY",
+})
+
 _open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
 
@@ -435,20 +451,66 @@ async def _eventbus_tick_broadcaster() -> None:
                     continue
                 # Normalise to frontend PriceTick schema:
                 # { type: "price_tick", data: PriceTick }
-                symbol = msg.get("symbol", "XAU/USD")
-                mid = float(msg.get("mid") or 0)
-                # Track previous mid for change_pct calculation
+
+                # 1. Normalise symbol to slash format (XAU/USD, EUR/USD …)
+                raw_symbol = msg.get("symbol", "XAU/USD")
+                symbol = _SLASH_SYMBOL.get(raw_symbol, raw_symbol)
+
+                # 2. Resolve mid from bid+ask or price field
+                raw_bid = msg.get("bid")
+                raw_ask = msg.get("ask")
+                raw_price = msg.get("price") or msg.get("mid")
+
+                if raw_bid is not None and raw_ask is not None:
+                    bid = float(raw_bid)
+                    ask = float(raw_ask)
+                    mid = (bid + ask) / 2.0
+                elif raw_price is not None:
+                    # Derive bid/ask from price using per-symbol spread config
+                    mid = float(raw_price)
+                    cfg = _SYMBOLS.get(symbol, {})
+                    half_spread = cfg.get("spread", mid * 0.0002) / 2
+                    bid = round(mid - half_spread, 5)
+                    ask = round(mid + half_spread, 5)
+                else:
+                    # No usable price — skip this message
+                    logger.debug("_eventbus_tick_broadcaster: no price in msg for %s, skipping", symbol)
+                    continue
+
+                if mid <= 0:
+                    continue
+
+                spread = round(ask - bid, 5)
+
+                # 3. Normalise timestamp to integer milliseconds
+                raw_ts = msg.get("timestamp") or msg.get("ts")
+                if raw_ts is None:
+                    ts_ms = int(datetime.now(UTC).timestamp() * 1000)
+                elif isinstance(raw_ts, str):
+                    # ISO string → ms
+                    try:
+                        from datetime import datetime as _dt
+                        ts_ms = int(_dt.fromisoformat(raw_ts.replace("Z", "+00:00")).timestamp() * 1000)
+                    except Exception:
+                        ts_ms = int(datetime.now(UTC).timestamp() * 1000)
+                elif isinstance(raw_ts, float) and raw_ts < 1e12:
+                    # Unix seconds → ms
+                    ts_ms = int(raw_ts * 1000)
+                else:
+                    ts_ms = int(raw_ts)
+
+                # 4. Track previous mid for change_pct calculation
                 prev = _last_mid.get(symbol, mid)
                 change = ((mid - prev) / prev * 100) if prev else 0.0
                 _last_mid[symbol] = mid
 
                 tick_data = {
                     "symbol": symbol,
-                    "bid": msg.get("bid"),
-                    "ask": msg.get("ask"),
-                    "mid": mid,
-                    "spread": msg.get("spread"),
-                    "timestamp": msg.get("timestamp"),
+                    "bid": round(bid, 5),
+                    "ask": round(ask, 5),
+                    "mid": round(mid, 5),
+                    "spread": spread,
+                    "timestamp": ts_ms,
                     "change_pct": round(change, 4),
                 }
                 tick = {"type": "price_tick", "data": tick_data}
