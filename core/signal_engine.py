@@ -1115,6 +1115,57 @@ def _build_ohlcv_proxy(data: dict[str, Any] | None) -> "pd.DataFrame | None":
     return pd.DataFrame({"close": prices, "high": highs, "low": lows})
 
 
+def _enrich_with_signal_score(
+    signal_payload: dict[str, Any],
+    ohlcv_proxy: "pd.DataFrame | None",
+    symbol: str,
+) -> None:
+    """
+    Compute multi-factor signal strength score and inject results into payload.
+
+    Adds to signal_payload:
+      signal_strength_score  : float 0–1 composite score
+      signal_grade           : STRONG / GOOD / FAIR / WEAK
+      signal_score_dimensions: per-dimension breakdown dict
+      signal_score_latency_ms: scorer latency
+
+    Silently skips on any error — scoring is advisory, never blocking.
+    """
+    try:
+        from ml.signal_scorer import get_signal_scorer
+
+        score_result = get_signal_scorer().score(
+            signal_payload=signal_payload,
+            ohlcv=ohlcv_proxy,
+            macro_df=None,  # macro will be integrated separately when available
+            symbol=symbol,
+        )
+        signal_payload["signal_strength_score"] = round(score_result.composite, 4)
+        signal_payload["signal_grade"] = score_result.grade
+        signal_payload["signal_score_dimensions"] = {
+            k: round(v, 4) for k, v in {
+                "ml_confidence":   score_result.dimensions.ml_confidence,
+                "technical":       score_result.dimensions.technical,
+                "macro_alignment": score_result.dimensions.macro_alignment,
+                "regime":          score_result.dimensions.regime,
+                "mtf_confluence":  score_result.dimensions.mtf_confluence,
+                "volatility":      score_result.dimensions.volatility,
+            }.items()
+        }
+        signal_payload["signal_score_latency_ms"] = round(score_result.latency_ms, 2)
+        logger.debug(
+            "Signal scored [%s]: %s score=%.3f grade=%s",
+            symbol,
+            signal_payload.get("direction"),
+            score_result.composite,
+            score_result.grade,
+        )
+    except Exception as exc:
+        logger.debug("Signal scoring failed (non-blocking): %s", exc)
+        signal_payload.setdefault("signal_strength_score", 0.5)
+        signal_payload.setdefault("signal_grade", "UNKNOWN")
+
+
 def _run_signal_filter(
     signal_payload: dict[str, Any],
     ohlcv_proxy: "pd.DataFrame | None",
@@ -1490,6 +1541,19 @@ async def _execute_if_approved(
     if direction not in ("BUY", "SELL"):
         return
 
+    # ── Signal grade gate ─────────────────────────────────────────────────────
+    # Only auto-trade STRONG and GOOD signals (composite score ≥ 0.60).
+    # FAIR and WEAK signals are published for human review but never auto-executed.
+    _grade = signal_payload.get("signal_grade", "UNKNOWN")
+    _score = float(signal_payload.get("signal_strength_score", 0.5))
+    _min_auto_score = float(os.getenv("AUTOTRADE_MIN_SIGNAL_SCORE", "0.60"))
+    if _grade not in ("STRONG", "GOOD") and _score < _min_auto_score:
+        logger.info(
+            "Auto-trade blocked by signal grade gate: %s grade=%s score=%.3f < %.3f threshold",
+            symbol, _grade, _score, _min_auto_score,
+        )
+        return
+
     if risk_manager is None:
         logger.error(
             "Auto-trade blocked for %s: risk_manager not initialised — cannot size without risk controls.",
@@ -1733,6 +1797,13 @@ async def _tick(app_state: Any) -> None:
             "lstm_blend_active": _LSTM_SIGNAL_ENABLED and _LSTM_SIGNAL_WEIGHT > 0.0,
             "lstm_signal_weight": _LSTM_SIGNAL_WEIGHT,
         }
+
+        # ── Signal Strength Scoring ───────────────────────────────────────────
+        # Multi-factor validation: ML confidence + technical consensus + macro
+        # alignment + regime suitability + MTF confluence + volatility quality.
+        # Score is added to the payload for WebSocket display and auto-trade gate.
+        ohlcv_proxy = _build_ohlcv_proxy(data)
+        _enrich_with_signal_score(signal_payload, ohlcv_proxy, symbol)
 
         await _publish_and_broadcast(app_state, symbol, signal_payload)
         await _execute_if_approved(app_state, symbol, signal_payload, data=data)

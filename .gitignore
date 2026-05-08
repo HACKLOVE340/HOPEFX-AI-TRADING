@@ -124,8 +124,8 @@ ml/saved_models/*.pkl
 ml/saved_models/*.joblib
 ml/saved_models/*_training_report.json
 ml/saved_models/*_meta.json
-# model_checksums.json is machine-generated at deploy time
-ml/saved_models/model_checksums.json
+# model_checksums.json is tracked so CI can verify model integrity
+# !ml/saved_models/model_checksums.json
 
 # Runtime-generated data files
 backtest/results/
