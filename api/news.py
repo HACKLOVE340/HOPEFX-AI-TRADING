@@ -111,13 +111,15 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
         geo_score  = 0.0
         if "XAU" in symbol.upper():
             try:
-                from news.geopolitical_risk import GeopoliticalRiskAnalyzer
+                from news.geopolitical_risk import get_geopolitical_provider
 
-                geo = GeopoliticalRiskAnalyzer()
-                risk = geo.assess_risk()
-                geo_score = float(getattr(risk, "score", 0.0))
+                provider = get_geopolitical_provider()
+                risk = await provider.get_risk_assessment()
+                # global_risk_score is 0–100; normalise to 0–1
+                raw_risk = float(getattr(risk, "global_risk_score", 0.0))
+                geo_score = round(raw_risk / 100.0, 4)
                 # High geopolitical risk → bullish gold
-                gold_score = min(geo_score * 0.5, 1.0)
+                gold_score = min(geo_score * 0.8, 1.0)
             except Exception:
                 pass
 
