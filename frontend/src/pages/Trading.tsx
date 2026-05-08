@@ -282,7 +282,16 @@ function ChartPanel({ symbol, timeframe, tick }: ChartPanelProps) {
       })
       .catch((err) => {
         if (controller.signal.aborted) return;
-        setChartError(err?.response?.data?.detail ?? err?.message ?? 'Failed to load chart data');
+        const detail = err?.response?.data?.detail ?? err?.response?.data?.message;
+        setChartError(
+          typeof detail === 'string'
+            ? detail
+            : detail
+              ? ((detail as { msg?: string; message?: string })?.msg
+                  ?? (detail as { msg?: string; message?: string })?.message
+                  ?? JSON.stringify(detail))
+              : (err?.message ?? 'Failed to load chart data'),
+        );
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
@@ -614,8 +623,16 @@ function AIAnalysisPanel({ symbol }: { symbol: string }) {
       setLastRun(new Date().toLocaleTimeString());
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? (e as { message?: string })?.message ?? 'Analysis failed';
+      const errData = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
+      const detail  = errData?.detail ?? errData?.message;
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : detail
+            ? ((detail as { msg?: string; message?: string })?.msg
+                ?? (detail as { msg?: string; message?: string })?.message
+                ?? JSON.stringify(detail))
+            : ((e as { message?: string })?.message ?? 'Analysis failed');
       setError(msg);
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -717,8 +734,16 @@ function EmergencyStopButton() {
       qc.invalidateQueries({ queryKey: ['positions'] });
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-        ?? (e as { message?: string })?.message ?? 'Emergency stop failed';
+      const errData2 = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
+      const detail2  = errData2?.detail ?? errData2?.message;
+      const msg =
+        typeof detail2 === 'string'
+          ? detail2
+          : detail2
+            ? ((detail2 as { msg?: string; message?: string })?.msg
+                ?? (detail2 as { msg?: string; message?: string })?.message
+                ?? JSON.stringify(detail2))
+            : ((e as { message?: string })?.message ?? 'Emergency stop failed');
       setError(msg); setConfirming(false);
     } finally {
       if (mountedRef.current) setLoading(false);
