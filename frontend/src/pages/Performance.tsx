@@ -393,10 +393,15 @@ const Performance: React.FC = () => {
               )}
             </div>
             {equityQ.isLoading && <PanelSkeleton rows={3} />}
-            {equity.length > 1
+            {equityQ.isError && (
+              <div style={{ textAlign: 'center', color: '#f87171', padding: 40, fontSize: 13 }}>
+                Failed to load equity curve — {(equityQ.error as Error)?.message ?? 'check your connection'}
+              </div>
+            )}
+            {!equityQ.isLoading && !equityQ.isError && (equity.length > 1
               ? <EquityCurveChart points={equity} />
-              : !equityQ.isLoading && <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No equity data yet</div>
-            }
+              : <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No equity data yet</div>
+            )}
           </div>
 
           {/* Benchmark comparison */}
@@ -460,7 +465,11 @@ const Performance: React.FC = () => {
             </div>
           </div>
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
-          {tradesQ.isError && <div style={{ color: '#f87171', fontSize: 13 }}>Failed to load trades — authentication required</div>}
+          {tradesQ.isError && (
+            <div style={{ color: '#f87171', fontSize: 13 }}>
+              Failed to load trades — {(tradesQ.error as Error)?.message ?? 'authentication required'}
+            </div>
+          )}
           {filteredTrades.length > 0 && (
             <div style={{ overflowX: 'auto' }}>
               <table style={s.table}>
