@@ -257,10 +257,10 @@ async def _check_event_bus() -> ComponentStatus:
     """Publish a heartbeat event on CH_HEARTBEAT and verify no exception."""
     t0 = time.monotonic()
     try:
-        from core.event_bus import publish, CH_HEARTBEAT
+        from core.event_bus import bus, CH_HEARTBEAT
 
         await asyncio.wait_for(
-            publish(CH_HEARTBEAT, {"type": "health_check", "ts": time.time()}),
+            bus.publish(CH_HEARTBEAT, {"type": "health_check", "ts": time.time()}),
             timeout=_TIMEOUT_S,
         )
         latency = (time.monotonic() - t0) * 1000

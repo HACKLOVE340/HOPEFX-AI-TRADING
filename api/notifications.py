@@ -332,8 +332,8 @@ async def send_test_notification(
     }
     # Try to push via WebSocket event bus
     try:
-        from core.event_bus import event_bus
-        await event_bus.publish(f"notifications:{user.sub}", test_notif)
+        from core.event_bus import bus
+        await bus.publish(f"notifications:{user.sub}", test_notif)
     except Exception as exc:
         logger.debug("test notification event bus: %s", exc)
 
