@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
+import { extractApiError } from '../../lib/utils';
 import { Card, SectionHeader, Button, StatusBadge } from '../settings/ui';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -832,7 +833,7 @@ const SystemReliabilitySection: React.FC = () => {
         setStatus(statusRes.value.data);
         setLastRefresh(new Date().toLocaleTimeString());
       } else {
-        setError(statusRes.reason instanceof Error ? statusRes.reason.message : 'Failed to fetch reliability status');
+        setError(extractApiError(statusRes.reason, 'Failed to fetch reliability status'));
       }
       if (compRes.status === 'fulfilled') {
         const d = compRes.value.data as { components?: Record<string, unknown>[] } | Record<string, unknown>[];
@@ -934,7 +935,7 @@ const SystemReliabilitySection: React.FC = () => {
       const res = await superadminApi.reliabilitySelfTest();
       setSelfTest(res.data);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Self-test failed');
+      setError(extractApiError(e, 'Self-test failed'));
     } finally {
       setSelfTestRunning(false);
     }
@@ -948,7 +949,7 @@ const SystemReliabilitySection: React.FC = () => {
       setTraceTestResult(res.data);
       await fetchTraces();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Trace test failed');
+      setError(extractApiError(e, 'Trace test failed'));
     } finally {
       setTraceTestRunning(false);
     }
