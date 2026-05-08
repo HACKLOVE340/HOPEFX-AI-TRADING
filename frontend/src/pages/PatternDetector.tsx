@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { tradingApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -179,7 +180,7 @@ const PatternDetector: React.FC = () => {
       setData(res.data as PatternResponse);
     } catch (err) {
       if (!mountedRef.current) return;
-      const msg = err instanceof Error ? err.message : 'Failed to scan patterns';
+      const msg = extractApiError(err, 'Failed to scan patterns');
       setError(msg);
     } finally {
       if (mountedRef.current) setLoading(false);
