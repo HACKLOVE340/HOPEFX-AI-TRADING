@@ -833,7 +833,7 @@ def _compute_ml_probability(
             adv_predictor = get_advanced_predictor()
             if adv_predictor is not None and adv_predictor.is_available:
                 ohlcv_df = _build_ohlcv_df(data)
-                macro_df = _fetch_macro_df(ohlcv_df)
+                macro_df = _fetch_macro_df(ohlcv_df, symbol)
                 try:
                     prob = hybrid.predict_proba(ohlcv_df, macro_df=macro_df)
                     if isinstance(prob, (int, float)) and 0.0 <= prob <= 1.0:

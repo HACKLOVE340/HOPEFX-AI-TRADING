@@ -585,7 +585,7 @@ class AdvancedPredictor:
             self._abstain_count += 1
 
         # ── Direction ─────────────────────────────────────────────────────────
-        if abstain or (ABSTAIN_LOW < prob < ABSTAIN_HIGH):
+        if abstain:
             direction = "neutral"
         elif prob >= THRESHOLD_LONG:
             direction = "long"
