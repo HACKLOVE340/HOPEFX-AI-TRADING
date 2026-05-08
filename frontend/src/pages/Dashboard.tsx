@@ -32,6 +32,7 @@ import {
   selectSentiment,
 } from '../store';
 import { mlApi, tradingApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import type { EquityPoint } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -356,7 +357,7 @@ const MlAccuracyCard: React.FC = () => {
       })
       .catch((err: unknown) => {
         setData(null);
-        setMlErr(err instanceof Error ? err.message : 'Failed to load model metrics.');
+        setMlErr(extractApiError(err, 'Failed to load model metrics.'));
       });
   }, []);
 
