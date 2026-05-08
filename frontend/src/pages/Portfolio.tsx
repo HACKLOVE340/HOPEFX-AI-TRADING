@@ -559,7 +559,7 @@ const AllocationBreakdown: React.FC = () => {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Portfolio: React.FC = () => {
-  useEquityCurve();
+  const equityQuery = useEquityCurve();
   usePositions();
   const equityHistory = useStore(selectEquityCurve);
   const toast = useToast();
@@ -623,6 +623,15 @@ const Portfolio: React.FC = () => {
       />
 
       <AccountSummary />
+
+      {equityQuery.isError && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] text-[12px]">
+          <span>⚠</span>
+          <span>
+            Equity curve unavailable — {(equityQuery.error as Error)?.message ?? 'check your connection'}
+          </span>
+        </div>
+      )}
       <EquityCurveChart />
 
       {/* Drawdown chart */}
