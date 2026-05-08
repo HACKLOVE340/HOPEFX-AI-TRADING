@@ -205,12 +205,20 @@ class CircuitBreaker:
         cutoff_hour = now - timedelta(hours=1)
 
         recent_minute = sum(1 for t in self.orders_last_minute if t > cutoff_minute)
-        sum(1 for t in self.orders_last_hour if t > cutoff_hour)
+        recent_hour = sum(1 for t in self.orders_last_hour if t > cutoff_hour)
 
         if recent_minute >= self.limits.max_orders_per_minute:
             await self._trigger_circuit_breaker(
                 "ORDER_RATE",
                 f"Order rate limit: {recent_minute} orders/minute",
+            )
+            return
+
+        max_orders_per_hour = getattr(self.limits, "max_orders_per_hour", 100)
+        if recent_hour >= max_orders_per_hour:
+            await self._trigger_circuit_breaker(
+                "ORDER_RATE_HOUR",
+                f"Hourly order rate limit: {recent_hour} orders/hour",
             )
             return
 

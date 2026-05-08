@@ -119,6 +119,10 @@ class DrawdownTracker:
         self.drawdown_mode = drawdown_mode.lower()
         self.alert_pct_of_limit = alert_pct_of_limit
 
+        # Lock protects all mutable state against concurrent update() / record_fill() calls
+        import threading as _threading
+        self._lock = _threading.Lock()
+
         # All-time trailing HWM — never decreases
         self._total_hwm: float = initial_balance
 
@@ -151,31 +155,38 @@ class DrawdownTracker:
         if balance is None:
             balance = equity
 
-        self._last_equity = equity
-        self._last_balance = balance
+        with self._lock:
+            self._last_equity = equity
+            self._last_balance = balance
 
-        # ── Day rollover ──────────────────────────────────────────────────────
-        today = datetime.now(UTC).day
-        if today != self._day:
-            # New day: anchor is the equity/balance at the start of the new day
-            anchor = balance if self.drawdown_mode == "balance" else equity
-            self._daily_open = anchor
-            self._daily_realised_pnl = 0.0
-            self._day = today
-            logger.info(
-                "DrawdownTracker: day rollover — daily_open=%.2f mode=%s",
-                self._daily_open,
-                self.drawdown_mode,
-            )
+            # ── Day rollover ──────────────────────────────────────────────────
+            today = datetime.now(UTC).day
+            if today != self._day:
+                # New day: anchor is the equity/balance at the start of the new day
+                anchor_new = balance if self.drawdown_mode == "balance" else equity
+                self._daily_open = anchor_new
+                self._daily_realised_pnl = 0.0
+                self._day = today
+                logger.info(
+                    "DrawdownTracker: day rollover — daily_open=%.2f mode=%s",
+                    self._daily_open,
+                    self.drawdown_mode,
+                )
 
-        # ── Trailing HWM update ───────────────────────────────────────────────
-        # HWM tracks the highest equity ever seen (not just today)
-        self._total_hwm = max(self._total_hwm, equity)
+            # ── Trailing HWM update ───────────────────────────────────────────
+            # HWM tracks the highest equity ever seen (not just today)
+            self._total_hwm = max(self._total_hwm, equity)
 
-        # ── Total drawdown (from all-time HWM) ────────────────────────────────
+            # ── Snapshot under lock for consistent computation ─────────────────
+            total_hwm = self._total_hwm
+            daily_open = self._daily_open
+            drawdown_mode = self.drawdown_mode
+
+        # ── Calculations outside lock (pure arithmetic, no shared mutation) ──
+        # Guard against zero/negative equity by clamping drawdown to 100%
         total_dd = 0.0
-        if self._total_hwm > 0:
-            total_dd = max(0.0, (self._total_hwm - equity) / self._total_hwm)
+        if total_hwm > 0:
+            total_dd = min(1.0, max(0.0, (total_hwm - equity) / total_hwm))
 
         total_breach = total_dd >= self.max_total_dd_pct
         total_alert = not total_breach and total_dd >= self.max_total_dd_pct * self.alert_pct_of_limit
@@ -183,12 +194,12 @@ class DrawdownTracker:
         # ── Daily drawdown ────────────────────────────────────────────────────
         # FTMO: measure on floating equity
         # Goat Funded: measure on closed balance from day-open balance
-        anchor = self._daily_open
-        measure = balance if self.drawdown_mode == "balance" else equity
+        anchor = daily_open
+        measure = balance if drawdown_mode == "balance" else equity
 
         daily_dd = 0.0
         if anchor > 0:
-            daily_dd = max(0.0, (anchor - measure) / anchor)
+            daily_dd = min(1.0, max(0.0, (anchor - measure) / anchor))
 
         daily_breach = daily_dd >= self.max_daily_dd_pct
         daily_alert = not daily_breach and daily_dd >= self.max_daily_dd_pct * self.alert_pct_of_limit
@@ -199,7 +210,7 @@ class DrawdownTracker:
                 "TOTAL DRAWDOWN BREACH: %.2f%% >= %.2f%% (HWM=%.2f equity=%.2f)",
                 total_dd * 100,
                 self.max_total_dd_pct * 100,
-                self._total_hwm,
+                total_hwm,
                 equity,
             )
         elif total_alert:
@@ -215,7 +226,7 @@ class DrawdownTracker:
                 daily_dd * 100,
                 self.max_daily_dd_pct * 100,
                 anchor,
-                self.drawdown_mode,
+                drawdown_mode,
                 measure,
             )
         elif daily_alert:
@@ -229,14 +240,14 @@ class DrawdownTracker:
             equity=equity,
             balance=balance,
             total_drawdown_pct=round(total_dd, 6),
-            total_hwm=self._total_hwm,
+            total_hwm=total_hwm,
             total_breach=total_breach,
             total_alert=total_alert,
             daily_drawdown_pct=round(daily_dd, 6),
-            daily_open=self._daily_open,
+            daily_open=daily_open,
             daily_breach=daily_breach,
             daily_alert=daily_alert,
-            drawdown_mode=self.drawdown_mode,
+            drawdown_mode=drawdown_mode,
         )
 
     # ── Partial fill handling ─────────────────────────────────────────────────
@@ -256,13 +267,15 @@ class DrawdownTracker:
         balance_after : New closed balance after the fill (optional; used for
                         direct balance tracking instead of PnL accumulation)
         """
-        self._daily_realised_pnl += pnl
-        if balance_after is not None:
-            self._last_balance = balance_after
+        with self._lock:
+            self._daily_realised_pnl += pnl
+            if balance_after is not None:
+                self._last_balance = balance_after
+            _daily_pnl = self._daily_realised_pnl
         logger.debug(
             "DrawdownTracker.record_fill: pnl=%.2f daily_realised=%.2f",
             pnl,
-            self._daily_realised_pnl,
+            _daily_pnl,
         )
 
     # ── Modify-order risk re-check ────────────────────────────────────────────
@@ -324,31 +337,38 @@ class DrawdownTracker:
 
     @property
     def total_hwm(self) -> float:
-        return self._total_hwm
+        with self._lock:
+            return self._total_hwm
 
     @property
     def daily_open(self) -> float:
-        return self._daily_open
+        with self._lock:
+            return self._daily_open
 
     @property
     def daily_realised_pnl(self) -> float:
-        return self._daily_realised_pnl
+        with self._lock:
+            return self._daily_realised_pnl
 
     @property
     def current_total_dd(self) -> float:
         """Current total drawdown fraction from all-time HWM."""
-        if self._total_hwm <= 0:
+        with self._lock:
+            hwm = self._total_hwm
+            equity = self._last_equity
+        if hwm <= 0:
             return 0.0
-        return max(0.0, (self._total_hwm - self._last_equity) / self._total_hwm)
+        return min(1.0, max(0.0, (hwm - equity) / hwm))
 
     @property
     def current_daily_dd(self) -> float:
         """Current daily drawdown fraction from day-open anchor."""
-        anchor = self._daily_open
-        measure = self._last_balance if self.drawdown_mode == "balance" else self._last_equity
+        with self._lock:
+            anchor = self._daily_open
+            measure = self._last_balance if self.drawdown_mode == "balance" else self._last_equity
         if anchor <= 0:
             return 0.0
-        return max(0.0, (anchor - measure) / anchor)
+        return min(1.0, max(0.0, (anchor - measure) / anchor))
 
     def status(self) -> dict:
         return {

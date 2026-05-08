@@ -1299,9 +1299,10 @@ class RiskManager:
     # ── Halt ──────────────────────────────────────────────────────────────────
 
     def _halt_trading(self, reason: str, duration_hours: float | None = None) -> None:
-        self._halt = True
-        self._trading_halted = True
-        self._halt_reason = reason
+        with self._state_lock:
+            self._halt = True
+            self._trading_halted = True
+            self._halt_reason = reason
         logger.critical("RiskManager: TRADING HALTED — reason=%s", reason)
         self._persist_halt_state()
         # Fire the app-level kill switch so all subsystems see the halt.
@@ -1316,9 +1317,10 @@ class RiskManager:
 
     def resume_trading(self) -> None:
         """Manual resume — requires explicit operator action."""
-        self._halt = False
-        self._trading_halted = False
-        self._halt_reason = ""
+        with self._state_lock:
+            self._halt = False
+            self._trading_halted = False
+            self._halt_reason = ""
         self._clear_halt_state()
         logger.warning("RiskManager: trading RESUMED by operator")
 
