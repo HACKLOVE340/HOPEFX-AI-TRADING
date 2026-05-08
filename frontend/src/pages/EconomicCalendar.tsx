@@ -18,6 +18,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { calendarApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { useMacro } from '../hooks/useOrchestratorData';
 import { useStore, selectMacro } from '../store';
 import { MacroCalendar } from '../components/panels/MacroCalendar';
@@ -195,7 +196,7 @@ const EconomicCalendar: React.FC = () => {
     } catch (err: unknown) {
       if (!mountedRef.current) return;
       setEvents([]);
-      setFetchErr(err instanceof Error ? err.message : 'Failed to load calendar events.');
+      setFetchErr(extractApiError(err, 'Failed to load calendar events.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -228,7 +229,7 @@ const EconomicCalendar: React.FC = () => {
       const res = await calendarApi.setAutoPause(next);
       setAutoPause(res.data);
     } catch (err: unknown) {
-      setPauseErr(err instanceof Error ? err.message : 'Failed to update auto-pause setting.');
+      setPauseErr(extractApiError(err, 'Failed to update auto-pause setting.'));
     } finally {
       setSavingPause(false);
     }
