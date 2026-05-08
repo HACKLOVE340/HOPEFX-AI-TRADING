@@ -258,7 +258,9 @@ export function AIChart({
           typeof detail === 'string'
             ? detail
             : detail
-              ? (detail.message ?? JSON.stringify(detail))
+              ? ((detail as { msg?: string; message?: string })?.msg
+                  ?? (detail as { msg?: string; message?: string })?.message
+                  ?? JSON.stringify(detail))
               : (err?.message ?? 'Failed to load chart'),
         );
       })
@@ -357,7 +359,9 @@ export function AIChart({
         typeof detail === 'string'
           ? detail
           : detail
-            ? ((detail as { message?: string })?.message ?? JSON.stringify(detail))
+            ? ((detail as { msg?: string; message?: string })?.msg
+                ?? (detail as { msg?: string; message?: string })?.message
+                ?? JSON.stringify(detail))
             : ((e as { message?: string })?.message ?? 'AI analysis failed'),
       );
     } finally {
