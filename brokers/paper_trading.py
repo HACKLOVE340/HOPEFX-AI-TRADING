@@ -566,7 +566,7 @@ class PaperTradingBroker(BrokerConnector):
                         "quantity": order.quantity,
                         "price": order.price,
                         "status": str(order.status.value),
-                        "filled_price": order.filled_price,
+                        "filled_price": order.average_price,
                         "timestamp": (
                             order.timestamp.isoformat()
                             if hasattr(order.timestamp, "isoformat")
