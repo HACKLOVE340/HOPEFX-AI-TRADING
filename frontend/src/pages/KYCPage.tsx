@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { kycApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
@@ -154,7 +155,7 @@ const KYCPage: React.FC = () => {
       setUploadedDocs(prev => [...prev.filter(d => d !== docType), docType]);
       setUploads(prev => { const n = { ...prev }; delete n[docType]; return n; });
     } catch (e: unknown) {
-      setUploadErrors(prev => ({ ...prev, [docType]: e instanceof Error ? e.message : 'Upload failed.' }));
+      setUploadErrors(prev => ({ ...prev, [docType]: extractApiError(e, 'Upload failed.') }));
     } finally { setUploading(null); }
   };
 
@@ -170,7 +171,7 @@ const KYCPage: React.FC = () => {
       setSubmitOk(true);
       await loadStatus();
     } catch (e: unknown) {
-      setSubmitMsg(e instanceof Error ? e.message : 'Submission failed. Please try again.');
+      setSubmitMsg(extractApiError(e, 'Submission failed. Please try again.'));
       setSubmitOk(false);
     } finally { setSubmitting(false); }
   };
