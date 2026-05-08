@@ -690,7 +690,42 @@ class HopeFXEngine:
                 d.reason = f"nuclear:{getattr(signal, 'strategy_id', 'agent')}"
                 await self._execute_decision(d, entry_price, symbol)
         except Exception as exc:
-            logger.error("_on_nuclear_signal error: %s", exc)
+            # Log with full traceback so the failure is visible in production logs.
+            logger.exception(
+                "_on_nuclear_signal FAILED — signal dropped: symbol=%s side=%s exc=%s",
+                getattr(signal, "symbol", "?"),
+                "BUY" if getattr(signal, "direction", "long") == "long" else "SELL",
+                exc,
+            )
+            # Enqueue to dead-letter buffer so operators can inspect dropped signals.
+            _dead_letter: deque = getattr(self, "_nuclear_dead_letter", None)
+            if _dead_letter is None:
+                self._nuclear_dead_letter: deque = deque(maxlen=100)
+                _dead_letter = self._nuclear_dead_letter
+            _dead_letter.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "symbol": getattr(signal, "symbol", "?"),
+                    "direction": getattr(signal, "direction", "?"),
+                    "confidence": getattr(signal, "confidence", None),
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                }
+            )
+            # Publish breach event so monitoring / alerting picks it up.
+            try:
+                from core.event_bus import event_bus as _eb
+
+                await _eb.publish_breach(
+                    {
+                        "type": "nuclear_signal_dropped",
+                        "symbol": getattr(signal, "symbol", "?"),
+                        "error": str(exc),
+                        "dead_letter_queue_depth": len(_dead_letter),
+                    }
+                )
+            except Exception as _pub_exc:
+                logger.debug("Could not publish nuclear breach event: %s", _pub_exc)
 
     async def _nuclear_loop(self) -> None:
         """

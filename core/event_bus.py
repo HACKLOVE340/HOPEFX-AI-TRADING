@@ -551,8 +551,16 @@ class EventBus:
                 yield msg
             return  # unreachable; satisfies type checker
 
-        # Redis path with auto-reconnect
+        # Redis path with auto-reconnect.
+        # Circuit-breaker: after _RECONNECT_MAX_ATTEMPTS consecutive failures the
+        # loop gives up and falls through to local fallback — it does NOT loop
+        # forever consuming CPU and filling logs when Redis is permanently down.
+        _RECONNECT_MAX_ATTEMPTS = 10
+        _RECONNECT_BASE_S = 1.0
+        _RECONNECT_MAX_S = 60.0
+
         _pubsub_redis: aioredis.Redis | None = None
+        _consecutive_errors: int = 0
         while True:
             pubsub = None
             try:
@@ -561,6 +569,7 @@ class EventBus:
                 pubsub = _pubsub_redis.pubsub()
                 await pubsub.subscribe(*channels)
                 logger.info("EventBus subscribed to channels: %s", channels)
+                _consecutive_errors = 0  # reset on successful subscribe
 
                 while True:
                     try:
@@ -613,17 +622,42 @@ class EventBus:
                 continue
             except Exception as exc:
                 self._metrics["errors"] += 1
-                logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
+                _consecutive_errors += 1
+
+                if _consecutive_errors >= _RECONNECT_MAX_ATTEMPTS:
+                    self._degraded = True
+                    logger.error(
+                        "EventBus: %d consecutive reconnect failures — giving up, "
+                        "switching to local fallback. Last error: %s",
+                        _consecutive_errors,
+                        exc,
+                    )
+                    return
+
+                # Exponential backoff capped at _RECONNECT_MAX_S
+                backoff_s = min(_RECONNECT_BASE_S * (2 ** (_consecutive_errors - 1)), _RECONNECT_MAX_S)
+                logger.error(
+                    "EventBus subscribe error (attempt %d/%d): %s — reconnecting in %.0fs",
+                    _consecutive_errors,
+                    _RECONNECT_MAX_ATTEMPTS,
+                    exc,
+                    backoff_s,
+                )
                 _pubsub_redis = None
-                await asyncio.sleep(5)
+                await asyncio.sleep(backoff_s)
                 try:
                     self._redis = _make_redis()
                     await self._redis.ping()
                     logger.info("EventBus reconnected to Redis.")
-                except Exception:
+                    _consecutive_errors = 0
+                except Exception as _reconnect_exc:
                     self._degraded = True
-                    logger.error("EventBus: Redis reconnect failed — switching to local fallback.")
-                    return
+                    logger.error(
+                        "EventBus: Redis reconnect failed (attempt %d/%d): %s",
+                        _consecutive_errors,
+                        _RECONNECT_MAX_ATTEMPTS,
+                        _reconnect_exc,
+                    )
 
     # ── local subscription (in-process handlers) ──────────────────────────────
 
