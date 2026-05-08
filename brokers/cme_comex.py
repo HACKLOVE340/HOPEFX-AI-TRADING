@@ -74,7 +74,7 @@ Usage
         quantity=1,          # 1 contract = 100 troy oz
         price=2350.00,
     )
-    logger.info(order.order_id, order.filled_price)
+    logger.info(order.id, order.filled_price)  # Order.id is the canonical field
     broker.disconnect()
 """
 
@@ -84,6 +84,7 @@ import asyncio
 import logging
 import os
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -486,9 +487,11 @@ class CMEComexConnector(BrokerConnector):
             stop_price=stop_price,
         )
         latency_ms = (time.monotonic() - t0) * 1000
+        # Order.id is the canonical field (brokers/base.py); order_id is not an attribute.
+        _order_id = getattr(order, "id", None) or getattr(order, "order_id", str(uuid.uuid4()))
         return CMEFill(
-            order_id=order.order_id,
-            cl_ord_id=order.order_id,
+            order_id=_order_id,
+            cl_ord_id=_order_id,
             symbol=symbol,
             side=side.value,
             contracts=order.filled_quantity or quantity,
