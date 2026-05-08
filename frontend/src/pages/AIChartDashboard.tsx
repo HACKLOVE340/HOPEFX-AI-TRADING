@@ -18,7 +18,7 @@ import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AIChart } from '../components/charts/AIChart';
-import { cn } from '../lib/utils';
+import { cn, extractApiError } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
 import { tradingApi } from '../hooks/useApi';
 
@@ -192,7 +192,7 @@ class ChartErrorBoundary extends React.Component<
     this.state = { hasError: false, message: '' };
   }
   static getDerivedStateFromError(err: unknown) {
-    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+    return { hasError: true, message: extractApiError(err, 'An error occurred') };
   }
   render() {
     if (this.state.hasError) {
