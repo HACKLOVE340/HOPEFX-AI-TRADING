@@ -362,12 +362,33 @@ class IBKRConnector(BrokerConnector):
         return c
 
     def _make_contract(self, symbol: str, instrument: str = "commodity") -> Contract:
-        """Generic contract factory — defaults to XAUUSD commodity."""
-        if symbol.upper() in (_XAUUSD_SYMBOL, "GOLD", "XAU"):
+        """Generic contract factory — routes to the correct asset class by symbol pattern."""
+        sym = symbol.upper().replace("/", "").replace("_", "")
+        if sym in (_XAUUSD_SYMBOL, "GOLD", "XAU", "XAUUSD"):
             return self._make_xauusd_contract(instrument)
-        # Fallback: treat as stock on SMART
-        from ib_insync import Stock  # type: ignore[import]
 
+        # Forex pairs: 6-char symbols like EURUSD, GBPJPY, etc.
+        _FOREX_PAIRS = frozenset(
+            {"EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD",
+             "USDCAD", "EURGBP", "EURJPY", "GBPJPY", "USDHKD", "USDSGD",
+             "EURCHF", "AUDNZD"}
+        )
+        if sym in _FOREX_PAIRS:
+            from ib_insync import Forex  # type: ignore[import]
+            base, quote = sym[:3], sym[3:]
+            c = Forex(sym, baseCurrency=base, currency=quote)
+            self._ib.qualifyContracts(c)
+            return c
+
+        # Silver / other metals
+        if sym in ("XAGUSD", "SILVER", "XAG"):
+            from ib_insync import Commodity  # type: ignore[import]
+            c = Commodity("XAGUSD", "SMART", "USD")
+            self._ib.qualifyContracts(c)
+            return c
+
+        # Default: treat as US equity on SMART
+        from ib_insync import Stock  # type: ignore[import]
         c = Stock(symbol, "SMART", _XAUUSD_CURRENCY)
         self._ib.qualifyContracts(c)
         return c
