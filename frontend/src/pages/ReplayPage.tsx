@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { replayApi } from '../hooks/useApi';
@@ -158,6 +158,7 @@ const SYMBOLS    = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'BTCUSD', 'US30', 'N
 const TIMEFRAMES = ['M1', 'M5', 'M15', 'M30', 'H1', 'H4', 'D1'];
 
 const ReplayPage: React.FC = () => {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<ReplaySession | null>(null);
   const [showCreate, setShowCreate] = useState(false);
