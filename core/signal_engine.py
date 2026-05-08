@@ -1051,13 +1051,25 @@ async def _publish_and_broadcast(
         model_ver,
     )
 
-    # WebSocket broadcast
-    ws = getattr(app_state, "ws_manager", None)
-    if ws is not None:
-        try:
-            await ws.broadcast_signal(symbol, signal_payload)
-        except Exception as ws_exc:
-            logger.warning("Signal broadcast failed: %s", ws_exc)
+    # WebSocket broadcast — route through LiveConnectionManager (FastAPI /ws/live)
+    # which is the connection pool the frontend actually uses.  Fall back to the
+    # legacy WebSocketManager on app_state for non-FastAPI deployments.
+    _signal_broadcast_ok = False
+    try:
+        from api.ws_live import get_live_manager as _get_live_mgr
+        await _get_live_mgr().broadcast_signal(symbol, signal_payload)
+        _signal_broadcast_ok = True
+    except Exception as _live_ws_exc:
+        logger.debug("LiveConnectionManager signal broadcast failed: %s", _live_ws_exc)
+
+    if not _signal_broadcast_ok:
+        ws = getattr(app_state, "ws_manager", None)
+        if ws is not None:
+            try:
+                _msg = {"type": "signal", "data": signal_payload}
+                await ws.broadcast(_msg)
+            except Exception as ws_exc:
+                logger.warning("Signal broadcast failed: %s", ws_exc)
 
     # Ingest into RealTimeSignalService ring buffer so /api/signals/latest
     # reflects engine-generated signals (not just manually-submitted ones).
@@ -1477,12 +1489,10 @@ async def _broadcast_fill(
     signal_payload: dict[str, Any],
 ) -> None:
     """Broadcast the fill over WebSocket — best-effort."""
-    ws = getattr(app_state, "ws_manager", None)
-    if ws is None:
-        return
     try:
         fill_price = (
             getattr(order, "average_fill_price", None)
+            or getattr(order, "average_price", None)
             or (order.get("fill_price") if isinstance(order, dict) else None)
             or signal_payload["entry_price"]
         )
@@ -1491,13 +1501,28 @@ async def _broadcast_fill(
             or (order.get("order_id") if isinstance(order, dict) else None)
             or "unknown"
         )
-        await ws.broadcast_trade(
-            symbol=symbol,
-            price=fill_price,
-            quantity=quantity,
-            side=direction.lower(),
-            trade_id=trade_id,
-        )
+        trade_msg = {
+            "type": "trade_fill",
+            "data": {
+                "symbol": symbol,
+                "price": fill_price,
+                "quantity": quantity,
+                "side": direction.lower(),
+                "trade_id": trade_id,
+            },
+        }
+        # Primary: LiveConnectionManager (FastAPI /ws/live — what the frontend uses)
+        try:
+            from api.ws_live import get_live_manager as _get_live_mgr
+            await _get_live_mgr().broadcast("trades", trade_msg)
+            return
+        except Exception as _live_exc:
+            logger.debug("LiveConnectionManager fill broadcast failed: %s", _live_exc)
+
+        # Fallback: legacy WebSocketManager
+        ws = getattr(app_state, "ws_manager", None)
+        if ws is not None:
+            await ws.broadcast(trade_msg)
     except Exception as exc:
         logger.debug("WebSocket fill broadcast failed: %s", exc)
 
