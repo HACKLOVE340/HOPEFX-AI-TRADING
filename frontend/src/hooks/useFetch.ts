@@ -36,6 +36,23 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// ── Shared error extractor ────────────────────────────────────────────────────
+// FastAPI can return detail as an object ({msg, loc, type}) on 503/422.
+// Probe .msg → .message → JSON.stringify before falling back to err.message.
+function extractFetchError(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const data = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
+      .response?.data;
+    const raw = data?.detail ?? data?.message;
+    if (typeof raw === 'string') return raw;
+    if (raw && typeof raw === 'object') {
+      const d = raw as { msg?: string; message?: string };
+      return d.msg ?? d.message ?? JSON.stringify(raw);
+    }
+  }
+  return err instanceof Error ? err.message : 'Request failed.';
+}
+
 export interface FetchState<T> {
   loading: boolean;
   error:   string | null;
@@ -101,17 +118,7 @@ export function useFetch<T>(
         if (mountedRef.current && !controller.signal.aborted) {
           const name = err instanceof Error ? err.name : '';
           if (name === 'AbortError' || name === 'CanceledError') return; // intentional cancel
-          const msg =
-            typeof err === 'object' && err !== null && 'response' in err
-              ? ((err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.detail ??
-                 (err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.message ??
-                 'Request failed.')
-              : err instanceof Error
-              ? err.message
-              : 'Request failed.';
-          setError(msg);
+          setError(extractFetchError(err));
         }
       })
       .finally(() => {
@@ -186,17 +193,7 @@ export function useFetchDeps<T>(
         if (mountedRef.current && !controller.signal.aborted) {
           const name = err instanceof Error ? err.name : '';
           if (name === 'AbortError' || name === 'CanceledError') return;
-          const msg =
-            typeof err === 'object' && err !== null && 'response' in err
-              ? ((err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.detail ??
-                 (err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.message ??
-                 'Request failed.')
-              : err instanceof Error
-              ? err.message
-              : 'Request failed.';
-          setError(msg);
+          setError(extractFetchError(err));
         }
       })
       .finally(() => {
