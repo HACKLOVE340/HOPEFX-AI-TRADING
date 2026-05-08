@@ -347,7 +347,7 @@ def _score_macro_alignment(
                 details["yield_curve_spread"] = round(spread_now, 3)
                 details["spread_change_5bar"] = round(spread_chg, 3)
                 if is_gold:
-                    # Steepening (risk-on) = bearish gold
+                    # Steepening (spread rising, risk-on) = bearish gold
                     votes.append((spread_chg < 0) == is_long)
         elif "macro_yield_spread" in macro_df.columns and "macro_yield_spread_chg" in macro_df.columns:
             # Pre-computed path (macro_features pipeline output)
