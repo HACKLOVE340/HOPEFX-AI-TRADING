@@ -11,6 +11,7 @@ import {
   ChevronRight, RefreshCw, WifiOff, Wifi,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { extractApiError } from '../lib/utils'
 
 interface BrokerConfig {
   type: string
@@ -159,7 +160,7 @@ export function BrokerWizard() {
     } catch (e: unknown) {
       setTestResult({
         ok: false,
-        error: e instanceof Error ? e.message : 'Network error',
+        error: extractApiError(e, 'Network error'),
         latency_ms: Date.now() - start,
       })
     } finally {
