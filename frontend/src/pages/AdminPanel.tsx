@@ -13,8 +13,8 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { api, adminApi } from '../hooks/useApi';
+import { useNavigate } from 'react-router-dom';
+import { api, superadminApi } from '../hooks/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { CrossLinkBar } from '../components/CrossLinkBar';
 import { Badge } from '../components/Badge';
@@ -109,8 +109,11 @@ const MaintenanceBroadcastPanel: React.FC = () => {
   const [statusMsg, setStatusMsg] = useState('');
 
   useEffect(() => {
-    api.get<MaintenanceStatus>('/admin/maintenance')
-      .then(r => setMaint(r.data))
+    api.get<MaintenanceStatus>('/admin/settings/system')
+      .then(r => setMaint({
+        maintenance_mode: Boolean(r.data.maintenance_mode),
+        maintenance_message: String(r.data.maintenance_message ?? ''),
+      }))
       .catch(() => {/* non-fatal */});
   }, []);
 
@@ -119,7 +122,10 @@ const MaintenanceBroadcastPanel: React.FC = () => {
   const toggleMaintenance = async () => {
     setSaving(true);
     try {
-      await api.post('/admin/maintenance', { enabled: !maint.maintenance_mode, message: maint.maintenance_message });
+      await api.post('/admin/settings/system', {
+        maintenance_mode: !maint.maintenance_mode,
+        maintenance_message: maint.maintenance_message,
+      });
       setMaint(m => ({ ...m, maintenance_mode: !m.maintenance_mode }));
       flash(`Maintenance mode ${!maint.maintenance_mode ? 'enabled' : 'disabled'}`);
     } catch { flash('Failed — check superadmin privileges'); }
@@ -130,7 +136,7 @@ const MaintenanceBroadcastPanel: React.FC = () => {
     if (!broadcast.title || !broadcast.body) return;
     setSaving(true);
     try {
-      await api.post('/admin/broadcast', broadcast);
+      await superadminApi.broadcastMessage(broadcast);
       setBroadcast({ title: '', body: '', type: 'info' });
       flash('Broadcast sent to all active users ✓');
     } catch { flash('Broadcast failed — check superadmin privileges'); }

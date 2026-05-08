@@ -316,6 +316,7 @@ const COLUMNS: Column<AuditEvent>[] = [
 const PAGE_SIZE = 50;
 
 const AuditLog: React.FC = () => {
+  const navigate = useNavigate();
   const [events, setEvents]     = useState<AuditEvent[]>([]);
   const [total, setTotal]       = useState(0);
   const [page, setPage]         = useState(1);

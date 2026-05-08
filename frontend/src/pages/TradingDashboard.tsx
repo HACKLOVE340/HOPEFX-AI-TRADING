@@ -101,7 +101,7 @@ const QuickActionBar: React.FC = () => {
       }}>
         <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 1 }}>OPEN P&L</span>
         <span style={{ fontSize: 13, fontWeight: 800, color: pnlColor, fontFamily: 'monospace' }}>
-          {unrealisedPnl >= 0 ? '+' : ''}{unrealisedPnl.toFixed(2)}
+          {unrealisedPnl >= 0 ? '+' : ''}{Number(unrealisedPnl).toFixed(2)}
         </span>
         {positions.length > 0 && (
           <span style={{ fontSize: 10, color: '#475569' }}>{positions.length} pos</span>
