@@ -361,6 +361,48 @@ def _score_macro_alignment(
                 if is_gold:
                     votes.append((spread_chg < 0) == is_long)
 
+        # CPI surprise: positive surprise → inflation higher than expected → bullish gold
+        if "cpi_surprise" in macro_df.columns and is_gold:
+            cpi = macro_df["cpi_surprise"].dropna()
+            if len(cpi) >= 1:
+                cpi_val = float(cpi.iloc[-1])
+                details["cpi_surprise"] = round(cpi_val, 4)
+                if abs(cpi_val) > 0.001:  # filter noise
+                    votes.append((cpi_val > 0) == is_long)
+
+        # Gold ETF flow: rising inflows → institutional demand → bullish gold
+        _etf_col = next((c for c in ("gold_etf_flow", "gold_etf", "wgc_etf_flow") if c in macro_df.columns), None)
+        if _etf_col and is_gold:
+            etf = macro_df[_etf_col].dropna()
+            if len(etf) >= 5:
+                etf_slope = float(etf.iloc[-1] - etf.iloc[-5])
+                details["etf_flow_5bar_chg"] = round(etf_slope, 2)
+                if abs(etf_slope) > 0.0:
+                    votes.append((etf_slope > 0) == is_long)
+
+        # COT net speculative positioning: extreme longs/shorts are contrarian signals
+        # Use rate-of-change: increasing net-long = momentum confirmation
+        if "cot_net_spec" in macro_df.columns and is_gold:
+            cot = macro_df["cot_net_spec"].dropna()
+            if len(cot) >= 4:
+                cot_now = float(cot.iloc[-1])
+                cot_prev = float(cot.iloc[-4])
+                cot_chg = cot_now - cot_prev
+                details["cot_net_spec"] = round(cot_now, 0)
+                details["cot_chg_4bar"] = round(cot_chg, 0)
+                # Momentum: increasing speculator longs = bullish confirmation
+                if abs(cot_chg) > 500:  # significant change threshold
+                    votes.append((cot_chg > 0) == is_long)
+
+        # WGC central bank demand: rising CB buying = structural gold support
+        if "wgc_central_bank" in macro_df.columns and is_gold:
+            cb = macro_df["wgc_central_bank"].dropna()
+            if len(cb) >= 2:
+                cb_chg = float(cb.iloc[-1] - cb.iloc[-2])
+                details["wgc_cb_demand_chg"] = round(cb_chg, 2)
+                if abs(cb_chg) > 0.0:
+                    votes.append((cb_chg > 0) == is_long)
+
         if not votes:
             return 0.5, {**details, "source": "insufficient_macro_signals"}
 

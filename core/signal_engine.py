@@ -1481,12 +1481,22 @@ async def _broadcast_fill(
     if ws is None:
         return
     try:
+        fill_price = (
+            getattr(order, "average_fill_price", None)
+            or (order.get("fill_price") if isinstance(order, dict) else None)
+            or signal_payload["entry_price"]
+        )
+        trade_id = (
+            getattr(order, "id", None)
+            or (order.get("order_id") if isinstance(order, dict) else None)
+            or "unknown"
+        )
         await ws.broadcast_trade(
             symbol=symbol,
-            price=order.average_fill_price or signal_payload["entry_price"],
+            price=fill_price,
             quantity=quantity,
             side=direction.lower(),
-            trade_id=order.id,
+            trade_id=trade_id,
         )
     except Exception as exc:
         logger.debug("WebSocket fill broadcast failed: %s", exc)
@@ -1511,7 +1521,11 @@ def _notify_online_learner(
 ) -> None:
     """Notify Phase-3 online learner of a confirmed fill — best-effort."""
     try:
-        fill_price = order.average_fill_price or signal_payload["entry_price"]
+        fill_price = (
+            getattr(order, "average_fill_price", None)
+            or (order.get("fill_price") if isinstance(order, dict) else None)
+            or signal_payload["entry_price"]
+        )
         features = pd.DataFrame(
             [
                 {
