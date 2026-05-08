@@ -1052,14 +1052,16 @@ class RiskManager:
         self._pnl_history.append(pnl)
 
     def update_equity(self, equity: float) -> None:
-        self._state.update_equity(equity)
-        # Keep precise DrawdownTracker in sync
+        with self._state_lock:
+            self._state.update_equity(equity)
+        # Keep precise DrawdownTracker in sync (thread-safe internally)
         if self._dd_tracker is not None:
             self._dd_tracker.update(equity=equity)
         # Auto-halt when drawdown limits are breached.
         if not self._halt:
-            dd = self._state.current_drawdown
-            daily_dd = self._state.daily_drawdown
+            with self._state_lock:
+                dd = self._state.current_drawdown
+                daily_dd = self._state.daily_drawdown
             if dd >= self._config.max_drawdown_pct:
                 self._halt_trading(f"auto_halt:drawdown={dd * 100:.2f}%>={self._config.max_drawdown_pct * 100:.1f}%")
             elif daily_dd >= self._config.max_daily_loss_pct:
