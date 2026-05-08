@@ -13,6 +13,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore } from '../store';
+import { extractApiError } from '../lib/utils';
 import type { UserRole } from '../store';
 
 function resolvePostOnboardingPath(role: UserRole | undefined): string {
@@ -194,7 +195,7 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
       });
       setState({ ...state, backtestDone: true });
     } catch (err: unknown) {
-      setBacktestErr(err instanceof Error ? err.message : 'Backtest failed. Ensure the backtesting API is running.');
+      setBacktestErr(extractApiError(err, 'Backtest failed. Ensure the backtesting API is running.'));
     } finally {
       setRunning(false);
     }
@@ -247,7 +248,7 @@ const Step5Paper: React.FC<{ state: WizardState; setState: (s: WizardState) => v
       await api.post('/trading/paper/start');
       setState({ ...state, paperStarted: true });
     } catch (err: unknown) {
-      setPaperErr(err instanceof Error ? err.message : 'Failed to start paper trading. Ensure the trading API is running.');
+      setPaperErr(extractApiError(err, 'Failed to start paper trading. Ensure the trading API is running.'));
     } finally {
       setStarting(false);
     }
