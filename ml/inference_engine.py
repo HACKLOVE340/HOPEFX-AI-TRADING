@@ -221,6 +221,12 @@ class InferenceEngine:
         self._model_stale: bool = False
         self._model_age_days: float | None = None
 
+        # ── Live accuracy monitoring (rolling 50-prediction window) ────────
+        # Tracks (predicted_direction, actual_outcome) pairs; compared against
+        # training OOS accuracy to detect silent model degradation.
+        self._live_pred_window: deque[tuple[int, int]] = deque(maxlen=50)
+        self._live_accuracy_alert_sent: bool = False
+
         # ── Feature drift guard ────────────────────────────────────────────
         # Rolling buffer of recent feature vectors (last _DRIFT_WINDOW rows).
         # Used to compute live feature means for KS-test drift detection.
@@ -461,7 +467,12 @@ class InferenceEngine:
 
     # ── Online learner update ─────────────────────────────────────────────────
 
-    def update_online(self, ohlcv: pd.DataFrame, label: int) -> None:
+    def update_online(
+        self,
+        ohlcv: pd.DataFrame,
+        label: int,
+        predicted_direction: int | None = None,
+    ) -> None:
         """
         Update the online learner with a confirmed fill outcome.
 
@@ -469,9 +480,16 @@ class InferenceEngine:
 
         Parameters
         ----------
-        ohlcv  : OHLCV DataFrame for the bars that produced the signal
-        label  : 1 = profitable outcome, 0 = loss
+        ohlcv               : OHLCV DataFrame for the bars that produced the signal
+        label               : 1 = profitable outcome, 0 = loss
+        predicted_direction : The model's predicted direction (1/0) at signal time.
+                              When provided, recorded in the live accuracy window.
         """
+        # Record prediction vs outcome for live accuracy monitoring
+        if predicted_direction is not None:
+            self._live_pred_window.append((predicted_direction, label))
+            self._check_live_accuracy_degradation()
+
         learner = self._get_online_learner()
         if learner is None:
             return
@@ -496,6 +514,37 @@ class InferenceEngine:
                 logger.debug("InferenceEngine: online learner updated with label=%d", label)
         except Exception as exc:
             logger.debug("Online learner update failed: %s", exc)
+
+    def _check_live_accuracy_degradation(self) -> None:
+        """Compare rolling live accuracy against training OOS baseline; warn if degraded."""
+        if len(self._live_pred_window) < 20:
+            return
+        correct = sum(1 for pred, actual in self._live_pred_window if pred == actual)
+        live_acc = correct / len(self._live_pred_window)
+
+        meta = self._load_meta()
+        oos_acc_raw = meta.get("oos_accuracy") or meta.get("accuracy") if meta else None
+        if oos_acc_raw is None:
+            return
+        try:
+            oos_acc = float(oos_acc_raw)
+        except (TypeError, ValueError):
+            return
+
+        degradation = oos_acc - live_acc
+        if degradation > 0.05:  # live accuracy dropped >5pp below training OOS
+            if not self._live_accuracy_alert_sent:
+                logger.warning(
+                    "InferenceEngine: live accuracy degradation detected — "
+                    "live=%.1f%% vs OOS=%.1f%% (delta=%.1f%%) over last %d predictions",
+                    live_acc * 100,
+                    oos_acc * 100,
+                    degradation * 100,
+                    len(self._live_pred_window),
+                )
+                self._live_accuracy_alert_sent = True
+        else:
+            self._live_accuracy_alert_sent = False  # reset when accuracy recovers
 
     # ── Stale model detection ─────────────────────────────────────────────────
 
