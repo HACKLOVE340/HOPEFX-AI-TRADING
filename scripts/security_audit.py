@@ -109,8 +109,8 @@ def main() -> int:
         issues = scan_file(py_file)
         for line_num, desc, line in issues:
             all_issues.append(f"{py_file}:{line_num}: {desc}")
-            logger.error(f"  ❌ {py_file}:{line_num}: {desc}")
-            logger.info(f"     {line[:80]}...")
+            logger.error("  ❌ %s:%s: %s", py_file, line_num, desc)
+            logger.info("     %s...", line[:80])
 
     # Check environment files
     logger.info("\n[2/3] Checking environment files...")
@@ -118,7 +118,7 @@ def main() -> int:
     for issue in env_issues:
         all_issues.append(issue)
         prefix = "❌" if "CRITICAL" in issue else "⚠️"
-        logger.info(f"  {prefix} {issue}")
+        logger.info("  %s %s", prefix, issue)
 
     # Check for common mistakes
     logger.info("\n[3/3] Checking for security anti-patterns...")
@@ -150,8 +150,8 @@ def main() -> int:
     critical = [i for i in all_issues if "CRITICAL" in i or "dev-key" in i]
     warnings = [i for i in all_issues if i not in critical]
 
-    logger.error(f"\nCritical issues: {len(critical)}")
-    logger.warning(f"Warnings: {len(warnings)}")
+    logger.error("\nCritical issues: %s", len(critical))
+    logger.warning("Warnings: %s", len(warnings))
 
     if critical:
         logger.error("\n❌ AUDIT FAILED - Fix critical issues before deployment")

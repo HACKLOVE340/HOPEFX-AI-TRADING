@@ -635,17 +635,17 @@ if __name__ == "__main__":
     # Buy order
     buy_order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1950.0)
     result = executor.submit_order(buy_order, current_price=2000.0)
-    logger.info(f"\\nBuy order: {result.status.value} @ {result.avg_price:.2f}")
-    logger.info(f"  Slippage: ${result.slippage:.2f}, Commission: ${result.commission:.2f}")
-    logger.info(f"  Balance: ${executor.balance:.2f}, Equity: ${executor.equity:.2f}")
+    logger.info("\\nBuy order: %s @ %.2f", result.status.value, result.avg_price)
+    logger.info("  Slippage: $%.2f, Commission: $%.2f", result.slippage, result.commission)
+    logger.info("  Balance: $%.2f, Equity: $%.2f", executor.balance, executor.equity)
 
     # Sell order
     sell_order = Order(symbol="XAUUSD", side="sell", qty=0.01)
     result = executor.submit_order(sell_order, current_price=2010.0)
-    logger.info(f"\\nSell order: {result.status.value} @ {result.avg_price:.2f}")
-    logger.info(f"  Balance: ${executor.balance:.2f}, Equity: ${executor.equity:.2f}")
+    logger.info("\\nSell order: %s @ %.2f", result.status.value, result.avg_price)
+    logger.info("  Balance: $%.2f, Equity: $%.2f", executor.balance, executor.equity)
 
     # Invalid order (should reject)
     bad_order = Order(symbol="INVALID", side="buy", qty=0.01)
     result = executor.submit_order(bad_order, current_price=100.0)
-    logger.info(f"\\nInvalid order: {result.status.value} - {result.message}")
+    logger.info("\\nInvalid order: %s - %s", result.status.value, result.message)

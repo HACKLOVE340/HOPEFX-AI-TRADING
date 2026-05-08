@@ -204,7 +204,7 @@ def main():
     result = _create_or_update(args.email, args.username, password, args.reset)
 
     if result["action"] == "exists":
-        logger.info(f"\n[INFO] Superadmin '{result['username']}' already exists (role={result['role']}).")
+        logger.info("\n[INFO] Superadmin '%s' already exists (role=%s).", result['username'], result['role'])
         logger.info("       Use --reset to update the password.\n")
         return
 

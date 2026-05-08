@@ -107,8 +107,8 @@ cells.append(
     code(
         """\
 df = pd.read_csv(ROOT / "data" / "XAUUSD_2Y.csv", index_col=0, parse_dates=True)
-logger.info(f"Shape: {df.shape}  |  {df.index[0].date()} → {df.index[-1].date()}")
-logger.info(f"Price range: ${df['close'].min():.0f} – ${df['close'].max():.0f}")
+logger.info("Shape: %s  |  %s → %s", df.shape, df.index[0].date(), df.index[-1].date())
+logger.info("Price range: $%.0f – $%.0f", df['close'].min(), df['close'].max())
 df.head()""",
         [
             stdout(
@@ -188,7 +188,7 @@ y_pred  = clf.predict(X_test)
 y_prob  = clf.predict_proba(X_test)[:, 1]
 
 logger.info(classification_report(y_test, y_pred, target_names=["Down", "Up"]))
-logger.info(f"Note: ~48% accuracy is expected for a direction classifier on financial data.")
+logger.info("Note: ~48%% accuracy is expected for a direction classifier on financial data.")
 logger.info(f"Edge comes from asymmetric ATR-based stop/TP sizing, not raw accuracy.")""",
         [
             stdout(
@@ -225,14 +225,14 @@ perf = json.loads((ROOT / "examples" / "results" / "performance.json").read_text
 trades_df = pd.read_csv(ROOT / "examples" / "results" / "trades.csv")
 
 logger.info("=" * 45)
-logger.info(f"  Period:          {perf['backtest_period']}")
-logger.info(f"  Trades:          {perf['n_trades']}")
-logger.info(f"  Win rate:        {perf['win_rate_pct']:.1f}%")
-logger.info(f"  Profit factor:   {perf['profit_factor']:.3f}")
-logger.info(f"  Total return:    {perf['total_return_pct']:+.2f}%")
-logger.info(f"  Max drawdown:    {perf['max_drawdown_pct']:.1f}%")
-logger.info(f"  Sharpe ratio:    {perf['sharpe_ratio']:.3f}")
-logger.info(f"  Calmar ratio:    {perf['calmar_ratio']:.3f}")
+logger.info("  Period:          %s", perf['backtest_period'])
+logger.info("  Trades:          %s", perf['n_trades'])
+logger.info("  Win rate:        %.1f%%", perf['win_rate_pct'])
+logger.info("  Profit factor:   %.3f", perf['profit_factor'])
+logger.info("  Total return:    %+.2f%%", perf['total_return_pct'])
+logger.info("  Max drawdown:    %.1f%%", perf['max_drawdown_pct'])
+logger.info("  Sharpe ratio:    %.3f", perf['sharpe_ratio'])
+logger.info("  Calmar ratio:    %.3f", perf['calmar_ratio'])
 logger.info("=" * 45)""",
         [
             stdout(
@@ -329,4 +329,4 @@ nb.metadata = {
     "language_info": {"name": "python", "version": "3.12.1"},
 }
 nbformat.write(nb, str(NB_PATH))
-logger.info(f"Notebook written → {NB_PATH}  ({NB_PATH.stat().st_size // 1024} KB)")
+logger.info("Notebook written → %s  (%s KB)", NB_PATH, NB_PATH.stat().st_size // 1024)

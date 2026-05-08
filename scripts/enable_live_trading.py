@@ -205,7 +205,7 @@ def _test_oanda_connection(api_key: str, account_id: str, practice: bool) -> boo
 def enable_live_trading() -> None:
     """Write FEATURE_LIVE_TRADING=true to .env."""
     if not _ENV_PATH.exists():
-        logger.info(f"\n✗ .env not found at {_ENV_PATH}")
+        logger.info("\n✗ .env not found at %s", _ENV_PATH)
         logger.info("  Copy .env.example to .env first: cp .env.example .env")
         sys.exit(1)
 
@@ -251,7 +251,7 @@ def main() -> None:
     logger.info("")
     if not all_passed:
         failed = [k for k, v in results.items() if not v]
-        logger.error(f"✗ {len(failed)} check(s) failed. Fix them before enabling live trading.")
+        logger.error("✗ %s check(s) failed. Fix them before enabling live trading.", len(failed))
         logger.info("\nSee docs/oanda_paper_trading_setup.md for setup instructions.")
         sys.exit(1)
 
@@ -266,7 +266,7 @@ def main() -> None:
     logger.warning("WARNING: Live trading uses REAL MONEY.")
     logger.info("Start with the minimum position size ($100 max).")
     logger.info("!" * 60)
-    logger.info(f'\nType exactly: "{_CONFIRM_PHRASE}"')
+    logger.info("\nType exactly: "%s"", _CONFIRM_PHRASE)
     logger.info("(or Ctrl+C to cancel)\n")
 
     try:
@@ -276,7 +276,7 @@ def main() -> None:
         sys.exit(0)
 
     if user_input != _CONFIRM_PHRASE:
-        logger.info(f'\n✗ Confirmation phrase did not match. Expected: "{_CONFIRM_PHRASE}"')
+        logger.info("\n✗ Confirmation phrase did not match. Expected: "%s"", _CONFIRM_PHRASE)
         sys.exit(1)
 
     enable_live_trading()

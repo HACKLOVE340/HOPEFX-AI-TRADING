@@ -72,7 +72,7 @@ def print_ticks_info(ticks):
         bid = tick["bid"]
         ask = tick["ask"]
         spread = ask - bid
-        logger.info(f"Bid: {bid}, Ask: {ask}, Spread: {spread}")
+        logger.info("Bid: %s, Ask: %s, Spread: %s", bid, ask, spread)
         logger.info("Bid: %s, Ask: %s, Spread: %s", bid, ask, spread)
 
 
@@ -86,7 +86,7 @@ def main():
     symbol = "XAUUSD"
     symbol_info = get_symbol_info(symbol)
     if symbol_info:
-        logger.info(f"Symbol Info - {symbol}: {symbol_info}")
+        logger.info("Symbol Info - %s: %s", symbol, symbol_info)
 
     last_ticks = fetch_last_ticks(symbol, 100)
     print_ticks_info(last_ticks)

@@ -552,9 +552,9 @@ def bootstrap(verbose: bool = True) -> None:
         logger.info("  HOPEFX Dev Bootstrap")
         logger.info("-" * 62)
         if created:
-            logger.info(f"  Generated .env  ->  {ENV_PATH}")
+            logger.info("  Generated .env  ->  %s", ENV_PATH)
         else:
-            logger.info(f"  .env already exists  ->  {ENV_PATH}")
+            logger.info("  .env already exists  ->  %s", ENV_PATH)
 
     for seed_fn, label, email, _username, redirect in [
         (_seed_superadmin, "Superadmin", DEFAULT_SUPERADMIN_EMAIL, DEFAULT_SUPERADMIN_USERNAME, "/superadmin"),
@@ -564,10 +564,10 @@ def bootstrap(verbose: bool = True) -> None:
         try:
             seed_fn()
             if verbose:
-                logger.info(f"  {label} seeded  ({email}  ->  {redirect})")
+                logger.info("  %s seeded  (%s  ->  %s)", label, email, redirect)
         except Exception as exc:  # pylint: disable=broad-exception-caught
             if verbose:
-                logger.warning(f"  {label} seed skipped: {exc}")
+                logger.warning("  %s seed skipped: %s", label, exc)
 
     build_frontend(verbose=verbose)
 

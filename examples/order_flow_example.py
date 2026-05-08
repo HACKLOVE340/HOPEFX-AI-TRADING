@@ -45,27 +45,27 @@ def print_metrics(analyzer, symbol: str) -> None:
     oscillator = analyzer.get_order_flow_oscillator(symbol)
     pressure = analyzer.get_pressure_gauges(symbol)
 
-    logger.info(f"\n{'=' * 55}")
-    logger.info(f"  Order Flow Snapshot — {symbol}  {datetime.now(UTC).strftime('%H:%M:%S UTC')}")
-    logger.info(f"{'=' * 55}")
+    logger.info("\n%s", '=' * 55)
+    logger.info("  Order Flow Snapshot — %s  %s", symbol, datetime.now(UTC).strftime('%H:%M:%S UTC'))
+    logger.info("%s", '=' * 55)
 
     if aggression:
-        logger.info(f"  Buy aggression  : {aggression.buy_aggression:6.1f}%")
-        logger.info(f"  Sell aggression : {aggression.sell_aggression:6.1f}%")
-        logger.info(f"  Score           : {aggression.aggression_score:+.1f}  ({aggression.dominant_side})")
+        logger.info("  Buy aggression  : %6.1f%%", aggression.buy_aggression)
+        logger.info("  Sell aggression : %6.1f%%", aggression.sell_aggression)
+        logger.info("  Score           : %+.1f  (%s)", aggression.aggression_score, aggression.dominant_side)
 
     if oscillator:
-        logger.info(f"  OFO value       : {oscillator.value:+.1f}  → {oscillator.signal}")
+        logger.info("  OFO value       : %+.1f  → %s", oscillator.value, oscillator.signal)
 
     if pressure:
-        logger.info(f"  Buy pressure    : {pressure.get('buy_pressure', 0.0):6.1f}%")
-        logger.info(f"  Sell pressure   : {pressure.get('sell_pressure', 0.0):6.1f}%")
+        logger.info("  Buy pressure    : %6.1f%%", pressure.get('buy_pressure', 0.0))
+        logger.info("  Sell pressure   : %6.1f%%", pressure.get('sell_pressure', 0.0))
 
     clusters = analyzer.get_volume_clusters(symbol, top_n=3)
     if clusters:
         logger.info("  Volume clusters :")
         for cluster in clusters:
-            logger.info(f"    {cluster.price_level:10.4f}  {cluster.cluster_type:<12}  strength={cluster.strength:.2f}")
+            logger.info("    %10.4f  %s  strength=%.2f", cluster.price_level, cluster.cluster_type:<12, cluster.strength)
 
 
 async def run_example(max_ticks: int = 100) -> None:
@@ -142,16 +142,16 @@ async def run_example(max_ticks: int = 100) -> None:
     # Detect delta divergence
     divergence = analyzer.detect_delta_divergence(SYMBOL)
     if divergence:
-        logger.info(f"\n  Delta divergence: {divergence.divergence_type} (confidence={divergence.confidence:.2f})")
+        logger.info("\n  Delta divergence: %s (confidence=%.2f)", divergence.divergence_type, divergence.confidence)
     else:
         logger.info("\n  No delta divergence detected.")
 
     # Stacked imbalances
     stacked = analyzer.get_stacked_imbalances(SYMBOL)
     if stacked:
-        logger.info(f"\n  Stacked imbalances: {len(stacked)} found")
+        logger.info("\n  Stacked imbalances: %s found", len(stacked))
         for si in stacked[:3]:
-            logger.info(f"    direction={si.direction}  levels={len(si.levels)}  strength={si.strength}")
+            logger.info("    direction=%s  levels=%s  strength=%s", si.direction, len(si.levels), si.strength)
     else:
         logger.info("\n  No stacked imbalances found.")
 

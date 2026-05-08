@@ -70,7 +70,7 @@ class ContinuousBackup:
         async with session.create_client("s3", region_name=region) as client:
             await client.head_bucket(Bucket=bucket)
 
-        logger.info(f"☁️ S3 backup enabled: {bucket}")
+        logger.info("☁️ S3 backup enabled: %s", bucket)
 
     async def create_snapshot(self, event_store, orchestra, risk_engine) -> SystemState:
         """Create consistent point-in-time snapshot"""
@@ -113,7 +113,7 @@ class ContinuousBackup:
         # Cleanup old snapshots (keep last 100)
         await self._cleanup_old_snapshots()
 
-        logger.info(f"💾 Snapshot created: {filename}")
+        logger.info("💾 Snapshot created: %s", filename)
         return state
 
     async def _upload_to_cloud(self, local_path: Path, filename: str):
@@ -155,7 +155,7 @@ class ContinuousBackup:
             raise ValueError("Snapshot checksum verification failed!")
 
         state = SystemState(**state_dict)
-        logger.info(f"✅ Restored from snapshot: {snapshot_file}")
+        logger.info("✅ Restored from snapshot: %s", snapshot_file)
         return state
 
 
@@ -181,7 +181,7 @@ class FailoverManager:
         """
         Raft/Paxos-style leader election.
         """
-        logger.info(f"🗳️ Starting leader election (node: {self.node_id})")
+        logger.info("🗳️ Starting leader election (node: %s)", self.node_id)
 
         # Simple bully algorithm for now
         # In production, use proper consensus (etcd, Consul)
@@ -208,7 +208,7 @@ class FailoverManager:
                 if primary != self.node_id:
                     last_seen = self.last_peer_heartbeat.get(primary)
                     if last_seen and (datetime.now(UTC) - last_seen).seconds > self.failover_timeout:
-                        logger.error(f"⚠️ Primary {primary} appears down! Triggering failover...")
+                        logger.error("⚠️ Primary %s appears down! Triggering failover...", primary)
                         await self._trigger_failover()
 
             await asyncio.sleep(self.heartbeat_interval)
@@ -245,10 +245,10 @@ class FailoverManager:
                 if resp.status < 300:
                     self.last_peer_heartbeat[peer] = datetime.now(UTC)
                 else:
-                    logger.warning(f"⚠️ Heartbeat to {peer} returned HTTP {resp.status}")
+                    logger.warning("⚠️ Heartbeat to %s returned HTTP %s", peer, resp.status)
         except aiohttp.ClientError as exc:
             # Network errors are expected when a peer is down — log and continue
-            logger.error(f"⚠️ Heartbeat to {peer} failed: {exc}")
+            logger.error("⚠️ Heartbeat to %s failed: %s", peer, exc)
 
     async def _trigger_failover(self):
         """Promote self to primary"""
@@ -261,7 +261,7 @@ class FailoverManager:
     async def graceful_handover(self, new_primary: str):
         """Gracefully hand over primary role"""
         if self.is_primary:
-            logger.info(f"🤝 Handing over primary to {new_primary}")
+            logger.info("🤝 Handing over primary to %s", new_primary)
             self.is_primary = False
             # Sync state to new primary
             # Pause new orders

@@ -188,7 +188,7 @@ class ImmutableAuditLog:
             expected_hash = self._recalculate_hash(record, calculated_hash)
 
             if record.hash_chain != expected_hash:
-                logger.error(f"❌ INTEGRITY VIOLATION at record {record.sequence_number}")
+                logger.error("❌ INTEGRITY VIOLATION at record %s", record.sequence_number)
                 return False
 
             calculated_hash = record.hash_chain

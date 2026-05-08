@@ -59,7 +59,7 @@ results: list[tuple[str, str, str]] = []  # (status, name, detail)
 
 def record(status: str, name: str, detail: str) -> None:
     results.append((status, name, detail))
-    logger.info(f"  {status}  {name}: {detail}")
+    logger.info("  %s  %s: %s", status, name, detail)
 
 
 # ── 1. Environment keys ───────────────────────────────────────────────────────
@@ -281,7 +281,7 @@ async def main() -> int:
     passed = sum(1 for s, _, _ in results if s == OK)
     warned = sum(1 for s, _, _ in results if s == WARN)
     failed = sum(1 for s, _, _ in results if s == FAIL)
-    logger.error(f"  {OK} {passed} passed   {WARN} {warned} warnings   {FAIL} {failed} failed")
+    logger.error("  %s %s passed   %s %s warnings   %s %s failed", OK, passed, WARN, warned, FAIL, failed)
 
     if failed > 0:
         logger.error("\nCritical failures detected. Fix the ❌ items before starting paper trading.")

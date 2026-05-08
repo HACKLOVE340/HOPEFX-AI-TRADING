@@ -1998,8 +1998,8 @@ def run_ml_test():
     # Generate synthetic data for smoke-testing only
     logger.info("\n[1] Generating synthetic GBM data (smoke-test only)...")
     df = generate_synthetic_data(n_samples=3000)
-    logger.info(f"    Generated {len(df)} samples")
-    logger.info(f"    Date range: {df.index[0]} to {df.index[-1]}")
+    logger.info("    Generated %s samples", len(df))
+    logger.info("    Date range: %s to %s", df.index[0], df.index[-1])
 
     # Initialize predictor
     logger.info("\n[2] Initializing ML predictor...")
@@ -2042,18 +2042,18 @@ def run_ml_test():
     logger.info("ML PREDICTOR REPORT")
     logger.info("=" * 80)
 
-    logger.info(f"\nModels in ensemble: {report['models']}")
-    logger.info(f"Weights: {report['weights']}")
-    logger.info(f"Predictions generated: {report['predictions_generated']}")
+    logger.info("\nModels in ensemble: %s", report['models'])
+    logger.info("Weights: %s", report['weights'])
+    logger.info("Predictions generated: %s", report['predictions_generated'])
 
     if report["recent_performance"]["accuracy"] is not None:
-        logger.info(f"\nRecent accuracy: {report['recent_performance']['accuracy']:.1%}")
-        logger.info(f"Average confidence: {report['recent_performance']['avg_confidence']:.1%}")
+        logger.info("\nRecent accuracy: %s", report['recent_performance']['accuracy']:.1%)
+        logger.info("Average confidence: %s", report['recent_performance']['avg_confidence']:.1%)
 
-    logger.info(f"\nFeatures used: {report['feature_count']}")
+    logger.info("\nFeatures used: %s", report['feature_count'])
     logger.info("Top 5 features:")
     for feat, imp in list(report["top_features"].items())[:5]:
-        logger.info(f"  {feat}: {imp:.4f}")
+        logger.info("  %s: %.4f", feat, imp)
 
     logger.info("\n" + "=" * 80)
     logger.info("✅ ML PREDICTOR TEST COMPLETED")

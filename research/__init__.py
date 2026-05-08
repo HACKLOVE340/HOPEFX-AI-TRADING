@@ -160,7 +160,7 @@ LOOKBACK_DAYS = 365
 from cache.market_data_cache import MarketDataCache
 cache = MarketDataCache()
 df = cache.get_ohlcv(SYMBOL, TIMEFRAME, limit=LOOKBACK_DAYS * 24)
-logger.info(f"Loaded {len(df)} bars for {SYMBOL} {TIMEFRAME}")
+logger.info("Loaded %s bars for %s %s", len(df), SYMBOL, TIMEFRAME)
 df.head()
 """,
         )

@@ -637,7 +637,7 @@ if __name__ == "__main__":
         json_path = gen.save_json(report)
         html_path = gen.save_html(report)
         logger.info(_render_text(report))
-        logger.info(f"\nSaved: {json_path}")
-        logger.info(f"Saved: {html_path}")
+        logger.info("\nSaved: %s", json_path)
+        logger.info("Saved: %s", html_path)
 
     asyncio.run(_main())

@@ -1086,7 +1086,7 @@ async def run_realtime_test():
     aggregator.add_provider(MockProvider(volatility=0.0002, drift=0.00001, tick_interval_ms=100))  # pylint: disable=abstract-class-instantiated
     aggregator.add_provider(MockProvider(volatility=0.0003, drift=-0.00001, tick_interval_ms=150))  # pylint: disable=abstract-class-instantiated
 
-    logger.info(f"    Added {len(aggregator.providers)} providers")
+    logger.info("    Added %s providers", len(aggregator.providers))
 
     # Set up tick collection
     consensus_ticks = []
@@ -1124,17 +1124,17 @@ async def run_realtime_test():
     logger.info("REAL-TIME ENGINE REPORT")
     logger.info("=" * 80)
 
-    logger.info(f"\nDuration: {elapsed:.2f} seconds")
-    logger.info(f"Consensus ticks received: {len(consensus_ticks)}")
-    logger.info(f"Rate: {len(consensus_ticks) / elapsed:.1f} ticks/second")
+    logger.info("\nDuration: %.2f seconds", elapsed)
+    logger.info("Consensus ticks received: %s", len(consensus_ticks))
+    logger.info("Rate: %.1f ticks/second", len(consensus_ticks) / elapsed)
 
     if latencies:
         logger.info("\n--- Latency Statistics ---")
-        logger.info(f"Min: {min(latencies):.3f} ms")
-        logger.info(f"Max: {max(latencies):.3f} ms")
-        logger.info(f"Mean: {np.mean(latencies):.3f} ms")
-        logger.info(f"P50: {np.percentile(latencies, 50):.3f} ms")
-        logger.info(f"P99: {np.percentile(latencies, 99):.3f} ms")
+        logger.info("Min: %.3f ms", min(latencies))
+        logger.info("Max: %.3f ms", max(latencies))
+        logger.info("Mean: %.3f ms", np.mean(latencies))
+        logger.info("P50: %.3f ms", np.percentile(latencies, 50))
+        logger.info("P99: %.3f ms", np.percentile(latencies, 99))
 
     # Health report
     logger.info("\n--- Provider Health ---")
@@ -1147,16 +1147,16 @@ async def run_realtime_test():
         )
 
     logger.info("\n--- Consensus Stats ---")
-    logger.info(f"Ticks processed: {aggregator.stats['ticks_processed']}")
-    logger.info(f"Consensus formed: {aggregator.stats['consensus_formed']}")
-    logger.info(f"Disagreements: {aggregator.stats['disagreements']}")
-    logger.info(f"Outliers rejected: {aggregator.stats['outliers_rejected']}")
+    logger.info("Ticks processed: %s", aggregator.stats['ticks_processed'])
+    logger.info("Consensus formed: %s", aggregator.stats['consensus_formed'])
+    logger.info("Disagreements: %s", aggregator.stats['disagreements'])
+    logger.info("Outliers rejected: %s", aggregator.stats['outliers_rejected'])
 
     # Sample consensus prices
     if consensus_ticks:
         logger.info("\n--- Sample Prices (last 5) ---")
         for tick in consensus_ticks[-5:]:
-            logger.info(f"{tick.symbol}: Bid={tick.bid:.5f} Ask={tick.ask:.5f} Spread={tick.spread_bps:.2f} bps")
+            logger.info("%s: Bid=%.5f Ask=%.5f Spread=%.2f bps", tick.symbol, tick.bid, tick.ask, tick.spread_bps)
 
     logger.info("\n" + "=" * 80)
     logger.info("✅ REAL-TIME ENGINE TEST COMPLETED")

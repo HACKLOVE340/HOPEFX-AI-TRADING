@@ -402,7 +402,7 @@ def run_checks(strict: bool = False) -> int:
 
         icon = "✅" if status == GREEN else ("⚠️ " if status == YELLOW else "❌")
         tag = "[CRITICAL]    " if cat == CRITICAL else "[non-critical]"
-        logger.info(f"  {icon} {tag} {name:<30} {msg[:60]}")
+        logger.info("  %s %s %s %s", icon, tag, name:<30, msg[:60])
 
     logger.info("")
     logger.info("─" * 70)
@@ -414,19 +414,19 @@ def run_checks(strict: bool = False) -> int:
     crit_reds = [(n, r) for n, r in reds if r[2] == CRITICAL]
     crit_yellows = [(n, r) for n, r in yellows if r[2] == CRITICAL]
 
-    logger.error(f"  TOTAL  ✅ {len(greens)} GREEN   ⚠️  {len(yellows)} YELLOW   ❌ {len(reds)} RED")
+    logger.error("  TOTAL  ✅ %s GREEN   ⚠️  %s YELLOW   ❌ %s RED", len(greens), len(yellows), len(reds))
     logger.info("")
 
     if crit_reds:
         logger.error("  ❌ CRITICAL FAILURES:")
         for name, (_status, msg, _) in crit_reds:
-            logger.info(f"     • {name}: {msg}")
+            logger.info("     • %s: %s", name, msg)
         logger.info("")
 
     if crit_yellows:
         logger.warning("  ⚠️  CRITICAL WARNINGS:")
         for name, (_status, msg, _) in crit_yellows:
-            logger.info(f"     • {name}: {msg}")
+            logger.info("     • %s: %s", name, msg)
         logger.info("")
 
     overall_ok = len(crit_reds) == 0 and (not strict or len(crit_yellows) == 0)

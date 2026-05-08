@@ -28,7 +28,7 @@ except ImportError:
 
     # Inspect the full registry at startup
     for name, info in flags.registry().items():
-        logger.info(f"{name}: enabled={info['enabled']}, status={info['status']}")
+        logger.info("%s: enabled=%s, status=%s", name, info['enabled'], info['status'])
 
 Status levels
 -------------

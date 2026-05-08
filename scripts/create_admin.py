@@ -72,7 +72,7 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
         existing = session.query(User).filter((User.email == email.lower()) | (User.username == username)).first()
 
         if existing and not reset:
-            logger.info(f"\n[INFO] User '{existing.username}' already exists.")
+            logger.info("\n[INFO] User '%s' already exists.", existing.username)
             logger.info("       Use --reset to update the password.\n")
             return
 
@@ -86,7 +86,7 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
             existing.email_verify_token = None
             existing.email_verify_expires = None
             session.commit()
-            logger.info(f"\n✅  Password reset for user '{existing.username}'")
+            logger.info("\n✅  Password reset for user '%s'", existing.username)
         else:
             user = User(
                 id=str(uuid.uuid4()),
@@ -101,11 +101,11 @@ def create_or_update_admin(email: str, username: str, password: str, reset: bool
             )
             session.add(user)
             session.commit()
-            logger.info(f"\n✅  Admin user created: '{username}'")
+            logger.info("\n✅  Admin user created: '%s'", username)
 
         logger.info("─" * 50)
-        logger.info(f"  Email    : {email}")
-        logger.info(f"  Username : {username}")
+        logger.info("  Email    : %s", email)
+        logger.info("  Username : %s", username)
         # Do not echo the password here — it was either supplied by the caller
         # (who already knows it) or printed once by main() before this call.
         logger.info("  Password : (set — use the value shown above or your supplied value)")
@@ -154,7 +154,7 @@ def main():
             os.write(fd, pw_content)
         finally:
             os.close(fd)
-        logger.info(f"[INFO] Auto-generated password written to: {pw_file}")
+        logger.info("[INFO] Auto-generated password written to: %s", pw_file)
         logger.info("[INFO] Delete that file after saving the password to a password manager.")
 
     create_or_update_admin(args.email, args.username, args.password, args.reset)

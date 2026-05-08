@@ -723,8 +723,8 @@ if __name__ == "__main__":
             arrival_price=1950.0,
         )
 
-        logger.info(f"\nOrder: {order.side.name} {order.size} {order.symbol}")
-        logger.info(f"Arrival price: {order.arrival_price}")
+        logger.info("\nOrder: %s %s %s", order.side.name, order.size, order.symbol)
+        logger.info("Arrival price: %s", order.arrival_price)
 
         # Execute
         result = await router.execute_order(order)
@@ -732,21 +732,21 @@ if __name__ == "__main__":
         logger.info("\n" + "=" * 70)
         logger.info("EXECUTION RESULT")
         logger.info("=" * 70)
-        logger.info(f"Status: {result['status']}")
-        logger.info(f"Filled: {result['filled_size']:.2f}")
-        logger.info(f"Avg Price: {result['avg_price']:.4f}")
-        logger.info(f"VWAP: {result['vwap']:.4f}")
-        logger.info(f"Implementation Shortfall: {result['implementation_shortfall']:.4%}")
-        logger.info(f"Total Fees: ${result['total_fees']:.2f}")
-        logger.info(f"Avg Slippage: {result['total_slippage_bps']:.2f} bps")
-        logger.info(f"Duration: {result['duration_seconds']:.2f}s")
+        logger.info("Status: %s", result['status'])
+        logger.info("Filled: %.2f", result['filled_size'])
+        logger.info("Avg Price: %.4f", result['avg_price'])
+        logger.info("VWAP: %.4f", result['vwap'])
+        logger.info("Implementation Shortfall: %s", result['implementation_shortfall']:.4%)
+        logger.info("Total Fees: $%.2f", result['total_fees'])
+        logger.info("Avg Slippage: %.2f bps", result['total_slippage_bps'])
+        logger.info("Duration: %.2fs", result['duration_seconds'])
 
         # Routing report
         logger.info("\n" + "=" * 70)
         logger.info("ROUTING REPORT")
         logger.info("=" * 70)
         report = router.get_routing_report()
-        logger.info(f"Venue distribution: {report['venue_usage']}")
+        logger.info("Venue distribution: %s", report['venue_usage'])
 
         logger.info("\n✅ Smart Router test completed!")
 

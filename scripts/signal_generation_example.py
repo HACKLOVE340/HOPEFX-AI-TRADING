@@ -26,7 +26,7 @@ def load_data(file_path):
         data = pd.read_csv(file_path)
         return data
     except Exception as e:
-        logger.error(f"Error loading data: {e}")
+        logger.error("Error loading data: %s", e)
         return None
 
 
@@ -52,7 +52,7 @@ def train_model(data):
         labels = data["Signal"]
         model.fit(features, labels)
     except Exception as e:
-        logger.error(f"Error training model: {e}")
+        logger.error("Error training model: %s", e)
         return None
     return model
 

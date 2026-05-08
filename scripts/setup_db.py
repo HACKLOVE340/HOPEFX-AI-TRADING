@@ -88,7 +88,7 @@ def get_sync_db_url() -> str:
 
 def run_migrations() -> bool:
     """Run alembic upgrade head. Returns True on success."""
-    logger.info(f"\n{OK}  Running Alembic migrations...")
+    logger.info("\n%s  Running Alembic migrations...", OK)
     result = subprocess.run(  # nosec B603 — fixed args, no shell, no user input
         [sys.executable, "-m", "alembic", "upgrade", "head"],
         cwd=str(ROOT),
@@ -98,12 +98,12 @@ def run_migrations() -> bool:
         check=False,
     )
     if result.returncode != 0:
-        logger.error(f"{FAIL}  Migration failed:\n{result.stderr}")
+        logger.error("%s  Migration failed:\n%s", FAIL, result.stderr)
         return False
     for line in result.stdout.splitlines() + result.stderr.splitlines():
         if "Running upgrade" in line or "Context impl" in line:
-            logger.info(f"       {line.strip()}")
-    logger.info(f"{OK}  Migrations complete")
+            logger.info("       %s", line.strip())
+    logger.info("%s  Migrations complete", OK)
     return True
 
 
@@ -131,10 +131,10 @@ def verify_tables(db_url: str) -> tuple[set[str], set[str]]:
             found = {r[0] for r in cur.fetchall()}
             conn.close()
         except ImportError:
-            logger.warning(f"{WARN}  psycopg2 not installed — cannot verify PostgreSQL tables")
+            logger.warning("%s  psycopg2 not installed — cannot verify PostgreSQL tables", WARN)
             return set(), set()
         except Exception as exc:
-            logger.error(f"{FAIL}  PostgreSQL connection failed: {exc}")
+            logger.error("%s  PostgreSQL connection failed: %s", FAIL, exc)
             return set(), EXPECTED_TABLES
 
     missing = EXPECTED_TABLES - found
@@ -159,8 +159,8 @@ def main() -> int:
     is_sqlite = db_url.startswith("sqlite")
 
     logger.info("\n=== HOPEFX Database Setup ===")
-    logger.info(f"  Database : {'SQLite (dev)' if is_sqlite else 'PostgreSQL (production)'}")
-    logger.info(f"  URL      : {db_url[:60]}{'...' if len(db_url) > 60 else ''}")
+    logger.info("  Database : %s", 'SQLite (dev)' if is_sqlite else 'PostgreSQL (production)')
+    logger.info("  URL      : %s%s", db_url[:60], '...' if len(db_url) > 60 else '')
 
     # ── Migrations ────────────────────────────────────────────────────────────
     if not args.check:
@@ -168,38 +168,38 @@ def main() -> int:
         if not ok:
             return 1
     else:
-        logger.warning(f"\n{WARN}  --check mode: skipping migrations")
+        logger.warning("\n%s  --check mode: skipping migrations", WARN)
 
     # ── Verify tables ─────────────────────────────────────────────────────────
     logger.info("\n=== Table verification ===")
     found, missing = verify_tables(db_url)
 
     if found:
-        logger.info(f"  {OK}  {len(found)} tables present")
+        logger.info("  %s  %s tables present", OK, len(found))
     if missing:
-        logger.error(f"  {FAIL}  {len(missing)} expected tables missing: {', '.join(sorted(missing))}")
+        logger.error("  %s  %s expected tables missing: %s", FAIL, len(missing), ', '.join(sorted(missing)))
         if not args.check:
             logger.info("       Re-run without --check to apply migrations")
     else:
-        logger.info(f"  {OK}  All {len(EXPECTED_TABLES)} expected tables verified")
+        logger.info("  %s  All %s expected tables verified", OK, len(EXPECTED_TABLES))
 
     # ── Redis ─────────────────────────────────────────────────────────────────
     logger.info("\n=== Redis ===")
     if check_redis():
-        logger.info(f"  {OK}  Redis connected — {os.getenv('REDIS_URL', 'redis://localhost:6379/0')}")
+        logger.info("  %s  Redis connected — %s", OK, os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
     else:
-        logger.warning(f"  {WARN}  Redis not reachable — start with: redis-server")
+        logger.warning("  %s  Redis not reachable — start with: redis-server", WARN)
         logger.info("       Paper trading will work without Redis but caching is disabled")
 
     # ── Summary ───────────────────────────────────────────────────────────────
     logger.info("\n=== Summary ===")
     if not missing:
-        logger.info(f"  {OK}  Database ready for paper trading")
+        logger.info("  %s  Database ready for paper trading", OK)
         if is_sqlite:
-            logger.warning(f"  {WARN}  Using SQLite — switch to PostgreSQL for production")
+            logger.warning("  %s  Using SQLite — switch to PostgreSQL for production", WARN)
             logger.info("       Set DATABASE_URL=postgresql+asyncpg://... in .env")
     else:
-        logger.error(f"  {FAIL}  Database setup incomplete — {len(missing)} tables missing")
+        logger.error("  %s  Database setup incomplete — %s tables missing", FAIL, len(missing))
         return 1
 
     return 0

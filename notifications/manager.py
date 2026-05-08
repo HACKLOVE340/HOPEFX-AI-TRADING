@@ -483,12 +483,12 @@ class ConsoleChannel(NotificationChannel):
         color = self.colors.get(notification.level, "")
         reset = self.reset
 
-        logger.info(f"{color}[{notification.level.value.upper()}] {notification.title}{reset}")
-        logger.info(f"  {notification.message}")
+        logger.info("%s[%s] %s%s", color, notification.level.value.upper(), notification.title, reset)
+        logger.info("  %s", notification.message)
 
         if notification.data:
             for key, value in notification.data.items():
-                logger.info(f"  • {key}: {value}")
+                logger.info("  • %s: %s", key, value)
 
         return True
 

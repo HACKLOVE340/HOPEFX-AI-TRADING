@@ -41,7 +41,7 @@ def async_retry(max_attempts: int = 3, delay: float = 1.0):
                 except Exception as e:
                     if attempt == max_attempts - 1:
                         raise
-                    logger.info(f"Retry {attempt + 1}/{max_attempts}: {e}")
+                    logger.info("Retry %s/%s: %s", attempt + 1, max_attempts, e)
                     await asyncio.sleep(delay * (2**attempt))
             return None
 

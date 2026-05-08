@@ -282,7 +282,7 @@ def generate_cover(output_path: Path) -> None:
     # ------------------------------------------------------------------
     output_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(str(output_path), "PNG", optimize=True)
-    logger.info(f"Cover written to {output_path}  ({output_path.stat().st_size // 1024} KB)")
+    logger.info("Cover written to %s  (%s KB)", output_path, output_path.stat().st_size // 1024)
 
 
 def main() -> None:

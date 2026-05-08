@@ -124,7 +124,7 @@ async def _run(args: argparse.Namespace) -> None:
     to_dt = datetime.fromisoformat(args.to_date).replace(tzinfo=UTC) if args.to_date else datetime.now(UTC)
 
     if args.granularity not in TIMEFRAME_SECONDS:
-        logger.info(f"Unknown granularity '{args.granularity}'. Supported: {', '.join(TIMEFRAME_SECONDS)}")
+        logger.info("Unknown granularity '%s'. Supported: %s", args.granularity, ', '.join(TIMEFRAME_SECONDS))
         sys.exit(1)
 
     bar_secs = TIMEFRAME_SECONDS[args.granularity]
@@ -133,13 +133,13 @@ async def _run(args: argparse.Namespace) -> None:
 
     logger.info("\nHOPEFX H1 Backfill")
     logger.info("=" * 50)
-    logger.info(f"  Symbol      : {args.symbol}")
-    logger.info(f"  Granularity : {args.granularity}")
-    logger.info(f"  From        : {from_dt.strftime('%Y-%m-%d')}")
-    logger.info(f"  To          : {to_dt.strftime('%Y-%m-%d')}")
-    logger.info(f"  Est. bars   : ~{total_bars_estimate:,}")
-    logger.info(f"  Output      : {output_path}")
-    logger.info(f"  OANDA key   : {'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)'}")
+    logger.info("  Symbol      : %s", args.symbol)
+    logger.info("  Granularity : %s", args.granularity)
+    logger.info("  From        : %s", from_dt.strftime('%Y-%m-%d'))
+    logger.info("  To          : %s", to_dt.strftime('%Y-%m-%d'))
+    logger.info("  Est. bars   : ~%s", total_bars_estimate:,)
+    logger.info("  Output      : %s", output_path)
+    logger.info("  OANDA key   : %s", 'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)')
     logger.info("")
 
     if args.dry_run:
@@ -164,11 +164,11 @@ async def _run(args: argparse.Namespace) -> None:
 
     logger.info("")
     logger.info("=" * 50)
-    logger.info(f"Backfill complete: {count:,} bars appended to {output_path}")
+    logger.info("Backfill complete: %s bars appended to %s", count:,, output_path)
 
     if output_path.exists():
         size_kb = output_path.stat().st_size / 1024
-        logger.info(f"File size: {size_kb:.1f} KB")
+        logger.info("File size: %.1f KB", size_kb)
 
     if count == 0 and not os.getenv("OANDA_API_KEY"):
         logger.info(
