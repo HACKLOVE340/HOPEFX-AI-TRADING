@@ -49,11 +49,20 @@ export async function fetchOHLCV(params: OHLCVParams): Promise<OHLCVBar[]> {
   );
   const raw = res.data;
   const bars: OHLCVBar[] = Array.isArray(raw) ? raw : (raw.data ?? []);
-  // Normalise timestamps to unix seconds
-  return bars.map((b) => ({
-    ...b,
-    time: b.time > 1e10 ? Math.floor(b.time / 1000) : b.time,
-  }));
+  // Backend returns `timestamp` (unix seconds float from price engine / yfinance).
+  // Normalise to unix seconds integer and map to the `time` field the chart types expect.
+  return bars
+    .map((b) => {
+      // Accept either `time` or `timestamp` from the server
+      const rawTs = (b as unknown as Record<string, unknown>).timestamp as number | undefined;
+      const ts = rawTs ?? b.time;
+      if (ts == null) return null;
+      // Auto-detect ms vs seconds: values > 1e10 are milliseconds
+      const timeSec = ts > 1e10 ? Math.floor(ts / 1000) : Math.floor(ts);
+      return { ...b, time: timeSec };
+    })
+    .filter((b): b is OHLCVBar => b !== null && b.time > 0)
+    .sort((a, b) => a.time - b.time); // lightweight-charts requires ascending order
 }
 
 // ─── Signals ──────────────────────────────────────────────────────────────────
