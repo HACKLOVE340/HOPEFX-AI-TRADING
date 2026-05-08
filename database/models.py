@@ -771,10 +771,14 @@ Index("idx_trades_entry_time", Trade.entry_time)
 Index("idx_trades_user_status_entry", Trade.user_id, Trade.status, Trade.entry_time)
 # Partial-style: open trades by symbol (status filter applied in WHERE)
 Index("idx_trades_symbol_entry_time", Trade.symbol, Trade.entry_time)
+# History-by-user without status filter (e.g. paginated trade history endpoint)
+Index("idx_trades_user_entry_time", Trade.user_id, Trade.entry_time)
 
 # Orders — Order has no user_id; use account_id + symbol as the covering key
 Index("idx_orders_symbol_created", Order.symbol, Order.created_at)
 Index("idx_orders_account_symbol_created", Order.account_id, Order.symbol, Order.created_at)
+# Unfilled order lookups by symbol (polling for pending orders)
+Index("idx_orders_symbol_filled", Order.symbol, Order.is_filled)
 
 # Signals
 Index("idx_signals_generated_executed", Signal.generated_at, Signal.executed)
