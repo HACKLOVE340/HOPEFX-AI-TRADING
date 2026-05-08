@@ -8,9 +8,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-// useNavigate removed — all nav converted to Link
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
@@ -18,109 +16,6 @@ import {
 import { propFirmExtApi } from '../hooks/useApi';
 import { usePolling } from '../hooks/usePolling';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
-
-// ── Radial Drawdown Gauge ─────────────────────────────────────────────────────
-
-interface GaugeProps {
-  value: number;   // 0–1 (current drawdown as fraction of limit)
-  limit: number;   // limit as fraction (e.g. 0.05 = 5%)
-  label: string;
-  size?: number;
-}
-
-const DrawdownGauge: React.FC<GaugeProps> = ({ value, limit, label, size = 140 }) => {
-  const pct     = Math.min(value / limit, 1);
-  const danger  = pct >= 1;
-  const warn    = pct >= 0.8;
-  const color   = danger ? '#ef4444' : warn ? '#f59e0b' : '#3b82f6';
-  const safe    = '#1e293b';
-
-  // SVG arc math
-  const r       = (size / 2) - 14;
-  const cx      = size / 2;
-  const cy      = size / 2;
-  const startAngle = -220;
-  const sweep   = 260; // degrees of arc
-  const endAngle = startAngle + sweep * pct;
-
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const arcPath = (from: number, to: number, radius: number) => {
-    const x1 = cx + radius * Math.cos(toRad(from));
-    const y1 = cy + radius * Math.sin(toRad(from));
-    const x2 = cx + radius * Math.cos(toRad(to));
-    const y2 = cy + radius * Math.sin(toRad(to));
-    const large = Math.abs(to - from) > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${large} 1 ${x2} ${y2}`;
-  };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-      <svg width={size} height={size} style={{ overflow: 'visible' }}>
-        {/* Track */}
-        <path d={arcPath(startAngle, startAngle + sweep, r)} fill="none" stroke={safe} strokeWidth={10} strokeLinecap="round" />
-        {/* Fill */}
-        {pct > 0 && (
-          <path d={arcPath(startAngle, endAngle, r)} fill="none" stroke={color} strokeWidth={10} strokeLinecap="round"
-            style={{ transition: 'stroke-dashoffset 0.6s ease, stroke 0.4s' }} />
-        )}
-        {/* Center text */}
-        <text x={cx} y={cy - 6} textAnchor="middle" fill={color} fontSize={18} fontWeight={700} fontFamily="monospace">
-          {(pct * 100).toFixed(0)}%
-        </text>
-        <text x={cx} y={cy + 12} textAnchor="middle" fill="#64748b" fontSize={10}>
-          of limit
-        </text>
-        {/* Danger ring pulse */}
-        {danger && (
-          <circle cx={cx} cy={cy} r={r + 16} fill="none" stroke="#ef444440" strokeWidth={4}>
-            <animate attributeName="r" values={`${r + 14};${r + 20};${r + 14}`} dur="1.5s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.8;0.2;0.8" dur="1.5s" repeatCount="indefinite" />
-          </circle>
-        )}
-      </svg>
-      <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, textAlign: 'center' }}>{label}</div>
-      <div style={{ fontSize: 11, color: '#64748b' }}>
-        {(value * 100).toFixed(2)}% / {(limit * 100).toFixed(0)}% limit
-      </div>
-    </div>
-  );
-};
-
-// ── Daily Loss Bar (enhanced) ─────────────────────────────────────────────────
-
-const DailyLossBar: React.FC<{ value: number; limit: number }> = ({ value, limit }) => {
-  const pct   = Math.min((value / limit) * 100, 100);
-  const color = pct >= 100 ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#3b82f6';
-  const zones = [
-    { pct: 50, label: '50%', color: '#22c55e' },
-    { pct: 80, label: '80%', color: '#f59e0b' },
-    { pct: 100, label: 'LIMIT', color: '#ef4444' },
-  ];
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600 }}>📉 Daily Loss</span>
-        <span style={{ fontSize: 13, fontWeight: 700, fontFamily: 'monospace', color }}>
-          {(value * 100).toFixed(2)}% / {(limit * 100).toFixed(0)}%
-        </span>
-      </div>
-      <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 8, height: 18, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: `linear-gradient(90deg, #3b82f6, ${color})`, borderRadius: 8, transition: 'width 0.6s ease' }} />
-        {/* Zone markers */}
-        {zones.map(z => (
-          <div key={z.pct} style={{ position: 'absolute', left: `${z.pct}%`, top: 0, bottom: 0, width: 1, background: z.color + '80' }}>
-            <span style={{ position: 'absolute', top: -18, left: -12, fontSize: 9, color: z.color, fontWeight: 700, whiteSpace: 'nowrap' }}>{z.label}</span>
-          </div>
-        ))}
-      </div>
-      {pct >= 80 && (
-        <div style={{ marginTop: 6, fontSize: 11, color, fontWeight: 600 }}>
-          {pct >= 100 ? '🚨 Daily loss limit reached — trading halted' : `⚠️ Approaching daily limit — ${(100 - pct).toFixed(1)}% remaining`}
-        </div>
-      )}
-    </div>
-  );
-};
 
 interface PropFirmStatus {
   daily_loss_pct: number;
@@ -203,6 +98,7 @@ const ProgressBar: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const PropFirmTracker: React.FC = () => {
+  const navigate = useNavigate();
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
   const enabled  = hydrated && isAuth;
@@ -282,41 +178,37 @@ const PropFirmTracker: React.FC = () => {
   const errorMsg = error instanceof Error ? error.message : error ? String(error) : null;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <PageHeader
-        title="Prop Firm Challenge Tracker"
-        icon="🛡️"
-        subtitle="Monitor drawdown limits, daily loss caps, and profit targets in real time."
-        breadcrumbs={[
-          { label: 'Dashboard',    href: '/dashboard' },
-          { label: 'Tools',        href: '/risk-calculator' },
-          { label: 'Prop Tracker' },
-        ]}
-        actions={
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-            {(['live', 'history', 'alerts', 'daily'] as const).map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} style={{
-                background: activeTab === t ? '#1e3a5f' : '#1e293b',
-                border: `1px solid ${activeTab === t ? '#3b82f6' : '#334155'}`,
-                borderRadius: 8, color: activeTab === t ? '#60a5fa' : '#64748b',
-                cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px', fontFamily: 'inherit',
-              }}>
-                {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
-              </button>
-            ))}
-            <div style={{ width: 1, height: 24, background: '#334155' }} />
-            <Link to="/risk-calculator" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>
-              🛡 Risk Calc
-            </Link>
-            <Link to="/journal" style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 8, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>
-              📓 Journal
-            </Link>
-            <Link to="/trade" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>
-              ⚡ Trade
-            </Link>
-          </div>
-        }
-      />
+    <div style={s.page}>
+      <div style={s.header}>
+        <span style={{ fontSize: 28 }}>🛡️</span>
+        <h1 style={s.title}>Prop Firm Challenge Tracker</h1>
+        {statusIcon && <span style={{ fontSize: 22 }}>{statusIcon}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {(['live', 'history', 'alerts', 'daily'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              background: activeTab === t ? '#1e3a5f' : '#1e293b',
+              border: `1px solid ${activeTab === t ? '#3b82f6' : '#334155'}`,
+              borderRadius: 8, color: activeTab === t ? '#60a5fa' : '#64748b',
+              cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: '6px 12px',
+            }}>
+              {t === 'live' ? '📊 Live' : t === 'history' ? '📋 History' : t === 'alerts' ? `🚨 Alerts${alertsQ.data?.filter(a => !a.acknowledged).length ? ` (${alertsQ.data.filter(a => !a.acknowledged).length})` : ''}` : '📅 Daily'}
+            </button>
+          ))}
+          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <button
+            onClick={() => navigate('/risk-calculator')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 8, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
+          >
+            🛡 Risk Calc
+          </button>
+          <button
+            onClick={() => navigate('/trade')}
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '6px 12px', cursor: 'pointer' }}
+          >
+            ⚡ Trade
+          </button>
+        </div>
+      </div>
 
       {/* ── History Tab ── */}
       {activeTab === 'history' && (
@@ -324,12 +216,15 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Challenge History</h3>
           {historyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!historyQ.isLoading && (historyQ.data ?? []).length === 0 && (
-            <EmptyState
-              icon="📋"
-              title="No challenge history yet"
-              description="Complete your first prop firm challenge to see historical performance here."
-              compact
-            />
+            <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 32 }}>🏆</div>
+              <div style={{ color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No challenge history yet</div>
+              <div style={{ color: '#64748b', fontSize: 12 }}>Complete a challenge phase to see your history here.</div>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Start Trading
+              </button>
+            </div>
           )}
           {(historyQ.data ?? []).map(ch => (
             <div key={ch.challenge_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #1e293b' }}>
@@ -383,12 +278,15 @@ const PropFirmTracker: React.FC = () => {
           <h3 style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', margin: '0 0 16px' }}>Daily P&L Stats</h3>
           {dailyQ.isLoading && <div style={s.loading}>Loading…</div>}
           {!dailyQ.isLoading && (dailyQ.data ?? []).length === 0 && (
-            <EmptyState
-              icon="📅"
-              title="No daily stats yet"
-              description="Daily trading statistics will appear here once you start trading."
-              compact
-            />
+            <div style={{ textAlign: 'center', padding: 32, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 32 }}>📈</div>
+              <div style={{ color: '#94a3b8', fontSize: 14, fontWeight: 600 }}>No daily stats yet</div>
+              <div style={{ color: '#64748b', fontSize: 12 }}>Trade to start building your daily P&amp;L record.</div>
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '6px 16px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Start Trading
+              </button>
+            </div>
           )}
           {(dailyQ.data ?? []).length > 0 && (
             <ResponsiveContainer width="100%" height={200}>
@@ -449,29 +347,27 @@ const PropFirmTracker: React.FC = () => {
             </div>
           </div>
 
-          {/* Drawdown gauges */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-            <div style={{ ...s.progressCard, display: 'flex', justifyContent: 'center', padding: '20px 16px' }}>
-              <DrawdownGauge
-                value={status.max_drawdown_pct}
-                limit={status.max_drawdown_limit}
-                label="Max Drawdown"
-                size={150}
-              />
-            </div>
-            <div style={{ ...s.progressCard, display: 'flex', justifyContent: 'center', padding: '20px 16px' }}>
-              <DrawdownGauge
-                value={status.profit_target_pct}
-                limit={1.0}
-                label="Profit Target"
-                size={150}
-              />
-            </div>
-          </div>
-
-          {/* Daily loss bar + trading days */}
+          {/* Progress bars */}
           <div style={s.progressCard}>
-            <DailyLossBar value={status.daily_loss_pct} limit={status.daily_loss_limit} />
+            <ProgressBar
+              label="Daily Loss"
+              value={status.daily_loss_pct}
+              limit={status.daily_loss_limit}
+              amount={`${(status.daily_loss_pct * 100).toFixed(2)}% / ${(status.daily_loss_limit * 100).toFixed(0)}% limit`}
+            />
+            <ProgressBar
+              label="Max Drawdown"
+              value={status.max_drawdown_pct}
+              limit={status.max_drawdown_limit}
+              amount={`${(status.max_drawdown_pct * 100).toFixed(2)}% / ${(status.max_drawdown_limit * 100).toFixed(0)}% limit`}
+            />
+            <ProgressBar
+              label="Profit Target"
+              value={status.profit_target_pct}
+              limit={1.0}
+              invert
+              amount={`$${status.profit_target_amount.toFixed(0)} / $${status.profit_target_goal.toFixed(0)}`}
+            />
 
             {/* Trading days */}
             <div style={{ marginBottom: 8 }}>
@@ -488,15 +384,6 @@ const PropFirmTracker: React.FC = () => {
                 }} />
               </div>
             </div>
-
-            {/* Profit target bar */}
-            <ProgressBar
-              label="Profit Target Progress"
-              value={status.profit_target_pct}
-              limit={1.0}
-              invert
-              amount={`$${status.profit_target_amount.toFixed(0)} / $${status.profit_target_goal.toFixed(0)}`}
-            />
           </div>
 
           {/* P&L summary */}
@@ -513,15 +400,6 @@ const PropFirmTracker: React.FC = () => {
       )}
       </>
       )}
-
-      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '🛡️ Risk Calculator', href: '/risk-calculator', color: '#f97316' },
-        { label: '📓 Trade Journal',    href: '/journal',         color: '#fbbf24' },
-        { label: '📊 Performance',      href: '/performance',     color: '#60a5fa' },
-        { label: '💼 Portfolio',         href: '/portfolio',       color: '#a78bfa' },
-        { label: '🔁 Copy Trading',     href: '/copy-trading',    color: '#34d399' },
-        { label: '📊 Dashboard',        href: '/dashboard',       color: '#94a3b8' },
-      ]}/>
     </div>
   );
 };

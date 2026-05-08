@@ -9,13 +9,10 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { securityHealingApi } from '../hooks/useApi';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-import { EmptyState } from '../components/EmptyState';
-import { Badge } from '../components/Badge';
 import { FixApprovalQueue } from '../components/FixApprovalQueue';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -106,8 +103,9 @@ async function fetchThreats(): Promise<Threat[]> {
   return (Array.isArray(res.data) ? res.data : (res.data as { threats?: Threat[] }).threats) ?? [];
 }
 
-// triggerAvScan removed — handleAvScan calls securityHealingApi.avScan() directly
-// so it can inspect the response status (queued vs triggered).
+async function triggerAvScan(): Promise<void> {
+  await securityHealingApi.avScan();
+}
 
 async function quarantineThreat(threatId: string): Promise<void> {
   await securityHealingApi.avQuarantine({ threat_id: threatId });
@@ -115,126 +113,29 @@ async function quarantineThreat(threatId: string): Promise<void> {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-// ── Drift detail modal ────────────────────────────────────────────────────────
-
-const DriftDetailModal: React.FC<{ event: DriftEvent; onClose: () => void }> = ({ event, onClose }) => {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ background: '#0d1421', border: '1px solid #334155', borderRadius: 12, padding: 24, maxWidth: 560, width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>⚠️ Drift Event</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 20 }}>✕</button>
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {[
-            { label: 'File Path', value: event.path, mono: true },
-            { label: 'Change Type', value: event.type, mono: false },
-            { label: 'Detected At', value: new Date(event.ts).toLocaleString(), mono: false },
-          ].map(({ label, value, mono }) => (
-            <div key={label} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 13, color: '#e2e8f0', fontFamily: mono ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>{value}</div>
-            </div>
-          ))}
-          {(event.expected || event.actual) && (
-            <div style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Hash Comparison</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div>
-                  <div style={{ fontSize: 10, color: '#22c55e', marginBottom: 2 }}>Expected</div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace', wordBreak: 'break-all' }}>{event.expected ?? '—'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 10, color: '#ef4444', marginBottom: 2 }}>Actual</div>
-                  <div style={{ fontSize: 11, color: '#f87171', fontFamily: 'monospace', wordBreak: 'break-all' }}>{event.actual ?? '—'}</div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+const DriftTable: React.FC<{ events: DriftEvent[]; loading: boolean }> = ({ events, loading }) => (
+  <div style={panelStyle}>
+    <div style={panelHeaderStyle}>
+      <span style={panelTitleStyle}>File Integrity Drift</span>
+      <span style={panelCountStyle}>{events.length}</span>
     </div>
-  );
-};
-
-// ── Baseline drift gauge ──────────────────────────────────────────────────────
-
-const BaselineDriftGauge: React.FC<{ driftCount: number; baselineFiles: number }> = ({ driftCount, baselineFiles }) => {
-  const pct = baselineFiles > 0 ? Math.min((driftCount / baselineFiles) * 100, 100) : 0;
-  const color = pct === 0 ? '#22c55e' : pct < 5 ? '#f59e0b' : '#ef4444';
-  const label = pct === 0 ? 'Clean' : pct < 5 ? 'Minor Drift' : 'High Drift';
-
-  return (
-    <div style={{ padding: '12px 16px', background: '#0f172a', border: `1px solid ${color}30`, borderRadius: 8, marginBottom: 12 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color }}>Baseline Integrity — {label}</span>
-        <span style={{ fontSize: 12, fontFamily: 'monospace', color }}>
-          {driftCount} / {baselineFiles} files drifted ({pct.toFixed(1)}%)
-        </span>
+    {loading ? (
+      <div style={emptyStyle}>Loading…</div>
+    ) : events.length === 0 ? (
+      <div style={emptyStyle}>No drift detected — all files match baseline</div>
+    ) : (
+      <div style={tableWrapStyle}>
+        {events.slice(0, 30).map((e, i) => (
+          <div key={i} style={tableRowStyle}>
+            <span style={typeBadgeStyle(e.type)}>{e.type}</span>
+            <span style={monoStyle}>{e.path}</span>
+            <span style={timeStyle}>{new Date(e.ts).toLocaleTimeString()}</span>
+          </div>
+        ))}
       </div>
-      <div style={{ height: 8, background: '#1e293b', borderRadius: 4, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width 0.6s ease' }} />
-      </div>
-      {/* Type breakdown mini-bars */}
-    </div>
-  );
-};
-
-const DriftTable: React.FC<{ events: DriftEvent[]; loading: boolean; baselineFiles: number }> = ({ events, loading, baselineFiles }) => {
-  const [selected, setSelected] = useState<DriftEvent | null>(null);
-
-  // Group by type for summary
-  const typeCounts = events.reduce<Record<string, number>>((acc, e) => {
-    acc[e.type] = (acc[e.type] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return (
-    <div style={panelStyle}>
-      {selected && <DriftDetailModal event={selected} onClose={() => setSelected(null)} />}
-      <div style={panelHeaderStyle}>
-        <span style={panelTitleStyle}>File Integrity Drift</span>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {Object.entries(typeCounts).map(([type, count]) => (
-            <span key={type} style={{ ...typeBadgeStyle(type), fontSize: 10 }}>{type}: {count}</span>
-          ))}
-          <span style={panelCountStyle}>{events.length}</span>
-        </div>
-      </div>
-      {!loading && baselineFiles > 0 && (
-        <div style={{ padding: '12px 16px 0' }}>
-          <BaselineDriftGauge driftCount={events.length} baselineFiles={baselineFiles} />
-        </div>
-      )}
-      {loading ? (
-        <EmptyState compact icon="⏳" title="Loading drift events…" />
-      ) : events.length === 0 ? (
-        <EmptyState compact icon="✅" title="No drift detected" description="All files match the baseline. The system is clean." />
-      ) : (
-        <div style={tableWrapStyle}>
-          {events.slice(0, 30).map((e, i) => (
-            <div key={i} style={{ ...tableRowStyle, cursor: 'pointer' }}
-              onClick={() => setSelected(e)}
-              onMouseEnter={el => { (el.currentTarget as HTMLDivElement).style.background = '#111827'; }}
-              onMouseLeave={el => { (el.currentTarget as HTMLDivElement).style.background = 'transparent'; }}>
-              <span style={typeBadgeStyle(e.type)}>{e.type}</span>
-              <span style={{ ...monoStyle, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.path}</span>
-              <span style={timeStyle}>{new Date(e.ts).toLocaleTimeString()}</span>
-              <span style={{ fontSize: 11, color: '#3b82f6', marginLeft: 6 }}>›</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+    )}
+  </div>
+);
 
 // ── Diff viewer modal ─────────────────────────────────────────────────────────
 
@@ -297,9 +198,9 @@ const PatchTable: React.FC<{ patches: PatchRecord[]; loading: boolean }> = ({ pa
         <span style={panelCountStyle}>{patches.length}</span>
       </div>
       {loading ? (
-        <EmptyState compact icon="⏳" title="Loading patches…" />
+        <div style={emptyStyle}>Loading…</div>
       ) : patches.length === 0 ? (
-        <EmptyState compact icon="🩹" title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
+        <div style={emptyStyle}>No patches applied yet</div>
       ) : (
         <div style={tableWrapStyle}>
           {patches.slice(0, 20).map((p, i) => (
@@ -328,9 +229,9 @@ const ThreatTable: React.FC<{
       <span style={panelCountStyle}>{threats.length}</span>
     </div>
     {loading ? (
-      <EmptyState compact icon="⏳" title="Loading threats…" />
+      <div style={emptyStyle}>Loading…</div>
     ) : threats.length === 0 ? (
-      <EmptyState compact icon="🛡️" title="No threats detected" description="The system is clean. Detected threats will appear here for review." />
+      <div style={emptyStyle}>No threats detected</div>
     ) : (
       <div style={tableWrapStyle}>
         {threats.slice(0, 30).map((t) => (
@@ -361,6 +262,7 @@ const ThreatTable: React.FC<{
 // ── Main component ────────────────────────────────────────────────────────────
 
 const AutoHealDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [healStatus, setHealStatus] = useState<HealStatus | null>(null);
   const [drift, setDrift] = useState<DriftEvent[]>([]);
   const [patches, setPatches] = useState<PatchRecord[]>([]);
@@ -414,69 +316,31 @@ const AutoHealDashboard: React.FC = () => {
   const handleScan = async () => {
     setScanning(true);
     setScanProgress(0);
-    setError(null);
+    // Simulate progress while scan runs (real progress from WS if available)
     const interval = setInterval(() => setScanProgress(p => Math.min(p + 8, 90)), 400);
     try {
       await triggerScan();
       setScanProgress(100);
       await loadAll();
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      if (status === 403) {
-        setError('Integrity scan requires admin role.');
-      } else if (status === 503) {
-        setError('Self-healer service unavailable — scan queued for next scheduled run.');
-      } else {
-        setError(detail ?? (err instanceof Error ? err.message : 'Scan trigger failed'));
-      }
-    }
+    } catch { setError('Scan trigger failed'); }
     finally { clearInterval(interval); setScanning(false); setTimeout(() => setScanProgress(0), 1500); }
   };
 
   const handleAvScan = async () => {
     setAvScanning(true);
     setAvProgress(0);
-    setError(null);
     const interval = setInterval(() => setAvProgress(p => Math.min(p + 5, 90)), 600);
     try {
-      const res = await securityHealingApi.avScan() as { data?: { status?: string; message?: string } };
+      await triggerAvScan();
       setAvProgress(100);
-      // Backend returns 200 with status=queued when AV engine is unavailable — treat as success
-      const scanStatus = res?.data?.status ?? 'triggered';
-      if (scanStatus === 'queued') {
-        setError('AV scan queued — engine initialising. Results will appear in the threats list shortly.');
-      }
       await loadAll();
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      if (status === 403) {
-        setError('AV scan requires admin role.');
-      } else if (status === 503) {
-        setError('AV engine unavailable — scan queued for next scheduled run.');
-      } else {
-        setError(detail ?? (err instanceof Error ? err.message : 'AV scan trigger failed'));
-      }
-    }
+    } catch { setError('AV scan trigger failed'); }
     finally { clearInterval(interval); setAvScanning(false); setTimeout(() => setAvProgress(0), 1500); }
   };
 
   const handleRebuild = async () => {
     setRebuilding(true);
-    setError(null);
-    try {
-      await rebuildBaseline();
-      await loadAll();
-    } catch (err: unknown) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      if (status === 403) {
-        setError('Baseline rebuild requires admin role.');
-      } else {
-        setError(detail ?? (err instanceof Error ? err.message : 'Baseline rebuild failed'));
-      }
-    }
+    try { await rebuildBaseline(); await loadAll(); } catch { setError('Baseline rebuild failed'); }
     finally { setRebuilding(false); }
   };
 
@@ -493,30 +357,17 @@ const AutoHealDashboard: React.FC = () => {
     <div style={pageStyle}>
       <PageHeader
         title="Auto-Heal & Antivirus"
-        icon="🩺"
         subtitle="Code integrity monitor · Self-healing engine · Malware scanner"
-        breadcrumbs={[
-          { label: 'Home',        href: '/home' },
-          { label: 'Admin Panel', href: '/admin' },
-          { label: 'Auto-Heal' },
-        ]}
-        badge={
-          highThreats > 0
-            ? <Badge variant="danger" style={{ fontSize: 11 }}>{highThreats} Active Threat{highThreats !== 1 ? 's' : ''}</Badge>
-            : healStatus?.running
-            ? <Badge variant="info" style={{ fontSize: 11 }}>● Healing Active</Badge>
-            : <Badge variant="success" style={{ fontSize: 11 }}>● Healthy</Badge>
-        }
         actions={
           <div style={{ display: 'flex', gap: 8 }}>
-            <Link to="/security"
-              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button onClick={() => navigate('/security')}
+              style={{ padding: '6px 14px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               🛡 Security
-            </Link>
-            <Link to="/audit"
-              style={{ padding: '6px 14px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-              📋 Audit Log
-            </Link>
+            </button>
+            <button onClick={() => navigate('/')}
+              style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              📊 Dashboard
+            </button>
           </div>
         }
       />
@@ -620,7 +471,7 @@ const AutoHealDashboard: React.FC = () => {
 
       {/* Main grid */}
       <div style={mainGridStyle}>
-        <DriftTable events={drift} loading={loading} baselineFiles={healStatus?.baseline_files ?? 0} />
+        <DriftTable events={drift} loading={loading} />
         <PatchTable patches={patches} loading={loading} />
       </div>
 
@@ -634,15 +485,6 @@ const AutoHealDashboard: React.FC = () => {
       {/* LLM fix approval queue */}
       <div style={sectionLabelStyle}>LLM Fix Approval Queue</div>
       <FixApprovalQueue />
-
-      <CrossLinkBar title="Related" links={[
-        { label: 'Security Dashboard',  href: '/security',           icon: '🛡️', color: '#f87171' },
-        { label: 'Audit Log',           href: '/audit',              icon: '🔍', color: '#60a5fa' },
-        { label: 'Admin Panel',         href: '/admin',              icon: '🔧', color: '#94a3b8' },
-        { label: 'Super Admin',         href: '/superadmin',         icon: '⚡', color: '#f59e0b' },
-        { label: 'System Reliability',  href: '/system-reliability', icon: '🔬', color: '#a78bfa' },
-        { label: 'System Status',       href: '/status',             icon: '🟢', color: '#22c55e' },
-      ]} />
     </div>
   );
 };

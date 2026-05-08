@@ -16,17 +16,14 @@
  *   GET  /custom-dev/requests
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { useStore } from '../store';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   eliteApi,
   type SupportTicketPayload,
   type CustomDevPayload,
 } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-import { EmptyState } from '../components/EmptyState';
+import { useStore } from '../store';
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
@@ -78,107 +75,6 @@ const STATUS_COLORS: Record<string, string> = {
   closed:      '#64748b',
   submitted:   '#8b5cf6',
 };
-
-// SLA durations in ms per priority
-const SLA_MS: Record<string, number> = {
-  urgent: 60 * 60 * 1000,        // 1h
-  high:   4 * 60 * 60 * 1000,    // 4h
-  normal: 24 * 60 * 60 * 1000,   // 24h
-};
-
-// ── SLA Countdown ─────────────────────────────────────────────────────────────
-function SlaCountdown({ createdAt, priority, status }: { createdAt: string; priority: string; status: string }) {
-  const [remaining, setRemaining] = useState<number>(0);
-
-  useEffect(() => {
-    if (status === 'resolved' || status === 'closed') return;
-    const sla = SLA_MS[priority] ?? SLA_MS.normal;
-    const deadline = new Date(createdAt).getTime() + sla;
-    const tick = () => setRemaining(Math.max(0, deadline - Date.now()));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [createdAt, priority, status]);
-
-  if (status === 'resolved' || status === 'closed') {
-    return <span style={{ fontSize: 11, color: '#22c55e' }}>✓ Resolved</span>;
-  }
-
-  const sla = SLA_MS[priority] ?? SLA_MS.normal;
-  const pct = Math.max(0, (remaining / sla) * 100);
-  const h = Math.floor(remaining / 3_600_000);
-  const m = Math.floor((remaining % 3_600_000) / 60_000);
-  const s = Math.floor((remaining % 60_000) / 1_000);
-  const color = pct > 50 ? '#22c55e' : pct > 20 ? '#f59e0b' : '#ef4444';
-  const label = remaining === 0 ? 'SLA BREACHED' : `${h}h ${m}m ${s}s`;
-
-  return (
-    <div style={{ minWidth: 120 }}>
-      <div style={{ fontSize: 11, color, fontWeight: 700, fontFamily: 'monospace', marginBottom: 3 }}>
-        {remaining === 0 ? '🚨 ' : '⏱ '}{label}
-      </div>
-      <div style={{ height: 3, background: '#1e293b', borderRadius: 2, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, transition: 'width 1s linear, background 0.5s' }} />
-      </div>
-    </div>
-  );
-}
-
-// ── Ticket Timeline ───────────────────────────────────────────────────────────
-interface TicketEvent {
-  event_type: string;
-  detail: string;
-  created_at: string;
-  actor?: string;
-}
-
-const TIMELINE_ICONS: Record<string, string> = {
-  created:     '🎫',
-  assigned:    '👤',
-  replied:     '💬',
-  escalated:   '🚨',
-  resolved:    '✅',
-  closed:      '🔒',
-  reopened:    '🔄',
-};
-
-function TicketTimeline({ ticketId }: { ticketId: string }) {
-  const [events, setEvents] = useState<TicketEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    eliteApi.ticketTimeline(ticketId)
-      .then(r => {
-        if (!mounted) return;
-        const d = r.data as TicketEvent[] | { events?: TicketEvent[] };
-        setEvents(Array.isArray(d) ? d : (d.events ?? []));
-      })
-      .catch(() => { if (mounted) setEvents([]); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, [ticketId]);
-
-  if (loading) return <div style={{ color: '#64748b', fontSize: 12, padding: '8px 0' }}>Loading timeline…</div>;
-  if (events.length === 0) return null;
-
-  return (
-    <div style={{ marginTop: 12, paddingLeft: 12, borderLeft: '2px solid #1e293b' }}>
-      {events.map((ev, i) => (
-        <div key={i} style={{ position: 'relative', paddingLeft: 16, paddingBottom: 10 }}>
-          <div style={{ position: 'absolute', left: -9, top: 2, width: 14, height: 14, borderRadius: '50%', background: '#0f172a', border: '2px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8 }}>
-            {TIMELINE_ICONS[ev.event_type] ?? '●'}
-          </div>
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>{ev.detail}</div>
-          <div style={{ fontSize: 10, color: '#475569', marginTop: 2 }}>
-            {ev.actor && <span style={{ color: '#64748b' }}>{ev.actor} · </span>}
-            {new Date(ev.created_at).toLocaleString()}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ── Account Manager card ──────────────────────────────────────────────────────
 
@@ -361,55 +257,43 @@ interface Ticket {
 }
 
 function TicketList({ refresh }: { refresh: number }) {
-  const [tickets, setTickets]   = useState<Ticket[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const load = useCallback(() => {
+  useEffect(() => {
+    let mounted = true;
     setLoading(true);
     eliteApi.listTickets()
-      .then(r => setTickets((r.data as { tickets: Ticket[] }).tickets ?? []))
-      .catch(() => setTickets([]))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [refresh, load]);
+      .then(r => { if (mounted) setTickets((r.data as { tickets: Ticket[] }).tickets ?? []); })
+      .catch(() => { if (mounted) setTickets([]); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [refresh]);
 
   return (
     <div style={s.card}>
-      <div style={{ ...s.cardH, justifyContent: 'space-between' }}>
-        <span>📋 My Support Tickets</span>
-        <button onClick={load} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 13 }}>↻</button>
-      </div>
+      <div style={s.cardH}>📋 My Support Tickets</div>
       {loading ? (
         <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
       ) : tickets.length === 0 ? (
-        <EmptyState icon="🎫" title="No tickets yet" description="Submit a support ticket above and it will appear here." />
+        <div style={{ color: '#64748b', fontSize: 13 }}>No tickets yet.</div>
       ) : (
         tickets.map(t => (
-          <div key={t.ticket_id} style={{ ...s.row, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}>
-                <button
-                  onClick={() => setExpanded(expanded === t.ticket_id ? null : t.ticket_id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', padding: 0, fontSize: 13, color: '#e2e8f0', fontWeight: 500, marginBottom: 4 }}
-                >
-                  {expanded === t.ticket_id ? '▾' : '▸'} {t.subject}
-                </button>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? '#64748b')}>{t.priority}</span>
-                  <span style={badgeStyle(STATUS_COLORS[t.status] ?? '#64748b')}>{t.status}</span>
-                  <span style={{ fontSize: 11, color: '#475569' }}>{t.category}</span>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                <div style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace', marginBottom: 6 }}>{t.ticket_id}</div>
-                <SlaCountdown createdAt={t.created_at} priority={t.priority} status={t.status} />
+          <div key={t.ticket_id} style={s.row}>
+            <div>
+              <div style={{ fontSize: 13, color: '#e2e8f0', fontWeight: 500, marginBottom: 4 }}>{t.subject}</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={badgeStyle(PRIORITY_COLORS[t.priority] ?? '#64748b')}>{t.priority}</span>
+                <span style={badgeStyle(STATUS_COLORS[t.status] ?? '#64748b')}>{t.status}</span>
+                <span style={{ fontSize: 11, color: '#475569' }}>{t.category}</span>
               </div>
             </div>
-            {expanded === t.ticket_id && (
-              <TicketTimeline ticketId={t.ticket_id} />
-            )}
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 11, color: '#475569', fontFamily: 'monospace' }}>{t.ticket_id}</div>
+              <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>
+                {new Date(t.created_at).toLocaleDateString()}
+              </div>
+            </div>
           </div>
         ))
       )}
@@ -580,7 +464,7 @@ function CustomDevList({ refresh }: { refresh: number }) {
       {loading ? (
         <div style={{ color: '#64748b', fontSize: 13 }}>Loading…</div>
       ) : reqs.length === 0 ? (
-        <EmptyState icon="📦" title="No development requests yet" description="Submit a custom development request above and it will appear here." />
+        <div style={{ color: '#64748b', fontSize: 13 }}>No requests yet.</div>
       ) : (
         reqs.map(r => (
           <div key={r.request_id} style={s.row}>
@@ -610,6 +494,7 @@ function CustomDevList({ refresh }: { refresh: number }) {
 // ── Root component ────────────────────────────────────────────────────────────
 
 const EliteDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const role     = useStore(st => st.user?.role ?? 'user');
   const plan     = useStore(st => st.plan ?? 'free');
 
@@ -621,67 +506,47 @@ const EliteDashboard: React.FC = () => {
 
   if (!isElite) {
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 40px' }}>
-        <PageHeader
-          title="Elite Dashboard"
-          breadcrumbs={[
-            { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Billing', href: '/pricing' },
-            { label: 'Elite' },
-          ]}
-        />
-        <EmptyState
-          icon="⭐"
-          title="Elite Plan Required"
-          description="Dedicated support, custom development, and sub-accounts are exclusive to Elite subscribers ($10,000/mo)."
-          action={<Link to="/checkout" style={{ padding: '8px 18px', background: '#f59e0b', borderRadius: 8, color: '#000', fontSize: 13, fontWeight: 700, textDecoration: 'none', display: 'inline-block' }}>⭐ Upgrade to Elite</Link>}
-        />
-        <div style={{ textAlign: 'center', marginTop: 12 }}>
-          <Link to="/pricing" style={{ color: '#94a3b8', fontSize: 13, textDecoration: 'none', padding: '8px 18px', border: '1px solid #334155', borderRadius: 6, display: 'inline-block' }}>
-            View all plans
-          </Link>
+      <div style={s.gate}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>⭐</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: '#f59e0b', marginBottom: 8 }}>
+          Elite Plan Required
         </div>
+        <div style={{ fontSize: 14, color: '#94a3b8', maxWidth: 400, margin: '0 auto 24px' }}>
+          Sub-accounts, dedicated support, and custom development are exclusive
+          to Elite subscribers ($10,000/mo).
+        </div>
+        <button style={s.btn} onClick={() => navigate('/checkout')}>
+          Upgrade to Elite
+        </button>
+        <button style={{ ...s.btnSec, marginLeft: 12 }} onClick={() => navigate('/pricing')}>
+          View all plans
+        </button>
       </div>
     );
   }
 
   return (
     <div style={s.page}>
-      <PageHeader
-        title="Elite Dashboard"
-        subtitle="Dedicated support · Custom development · Sub-accounts · White-label"
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Billing', href: '/pricing' },
-          { label: 'Elite' },
-        ]}
-        badge={<span style={{ fontSize: 11, fontWeight: 700, padding: '2px 10px', borderRadius: 20, background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)' }}>ELITE</span>}
-        actions={
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Link to="/walk-forward"
-              style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
-              📈 Walk-Forward
-            </Link>
-            <Link to="/ai-strategy"
-              style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
-              🤖 AI Strategy
-            </Link>
-            <Link to="/leaderboard"
-              style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>
-              🏆 Leaderboard
-            </Link>
-          </div>
-        }
-      />
-
-      <CrossLinkBar links={[
-        { label: 'Sub-Accounts', href: '/sub-accounts', icon: '🗂', color: '#60a5fa' },
-        { label: 'White-label',  href: '/whitelabel',   icon: '🏷', color: '#a78bfa' },
-        { label: 'Teams',        href: '/teams',        icon: '👥', color: '#4ade80' },
-        { label: 'Wallet',       href: '/wallet',       icon: '💳', color: '#f59e0b' },
-        { label: 'Settings',     href: '/settings',     icon: '⚙️', color: '#94a3b8' },
-        { label: 'Chat',         href: '/chat',         icon: '💬', color: '#06b6d4' },
-      ]} style={{ marginBottom: 28 }} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
+        <div style={s.heading}>⭐ Elite Dashboard</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => navigate('/walk-forward')}
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📈 Walk-Forward
+          </button>
+          <button onClick={() => navigate('/ai-strategy')}
+            style={{ padding: '7px 14px', background: 'rgba(6,182,212,0.12)', border: '1px solid rgba(6,182,212,0.35)', borderRadius: 7, color: '#06b6d4', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🤖 AI Strategy
+          </button>
+          <button onClick={() => navigate('/leaderboard')}
+            style={{ padding: '7px 14px', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 7, color: '#f59e0b', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            🏆 Leaderboard
+          </button>
+        </div>
+      </div>
+      <div style={s.sub}>
+        Dedicated support · Custom development · Sub-accounts · White-label
+      </div>
 
       {/* Account manager + ticket form */}
       <div style={s.grid}>
@@ -697,14 +562,6 @@ const EliteDashboard: React.FC = () => {
 
       {/* Custom dev request list — full width */}
       <CustomDevList refresh={devRefresh} />
-
-      <CrossLinkBar title="Related" style={{ marginTop: 16 }} links={[
-        { label: 'Performance',     href: '/performance',   icon: '📊', color: '#4ade80' },
-        { label: 'Portfolio',       href: '/portfolio',     icon: '💼', color: '#60a5fa' },
-        { label: 'AI Strategy',     href: '/ai-strategy',   icon: '🤖', color: '#a78bfa' },
-        { label: 'Pricing',         href: '/pricing',       icon: '💰', color: '#f59e0b' },
-        { label: 'Affiliate',       href: '/affiliate',     icon: '🤝', color: '#f97316' },
-      ]} />
     </div>
   );
 };

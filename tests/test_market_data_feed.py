@@ -356,6 +356,9 @@ class TestMarketDataCache:
 
     def test_store_bar_calls_zadd(self):
         r = self._make_redis()
+        # store_bar uses a pipeline — assert on the pipeline's zadd, not r.zadd directly.
+        pipe = MagicMock()
+        r.pipeline.return_value = pipe
         cache = MarketDataCache(r)
         bar = {
             "symbol": "XAUUSD",
@@ -368,8 +371,7 @@ class TestMarketDataCache:
             "bar_open_ts": 1_700_000_000.0,
         }
         cache.store_bar("XAUUSD", "1m", bar)
-        # store_bar uses a pipeline; verify pipeline().zadd was called
-        pipe = r.pipeline.return_value
+        r.pipeline.assert_called_once()
         pipe.zadd.assert_called_once()
 
     def test_ping_returns_false_on_redis_error(self):

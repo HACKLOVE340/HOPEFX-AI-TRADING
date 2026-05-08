@@ -17,7 +17,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api as sharedApi } from '../hooks/useApi';
 import {
   useQuery,
@@ -33,18 +33,7 @@ import {
 } from 'recharts';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-import { EmptyState } from '../components/EmptyState';
 import { useStore, selectUser } from '../store';
-
-const TCA_CROSS_LINKS = [
-  { label: 'Performance',   href: '/performance',     icon: '📈', color: '#4ade80' },
-  { label: 'P&L Dashboard', href: '/pnl',             icon: '💹', color: '#a78bfa' },
-  { label: 'Correlation',   href: '/correlation',     icon: '📊', color: '#60a5fa' },
-  { label: 'Trade Journal', href: '/journal',         icon: '📓', color: '#f59e0b' },
-  { label: 'Trade',         href: '/trade',           icon: '⚡', color: '#3b82f6' },
-  { label: 'Walk-Forward',  href: '/walk-forward',    icon: '🔁', color: '#34d399' },
-];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -364,17 +353,15 @@ const TCADashboard: React.FC = () => {
       <PageHeader
         title="Transaction Cost Analysis"
         subtitle="Signal-price vs fill-price slippage across all brokers and sessions"
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Analytics', href: '/performance' },
-          { label: 'TCA' },
-        ]}
         actions={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {loading && <span style={{ color: '#64748b', fontSize: 11 }}>Updating…</span>}
-            <Link to="/performance" style={{ ...pg.btn, background: 'rgba(74,222,128,0.1)', borderColor: 'rgba(74,222,128,0.3)', color: '#4ade80', textDecoration: 'none' }}>📈 Performance</Link>
-            <Link to="/pnl"         style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa', textDecoration: 'none' }}>💹 P&amp;L</Link>
-            <Link to="/correlation" style={{ ...pg.btn, background: 'rgba(96,165,250,0.1)',  borderColor: 'rgba(96,165,250,0.3)',  color: '#60a5fa', textDecoration: 'none' }}>📊 Correlation</Link>
+            <button
+              onClick={() => navigate('/pnl')}
+              style={{ ...pg.btn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
+            >
+              💹 View P&L Impact
+            </button>
             <button style={pg.btn} onClick={refresh} disabled={loading}>Refresh</button>
             <button style={pg.btnCsv} onClick={() => exportCSV(filteredRecords)} disabled={filteredRecords.length === 0}>
               ↓ CSV
@@ -476,7 +463,7 @@ const TCADashboard: React.FC = () => {
             <span style={pg.badge}>{reports.length} brokers</span>
           </div>
           {reports.length === 0 ? (
-            <EmptyState compact icon="🏦" title="No broker data yet" description="Fill records will appear here once the execution engine records trades." links={[{ label: 'Trade', href: '/trade', icon: '⚡' }]} />
+            <div style={pg.empty}>No broker data yet — fills will appear here.</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={pg.table}>
@@ -523,7 +510,7 @@ const TCADashboard: React.FC = () => {
             <span style={pg.panelTitle}>Session Breakdown</span>
           </div>
           {!stats?.by_session || Object.keys(stats.by_session).length === 0 ? (
-            <EmptyState compact icon="📅" title="No session data yet" description="Session breakdown appears after trades are recorded." />
+            <div style={pg.empty}>No session data yet.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {Object.entries(stats.by_session).map(([session, s]) => (
@@ -611,15 +598,23 @@ const TCADashboard: React.FC = () => {
         </div>
 
         {filteredRecords.length === 0 ? (
-          <EmptyState
-            compact
-            icon="📋"
-            title={records.length === 0 ? 'No fill records yet' : 'No records match filters'}
-            description={records.length === 0
-              ? 'Trades will appear here once the execution engine records fills.'
-              : 'Try adjusting the symbol filter or date range.'}
-            links={records.length === 0 ? [{ label: 'Trade', href: '/trade', icon: '⚡' }] : []}
-          />
+          <div style={{ ...pg.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 36 }}>📊</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>
+              {records.length === 0 ? 'No fill records yet' : 'No records match the current filters'}
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', textAlign: 'center', maxWidth: 360 }}>
+              {records.length === 0
+                ? 'Trades will appear here once the execution engine records fills.'
+                : 'Try clearing your filters to see all records.'}
+            </div>
+            {records.length === 0 && (
+              <button onClick={() => navigate('/trade')}
+                style={{ padding: '7px 18px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 8, color: '#60a5fa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+                ⚡ Start Trading
+              </button>
+            )}
+          </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={pg.table}>
@@ -670,8 +665,6 @@ const TCADashboard: React.FC = () => {
           </div>
         )}
       </div>
-
-      <CrossLinkBar links={TCA_CROSS_LINKS} title="Related Analytics" />
     </div>
   );
 };

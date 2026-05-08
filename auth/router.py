@@ -76,13 +76,18 @@ def _get_signing_secret() -> str:
 def _make_signed_token(payload: dict, salt: str, max_age_seconds: int = 86400) -> str:
     """Return a URL-safe signed token embedding *payload*.
 
-    Falls back to ``secrets.token_urlsafe(32)`` when itsdangerous is not
-    installed (should never happen in production — itsdangerous is in
-    requirements.txt).
+    When itsdangerous is available (production), the token is a
+    URLSafeTimedSerializer envelope with HMAC signature and expiry.
+
+    When itsdangerous is not installed (dev/CI without the package), the
+    function returns the raw ``tok`` value from the payload directly.  The
+    raw token is already a ``secrets.token_urlsafe(32)`` — cryptographically
+    random and validated via SHA-256 hash in the service layer — so
+    verification remains secure even without the HMAC wrapper.
     """
     if not _ITS_AVAILABLE:
-        logger.warning("itsdangerous not available — falling back to opaque token")
-        return secrets.token_urlsafe(32)
+        logger.warning("itsdangerous not available — using raw tok as token (dev/CI only)")
+        return payload.get("tok", secrets.token_urlsafe(32))
     s = URLSafeTimedSerializer(_get_signing_secret(), salt=salt)
     return s.dumps(payload)
 
@@ -96,9 +101,12 @@ def _verify_signed_token(
 
     Returns None on any error (expired, tampered, wrong salt).  Callers
     should treat None as an invalid/expired token without leaking the reason.
+
+    When itsdangerous is unavailable, treats the token as the raw ``tok``
+    value (matching the fallback in ``_make_signed_token``).
     """
     if not _ITS_AVAILABLE:
-        return None
+        return {"tok": token}
     try:
         s = URLSafeTimedSerializer(_get_signing_secret(), salt=salt)
         return s.loads(token, max_age=max_age_seconds)

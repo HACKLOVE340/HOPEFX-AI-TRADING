@@ -1,13 +1,10 @@
 /**
  * Social Signal Feed — community feed of high-confidence AI signals.
- * Features: opt-in/out toggle, real-time WS signal injection with auto-reconnect,
- * pagination, reactions (👍/👎), comments, copy counts.
- *
- * Routes: /signals (canonical), /social → /signals, /feed → /signals
+ * Features: opt-in/out toggle, real-time WS signal injection, pagination,
+ * reactions (👍/👎), comments, copy counts.
  */
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { getWsBase } from '../lib/utils';
@@ -29,9 +26,6 @@ function extractErr(err: unknown, fb: string): string {
 const SocialFeed: React.FC = () => {
   const navigate = useNavigate();
   const user = useStore(s => s.user);
-  const [wsConnected, setWsConnected] = useState(false);
-  const [wsFlash, setWsFlash]         = useState(false);
-  const [typingSignals, setTypingSignals] = useState<Record<string, boolean>>({});
   const [items, setItems]           = useState<FeedItem[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string|null>(null);
@@ -79,63 +73,24 @@ const SocialFeed: React.FC = () => {
 
   useEffect(() => { loadFeed(1, true); }, [loadFeed]);
 
-  // WebSocket — inject new signals in real-time with auto-reconnect (exponential backoff)
+  // WebSocket — inject new signals in real-time
   const wsToken = useStore(s => s.token);
-  const wsRef2  = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectDelay = useRef(1000);
-
   useEffect(() => {
     if (!wsToken) return;
-    let destroyed = false;
-
-    const connect = () => {
-      if (destroyed) return;
-      const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
-      let ws: WebSocket;
-      try { ws = new WebSocket(wsUrl); } catch { return; }
-      wsRef2.current = ws;
-
-      ws.onopen = () => {
-        if (!mountedRef.current || destroyed) return;
-        setWsConnected(true);
-        reconnectDelay.current = 1000; // reset backoff on successful connect
-      };
-      ws.onclose = () => {
-        if (!mountedRef.current || destroyed) return;
-        setWsConnected(false);
-        // Exponential backoff: 1s → 2s → 4s → 8s → max 30s
-        const delay = Math.min(reconnectDelay.current, 30_000);
-        reconnectDelay.current = delay * 2;
-        reconnectTimer.current = setTimeout(connect, delay);
-      };
-      ws.onerror = () => {
-        if (!mountedRef.current || destroyed) return;
-        setWsConnected(false);
-        ws.close();
-      };
+    const wsUrl = `${getWsBase()}/ws/social-feed?token=${wsToken}`;
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(wsUrl);
       ws.onmessage = (ev) => {
         try {
           const msg = JSON.parse(ev.data as string) as { type?: string; signal?: FeedItem };
           if (msg.type === 'new_signal' && msg.signal) {
             setItems(prev => [msg.signal!, ...prev].slice(0, 200));
-            setWsFlash(true);
-            setTimeout(() => setWsFlash(false), 800);
           }
-          // heartbeat — no action needed, connection is alive
         } catch { /* ignore malformed frames */ }
       };
-    };
-
-    connect();
-
-    return () => {
-      destroyed = true;
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      wsRef2.current?.close();
-      wsRef2.current = null;
-      setWsConnected(false);
-    };
+    } catch { /* WS unavailable — polling only */ }
+    return () => { ws?.close(); };
   }, [wsToken]);
 
   const handleOptToggle = async () => {
@@ -213,67 +168,39 @@ const SocialFeed: React.FC = () => {
   });
 
   return (
-    <div className="max-w-3xl mx-auto px-3 sm:px-6 py-4 sm:py-8 text-slate-100 min-h-screen">
-      <PageHeader
-        title="Community Signal Feed"
-        icon="📡"
-        subtitle="High-confidence AI signals from the community (≥70% confidence)"
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Community', href: '/leaderboard' },
-          { label: 'Signal Feed' },
-        ]}
-        actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* WS live indicator */}
-            <div
-              title={wsConnected ? 'Real-time connected' : 'Reconnecting…'}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border cursor-default ${
-                wsConnected
-                  ? 'bg-green-500/8 border-green-500/30'
-                  : 'bg-slate-500/8 border-terminal-border'
-              }`}
-            >
-              <div className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                wsConnected ? (wsFlash ? 'bg-white' : 'bg-green-400') : 'bg-slate-500 animate-pulse'
-              }`} />
-              <span className={`text-2xs font-bold ${wsConnected ? 'text-green-400' : 'text-slate-500'}`}>
-                {wsConnected ? 'LIVE' : 'RECONNECTING'}
-              </span>
-            </div>
-            <Link to="/leaderboard"
-              className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs font-semibold no-underline hover:bg-amber-500/20 transition-colors hidden sm:inline-flex">
-              🏆 Leaderboard
-            </Link>
-            <Link to="/copy-trading"
-              className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-xs font-semibold no-underline hover:bg-emerald-500/20 transition-colors hidden sm:inline-flex">
-              🔁 Copy
-            </Link>
-            <button
-              onClick={handleOptToggle}
-              disabled={optLoading || optedIn === null}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold border-0 cursor-pointer transition-colors disabled:opacity-50 ${
-                optedIn ? 'bg-emerald-700 text-white' : 'bg-terminal-raised text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
-            </button>
-          </div>
-        }
-      />
+    <div style={s.page}>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Community Signal Feed</h1>
+          <p style={s.subtitle}>High-confidence AI signals from the community (≥70% confidence)</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 13, color: '#64748b' }}>Share my signals:</span>
+          <button
+            onClick={handleOptToggle}
+            disabled={optLoading || optedIn === null}
+            style={{
+              ...s.toggleBtn,
+              background: optedIn ? '#059669' : '#334155',
+              color: optedIn ? '#fff' : '#94a3b8',
+            }}
+          >
+            {optLoading ? '…' : optedIn ? '✅ Opted In' : 'Opt In'}
+          </button>
+        </div>
+      </div>
 
-      {/* Symbol filters + sort — scrollable on mobile */}
-      <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1"
-        style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
+      {/* Symbol filters */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
         {SYMBOLS.map(sym => (
           <button
             key={sym}
             onClick={() => setSymbolFilter(sym)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer whitespace-nowrap transition-colors flex-shrink-0 ${
-              symbolFilter === sym
-                ? 'bg-blue-600 text-white'
-                : 'bg-terminal-raised text-slate-400 hover:text-slate-200'
-            }`}
+            style={{
+              padding: '4px 12px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
+              background: symbolFilter === sym ? '#3b82f6' : '#1e293b',
+              color: symbolFilter === sym ? '#fff' : '#94a3b8',
+            }}
           >
             {sym}
           </button>
@@ -281,232 +208,152 @@ const SocialFeed: React.FC = () => {
         <select
           value={sortBy}
           onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          className="ml-auto bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-xs px-2.5 py-1.5 outline-none cursor-pointer flex-shrink-0"
+          style={{ marginLeft: 'auto', background: '#1e293b', color: '#94a3b8', border: '1px solid #334155', borderRadius: 6, padding: '4px 8px', fontSize: 13 }}
         >
-          <option value="confidence">Confidence</option>
-          <option value="return">Return</option>
-          <option value="recent">Recent</option>
+          <option value="confidence">Sort: Confidence</option>
+          <option value="return">Sort: Return</option>
+          <option value="recent">Sort: Recent</option>
         </select>
       </div>
 
-      {error && (
-        <div className="bg-red-950/40 border border-red-800 rounded-lg px-4 py-3 text-red-400 text-sm mb-4">
-          {error}
-        </div>
-      )}
-
-      {/* Opt-in CTA */}
-      {optedIn === false && (
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-br from-blue-500/8 to-violet-500/8 border border-blue-500/25 rounded-xl p-4 sm:p-5 mb-5">
-          <div className="min-w-0">
-            <div className="text-slate-100 text-sm font-bold mb-1">
-              📡 Share your AI signals with the community
-            </div>
-            <div className="text-slate-400 text-xs leading-relaxed max-w-md">
-              Opt in to broadcast your high-confidence signals (≥70%) to other traders.
-              Build your reputation on the leaderboard and earn copy-trading followers.
-            </div>
-          </div>
-          <button
-            onClick={handleOptToggle}
-            disabled={optLoading}
-            className="flex-shrink-0 px-5 py-2.5 rounded-lg font-bold text-sm cursor-pointer border-0 text-white transition-opacity disabled:opacity-60 whitespace-nowrap"
-            style={{ background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)' }}
-          >
-            {optLoading ? 'Enabling…' : '✅ Enable Signal Sharing'}
-          </button>
-        </div>
-      )}
+      {error && <div style={s.errorBox}>{error}</div>}
 
       {filteredItems.length === 0 && !loading && !error && (
-        <EmptyState
-          icon="📡"
-          title={optedIn === false ? 'No community signals yet' : 'No signals yet'}
-          description={
-            optedIn === false
-              ? 'Be the first to share — opt in above to broadcast your AI signals to the community.'
-              : 'Community signals appear here once traders opt in to share.'
-          }
-          action={
-            <div className="flex gap-2">
-              <Link to="/ai-chart-dashboard"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold no-underline transition-colors">
-                📈 AI Charts
-              </Link>
-              <Link to="/leaderboard"
-                className="px-4 py-2 bg-transparent border border-terminal-border text-slate-400 rounded-lg text-sm no-underline hover:border-slate-500 hover:text-slate-300 transition-colors">
-                🏆 Leaderboard
-              </Link>
-            </div>
-          }
-        />
+        <div style={{ ...s.empty, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+          <div style={{ fontSize: 36 }}>📡</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#94a3b8' }}>No signals yet</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Check back soon or generate AI signals now.</div>
+          <button onClick={() => navigate('/signals')}
+            style={{ padding: '7px 18px', background: 'rgba(167,139,250,0.15)', border: '1px solid rgba(167,139,250,0.4)', borderRadius: 8, color: '#a78bfa', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>
+            📡 View Signals
+          </button>
+        </div>
       )}
 
-      {/* Signal cards */}
-      <div className="flex flex-col gap-3">
-        {filteredItems.map(item => {
-          const isBuy = item.direction === 'BUY';
-          return (
-            <div key={item.signal_id}
-              className="bg-terminal-surface border border-terminal-border rounded-xl p-3 sm:p-4">
-              {/* Card top row */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-2xs font-bold px-2 py-0.5 rounded ${
-                    isBuy ? 'bg-green-950 text-green-400' : 'bg-red-950 text-red-400'
-                  }`}>
-                    {item.direction}
-                  </span>
-                  <span className="text-slate-100 text-sm sm:text-base font-bold">{item.symbol}</span>
-                  <span className="text-2xs bg-blue-950 text-blue-400 px-2 py-0.5 rounded-full">
-                    {(item.confidence * 100).toFixed(0)}% conf
-                  </span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <span>by <strong className="text-slate-400">{item.username}</strong></span>
-                  <span className="hidden sm:inline">{new Date(item.created_at).toLocaleTimeString()}</span>
-                </div>
+      <div style={s.feed}>
+        {filteredItems.map(item => (
+          <div key={item.signal_id} style={s.card}>
+            <div style={s.cardTop}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ ...s.dirBadge, background: item.direction === 'BUY' ? '#14532d' : '#450a0a', color: item.direction === 'BUY' ? '#4ade80' : '#f87171' }}>
+                  {item.direction}
+                </span>
+                <span style={s.symbol}>{item.symbol}</span>
+                <span style={s.confidence}>{(item.confidence * 100).toFixed(0)}% conf</span>
               </div>
-
-              {/* Metrics row — wraps on mobile */}
-              <div className="flex gap-4 sm:gap-6 mb-3 flex-wrap text-xs">
-                <span className="text-slate-500">
-                  Entry: <strong className="text-slate-200">${item.entry_price.toFixed(4)}</strong>
-                </span>
-                <span className={item.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  P&L: <strong>{item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(2)}%</strong>
-                </span>
-                <span className="text-slate-500">
-                  Copies: <strong className="text-slate-300">{item.copies}</strong>
-                </span>
-                <span className="text-slate-600 sm:hidden">
-                  {new Date(item.created_at).toLocaleTimeString()}
-                </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: '#64748b' }}>by <strong style={{ color: '#94a3b8' }}>{item.username}</strong></span>
+                <span style={{ fontSize: 11, color: '#475569' }}>{new Date(item.created_at).toLocaleTimeString()}</span>
               </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={() => handleReact(item.signal_id, 'up')}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 bg-transparent border border-terminal-border rounded-lg text-xs cursor-pointer transition-colors hover:border-slate-500 ${
-                    item.your_reaction === 'up' ? 'text-green-400 border-green-800' : 'text-slate-500'
-                  }`}>
-                  👍 {item.thumbs_up}
-                </button>
-                <button onClick={() => handleReact(item.signal_id, 'down')}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 bg-transparent border border-terminal-border rounded-lg text-xs cursor-pointer transition-colors hover:border-slate-500 ${
-                    item.your_reaction === 'down' ? 'text-red-400 border-red-800' : 'text-slate-500'
-                  }`}>
-                  👎 {item.thumbs_down}
-                </button>
-                <button onClick={() => toggleExpand(item.signal_id)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-transparent border border-terminal-border rounded-lg text-slate-500 text-xs cursor-pointer hover:border-slate-500 hover:text-slate-300 transition-colors">
-                  💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
-                </button>
-                <Link
-                  to="/trade"
-                  state={{ signal: { symbol: item.symbol, direction: item.direction, entry_price: item.entry_price } }}
-                  className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold no-underline transition-colors ${
-                    isBuy
-                      ? 'bg-green-500/12 border border-green-500/40 text-green-400 hover:bg-green-500/20'
-                      : 'bg-red-500/12 border border-red-500/40 text-red-400 hover:bg-red-500/20'
-                  }`}
-                >
-                  ⚡ Trade
-                </Link>
-              </div>
-
-              {/* Comments section */}
-              {expanded === item.signal_id && (
-                <div className="mt-3 pt-3 border-t border-terminal-border flex flex-col gap-2">
-                  {(comments[item.signal_id] ?? []).map(c => (
-                    <div key={c.comment_id} className="bg-terminal-raised rounded-lg px-3 py-2">
-                      <div className="flex items-center gap-2 mb-1">
-                        <strong className="text-slate-400 text-xs">{c.username}</strong>
-                        <span className="text-slate-600 text-2xs">{new Date(c.created_at).toLocaleTimeString()}</span>
-                      </div>
-                      <p className="text-slate-300 text-xs leading-relaxed m-0">{c.text}</p>
-                    </div>
-                  ))}
-                  {user && (
-                    <div className="mt-1">
-                      {typingSignals[item.signal_id] && (
-                        <div className="flex items-center gap-1.5 text-slate-600 text-2xs mb-1">
-                          {[0,1,2].map(i => (
-                            <span key={i} className="w-1 h-1 rounded-full bg-slate-600 inline-block animate-bounce"
-                              style={{ animationDelay: `${i * 0.2}s` }} />
-                          ))}
-                          typing…
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <input
-                          value={commentText}
-                          onChange={e => {
-                            setCommentText(e.target.value);
-                            setTypingSignals(prev => ({ ...prev, [item.signal_id]: e.target.value.length > 0 }));
-                          }}
-                          onBlur={() => setTypingSignals(prev => ({ ...prev, [item.signal_id]: false }))}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              submitComment(item.signal_id);
-                              setTypingSignals(prev => ({ ...prev, [item.signal_id]: false }));
-                            }
-                          }}
-                          placeholder="Add a comment…"
-                          className="flex-1 bg-terminal-raised border border-terminal-border rounded-lg px-3 py-2 text-slate-200 text-xs outline-none focus:border-blue-500 transition-colors placeholder-slate-600"
-                        />
-                        <button
-                          onClick={() => { submitComment(item.signal_id); setTypingSignals(prev => ({ ...prev, [item.signal_id]: false })); }}
-                          disabled={submitting || !commentText.trim()}
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold cursor-pointer border-0 transition-colors disabled:opacity-50"
-                        >
-                          {submitting ? '…' : 'Post'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
-          );
-        })}
+
+            <div style={s.metrics}>
+              <span style={s.metric}>Entry: <strong>${item.entry_price.toFixed(4)}</strong></span>
+              <span style={{ ...s.metric, color: item.pnl >= 0 ? '#4ade80' : '#f87171' }}>
+                P&L: <strong>{item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(2)}%</strong>
+              </span>
+              <span style={s.metric}>Copies: <strong>{item.copies}</strong></span>
+            </div>
+
+            <div style={s.actions}>
+              <button onClick={() => handleReact(item.signal_id, 'up')}
+                style={{ ...s.reactBtn, color: item.your_reaction === 'up' ? '#4ade80' : '#64748b' }}>
+                👍 {item.thumbs_up}
+              </button>
+              <button onClick={() => handleReact(item.signal_id, 'down')}
+                style={{ ...s.reactBtn, color: item.your_reaction === 'down' ? '#f87171' : '#64748b' }}>
+                👎 {item.thumbs_down}
+              </button>
+              <button onClick={() => toggleExpand(item.signal_id)} style={s.commentToggle}>
+                💬 {item.comment_count} {expanded === item.signal_id ? '▲' : '▼'}
+              </button>
+              <button
+                onClick={() => navigate('/trade', { state: { signal: { symbol: item.symbol, direction: item.direction } } })}
+                style={{
+                  marginLeft: 'auto', padding: '4px 12px', borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: 'pointer',
+                  background: item.direction === 'BUY' ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+                  border: `1px solid ${item.direction === 'BUY' ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
+                  color: item.direction === 'BUY' ? '#4ade80' : '#f87171',
+                }}
+              >
+                ⚡ Trade
+              </button>
+            </div>
+
+            {expanded === item.signal_id && (
+              <div style={s.commentsSection}>
+                {(comments[item.signal_id] ?? []).map(c => (
+                  <div key={c.comment_id} style={s.comment}>
+                    <strong style={{ color: '#94a3b8', fontSize: 12 }}>{c.username}</strong>
+                    <span style={{ color: '#64748b', fontSize: 11, marginLeft: 8 }}>{new Date(c.created_at).toLocaleTimeString()}</span>
+                    <p style={{ margin: '4px 0 0', fontSize: 13, color: '#cbd5e1' }}>{c.text}</p>
+                  </div>
+                ))}
+                {user && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <input
+                      value={commentText}
+                      onChange={e => setCommentText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && submitComment(item.signal_id)}
+                      placeholder="Add a comment…"
+                      style={s.commentInput}
+                    />
+                    <button onClick={() => submitComment(item.signal_id)} disabled={submitting || !commentText.trim()} style={s.commentBtn}>
+                      {submitting ? '…' : 'Post'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
-      {loading && (
-        <div className="text-center text-slate-500 text-sm py-6">Loading signals…</div>
-      )}
+      {loading && <div style={s.dim}>Loading signals…</div>}
 
       {!loading && hasMore && items.length > 0 && (
-        <div className="text-center mt-5">
-          <button onClick={loadMore}
-            className="px-6 py-2.5 bg-terminal-raised border border-terminal-border rounded-lg text-slate-400 text-sm cursor-pointer hover:border-slate-500 hover:text-slate-200 transition-colors">
-            Load more
-          </button>
+        <div style={{ textAlign: 'center', marginTop: 20 }}>
+          <button onClick={loadMore} style={s.loadMoreBtn}>Load more</button>
         </div>
       )}
 
       {optedIn !== null && (
-        <div className={`mt-5 px-4 py-3 rounded-xl text-xs border ${
-          optedIn
-            ? 'bg-green-950/30 border-green-900 text-green-400'
-            : 'bg-terminal-raised border-terminal-border text-slate-500'
-        }`}>
+        <div style={s.infoBanner}>
           {optedIn
             ? '✅ Your high-confidence signals are visible to the community. Toggle off to stop sharing.'
             : '💡 Opt in to share your AI signals with the community and build your reputation.'}
         </div>
       )}
-
-      <CrossLinkBar title="Related" className="mt-6" links={[
-        { label: '🥇 Leaderboard',  href: '/leaderboard',  color: '#f59e0b' },
-        { label: '🔁 Copy Trading', href: '/copy-trading', color: '#34d399' },
-        { label: '💬 Chat',         href: '/chat',         color: '#06b6d4' },
-        { label: '🛒 Marketplace',  href: '/marketplace',  color: '#a78bfa' },
-        { label: '👥 Teams',        href: '/teams',        color: '#60a5fa' },
-      ]} />
     </div>
   );
 };
 
+const s: Record<string, React.CSSProperties> = {
+  page:           { maxWidth: 800, margin: '0 auto', padding: '24px 16px', fontFamily: 'system-ui,-apple-system,sans-serif', color: '#f1f5f9', background: '#0f172a', minHeight: '100vh' },
+  header:         { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+  title:          { fontSize: 24, fontWeight: 700, color: '#f8fafc', margin: '0 0 4px' },
+  subtitle:       { fontSize: 13, color: '#64748b', margin: 0 },
+  toggleBtn:      { border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px', transition: 'background 0.2s' },
+  errorBox:       { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: '#f87171' },
+  empty:          { color: '#475569', fontSize: 14, textAlign: 'center', padding: 48 },
+  feed:           { display: 'flex', flexDirection: 'column', gap: 12 },
+  card:           { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px' },
+  cardTop:        { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  dirBadge:       { fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 4 },
+  symbol:         { fontSize: 15, fontWeight: 700, color: '#f1f5f9' },
+  confidence:     { fontSize: 11, background: '#1e3a5f', color: '#60a5fa', padding: '2px 8px', borderRadius: 10 },
+  metrics:        { display: 'flex', gap: 20, marginBottom: 10 },
+  metric:         { fontSize: 13, color: '#64748b' },
+  actions:        { display: 'flex', gap: 8 },
+  reactBtn:       { background: 'transparent', border: '1px solid #334155', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '4px 10px' },
+  commentToggle:  { background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 13, padding: '4px 10px', marginLeft: 'auto' },
+  commentsSection:{ borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
+  comment:        { padding: '6px 0', borderBottom: '1px solid #0f172a' },
+  commentInput:   { flex: 1, background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', fontSize: 13, padding: '6px 10px', outline: 'none' },
+  commentBtn:     { background: '#3b82f6', border: 'none', borderRadius: 6, color: '#fff', cursor: 'pointer', fontSize: 13, padding: '6px 14px' },
+  dim:            { color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 },
+  loadMoreBtn:    { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', cursor: 'pointer', fontSize: 14, padding: '10px 28px' },
+  infoBanner:     { marginTop: 24, background: '#1e293b', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#94a3b8', border: '1px solid #334155' },
+};
 
 export default SocialFeed;

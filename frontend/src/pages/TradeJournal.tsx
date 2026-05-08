@@ -13,9 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
-import { useToast } from '../components/Toast';
+import { useNavigate } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
@@ -82,124 +80,8 @@ function pnlColor(pnl: number | null): string {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-// ── Tag autocomplete ──────────────────────────────────────────────────────────
-
-const TagAutocomplete: React.FC<{
-  value: string[];
-  onChange: (tags: string[]) => void;
-  suggestions: string[];
-}> = ({ value, onChange, suggestions }) => {
-  const [input, setInput]   = useState('');
-  const [open, setOpen]     = useState(false);
-  const filtered = suggestions.filter(
-    (s) => s.toLowerCase().includes(input.toLowerCase()) && !value.includes(s),
-  );
-
-  const add = (tag: string) => {
-    const t = tag.trim().toLowerCase();
-    if (t && !value.includes(t)) onChange([...value, t]);
-    setInput(''); setOpen(false);
-  };
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, padding: '6px 8px', background: '#0a0f1a', border: '1px solid #1e2d3d', borderRadius: 6, minHeight: 36 }}>
-        {value.map((t) => (
-          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#1e3a5f', color: '#60a5fa', borderRadius: 4, padding: '2px 7px', fontSize: 11, fontWeight: 600 }}>
-            {t}
-            <button onClick={() => onChange(value.filter((x) => x !== t))} style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', padding: 0, lineHeight: 1, fontSize: 12 }}>×</button>
-          </span>
-        ))}
-        <input
-          value={input}
-          onChange={(e) => { setInput(e.target.value); setOpen(true); }}
-          onKeyDown={(e) => { if (e.key === 'Enter' && input) { e.preventDefault(); add(input); } }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Add tag…"
-          style={{ background: 'none', border: 'none', outline: 'none', color: '#94a3b8', fontSize: 12, minWidth: 80, flex: 1 }}
-        />
-      </div>
-      {open && filtered.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, marginTop: 2, maxHeight: 160, overflowY: 'auto' }}>
-          {filtered.map((s) => (
-            <button key={s} onMouseDown={() => add(s)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', background: 'none', border: 'none', color: '#94a3b8', fontSize: 12, cursor: 'pointer' }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = '#1e2d3d'; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ── Emotion calendar ──────────────────────────────────────────────────────────
-
-const EmotionCalendar: React.FC<{ trades: JournalEntry[] }> = ({ trades }) => {
-  // Build a map of date → dominant emotion
-  const byDate: Record<string, string[]> = {};
-  for (const t of trades) {
-    if (!t.emotion) continue;
-    const d = t.opened_at.slice(0, 10);
-    if (!byDate[d]) byDate[d] = [];
-    byDate[d]!.push(t.emotion);
-  }
-
-  // Last 35 days
-  const days: { date: string; emotion: string | null }[] = [];
-  for (let i = 34; i >= 0; i--) {
-    const d = new Date(); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
-    const emotions = byDate[key] ?? [];
-    // Pick most frequent
-    const freq: Record<string, number> = {};
-    for (const e of emotions) freq[e] = (freq[e] ?? 0) + 1;
-    const dominant = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-    days.push({ date: key, emotion: dominant });
-  }
-
-  const EMOTION_COLOR: Record<string, string> = {
-    patient: '#00e676', disciplined: '#00e676',
-    fomo: '#ff1744', revenge: '#ff1744', overconfident: '#ff9800',
-    hesitant: '#fbbf24', fearful: '#f87171',
-  };
-
-  return (
-    <div>
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8 }}>Emotion Calendar — last 35 days</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 3 }}>
-        {days.map(({ date, emotion }) => (
-          <div
-            key={date}
-            title={`${date}${emotion ? ` — ${EMOTION_EMOJI[emotion] ?? ''} ${emotion}` : ''}`}
-            style={{
-              height: 22, borderRadius: 3,
-              background: emotion ? (EMOTION_COLOR[emotion] ?? '#334155') + '55' : '#0f172a',
-              border: `1px solid ${emotion ? (EMOTION_COLOR[emotion] ?? '#334155') + '88' : '#1e2d3d'}`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 10, cursor: 'default',
-            }}
-          >
-            {emotion ? (EMOTION_EMOJI[emotion] ?? '') : ''}
-          </div>
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-        {Object.entries(EMOTION_EMOJI).map(([em, emoji]) => (
-          <span key={em} style={{ fontSize: 10, color: '#475569', display: 'flex', alignItems: 'center', gap: 3 }}>
-            {emoji} {em}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 const TradeJournal: React.FC = () => {
-  const toast = useToast();
+  const navigate = useNavigate();
   const [tab, setTab]             = useState<Tab>('trades');
   const [trades, setTrades]       = useState<JournalEntry[]>([]);
   const [mistakes, setMistakes]   = useState<JournalEntry[]>([]);
@@ -209,10 +91,7 @@ const TradeJournal: React.FC = () => {
   const [editForm, setEditForm]   = useState<Partial<JournalEntry>>({});
   const [saving, setSaving]       = useState(false);
   const [saveErr, setSaveErr]     = useState<string | null>(null);
-  const [filterTag, setFilterTag]         = useState('');
-  const [uploadingId, setUploadingId]     = useState<string | null>(null);
-  const [screenshotUrls, setScreenshotUrls] = useState<Record<string, string>>({});
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [filterTag, setFilterTag] = useState('');
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -261,30 +140,11 @@ const TradeJournal: React.FC = () => {
     try {
       await journalApi.updateTrade(editing, editForm as Record<string, unknown>);
       setEditing(null);
-      toast.success('Journal entry saved.');
       await fetchAll();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save journal entry.';
-      setSaveErr(msg);
-      toast.error(msg);
+      setSaveErr(err instanceof Error ? err.message : 'Failed to save journal entry. Please try again.');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const handleScreenshotUpload = async (tradeId: string, file: File) => {
-    setUploadingId(tradeId);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await journalApi.uploadScreenshot(tradeId, form);
-      const url = (res.data as { url: string }).url;
-      setScreenshotUrls((prev) => ({ ...prev, [tradeId]: url }));
-      toast.success('Screenshot uploaded.');
-    } catch {
-      toast.error('Screenshot upload failed.');
-    } finally {
-      setUploadingId(null);
     }
   };
 
@@ -296,25 +156,27 @@ const TradeJournal: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-3 py-3 sm:px-4 sm:py-6">
-      <PageHeader
-        title="Trade Journal"
-        icon="📓"
-        subtitle="Every trade logged automatically. Add notes, emotions, and tags to improve."
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Analytics', href: '/performance' },
-          { label: 'Trade Journal' },
-        ]}
-        actions={
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            <Link to="/trade"           style={{ background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>⚡</Link>
-            <Link to="/performance"     style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>📈</Link>
-            <Link to="/risk-calculator" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>🛡</Link>
-            <Link to="/portfolio"       style={{ background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '8px 12px', textDecoration: 'none', minHeight: 36, display: 'inline-flex', alignItems: 'center' }}>💼</Link>
-          </div>
-        }
-      />
+    <div style={s.page}>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Trade Journal</h1>
+          <p style={s.subtitle}>Every trade logged automatically. Add notes, emotions, and tags to improve.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => navigate('/performance')}
+            style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            📈 Performance
+          </button>
+          <button
+            onClick={() => navigate('/risk-calculator')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            🛡 Risk Calculator
+          </button>
+        </div>
+      </div>
 
       {/* Tabs */}
       <div style={s.tabs}>
@@ -337,19 +199,16 @@ const TradeJournal: React.FC = () => {
             </select>
           </div>
 
-          {loading ? <EmptyState compact icon="⏳" title="Loading journal…" /> :
+          {loading ? <div style={s.empty}>Loading…</div> :
            trades.length === 0 ? (
-            <EmptyState
-              icon="📓"
-              title="No journal entries yet"
-              description="Entries are created automatically when you close a trade. Make your first trade to start building your journal."
-              action={
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Link to="/trade"   style={{ padding: '8px 18px', background: '#3b82f6', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>⚡ Start Trading</Link>
-                  <Link to="/signals" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>📡 View Signals</Link>
-                </div>
-              }
-            />
+            <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📓</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No journal entries yet</div>
+              <div style={{ fontSize: 13, color: '#64748b', maxWidth: 360, margin: '0 auto', lineHeight: 1.6 }}>
+                Journal entries are created automatically when you close a trade.
+                Head to the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to make your first trade.
+              </div>
+            </div>
            ) :
            trades.map((entry) => (
             <div key={entry.trade_id} style={s.tradeCard}>
@@ -368,14 +227,13 @@ const TradeJournal: React.FC = () => {
                     {entry.pnl !== null ? `${entry.pnl >= 0 ? '+' : ''}$${fmt(entry.pnl)}` : 'Open'}
                   </span>
                   {entry.closed_at && (
-                    <Link
-                      to="/trade"
-                      state={{ signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } }}
-                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', textDecoration: 'none' }}
+                    <button
+                      onClick={() => navigate('/trade', { state: { signal: { symbol: entry.symbol, direction: entry.side === 'long' ? 'BUY' : 'SELL' } } })}
+                      style={{ background: 'rgba(96,165,250,0.12)', border: '1px solid rgba(96,165,250,0.35)', borderRadius: 5, color: '#60a5fa', fontSize: 11, fontWeight: 700, padding: '3px 9px', cursor: 'pointer' }}
                       title="Open a new trade with the same symbol and direction"
                     >
                       🔁 Re-trade
-                    </Link>
+                    </button>
                   )}
                   <button onClick={() => editing === entry.trade_id ? setEditing(null) : startEdit(entry)} style={s.editBtn}>
                     {editing === entry.trade_id ? 'Cancel' : 'Edit'}
@@ -401,15 +259,6 @@ const TradeJournal: React.FC = () => {
               {/* Notes */}
               {entry.notes && <p style={s.notes}>{entry.notes}</p>}
 
-              {/* Screenshot thumbnail */}
-              {screenshotUrls[entry.trade_id] && (
-                <img
-                  src={screenshotUrls[entry.trade_id]}
-                  alt="Trade screenshot"
-                  style={{ maxWidth: '100%', maxHeight: 180, borderRadius: 6, border: '1px solid #1e2d3d', marginTop: 8, objectFit: 'contain' }}
-                />
-              )}
-
               {/* Edit form */}
               {editing === entry.trade_id && (
                 <div style={s.editForm}>
@@ -418,11 +267,14 @@ const TradeJournal: React.FC = () => {
                     style={s.textarea} rows={3} />
 
                   <label style={s.label}>Tags</label>
-                  <TagAutocomplete
-                    value={editForm.tags ?? []}
-                    onChange={(tags) => setEditForm({ ...editForm, tags })}
-                    suggestions={[...TRADE_TAGS, ...trades.flatMap((t) => t.tags)].filter((v, i, a) => a.indexOf(v) === i)}
-                  />
+                  <div style={s.tagPicker}>
+                    {TRADE_TAGS.map((t) => (
+                      <button key={t} onClick={() => toggleTag(t)}
+                        style={{ ...s.tagPickerBtn, ...(editForm.tags?.includes(t) ? s.tagPickerBtnActive : {}) }}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
 
                   <label style={s.label}>Emotion</label>
                   <div style={s.tagPicker}>
@@ -444,33 +296,9 @@ const TradeJournal: React.FC = () => {
                       placeholder="What rule did you break?" style={{ ...s.input, marginTop: 6 }} />
                   )}
 
-                  {/* Screenshot upload */}
-                  <label style={{ ...s.label, marginTop: 10 }}>Screenshot</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) handleScreenshotUpload(entry.trade_id, file);
-                        e.target.value = '';
-                      }}
-                    />
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingId === entry.trade_id}
-                      style={{ ...s.tagPickerBtn, padding: '5px 12px' }}
-                    >
-                      {uploadingId === entry.trade_id ? 'Uploading…' : '📷 Upload screenshot'}
-                    </button>
-                    {screenshotUrls[entry.trade_id] && (
-                      <span style={{ fontSize: 11, color: '#4ade80' }}>✓ Uploaded</span>
-                    )}
-                  </div>
-
-                  {saveErr && <div style={s.saveErrBox}>{saveErr}</div>}
+                  {saveErr && (
+                    <div style={s.saveErrBox}>{saveErr}</div>
+                  )}
                   <button onClick={saveEdit} disabled={saving} style={s.saveBtn}>
                     {saving ? 'Saving…' : 'Save'}
                   </button>
@@ -522,12 +350,6 @@ const TradeJournal: React.FC = () => {
             </div>
           )}
           {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}
-
-          {/* Emotion calendar */}
-          <h3 style={s.sectionTitle}>Emotion Calendar</h3>
-          <div style={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
-            <EmotionCalendar trades={trades} />
-          </div>
         </div>
       )}
 
@@ -535,7 +357,7 @@ const TradeJournal: React.FC = () => {
       {tab === 'mistakes' && (
         <>
           {mistakes.length === 0
-            ? <EmptyState compact icon="🎯" title="No rule deviations recorded" description="Your trading discipline is clean. Deviations from your rules will appear here." links={[{ label: 'Trade Journal', href: '/journal', icon: '📓' }]} />
+            ? <div style={s.empty}>No rule deviations recorded. Keep it up! 🎯</div>
             : (
               <>
                 {/* Summary banner */}
@@ -588,16 +410,6 @@ const TradeJournal: React.FC = () => {
           }
         </>
       )}
-
-      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '📊 Performance',     href: '/performance',     color: '#4ade80' },
-        { label: '💰 P&L Dashboard',   href: '/pnl',             color: '#60a5fa' },
-        { label: '💼 Portfolio',        href: '/portfolio',       color: '#a78bfa' },
-        { label: '🛡️ Risk Calculator', href: '/risk-calculator', color: '#f97316' },
-        { label: '📈 AI Charts',        href: '/ai-chart',        color: '#34d399' },
-        { label: '⚗️ A/B Testing',     href: '/ab-testing',      color: '#fbbf24' },
-      ]}/>
-
     </div>
   );
 };
@@ -626,20 +438,20 @@ const TagRow: React.FC<{ stat: TagStats; emoji?: string }> = ({ stat, emoji }) =
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:            { padding: 'clamp(12px,4vw,24px)', maxWidth: 900, margin: '0 auto' },
+  page:            { padding: 24, maxWidth: 900, margin: '0 auto' },
   header:          { marginBottom: 20 },
   title:           { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:        { fontSize: 14, color: '#64748b', margin: 0 },
-  tabs:            { display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
-  tab:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '10px 14px', fontSize: 13, minHeight: 44, touchAction: 'manipulation' },
+  tabs:            { display: 'flex', gap: 8, marginBottom: 20 },
+  tab:             { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', padding: '8px 16px', fontSize: 13 },
   tabActive:       { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  filterRow:       { marginBottom: 14 },
-  select:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16 },
-  tradeCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: 'clamp(10px,3vw,16px)', marginBottom: 10 },
-  tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  filterRow:       { marginBottom: 16 },
+  select:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 14 },
+  tradeCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 16px', marginBottom: 10 },
+  tradeHeader:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   sideBadge:       { borderRadius: 4, fontSize: 11, fontWeight: 700, padding: '2px 8px' },
   deviationBadge:  { background: '#450a0a', color: '#f87171', fontSize: 11, padding: '2px 8px', borderRadius: 4 },
-  priceRow:        { display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginBottom: 8 },
+  priceRow:        { display: 'flex', gap: 16, marginBottom: 8 },
   priceItem:       { fontSize: 13, color: '#64748b' },
   tagRow:          { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 },
   tag:             { background: '#0f172a', border: '1px solid #334155', borderRadius: 4, color: '#94a3b8', fontSize: 11, padding: '2px 8px' },
@@ -647,12 +459,12 @@ const s: Record<string, React.CSSProperties> = {
   editBtn:         { background: '#334155', border: 'none', borderRadius: 6, color: '#94a3b8', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   editForm:        { borderTop: '1px solid #334155', marginTop: 12, paddingTop: 12 },
   label:           { display: 'block', fontSize: 13, color: '#94a3b8', marginBottom: 6, fontWeight: 500 },
-  textarea:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
-  input:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '10px 12px', fontSize: 16, boxSizing: 'border-box', WebkitAppearance: 'none' },
+  textarea:        { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', marginBottom: 12 },
+  input:           { width: '100%', background: '#0f172a', border: '1px solid #334155', borderRadius: 8, color: '#f1f5f9', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' },
   tagPicker:       { display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 },
   tagPickerBtn:    { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '4px 10px' },
   tagPickerBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '12px 20px', marginTop: 8, minHeight: 48, width: '100%', touchAction: 'manipulation' },
+  saveBtn:         { background: '#059669', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '8px 20px', marginTop: 8 },
   saveErrBox:      { background: 'rgba(248,113,113,0.1)', border: '1px solid #f87171', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#f87171', marginTop: 8 },
   statsGrid:       { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12, marginBottom: 24 },
   statCard:        { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px' },

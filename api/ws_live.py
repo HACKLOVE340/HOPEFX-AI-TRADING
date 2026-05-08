@@ -208,6 +208,15 @@ class LiveConnectionManager:
         for cid in dead:
             self.disconnect(cid)
 
+    async def broadcast_signal(self, symbol: str, signal: dict) -> None:
+        """Called by signal_engine.py to push a signal to all 'signals' subscribers."""
+        await self.broadcast("signals", {"type": "signal", "data": signal})
+        try:
+            from api.social_feed import _social_feed_broadcast as _sf_broadcast
+            await _sf_broadcast(signal)
+        except Exception:  # nosec B110
+            pass
+
     async def send_to_user(self, user_id: str, channel: str, msg: dict) -> None:
         """
         Send a message only to connections belonging to a specific user.
@@ -236,9 +245,6 @@ class LiveConnectionManager:
 
 # Singleton
 _manager = LiveConnectionManager()
-# Public alias so other modules (e.g. superadmin/nuclear_controls.py) can
-# broadcast system events without importing the private _manager name.
-manager = _manager
 
 
 def get_live_manager() -> LiveConnectionManager:
@@ -265,6 +271,22 @@ _BROKER_KEY: dict[str, str] = {
     "USD/JPY": "USDJPY",
     "BTC/USD": "BTC/USD",
 }
+
+# Reverse map: broker/no-slash symbol → frontend slash format
+_SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
+# Extra aliases that may arrive from various publishers
+_SLASH_SYMBOL.update({
+    "XAUUSD": "XAU/USD",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "BTCUSD": "BTC/USD",
+    "ETHUSD": "ETH/USD",
+    "GC=F":   "XAU/USD",
+    "EURUSD=X": "EUR/USD",
+    "GBPUSD=X": "GBP/USD",
+    "USDJPY=X": "USD/JPY",
+})
 
 _open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
@@ -427,57 +449,80 @@ async def _eventbus_tick_broadcaster() -> None:
             async for msg in bus.subscribe(CH_TICK):
                 if _manager.connection_count == 0:
                     continue
+                # Normalise to frontend PriceTick schema:
+                # { type: "price_tick", data: PriceTick }
 
-                # Engine publishes {symbol, price, source, ts, bid?, ask?}
-                # bid/ask are optional — derive from price when absent.
-                raw_sym = msg.get("symbol", "XAUUSD")
+                # 1. Normalise symbol to slash format (XAU/USD, EUR/USD …)
+                raw_symbol = msg.get("symbol", "XAU/USD")
+                symbol = _SLASH_SYMBOL.get(raw_symbol, raw_symbol)
 
-                # Normalise symbol to slash format expected by the frontend
-                # e.g. XAUUSD → XAU/USD, EURUSD → EUR/USD, BTCUSD → BTC/USD
-                if "/" not in raw_sym and "_" not in raw_sym:
-                    if len(raw_sym) == 6:
-                        symbol = f"{raw_sym[:3]}/{raw_sym[3:]}"
-                    elif len(raw_sym) == 7:
-                        symbol = f"{raw_sym[:3]}/{raw_sym[3:]}"
-                    else:
-                        symbol = raw_sym
+                # 2. Resolve mid from bid+ask or price field
+                raw_bid = msg.get("bid")
+                raw_ask = msg.get("ask")
+                raw_price = msg.get("price") or msg.get("mid")
+
+                if raw_bid is not None and raw_ask is not None:
+                    bid = float(raw_bid)
+                    ask = float(raw_ask)
+                    mid = (bid + ask) / 2.0
+                elif raw_price is not None:
+                    # Derive bid/ask from price using per-symbol spread config
+                    mid = float(raw_price)
+                    cfg = _SYMBOLS.get(symbol, {})
+                    half_spread = cfg.get("spread", mid * 0.0002) / 2
+                    bid = round(mid - half_spread, 5)
+                    ask = round(mid + half_spread, 5)
                 else:
-                    symbol = raw_sym.replace("_", "/")
-
-                price = float(msg.get("price") or msg.get("mid") or 0)
-                if price <= 0:
+                    # No usable price — skip this message
+                    logger.debug("_eventbus_tick_broadcaster: no price in msg for %s, skipping", symbol)
                     continue
 
-                bid = float(msg.get("bid") or 0) or None
-                ask = float(msg.get("ask") or 0) or None
+                if mid <= 0:
+                    continue
 
-                # Derive spread from config or use a sensible default
-                cfg    = _SYMBOLS.get(symbol, {})
-                spread = cfg.get("spread", price * 0.0002)
-                if bid is None:
-                    bid = round(price - spread / 2, 5)
-                if ask is None:
-                    ask = round(price + spread / 2, 5)
-                mid = round((bid + ask) / 2, 5)
+                spread = round(ask - bid, 5)
 
-                # Track previous mid for change_pct calculation
-                prev   = _last_mid.get(symbol, mid)
+                # 3. Normalise timestamp to integer milliseconds
+                raw_ts = msg.get("timestamp") or msg.get("ts")
+                if raw_ts is None:
+                    ts_ms = int(datetime.now(UTC).timestamp() * 1000)
+                elif isinstance(raw_ts, str):
+                    # ISO string → ms
+                    try:
+                        from datetime import datetime as _dt
+                        ts_ms = int(_dt.fromisoformat(raw_ts.replace("Z", "+00:00")).timestamp() * 1000)
+                    except Exception:
+                        ts_ms = int(datetime.now(UTC).timestamp() * 1000)
+                elif isinstance(raw_ts, float) and raw_ts < 1e12:
+                    # Unix seconds → ms
+                    ts_ms = int(raw_ts * 1000)
+                else:
+                    ts_ms = int(raw_ts)
+
+                # 4. Track previous mid for change_pct calculation
+                prev = _last_mid.get(symbol, mid)
                 change = ((mid - prev) / prev * 100) if prev else 0.0
                 _last_mid[symbol] = mid
 
-                tick = {
-                    "type": "price_tick",
-                    "data": {
-                        "symbol":     symbol,
-                        "bid":        bid,
-                        "ask":        ask,
-                        "mid":        mid,
-                        "spread":     round(ask - bid, 5),
-                        "timestamp":  int(float(msg.get("ts", 0)) * 1000),
-                        "change_pct": round(change, 4),
-                    },
+                tick_data = {
+                    "symbol": symbol,
+                    "bid": round(bid, 5),
+                    "ask": round(ask, 5),
+                    "mid": round(mid, 5),
+                    "spread": spread,
+                    "timestamp": ts_ms,
+                    "change_pct": round(change, 4),
                 }
+                tick = {"type": "price_tick", "data": tick_data}
                 await _manager.broadcast("prices", tick)
+                # Also write tick:{symbol} so ws_public.py Redis fallback chain is populated.
+                try:
+                    from cache.redis_client import get_redis as _get_redis
+                    _rc = await _get_redis()
+                    if _rc is not None:
+                        await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
+                except Exception:  # nosec B110 — non-fatal, fallback chain degrades gracefully
+                    pass
         except Exception as exc:
             delay = _retry_delays[min(attempt, len(_retry_delays) - 1)]
             logger.warning(
@@ -637,74 +682,50 @@ async def _eventbus_signal_broadcaster() -> None:
     """
     Subscribe to hopefx:signal and forward signal_events to clients
     subscribed to the 'signals' channel.
-
-    The inner loop runs forever — bus.subscribe() never returns on its own
-    (it switches to the local fallback queue when Redis is unavailable).
-    The outer retry loop guards against unexpected exceptions so the task
-    never exits and the done-callback never fires a spurious restart.
     """
-    _RETRY_DELAY: float = 2.0
+    try:
+        from core.event_bus import CH_SIGNAL, bus
 
-    while True:
-        try:
-            from core.event_bus import CH_SIGNAL, bus
+        await bus.connect()
+        async for msg in bus.subscribe(CH_SIGNAL):
+            if msg.get("type") != "signal_event":
+                continue
+            if _manager.connection_count == 0:
+                continue
+            # Normalise to the frontend WsMessage schema:
+            # { type: "signal", data: Signal }
+            direction_raw = (msg.get("direction") or "neutral").lower()
+            direction_fe = "long" if direction_raw == "buy" else "short" if direction_raw == "sell" else "neutral"
+            mid = msg.get("mid", 0.0)
+            symbol = msg.get("symbol", "XAU/USD")
 
-            await bus.connect()
-            async for msg in bus.subscribe(CH_SIGNAL):
-                if msg.get("type") != "signal_event":
-                    continue
-                if _manager.connection_count == 0:
-                    continue
-                # Normalise to the frontend WsMessage schema:
-                # { type: "signal", data: Signal }
-                direction_raw = (msg.get("direction") or "neutral").lower()
-                direction_fe = (
-                    "long" if direction_raw == "buy"
-                    else "short" if direction_raw == "sell"
-                    else "neutral"
-                )
-                mid = msg.get("mid", 0.0)
-                symbol = msg.get("symbol", "XAU/USD")
+            # Use signal-engine-provided SL/TP when present; compute ATR-based
+            # levels only when the upstream signal did not supply them.
+            sl = msg.get("stop_loss")
+            tp = msg.get("take_profit")
+            if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
+                computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
+                sl = sl if sl is not None else computed_sl
+                tp = tp if tp is not None else computed_tp
 
-                # Use signal-engine-provided SL/TP when present; compute ATR-based
-                # levels only when the upstream signal did not supply them.
-                sl = msg.get("stop_loss")
-                tp = msg.get("take_profit")
-                if (sl is None or tp is None) and mid > 0 and direction_fe != "neutral":
-                    computed_sl, computed_tp = _compute_atr_sl_tp(symbol, mid, direction_fe)
-                    sl = sl if sl is not None else computed_sl
-                    tp = tp if tp is not None else computed_tp
-
-                signal = {
-                    "type": "signal",
-                    "data": {
-                        "id": f"sig_{msg.get('tick_seq', 0)}",
-                        "symbol": symbol,
-                        "direction": direction_fe,
-                        "confidence": msg.get("confidence", 0.0),
-                        "model": msg.get("model_version", "advanced_oos"),
-                        "entry_price": mid,
-                        "stop_loss": sl,
-                        "take_profit": tp,
-                        "generated_at": msg.get("timestamp", ""),
-                        "status": "active",
-                    },
-                }
-                await _manager.broadcast("signals", signal)
-
-            # bus.subscribe() returned (should not happen after event_bus fix,
-            # but guard defensively).
-            logger.debug("WS live: signal broadcaster subscribe loop ended — restarting")
-
-        except asyncio.CancelledError:
-            return
-        except Exception as exc:
-            logger.warning(
-                "WS live: EventBus signal stream error: %s — restarting in %.0fs",
-                exc,
-                _RETRY_DELAY,
-            )
-            await asyncio.sleep(_RETRY_DELAY)
+            signal = {
+                "type": "signal",
+                "data": {
+                    "id": f"sig_{msg.get('tick_seq', 0)}",
+                    "symbol": symbol,
+                    "direction": direction_fe,
+                    "confidence": msg.get("confidence", 0.0),
+                    "model": msg.get("model_version", "advanced_oos"),
+                    "entry_price": mid,
+                    "stop_loss": sl,
+                    "take_profit": tp,
+                    "generated_at": msg.get("timestamp", ""),
+                    "status": "active",
+                },
+            }
+            await _manager.broadcast("signals", signal)
+    except Exception as exc:
+        logger.warning("WS live: EventBus signal stream failed: %s", exc)
 
 
 async def _broadcast_no_live_feed() -> None:
@@ -776,7 +797,6 @@ _YF_SYMBOL_MAP: dict[str, str] = {
     "GBP/USD": "GBPUSD=X",
     "USD/JPY": "USDJPY=X",
     "BTC/USD": "BTC-USD",
-    "ETH/USD": "ETH-USD",
 }
 
 # Cache last yfinance prices so we can broadcast change_pct correctly
@@ -785,72 +805,65 @@ _yf_last_prices: dict[str, float] = {}
 
 async def _yfinance_price_broadcaster() -> None:
     """
-    Broadcast real market prices fetched from yfinance every 5 seconds.
+    Broadcast real market prices fetched from yfinance every 15 seconds.
 
-    Fetches each ticker individually to avoid multi-level DataFrame column
-    issues that occur with batch downloads. Broadcasts immediately on first
-    run so charts populate without waiting for the first interval.
+    Used when no broker or EventBus is available (API-only / dev mode).
+    Sends genuine price_tick messages — no synthetic or mock data.
     """
     import time as _time
-    _POLL_INTERVAL = 5  # seconds between yfinance fetches
+    _POLL_INTERVAL = 15  # seconds between yfinance fetches
 
-    async def _fetch_and_broadcast() -> None:
+    while True:
+        await asyncio.sleep(_POLL_INTERVAL)
+        if _manager.connection_count == 0:
+            continue
         try:
             import yfinance as _yf
+            tickers = list(_YF_SYMBOL_MAP.values())
+            data = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _yf.download, tickers, period="1d", interval="1m",
+                    progress=False, auto_adjust=True,
+                ),
+                timeout=12.0,
+            )
             now_ms = int(_time.time() * 1000)
-
-            async def _fetch_one(ws_sym: str, yf_ticker: str) -> None:
+            for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items():
                 try:
-                    t = _yf.Ticker(yf_ticker)
-                    df = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            t.history, period="1d", interval="1m",
-                            auto_adjust=True, progress=False,
-                        ),
-                        timeout=8.0,
-                    )
-                    if df.empty:
-                        return
-                    price = float(df["Close"].dropna().iloc[-1])
+                    if hasattr(data.columns, "levels"):
+                        col = ("Close", yf_ticker)
+                        if col not in data.columns:
+                            continue
+                        series = data[col].dropna()
+                    else:
+                        series = data["Close"].dropna()
+                    if series.empty:
+                        continue
+                    price = float(series.iloc[-1])
                     if price <= 0:
-                        return
-                    cfg    = _SYMBOLS.get(ws_sym, {})
+                        continue
+                    cfg = _SYMBOLS.get(ws_sym, {"spread": price * 0.0002})
                     spread = cfg.get("spread", price * 0.0002)
-                    prev   = _yf_last_prices.get(ws_sym, price)
+                    prev = _yf_last_prices.get(ws_sym, price)
                     change_pct = ((price - prev) / prev * 100) if prev > 0 else 0.0
                     _yf_last_prices[ws_sym] = price
                     tick = {
                         "type": "price_tick",
                         "data": {
-                            "symbol":     ws_sym,
-                            "bid":        round(price - spread / 2, 5),
-                            "ask":        round(price + spread / 2, 5),
-                            "mid":        round(price, 5),
-                            "spread":     spread,
-                            "timestamp":  now_ms,
+                            "symbol": ws_sym,
+                            "bid": round(price - spread / 2, 5),
+                            "ask": round(price + spread / 2, 5),
+                            "mid": round(price, 5),
+                            "spread": spread,
+                            "timestamp": now_ms,
                             "change_pct": round(change_pct, 4),
                         },
                     }
                     await _manager.broadcast("prices", tick)
                 except Exception as _sym_exc:
                     logger.debug("yfinance tick for %s failed: %s", ws_sym, _sym_exc)
-
-            # Fetch all symbols concurrently
-            await asyncio.gather(
-                *[_fetch_one(ws_sym, yf_ticker) for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items()],
-                return_exceptions=True,
-            )
         except Exception as exc:
             logger.warning("yfinance price broadcaster error: %s", exc)
-
-    # Broadcast immediately on startup so charts don't wait for first interval
-    await _fetch_and_broadcast()
-
-    while True:
-        await asyncio.sleep(_POLL_INTERVAL)
-        if _manager.connection_count == 0:
-            continue
-        await _fetch_and_broadcast()
 
 
 async def _price_broadcaster() -> None:
@@ -1175,9 +1188,7 @@ def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type
     if exc is not None:
         logger.error("WS broadcaster task %r crashed: %s — restarting", name, exc, exc_info=exc)
     else:
-        # A clean exit from a broadcaster is unexpected (all broadcasters run
-        # infinite loops).  Log at DEBUG — the restart is automatic.
-        logger.debug("WS broadcaster task %r exited cleanly — restarting", name)
+        logger.warning("WS broadcaster task %r exited cleanly — restarting", name)
 
     for spec_name, coro_fn in _BROADCASTER_SPECS:
         if spec_name == name:
@@ -1193,78 +1204,6 @@ def _broadcaster_done_callback(task: asyncio.Task) -> None:  # type: ignore[type
             break
 
 
-async def _eventbus_news_broadcaster() -> None:
-    """
-    Subscribe to CH_NEWS_ITEM and CH_SENTIMENT on the EventBus and forward
-    messages to WebSocket clients subscribed to the 'news' and 'sentiment'
-    channels respectively.
-
-    This is the push path — the sentiment engine publishes to these channels
-    after each ingest cycle.  The _chartbot_broadcaster poll path remains as
-    a fallback for when no articles have been ingested yet.
-
-    Two inner tasks run concurrently so a slow sentiment message doesn't
-    block news delivery.  Both are cancelled and restarted on any error.
-    """
-    _RETRY_DELAY: float = 5.0
-
-    while True:
-        _inner_tasks: list[asyncio.Task] = []
-        try:
-            from core.event_bus import CH_NEWS_ITEM, CH_SENTIMENT, bus
-
-            await bus.connect()
-            logger.info("WS live: EventBus news/sentiment broadcaster connected.")
-
-            async def _sub_news() -> None:
-                async for msg in bus.subscribe(CH_NEWS_ITEM):
-                    if _manager.connection_count == 0:
-                        continue
-                    if msg.get("type") == "news_item":
-                        await _manager.broadcast("news", msg)
-
-            async def _sub_sentiment() -> None:
-                async for msg in bus.subscribe(CH_SENTIMENT):
-                    if _manager.connection_count == 0:
-                        continue
-                    if msg.get("type") == "sentiment_update":
-                        await _manager.broadcast("sentiment", msg)
-
-            # Run both subscriptions as separate tasks so neither blocks the other.
-            _inner_tasks = [
-                asyncio.create_task(_sub_news(),      name="ws_news_sub"),
-                asyncio.create_task(_sub_sentiment(), name="ws_sentiment_sub"),
-            ]
-            # Wait until either task finishes (which means an error or the
-            # subscribe generator returned unexpectedly).
-            done, pending = await asyncio.wait(
-                _inner_tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-            for t in pending:
-                t.cancel()
-            # Re-raise any exception from the completed task so the outer
-            # retry loop handles it.
-            for t in done:
-                if not t.cancelled() and t.exception():
-                    raise t.exception()  # type: ignore[misc]
-
-            logger.debug("WS live: news/sentiment broadcaster loop ended — restarting")
-
-        except asyncio.CancelledError:
-            for t in _inner_tasks:
-                t.cancel()
-            return
-        except Exception as exc:
-            for t in _inner_tasks:
-                t.cancel()
-            logger.warning(
-                "WS live: EventBus news/sentiment stream error: %s — restarting in %.0fs",
-                exc,
-                _RETRY_DELAY,
-            )
-            await asyncio.sleep(_RETRY_DELAY)
-
-
 def start_broadcasters() -> None:
     """Start background tasks (call once from app lifespan)."""
     global _broadcaster_tasks, _BROADCASTER_SPECS
@@ -1274,7 +1213,6 @@ def start_broadcasters() -> None:
         ("price_broadcaster",          _price_broadcaster),
         ("heartbeat_broadcaster",       _heartbeat_broadcaster),
         ("signal_broadcaster",          _eventbus_signal_broadcaster),
-        ("news_sentiment_broadcaster",  _eventbus_news_broadcaster),
         ("chartbot_broadcaster",        _chartbot_broadcaster),
         ("account_update_broadcaster",  _account_update_broadcaster),
     ]
@@ -1285,10 +1223,7 @@ def start_broadcasters() -> None:
         task.add_done_callback(_broadcaster_done_callback)
         _broadcaster_tasks.append(task)
 
-    logger.info(
-        "WS live broadcasters started "
-        "(price → account → signal → news/sentiment → heartbeat → chart-bot)"
-    )
+    logger.info("WS live broadcasters started (price → account → signal → heartbeat → chart-bot)")
 
 
 # ─── Endpoint ─────────────────────────────────────────────────────────────────

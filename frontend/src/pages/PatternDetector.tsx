@@ -6,10 +6,8 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, CrossLinkBar } from '../components';
-import { tradingApi, signalsApi } from '../hooks/useApi';
-import { useToast } from '../components/Toast';
+import { useNavigate } from 'react-router-dom';
+import { tradingApi } from '../hooks/useApi';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,11 +64,9 @@ interface PatternCardProps {
   pattern: DetectedPattern;
   symbol: string;
   onTrade: (p: DetectedPattern) => void;
-  onAlert: (p: DetectedPattern) => void;
-  alertSet: boolean;
 }
 
-const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade, onAlert, alertSet }) => {
+const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) => {
   const bullish = pattern.direction === 'bullish';
   const dirColor = bullish ? '#4ade80' : '#f87171';
   const barColor = confidenceColor(pattern.confidence);
@@ -139,36 +135,20 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade, onA
         </p>
       )}
 
-      <div style={{ display: 'flex', gap: 8 }}>
-        {pattern.confidence >= 0.5 && (
-          <button
-            onClick={() => onTrade(pattern)}
-            style={{
-              flex: 1, padding: '8px 0', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
-              fontSize: 13, fontFamily: 'inherit',
-              background: bullish ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-              border: `1px solid ${bullish ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-              color: bullish ? '#4ade80' : '#f87171',
-            }}
-          >
-            ⚡ {bullish ? 'BUY' : 'SELL'} {symbol}
-          </button>
-        )}
+      {pattern.confidence >= 0.5 && (
         <button
-          onClick={() => onAlert(pattern)}
-          title={alertSet ? 'Alert set' : 'Set alert for this pattern'}
+          onClick={() => onTrade(pattern)}
           style={{
-            padding: '8px 12px', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
+            width: '100%', padding: '8px 0', borderRadius: 7, cursor: 'pointer', fontWeight: 700,
             fontSize: 13, fontFamily: 'inherit',
-            background: alertSet ? 'rgba(251,191,36,0.18)' : 'rgba(251,191,36,0.08)',
-            border: `1px solid ${alertSet ? 'rgba(251,191,36,0.6)' : 'rgba(251,191,36,0.25)'}`,
-            color: '#fbbf24',
-            transition: 'all 0.15s',
+            background: bullish ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
+            border: `1px solid ${bullish ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
+            color: bullish ? '#4ade80' : '#f87171',
           }}
         >
-          {alertSet ? '🔔 Alert Set' : '🔔'}
+          ⚡ {bullish ? 'BUY' : 'SELL'} {symbol} — Trade This Pattern
         </button>
-      </div>
+      )}
     </div>
   );
 };
@@ -177,14 +157,12 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade, onA
 
 const PatternDetector: React.FC = () => {
   const navigate = useNavigate();
-  const toast    = useToast();
-  const [symbol, setSymbol]       = useState<string>('XAU/USD');
+  const [symbol, setSymbol]     = useState<string>('XAU/USD');
   const [timeframe, setTimeframe] = useState<string>('1h');
-  const [minConf, setMinConf]     = useState<number>(0.5);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState<string | null>(null);
-  const [data, setData]           = useState<PatternResponse | null>(null);
-  const [alertedKeys, setAlertedKeys] = useState<Set<string>>(new Set());
+  const [minConf, setMinConf]   = useState<number>(0.5);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+  const [data, setData]         = useState<PatternResponse | null>(null);
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -216,57 +194,33 @@ const PatternDetector: React.FC = () => {
           direction: p.direction === 'bullish' ? 'BUY' : 'SELL',
           stop_loss: p.stop_loss,
           take_profit: p.target_price,
-        },
-      },
+        }
+      }
     });
   };
-
-  const handleAlert = useCallback(async (p: DetectedPattern) => {
-    const key = `${p.pattern_type}-${p.start_index}`;
-    if (alertedKeys.has(key)) return;
-    try {
-      await signalsApi.setAlert({
-        symbol,
-        timeframe,
-        pattern_type: p.pattern_type,
-        direction: p.direction,
-        confidence_threshold: p.confidence,
-        entry_price: p.entry_price,
-        target_price: p.target_price,
-        stop_loss: p.stop_loss,
-      });
-      setAlertedKeys(prev => new Set([...prev, key]));
-      toast.success(`Alert set for ${formatPatternName(p.pattern_type)} on ${symbol}`);
-    } catch {
-      toast.error('Failed to set alert. Check your connection.');
-    }
-  }, [alertedKeys, symbol, timeframe, toast]);
 
   // Auto-scan on mount and when params change
   useEffect(() => { scan(); }, [scan]);
 
   return (
     <div style={s.page}>
-      <PageHeader
-        title="Pattern Detector"
-        icon="🔍"
-        subtitle="AI-powered chart pattern recognition for XAU/USD and major instruments"
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'AI Strategy', href: '/ai-strategy' },
-          { label: 'Pattern Detector' },
-        ]}
-        actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Link to="/ai-chart-dashboard" style={s.navLink}>📈 AI Charts</Link>
-            <Link to="/ai-strategy"        style={s.navLink}>🤖 AI Strategy</Link>
-            <Link to="/walk-forward"       style={s.navLink}>📊 Walk-Forward</Link>
-            <Link to="/risk-calculator"    style={s.navLink}>🛡 Risk Calc</Link>
-            <Link to="/correlation"        style={s.navLink}>📊 Correlation</Link>
-          </div>
-        }
-      />
+      {/* Header */}
       <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Pattern Detector</h1>
+          <p style={s.subtitle}>AI-powered chart pattern recognition for XAU/USD and major instruments</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => navigate('/ai-chart')} style={s.navBtn}>
+            🧠 AI Chart
+          </button>
+          <button onClick={() => navigate('/ai-strategy')} style={s.navBtn}>
+            🤖 AI Strategy
+          </button>
+          <button onClick={() => navigate('/risk-calculator')} style={s.navBtn}>
+            🛡 Risk Calc
+          </button>
+        </div>
 
         {/* Controls */}
         <div style={s.controls}>
@@ -355,32 +309,13 @@ const PatternDetector: React.FC = () => {
               <strong style={{ color: '#94a3b8' }}>{data.symbol}</strong> / {timeframe}
             </div>
             <div style={s.grid}>
-              {data.patterns.map((p, i) => {
-                const key = `${p.pattern_type}-${p.start_index}`;
-                return (
-                  <PatternCard
-                    key={`${key}-${i}`}
-                    pattern={p}
-                    symbol={symbol}
-                    onTrade={handleTrade}
-                    onAlert={handleAlert}
-                    alertSet={alertedKeys.has(key)}
-                  />
-                );
-              })}
+              {data.patterns.map((p, i) => (
+                <PatternCard key={`${p.pattern_type}-${p.start_index}-${i}`} pattern={p} symbol={symbol} onTrade={handleTrade} />
+              ))}
             </div>
           </div>
         )
       ) : null}
-
-      <CrossLinkBar title="Related" style={{ marginTop: 8 }} links={[
-        { label: 'AI Charts',    href: '/ai-chart',     icon: '📈', color: '#06b6d4' },
-        { label: 'AI Strategy',  href: '/ai-strategy',  icon: '🤖', color: '#a78bfa' },
-        { label: 'Indicators',   href: '/indicators',   icon: '📐', color: '#f97316' },
-        { label: 'Trade',        href: '/trade',        icon: '⚡', color: '#3b82f6' },
-        { label: 'Walk-Forward', href: '/walk-forward', icon: '📊', color: '#60a5fa' },
-        { label: 'A/B Testing',  href: '/ab-testing',   icon: '⚗️', color: '#4ade80' },
-      ]} />
     </div>
   );
 };
@@ -442,11 +377,6 @@ const s: Record<string, React.CSSProperties> = {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
     color: '#94a3b8', cursor: 'pointer', fontSize: 12, fontWeight: 600,
     padding: '6px 14px', fontFamily: 'inherit',
-  },
-  navLink: {
-    background: '#1e293b', border: '1px solid #334155', borderRadius: 7,
-    color: '#94a3b8', fontSize: 12, fontWeight: 600,
-    padding: '6px 14px', textDecoration: 'none', display: 'inline-block',
   },
 };
 

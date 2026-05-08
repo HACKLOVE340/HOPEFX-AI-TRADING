@@ -28,7 +28,6 @@ Design
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import json
 import logging
 import mmap
@@ -36,7 +35,7 @@ import os
 import struct
 import threading
 from collections import defaultdict
-from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -270,21 +269,21 @@ class _LocalBus:
         self._handlers: dict[str, list[Callable]] = {ch: [] for ch in ALL_CHANNELS}
 
     def subscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
-        self._handlers.setdefault(channel, []).append(handler)
+        """Register a handler for a channel. Idempotent — duplicate handlers are not added."""
+        handlers = self._handlers.setdefault(channel, [])
+        if handler not in handlers:
+            handlers.append(handler)
 
     def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
-        """Remove a previously registered handler.
-
-        Called by subscribe() on cleanup so handlers don't accumulate across
-        repeated subscribe() calls, which would cause duplicate delivery and
-        unbounded memory growth.
-        """
-        handlers = self._handlers.get(channel, [])
+        """Remove a previously registered handler. No-op if handler is not registered."""
         try:
-            handlers.remove(handler)
+            self._handlers.get(channel, []).remove(handler)
         except ValueError:
-            # Handler not in list — idempotent unsubscribe is intentional  # nosec B110
-            logger.debug("unsubscribe_local: handler not found for channel %s (already removed)", channel)
+            pass  # handler was not registered — safe to ignore
+
+    def clear_channel(self, channel: str) -> None:
+        """Remove all handlers for a channel (e.g. on reconnect to avoid duplicates)."""
+        self._handlers[channel] = []
 
     async def publish_local(self, channel: str, message: dict) -> None:
         for handler in list(self._handlers.get(channel, [])):
@@ -411,19 +410,11 @@ class EventBus:
 
         Safe to call multiple times — subsequent calls while already connected
         are no-ops. If already in degraded mode, re-attempts the connection
-        and only logs if the state changes.
-
-        Closes the previous connection before creating a new one to prevent
-        connection leaks on repeated reconnect attempts.
+        silently and only logs if the state changes.
         """
         if self._redis is not None and not self._degraded:
-            # Already connected and healthy — skip redundant connect attempt.
+            # Already connected — skip redundant connect attempt
             return
-        # Close the stale connection before creating a new one.
-        if self._redis is not None:
-            with contextlib.suppress(Exception):
-                await self._redis.aclose()
-            self._redis = None
         try:
             self._redis = _make_redis()
             await self._redis.ping()
@@ -482,10 +473,8 @@ class EventBus:
         # straight to the local fallback.  This prevents the log from being
         # flooded with "attempt N/5 failed" lines when Redis is persistently
         # unavailable — the degraded state is already logged at connect time.
-        # Do NOT increment errors here — routing to local fallback in degraded
-        # mode is expected behaviour, not an error condition.
         if self._degraded or self._redis is None:
-            self._metrics["published"] += 1
+            self._metrics["published"] += 1  # counts as delivered via local bus
             logger.debug("EventBus: Redis degraded — routing %s to local fallback.", channel)
             await _local_bus.publish_local(channel, message)
             return
@@ -526,195 +515,129 @@ class EventBus:
 
     # ── subscribe ─────────────────────────────────────────────────────────────
 
-    async def subscribe(self, *channels: str) -> AsyncGenerator[dict, None]:
+    async def subscribe(self, *channels: str) -> AsyncIterator[dict]:
         """
         Async generator yielding decoded dicts from the given channels.
 
-        Reconnects automatically when the Redis connection drops using
-        exponential back-off (1 s → 2 s → 4 s … capped at MAX_BACKOFF_S).
-
-        When Redis is permanently unavailable (or already degraded at call
-        time) the generator transparently switches to the in-process local
-        fallback queue so callers keep receiving messages without restarting.
-        The generator never returns on its own — it runs until cancelled.
-
-        Cleanup guarantee: local-bus handlers registered for the fallback
-        queue are always removed when the generator is cancelled or exits,
-        preventing handler accumulation across repeated subscribe() calls.
+        Reconnects automatically when the Redis connection drops.
+        Switches to local fallback when Redis is permanently unavailable.
         """
-        _LOCAL_QUEUE_MAXSIZE = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
-
-        def _make_local_queue() -> tuple[asyncio.Queue, list]:  # type: ignore[type-arg]
-            """Wire up a local queue and register handlers for all channels.
-
-            Returns (queue, handlers) so callers can unregister on cleanup.
-            """
-            q: asyncio.Queue[dict] = asyncio.Queue(maxsize=_LOCAL_QUEUE_MAXSIZE)
-            registered: list = []
+        if self._degraded:
+            # Local fallback: feed a bounded queue from _local_bus handlers.
+            # Maxsize prevents unbounded memory growth when consumers are slow.
+            _LOCAL_QUEUE_MAXSIZE = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
+            queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=_LOCAL_QUEUE_MAXSIZE)
 
             async def _enqueue(msg: dict) -> None:
                 try:
-                    q.put_nowait(msg)
+                    queue.put_nowait(msg)
                 except asyncio.QueueFull:
-                    # Evict oldest to make room — prefer freshness over completeness.
+                    # Drop oldest message to make room (LIFO-style eviction)
                     try:
-                        q.get_nowait()
+                        queue.get_nowait()
                     except asyncio.QueueEmpty:  # nosec B110
                         pass
                     try:
-                        q.put_nowait(msg)
+                        queue.put_nowait(msg)
                     except asyncio.QueueFull:
-                        logger.warning(
-                            "EventBus local queue full — dropping message on %s", channels
-                        )
+                        logger.warning("EventBus local queue full — dropping message on %s", channels)
 
             for ch in channels:
                 _local_bus.subscribe_local(ch, _enqueue)
-                registered.append((ch, _enqueue))
-            return q, registered
 
-        def _cleanup_handlers(registered: list) -> None:
-            """Unregister all local-bus handlers to prevent accumulation."""
-            for ch, handler in registered:
-                _local_bus.unsubscribe_local(ch, handler)
-
-        # ── Local fallback path (degraded=True at entry) ──────────────────────
-        if self._degraded:
-            q, registered = _make_local_queue()
-            try:
-                while True:
-                    msg = await q.get()
-                    self._metrics["delivered"] += 1
-                    yield msg
-            except asyncio.CancelledError:
-                raise
-            finally:
-                # Always unregister handlers — prevents accumulation on repeated calls.
-                _cleanup_handlers(registered)
-
-        # ── Redis path with exponential back-off reconnect ────────────────────
-        _pubsub_redis: aioredis.Redis | None = None
-        _reconnect_backoff: float = BASE_BACKOFF_S
-        # How many consecutive Redis failures before giving up and falling back.
-        _MAX_CONSECUTIVE_FAILURES = int(
-            os.environ.get("EVENT_BUS_MAX_FAILURES", "5")
-        )
-        _consecutive_failures: int = 0
-        _local_registered: list = []
-
-        try:
             while True:
-                # If we transitioned to degraded mid-loop, switch to local queue.
-                if self._degraded:
-                    logger.info(
-                        "EventBus subscribe: Redis degraded — switching to local fallback for %s",
-                        channels,
-                    )
-                    q, _local_registered = _make_local_queue()
-                    while True:
-                        msg = await q.get()
-                        self._metrics["delivered"] += 1
-                        yield msg
-                    # Unreachable — loop exits only via CancelledError caught below.
+                msg = await queue.get()
+                self._metrics["delivered"] += 1
+                yield msg
+            return  # unreachable; satisfies type checker
 
-                pubsub = None
-                try:
-                    if _pubsub_redis is None:
-                        _pubsub_redis = _make_redis_pubsub()
-                    pubsub = _pubsub_redis.pubsub()
-                    await pubsub.subscribe(*channels)
-                    logger.info("EventBus subscribed to channels: %s", channels)
-                    # Successful subscribe — reset failure counter and back-off.
-                    _consecutive_failures = 0
-                    _reconnect_backoff = BASE_BACKOFF_S
+        # Redis path with auto-reconnect
+        _pubsub_redis: aioredis.Redis | None = None
+        while True:
+            pubsub = None
+            try:
+                if _pubsub_redis is None:
+                    _pubsub_redis = _make_redis_pubsub()
+                pubsub = _pubsub_redis.pubsub()
+                await pubsub.subscribe(*channels)
+                logger.info("EventBus subscribed to channels: %s", channels)
 
-                    while True:
-                        try:
-                            raw = await pubsub.get_message(
-                                ignore_subscribe_messages=True,
-                                timeout=1.0,
-                            )
-                        except TimeoutError:
-                            # No message within poll window — normal on idle channels.
-                            continue
-                        except Exception:
-                            raise  # propagate real errors to outer handler
-
-                        if raw is None:
-                            await asyncio.sleep(0.01)
-                            continue
-
-                        if raw.get("type") != "message":
-                            continue
-
-                        try:
-                            msg = json.loads(raw["data"])
-                            try:
-                                from tracing.setup import extract_trace_context
-
-                                trace_carrier = msg.pop("_trace", {})
-                                if trace_carrier:
-                                    msg["_trace_context"] = extract_trace_context(trace_carrier)
-                            except Exception as _exc:
-                                logger.debug("Suppressed exception: %s", _exc)
-                            self._metrics["delivered"] += 1
-                            yield msg
-                        except json.JSONDecodeError as exc:
-                            logger.warning(
-                                "EventBus: bad JSON on %s: %s", raw.get("channel"), exc
-                            )
-
-                except asyncio.CancelledError:
-                    if pubsub:
-                        with contextlib.suppress(Exception):
-                            await pubsub.unsubscribe()
-                    if _pubsub_redis:
-                        with contextlib.suppress(Exception):
-                            await _pubsub_redis.aclose()
-                    raise  # propagate to outer try/finally for handler cleanup
-
-                except (TimeoutError, _redis_exc.TimeoutError) if _redis_exc else (TimeoutError,):
-                    # Idle pubsub timeout — normal on quiet channels; re-subscribe silently.
-                    _pubsub_redis = None
-                    continue
-
-                except Exception as exc:
-                    self._metrics["errors"] += 1
-                    _consecutive_failures += 1
-                    _pubsub_redis = None
-
-                    if _consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
-                        logger.error(
-                            "EventBus: Redis unavailable after %d attempts — switching to local fallback.",
-                            _consecutive_failures,
+                while True:
+                    try:
+                        # get_message with a timeout avoids blocking the event loop
+                        # indefinitely and prevents spurious "Timeout reading" errors
+                        # that occur when socket_timeout fires on an idle connection.
+                        raw = await pubsub.get_message(
+                            ignore_subscribe_messages=True,
+                            timeout=1.0,
                         )
-                        self._degraded = True
-                        # Fall through to the degraded check at the top of the loop.
+                    except TimeoutError:
+                        # No message within the poll window — normal for idle channels
+                        continue
+                    except Exception:
+                        raise  # propagate real errors to the outer except
+
+                    if raw is None:
+                        # No message ready — yield control and poll again
+                        await asyncio.sleep(0.01)
                         continue
 
-                    wait = min(_reconnect_backoff, MAX_BACKOFF_S)
-                    logger.warning(
-                        "EventBus subscribe error: %s — reconnecting in %.0f s",
-                        exc,
-                        wait,
-                    )
-                    await asyncio.sleep(wait)
-                    _reconnect_backoff = min(_reconnect_backoff * 2, MAX_BACKOFF_S)
+                    if raw.get("type") != "message":
+                        continue
 
-                    # Attempt to re-establish the main Redis connection.
-                    # Use connect() so the connection-leak fix applies here too
-                    # (closes old _redis before creating a new one).
-                    await self.connect()
+                    try:
+                        msg = json.loads(raw["data"])
+                        # Restore trace context from publisher so this consumer's
+                        # spans appear as children in the same distributed trace.
+                        try:
+                            from tracing.setup import extract_trace_context
 
-        finally:
-            # Always clean up local-bus handlers on exit (cancellation or error).
-            _cleanup_handlers(_local_registered)
+                            trace_carrier = msg.pop("_trace", {})
+                            if trace_carrier:
+                                msg["_trace_context"] = extract_trace_context(trace_carrier)
+                        except Exception as _exc:
+                            logger.debug("Suppressed exception: %s", _exc)
+                        self._metrics["delivered"] += 1
+                        yield msg
+                    except json.JSONDecodeError as exc:
+                        logger.warning("EventBus: bad JSON on %s: %s", raw.get("channel"), exc)
+
+            except asyncio.CancelledError:
+                if pubsub:
+                    await pubsub.unsubscribe()
+                return
+            except (TimeoutError, _redis_exc.TimeoutError):
+                # Idle pubsub timeout — no messages received within socket_timeout.
+                # This is normal on quiet channels; just re-subscribe without logging.
+                _pubsub_redis = None
+                continue
+            except Exception as exc:
+                self._metrics["errors"] += 1
+                logger.error("EventBus subscribe error: %s — reconnecting in 5 s", exc)
+                _pubsub_redis = None
+                await asyncio.sleep(5)
+                try:
+                    self._redis = _make_redis()
+                    await self._redis.ping()
+                    logger.info("EventBus reconnected to Redis.")
+                except Exception:
+                    self._degraded = True
+                    logger.error("EventBus: Redis reconnect failed — switching to local fallback.")
+                    return
 
     # ── local subscription (in-process handlers) ──────────────────────────────
 
     def subscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
         """Register a handler for local fallback delivery on a channel."""
         _local_bus.subscribe_local(channel, handler)
+
+    def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
+        """Remove a previously registered local handler. No-op if not registered."""
+        _local_bus.unsubscribe_local(channel, handler)
+
+    def clear_local_channel(self, channel: str) -> None:
+        """Remove all local handlers for a channel (use on reconnect to prevent duplicates)."""
+        _local_bus.clear_channel(channel)
 
     # ── convenience publishers ────────────────────────────────────────────────
 
@@ -739,3 +662,16 @@ class EventBus:
 # ─────────────────────────────────────────────────────────────────────────────
 
 bus: EventBus = EventBus()
+
+
+async def publish(channel: str, message: dict) -> None:
+    """Module-level convenience wrapper — delegates to the global bus singleton.
+
+    Allows callers to write::
+
+        from core.event_bus import publish, CH_TICK
+        await publish(CH_TICK, {...})
+
+    instead of importing ``bus`` directly.
+    """
+    await bus.publish(channel, message)

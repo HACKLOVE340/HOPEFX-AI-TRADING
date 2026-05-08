@@ -342,12 +342,12 @@ try:
 except Exception as _hyperopt_router_err:
     logger.warning("Hyperopt router failed to register: %s", _hyperopt_router_err)
 
-# ── Replay / stress-test router (/replay) ────────────────────────────────────
+# ── Replay / stress-test router (/api/replay) ────────────────────────────────
 try:
     from backtesting.replay_connector import create_replay_router as _create_replay_router
 
     app.include_router(_create_replay_router())
-    logger.info("Replay backtest router registered at /replay")
+    logger.info("Replay backtest router registered at /api/replay")
 except Exception as _replay_router_err:
     logger.warning("Replay router failed to register: %s", _replay_router_err)
 

@@ -1,17 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
 import { useStore, selectWsStatus } from '../store';
-import { PageHeader } from '../components/PageHeader';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-
-const STATUS_CROSS_LINKS = [
-  { label: 'System Reliability', href: '/system-reliability', icon: '🔬', color: '#60a5fa' },
-  { label: 'Auto-Heal',          href: '/auto-heal',          icon: '🩺', color: '#4ade80' },
-  { label: 'Security Ops',       href: '/security',           icon: '🛡️', color: '#f59e0b' },
-  { label: 'Admin Panel',        href: '/admin',              icon: '🔧', color: '#a78bfa' },
-  { label: 'Docs',               href: '/docs',               icon: '📖', color: '#94a3b8' },
-];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -114,6 +104,7 @@ const UptimeBar: React.FC<{ history: HistoryDay[] }> = ({ history }) => (
 // ── Main component ────────────────────────────────────────────────────────────
 
 const StatusPage: React.FC = () => {
+  const navigate = useNavigate();
   const wsStatus = useStore(selectWsStatus);
   const [data, setData] = useState<StatusData | null>(null);
   const [history, setHistory] = useState<HistoryDay[]>([]);
@@ -167,12 +158,12 @@ const StatusPage: React.FC = () => {
   }, [load]);
 
   if (loading) {
-    return <div className="max-w-3xl mx-auto px-4 py-6"><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
+    return <div style={styles.page}><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
   }
 
   if (error || !data) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-6">
+      <div style={styles.page}>
         <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
           <span style={{ fontSize: 32 }}>❌</span>
           <div>
@@ -195,24 +186,7 @@ const StatusPage: React.FC = () => {
     : 100;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <PageHeader
-        title="System Status"
-        icon="🟢"
-        subtitle="Real-time health of all platform services"
-        breadcrumbs={[
-          { label: 'Home', href: '/home' },
-          { label: 'System Status' },
-        ]}
-        actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to="/docs" style={{ padding: '6px 12px', background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.4)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📖 Docs</Link>
-            <Link to="/dashboard" style={{ padding: '6px 12px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>📊 Dashboard</Link>
-            <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻ Refresh</button>
-          </div>
-        }
-      />
-
+    <div style={styles.page}>
       {/* Banner */}
       <div style={{
         ...styles.banner,
@@ -227,14 +201,10 @@ const StatusPage: React.FC = () => {
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Link to="/home"
-            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <button onClick={() => navigate('/')}
+            style={{ padding: '6px 14px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.4)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             📊 Dashboard
-          </Link>
-          <Link to="/docs"
-            style={{ padding: '6px 14px', background: 'rgba(100,116,139,0.15)', border: '1px solid rgba(100,116,139,0.4)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-            📖 Docs
-          </Link>
+          </button>
           <button onClick={load} style={styles.refreshBtn} title="Refresh now">↻</button>
         </div>
       </div>
@@ -329,8 +299,6 @@ const StatusPage: React.FC = () => {
         )}
       </div>
 
-      <CrossLinkBar links={STATUS_CROSS_LINKS} title="Related" style={{ marginBottom: 16 }} />
-
       <div style={styles.footer}>
         Last refreshed: {lastRefresh.toLocaleTimeString()} &nbsp;·&nbsp;
         Auto-refreshes every 60s &nbsp;·&nbsp;
@@ -343,7 +311,7 @@ const StatusPage: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
-  _page_unused: {
+  page: {
     maxWidth: 760,
     margin: '0 auto',
     padding: '32px 16px',

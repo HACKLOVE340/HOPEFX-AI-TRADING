@@ -9,24 +9,9 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader } from '../components';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-
-const WF_CROSS_LINKS = [
-  { label: 'AI Strategy',      href: '/ai-strategy',      icon: '🤖', color: '#a78bfa' },
-  { label: 'A/B Testing',      href: '/ab-testing',       icon: '⚡', color: '#34d399' },
-  { label: 'Pattern Detector', href: '/pattern-detector', icon: '🔍', color: '#fbbf24' },
-  { label: 'Correlation',      href: '/correlation',      icon: '📊', color: '#60a5fa' },
-  { label: 'Performance',      href: '/performance',      icon: '📈', color: '#4ade80' },
-  { label: 'Market Replay',    href: '/replay',           icon: '⏪', color: '#f97316' },
-];
+import { useNavigate } from 'react-router-dom';
 import { createChart, LineSeries, type IChartApi, type UTCTimestamp } from 'lightweight-charts';
 import { api } from '../hooks/useApi';
-import {
-  RadialBarChart, RadialBar, PolarAngleAxis,
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,72 +102,34 @@ const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> 
   return <div ref={containerRef} style={{ width: '100%', height: 300 }} />;
 };
 
-// ─── Stability gauge (SVG arc) ────────────────────────────────────────────────
+// ─── Stability badge ──────────────────────────────────────────────────────────
 
-const StabilityGauge: React.FC<{ score: number }> = ({ score }) => {
-  const color = score >= 75 ? '#4ade80' : score >= 50 ? '#facc15' : '#f87171';
-  const label = score >= 75 ? 'Stable' : score >= 50 ? 'Moderate' : 'Unstable';
-  const r = 44;
-  const cx = 60;
-  const cy = 60;
-  const startAngle = -210;
-  const endAngle   = 30;
-  const totalArc   = endAngle - startAngle;
-  const fillArc    = (score / 100) * totalArc;
-
-  const polarToXY = (angleDeg: number) => {
-    const rad = (angleDeg * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  };
-
-  const describeArc = (start: number, end: number) => {
-    const s = polarToXY(start);
-    const e = polarToXY(end);
-    const large = end - start > 180 ? 1 : 0;
-    return `M ${s.x} ${s.y} A ${r} ${r} 0 ${large} 1 ${e.x} ${e.y}`;
-  };
-
+const StabilityBadge: React.FC<{ score: number }> = ({ score }) => {
+  const color =
+    score >= 75 ? '#4ade80' :
+    score >= 50 ? '#facc15' :
+    '#f87171';
+  const label =
+    score >= 75 ? 'Stable' :
+    score >= 50 ? 'Moderate' :
+    'Unstable';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <svg width={120} height={90} viewBox="0 0 120 90">
-        {/* Track */}
-        <path d={describeArc(startAngle, endAngle)} fill="none" stroke="#1e293b" strokeWidth={8} strokeLinecap="round" />
-        {/* Fill */}
-        <path d={describeArc(startAngle, startAngle + fillArc)} fill="none" stroke={color} strokeWidth={8} strokeLinecap="round" style={{ transition: 'stroke-dashoffset 0.6s ease' }} />
-        {/* Score text */}
-        <text x={cx} y={cy + 4} textAnchor="middle" fill={color} fontSize={18} fontWeight={800}>{score.toFixed(0)}</text>
-        <text x={cx} y={cy + 18} textAnchor="middle" fill="#64748b" fontSize={9}>/ 100</text>
-      </svg>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{
+        width: 80, height: 80, borderRadius: '50%',
+        border: `4px solid ${color}`,
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{ fontSize: 20, fontWeight: 800, color }}>{score.toFixed(0)}</span>
+        <span style={{ fontSize: 10, color: '#64748b' }}>/ 100</span>
+      </div>
       <div>
         <div style={{ fontSize: 16, fontWeight: 700, color }}>{label}</div>
-        <div style={{ fontSize: 12, color: '#64748b', maxWidth: 160 }}>Consistency of returns across all folds</div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Monte Carlo fan chart ────────────────────────────────────────────────────
-
-const MonteCarloFan: React.FC<{ mc: MonteCarloResult }> = ({ mc }) => {
-  const data = [
-    { name: 'Worst (P5)',   value: mc.p5_equity,     fill: '#f87171' },
-    { name: 'Median',       value: mc.median_equity,  fill: '#60a5fa' },
-    { name: 'Best (P95)',   value: mc.p95_equity,     fill: '#4ade80' },
-  ];
-  const max = Math.max(...data.map(d => d.value)) * 1.1;
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {data.map(({ name, value, fill }) => (
-        <div key={name}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-            <span style={{ color: '#94a3b8' }}>{name}</span>
-            <span style={{ color: fill, fontWeight: 700 }}>${value.toLocaleString()}</span>
-          </div>
-          <div style={{ height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${(value / max) * 100}%`, background: fill, borderRadius: 4, transition: 'width 0.6s ease' }} />
-          </div>
+        <div style={{ fontSize: 12, color: '#64748b', maxWidth: 180 }}>
+          Consistency of returns across all folds
         </div>
-      ))}
+      </div>
     </div>
   );
 };
@@ -257,7 +204,9 @@ const WalkForward: React.FC = () => {
             <button onClick={() => load()} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
               ↻ Retry
             </button>
-            <Link to="/ai-strategy" style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', fontSize: 14, textDecoration: 'none' }}>🧠 AI Strategy</Link>
+            <button onClick={() => navigate('/backtest')} style={{ background: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontSize: 14 }}>
+              📊 Go to Backtesting
+            </button>
           </div>
         </div>
       </div>
@@ -267,32 +216,35 @@ const WalkForward: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <PageHeader
-        title="Walk-Forward Validation"
-        icon="📈"
-        subtitle={`${data.strategy ?? '—'} · ${data.symbol ?? '—'} · ${(data.folds ?? []).length} folds`}
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'AI Strategy', href: '/ai-strategy' },
-          { label: 'Walk-Forward' },
-        ]}
-        actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <Link to="/ai-strategy"      style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🤖 AI Strategy</Link>
-            <Link to="/ab-testing"       style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(52,211,153,0.12)',  border: '1px solid rgba(52,211,153,0.3)',  color: '#34d399', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>⚡ A/B Test</Link>
-            <Link to="/pattern-detector" style={{ padding: '6px 12px', borderRadius: 6, background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24', fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>🔍 Patterns</Link>
-            <div style={s.searchRow}>
-              <input
-                style={s.searchInput}
-                placeholder="Run ID…"
-                value={inputId}
-                onChange={(e) => setInputId(e.target.value)}
-              />
-              <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
-            </div>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Walk-Forward Validation</h1>
+          <p style={s.subtitle}>
+            {data.strategy ?? '—'} · {data.symbol ?? '—'} · {(data.folds ?? []).length} folds
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => navigate('/ai-strategy')}
+            style={{
+              padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
+              background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)',
+              color: '#a78bfa', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+            }}
+          >
+            🤖 Generate Strategy
+          </button>
+          <div style={s.searchRow}>
+            <input
+              style={s.searchInput}
+              placeholder="Run ID…"
+              value={inputId}
+              onChange={(e) => setInputId(e.target.value)}
+            />
+            <button style={s.btn} onClick={() => load(inputId || undefined)}>Load</button>
           </div>
-        }
-      />
+        </div>
+      </div>
 
       {/* Summary metrics */}
       <div style={s.metricsRow}>
@@ -301,7 +253,7 @@ const WalkForward: React.FC = () => {
         <MetricCard label="Avg Drawdown"  value={`${(data.avg_drawdown ?? 0).toFixed(1)}%`} color="#f87171" />
         <div style={s.metricCard}>
           <div style={s.metricLabel}>Stability Score</div>
-          <StabilityGauge score={data.stability_score} />
+          <StabilityBadge score={data.stability_score} />
         </div>
       </div>
 
@@ -376,29 +328,16 @@ const WalkForward: React.FC = () => {
       {/* Monte Carlo */}
       {data.monte_carlo && (
         <div style={s.card}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-            <div style={s.cardTitle}>Monte Carlo Simulation ({data.monte_carlo.simulations.toLocaleString()} runs)</div>
-            <div style={{
-              padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 700,
-              background: data.monte_carlo.probability_of_ruin < 5 ? 'rgba(74,222,128,0.12)' : 'rgba(248,113,113,0.12)',
-              border: `1px solid ${data.monte_carlo.probability_of_ruin < 5 ? 'rgba(74,222,128,0.4)' : 'rgba(248,113,113,0.4)'}`,
-              color: data.monte_carlo.probability_of_ruin < 5 ? '#4ade80' : '#f87171',
-            }}>
-              Ruin probability: {data.monte_carlo.probability_of_ruin.toFixed(1)}%
-            </div>
-          </div>
-          <MonteCarloFan mc={data.monte_carlo} />
+          <div style={s.cardTitle}>Monte Carlo Simulation ({data.monte_carlo.simulations.toLocaleString()} runs)</div>
           <div style={s.mcGrid}>
-            <MCCard label="Median Equity"          value={`$${data.monte_carlo.median_equity.toLocaleString()}`}  color="#60a5fa" />
-            <MCCard label="5th Percentile (Worst)" value={`$${data.monte_carlo.p5_equity.toLocaleString()}`}      color="#f87171" />
-            <MCCard label="95th Percentile (Best)" value={`$${data.monte_carlo.p95_equity.toLocaleString()}`}     color="#4ade80" />
-            <MCCard label="Probability of Ruin"    value={`${data.monte_carlo.probability_of_ruin.toFixed(1)}%`}
+            <MCCard label="Median Equity"       value={`$${data.monte_carlo.median_equity.toLocaleString()}`} color="#60a5fa" />
+            <MCCard label="5th Percentile (Worst)" value={`$${data.monte_carlo.p5_equity.toLocaleString()}`} color="#f87171" />
+            <MCCard label="95th Percentile (Best)" value={`$${data.monte_carlo.p95_equity.toLocaleString()}`} color="#4ade80" />
+            <MCCard label="Probability of Ruin" value={`${data.monte_carlo.probability_of_ruin.toFixed(1)}%`}
               color={data.monte_carlo.probability_of_ruin < 5 ? '#4ade80' : '#f87171'} />
           </div>
         </div>
       )}
-
-      <CrossLinkBar links={WF_CROSS_LINKS} title="Related Tools" style={{ marginTop: 8 }} />
     </div>
   );
 };

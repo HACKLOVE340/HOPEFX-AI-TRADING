@@ -163,7 +163,7 @@ def _unique_email() -> str:
 
 
 async def _register_and_login(client: AsyncClient) -> tuple[str, str]:
-    """Register a new user and return (access_token, user_id)."""
+    """Register a new user, verify email (using dev token), and return (access_token, user_id)."""
     email = _unique_email()
     password = "TestPass123!"
     username = f"user_{uuid.uuid4().hex[:6]}"
@@ -177,6 +177,14 @@ async def _register_and_login(client: AsyncClient) -> tuple[str, str]:
         },
     )
     assert reg.status_code in (200, 201), f"register failed: {reg.text}"
+
+    # In APP_ENV=test the server returns _dev_verify_token so tests can
+    # complete email verification without an SMTP transport.
+    reg_data = reg.json()
+    dev_token = reg_data.get("_dev_verify_token")
+    if dev_token:
+        verify = await client.get(f"/api/auth/verify-email?token={dev_token}")
+        assert verify.status_code in (200, 302), f"email verify failed: {verify.text}"
 
     login = await client.post(
         "/api/auth/login",

@@ -8,11 +8,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
-import { useToast } from '../components/Toast';
 
 function extractApiError(err: unknown, fallback: string): string {
   const detail = (err as { response?: { data?: { detail?: string } } })
@@ -109,19 +107,16 @@ const LeaderCard: React.FC<{
 
 const CopyTrading: React.FC = () => {
   const navigate = useNavigate();
-  const toast    = useToast();
   const [leaders, setLeaders]           = useState<Leader[]>([]);
   const [loading, setLoading]           = useState(true);
   const [loadErr, setLoadErr]           = useState('');
   const [selected, setSelected]         = useState<string | null>(null);
   const [allocation, setAllocation]     = useState(10000);
-  const [riskPct, setRiskPct]           = useState(10); // max drawdown stop %
   const [sortBy, setSortBy]             = useState<'return' | 'sharpe' | 'followers'>('return');
   const [copying, setCopying]           = useState(false);
   const [copyMsg, setCopyMsg]           = useState('');
   const [sessions, setSessions]         = useState<ActiveSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [stopConfirmId, setStopConfirmId] = useState<string | null>(null);
   const [stoppingId, setStoppingId]     = useState<string | null>(null);
   const [updatingId, setUpdatingId]     = useState<string | null>(null);
   const [editAlloc, setEditAlloc]       = useState<Record<string, number>>({});
@@ -176,34 +171,23 @@ const CopyTrading: React.FC = () => {
     setCopying(true);
     setCopyMsg('');
     try {
-      await copyTradingApi.startCopy(selected, {
-        allocation_amount: allocation,
-        max_drawdown_stop_pct: riskPct,
-      });
-      const msg = `Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()} · Stop at ${riskPct}% DD`;
-      setCopyMsg(msg);
-      toast.success(msg);
+      await copyTradingApi.startCopy(selected, { allocation_amount: allocation });
+      setCopyMsg(`Now copying ${selectedLeader?.name}. Allocation: $${allocation.toLocaleString()}`);
       setSelected(null);
       await loadSessions();
       setActiveTab('active');
     } catch (e: unknown) {
-      const msg = `Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`;
-      setCopyMsg(msg);
-      toast.error(msg);
+      setCopyMsg(`Failed: ${(e as { message?: string })?.message ?? 'Unknown error'}`);
     }
     setCopying(false);
   };
 
   const handleStopCopy = async (traderId: string) => {
-    setStopConfirmId(null);
     setStoppingId(traderId);
     try {
       await copyTradingApi.stopCopy(traderId);
-      toast.success('Copy session stopped.');
       await loadSessions();
-    } catch {
-      toast.error('Failed to stop copy session.');
-    }
+    } catch { /* non-fatal */ }
     finally { setStoppingId(null); }
   };
 
@@ -224,59 +208,49 @@ const CopyTrading: React.FC = () => {
     : '0.00';
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
-      <PageHeader
-        title="Copy Trading Marketplace"
-        icon="🔁"
-        subtitle="Mirror top traders automatically. Allocate capital and start earning."
-        breadcrumbs={[
-          { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Community', href: '/leaderboard' },
-          { label: 'Copy Trading' },
-        ]}
-        actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {(['browse', 'active'] as const).map(t => (
-              <button key={t} onClick={() => setActiveTab(t)} style={{
-                ...s.tabBtn,
-                ...(activeTab === t ? s.tabBtnActive : {}),
-              }}>
-                {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
-              </button>
-            ))}
-            <div style={{ width: 1, height: 24, background: '#334155' }} />
-            <Link to="/leaderboard" style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>🏆 Leaderboard</Link>
-            <Link to="/signals"     style={{ background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 600, padding: '6px 12px', textDecoration: 'none' }}>📡 Signals</Link>
-          </div>
-        }
-      />
+    <div style={s.page}>
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Copy Trading Marketplace</h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
+            Mirror top traders automatically. Allocate capital and start earning.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {(['browse', 'active'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} style={{
+              ...s.tabBtn,
+              ...(activeTab === t ? s.tabBtnActive : {}),
+            }}>
+              {t === 'browse' ? '🔍 Browse Traders' : `📋 Active Sessions (${sessions.length})`}
+            </button>
+          ))}
+          <div style={{ width: 1, height: 24, background: '#334155' }} />
+          <button
+            onClick={() => navigate('/leaderboard')}
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}
+          >
+            🏆 Leaderboard
+          </button>
+        </div>
+      </div>
 
       {/* ── Active Sessions Tab ── */}
       {activeTab === 'active' && (
         <div>
           {sessionsLoading && <p style={{ color: '#64748b' }}>Loading sessions…</p>}
           {!sessionsLoading && sessions.length === 0 && (
-            <EmptyState
-              icon="📋"
-              title="No active copy sessions"
-              description="Browse top traders and allocate capital to start mirroring their trades automatically."
-              action={
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    onClick={() => setActiveTab('browse')}
-                    style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    🔍 Browse Traders
-                  </button>
-                  <button
-                    onClick={() => navigate('/leaderboard')}
-                    style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    🏆 Leaderboard
-                  </button>
-                </div>
-              }
-            />
+            <div style={{ textAlign: 'center', color: '#475569', padding: 48 }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📋</div>
+              <div style={{ fontSize: 15, color: '#94a3b8', marginBottom: 8 }}>No active copy sessions</div>
+              <div style={{ fontSize: 13, marginBottom: 20 }}>Browse top traders and start copying to see your sessions here.</div>
+              <button
+                onClick={() => setActiveTab('browse')}
+                style={{ background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 14, fontWeight: 600, padding: '10px 24px' }}
+              >
+                🔍 Browse Traders
+              </button>
+            </div>
           )}
           {sessions.map(sess => {
             const totalPnl = (sess.unrealised_pnl ?? 0) + (sess.realised_pnl ?? 0);
@@ -335,26 +309,13 @@ const CopyTrading: React.FC = () => {
                   </button>
                 </div>
 
-                {stopConfirmId === sess.trader_id ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8 }}>
-                    <span style={{ fontSize: 13, color: '#fca5a5' }}>Stop copying {sess.trader_name}?</span>
-                    <button
-                      onClick={() => handleStopCopy(sess.trader_id)}
-                      disabled={stoppingId === sess.trader_id}
-                      style={{ background: '#7f1d1d', border: 'none', borderRadius: 6, color: '#f87171', cursor: 'pointer', fontSize: 12, fontWeight: 700, padding: '5px 12px' }}
-                    >
-                      {stoppingId === sess.trader_id ? 'Stopping…' : 'Confirm Stop'}
-                    </button>
-                    <button onClick={() => setStopConfirmId(null)} style={{ background: 'transparent', border: '1px solid #334155', borderRadius: 6, color: '#64748b', cursor: 'pointer', fontSize: 12, padding: '5px 10px' }}>Cancel</button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setStopConfirmId(sess.trader_id)}
-                    style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
-                  >
-                    ⏹ Stop Copying
-                  </button>
-                )}
+                <button
+                  onClick={() => handleStopCopy(sess.trader_id)}
+                  disabled={stoppingId === sess.trader_id}
+                  style={{ background: '#450a0a', border: '1px solid #7f1d1d', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}
+                >
+                  {stoppingId === sess.trader_id ? 'Stopping…' : '⏹ Stop Copying'}
+                </button>
               </div>
             );
           })}
@@ -378,15 +339,7 @@ const CopyTrading: React.FC = () => {
       ) : loadErr ? (
         <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
       ) : leaders.length === 0 ? (
-        <EmptyState
-          icon="🔁"
-          title="No traders available yet"
-          description="Top traders will appear here once they publish their strategies. Check back soon."
-          links={[
-            { label: '🥇 Leaderboard', href: '/leaderboard' },
-            { label: '🛒 Marketplace', href: '/marketplace' },
-          ]}
-        />
+        <p style={{ color: '#64748b', padding: '40px 0' }}>No traders available yet. Check back soon.</p>
       ) : (
         <div style={s.grid}>
           {sorted.map((leader) => (
@@ -406,50 +359,24 @@ const CopyTrading: React.FC = () => {
           <h3 style={s.cardTitle}>Start Copying — {selectedLeader.name}</h3>
 
           <div style={s.allocationGrid}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={s.label}>
-                  Allocation Amount: <strong style={{ color: '#f1f5f9' }}>${allocation.toLocaleString()}</strong>
-                </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <input
-                    type="range"
-                    min={1000}
-                    max={100000}
-                    step={1000}
-                    value={allocation}
-                    onChange={(e) => setAllocation(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: '#3b82f6' }}
-                  />
-                  <input
-                    type="number"
-                    value={allocation}
-                    onChange={(e) => setAllocation(Number(e.target.value))}
-                    style={{ ...s.input, width: 120 }}
-                  />
-                </div>
-              </div>
-              <div>
-                <label style={s.label}>
-                  Max Drawdown Stop: <strong style={{ color: '#f87171' }}>{riskPct}%</strong>
-                  <span style={{ color: '#475569', fontWeight: 400, marginLeft: 8 }}>
-                    (stop at −${(allocation * riskPct / 100).toLocaleString()} loss)
-                  </span>
-                </label>
+            <div>
+              <label style={s.label}>Allocation Amount</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <input
                   type="range"
-                  min={2}
-                  max={50}
-                  step={1}
-                  value={riskPct}
-                  onChange={(e) => setRiskPct(Number(e.target.value))}
-                  style={{ width: '100%', accentColor: '#f87171' }}
+                  min={1000}
+                  max={100000}
+                  step={1000}
+                  value={allocation}
+                  onChange={(e) => setAllocation(Number(e.target.value))}
+                  style={{ flex: 1 }}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginTop: 2 }}>
-                  <span>2% (Conservative)</span>
-                  <span>25% (Moderate)</span>
-                  <span>50% (Aggressive)</span>
-                </div>
+                <input
+                  type="number"
+                  value={allocation}
+                  onChange={(e) => setAllocation(Number(e.target.value))}
+                  style={{ ...s.input, width: 120 }}
+                />
               </div>
             </div>
 
@@ -498,15 +425,6 @@ const CopyTrading: React.FC = () => {
       )}
       </>
       )}
-
-      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
-        { label: '🥇 Leaderboard',  href: '/leaderboard',  color: '#fbbf24' },
-        { label: '📡 Signal Feed',  href: '/signals',      color: '#34d399' },
-        { label: '🛒 Marketplace',  href: '/marketplace',  color: '#a78bfa' },
-        { label: '📊 Performance',  href: '/performance',  color: '#60a5fa' },
-        { label: '💼 Portfolio',    href: '/portfolio',    color: '#f97316' },
-        { label: '🤝 Affiliate',    href: '/affiliate',    color: '#4ade80' },
-      ]}/>
     </div>
   );
 };

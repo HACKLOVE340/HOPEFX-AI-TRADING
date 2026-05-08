@@ -244,7 +244,6 @@ _CSRF_EXEMPT_PREFIXES: tuple[str, ...] = (
     "/api/email/webhook",  # SendGrid webhook — uses HMAC signature
     "/api/billing/webhook/stripe",  # Stripe webhook — uses HMAC-SHA256 signature, no CSRF token
     "/api/monetization/webhook/stripe",  # Stripe webhook (monetization router alias)
-    "/api/webhooks/",  # Inbound webhooks (TradingView etc.) — use HMAC-SHA256 signature auth
     "/api/health",  # health checks
     "/ws",  # WebSocket — uses JWT auth
     "/metrics",  # Prometheus scrape
@@ -363,7 +362,6 @@ def setup_csrf_middleware(app: FastAPI) -> None:
 _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
     "/api/health",
     "/api/auth",
-    "/api/auth/csrf-token",
     "/health",
     "/docs",
     "/redoc",
@@ -371,14 +369,14 @@ _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
     "/metrics",
     "/static",
     "/favicon.ico",
-    "/ws",          # WebSocket — auth is checked inside the handler
-    "/api/status",  # lightweight status page
-    "/",            # root — serves static HTML, no data dependency
-    "/godmode",     # dashboard — static HTML
-    "/stream",      # stream dashboard — static HTML
-    "/paper-trading",  # paper trading page — static HTML
-    "/pricing",     # pricing page — static HTML
-    "/admin",       # admin dashboard — static HTML
+    "/ws",              # WebSocket — auth is checked inside the handler
+    "/api/status",      # lightweight status page
+    "/api/billing",     # billing/plans must be readable before startup completes
+    "/api/notifications",
+    "/api/kyc",
+    "/api/profiles",
+    "/api/settings",
+    "/api/superadmin",  # admin ops must not be gated
 )
 
 

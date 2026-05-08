@@ -1051,7 +1051,7 @@ class TestAssessRiskAndSize:
             "probability": 0.72,
             "confidence": 0.75,
             "direction": "BUY",
-            # Use TRENDING_UP (scalar=1.0) so regime scaling does not reduce size
+            # TRENDING_UP has scalar 1.0 so recommended_size is returned unchanged.
             "regime": "TRENDING_UP",
         }
 

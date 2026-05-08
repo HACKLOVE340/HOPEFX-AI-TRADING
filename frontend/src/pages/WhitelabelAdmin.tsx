@@ -9,23 +9,8 @@
  */
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
-import { PageHeader } from '../components/PageHeader';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-import { EmptyState } from '../components/EmptyState';
-import { Badge } from '../components/Badge';
-import { useConfirm } from '../components/ConfirmDialog';
-import { useToast } from '../components/Toast';
-
-const WL_CROSS_LINKS = [
-  { label: 'Admin Panel',         href: '/admin',              icon: '🔧', color: '#60a5fa' },
-  { label: 'Super Admin',         href: '/superadmin',         icon: '⚡', color: '#f87171' },
-  { label: 'Security Dashboard',  href: '/security',           icon: '🛡️', color: '#f59e0b' },
-  { label: 'Audit Log',           href: '/audit',              icon: '🔍', color: '#a78bfa' },
-  { label: 'System Status',       href: '/status',             icon: '🟢', color: '#4ade80' },
-  { label: 'Docs',                href: '/docs',               icon: '📖', color: '#94a3b8' },
-];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -149,137 +134,53 @@ const CreateModal: React.FC<{
   );
 };
 
-// ─── Live Branding Preview Panel ─────────────────────────────────────────────
+// ─── Preview Panel ────────────────────────────────────────────────────────────
 
-const PreviewPanel: React.FC<{
-  tenant:    Tenant;
-  onClose:   () => void;
-  onSaved:   (t: Tenant) => void;
-}> = ({ tenant, onClose, onSaved }) => {
-  const [color,       setColor]       = useState(tenant.theme.primary_color);
-  const [logoUrl,     setLogoUrl]     = useState(tenant.theme.logo_url ?? '');
-  const [companyName, setCompanyName] = useState(tenant.theme.company_name ?? tenant.name);
-  const [features,    setFeatures]    = useState<string[]>(tenant.features);
-  const [saving,      setSaving]      = useState(false);
-  const [saveMsg,     setSaveMsg]     = useState('');
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [onClose]);
-
-  const toggleFeature = (f: string) =>
-    setFeatures(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
-
-  const handleSave = async () => {
-    setSaving(true); setSaveMsg('');
-    try {
-      const res = await api.patch(`/whitelabel/tenants/${tenant.tenant_id}`, {
-        primary_color: color, logo_url: logoUrl, company_name: companyName, features,
-      });
-      setSaveMsg('✓ Saved');
-      onSaved(res.data as Tenant);
-      setTimeout(() => setSaveMsg(''), 2500);
-    } catch { setSaveMsg('⚠ Save failed'); }
-    finally { setSaving(false); }
-  };
-
+const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenant, onClose }) => {
+  const color = tenant.theme.primary_color;
   return (
-    <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ ...s.modal, maxWidth: 700, display: 'flex', flexDirection: 'column', gap: 0, padding: 0, overflow: 'hidden' }}>
-        <div style={{ ...s.modalHeader, padding: '16px 20px', borderBottom: '1px solid #1e293b' }}>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>Live Branding Preview — {tenant.name}</span>
+    <div style={s.overlay}>
+      <div style={{ ...s.modal, maxWidth: 560 }}>
+        <div style={s.modalHeader}>
+          <span style={{ fontWeight: 700, fontSize: 16 }}>Dashboard Preview — {tenant.name}</span>
           <button style={s.closeBtn} onClick={onClose}>✕</button>
         </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, flex: 1, overflow: 'hidden' }}>
-          {/* Left: controls */}
-          <div style={{ padding: 20, borderRight: '1px solid #1e293b', overflowY: 'auto' }}>
-            <div style={s.fieldLabel}>Brand Colour</div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-              <input type="color" value={color} onChange={e => setColor(e.target.value)}
-                style={{ width: 40, height: 36, border: 'none', background: 'none', cursor: 'pointer' }} />
-              <input style={{ ...s.textInput, flex: 1, marginBottom: 0 }} value={color} onChange={e => setColor(e.target.value)} />
-            </div>
-
-            <div style={s.fieldLabel}>Company Name</div>
-            <input style={s.textInput} value={companyName} onChange={e => setCompanyName(e.target.value)} />
-
-            <div style={s.fieldLabel}>Logo URL</div>
-            <input style={s.textInput} value={logoUrl} onChange={e => setLogoUrl(e.target.value)} placeholder="https://…" />
-
-            <div style={s.fieldLabel}>Feature Flags</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {ALL_FEATURES.map(f => (
-                <label key={f} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                  <div
-                    onClick={() => toggleFeature(f)}
-                    style={{
-                      width: 36, height: 20, borderRadius: 10, cursor: 'pointer', transition: 'background 0.2s',
-                      background: features.includes(f) ? color : '#334155', position: 'relative', flexShrink: 0,
-                    }}
-                  >
-                    <div style={{
-                      position: 'absolute', top: 2, left: features.includes(f) ? 18 : 2,
-                      width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                      transition: 'left 0.2s',
-                    }} />
-                  </div>
-                  <span style={{ fontSize: 12, color: features.includes(f) ? '#e2e8f0' : '#64748b' }}>{f}</span>
-                </label>
+        {/* Simulated branded dashboard */}
+        <div style={{ background: '#0f172a', borderRadius: 10, overflow: 'hidden', border: '1px solid #334155' }}>
+          {/* Nav bar */}
+          <div style={{ background: color, padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            {tenant.theme.logo_url
+              ? <img src={tenant.theme.logo_url} alt="logo" style={{ height: 28 }} />
+              : <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#fff', fontSize: 14 }}>
+                  {tenant.name.slice(0, 2).toUpperCase()}
+                </div>
+            }
+            <span style={{ fontWeight: 700, color: '#fff', fontSize: 16 }}>{tenant.theme.company_name}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>Powered by HOPEFX</span>
+          </div>
+          {/* Theme preview — shows how the tenant's brand colours apply to the dashboard */}
+          <div style={{ padding: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
+              {(['Balance', 'P&L', 'Win Rate'] as const).map((label) => (
+                <div key={label} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>{label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: '#f8fafc' }}>—</div>
+                </div>
               ))}
             </div>
-
-            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-              <button onClick={() => void handleSave()} disabled={saving}
-                style={{ ...s.saveBtn, flex: 'none', padding: '8px 20px', fontSize: 13 }}>
-                {saving ? 'Saving…' : '💾 Save Changes'}
-              </button>
-              {saveMsg && <span style={{ fontSize: 12, color: saveMsg.startsWith('✓') ? '#22c55e' : '#f87171', alignSelf: 'center' }}>{saveMsg}</span>}
+            <div style={{ background: '#1e293b', borderRadius: 8, padding: 16, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
+              Equity chart — accent colour: <span style={{ color, marginLeft: 6, fontWeight: 700 }}>{color}</span>
             </div>
           </div>
-
-          {/* Right: live preview */}
-          <div style={{ padding: 20, overflowY: 'auto', background: '#060d18' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Live Preview</div>
-            <div style={{ background: '#0f172a', borderRadius: 10, overflow: 'hidden', border: '1px solid #1e293b' }}>
-              {/* Nav bar */}
-              <div style={{ background: color, padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                {logoUrl
-                  ? <img src={logoUrl} alt="logo" style={{ height: 24, borderRadius: 4 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                  : <div style={{ width: 24, height: 24, borderRadius: 5, background: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#fff', fontSize: 11 }}>
-                      {companyName.slice(0, 2).toUpperCase()}
-                    </div>
-                }
-                <span style={{ fontWeight: 700, color: '#fff', fontSize: 14 }}>{companyName}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: 'rgba(255,255,255,0.6)' }}>Powered by HOPEFX</span>
-              </div>
-              {/* KPI cards */}
-              <div style={{ padding: 14 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 12 }}>
-                  {['Balance', 'P&L', 'Win Rate'].map(label => (
-                    <div key={label} style={{ background: '#1e293b', borderRadius: 6, padding: '10px 12px', borderTop: `3px solid ${color}` }}>
-                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{label}</div>
-                      <div style={{ fontSize: 15, fontWeight: 700, color: '#f8fafc' }}>—</div>
-                    </div>
-                  ))}
-                </div>
-                {/* Chart placeholder */}
-                <div style={{ background: '#1e293b', borderRadius: 6, padding: 12, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                  <svg width="100%" height="40" viewBox="0 0 200 40" preserveAspectRatio="none">
-                    <polyline points="0,35 30,28 60,20 90,25 120,10 150,18 200,5" fill="none" stroke={color} strokeWidth="2" />
-                  </svg>
-                </div>
-                {/* Feature pills */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {features.slice(0, 6).map(f => (
-                    <span key={f} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, background: `${color}22`, color, border: `1px solid ${color}50` }}>{f}</span>
-                  ))}
-                  {features.length > 6 && <span style={{ fontSize: 9, color: '#475569' }}>+{features.length - 6} more</span>}
-                </div>
-              </div>
-            </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <div style={s.fieldLabel}>Enabled Features</div>
+          <div style={s.featureGrid}>
+            {tenant.features.map((f) => (
+              <span key={f} style={{ ...s.featurePill, background: `${color}22`, color, border: `1px solid ${color}` }}>
+                {f}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -353,8 +254,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 const WhitelabelAdmin: React.FC = () => {
-  const confirm  = useConfirm();
-  const toast    = useToast();
+  const navigate = useNavigate();
   const [tenants,    setTenants]    = useState<Tenant[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [loadErr,    setLoadErr]    = useState<string | null>(null);
@@ -389,26 +289,15 @@ const WhitelabelAdmin: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   const handleAction = async (id: string, action: string) => {
-    if (action === 'delete') {
-      const ok = await confirm({
-        title:        'Delete tenant?',
-        description:  'This will permanently remove the tenant, their branding, and API key. This cannot be undone.',
-        confirmLabel: 'Delete Tenant',
-        variant:      'danger',
-      });
-      if (!ok) return;
-    }
+    if (action === 'delete' && !window.confirm('Delete this tenant? This cannot be undone.')) return;
     setActionErr(null);
     try {
       if (action === 'activate') await api.post(`/whitelabel/tenants/${id}/activate`);
       else if (action === 'suspend') await api.post(`/whitelabel/tenants/${id}/suspend`);
       else if (action === 'delete') await api.delete(`/whitelabel/tenants/${id}`);
-      toast.success(`Tenant ${action}d successfully.`);
       await load();
     } catch (err) {
-      const msg = extractErrorMessage(err, `Action "${action}" failed. Check permissions and try again.`);
-      setActionErr(msg);
-      toast.error(msg);
+      setActionErr(extractErrorMessage(err, `Action "${action}" failed. Check permissions and try again.`));
     }
   };
 
@@ -433,46 +322,26 @@ const WhitelabelAdmin: React.FC = () => {
           onClose={() => setCreating(false)}
         />
       )}
-      {preview && (
-        <PreviewPanel
-          tenant={preview}
-          onClose={() => setPreview(null)}
-          onSaved={(updated) => {
-            setTenants(prev => prev.map(t => t.tenant_id === updated.tenant_id ? updated : t));
-            setPreview(updated);
-          }}
-        />
-      )}
+      {preview && <PreviewPanel tenant={preview} onClose={() => setPreview(null)} />}
 
       {/* Header */}
-      <PageHeader
-        title="Whitelabel Tenants"
-        icon="🏷️"
-        subtitle="Manage prop-firm and reseller branded deployments."
-        breadcrumbs={[
-          { label: 'Home',        href: '/home' },
-          { label: 'Admin Panel', href: '/admin' },
-          { label: 'Whitelabel Admin' },
-        ]}
-        badge={
-          <Badge variant="info" style={{ fontSize: 11 }}>
-            {tenants.length} Tenant{tenants.length !== 1 ? 's' : ''}
-          </Badge>
-        }
-        actions={
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to="/superadmin"
-              style={{ padding: '7px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-              ⚡ Super Admin
-            </Link>
-            <Link to="/admin"
-              style={{ padding: '7px 14px', background: 'rgba(100,116,139,0.12)', border: '1px solid rgba(100,116,139,0.35)', borderRadius: 7, color: '#94a3b8', fontSize: 12, fontWeight: 700, cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-              🔧 Admin
-            </Link>
-            <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
-          </div>
-        }
-      />
+      <div style={s.header}>
+        <div>
+          <h1 style={s.title}>Whitelabel Tenants</h1>
+          <p style={s.subtitle}>Manage prop-firm and reseller branded deployments.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={() => navigate('/trade')}
+            style={{ padding: '7px 14px', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.35)', borderRadius: 7, color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            ⚡ Trade
+          </button>
+          <button onClick={() => navigate('/performance')}
+            style={{ padding: '7px 14px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.35)', borderRadius: 7, color: '#8b5cf6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            📊 Performance
+          </button>
+          <button style={s.createBtn} onClick={() => setCreating(true)}>+ New Tenant</button>
+        </div>
+      </div>
 
       {/* API key message */}
       {apiKeyMsg && (
@@ -517,20 +386,7 @@ const WhitelabelAdmin: React.FC = () => {
       <div style={s.card}>
         {loading && <div style={s.dim}>Loading tenants…</div>}
         {!loading && filtered.length === 0 && (
-          <EmptyState
-            icon="🏷️"
-            title="No tenants yet"
-            description="Create a whitelabel tenant to deploy a branded prop-firm or reseller instance."
-            action={
-              <button onClick={() => setCreating(true)} style={s.createBtn}>
-                + New Tenant
-              </button>
-            }
-            links={[
-              { label: 'Admin Panel', href: '/admin', icon: '🔧' },
-              { label: 'Super Admin', href: '/superadmin', icon: '⚡' },
-            ]}
-          />
+          <div style={s.empty}>No tenants yet. Click "+ New Tenant" to create one.</div>
         )}
         {filtered.map((t) => (
           <TenantRow
@@ -549,9 +405,6 @@ const WhitelabelAdmin: React.FC = () => {
         {' '}Each tenant gets a branded dashboard, their own API key, and configurable feature flags.
         Email FTMO / The5ers / Funded Next with the preview link to close deals.
       </div>
-
-      {/* Cross-links */}
-      <CrossLinkBar links={WL_CROSS_LINKS} title="Related" style={{ marginTop: 8 }} />
     </div>
   );
 };

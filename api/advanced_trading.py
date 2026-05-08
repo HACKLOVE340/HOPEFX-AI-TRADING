@@ -175,58 +175,9 @@ class ABTestRequest(BaseModel):
     initial_capital: float = 10000.0
 
 
-# Canonical name → (module, class) mapping for A/B test strategy resolution.
-# Frontend sends the short display name; this maps it to the real class.
-_STRATEGY_CLASS_MAP: dict[str, tuple[str, str]] = {
-    # Short names (sent by frontend ABTesting.tsx)
-    "MovingAverageCrossover": ("strategies.ma_crossover",    "MovingAverageCrossover"),
-    "RSIStrategy":            ("strategies.rsi_strategy",    "RSIStrategy"),
-    "MACDStrategy":           ("strategies.macd_strategy",   "MACDStrategy"),
-    "BollingerBands":         ("strategies.bollinger_bands", "BollingerBandsStrategy"),
-    "SMCICTStrategy":         ("strategies.smc_ict",         "SMCICTStrategy"),
-    "EMAcrossover":           ("strategies.ema_crossover",   "EMAcrossoverStrategy"),
-    "MeanReversion":          ("strategies.mean_reversion",  "MeanReversionStrategy"),
-    "Breakout":               ("strategies.breakout",        "BreakoutStrategy"),
-    "Stochastic":             ("strategies.stochastic",      "StochasticStrategy"),
-    # Full class names (also accepted for robustness)
-    "BollingerBandsStrategy": ("strategies.bollinger_bands", "BollingerBandsStrategy"),
-    "EMAcrossoverStrategy":   ("strategies.ema_crossover",   "EMAcrossoverStrategy"),
-    "MeanReversionStrategy":  ("strategies.mean_reversion",  "MeanReversionStrategy"),
-    "BreakoutStrategy":       ("strategies.breakout",        "BreakoutStrategy"),
-    "StochasticStrategy":     ("strategies.stochastic",      "StochasticStrategy"),
-}
-
-
-def _resolve_strategy_instance(strategy_name: str):
-    """
-    Import and instantiate a strategy class by its display name.
-
-    Raises ValueError with a clear message when the name is not registered.
-    """
-    entry = _STRATEGY_CLASS_MAP.get(strategy_name)
-    if entry is None:
-        available = ", ".join(sorted(_STRATEGY_CLASS_MAP.keys()))
-        raise ValueError(
-            f"Unknown strategy '{strategy_name}'. Available: {available}"
-        )
-    module_path, class_name = entry
-    try:
-        import importlib
-        mod = importlib.import_module(module_path)
-        cls = getattr(mod, class_name)
-        return cls({})
-    except Exception as exc:
-        raise ValueError(
-            f"Failed to load strategy '{strategy_name}' from {module_path}.{class_name}: {exc}"
-        ) from exc
-
-
 def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, initial_capital: float) -> dict:
     """
     Run a real backtest for a named strategy using the backtesting engine.
-
-    Resolves the strategy name to a concrete class via _STRATEGY_CLASS_MAP,
-    adds it to the engine, then runs the simulation.
 
     Returns a result dict compatible with the A/B test response schema.
     Raises ValueError when the strategy is not registered or data is unavailable.
@@ -235,9 +186,6 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
         from datetime import timedelta
 
         from backtesting.engine_config import BacktestConfig, BacktestEngine
-
-        # Resolve and instantiate the strategy — raises ValueError on unknown name
-        strategy_instance = _resolve_strategy_instance(strategy_name)
 
         end_dt = datetime.now(UTC)
         start_dt = end_dt - timedelta(days=duration_days)
@@ -248,8 +196,6 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
             initial_capital=initial_capital,
         )
         engine = BacktestEngine(config=config)
-        engine.add_strategy(strategy_instance)
-
         import asyncio
 
         result = asyncio.run(engine.run())
@@ -263,9 +209,6 @@ def _run_real_backtest(strategy_name: str, symbol: str, duration_days: int, init
             "win_rate": round(float(result.win_rate * 100), 2),
             "equity_curve": result.equity_curve,
         }
-    except ValueError:
-        # Re-raise clean ValueError messages (unknown strategy, data unavailable)
-        raise
     except ImportError:
         raise ValueError(
             "BacktestEngine is not available. Ensure the backtest module is installed and configured."
@@ -331,12 +274,6 @@ async def get_ab_test(test_id: str, user: TokenPayload = Depends(require_plan("p
     if not t or t["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Test not found")
     return t
-
-
-@router.get("/api/advanced/ab-tests/strategies/available", summary="List available A/B test strategy names")
-async def list_ab_strategies(user: TokenPayload = Depends(require_plan("professional"))):
-    """Return the canonical strategy names accepted by POST /api/advanced/ab-tests/run."""
-    return {"strategies": sorted(_STRATEGY_CLASS_MAP.keys())}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -749,57 +686,62 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(require_pla
     return {"deleted": True}
 
 
-class PatchIndicatorRequest(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=60)
-    formula: str | None = None
-    symbol: str | None = None
-    color: str | None = None
-
-
-@router.patch("/api/indicators/{ind_id}", summary="Update a custom indicator")
-async def patch_indicator(
+@router.patch("/api/indicators/{ind_id}")
+async def update_indicator(
     ind_id: str,
-    req: PatchIndicatorRequest,
+    payload: dict,
     user: TokenPayload = Depends(require_plan("professional")),
 ):
-    """Partial update of a saved indicator. Only provided fields are changed."""
+    """Update an existing custom indicator (name, formula, parameters)."""
     ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
     if not ind or ind["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Indicator not found")
-    updates = req.model_dump(exclude_none=True)
-    ind.update(updates)
+    allowed = {"name", "formula", "parameters", "color", "panel", "visible"}
+    for key in allowed:
+        if key in payload:
+            ind[key] = payload[key]
     _kv_set(f"advanced:indicator:{ind_id}", ind)
     _indicators[ind_id] = ind
     return ind
 
 
-@router.post("/api/indicators/{ind_id}/apply", summary="Apply a saved indicator to a symbol")
+@router.post("/api/indicators/{ind_id}/apply")
 async def apply_indicator(
     ind_id: str,
     payload: dict,
     user: TokenPayload = Depends(require_plan("professional")),
 ):
     """
-    Evaluate a saved indicator formula against the requested symbol and period.
-    Payload: { "symbol": "XAU/USD", "periods": 200 }
-    Returns the same shape as /indicators/preview.
+    Apply a saved custom indicator to a chart session.
+
+    Evaluates the indicator's formula against real OHLCV data fetched for
+    ``symbol`` (same engine as /indicators/preview) and returns computed
+    values ready for the chart.
     """
     ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
     if not ind or ind["user_id"] != user.sub:
         raise HTTPException(status_code=404, detail="Indicator not found")
-    symbol = payload.get("symbol", ind.get("symbol", "XAU/USD"))
+
+    formula = ind.get("formula", "")
+    if not formula:
+        raise HTTPException(status_code=422, detail="Indicator has no formula")
+
+    symbol = payload.get("symbol", "XAU_USD")
     periods = int(payload.get("periods", 200))
+
     try:
-        data = _eval_indicator(ind["formula"], symbol, periods)
+        result = _eval_indicator(formula, symbol, periods)
+        return {
+            "indicator_id": ind_id,
+            "name": ind.get("name", "custom"),
+            "symbol": symbol,
+            "data": result,
+            "points": len(result),
+        }
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {
-        "id": ind_id,
-        "formula": ind["formula"],
-        "symbol": symbol,
-        "data": data,
-        "points": len(data),
-    }
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Formula evaluation failed: {exc}") from exc
 
 
 # ─────────────────────────────────────────────────────────────────────────────

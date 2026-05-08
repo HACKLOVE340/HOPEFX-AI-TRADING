@@ -5,18 +5,7 @@
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { CrossLinkBar } from '../components/CrossLinkBar';
-
-const TRADING_CROSS_LINKS = [
-  { label: 'Dashboard',       href: '/dashboard',       icon: '📊', color: '#60a5fa' },
-  { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
-  { label: 'AI Chart',        href: '/ai-chart',        icon: '📈', color: '#34d399' },
-  { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#f59e0b' },
-  { label: 'Trade Journal',   href: '/journal',         icon: '📓', color: '#a78bfa' },
-  { label: 'Copy Trading',    href: '/copy-trading',    icon: '🔁', color: '#f97316' },
-  { label: 'AI Strategy',     href: '/ai-strategy',     icon: '🤖', color: '#ec4899' },
-];
+import { useNavigate } from 'react-router-dom';
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
@@ -101,15 +90,6 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
 
   return (
     <div className="flex items-center gap-3 px-3 py-2 bg-[#0a1628] border-b border-[#1e2d3d] shrink-0 flex-wrap">
-      {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-[10px] shrink-0" aria-label="Breadcrumb">
-        <Link to="/dashboard" className="text-slate-600 hover:text-slate-400 transition-colors no-underline font-semibold tracking-wide">HOME</Link>
-        <span className="text-slate-700">›</span>
-        <span className="text-slate-500 font-semibold tracking-wide">TERMINAL</span>
-      </nav>
-
-      <div className="w-px h-4 bg-[#1e2d3d]" />
-
       {/* Branding */}
       <span className="text-[13px] font-bold text-[#00d4ff] tracking-widest shrink-0">
         HOPEFX
@@ -178,14 +158,14 @@ function TopBar({ symbol, setSymbol, timeframe, setTimeframe, tick, wsStatus }: 
       )}
 
       {/* Quick nav */}
-      <Link to="/journal"
-        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors" style={{ textDecoration: 'none' }}>
+      <button onClick={() => navigate('/journal')}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
         📓 Journal
-      </Link>
-      <Link to="/risk-calculator"
-        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors" style={{ textDecoration: 'none' }}>
+      </button>
+      <button onClick={() => navigate('/risk-calculator')}
+        className="px-2 py-0.5 rounded text-[11px] font-semibold border border-[#1e2d3d] text-slate-500 hover:border-[#334155] hover:text-slate-300 transition-colors">
         🛡 Risk Calc
-      </Link>
+      </button>
 
       {/* WS status */}
       <span className={cn(
@@ -837,9 +817,6 @@ function TradingPage() {
   const prices   = useStore((s) => s.prices);
   const tick     = prices[symbol];
 
-  // Mobile: tab-based layout — chart / order / positions / signals
-  const [mobilePanel, setMobilePanel] = React.useState<'chart' | 'order' | 'positions' | 'signals'>('chart');
-
   return (
     <div className="flex flex-col h-screen bg-[#060d18] text-slate-200 overflow-hidden">
       <TopBar
@@ -848,8 +825,7 @@ function TradingPage() {
         tick={tick} wsStatus={wsStatus}
       />
 
-      {/* ── Desktop layout (md+): side-by-side panels ── */}
-      <div className="hidden md:flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">
+      <div className="flex flex-1 min-h-0 gap-2 p-2 overflow-hidden">
         {/* Left sidebar */}
         <LeftSidebar symbol={symbol} />
 
@@ -865,7 +841,7 @@ function TradingPage() {
                   key={t}
                   onClick={() => setActiveTab(t)}
                   className={cn(
-                    'px-3 py-1.5 rounded text-[11px] font-semibold border transition-colors capitalize min-h-[36px]',
+                    'px-3 py-1 rounded text-[11px] font-semibold border transition-colors capitalize',
                     activeTab === t
                       ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
                       : 'bg-transparent border-[#1e2d3d] text-slate-500 hover:border-[#334155]',
@@ -881,83 +857,10 @@ function TradingPage() {
               {activeTab === 'signals'   && <SignalsSummaryPanel symbol={symbol} />}
             </div>
           </div>
-
-          {/* Cross-links footer */}
-          <CrossLinkBar links={TRADING_CROSS_LINKS} title="Quick Nav" style={{ padding: '8px 4px', marginTop: 0 }} />
         </div>
 
         {/* Right sidebar */}
         <RightSidebar rightTab={rightTab} setRightTab={setRightTab} />
-      </div>
-
-      {/* ── Mobile layout (< md): stacked panels with bottom tab bar ── */}
-      <div className="flex md:hidden flex-col flex-1 min-h-0 overflow-hidden">
-        {/* Panel content */}
-        <div className="flex-1 min-h-0 overflow-auto">
-          {mobilePanel === 'chart' && (
-            <div className="h-full flex flex-col gap-2 p-2">
-              <ChartPanel symbol={symbol} timeframe={timeframe} tick={tick} />
-            </div>
-          )}
-          {mobilePanel === 'order' && (
-            <div className="h-full overflow-y-auto p-2">
-              <LeftSidebar symbol={symbol} />
-            </div>
-          )}
-          {mobilePanel === 'positions' && (
-            <div className="h-full overflow-auto p-2">
-              <div className="bg-[#0d1421] border border-[#1e2d3d] rounded-lg overflow-hidden">
-                <div className="flex items-center gap-1 px-3 py-2 border-b border-[#1e2d3d] shrink-0">
-                  {(['positions', 'history'] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setActiveTab(t)}
-                      className={cn(
-                        'px-3 py-1.5 rounded text-[11px] font-semibold border transition-colors capitalize min-h-[36px]',
-                        activeTab === t
-                          ? 'bg-[#1e3a5f] border-[#3b82f6] text-[#60a5fa]'
-                          : 'bg-transparent border-[#1e2d3d] text-slate-500',
-                      )}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-                <div className="overflow-auto">
-                  {activeTab === 'positions' && <PositionsTable symbol={symbol} />}
-                  {activeTab === 'history'   && <TradeHistoryPanel symbol={symbol} />}
-                </div>
-              </div>
-            </div>
-          )}
-          {mobilePanel === 'signals' && (
-            <div className="h-full overflow-y-auto p-2">
-              <RightSidebar rightTab={rightTab} setRightTab={setRightTab} />
-            </div>
-          )}
-        </div>
-
-        {/* Bottom tab bar */}
-        <div className="flex shrink-0 border-t border-[#1e2d3d] bg-[#0a1628] pb-safe">
-          {([
-            { id: 'chart',     label: 'Chart',    icon: '📈' },
-            { id: 'order',     label: 'Order',    icon: '⚡' },
-            { id: 'positions', label: 'Positions', icon: '📋' },
-            { id: 'signals',   label: 'Signals',  icon: '📡' },
-          ] as const).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setMobilePanel(tab.id)}
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-semibold transition-colors min-h-[52px]',
-                mobilePanel === tab.id ? 'text-[#60a5fa]' : 'text-slate-500',
-              )}
-            >
-              <span className="text-base leading-none">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );

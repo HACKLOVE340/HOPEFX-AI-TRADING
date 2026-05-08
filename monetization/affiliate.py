@@ -599,6 +599,84 @@ class AffiliateManager:
             affiliates = [a for a in affiliates if a.status == status]
         return affiliates
 
+    def get_commissions(self, affiliate_id: str) -> list[dict[str, Any]]:
+        """Return all commission records (converted + paid referrals) for an affiliate."""
+        referrals = self.get_affiliate_referrals(affiliate_id)
+        result = []
+        for ref in referrals:
+            if ref.status in (ReferralStatus.CONVERTED, ReferralStatus.PAID) and ref.commission_amount is not None:
+                result.append(
+                    {
+                        "referral_id": ref.referral_id,
+                        "affiliate_id": ref.affiliate_id,
+                        "referred_user_id": ref.referred_user_id,
+                        "commission_amount": float(ref.commission_amount),
+                        "subscription_amount": float(ref.subscription_amount) if ref.subscription_amount else None,
+                        "tier": ref.tier.value if ref.tier else None,
+                        "status": ref.status.value,
+                        "converted_at": ref.converted_at.isoformat() if ref.converted_at else None,
+                    }
+                )
+        return result
+
+    def request_withdrawal(self, affiliate_id: str, amount: float) -> Payout:
+        """Request a commission withdrawal for a specific amount.
+
+        Raises ValueError if the affiliate is not found/active or the amount
+        exceeds available pending commissions.
+        """
+        import uuid
+
+        affiliate = self.get_affiliate(affiliate_id)
+        if not affiliate:
+            raise ValueError(f"Affiliate {affiliate_id} not found")
+        if not affiliate.is_active():
+            raise ValueError(f"Affiliate {affiliate_id} is not active")
+
+        requested = Decimal(str(amount))
+        pending = self._calculate_pending_commission(affiliate_id)
+        if requested > pending:
+            raise ValueError(
+                f"Requested withdrawal ${requested} exceeds pending commissions ${pending}"
+            )
+        if requested < self.MIN_PAYOUT:
+            raise ValueError(
+                f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}"
+            )
+
+        payment_method = affiliate.payment_details.get("method", "bank_transfer")
+        payout_id = f"WD-{uuid.uuid4().hex[:12].upper()}"
+        payout = Payout(
+            payout_id=payout_id,
+            affiliate_id=affiliate_id,
+            amount=requested,
+            payment_method=payment_method,
+            status=PayoutStatus.PENDING,
+        )
+        payout.withdrawal_id = payout_id  # type: ignore[attr-defined]
+        self._payouts[payout_id] = payout
+
+        # Mark enough converted referrals as paid to cover the withdrawal
+        covered = Decimal("0.00")
+        for ref in self.get_affiliate_referrals(affiliate_id, ReferralStatus.CONVERTED):
+            if covered >= requested:
+                break
+            if ref.commission_amount:
+                covered += ref.commission_amount
+                ref.mark_paid()
+
+        logger.info("Withdrawal %s created for affiliate %s: $%s", payout_id, affiliate_id, requested)
+        return payout
+
+    def update_payment_method(self, affiliate_id: str, payment_details: dict[str, Any]) -> bool:
+        """Update payment/payout details for an affiliate."""
+        affiliate = self.get_affiliate(affiliate_id)
+        if not affiliate:
+            raise ValueError(f"Affiliate {affiliate_id} not found")
+        affiliate.payment_details.update(payment_details)
+        logger.info("Payment method updated for affiliate %s", affiliate_id)
+        return True
+
     def get_leaderboard(self, limit: int = 10) -> list[dict[str, Any]]:
         """Get top affiliates leaderboard"""
         active = self.get_all_affiliates(AffiliateStatus.ACTIVE)

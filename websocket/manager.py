@@ -43,7 +43,7 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
-_AUTH_TIMEOUT: float = float(os.getenv("WS_AUTH_TIMEOUT", "10"))
+_AUTH_TIMEOUT: float = float(os.getenv("WS_AUTH_TIMEOUT", "30"))
 
 
 def _validate_token(token: str) -> dict | None:
