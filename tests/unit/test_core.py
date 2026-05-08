@@ -69,16 +69,24 @@ async def test_memory_mapped_event_store(tmp_path):
     assert data["symbol"] == "XAUUSD"
 
 
-def test_settings_validation():
+def test_settings_validation(monkeypatch):
     """Test Settings loads with defaults and env field works."""
+    # Remove BROKER/BROKER_TYPE so pydantic-settings doesn't try to parse
+    # "paper" (a plain string) as a BrokerSettings JSON object.
+    monkeypatch.delenv("BROKER", raising=False)
+    monkeypatch.delenv("BROKER_TYPE", raising=False)
     settings = Settings()
     # Default env is development
     assert settings.env in ("development", "staging", "production")
     assert isinstance(settings.debug, bool)
 
 
-def test_settings_production():
+def test_settings_production(monkeypatch):
     """Test Settings accepts production env."""
+    monkeypatch.delenv("BROKER", raising=False)
+    monkeypatch.delenv("BROKER_TYPE", raising=False)
+    # Production mode requires REDIS_URL — provide a minimal valid value.
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
     settings = Settings(env="production", debug=False)
     assert settings.env == "production"
     assert settings.debug is False
