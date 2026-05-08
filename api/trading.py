@@ -1965,30 +1965,50 @@ async def get_ohlcv(
     # Used when price engine is unavailable or returns flat bars.
     try:
         import yfinance as _yf
+        import pandas as _pd
 
         _YF_MAP = {
-            "XAUUSD": "GC=F", "XAGUSD": "SI=F", "XPTUSD": "PL=F",
+            "XAUUSD": "GC=F",  "XAGUSD": "SI=F",    "XPTUSD": "PL=F",
             "EURUSD": "EURUSD=X", "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X",
-            "USDCHF": "CHF=X", "AUDUSD": "AUDUSD=X", "NZDUSD": "NZDUSD=X",
-            "USDCAD": "CAD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
-            "US30": "YM=F", "US500": "ES=F", "NAS100": "NQ=F",
-            "USOIL": "CL=F", "UKOIL": "BZ=F",
+            "USDCHF": "CHF=X",  "AUDUSD": "AUDUSD=X", "NZDUSD": "NZDUSD=X",
+            "USDCAD": "CAD=X",  "BTCUSD": "BTC-USD",  "ETHUSD": "ETH-USD",
+            "US30":   "YM=F",   "US500":  "ES=F",     "NAS100": "NQ=F",
+            "USOIL":  "CL=F",   "UKOIL":  "BZ=F",
         }
+        # Map timeframe → (yfinance interval, fetch period).
+        # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
+        # yfinance only provides 1h data for up to 730 days but fetching that
+        # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
         _TF_MAP = {
-            "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
-            "30m": ("30m", "60d"), "1h": ("1h", "730d"), "4h": ("1h", "730d"),
-            "1d": ("1d", "5y"), "1w": ("1wk", "10y"),
+            "1m":  ("1m",  "7d"),
+            "5m":  ("5m",  "60d"),
+            "15m": ("15m", "60d"),
+            "30m": ("30m", "60d"),
+            "1h":  ("1h",  "60d"),   # ~1440 bars — fast, plenty of history
+            "4h":  ("1h",  "60d"),   # fetch 1h then resample → 4h
+            "1d":  ("1d",  "5y"),
+            "1w":  ("1wk", "10y"),
         }
         ticker_sym = _YF_MAP.get(symbol, symbol)
-        interval, period = _TF_MAP.get(timeframe, ("1h", "730d"))
+        interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
+        resample_4h = (timeframe == "4h")
 
         loop = asyncio.get_running_loop()
 
-        def _fetch_yf():
-            t = _yf.Ticker(ticker_sym)
-            df = t.history(period=period, interval=interval, auto_adjust=True)
+        def _fetch_yf() -> list:
+            t  = _yf.Ticker(ticker_sym)
+            df = t.history(period=period, interval=interval, auto_adjust=True, progress=False)
             if df.empty:
                 return []
+            # Resample 1h → 4h when requested
+            if resample_4h:
+                df = df.resample("4h").agg({
+                    "Open":   "first",
+                    "High":   "max",
+                    "Low":    "min",
+                    "Close":  "last",
+                    "Volume": "sum",
+                }).dropna(subset=["Open", "Close"])
             df = df.tail(limit)
             bars = []
             for ts, row in df.iterrows():
@@ -2002,7 +2022,7 @@ async def get_ohlcv(
                 })
             return bars
 
-        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=25.0)
+        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=20.0)
         if bars:
             logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
             return bars

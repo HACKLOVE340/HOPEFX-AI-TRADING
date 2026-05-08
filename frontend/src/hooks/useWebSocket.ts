@@ -27,7 +27,7 @@ const HEARTBEAT_INTERVAL_MS  = 30_000;
 const INITIAL_RECONNECT_MS   = 1_000;
 const MAX_RECONNECT_MS       = 30_000;
 // Poll REST prices when WS is not connected so the UI shows live-ish data.
-const REST_POLL_INTERVAL_MS  = 30_000;
+const REST_POLL_INTERVAL_MS  = 5_000;
 
 interface WsMessage {
   type:

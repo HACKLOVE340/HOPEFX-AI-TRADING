@@ -747,6 +747,7 @@ _YF_SYMBOL_MAP: dict[str, str] = {
     "GBP/USD": "GBPUSD=X",
     "USD/JPY": "USDJPY=X",
     "BTC/USD": "BTC-USD",
+    "ETH/USD": "ETH-USD",
 }
 
 # Cache last yfinance prices so we can broadcast change_pct correctly
@@ -755,65 +756,72 @@ _yf_last_prices: dict[str, float] = {}
 
 async def _yfinance_price_broadcaster() -> None:
     """
-    Broadcast real market prices fetched from yfinance every 15 seconds.
+    Broadcast real market prices fetched from yfinance every 5 seconds.
 
-    Used when no broker or EventBus is available (API-only / dev mode).
-    Sends genuine price_tick messages — no synthetic or mock data.
+    Fetches each ticker individually to avoid multi-level DataFrame column
+    issues that occur with batch downloads. Broadcasts immediately on first
+    run so charts populate without waiting for the first interval.
     """
     import time as _time
-    _POLL_INTERVAL = 15  # seconds between yfinance fetches
+    _POLL_INTERVAL = 5  # seconds between yfinance fetches
 
-    while True:
-        await asyncio.sleep(_POLL_INTERVAL)
-        if _manager.connection_count == 0:
-            continue
+    async def _fetch_and_broadcast() -> None:
         try:
             import yfinance as _yf
-            tickers = list(_YF_SYMBOL_MAP.values())
-            data = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _yf.download, tickers, period="1d", interval="1m",
-                    progress=False, auto_adjust=True,
-                ),
-                timeout=12.0,
-            )
             now_ms = int(_time.time() * 1000)
-            for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items():
+
+            async def _fetch_one(ws_sym: str, yf_ticker: str) -> None:
                 try:
-                    if hasattr(data.columns, "levels"):
-                        col = ("Close", yf_ticker)
-                        if col not in data.columns:
-                            continue
-                        series = data[col].dropna()
-                    else:
-                        series = data["Close"].dropna()
-                    if series.empty:
-                        continue
-                    price = float(series.iloc[-1])
+                    t = _yf.Ticker(yf_ticker)
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            t.history, period="1d", interval="1m",
+                            auto_adjust=True, progress=False,
+                        ),
+                        timeout=8.0,
+                    )
+                    if df.empty:
+                        return
+                    price = float(df["Close"].dropna().iloc[-1])
                     if price <= 0:
-                        continue
-                    cfg = _SYMBOLS.get(ws_sym, {"spread": price * 0.0002})
+                        return
+                    cfg    = _SYMBOLS.get(ws_sym, {})
                     spread = cfg.get("spread", price * 0.0002)
-                    prev = _yf_last_prices.get(ws_sym, price)
+                    prev   = _yf_last_prices.get(ws_sym, price)
                     change_pct = ((price - prev) / prev * 100) if prev > 0 else 0.0
                     _yf_last_prices[ws_sym] = price
                     tick = {
                         "type": "price_tick",
                         "data": {
-                            "symbol": ws_sym,
-                            "bid": round(price - spread / 2, 5),
-                            "ask": round(price + spread / 2, 5),
-                            "mid": round(price, 5),
-                            "spread": spread,
-                            "timestamp": now_ms,
+                            "symbol":     ws_sym,
+                            "bid":        round(price - spread / 2, 5),
+                            "ask":        round(price + spread / 2, 5),
+                            "mid":        round(price, 5),
+                            "spread":     spread,
+                            "timestamp":  now_ms,
                             "change_pct": round(change_pct, 4),
                         },
                     }
                     await _manager.broadcast("prices", tick)
                 except Exception as _sym_exc:
                     logger.debug("yfinance tick for %s failed: %s", ws_sym, _sym_exc)
+
+            # Fetch all symbols concurrently
+            await asyncio.gather(
+                *[_fetch_one(ws_sym, yf_ticker) for ws_sym, yf_ticker in _YF_SYMBOL_MAP.items()],
+                return_exceptions=True,
+            )
         except Exception as exc:
             logger.warning("yfinance price broadcaster error: %s", exc)
+
+    # Broadcast immediately on startup so charts don't wait for first interval
+    await _fetch_and_broadcast()
+
+    while True:
+        await asyncio.sleep(_POLL_INTERVAL)
+        if _manager.connection_count == 0:
+            continue
+        await _fetch_and_broadcast()
 
 
 async def _price_broadcaster() -> None:

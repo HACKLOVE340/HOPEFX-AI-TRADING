@@ -207,19 +207,17 @@ export function AIChart({
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load OHLCV on symbol/timeframe change ─────────────────────────────────
+  // ── Load OHLCV on symbol/timeframe change + periodic refresh ──────────────
 
-  useEffect(() => {
+  const loadOhlcv = useCallback((initial = false) => {
     if (!candleRef.current || !hydrated || !isAuth) return;
-    setLoading(true);
-    setChartError(null);
-    setAiResult(null);
+    if (initial) { setLoading(true); setChartError(null); setAiResult(null); }
 
     tradingApi.ohlcv(symbol, timeframe, 300)
       .then((r) => {
         const raw  = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data = Array.isArray(raw) ? raw : (raw.data ?? []);
-        if (!data.length) { setChartError('No OHLCV data'); return; }
+        if (!data.length) { if (initial) setChartError('No OHLCV data'); return; }
 
         const sorted = [...data].sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
         setCandles(sorted);
@@ -237,9 +235,10 @@ export function AIChart({
 
         maRef.current?.setData(computeMA(sorted, 20));
 
-        chartRef.current?.timeScale().fitContent();
+        if (initial) chartRef.current?.timeScale().fitContent();
       })
       .catch((err) => {
+        if (!initial) return; // silent on background refresh
         const detail = err?.response?.data?.detail ?? err?.response?.data?.message;
         setChartError(
           typeof detail === 'string'
@@ -249,19 +248,30 @@ export function AIChart({
               : (err?.message ?? 'Failed to load chart'),
         );
       })
-      .finally(() => setLoading(false));
-  }, [symbol, timeframe, hydrated, isAuth]);
+      .finally(() => { if (initial) setLoading(false); });
+  }, [symbol, timeframe, hydrated, isAuth]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Live tick update ──────────────────────────────────────────────────────
+  useEffect(() => {
+    loadOhlcv(true);
+    // Refresh candles every 30s to pick up new bars without a full reload
+    const refreshTimer = setInterval(() => loadOhlcv(false), 30_000);
+    return () => clearInterval(refreshTimer);
+  }, [loadOhlcv]);
+
+  // ── Live tick update — updates the current candle's close in real time ───
 
   useEffect(() => {
     if (!tick || !candleRef.current) return;
+    const mid  = tick.mid ?? ((tick.bid + tick.ask) / 2);
+    const time = Math.floor(
+      tick.timestamp > 1_000_000_000_000 ? tick.timestamp / 1000 : tick.timestamp,
+    ) as UTCTimestamp;
     candleRef.current.update({
-      time:  Math.floor(tick.timestamp / 1000) as UTCTimestamp,
-      open:  tick.bid,
-      high:  Math.max(tick.bid, tick.ask),
-      low:   Math.min(tick.bid, tick.ask),
-      close: tick.ask,
+      time,
+      open:  mid,
+      high:  tick.ask,
+      low:   tick.bid,
+      close: mid,
     });
   }, [tick]);
 
