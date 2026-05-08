@@ -269,10 +269,24 @@ class _LocalBus:
         self._handlers: dict[str, list[Callable]] = {ch: [] for ch in ALL_CHANNELS}
 
     def subscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
-        self._handlers.setdefault(channel, []).append(handler)
+        """Register a handler for a channel. Idempotent — duplicate handlers are not added."""
+        handlers = self._handlers.setdefault(channel, [])
+        if handler not in handlers:
+            handlers.append(handler)
+
+    def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
+        """Remove a previously registered handler. No-op if handler is not registered."""
+        try:
+            self._handlers.get(channel, []).remove(handler)
+        except ValueError:
+            pass  # handler was not registered — safe to ignore
+
+    def clear_channel(self, channel: str) -> None:
+        """Remove all handlers for a channel (e.g. on reconnect to avoid duplicates)."""
+        self._handlers[channel] = []
 
     async def publish_local(self, channel: str, message: dict) -> None:
-        for handler in self._handlers.get(channel, []):
+        for handler in list(self._handlers.get(channel, [])):
             try:
                 result = handler(message)
                 if asyncio.iscoroutine(result):
@@ -460,7 +474,7 @@ class EventBus:
         # flooded with "attempt N/5 failed" lines when Redis is persistently
         # unavailable — the degraded state is already logged at connect time.
         if self._degraded or self._redis is None:
-            self._metrics["errors"] += 1
+            self._metrics["published"] += 1  # counts as delivered via local bus
             logger.debug("EventBus: Redis degraded — routing %s to local fallback.", channel)
             await _local_bus.publish_local(channel, message)
             return
@@ -617,6 +631,14 @@ class EventBus:
         """Register a handler for local fallback delivery on a channel."""
         _local_bus.subscribe_local(channel, handler)
 
+    def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
+        """Remove a previously registered local handler. No-op if not registered."""
+        _local_bus.unsubscribe_local(channel, handler)
+
+    def clear_local_channel(self, channel: str) -> None:
+        """Remove all local handlers for a channel (use on reconnect to prevent duplicates)."""
+        _local_bus.clear_channel(channel)
+
     # ── convenience publishers ────────────────────────────────────────────────
 
     async def publish_tick(self, data: dict) -> None:
@@ -640,3 +662,16 @@ class EventBus:
 # ─────────────────────────────────────────────────────────────────────────────
 
 bus: EventBus = EventBus()
+
+
+async def publish(channel: str, message: dict) -> None:
+    """Module-level convenience wrapper — delegates to the global bus singleton.
+
+    Allows callers to write::
+
+        from core.event_bus import publish, CH_TICK
+        await publish(CH_TICK, {...})
+
+    instead of importing ``bus`` directly.
+    """
+    await bus.publish(channel, message)
