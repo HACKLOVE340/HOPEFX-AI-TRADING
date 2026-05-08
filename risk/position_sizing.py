@@ -90,9 +90,17 @@ class PositionSizer:
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
+    # Minimum ATR as a fraction of entry price; below this the market is illiquid
+    # or frozen and risk sizing becomes meaningless (size would be astronomically large).
+    _MIN_ATR_PCT_OF_PRICE = Decimal("0.0001")  # 0.01% of entry price
+
     def _atr_size(self, equity: Decimal, entry_price: Decimal, atr: Decimal) -> Decimal:
         """Risk risk_pct of equity per 1-ATR adverse move."""
         if atr <= 0 or entry_price <= 0:
+            return Decimal(0)
+        # Guard against near-zero ATR (illiquid / frozen market) causing unbounded size
+        min_atr = entry_price * self._MIN_ATR_PCT_OF_PRICE
+        if atr < min_atr:
             return Decimal(0)
         risk_amount = equity * self.risk_pct
         # 1 lot = 1 unit; stop = 1 ATR
