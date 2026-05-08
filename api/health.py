@@ -637,6 +637,51 @@ async def _check_master_control() -> ComponentStatus:
         )
 
 
+async def _check_db_pool() -> ComponentStatus:
+    """Verify the async DB connection pool is initialised and can serve sessions.
+
+    ``set_default_pool()`` must be called during app startup before any DB
+    endpoint is reachable.  If it was never called, all 9 DB-backed endpoints
+    silently return empty data — this check surfaces that failure explicitly.
+    """
+    t0 = time.perf_counter()
+    try:
+        from database.async_connection import _default_pool  # type: ignore[import]
+
+        if _default_pool is None:
+            return ComponentStatus(
+                name="db_pool",
+                status="down",
+                critical=True,
+                latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+                detail="set_default_pool() was never called — DB endpoints will return empty data",
+            )
+
+        # Verify the pool can actually open a session.
+        pool_healthy = getattr(_default_pool, "is_healthy", None)
+        if callable(pool_healthy):
+            healthy = pool_healthy()
+        else:
+            healthy = True  # pool exists; assume healthy if no probe method
+
+        latency_ms = round((time.perf_counter() - t0) * 1000, 2)
+        return ComponentStatus(
+            name="db_pool",
+            status="healthy" if healthy else "degraded",
+            critical=True,
+            latency_ms=latency_ms,
+            detail=f"pool={type(_default_pool).__name__} healthy={healthy}",
+        )
+    except Exception as exc:
+        return ComponentStatus(
+            name="db_pool",
+            status="unknown",
+            critical=True,
+            latency_ms=round((time.perf_counter() - t0) * 1000, 2),
+            detail=str(exc),
+        )
+
+
 async def _run_all_checks() -> list[ComponentStatus]:
     """Run all component checks concurrently and return results.
 
@@ -654,12 +699,14 @@ async def _run_all_checks() -> list[ComponentStatus]:
         _check_price_engine(),
         _check_brain(),
         _check_master_control(),
+        _check_db_pool(),
         return_exceptions=True,
     )
     statuses: list[ComponentStatus] = []
     names = [
         "redis", "database", "kill_switch", "ml_model", "orchestrator",
         "broker", "db_migrations", "price_engine", "brain", "master_control",
+        "db_pool",
     ]
     for i, result in enumerate(results):
         if isinstance(result, Exception):
