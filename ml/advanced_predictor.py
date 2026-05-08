@@ -834,14 +834,18 @@ class HybridEnsemblePredictor:
         """XGBoost probability via AdvancedPredictor base model."""
         try:
             pred = get_predictor()
-            if pred._model is None:
-                pred._load()
-            if pred._model is None:
-                return 0.5
-            X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
-            X_df = pred._align_features(X_df)
-            X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-            proba = pred._model.predict_proba(X_df)
+            with pred._lock:
+                if pred._model is None:
+                    pred._load()
+                if pred._model is None:
+                    return 0.5
+                X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
+                X_df = pred._align_features(X_df)
+                X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+                if np.any(np.isnan(X_df.values)):
+                    logger.warning("HybridEnsemble: NaN in features after fillna — abstaining")
+                    return 0.5
+                proba = pred._model.predict_proba(X_df)
             return float(proba[0][1]) if proba.shape[1] > 1 else float(proba[0][0])
         except Exception as exc:
             logger.debug("HybridEnsemble XGB predict failed: %s", exc)

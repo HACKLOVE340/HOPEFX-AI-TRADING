@@ -367,11 +367,18 @@ class AdvancedModelPredictor:
             if expected is not None:
                 missing = [c for c in expected if c not in X.columns]
                 if missing:
-                    logger.debug(
-                        "Filling %d missing features with 0 for %s",
-                        len(missing),
-                        symbol,
-                    )
+                    impute_frac = len(missing) / max(len(expected), 1)
+                    if impute_frac > 0.20:
+                        logger.warning(
+                            "High feature imputation: %d/%d (%.0f%%) columns zeroed for %s — "
+                            "MacroStore or data layer likely unavailable; signal quality degraded",
+                            len(missing), len(expected), impute_frac * 100, symbol,
+                        )
+                    else:
+                        logger.debug(
+                            "Filling %d missing features with 0 for %s",
+                            len(missing), symbol,
+                        )
                     for col in missing:
                         X[col] = 0.0
                 X = X[expected]  # enforce column order
