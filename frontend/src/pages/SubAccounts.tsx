@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
@@ -223,7 +224,7 @@ const SubAccounts: React.FC = () => {
       }
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError(e instanceof Error ? e.message : 'Failed to load accounts');
+      setError(extractApiError(e, 'Failed to load accounts'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -245,7 +246,7 @@ const SubAccounts: React.FC = () => {
       setNewAccLabel('');
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Create failed');
+      setError(extractApiError(e, 'Create failed'));
     } finally {
       setSaving(false);
     }
@@ -257,7 +258,7 @@ const SubAccounts: React.FC = () => {
       await api.delete(`/accounts/sub-accounts/${acc.account_id}`);
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Delete failed');
+      setError(extractApiError(e, 'Delete failed'));
     }
   };
 
@@ -272,7 +273,7 @@ const SubAccounts: React.FC = () => {
       setEditAcc(null);
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Update failed');
+      setError(extractApiError(e, 'Update failed'));
     } finally {
       setSaving(false);
     }
@@ -288,7 +289,7 @@ const SubAccounts: React.FC = () => {
       setNewTeamName('');
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Create team failed');
+      setError(extractApiError(e, 'Create team failed'));
     } finally {
       setSaving(false);
     }
@@ -310,7 +311,7 @@ const SubAccounts: React.FC = () => {
       setInviteEmail('');
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Invite failed');
+      setError(extractApiError(e, 'Invite failed'));
     } finally {
       setSaving(false);
     }
@@ -323,7 +324,7 @@ const SubAccounts: React.FC = () => {
       await api.delete(`/accounts/teams/${selectedTeam.team_id}/members/${member.user_id}`);
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Remove failed');
+      setError(extractApiError(e, 'Remove failed'));
     }
   };
 
@@ -335,7 +336,7 @@ const SubAccounts: React.FC = () => {
       await api.patch(`/accounts/teams/${selectedTeam.team_id}/members/${member.user_id}`, { role: newRole });
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Role update failed');
+      setError(extractApiError(e, 'Role update failed'));
     }
   };
 
