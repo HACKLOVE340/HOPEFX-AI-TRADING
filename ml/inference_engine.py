@@ -605,7 +605,7 @@ class InferenceEngine:
             live_means = buffer_arr.mean(axis=0)
 
             max_z = 0.0
-            drifted_features: ClassVar[list[str]] = []
+            drifted_features: list[str] = []
 
             for i, feat_name in enumerate(col_names):
                 if feat_name not in train_stats:
@@ -1277,7 +1277,7 @@ class InferenceEngine:
         train_stats_available = self._load_train_stats() is not None
 
         # Degrade status when model is stale or drift is blocking
-        if (self._model_stale or (self._drift_detected and _DRIFT_BLOCK)) and status == "ok":
+        if self._model_stale or (self._drift_detected and _DRIFT_BLOCK):
             status = "degraded"
 
         return {

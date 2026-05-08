@@ -553,23 +553,27 @@ class LiveInferenceLoop:
 
         return None
 
-    async def _fetch_macro(self) -> pd.DataFrame | None:
+    async def _fetch_macro(self, ohlcv: pd.DataFrame | None = None) -> pd.DataFrame | None:
         """
-        Pull aligned macro features from MacroStore.
+        Pull macro features from MacroStore aligned to the given OHLCV index.
 
-        Uses the MacroStore singleton (populated by MacroStoreBridge from FRED).
-        Returns None when MacroStore is empty or unavailable — the predictor
-        degrades gracefully without macro features.
+        Uses MacroStore.align_to_hourly() so each macro series is forward-filled
+        to the hourly bars — no look-ahead bias.  Returns None when MacroStore is
+        empty or unavailable; the predictor degrades gracefully without macro features.
         """
         try:
             from ml.macro_store import macro_store
 
             if len(macro_store) == 0:
                 return None
-            # We need an OHLCV index to align to; use a minimal placeholder
-            # The predictor will re-align internally using its own OHLCV index
-            return None  # macro alignment happens inside AdvancedModelPredictor
-        except Exception:  # nosec B110 — optional macro features
+            if ohlcv is None or ohlcv.empty:
+                return None
+            macro_df = macro_store.align_to_hourly(ohlcv)
+            if macro_df.empty:
+                return None
+            return macro_df
+        except Exception as exc:  # nosec B110 — optional macro features
+            logger.debug("LiveInferenceLoop._fetch_macro: %s", exc)
             return None
 
     def _apply_signal_filter(self, signal: dict[str, Any], ohlcv: pd.DataFrame) -> dict[str, Any]:
@@ -611,7 +615,7 @@ class LiveInferenceLoop:
             )
             return
 
-        macro = await self._fetch_macro()
+        macro = await self._fetch_macro(ohlcv)
 
         try:
             signal = self._predictor.predict_signal(
