@@ -209,6 +209,7 @@ export function extractApiError(err: unknown, fallback = 'An error occurred'): s
     if (typeof s === 'string' && s.length > 0) return s;
     return JSON.stringify(raw);
   }
-  if (err instanceof Error && err.message) return err.message;
+  const msg = (err as { message?: unknown })?.message;
+  if (typeof msg === 'string' && msg.length > 0) return msg;
   return fallback;
 }
