@@ -86,23 +86,33 @@ def _load_model(model_name: str) -> Any | None:
         except Exception as exc:
             logger.debug("explainability._load_model via predictor: %s", exc)
 
-    # Generic: try direct pickle
-    import pickle
-
+    # Generic: try joblib first (scikit-learn / XGBoost standard), then pickle
     pkl_path = _MODEL_DIR / f"{model_name}.pkl"
     if not pkl_path.exists():
         return None
-    try:
-        with open(pkl_path, "rb") as f:
-            obj = pickle.load(f)
-        # Unwrap Pipeline if needed
-        if hasattr(obj, "steps"):
-            _, final_estimator = obj.steps[-1]
-            obj = final_estimator
-        return _unwrap_calibrated(obj)
-    except Exception as exc:
-        logger.debug("explainability._load_model(%s): %s", model_name, exc)
+
+    obj = None
+    for loader_name, loader in (("joblib", None), ("pickle", None)):
+        try:
+            if loader_name == "joblib":
+                import joblib
+                obj = joblib.load(str(pkl_path))
+            else:
+                import pickle
+                with open(pkl_path, "rb") as f:
+                    obj = pickle.load(f)
+            break
+        except Exception as exc:
+            logger.debug("explainability._load_model(%s) via %s: %s", model_name, loader_name, exc)
+
+    if obj is None:
         return None
+
+    # Unwrap Pipeline if needed
+    if hasattr(obj, "steps"):
+        _, final_estimator = obj.steps[-1]
+        obj = final_estimator
+    return _unwrap_calibrated(obj)
 
 
 def _get_sample_data(model_name: str, model: Any) -> np.ndarray | None:

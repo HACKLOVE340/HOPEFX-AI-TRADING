@@ -1799,6 +1799,166 @@ async def get_sharpe_circuit_breaker_status() -> dict:
         }
 
 
+# ── SHAP / Feature Importance ────────────────────────────────────────────────
+
+@router.get(
+    "/explain/{model_name}",
+    summary="SHAP feature importance for a deployed model",
+    tags=["ML Models"],
+)
+async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
+    """
+    Return SHAP TreeExplainer global feature importance for the named model.
+
+    Uses cached results (TTL 1 hour) — subsequent calls are instant.
+    Falls back to XGBoost/RF built-in `feature_importances_` when SHAP is
+    not available for the model type.
+    """
+    from ml.explainability import get_shap_values
+    return get_shap_values(model_name, top_n=top_n)
+
+
+@router.get(
+    "/feature-importance/{model_name}",
+    summary="Built-in feature importances for a deployed model (fast)",
+    tags=["ML Models"],
+)
+async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict:
+    """Return XGBoost/RF built-in feature_importances_ (faster than SHAP)."""
+    from ml.explainability import get_feature_importance
+    return get_feature_importance(model_name, top_n=top_n)
+
+
+# ── Model-level Drift Detector (KS-test) ─────────────────────────────────────
+
+@router.get(
+    "/model-drift",
+    summary="KS-test model-output drift across all production models",
+    tags=["ML Models"],
+)
+async def get_model_drift() -> dict:
+    """
+    Return per-model prediction distribution drift using Kolmogorov-Smirnov
+    tests on a sliding window of recent predictions vs the reference distribution.
+
+    Status values: ``stable`` | ``warning`` | ``drift_detected``
+    """
+    from ml.drift_detector import get_drift_detector
+    return get_drift_detector().get_all_drift()
+
+
+# ── A/B Testing ───────────────────────────────────────────────────────────────
+
+@router.get(
+    "/ab-tests",
+    summary="List all active A/B tests",
+    tags=["ML Models"],
+)
+async def list_ab_tests() -> dict:
+    """Return all active A/B model comparison tests."""
+    from ml.ab_testing import get_ab_test_manager
+    return {"tests": get_ab_test_manager().list_tests()}
+
+
+@router.post(
+    "/ab-tests",
+    summary="Create a new A/B test",
+    tags=["ML Models"],
+    status_code=201,
+)
+async def create_ab_test(
+    challenger_model: str,
+    traffic_split: float = 0.20,
+    control_model: str = "advanced_oos",
+    name: str | None = None,
+) -> dict:
+    """
+    Start a new A/B test comparing challenger_model against control_model.
+
+    ``traffic_split`` fraction of requests are routed to the challenger.
+    """
+    from ml.ab_testing import get_ab_test_manager
+    test = get_ab_test_manager().create_test(
+        challenger_model=challenger_model,
+        traffic_split=traffic_split,
+        control_model=control_model,
+        name=name,
+    )
+    return test.to_dict()
+
+
+@router.post(
+    "/ab-tests/{test_id}/result",
+    summary="Record a prediction result for an A/B test",
+    tags=["ML Models"],
+)
+async def record_ab_result(
+    test_id: str,
+    arm: str,
+    correct: bool,
+) -> dict:
+    """Record whether the ``arm`` prediction was correct."""
+    from ml.ab_testing import get_ab_test_manager
+    mgr = get_ab_test_manager()
+    ok = mgr.record_result(test_id, arm, correct=correct)
+    return {"recorded": ok}
+
+
+@router.delete(
+    "/ab-tests/{test_id}",
+    summary="Stop an A/B test",
+    tags=["ML Models"],
+)
+async def stop_ab_test(test_id: str, winner: str | None = None) -> dict:
+    """Stop a running A/B test and optionally declare a winner."""
+    from ml.ab_testing import get_ab_test_manager
+    stopped = get_ab_test_manager().stop_test(test_id, winner=winner)
+    return {"stopped": stopped, "test_id": test_id}
+
+
+# ── Training Manager ──────────────────────────────────────────────────────────
+
+@router.get(
+    "/training-jobs",
+    summary="List all training jobs (active + recent)",
+    tags=["ML Models"],
+)
+async def list_training_jobs() -> dict:
+    """Return all active and recently completed model training jobs."""
+    from ml.training_manager import get_training_manager
+    return {"jobs": get_training_manager().list_jobs()}
+
+
+@router.post(
+    "/training-jobs",
+    summary="Start a model training job",
+    tags=["ML Models"],
+    status_code=202,
+)
+async def start_training_job(model: str) -> dict:
+    """
+    Dispatch a background training job for the named model.
+
+    Supported models: ``advanced_oos``, ``lstm_signal``, ``rl_ppo``,
+    ``hybrid_ensemble``, ``xgb_macro``, ``rf_macro``.
+    """
+    from ml.training_manager import get_training_manager
+    job = get_training_manager().start_job(model)
+    return job.__dict__ if hasattr(job, "__dict__") else job
+
+
+@router.delete(
+    "/training-jobs/{job_id}",
+    summary="Cancel a running training job",
+    tags=["ML Models"],
+)
+async def cancel_training_job(job_id: str) -> dict:
+    """Cancel a background training job by ID."""
+    from ml.training_manager import get_training_manager
+    cancelled = get_training_manager().cancel_job(job_id)
+    return {"cancelled": cancelled, "job_id": job_id}
+
+
 # ── Superadmin-facing aliases ────────────────────────────────────────────────
 # api/superadmin/ml_ai.py calls these; map them to the endpoint functions above.
 
