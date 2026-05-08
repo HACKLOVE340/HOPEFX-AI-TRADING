@@ -104,7 +104,7 @@ class NuclearConnectionManager:
         if not self._connections:
             return
         payload = json.dumps(message, default=str)
-        dead: ClassVar[set[WebSocket]] = set()
+        dead: set[WebSocket] = set()
         async with self._lock:
             connections = set(self._connections)
         for ws in connections:
