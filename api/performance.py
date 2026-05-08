@@ -109,10 +109,12 @@ def _load_equity_curve() -> list[EquityPoint]:
         import asyncio as _asyncio2
 
         async def _fetch_closed_trades():
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _TR(_db)
                 return await repo.get_by_user(user_id=None, status="closed", limit=50000)
 
@@ -159,10 +161,12 @@ def _db_trade_count() -> int:
         import asyncio as _asyncio3
 
         async def _count():
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _TR(_db)
                 rows = await repo.get_by_user(user_id=None, status="closed", limit=1, offset=0)
                 # Use paginate to get total count if available
@@ -548,10 +552,12 @@ def _load_trades() -> list[dict]:
         import asyncio as _asyncio4
 
         async def _fetch_all_trades():
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _TR(_db)
                 return await repo.get_by_user(user_id=None, limit=500)
 

@@ -239,10 +239,12 @@ async def _pnl_summary_from_db() -> PnLSummary:
     """
     _empty_note = "Engine not started and DB unavailable."
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TR
 
-        async with _get_async_db() as _db:
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
             repo = _TR(_db)
             trades = await repo.get_by_user(user_id=None, status="closed", limit=50000)
     except Exception as exc:
@@ -313,10 +315,12 @@ async def _trade_log_from_db(
     Maps Trade rows to FillEntry — uses trade_id as fill_id.
     """
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TR
 
-        async with _get_async_db() as _db:
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
             repo = _TR(_db)
             trades = await repo.get_by_user(
                 user_id=None,

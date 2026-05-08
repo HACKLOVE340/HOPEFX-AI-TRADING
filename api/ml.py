@@ -201,10 +201,12 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
         import asyncio as _asyncio_ml
 
         async def _fetch_db_ohlcv():
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.market_data_repository import MarketDataRepository as _MDR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _MDR(_db)
                 bars = await repo.get_latest_n_bars(
                     symbol=symbol_upper,
@@ -1089,10 +1091,12 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         # Enrich with real live trade performance from TradeRepository
         live_trade_stats: dict = {}
         try:
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _TR(_db)
                 closed = await repo.get_by_user(user_id=None, status="closed", limit=500)
                 if closed:

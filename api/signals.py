@@ -379,10 +379,12 @@ class RealTimeSignalService:
 
             async def _persist_signal() -> None:
                 try:
-                    from database.async_connection import get_async_db as _get_async_db
+                    from database.async_connection import _default_pool as _async_pool
                     from database.repositories.signal_repository import SignalRepository as _SigRepo
 
-                    async with _get_async_db() as _db:
+                    if _async_pool is None:
+                        raise RuntimeError("Async DB pool not initialised")
+                    async with _async_pool.session() as _db:
                         _repo = _SigRepo(_db)
                         await _repo.create(
                             signal_id=signal.id,
@@ -919,10 +921,12 @@ def _register_signal_read_routes(router: Any) -> None:
         # Enrich with DB-backed accuracy stats from SignalRepository
         db_accuracy: dict = {}
         try:
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.signal_repository import SignalRepository as _SigRepo
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 _repo = _SigRepo(_db)
                 db_accuracy = await _repo.get_accuracy_stats(symbol=symbol)
         except Exception as _exc:
