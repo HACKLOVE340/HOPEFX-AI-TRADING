@@ -763,16 +763,29 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
 
     @router.get("/health")
     async def get_health():
-        """Health alias — same payload as /status (for frontend compatibility)."""
+        """ML health — reports live signal-engine ML availability and model status."""
+        try:
+            from core.signal_engine import get_signal_engine_status
+            engine_status = get_signal_engine_status()
+            ml_available = engine_status.get("ml_available", False)
+            model_version = engine_status.get("model_version", "none")
+        except Exception:
+            ml_available = False
+            model_version = "unknown"
+
+        model_dir = _Path(__file__).parent / "saved_models"
+        model_files = []
+        if model_dir.exists():
+            model_files = [f.name for f in model_dir.iterdir() if f.suffix in {".pkl", ".json"}]
+
         return {
-            "status": "ok",
+            "status": "ok" if ml_available else "degraded",
+            "ml_available": ml_available,
+            "model_version": model_version,
             "module": "ML Predictions",
             "feature_engineer": "ready",
-            "models": {
-                "lstm": "requires training",
-                "random_forest": "requires training",
-                "ensemble": "requires training",
-            },
+            "saved_models": model_files,
+            "note": None if ml_available else "ML package unavailable — signals use StrategyBrain only",
         }
 
     @router.get("/features")

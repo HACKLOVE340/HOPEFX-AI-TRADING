@@ -1925,7 +1925,17 @@ async def init_deep_ensemble_store(s: Any) -> Any:
 
 async def init_signal_engine(s: Any) -> Any:
     from api.admin import log_activity
-    from core.signal_engine import run_signal_engine
+    from core.signal_engine import run_signal_engine, _ML_AVAILABLE  # noqa: PLC0415
+
+    # Pre-flight: warn loudly if ML package is missing so operators see it in
+    # startup logs rather than discovering degraded signals silently at runtime.
+    if not _ML_AVAILABLE:
+        logger.warning(
+            "[STARTUP] ML package unavailable — signal engine will run WITHOUT ML "
+            "probability enrichment.  Signals are still generated from StrategyBrain "
+            "but model_version will be reported as 'none'.  "
+            "Fix: ensure ml/ package imports cleanly (check PyTorch, scikit-learn, etc.)."
+        )
 
     t = asyncio.create_task(run_signal_engine(s))
     s.background_tasks.append(t)
