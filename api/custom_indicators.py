@@ -204,7 +204,7 @@ async def preview_indicator(
     # Try to load real OHLCV data; raise 503 if unavailable
     closes: list[float] = []
     try:
-        from data_layer.ohlcv_store import OHLCVStore
+        from brokers.ohlcv_store import OHLCVStore
         store = OHLCVStore()
         bars = store.get_bars(body.symbol, "H1", limit=body.periods)
         if bars:
