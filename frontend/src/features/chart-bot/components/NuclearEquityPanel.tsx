@@ -75,6 +75,7 @@ const NuclearEquityPanel = memo(() => {
   const equityRef    = useRef<ISeriesApi<'Area'> | null>(null);
   const ddRef        = useRef<ISeriesApi<'Histogram'> | null>(null);
   const markersRef   = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   const equityCurve   = useNuclearStore((s) => s.equityCurve);
   const nuclearEvents = useNuclearStore((s) => s.nuclearEvents);
@@ -127,20 +128,27 @@ const NuclearEquityPanel = memo(() => {
     // Event markers on equity series
     markersRef.current = createSeriesMarkers(equity, []);
 
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({
-          width:  containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({
+            width:  containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight || undefined,
+          });
+        }
+      });
     });
     ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       chart.remove();
-      chartRef.current = null;
+      chartRef.current  = null;
+      equityRef.current = null;
+      ddRef.current     = null;
     };
   }, []);
 
@@ -166,6 +174,9 @@ const NuclearEquityPanel = memo(() => {
 
     equityRef.current.setData(equityData);
     ddRef.current?.setData(ddData);
+    // Always show the most recent equity data on load
+    chartRef.current?.timeScale().fitContent();
+    chartRef.current?.timeScale().scrollToRealTime();
   }, [equityCurve]);
 
   // ── Update event markers ────────────────────────────────────────────────────

@@ -80,7 +80,8 @@ const FormulaHighlight: React.FC<{ formula: string }> = ({ formula }) => (
 );
 
 const PreviewChart: React.FC<{ data: PreviewPoint[]; color: string }> = ({ data, color }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref    = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number>(0);
   useEffect(() => {
     if (!ref.current || data.length === 0) return;
     const chart = createChart(ref.current, {
@@ -91,14 +92,29 @@ const PreviewChart: React.FC<{ data: PreviewPoint[]; color: string }> = ({ data,
       rightPriceScale: { borderColor: '#334155' },
     });
     const series = chart.addSeries(LineSeries, { color, lineWidth: 2 });
-    // Use real timestamps: anchor to today and step back by day per point
+    // Anchor timestamps to today, stepping back one day per point
     const nowSec = Math.floor(Date.now() / 1000);
     series.setData(data.map((d, i) => ({
       time: (nowSec - (data.length - 1 - i) * 86400) as UTCTimestamp,
       value: d.value,
     })));
     chart.timeScale().fitContent();
-    return () => chart.remove();
+    chart.timeScale().scrollToRealTime();
+
+    // rAF-throttled ResizeObserver
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (ref.current) chart.applyOptions({ width: ref.current.clientWidth });
+      });
+    });
+    ro.observe(ref.current);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+    };
   }, [data, color]);
   return <div ref={ref} style={{ width: '100%', height: 200 }} />;
 };
