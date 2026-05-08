@@ -27,7 +27,7 @@ import {
 } from 'recharts';
 import { pnlApi } from '../hooks/useApi';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
-import { fmtPrice, fmtPctRaw, fmtDateTime } from '../lib/utils';
+import { fmtPrice, fmtPctRaw, fmtDateTime, extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -424,7 +424,7 @@ const PnLDashboard: React.FC = () => {
       {error && (
         <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          {(error as Error).message ?? 'Failed to load P&L data'}
+          {extractApiError(error, 'Failed to load P&L data')}
         </div>
       )}
 
@@ -513,14 +513,30 @@ const PnLDashboard: React.FC = () => {
             <h3 className="font-semibold text-slate-200">Equity Curve</h3>
             <span className="text-xs text-slate-500">Account currency</span>
           </div>
-          <EquitySparkline data={equityData} />
+          {equityQ.isLoading && (
+            <div className="flex items-center justify-center h-32 text-slate-500 text-sm">Loading…</div>
+          )}
+          {equityQ.isError && (
+            <div className="flex items-center justify-center h-32 text-red-400 text-sm">
+              {extractApiError(equityQ.error, 'Failed to load equity curve')}
+            </div>
+          )}
+          {!equityQ.isLoading && !equityQ.isError && <EquitySparkline data={equityData} />}
         </div>
         <div className="bg-[#0d1421] rounded-lg border border-[#1e2d3d] p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-slate-200">Drawdown Curve</h3>
             <span className="text-xs text-slate-500">% from peak equity</span>
           </div>
-          <DrawdownChart data={ddData} />
+          {drawdownQ.isLoading && (
+            <div className="flex items-center justify-center h-32 text-slate-500 text-sm">Loading…</div>
+          )}
+          {drawdownQ.isError && (
+            <div className="flex items-center justify-center h-32 text-red-400 text-sm">
+              {extractApiError(drawdownQ.error, 'Failed to load drawdown curve')}
+            </div>
+          )}
+          {!drawdownQ.isLoading && !drawdownQ.isError && <DrawdownChart data={ddData} />}
         </div>
       </div>
 
