@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 interface ABResult {
   test_id: string;
@@ -47,20 +48,6 @@ const MetricRow: React.FC<{ label: string; a: string; b: string; winner: string;
   </div>
 );
 
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object') {
-    const e = err as Record<string, unknown>;
-    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
-    if (detail && typeof detail === 'object') {
-      const d = detail as Record<string, unknown>;
-      if (typeof d['detail'] === 'string') return d['detail'];
-      if (typeof d['message'] === 'string') return d['message'];
-    }
-    if (typeof e['message'] === 'string') return e['message'];
-  }
-  return fallback;
-}
-
 const ABTesting: React.FC = () => {
   const navigate = useNavigate();
   const [tests, setTests]       = useState<ABResult[]>([]);
@@ -82,7 +69,7 @@ const ABTesting: React.FC = () => {
       setTests(res.data.tests || res.data || []);
     } catch (err) {
       setTests([]);
-      setLoadErr(extractErrorMessage(err, 'Failed to load test history. Ensure the API is running.'));
+      setLoadErr(extractApiError(err, 'Failed to load test history. Ensure the API is running.'));
     } finally {
       setLoadingTests(false);
     }
@@ -101,7 +88,7 @@ const ABTesting: React.FC = () => {
       setTests(prev => [res.data, ...prev]);
       setSelected(res.data);
     } catch (err) {
-      setRunError(extractErrorMessage(err, 'Failed to start A/B test. Check strategy names and try again.'));
+      setRunError(extractApiError(err, 'Failed to start A/B test. Check strategy names and try again.'));
     } finally {
       setRunning(false);
     }

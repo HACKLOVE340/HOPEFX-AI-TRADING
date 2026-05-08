@@ -18,7 +18,7 @@ import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { PanelSkeleton } from '../ui/Skeleton';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, fmtPnl, fmtDateTime, cn } from '../../lib/utils';
+import { fmtPrice, fmtPnl, fmtDateTime, cn, extractApiError } from '../../lib/utils';
 import type { Position } from '../../types';
 
 // ── Inline confirmation dialog ────────────────────────────────────────────────
@@ -186,17 +186,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       onClosed?.(id);
       invalidate();
     } catch (e: unknown) {
-      const _ed1 = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
-      const _d1  = _ed1?.detail ?? _ed1?.message;
-      const msg =
-        typeof _d1 === 'string'
-          ? _d1
-          : _d1
-            ? ((_d1 as { msg?: string; message?: string })?.msg
-                ?? (_d1 as { msg?: string; message?: string })?.message
-                ?? JSON.stringify(_d1))
-            : ((e as { message?: string })?.message ?? 'Close failed');
-      setError(msg);
+      setError(extractApiError(e, 'Close failed'));
     } finally {
       setClosingId(null);
     }
@@ -211,17 +201,7 @@ function PositionsTableInner({ symbol, onClosed }: PositionsTableProps) {
       setPositions([]);
       invalidate();
     } catch (e: unknown) {
-      const _ed2 = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
-      const _d2  = _ed2?.detail ?? _ed2?.message;
-      const msg =
-        typeof _d2 === 'string'
-          ? _d2
-          : _d2
-            ? ((_d2 as { msg?: string; message?: string })?.msg
-                ?? (_d2 as { msg?: string; message?: string })?.message
-                ?? JSON.stringify(_d2))
-            : ((e as { message?: string })?.message ?? 'Close all failed');
-      setError(msg);
+      setError(extractApiError(e, 'Close all failed'));
     } finally {
       setClosingAll(false);
     }

@@ -6,6 +6,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { marketplaceApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
+import { extractApiError } from '../lib/utils';
 
 interface Strategy {
   strategy_id: string; name: string; description: string; creator_id: string;
@@ -18,16 +19,7 @@ type SortOption = 'popular'|'rating'|'newest'|'price_low'|'price_high';
 type MainTab = 'browse'|'my-listings';
 const CATEGORIES = ['all','trend_following','mean_reversion','smart_money','macro','breakout','swing'];
 
-function extractErr(err: unknown, fb: string): string {
-  const d = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
-  const raw = d?.detail ?? d?.message;
-  if (typeof raw === 'string' && raw.length > 0) return raw;
-  if (raw && typeof raw === 'object') {
-    const r = raw as { msg?: string; message?: string };
-    return r.msg ?? r.message ?? JSON.stringify(raw);
-  }
-  return err instanceof Error ? err.message : fb;
-}
+
 const fmt = (n: number, d = 1) => n.toFixed(d);
 const Stars: React.FC<{rating: number; size?: number}> = ({rating, size=14}) => {
   const full = Math.floor(rating); const half = rating - full >= 0.5;
@@ -59,7 +51,7 @@ const ReviewModal: React.FC<{strategyId:string;onClose:()=>void;onSubmitted:()=>
     if(!title.trim()||!content.trim()){setErr('Title and content are required.');return;}
     setSubmitting(true);
     try{ await marketplaceApi.review(strategyId,{rating,title,content}); onSubmitted(); onClose(); }
-    catch(e){setErr(extractErr(e,'Failed to submit review.'));}
+    catch(e){setErr(extractApiError(e,'Failed to submit review.'));}
     finally{setSubmitting(false);}
   };
   return(
@@ -138,7 +130,7 @@ const Marketplace: React.FC = () => {
     } catch (err) {
       if (!mountedRef.current) return;
       if ((err as {name?:string}).name === 'CanceledError') return;
-      setStrategies([]); setLoadErr(extractErr(err,'Failed to load strategies.'));
+      setStrategies([]); setLoadErr(extractApiError(err,'Failed to load strategies.'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [category, sortBy, search]);
 
@@ -172,7 +164,7 @@ const Marketplace: React.FC = () => {
     try {
       const res = await marketplaceApi.strategy(s.strategy_id) as {data:{strategy:Strategy;reviews:Review[]}};
       setSelectedReviews(res.data.reviews ?? []);
-    } catch (err) { setSelectedReviews([]); setReviewsErr(extractErr(err,'Failed to load reviews.')); }
+    } catch (err) { setSelectedReviews([]); setReviewsErr(extractApiError(err,'Failed to load reviews.')); }
   };
 
   const handleSubscribe = async (s: Strategy) => {
@@ -180,7 +172,7 @@ const Marketplace: React.FC = () => {
     try {
       await marketplaceApi.purchase({ buyer_id: currentUser?.id ?? '', strategy_id: s.strategy_id });
       setSubscribed(prev => new Set([...prev, s.strategy_id]));
-    } catch (err) { setPurchaseError(extractErr(err,'Purchase failed. Check your payment method.')); }
+    } catch (err) { setPurchaseError(extractApiError(err,'Purchase failed. Check your payment method.')); }
   };
 
   const visible = strategies.filter(s => {

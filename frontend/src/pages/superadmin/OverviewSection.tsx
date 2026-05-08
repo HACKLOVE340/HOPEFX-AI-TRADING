@@ -129,17 +129,7 @@ const OverviewSection: React.FC = () => {
       setData(res.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      const _errData = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
-      const _detail  = _errData?.detail ?? _errData?.message;
-      const msg =
-        typeof _detail === 'string'
-          ? _detail
-          : _detail
-            ? ((_detail as { msg?: string; message?: string })?.msg
-                ?? (_detail as { msg?: string; message?: string })?.message
-                ?? JSON.stringify(_detail))
-            : ((e as { message?: string })?.message ?? 'Failed to load overview');
-      setError(msg);
+      setError(extractApiError(e, 'Failed to load overview'));
     } finally {
       if (mountedRef.current) setLoading(false);
       if (mountedRef.current) setRefreshing(false);

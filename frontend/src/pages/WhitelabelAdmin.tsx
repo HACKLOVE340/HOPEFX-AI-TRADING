@@ -240,20 +240,6 @@ const TenantRow: React.FC<{
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object') {
-    const e = err as Record<string, unknown>;
-    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
-    if (detail && typeof detail === 'object') {
-      const d = detail as Record<string, unknown>;
-      if (typeof d['detail'] === 'string') return d['detail'];
-      if (typeof d['message'] === 'string') return d['message'];
-    }
-    if (typeof e['message'] === 'string') return e['message'];
-  }
-  return fallback;
-}
-
 const WhitelabelAdmin: React.FC = () => {
   const navigate = useNavigate();
   const [tenants,    setTenants]    = useState<Tenant[]>([]);
@@ -281,7 +267,7 @@ const WhitelabelAdmin: React.FC = () => {
     } catch (err) {
       if (!mountedRef.current) return;
       setTenants([]);
-      setLoadErr(extractErrorMessage(err, 'Failed to load tenants. Ensure the whitelabel API is running.'));
+      setLoadErr(extractApiError(err, 'Failed to load tenants. Ensure the whitelabel API is running.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -298,7 +284,7 @@ const WhitelabelAdmin: React.FC = () => {
       else if (action === 'delete') await api.delete(`/whitelabel/tenants/${id}`);
       await load();
     } catch (err) {
-      setActionErr(extractErrorMessage(err, `Action "${action}" failed. Check permissions and try again.`));
+      setActionErr(extractApiError(err, `Action "${action}" failed. Check permissions and try again.`));
     }
   };
 
@@ -309,7 +295,7 @@ const WhitelabelAdmin: React.FC = () => {
       setApiKeyMsg(`API Key (copy now — shown once): ${res.data.api_key}`);
       await load();
     } catch (err) {
-      setActionErr(extractErrorMessage(err, 'Failed to generate API key. Check permissions and try again.'));
+      setActionErr(extractApiError(err, 'Failed to generate API key. Check permissions and try again.'));
     }
   };
 

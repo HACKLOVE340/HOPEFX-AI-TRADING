@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { PageHeader, CrossLinkBar } from '../components';
 import { createChart, LineSeries, type UTCTimestamp } from 'lightweight-charts';
 import { indicatorsApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 interface Indicator { id: string; name: string; formula: string; symbol: string; color: string; created_at: string; }
 interface PreviewPoint { index: number; value: number; }
@@ -119,20 +120,6 @@ const PreviewChart: React.FC<{ data: PreviewPoint[]; color: string }> = ({ data,
   return <div ref={ref} style={{ width: '100%', height: 200 }} />;
 };
 
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === 'object') {
-    const e = err as Record<string, unknown>;
-    const detail = (e['response'] as Record<string, unknown> | undefined)?.['data'];
-    if (detail && typeof detail === 'object') {
-      const d = detail as Record<string, unknown>;
-      if (typeof d['detail'] === 'string') return d['detail'];
-      if (typeof d['message'] === 'string') return d['message'];
-    }
-    if (typeof e['message'] === 'string') return e['message'];
-  }
-  return fallback;
-}
-
 const CustomIndicators: React.FC = () => {
   const [formula,    setFormula]    = useState('EMA(close, 20)');
   const [name,       setName]       = useState('');
@@ -167,7 +154,7 @@ const CustomIndicators: React.FC = () => {
       const d = res.data as { data?: PreviewPoint[] } | PreviewPoint[];
       setPreview(Array.isArray(d) ? d : (d.data ?? []));
     } catch (e: unknown) {
-      setError(extractErrorMessage(e, 'Formula error'));
+      setError(extractApiError(e, 'Formula error'));
       setPreview([]);
     }
     setLoading(false);
@@ -197,7 +184,7 @@ const CustomIndicators: React.FC = () => {
       await indicatorsApi.delete(id);
       setIndicators(prev => prev.filter(i => i.id !== id));
     } catch (err) {
-      setDeleteErr(extractErrorMessage(err, 'Failed to delete indicator. Please try again.'));
+      setDeleteErr(extractApiError(err, 'Failed to delete indicator. Please try again.'));
     }
   };
 
