@@ -8,6 +8,7 @@ import {
 } from './ui';
 import type { PlatformOverview } from './types';
 import { useSuperAdminNav } from './types';
+import { extractApiError } from '../../lib/utils';
 
 // ── Infra detail types ────────────────────────────────────────────────────────
 interface InfraHealth {
@@ -173,7 +174,7 @@ const OverviewSection: React.FC = () => {
       setInfraMsg('Cache flushed successfully');
       setTimeout(loadInfra, 800);
     } catch (e: unknown) {
-      setInfraMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Cache flush failed');
+      setInfraMsg(extractApiError(e, 'Cache flush failed'));
     } finally { setFlushing(false); }
   };
 
@@ -187,7 +188,7 @@ const OverviewSection: React.FC = () => {
       setActionMsg(enabling ? '🛑 Kill switch activated — trading halted' : '▶️ Kill switch deactivated — trading resumed');
       load(true);
     } catch (e: unknown) {
-      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Kill-switch toggle failed');
+      setActionMsg(extractApiError(e, 'Kill-switch toggle failed'));
     } finally { if (mountedRef.current) setActionBusy(null); }
   };
 
@@ -201,7 +202,7 @@ const OverviewSection: React.FC = () => {
       setActionMsg(enabling ? '🔧 Maintenance mode enabled' : '✅ Maintenance mode disabled');
       load(true);
     } catch (e: unknown) {
-      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Maintenance toggle failed');
+      setActionMsg(extractApiError(e, 'Maintenance toggle failed'));
     } finally { if (mountedRef.current) setActionBusy(null); }
   };
 

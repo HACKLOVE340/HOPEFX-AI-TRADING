@@ -9,6 +9,7 @@ import {
   Toggle, Input, Select, Divider,
   ErrorState, LoadingRows, ConfirmDialog, Spinner,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -998,8 +999,7 @@ const AutoHealingSection: React.FC = () => {
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  const errDetail = (e: unknown) =>
-    (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+  const errDetail = (e: unknown, fb: string) => extractApiError(e, fb);
 
   const showMsg = (text: string, type: 'ok' | 'err' = 'ok') => {
     setMsg(text); setMsgType(type);
@@ -1086,7 +1086,7 @@ const AutoHealingSection: React.FC = () => {
       await Promise.all([loadStatus(), loadConfig(), loadDrift(), loadPatches(), loadQuarantine(), loadApproval()]);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError(errDetail(e) ?? 'Failed to load healing configuration');
+      setError(errDetail(e, 'Failed to load healing configuration'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [loadStatus, loadConfig, loadDrift, loadPatches, loadQuarantine, loadApproval]);
 
@@ -1118,7 +1118,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Baseline rebuild triggered — this may take a moment');
       setTimeout(loadStatus, 3000);
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Rebuild failed', 'err');
+      showMsg(errDetail(e, 'Rebuild failed'), 'err');
     } finally { setRebuildBusy(false); }
   };
 
@@ -1129,7 +1129,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Test re-scan started — index will update shortly');
       setTimeout(loadStatus, 4000);
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Re-scan failed', 'err');
+      showMsg(errDetail(e, 'Re-scan failed'), 'err');
     } finally { setReindexBusy(false); }
   };
 
@@ -1141,7 +1141,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0} ✓` : `Tests failed: ${res.data.failed ?? 0} ✗`, res.data.success ? 'ok' : 'err');
       setTimeout(loadStatus, 2000);
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Test run failed', 'err');
+      showMsg(errDetail(e, 'Test run failed'), 'err');
     } finally { setTestRunBusy(false); }
   };
 
@@ -1152,7 +1152,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Patch approved and queued for application');
       await loadApproval();
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Approval failed', 'err');
+      showMsg(errDetail(e, 'Approval failed'), 'err');
     } finally { setApprovingIdx(null); }
   };
 
@@ -1166,7 +1166,7 @@ const AutoHealingSection: React.FC = () => {
       await superadminApi.autoHealSaveConfig(toSave);
       showMsg('Configuration saved and applied to live engine');
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Save failed', 'err');
+      showMsg(errDetail(e, 'Save failed'), 'err');
     } finally { setSaving(false); }
   };
 

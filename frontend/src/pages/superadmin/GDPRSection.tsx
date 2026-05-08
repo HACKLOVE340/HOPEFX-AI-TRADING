@@ -9,6 +9,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { DataSubjectRequest } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -67,7 +68,7 @@ const GDPRSection: React.FC = () => {
       setPolicyEdits(edits);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load GDPR data');
+      setError(extractApiError(e, 'Failed to load GDPR data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [statusFilter, typeFilter]);
 
@@ -92,7 +93,7 @@ const GDPRSection: React.FC = () => {
       setMsg(`Request ${action === 'approve' ? 'approved' : 'rejected'}`);
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Action failed');
+      setMsg(extractApiError(e, 'Action failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -105,7 +106,7 @@ const GDPRSection: React.FC = () => {
       setEraseUserId(''); setEraseReason('');
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Erasure failed');
+      setMsg(extractApiError(e, 'Erasure failed'));
     } finally { setBusy(null); setEraseConfirm(false); }
   };
 
@@ -115,7 +116,7 @@ const GDPRSection: React.FC = () => {
       await superadminApi.gdprExportUser(userId);
       setMsg(`Export queued for ${userId} — user will receive download link`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+      setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(null); }
   };
 
@@ -129,7 +130,7 @@ const GDPRSection: React.FC = () => {
       // Update local state
       setPolicies(prev => prev.map(p => p.data_type === dataType ? { ...p, retention_days: days } : p));
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Update failed');
+      setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
 

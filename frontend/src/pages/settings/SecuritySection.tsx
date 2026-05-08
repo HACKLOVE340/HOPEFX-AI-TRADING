@@ -20,6 +20,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 import { Card, SectionHeader, Button, StatusBadge, Divider, Input, Field } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const SecuritySection: React.FC = () => {
   const navigate = useNavigate();
@@ -71,8 +72,7 @@ const SecuritySection: React.FC = () => {
       setPwMsg({ type: 'ok', text: 'Password updated successfully.' });
       setPwForm({ current: '', next: '', confirm: '' });
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setPwMsg({ type: 'err', text: detail ?? 'Failed to update password.' });
+      setPwMsg({ type: 'err', text: extractApiError(err, 'Failed to update password.') });
     } finally {
       setPwSaving(false);
     }

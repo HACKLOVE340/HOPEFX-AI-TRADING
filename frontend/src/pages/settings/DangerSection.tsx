@@ -16,6 +16,7 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 import { Card, SectionHeader, Button, Divider } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DangerSection: React.FC = () => {
   const navigate = useNavigate();
@@ -82,8 +83,7 @@ const DangerSection: React.FC = () => {
       clearAuth();
       navigate('/');
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setDeleteError(detail ?? 'Failed to delete account. Contact support.');
+      setDeleteError(extractApiError(err, 'Failed to delete account. Contact support.'));
     } finally {
       setDeleteLoading(false);
     }

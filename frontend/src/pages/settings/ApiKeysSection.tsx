@@ -5,6 +5,7 @@ import { useConfirm } from '../../components/ConfirmDialog';
 import { useToast } from '../../components/Toast';
 import type { ApiKey } from './types';
 import { Card, SectionHeader, Field, Input, Button, StatusBadge } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const SCOPE_OPTIONS = ['read', 'trade', 'admin'];
 
@@ -49,8 +50,7 @@ const ApiKeysSection: React.FC = () => {
       setNewKeyName('');
       setNewKeyScopes(['read']);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setCreateError(detail ?? 'Failed to create API key.');
+      setCreateError(extractApiError(err, 'Failed to create API key.'));
     } finally {
       setCreating(false);
     }

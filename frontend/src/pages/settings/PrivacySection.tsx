@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { PrivacySettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: PrivacySettings = {
   share_performance: false,
@@ -40,8 +41,7 @@ const PrivacySection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save privacy settings.');
+      setError(extractApiError(err, 'Failed to save privacy settings.'));
     } finally { setSaving(false); }
   };
 

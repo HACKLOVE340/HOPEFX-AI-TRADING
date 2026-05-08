@@ -8,6 +8,7 @@ import {
   SectionCard, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
@@ -89,7 +90,7 @@ const AuditTrailSection: React.FC = () => {
       setPage(p);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load audit trail');
+      setError(extractApiError(e, 'Failed to load audit trail'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [categoryFilter]);
 
@@ -105,7 +106,7 @@ const AuditTrailSection: React.FC = () => {
       URL.revokeObjectURL(url);
       setMsg('Audit trail exported');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+      setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(false); }
   };
 
@@ -140,7 +141,7 @@ const AuditTrailSection: React.FC = () => {
       URL.revokeObjectURL(url);
       setMsg('System audit exported');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+      setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(false); }
   };
 

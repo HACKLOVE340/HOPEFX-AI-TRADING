@@ -9,6 +9,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { ServiceStatus, BackupRecord, ScheduledJob } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -68,7 +69,7 @@ const SystemHealthSection: React.FC = () => {
       setApiKeys(kRes.data.api_keys ?? kRes.data.keys ?? kRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load system health data');
+      setError(extractApiError(e, 'Failed to load system health data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -83,7 +84,7 @@ const SystemHealthSection: React.FC = () => {
       setMsg(`${backupType} backup triggered`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Backup trigger failed');
+      setMsg(extractApiError(e, 'Backup trigger failed'));
     } finally { setBusy(null); }
   };
 
@@ -107,7 +108,7 @@ const SystemHealthSection: React.FC = () => {
       setApiKeys(prev => prev.map(k => k.key_id === keyId ? { ...k, active: false } : k));
       setMsg('API key revoked');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Revoke failed');
+      setMsg(extractApiError(e, 'Revoke failed'));
     } finally { setBusy(null); setRevokeConfirm(null); }
   };
 

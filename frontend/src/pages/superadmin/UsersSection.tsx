@@ -10,6 +10,7 @@ import type { SuperAdminUser, BulkUserResult } from './types';
 import { ROLE_BADGE_STYLES, ROLE_LABELS, PLAN_COLORS, PLAN_LABELS } from '../../lib/subscription';
 import type { UserRole } from '../../store';
 import type { Plan } from '../../lib/subscription';
+import { extractApiError } from '../../lib/utils';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'Never';
@@ -83,7 +84,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
       setMsg('Done');
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Action failed');
+      setMsg(extractApiError(e, 'Action failed'));
     } finally {
       setSaving(false);
     }
@@ -97,7 +98,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
       setMsg('Done');
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Update failed');
+      setMsg(extractApiError(e, 'Update failed'));
     } finally { setSaving(false); }
   };
 
@@ -109,7 +110,7 @@ const UserDetailDrawer: React.FC<UserDetailDrawerProps> = ({ user: initialUser, 
       onRefresh();
       setTimeout(onClose, 800);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+      setMsg(extractApiError(e, 'Delete failed'));
     } finally { setDeleting(false); setDeleteConfirm(false); }
   };
 
@@ -338,7 +339,7 @@ const UsersSection: React.FC = () => {
       setCheckedIds(new Set());
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load users');
+      setError(extractApiError(e, 'Failed to load users'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -381,7 +382,7 @@ const UsersSection: React.FC = () => {
       setBulkResult(res.data);
       load();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Bulk action failed';
+      const msg = extractApiError(e, 'Bulk action failed');
       setBulkResult({ succeeded: [], failed: ids.map(id => ({ user_id: id, reason: msg })), total: ids.length });
     } finally {
       setBulkBusy(null);

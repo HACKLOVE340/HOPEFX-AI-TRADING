@@ -6,6 +6,7 @@ import {
   SectionCard, StatusBadge, ActionBtn, Input, Select, Toggle,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 interface EngineConfig {
   paper_trading_mode: boolean;
@@ -76,7 +77,7 @@ const TradingEngineSection: React.FC = () => {
       setStatus(stRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load engine data');
+      setError(extractApiError(e, 'Failed to load engine data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -92,7 +93,7 @@ const TradingEngineSection: React.FC = () => {
       await superadminApi.updateEngineConfig(cfg);
       setMsg('Engine configuration saved');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed');
+      setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
 
@@ -104,7 +105,7 @@ const TradingEngineSection: React.FC = () => {
       setCfg(c => c ? { ...c, kill_switch_active: !c.kill_switch_active } : c);
       setMsg(`Kill switch ${!cfg.kill_switch_active ? 'ACTIVATED — all trading halted' : 'deactivated — trading resumed'}`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Kill switch failed');
+      setMsg(extractApiError(e, 'Kill switch failed'));
     } finally { setSaving(false); setConfirm(null); }
   };
 

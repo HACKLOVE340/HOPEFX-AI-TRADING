@@ -9,6 +9,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { Tenant } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -72,7 +73,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       setMsg('Tenant updated');
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed');
+      setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
 
@@ -83,7 +84,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       setMsg('Tenant activated');
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Activate failed');
+      setMsg(extractApiError(e, 'Activate failed'));
     } finally { setBusy(null); }
   };
 
@@ -95,7 +96,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       setSuspendConfirm(false);
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Suspend failed');
+      setMsg(extractApiError(e, 'Suspend failed'));
     } finally { setBusy(null); }
   };
 
@@ -107,7 +108,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       onRefresh();
       setTimeout(onClose, 600);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+      setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(false); }
   };
 
@@ -123,7 +124,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         .catch(() => {})
         .finally(() => setKeysLoading(false));
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Key rotation failed');
+      setMsg(extractApiError(e, 'Key rotation failed'));
     } finally { setBusy(null); }
   };
 
@@ -303,7 +304,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
       onCreated();
       onClose();
     } catch (e: unknown) {
-      setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Create failed');
+      setErr(extractApiError(e, 'Create failed'));
     } finally { setSaving(false); }
   };
 
@@ -361,7 +362,7 @@ const WhiteLabelSection: React.FC = () => {
       setTenants(res.data.tenants ?? res.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load tenants');
+      setError(extractApiError(e, 'Failed to load tenants'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [search]);
 

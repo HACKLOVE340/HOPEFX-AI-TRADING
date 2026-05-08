@@ -17,6 +17,7 @@ import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import type { UserRole } from '../store';
 import { Eye, EyeOff, Activity, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
+import { extractApiError } from '../lib/utils';
 
 // ── Error normaliser ──────────────────────────────────────────────────────────
 
@@ -141,7 +142,7 @@ const Login: React.FC = () => {
       void prefetchCsrfToken();
       navigate(resolveDestination(res.data.user.role as UserRole), { replace: true });
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = extractApiError(err, '');
       setLoading(false);
 
       // Reveal TOTP field when server signals 2FA is required.
@@ -149,7 +150,7 @@ const Login: React.FC = () => {
         setShowTotp(true);
       }
 
-      setError(humaniseError(detail));
+      setError(humaniseError(detail || undefined));
     }
   };
 

@@ -4,6 +4,7 @@ import { api } from '../../hooks/useApi';
 import type { AppearanceSettings } from './types';
 import { ACCENT_COLORS } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: AppearanceSettings = {
   theme: 'dark',
@@ -70,8 +71,7 @@ const AppearanceSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save appearance settings.');
+      setError(extractApiError(err, 'Failed to save appearance settings.'));
     } finally {
       setSaving(false);
     }

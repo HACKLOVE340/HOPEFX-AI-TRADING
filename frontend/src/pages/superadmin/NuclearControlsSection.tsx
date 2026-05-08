@@ -7,6 +7,7 @@ import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
   ConfirmDialog, Input,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -64,7 +65,7 @@ const NuclearControlsSection: React.FC = () => {
       setLog(lRes.data.log ?? lRes.data.entries ?? []);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load nuclear status');
+      setError(extractApiError(e, 'Failed to load nuclear status'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 

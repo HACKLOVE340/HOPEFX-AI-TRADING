@@ -19,8 +19,14 @@ type MainTab = 'browse'|'my-listings';
 const CATEGORIES = ['all','trend_following','mean_reversion','smart_money','macro','breakout','swing'];
 
 function extractErr(err: unknown, fb: string): string {
-  const d = (err as {response?:{data?:{detail?:string;message?:string}}})?.response?.data;
-  return d?.detail ?? d?.message ?? (err instanceof Error ? err.message : fb);
+  const d = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
+  const raw = d?.detail ?? d?.message;
+  if (typeof raw === 'string' && raw.length > 0) return raw;
+  if (raw && typeof raw === 'object') {
+    const r = raw as { msg?: string; message?: string };
+    return r.msg ?? r.message ?? JSON.stringify(raw);
+  }
+  return err instanceof Error ? err.message : fb;
 }
 const fmt = (n: number, d = 1) => n.toFixed(d);
 const Stars: React.FC<{rating: number; size?: number}> = ({rating, size=14}) => {

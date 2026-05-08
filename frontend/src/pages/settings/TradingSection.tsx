@@ -5,6 +5,7 @@ import { useStore } from '../../store';
 import type { TradingPreferences } from './types';
 import { SYMBOLS, TIMEFRAMES } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: TradingPreferences = {
   default_symbol: 'XAU_USD',
@@ -48,8 +49,7 @@ const TradingSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save trading preferences.');
+      setError(extractApiError(err, 'Failed to save trading preferences.'));
     } finally {
       setSaving(false);
     }

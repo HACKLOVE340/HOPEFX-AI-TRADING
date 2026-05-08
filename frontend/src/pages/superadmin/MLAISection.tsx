@@ -7,6 +7,7 @@ import {
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { MLModel } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -84,7 +85,7 @@ const MLAISection: React.FC = () => {
       setMlStatus(stRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load ML data');
+      setError(extractApiError(e, 'Failed to load ML data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -112,7 +113,7 @@ const MLAISection: React.FC = () => {
       setActionMsg(`RL agent ${action} triggered`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
-      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'RL control failed');
+      setActionMsg(extractApiError(e, 'RL control failed'));
     } finally { setBusy(null); }
   };
 

@@ -7,6 +7,7 @@ import {
   ErrorState, LoadingRows,
 } from './ui';
 import type { FeatureFlag } from './types';
+import { extractApiError } from '../../lib/utils';
 
 interface UserOverride { flag: string; enabled: boolean }
 
@@ -32,7 +33,7 @@ const FeatureFlagsSection: React.FC = () => {
       setFlags(res.data.flags ?? res.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load feature flags');
+      setError(extractApiError(e, 'Failed to load feature flags'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -47,7 +48,7 @@ const FeatureFlagsSection: React.FC = () => {
       setFlags(prev => prev.map(f => f.name === name ? { ...f, enabled } : f));
       setMsg(`Flag "${name}" ${enabled ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Toggle failed');
+      setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
 
@@ -58,7 +59,7 @@ const FeatureFlagsSection: React.FC = () => {
       const res = await superadminApi.userFlagOverrides(userIdInput.trim());
       setUserOverrides(res.data.overrides ?? res.data);
     } catch (e: unknown) {
-      setOverrideMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load overrides');
+      setOverrideMsg(extractApiError(e, 'Failed to load overrides'));
     } finally { setOverrideLoading(false); }
   };
 
@@ -73,7 +74,7 @@ const FeatureFlagsSection: React.FC = () => {
       });
       setOverrideMsg(`Override for "${flag}" set to ${enabled ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
-      setOverrideMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Override failed');
+      setOverrideMsg(extractApiError(e, 'Override failed'));
     } finally { setBusy(null); }
   };
 

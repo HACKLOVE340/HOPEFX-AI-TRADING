@@ -11,6 +11,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ const CreateModal: React.FC<{
       });
       onCreated(res.data);
     } catch (e: unknown) {
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to create tenant.');
+      setError(extractApiError(e, 'Failed to create tenant.'));
     } finally {
       setSaving(false);
     }

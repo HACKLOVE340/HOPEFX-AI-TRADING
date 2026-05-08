@@ -7,6 +7,7 @@ import {
   SectionCard, ActionBtn, KpiTile, ErrorState, LoadingRows,
   ConfirmDialog,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -102,7 +103,7 @@ const SecurityInfraSection: React.FC = () => {
       setInfraLog(Array.isArray(logRaw) ? logRaw : []);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load security infrastructure data');
+      setError(extractApiError(e, 'Failed to load security infrastructure data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -131,7 +132,7 @@ const SecurityInfraSection: React.FC = () => {
         setMsg('Antivirus scan started');
       }
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Scan trigger failed');
+      setMsg(extractApiError(e, 'Scan trigger failed'));
     } finally { setBusy(null); }
   };
 
@@ -142,7 +143,7 @@ const SecurityInfraSection: React.FC = () => {
       setMsg(`Key ${keyId} rotated successfully`);
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Key rotation failed');
+      setMsg(extractApiError(e, 'Key rotation failed'));
     } finally { setBusy(null); setRotateConfirm(null); }
   };
 

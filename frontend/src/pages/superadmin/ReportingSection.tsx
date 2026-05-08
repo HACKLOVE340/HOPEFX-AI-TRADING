@@ -8,6 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { ReportRecord } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -40,7 +41,7 @@ const ReportingSection: React.FC = () => {
       setReports(res.data.reports ?? res.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load reports');
+      setError(extractApiError(e, 'Failed to load reports'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -56,7 +57,7 @@ const ReportingSection: React.FC = () => {
       setMsg(`${genType} report generation started for period ${period}`);
       setTimeout(load, 2000);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Generate failed');
+      setMsg(extractApiError(e, 'Generate failed'));
     } finally { setBusy(null); }
   };
 
@@ -69,7 +70,7 @@ const ReportingSection: React.FC = () => {
       a.href = url; a.download = report.report_id; a.click();
       URL.revokeObjectURL(url);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Download failed');
+      setMsg(extractApiError(e, 'Download failed'));
     } finally { setBusy(null); }
   };
 
@@ -80,7 +81,7 @@ const ReportingSection: React.FC = () => {
       setReports(prev => prev.filter(r => r.report_id !== reportId));
       setMsg('Report deleted');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+      setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(null); }
   };
 

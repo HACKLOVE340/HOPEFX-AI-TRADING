@@ -6,6 +6,7 @@ import { useStore } from '../../store';
 import type { ProfileSettings } from './types';
 import { TIMEZONES, LANGUAGES } from './types';
 import { Field, Input, Select, Toggle, Card, SectionHeader, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: ProfileSettings = {
   username: '', email: '', bio: '', avatar_url: '',
@@ -70,8 +71,7 @@ const ProfileSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save profile.');
+      setError(extractApiError(err, 'Failed to save profile.'));
     } finally {
       setSaving(false);
     }

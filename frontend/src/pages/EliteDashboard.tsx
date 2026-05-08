@@ -24,6 +24,7 @@ import {
   type CustomDevPayload,
 } from '../hooks/useApi';
 import { useStore } from '../store';
+import { extractApiError } from '../lib/utils';
 
 // ── Style helpers ─────────────────────────────────────────────────────────────
 
@@ -176,8 +177,7 @@ function SupportTicketForm({ onCreated }: { onCreated: () => void }) {
       setForm({ subject: '', message: '', priority: 'high', category: 'general' });
       onCreated();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setMsg({ type: 'err', text: detail ?? 'Failed to submit ticket. Please try again.' });
+      setMsg({ type: 'err', text: extractApiError(err, 'Failed to submit ticket. Please try again.') });
     } finally {
       setLoading(false);
     }
@@ -338,8 +338,7 @@ function CustomDevForm({ onCreated }: { onCreated: () => void }) {
       setSymbolsInput('');
       onCreated();
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setMsg({ type: 'err', text: detail ?? 'Failed to submit request. Please try again.' });
+      setMsg({ type: 'err', text: extractApiError(err, 'Failed to submit request. Please try again.') });
     } finally {
       setLoading(false);
     }

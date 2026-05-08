@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { Activity, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { authApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 function measureStrength(pw: string): { score: number; label: string; color: string } {
   if (!pw) return { score: 0, label: '', color: '#334155' };
@@ -88,12 +89,11 @@ const ResetPassword: React.FC = () => {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      const msg = detail?.toLowerCase() ?? '';
+      const msg = extractApiError(err, '').toLowerCase();
       if (msg.includes('expired') || msg.includes('invalid'))
         setError('This reset link has expired or already been used. Please request a new one.');
       else
-        setError(detail ?? 'Failed to reset password. Please try again.');
+        setError(extractApiError(err, 'Failed to reset password. Please try again.'));
     } finally {
       setLoading(false);
     }
