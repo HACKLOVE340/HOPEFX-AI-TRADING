@@ -74,29 +74,27 @@ def _db_save(user_id: str, section: str, data: dict) -> bool:
         mgr = get_db_manager()
         if not mgr:
             return False
-        ctx = mgr.session()
-        session = ctx.__enter__()
-        if not session:
-            return False
-
-        key = f"{section}:{user_id}"
-        value = json.dumps(data)
-        existing = session.query(Configuration).filter_by(config_key=key).first()
-        if existing:
-            existing.config_value = value
-            existing.changed_by = user_id
-        else:
-            from database.models import Configuration as Cfg
-
-            record = Cfg(
-                environment="production",
-                config_key=key,
-                config_value=value,
-                changed_by=user_id,
-                change_reason=f"user {section} update",
-            )
-            session.add(record)
-        session.commit()
+        with mgr.session() as session:
+            key = f"{section}:{user_id}"
+            value = json.dumps(data)
+            existing = session.query(Configuration).filter_by(config_key=key).first()
+            if existing:
+                existing.config_value = value
+                existing.changed_by = user_id
+            else:
+                record = Configuration(
+                    environment="production",
+                    config_key=key,
+                    config_value=value,
+                    changed_by=user_id,
+                    change_reason=f"user {section} update",
+                )
+                session.add(record)
+            try:
+                session.commit()
+            except Exception:
+                session.rollback()
+                raise
         return True
     except Exception as exc:
         logger.debug("DB save failed for %s/%s: %s", section, user_id, exc)
@@ -112,15 +110,11 @@ def _db_load(user_id: str, section: str) -> dict | None:
         mgr = get_db_manager()
         if not mgr:
             return None
-        ctx = mgr.session()
-        session = ctx.__enter__()
-        if not session:
-            return None
-
-        key = f"{section}:{user_id}"
-        record = session.query(Configuration).filter_by(config_key=key).first()
-        if record and record.config_value:
-            return json.loads(record.config_value)
+        with mgr.session() as session:
+            key = f"{section}:{user_id}"
+            record = session.query(Configuration).filter_by(config_key=key).first()
+            if record and record.config_value:
+                return json.loads(record.config_value)
     except Exception as exc:
         logger.debug("DB load failed for %s/%s: %s", section, user_id, exc)
     return None

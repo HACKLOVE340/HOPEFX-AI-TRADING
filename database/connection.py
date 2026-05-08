@@ -684,7 +684,10 @@ class AsyncDatabaseManager:
                 self._record_success()
                 return
             except Exception as exc:
-                await session.rollback()
+                try:
+                    await session.rollback()
+                except Exception as rb_exc:
+                    logger.debug("AsyncDB rollback failed (connection lost?): %s", rb_exc)
                 last_exc = exc
                 self._record_failure(exc)
                 if attempt < self.max_retries - 1:

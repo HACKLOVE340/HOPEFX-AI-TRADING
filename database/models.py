@@ -404,7 +404,7 @@ class Configuration(Base):
     timestamp = Column(DateTime, default=_utcnow)
     environment = Column(String(20), nullable=False)
 
-    config_key = Column(String(100), nullable=False)
+    config_key = Column(String(100), nullable=False, index=True, unique=True)
     config_value = Column(Text, nullable=True)
     is_encrypted = Column(Boolean, default=False)
 
