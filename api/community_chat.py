@@ -31,6 +31,7 @@ ws_router = APIRouter(tags=["Community Chat WS"])
 # ── WebSocket connection registry ─────────────────────────────────────────────
 # room_id -> list of active WebSocket connections
 _CHAT_CONNECTIONS: dict[str, list[WebSocket]] = {}
+_MAX_CONNECTIONS_PER_ROOM = 500
 
 
 async def _ws_broadcast(room_id: str, payload: dict) -> None:
@@ -460,9 +461,12 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
 
     await websocket.accept()
 
-    # Register connection
+    # Register connection — enforce per-room limit to prevent memory DoS
     if room_id not in _CHAT_CONNECTIONS:
         _CHAT_CONNECTIONS[room_id] = []
+    if len(_CHAT_CONNECTIONS[room_id]) >= _MAX_CONNECTIONS_PER_ROOM:
+        await websocket.close(code=1008, reason="Room connection limit reached")
+        return
     _CHAT_CONNECTIONS[room_id].append(websocket)
 
     try:
