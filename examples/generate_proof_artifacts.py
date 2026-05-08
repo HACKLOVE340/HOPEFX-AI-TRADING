@@ -680,7 +680,7 @@ perf = {
 }
 
 perf_path = RESULTS_DIR / "performance.json"
-with open(perf_path, "w") as f:
+with open(perf_path, "w", encoding="utf-8") as f:
     json.dump(perf, f, indent=2)
 logger.info(f"  Saved performance → {perf_path}")
 

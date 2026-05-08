@@ -93,7 +93,7 @@ async def get_logs(
     if not entries:
         log_file = os.getenv("LOG_FILE", "logs/app.log")
         try:
-            with open(log_file) as f:
+            with open(log_file, encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()[-limit:]
             for line in reversed(lines):
                 stripped = line.strip()

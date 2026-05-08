@@ -316,7 +316,7 @@ async def get_resource_utilisation(
     except ImportError:
         # psutil not installed — use /proc
         try:
-            with open("/proc/meminfo") as f:
+            with open("/proc/meminfo", encoding="utf-8") as f:
                 lines = {l.split(":")[0]: int(l.split(":")[1].strip().split()[0]) for l in f if ":" in l}
             total_kb = lines.get("MemTotal", 0)
             avail_kb = lines.get("MemAvailable", 0)

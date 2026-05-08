@@ -821,7 +821,7 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
                 import csv as _csv
 
                 closes: list[float] = []
-                with open(csv_path, newline="") as fh:
+                with open(csv_path, newline="", encoding="utf-8") as fh:
                     reader = _csv.DictReader(fh)
                     # Accept "close" or "Close" column
                     for row in reader:

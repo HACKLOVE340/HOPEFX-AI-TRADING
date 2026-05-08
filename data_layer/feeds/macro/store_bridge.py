@@ -239,7 +239,7 @@ class MacroStoreBridge:
                         if not series.empty
                     }
                     os.makedirs(os.path.dirname(_FRED_CACHE_PATH) or ".", exist_ok=True)
-                    with open(_FRED_CACHE_PATH, "w") as _cf:
+                    with open(_FRED_CACHE_PATH, "w", encoding="utf-8") as _cf:
                         json.dump(cache_data, _cf)
                     logger.debug("MacroStoreBridge: FRED cache written to %s", _FRED_CACHE_PATH)
                 except Exception as cache_write_exc:
@@ -247,7 +247,7 @@ class MacroStoreBridge:
             else:
                 # FRED unavailable — try loading last known good cache
                 try:
-                    with open(_FRED_CACHE_PATH) as _cf:
+                    with open(_FRED_CACHE_PATH, encoding="utf-8") as _cf:
                         cache_data = json.load(_cf)
                     all_series = {
                         name: pd.Series({pd.Timestamp(k): v for k, v in vals.items()}, dtype=float)

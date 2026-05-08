@@ -206,7 +206,7 @@ class DriftDetectorService:
             tracker.set_reference(ref.tolist())
             return
         try:
-            with open(meta_path) as f:
+            with open(meta_path, encoding="utf-8") as f:
                 meta = json.load(f)
             # Look for OOS probability distributions in meta
             probs = meta.get("oos_probabilities") or meta.get("val_probabilities", [])

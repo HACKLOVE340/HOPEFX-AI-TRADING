@@ -169,7 +169,7 @@ class ModelRegistry:
         """Atomically write the manifest via a temp-file rename."""
         tmp_fd, tmp_path = tempfile.mkstemp(dir=self._path.parent, prefix=".registry_tmp_", suffix=".json")
         try:
-            with os.fdopen(tmp_fd, "w") as fh:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 json.dump(manifest, fh, indent=2)
             Path(tmp_path).replace(self._path)
         except Exception:  # nosec B110 — cleanup temp file before re-raise

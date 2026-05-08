@@ -452,7 +452,7 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
     # Write strategy source to a temp file so the subprocess can import it.
     fd, tmp_path = tempfile.mkstemp(suffix=".py", dir=tempfile.gettempdir())
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(code)
     except Exception:  # nosec B110 — close fd before re-raise
         os.close(fd)
@@ -484,7 +484,7 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
 
     runner_fd, runner_path = tempfile.mkstemp(suffix="_runner.py", dir=tempfile.gettempdir())
     try:
-        with os.fdopen(runner_fd, "w") as f:
+        with os.fdopen(runner_fd, "w", encoding="utf-8") as f:
             f.write(runner_script)
     except Exception:
         os.close(runner_fd)

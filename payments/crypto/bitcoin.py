@@ -175,7 +175,7 @@ async def _broadcast_via_fireblocks(
 
     # Secret may be a file path or inline PEM
     if os.path.isfile(secret_raw):
-        with open(secret_raw) as f:
+        with open(secret_raw, encoding="utf-8") as f:
             private_key_pem = f.read()
     else:
         private_key_pem = secret_raw.replace("\\n", "\n")

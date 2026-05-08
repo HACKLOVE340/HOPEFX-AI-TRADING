@@ -299,7 +299,7 @@ class XAUUSDBot:
 
         results_file = Path('results/xauusd_paper_results.json')
         results_file.parent.mkdir(exist_ok=True)
-        with Path(results_file).open('w') as f:
+        with Path(results_file).open('w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, default=str)
         logger.info("Results saved to: %s", results_file)
 
