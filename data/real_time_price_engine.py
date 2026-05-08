@@ -813,12 +813,13 @@ class RealTimePriceEngine:
             ticker_sym = self._YF_TICKER_MAP.get(symbol.upper(), symbol)
             interval = self._YF_INTERVAL_MAP.get(timeframe, "1h")
 
-            # Determine period based on limit + interval
+            # Determine period based on limit + interval.
+            # 1h capped at 60d (~1440 bars) — 730d is too slow for a REST fallback.
             _period_map = {
                 "1m": "7d", "5m": "60d", "15m": "60d", "30m": "60d",
-                "1h": "730d", "1d": "5y", "1wk": "10y",
+                "1h": "60d", "1d": "5y", "1wk": "10y",
             }
-            period = _period_map.get(interval, "730d")
+            period = _period_map.get(interval, "60d")
 
             loop = asyncio.get_event_loop()
 

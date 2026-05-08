@@ -427,24 +427,53 @@ async def _eventbus_tick_broadcaster() -> None:
             async for msg in bus.subscribe(CH_TICK):
                 if _manager.connection_count == 0:
                     continue
-                # Normalise to frontend PriceTick schema:
-                # { type: "price_tick", data: PriceTick }
-                symbol = msg.get("symbol", "XAU/USD")
-                mid = float(msg.get("mid") or 0)
+
+                # Engine publishes {symbol, price, source, ts, bid?, ask?}
+                # bid/ask are optional — derive from price when absent.
+                raw_sym = msg.get("symbol", "XAUUSD")
+
+                # Normalise symbol to slash format expected by the frontend
+                # e.g. XAUUSD → XAU/USD, EURUSD → EUR/USD, BTCUSD → BTC/USD
+                if "/" not in raw_sym and "_" not in raw_sym:
+                    if len(raw_sym) == 6:
+                        symbol = f"{raw_sym[:3]}/{raw_sym[3:]}"
+                    elif len(raw_sym) == 7:
+                        symbol = f"{raw_sym[:3]}/{raw_sym[3:]}"
+                    else:
+                        symbol = raw_sym
+                else:
+                    symbol = raw_sym.replace("_", "/")
+
+                price = float(msg.get("price") or msg.get("mid") or 0)
+                if price <= 0:
+                    continue
+
+                bid = float(msg.get("bid") or 0) or None
+                ask = float(msg.get("ask") or 0) or None
+
+                # Derive spread from config or use a sensible default
+                cfg    = _SYMBOLS.get(symbol, {})
+                spread = cfg.get("spread", price * 0.0002)
+                if bid is None:
+                    bid = round(price - spread / 2, 5)
+                if ask is None:
+                    ask = round(price + spread / 2, 5)
+                mid = round((bid + ask) / 2, 5)
+
                 # Track previous mid for change_pct calculation
-                prev = _last_mid.get(symbol, mid)
+                prev   = _last_mid.get(symbol, mid)
                 change = ((mid - prev) / prev * 100) if prev else 0.0
                 _last_mid[symbol] = mid
 
                 tick = {
                     "type": "price_tick",
                     "data": {
-                        "symbol": symbol,
-                        "bid": msg.get("bid"),
-                        "ask": msg.get("ask"),
-                        "mid": mid,
-                        "spread": msg.get("spread"),
-                        "timestamp": msg.get("timestamp"),
+                        "symbol":     symbol,
+                        "bid":        bid,
+                        "ask":        ask,
+                        "mid":        mid,
+                        "spread":     round(ask - bid, 5),
+                        "timestamp":  int(float(msg.get("ts", 0)) * 1000),
                         "change_pct": round(change, 4),
                     },
                 }
