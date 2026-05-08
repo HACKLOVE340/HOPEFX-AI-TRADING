@@ -686,6 +686,64 @@ async def delete_indicator(ind_id: str, user: TokenPayload = Depends(require_pla
     return {"deleted": True}
 
 
+@router.patch("/api/indicators/{ind_id}")
+async def update_indicator(
+    ind_id: str,
+    payload: dict,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    """Update an existing custom indicator (name, formula, parameters)."""
+    ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
+    if not ind or ind["user_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+    allowed = {"name", "formula", "parameters", "color", "panel", "visible"}
+    for key in allowed:
+        if key in payload:
+            ind[key] = payload[key]
+    _kv_set(f"advanced:indicator:{ind_id}", ind)
+    _indicators[ind_id] = ind
+    return ind
+
+
+@router.post("/api/indicators/{ind_id}/apply")
+async def apply_indicator(
+    ind_id: str,
+    payload: dict,
+    user: TokenPayload = Depends(require_plan("professional")),
+):
+    """
+    Apply a saved custom indicator to a chart session.
+
+    Evaluates the indicator's formula against real OHLCV data fetched for
+    ``symbol`` (same engine as /indicators/preview) and returns computed
+    values ready for the chart.
+    """
+    ind = _kv_get(f"advanced:indicator:{ind_id}") or _indicators.get(ind_id)
+    if not ind or ind["user_id"] != user.sub:
+        raise HTTPException(status_code=404, detail="Indicator not found")
+
+    formula = ind.get("formula", "")
+    if not formula:
+        raise HTTPException(status_code=422, detail="Indicator has no formula")
+
+    symbol = payload.get("symbol", "XAU_USD")
+    periods = int(payload.get("periods", 200))
+
+    try:
+        result = _eval_indicator(formula, symbol, periods)
+        return {
+            "indicator_id": ind_id,
+            "name": ind.get("name", "custom"),
+            "symbol": symbol,
+            "data": result,
+            "points": len(result),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Formula evaluation failed: {exc}") from exc
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Task 45 — Multi-Symbol Correlation Dashboard
 # ─────────────────────────────────────────────────────────────────────────────
