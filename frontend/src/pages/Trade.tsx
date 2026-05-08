@@ -43,7 +43,7 @@ import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
 import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -468,7 +468,7 @@ const Trade: React.FC = () => {
       await qc.invalidateQueries({ queryKey: ['positions'] });
       toast.success('All positions closed.');
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Failed to close positions.');
+      toast.error(extractApiError(e, 'Failed to close positions.'));
     } finally {
       setClosingAll(false);
     }
