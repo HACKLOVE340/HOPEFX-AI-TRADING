@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, superadminApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -332,7 +333,7 @@ const AdminPanel: React.FC = () => {
       if (ovRes.status === 'rejected') setError('Failed to load admin overview.');
     } catch (err: unknown) {
       if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(extractApiError(err, 'Unknown error'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
