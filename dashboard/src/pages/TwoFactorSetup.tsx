@@ -17,6 +17,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
+import { extractApiError } from '../lib/utils';
 
 type Step = 'idle' | 'setup' | 'verify' | 'active' | 'backup';
 
@@ -67,7 +68,7 @@ const TwoFactorSetup: React.FC = () => {
       setSetupData(data);
       setStep('setup');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Setup failed');
+      setError(extractApiError(e, 'Setup failed'));
     } finally {
       setLoading(false);
     }
@@ -92,7 +93,7 @@ const TwoFactorSetup: React.FC = () => {
         setError(data.message ?? 'Invalid code');
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Verify failed');
+      setError(extractApiError(e, 'Verify failed'));
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ const TwoFactorSetup: React.FC = () => {
       setBackupCodes(data.codes ?? []);
       setStep('backup');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to get backup codes');
+      setError(extractApiError(e, 'Failed to get backup codes'));
     } finally {
       setLoading(false);
     }
@@ -133,7 +134,7 @@ const TwoFactorSetup: React.FC = () => {
         setError(data.message ?? 'Invalid code');
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Disable failed');
+      setError(extractApiError(e, 'Disable failed'));
     } finally {
       setLoading(false);
     }
