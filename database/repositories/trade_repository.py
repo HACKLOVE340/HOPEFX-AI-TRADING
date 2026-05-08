@@ -17,6 +17,7 @@ from typing import Any, Sequence
 
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from database.models import Trade, TradeStatus
 from .base import AsyncRepository
@@ -60,6 +61,7 @@ class TradeRepository(AsyncRepository[Trade]):
             conditions.append(Trade.user_id == user_id)
         stmt = (
             select(Trade)
+            .options(selectinload(Trade.account))
             .where(and_(*conditions))
             .order_by(desc(Trade.entry_time))
             .limit(limit)
@@ -81,6 +83,7 @@ class TradeRepository(AsyncRepository[Trade]):
             conditions.append(Trade.status == status)
         stmt = (
             select(Trade)
+            .options(selectinload(Trade.account))
             .where(and_(*conditions))
             .order_by(desc(Trade.entry_time))
             .limit(limit)
@@ -102,6 +105,7 @@ class TradeRepository(AsyncRepository[Trade]):
             conditions.append(Trade.entry_time >= since)
         stmt = (
             select(Trade)
+            .options(selectinload(Trade.account))
             .where(and_(*conditions))
             .order_by(desc(Trade.entry_time))
             .limit(limit)
@@ -122,6 +126,7 @@ class TradeRepository(AsyncRepository[Trade]):
             conditions.append(Trade.symbol == symbol)
         stmt = (
             select(Trade)
+            .options(selectinload(Trade.account))
             .where(and_(*conditions))
             .order_by(Trade.entry_time)
         )
@@ -195,6 +200,7 @@ class TradeRepository(AsyncRepository[Trade]):
             conditions.append(Trade.status == status)
         stmt = (
             select(Trade)
+            .options(selectinload(Trade.account))
             .where(and_(*conditions))
             .order_by(Trade.entry_time)
             .limit(limit)

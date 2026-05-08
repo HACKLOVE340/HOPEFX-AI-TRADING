@@ -427,9 +427,27 @@ class OANDABroker:
         # Market order fill
         fill = data.get("orderFillTransaction", {})
         if fill:
-            price = float(fill.get("price", fill.get("tradeOpened", {}).get("price", 0)))
-            units = abs(int(fill.get("units", 0)))
-            direction = "long" if int(fill.get("units", 0)) > 0 else "short"
+            raw_price_str = fill.get("price") or fill.get("tradeOpened", {}).get("price")
+            raw_units_str = fill.get("units")
+            if not raw_price_str or not raw_units_str:
+                logger.warning(
+                    "_parse_fill: orderFillTransaction present but missing price=%r units=%r — treating as rejected",
+                    raw_price_str,
+                    raw_units_str,
+                )
+                return {"status": "rejected", "reason": "missing_fill_fields", "broker": "oanda", "raw": data}
+            price = float(raw_price_str)
+            raw_units = int(raw_units_str)
+            units = abs(raw_units)
+            direction = "long" if raw_units > 0 else "short"
+            if price <= 0.0 or units == 0:
+                logger.warning(
+                    "_parse_fill: degenerate fill price=%.5f units=%d for client_ref=%s — treating as rejected",
+                    price,
+                    units,
+                    client_ref,
+                )
+                return {"status": "rejected", "reason": "degenerate_fill", "broker": "oanda", "raw": data}
             return {
                 "status": "filled",
                 "fill_price": price,

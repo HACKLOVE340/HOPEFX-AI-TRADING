@@ -113,9 +113,9 @@ class DatabaseManager:
     def __init__(
         self,
         connection_string: str,
-        pool_size: int = 10,
-        max_overflow: int = 20,
-        pool_timeout: float = 30.0,
+        pool_size: int = 20,
+        max_overflow: int = 40,
+        pool_timeout: float = 10.0,
         pool_recycle: int = 3600,
         pool_pre_ping: bool = True,
         echo: bool = False,
@@ -490,8 +490,8 @@ class AsyncDatabaseManager:
     def __init__(
         self,
         connection_string: str,
-        pool_size: int = 10,
-        max_overflow: int = 20,
+        pool_size: int = 20,
+        max_overflow: int = 40,
         pool_recycle: int = 3600,
         pool_pre_ping: bool = True,
         echo: bool = False,
