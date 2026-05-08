@@ -208,6 +208,15 @@ class LiveConnectionManager:
         for cid in dead:
             self.disconnect(cid)
 
+    async def broadcast_signal(self, symbol: str, signal: dict) -> None:
+        """Called by signal_engine.py to push a signal to all 'signals' subscribers."""
+        await self.broadcast("signals", {"type": "signal", "data": signal})
+        try:
+            from api.social_feed import _social_feed_broadcast as _sf_broadcast
+            await _sf_broadcast(signal)
+        except Exception:  # nosec B110
+            pass
+
     async def send_to_user(self, user_id: str, channel: str, msg: dict) -> None:
         """
         Send a message only to connections belonging to a specific user.
@@ -433,19 +442,25 @@ async def _eventbus_tick_broadcaster() -> None:
                 change = ((mid - prev) / prev * 100) if prev else 0.0
                 _last_mid[symbol] = mid
 
-                tick = {
-                    "type": "price_tick",
-                    "data": {
-                        "symbol": symbol,
-                        "bid": msg.get("bid"),
-                        "ask": msg.get("ask"),
-                        "mid": mid,
-                        "spread": msg.get("spread"),
-                        "timestamp": msg.get("timestamp"),
-                        "change_pct": round(change, 4),
-                    },
+                tick_data = {
+                    "symbol": symbol,
+                    "bid": msg.get("bid"),
+                    "ask": msg.get("ask"),
+                    "mid": mid,
+                    "spread": msg.get("spread"),
+                    "timestamp": msg.get("timestamp"),
+                    "change_pct": round(change, 4),
                 }
+                tick = {"type": "price_tick", "data": tick_data}
                 await _manager.broadcast("prices", tick)
+                # Also write tick:{symbol} so ws_public.py Redis fallback chain is populated.
+                try:
+                    from cache.redis_client import get_redis as _get_redis
+                    _rc = await _get_redis()
+                    if _rc is not None:
+                        await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
+                except Exception:  # nosec B110 — non-fatal, fallback chain degrades gracefully
+                    pass
         except Exception as exc:
             delay = _retry_delays[min(attempt, len(_retry_delays) - 1)]
             logger.warning(

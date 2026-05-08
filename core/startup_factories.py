@@ -758,6 +758,31 @@ async def init_auth(s: Any) -> Any:
     # Idempotent — skips users that already exist.
     _ensure_bootstrap_users(s.db_session_factory)
 
+    # Background task: purge expired/revoked sessions daily to keep the table lean.
+    async def _purge_expired_sessions() -> None:
+        import asyncio as _asyncio
+        from datetime import datetime as _dt, timezone as _tz
+
+        while True:
+            await _asyncio.sleep(86400)  # run once per day
+            try:
+                with s.db_session_factory() as _db:
+                    now = _dt.now(_tz.utc)
+                    deleted = (
+                        _db.query(UserSession)
+                        .filter(
+                            (UserSession.expires_at < now) | (UserSession.is_revoked.is_(True))
+                        )
+                        .delete(synchronize_session=False)
+                    )
+                    _db.commit()
+                    logger.info("Session cleanup: removed %d expired/revoked rows", deleted)
+            except Exception as _exc:
+                logger.warning("Session cleanup failed (non-fatal): %s", _exc)
+
+    t = asyncio.create_task(_purge_expired_sessions())
+    s.background_tasks.append(t)
+
     return svc
 
 
@@ -891,16 +916,41 @@ async def init_broker(s: Any) -> Any:
         if mt5_broker is not None:
             await _publish_broker_status(broker_type="mt5", connected=True)
             return mt5_broker
-        # Fall through to paper broker so startup is not fatal if MT5 is unavailable.
+        logger.error(
+            "[BROKER] MT5 connection failed (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD). "
+            "Set FALLBACK_TO_PAPER=true to allow automatic paper-trading fallback."
+        )
+        if os.getenv("FALLBACK_TO_PAPER", "false").lower() not in ("1", "true", "yes"):
+            raise RuntimeError(
+                "Configured broker 'mt5' is unavailable and FALLBACK_TO_PAPER is not set. "
+                "Fix broker credentials or set FALLBACK_TO_PAPER=true to start in paper mode."
+            )
         log_activity(
-            "MT5 broker unavailable — falling back to paper trading (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD)"
+            "MT5 broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)"
         )
 
-    if broker_type == "oanda" and oanda_token and oanda_account:
-        broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
-        if broker is not None:
-            await _publish_broker_status(broker_type="oanda", connected=True)
-            return broker
+    if broker_type == "oanda":
+        if not oanda_token or not oanda_account:
+            logger.error(
+                "[BROKER] BROKER_TYPE=oanda but BROKER_OANDA_TOKEN / BROKER_OANDA_ACCOUNT are not set. "
+                "Set FALLBACK_TO_PAPER=true to allow automatic paper-trading fallback."
+            )
+        else:
+            broker = await _try_connect_oanda(oanda_token, oanda_account, oanda_practice, log_activity)
+            if broker is not None:
+                await _publish_broker_status(broker_type="oanda", connected=True)
+                return broker
+            logger.error(
+                "[BROKER] OANDA connection failed. "
+                "Set FALLBACK_TO_PAPER=true to allow automatic paper-trading fallback."
+            )
+        # Only auto-fall-back if operator has explicitly opted in.
+        if os.getenv("FALLBACK_TO_PAPER", "false").lower() not in ("1", "true", "yes"):
+            raise RuntimeError(
+                "Configured broker 'oanda' is unavailable and FALLBACK_TO_PAPER is not set. "
+                "Fix broker credentials or set FALLBACK_TO_PAPER=true to start in paper mode."
+            )
+        log_activity("OANDA broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)")
 
     broker = await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
     await _publish_broker_status(broker_type="paper", connected=True)

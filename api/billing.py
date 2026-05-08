@@ -315,7 +315,6 @@ async def stripe_config():
 
 
 class CreatePaymentIntentRequest(BaseModel):
-    customer_id: str
     amount_usd: float
     currency: str = "USD"
     description: str = "HopeFX subscription"
@@ -328,9 +327,10 @@ class CreatePaymentIntentRequest(BaseModel):
 async def create_payment_intent(
     body: CreatePaymentIntentRequest,
     request: Request,
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Create a Stripe PaymentIntent with Radar fraud scoring and multi-currency support.
+    Create a Stripe PaymentIntent for the authenticated user.
 
     Supported currencies: USD, EUR, GBP, AED, NGN, JPY, CHF, CAD, AUD, SGD.
     Returns client_secret for frontend Stripe.js confirmation.
@@ -338,11 +338,13 @@ async def create_payment_intent(
     from monetization.stripe_live import get_stripe_client
 
     client = get_stripe_client()
+    # Derive customer_id from the authenticated user — never accept it from the request body.
+    customer_id = client.get_or_create_customer(user.sub, getattr(user, "email", None))
     user_ip = body.user_ip or request.client.host if request.client else None
     user_agent = request.headers.get("user-agent", "")
 
     result = client.create_payment_intent(
-        customer_id=body.customer_id,
+        customer_id=customer_id,
         amount_usd=Decimal(str(body.amount_usd)),
         currency=body.currency,
         description=body.description,
