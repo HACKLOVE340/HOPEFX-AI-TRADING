@@ -25,7 +25,7 @@ import {
 import type { UTCTimestamp } from 'lightweight-charts';
 import { useStore, selectIsAuth, useHasHydrated } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
-import { cn, fmtPrice } from '../../lib/utils';
+import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -253,16 +253,7 @@ export function AIChart({
       })
       .catch((err) => {
         if (!initial) return; // silent on background refresh
-        const detail = err?.response?.data?.detail ?? err?.response?.data?.message;
-        setChartError(
-          typeof detail === 'string'
-            ? detail
-            : detail
-              ? ((detail as { msg?: string; message?: string })?.msg
-                  ?? (detail as { msg?: string; message?: string })?.message
-                  ?? JSON.stringify(detail))
-              : (err?.message ?? 'Failed to load chart'),
-        );
+        setChartError(extractApiError(err, 'Failed to load chart'));
       })
       .finally(() => { if (initial) setLoading(false); });
   }, [symbol, timeframe, hydrated, isAuth]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -353,17 +344,7 @@ export function AIChart({
       setAiResult(r.data as AIResult);
       setLastAnalyzedAt(new Date().toLocaleTimeString());
     } catch (e: unknown) {
-      const errData = (e as { response?: { data?: { detail?: unknown; message?: unknown } } })?.response?.data;
-      const detail  = errData?.detail ?? errData?.message;
-      setAiError(
-        typeof detail === 'string'
-          ? detail
-          : detail
-            ? ((detail as { msg?: string; message?: string })?.msg
-                ?? (detail as { msg?: string; message?: string })?.message
-                ?? JSON.stringify(detail))
-            : ((e as { message?: string })?.message ?? 'AI analysis failed'),
-      );
+      setAiError(extractApiError(e, 'AI analysis failed'));
     } finally {
       setAnalyzing(false);
     }
