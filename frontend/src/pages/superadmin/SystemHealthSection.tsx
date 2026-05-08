@@ -97,7 +97,7 @@ const SystemHealthSection: React.FC = () => {
       setMsg(`Job ${jobId} ${action}d`);
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `Job ${action} failed`);
+      setMsg(extractApiError(e, `Job ${action} failed`));
     } finally { setBusy(null); }
   };
 

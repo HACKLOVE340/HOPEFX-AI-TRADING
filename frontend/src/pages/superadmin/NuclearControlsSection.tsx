@@ -94,7 +94,7 @@ const NuclearControlsSection: React.FC = () => {
       }
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `Action "${action}" failed`);
+      setMsg(extractApiError(e, `Action "${action}" failed`));
     } finally { setBusy(null); setConfirm(null); }
   };
 

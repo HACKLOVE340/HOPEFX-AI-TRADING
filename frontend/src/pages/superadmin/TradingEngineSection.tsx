@@ -117,7 +117,7 @@ const TradingEngineSection: React.FC = () => {
       setMsg(`Trading ${action === 'pause' ? 'paused' : 'resumed'}`);
       setTimeout(load, 1000);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `${action} failed`);
+      setMsg(extractApiError(e, `${action} failed`));
     } finally { setSaving(false); setConfirm(null); }
   };
 

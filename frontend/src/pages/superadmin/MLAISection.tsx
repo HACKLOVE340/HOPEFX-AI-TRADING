@@ -102,7 +102,7 @@ const MLAISection: React.FC = () => {
       setActionMsg(`${action} triggered for ${model}`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
-      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `${action} failed`);
+      setActionMsg(extractApiError(e, `${action} failed`));
     } finally { setBusy(null); setConfirm(null); setDeployTarget(null); }
   };
 

@@ -110,7 +110,7 @@ const ComplianceSection: React.FC = () => {
       setConfirm(null); setRejectReason('');
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `KYC ${action} failed`);
+      setMsg(extractApiError(e, `KYC ${action} failed`));
     } finally { setBusy(null); }
   };
 
