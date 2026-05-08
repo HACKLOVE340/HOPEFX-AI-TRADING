@@ -647,13 +647,39 @@ async def _record_fill(
       4. Prometheus metric increment
       5. Paper-trading gate + online learner feedback
     """
+    # Normalise result: brokers return either an Order object or a fill dict.
+    def _get(attr: str, dict_key: str | None = None) -> Any:
+        """Get attribute from Order object or key from fill dict."""
+        if hasattr(result, attr):
+            return getattr(result, attr)
+        if isinstance(result, dict):
+            return result.get(dict_key or attr)
+        return None
+
+    order_id = _get("id", "order_id") or "unknown"
+    fill_price = _get("average_fill_price", "fill_price") or 0.0
+    filled_qty = _get("filled_quantity", "quantity") or order.quantity
+
+    # Reject if broker signalled a failure status in the result.
+    result_status = _get("status")
+    if result_status in ("rejected", "error", "cancelled"):
+        reason = _get("reason") or result_status
+        logger.error(
+            "Order rejected by broker: user=%s symbol=%s side=%s status=%s reason=%s",
+            user_id, order.symbol, order.side, result_status, reason,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Order rejected: {reason}",
+        )
+
     logger.info(
         "Order placed: user=%s symbol=%s side=%s qty=%s order_id=%s",
         user_id,
         order.symbol,
         order.side,
         order.quantity,
-        result.id,
+        order_id,
     )
     await _broadcast_fill_ws(order, result)
     _send_fill_push(order, result, user_id)
@@ -663,9 +689,9 @@ async def _record_fill(
 
     return {
         "status": "success",
-        "order_id": result.id,
-        "filled_price": result.average_fill_price,
-        "filled_quantity": result.filled_quantity,
+        "order_id": order_id,
+        "filled_price": fill_price,
+        "filled_quantity": filled_qty,
     }
 
 

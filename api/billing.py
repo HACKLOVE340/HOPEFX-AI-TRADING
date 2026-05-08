@@ -300,7 +300,8 @@ async def stripe_webhook(request: Request):
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
-    return {"received": True, "event_type": event.get("type"), "result": result}
+    logger.info("Stripe webhook processed: event_type=%s result_status=%s", event.get("type"), result.get("status") if isinstance(result, dict) else "ok")
+    return {"received": True}
 
 
 @router.get("/stripe/config")

@@ -314,7 +314,7 @@ def _task(**kwargs):
 # ── ML tasks ─────────────────────────────────────────────────────────────────
 
 
-@_task(name="celery_app.ml_hourly_online_update", queue="ml")
+@_task(name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360)
 def ml_hourly_online_update(self=None):
     """
     Incremental online-learning update for all configured symbols.
@@ -340,7 +340,7 @@ def ml_hourly_online_update(self=None):
         raise
 
 
-@_task(name="celery_app.ml_daily_full_retrain", queue="ml")
+@_task(name="celery_app.ml_daily_full_retrain", queue="ml", soft_time_limit=3600, time_limit=4200)
 def ml_daily_full_retrain(self=None):
     """
     Full model retrain on the complete historical dataset.
@@ -367,7 +367,7 @@ def ml_daily_full_retrain(self=None):
 # ── Billing tasks ─────────────────────────────────────────────────────────────
 
 
-@_task(name="celery_app.subscription_expiry_check", queue="billing")
+@_task(name="celery_app.subscription_expiry_check", queue="billing", soft_time_limit=120, time_limit=180)
 def subscription_expiry_check(self=None):
     """
     Scan all subscriptions and downgrade expired ones to the free tier.
@@ -405,7 +405,7 @@ def subscription_expiry_check(self=None):
         raise
 
 
-@_task(name="celery_app.affiliate_commission_payout", queue="billing")
+@_task(name="celery_app.affiliate_commission_payout", queue="billing", soft_time_limit=300, time_limit=360)
 def affiliate_commission_payout(self=None):
     """
     Process pending affiliate commission payouts.

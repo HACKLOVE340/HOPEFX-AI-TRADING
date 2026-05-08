@@ -478,14 +478,16 @@ async def get_user_trades(
 async def impersonate_user(
     user_id: str,
     request: Request,
-    admin: TokenPayload = Depends(_require_admin_dep),
+    admin: TokenPayload = Depends(require_role("superadmin")),
 ):
     """
     Generate a short-lived JWT impersonation token for support purposes.
 
     The token carries an 'impersonated_by' claim so all downstream actions
     are attributed to the admin in the audit log.
-    Admin only. Token expires in 5 minutes.
+    Requires superadmin role to prevent privilege escalation (an admin
+    impersonating a superadmin would gain elevated privileges).
+    Token expires in 5 minutes.
     """
     _log_audit(admin.sub, "user.impersonated", f"Admin {admin.sub} impersonating {user_id}", ip=_client_ip(request))
 
@@ -529,8 +531,8 @@ async def impersonate_user(
 async def get_audit_log(
     page: int = 1,
     limit: int = 50,
-    user_id: str | None = None,
-    event_type: str | None = None,
+    user_id: str | None = Query(None, max_length=255),
+    event_type: str | None = Query(None, max_length=100),
     admin: TokenPayload = Depends(_require_admin_dep),
 ):
     """Return paginated audit log with optional filters. Admin only."""
