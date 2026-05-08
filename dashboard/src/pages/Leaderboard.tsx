@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Trophy, Medal, TrendingUp, Users, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { extractApiError } from '../lib/utils'
 
 interface LeaderboardEntry {
   id: string
@@ -37,7 +38,7 @@ export function Leaderboard() {
       setRankings(data)
       setFetchState(data.length === 0 ? 'empty' : 'ok')
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unknown error')
+      setErrorMsg(extractApiError(err, 'Unknown error'))
       setFetchState('error')
     }
   }, [token])

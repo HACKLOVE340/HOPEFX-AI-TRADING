@@ -9,6 +9,7 @@ import {
   AlertTriangle, Loader2,
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import { extractApiError } from '../lib/utils'
 
 interface FeedItem {
   signal_id: string
@@ -73,7 +74,7 @@ export default function SocialFeed() {
       setFeed(items)
       setFetchState(items.length === 0 ? 'empty' : 'ok')
     } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : 'Unknown error')
+      setErrorMsg(extractApiError(err, 'Unknown error'))
       setFetchState('error')
     }
   }, [])
