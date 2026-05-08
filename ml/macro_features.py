@@ -100,13 +100,79 @@ MACRO_COLUMNS: list[str] = [
 ]
 
 
+def _load_macro_from_csv(start: datetime, end: datetime) -> pd.DataFrame:
+    """
+    Load macro data from data/macro/*.csv files as fallback when
+    Yahoo Finance is unavailable (network-restricted environments).
+
+    CSV format: date,value  (e.g. dxy_daily.csv, vix_daily.csv)
+
+    Mapping from CSV filenames to series names expected by add_macro_features():
+        dxy_daily.csv       → dxy
+        us10y_daily.csv     → yield_10y
+        us2y_daily.csv      → yield_5y  (2Y used as proxy for 5Y)
+        vix_daily.csv       → vix
+        gold_etf_flow.csv   → gold_etf  (flow as proxy for price momentum)
+    """
+    from pathlib import Path
+
+    _CSV_MAP: dict[str, str] = {
+        "dxy_daily.csv": "dxy",
+        "us10y_daily.csv": "yield_10y",
+        "us2y_daily.csv": "yield_5y",
+        "vix_daily.csv": "vix",
+        "gold_etf_flow.csv": "gold_etf",
+    }
+
+    # Resolve data/macro relative to repo root (two levels up from ml/)
+    macro_dir = Path(__file__).parent.parent / "data" / "macro"
+    frames: dict[str, pd.Series] = {}
+
+    for fname, series_name in _CSV_MAP.items():
+        fpath = macro_dir / fname
+        if not fpath.exists():
+            logger.debug("Macro CSV not found: %s — skipping %s", fpath, series_name)
+            continue
+        try:
+            raw = pd.read_csv(fpath, parse_dates=["date"], index_col="date")
+            raw.index = pd.to_datetime(raw.index).tz_localize(None)
+            # Filter to requested date range (inclusive, with buffer)
+            mask = (raw.index >= pd.Timestamp(start).tz_localize(None)) & (
+                raw.index <= pd.Timestamp(end).tz_localize(None)
+            )
+            series = raw.loc[mask, "value"].rename(series_name)
+            if len(series) > 0:
+                frames[series_name] = series
+                logger.debug("Loaded macro CSV %s: %d rows (%s → %s)",
+                             fname, len(series),
+                             series.index[0].date(), series.index[-1].date())
+        except Exception as exc:
+            logger.warning("Failed to load macro CSV %s: %s", fname, exc)
+
+    if not frames:
+        return pd.DataFrame()
+
+    df = pd.concat(frames.values(), axis=1).ffill()
+    logger.info(
+        "Macro data (CSV fallback): %d bars, %d series (%s → %s)",
+        len(df), len(df.columns),
+        df.index[0].date() if len(df) else "n/a",
+        df.index[-1].date() if len(df) else "n/a",
+    )
+    return df
+
+
 def fetch_macro_history(
     start: datetime,
     end: datetime | None = None,
     interval: str = "1d",
 ) -> pd.DataFrame:
     """
-    Download macro time series from Yahoo Finance.
+    Download macro time series from Yahoo Finance, with CSV fallback.
+
+    Priority:
+      1. Yahoo Finance (live, full series) — DXY, VIX, yields, SPX, gold ETF, etc.
+      2. data/macro/*.csv (pre-downloaded, covers DXY/VIX/yields/gold ETF flow)
 
     Only forward-fill is applied — never backward-fill — so pre-history bars
     (e.g. pre-1990 VIX) remain NaN and are zeroed downstream after reindex.
@@ -115,46 +181,48 @@ def fetch_macro_history(
 
     try:
         import yfinance as yf
-    except ImportError:
-        logger.warning("yfinance not installed — macro features unavailable")
-        return pd.DataFrame()
 
-    frames: dict[str, pd.Series] = {}
-    for name, ticker in _MACRO_TICKERS.items():
-        try:
-            raw = yf.download(
-                ticker,
-                start=start.strftime("%Y-%m-%d"),
-                end=(end + timedelta(days=1)).strftime("%Y-%m-%d"),
-                interval=interval,
-                progress=False,
-                auto_adjust=True,
+        frames: dict[str, pd.Series] = {}
+        for name, ticker in _MACRO_TICKERS.items():
+            try:
+                raw = yf.download(
+                    ticker,
+                    start=start.strftime("%Y-%m-%d"),
+                    end=(end + timedelta(days=1)).strftime("%Y-%m-%d"),
+                    interval=interval,
+                    progress=False,
+                    auto_adjust=True,
+                )
+                if raw.empty:
+                    logger.debug("No data for %s (%s)", ticker, name)
+                    continue
+                close = raw["Close"]
+                if hasattr(close, "squeeze"):
+                    close = close.squeeze()
+                close.index = pd.to_datetime(close.index).tz_localize(None)
+                frames[name] = close.rename(name)
+            except Exception as exc:
+                logger.debug("Failed to fetch %s (%s): %s", ticker, name, exc)
+
+        if frames:
+            df = pd.concat(frames.values(), axis=1).ffill()
+            logger.info(
+                "Macro data (Yahoo Finance): %d bars, %d series (%s → %s)",
+                len(df), len(df.columns),
+                df.index[0].date() if len(df) else "n/a",
+                df.index[-1].date() if len(df) else "n/a",
             )
-            if raw.empty:
-                logger.debug("No data for %s (%s)", ticker, name)
-                continue
-            close = raw["Close"]
-            if hasattr(close, "squeeze"):
-                close = close.squeeze()
-            close.index = pd.to_datetime(close.index).tz_localize(None)
-            frames[name] = close.rename(name)
-        except Exception as exc:
-            logger.warning("Failed to fetch %s (%s): %s", ticker, name, exc)
+            return df
 
-    if not frames:
-        logger.warning("No macro data fetched — all macro features will be zero")
-        return pd.DataFrame()
+        logger.info("Yahoo Finance returned no data — falling back to local CSVs")
+    except Exception as exc:
+        logger.info("Yahoo Finance unavailable (%s) — falling back to local CSVs", exc)
 
-    # Forward-fill only: never bfill (would inject future data into past bars)
-    df = pd.concat(frames.values(), axis=1).ffill()  # healer: ignore — ffill only, no bfill, no future data injection
-    logger.info(
-        "Macro data: %d bars, %d series (%s → %s)",
-        len(df),
-        len(df.columns),
-        df.index[0].date() if len(df) else "n/a",
-        df.index[-1].date() if len(df) else "n/a",
-    )
-    return df
+    # CSV fallback — always available in network-restricted environments
+    csv_df = _load_macro_from_csv(start, end)
+    if csv_df.empty:
+        logger.warning("No macro data available from Yahoo Finance or local CSVs")
+    return csv_df
 
 
 def add_macro_features(

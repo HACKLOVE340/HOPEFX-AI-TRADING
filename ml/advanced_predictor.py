@@ -836,7 +836,13 @@ class HybridEnsemblePredictor:
         try:
             from research.pipeline.models_deep import DeepPredictor
 
-            model_path = Path(__file__).parent / "saved_models" / "lstm_predictor.pt"
+            import os as _os
+            _lstm_env = _os.getenv("LSTM_MODEL_PATH", "")
+            model_path = (
+                Path(_lstm_env)
+                if _lstm_env
+                else Path(__file__).parent / "saved_models" / "lstm_signal.pt"
+            )
             if not model_path.exists():
                 return 0.5
             dp = DeepPredictor.load(model_path)
