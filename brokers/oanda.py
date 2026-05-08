@@ -151,7 +151,13 @@ def _resolve_env(value: Any) -> str:
 def _units(direction: str, quantity: float) -> int:
     """OANDA uses signed units: positive = buy, negative = sell."""
     qty = abs(quantity)
-    return int(qty) if direction.lower() in ("long", "buy") else -int(qty)
+    rounded = round(qty)
+    if abs(rounded - qty) > 0.01:
+        logger.warning(
+            "Quantity rounded from %.4f to %d units (%.4f lost) for %s order",
+            qty, rounded, qty - rounded, direction,
+        )
+    return rounded if direction.lower() in ("long", "buy") else -rounded
 
 
 # ── OANDABroker (async) ───────────────────────────────────────────────────────
@@ -328,6 +334,21 @@ class OANDABroker:
             price = order_request.get("mid_price")
             if price:
                 order_body["price"] = f"{float(price):.5f}"
+
+        # Attach stop-loss and take-profit if provided — these become OCO orders
+        # on OANDA's side and are guaranteed to execute even if connection drops.
+        sl_price = order_request.get("stop_loss") or order_request.get("sl_price")
+        tp_price = order_request.get("take_profit") or order_request.get("tp_price")
+        if sl_price is not None:
+            order_body["stopLossOnFill"] = {
+                "price": f"{float(sl_price):.5f}",
+                "timeInForce": "GTC",
+            }
+        if tp_price is not None:
+            order_body["takeProfitOnFill"] = {
+                "price": f"{float(tp_price):.5f}",
+                "timeInForce": "GTC",
+            }
 
         payload = {"order": order_body}
 

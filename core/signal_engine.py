@@ -1119,6 +1119,7 @@ def _enrich_with_signal_score(
     signal_payload: dict[str, Any],
     ohlcv_proxy: "pd.DataFrame | None",
     symbol: str,
+    macro_df: "pd.DataFrame | None" = None,
 ) -> None:
     """
     Compute multi-factor signal strength score and inject results into payload.
@@ -1137,7 +1138,7 @@ def _enrich_with_signal_score(
         score_result = get_signal_scorer().score(
             signal_payload=signal_payload,
             ohlcv=ohlcv_proxy,
-            macro_df=None,  # macro will be integrated separately when available
+            macro_df=macro_df,
             symbol=symbol,
         )
         signal_payload["signal_strength_score"] = round(score_result.composite, 4)
@@ -1402,18 +1403,37 @@ async def _place_order_and_notify(
       - Paper trading gate fill counter
       - Online learner Phase-3 feedback
     """
-    order = await broker.place_market_order(
-        symbol=symbol,
-        side=direction.lower(),
-        quantity=quantity,
-    )
+    try:
+        order = await broker.place_market_order(
+            symbol=symbol,
+            side=direction.lower(),
+            quantity=quantity,
+        )
+    except Exception as broker_exc:
+        logger.error(
+            "Auto-trade broker call failed — order NOT placed: %s %s qty=%s error=%s",
+            direction, symbol, quantity, broker_exc,
+        )
+        return
+
+    # Validate the order result before recording the fill.
+    order_status = getattr(order, "status", None) or (order.get("status") if isinstance(order, dict) else None)
+    if order_status in ("rejected", "error", "cancelled"):
+        reason = getattr(order, "reason", None) or (order.get("reason") if isinstance(order, dict) else "unknown")
+        logger.error(
+            "Auto-trade order rejected: %s %s qty=%s status=%s reason=%s",
+            direction, symbol, quantity, order_status, reason,
+        )
+        return
+
+    order_id = getattr(order, "id", None) or (order.get("order_id") if isinstance(order, dict) else "unknown")
     logger.info(
         "Auto-trade executed: %s %s confidence=%.2f qty=%s order_id=%s",
         direction,
         symbol,
         signal_payload["confidence"],
         quantity,
-        order.id,
+        order_id,
     )
 
     _log_compliance(app_state, symbol, direction, quantity, signal_payload)
@@ -1803,7 +1823,14 @@ async def _tick(app_state: Any) -> None:
         # alignment + regime suitability + MTF confluence + volatility quality.
         # Score is added to the payload for WebSocket display and auto-trade gate.
         ohlcv_proxy = _build_ohlcv_proxy(data)
-        _enrich_with_signal_score(signal_payload, ohlcv_proxy, symbol)
+        # Fetch live macro features so macro_alignment dimension activates.
+        _scorer_macro: pd.DataFrame | None = None
+        try:
+            _scorer_ohlcv = _build_ohlcv_df(data)
+            _scorer_macro = _fetch_macro_df(_scorer_ohlcv, symbol)
+        except Exception as _sm_exc:
+            logger.debug("macro fetch for scorer failed (non-fatal): %s", _sm_exc)
+        _enrich_with_signal_score(signal_payload, ohlcv_proxy, symbol, macro_df=_scorer_macro)
 
         # ── Factor Attribution ────────────────────────────────────────────────
         # Append live portfolio factor attribution (market/size/value betas and

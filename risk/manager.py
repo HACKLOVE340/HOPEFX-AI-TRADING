@@ -509,6 +509,10 @@ class RiskManager:
         # Mutable open-positions list (tests append dicts to rm.open_positions).
         self._open_positions_list: list[Any] = []
 
+        # Lock protecting all mutable state: open_positions, equity, P&L, halt.
+        # Must be acquired for any read-modify-write on _state or _halt.
+        self._state_lock: threading.Lock = threading.Lock()
+
         # Precise drawdown tracker (trailing HWM + daily reset)
         try:
             from risk.drawdown_tracker import DrawdownTracker
@@ -670,13 +674,17 @@ class RiskManager:
 
     def notify_position_opened(self, symbol: str) -> None:
         """Called when a new position is opened."""
-        self._state.open_positions += 1
-        logger.info("Position opened for %s — open_positions=%d", symbol, self._state.open_positions)
+        with self._state_lock:
+            self._state.open_positions += 1
+            count = self._state.open_positions
+        logger.info("Position opened for %s — open_positions=%d", symbol, count)
 
     def notify_position_closed(self, symbol: str) -> None:
         """Called when a position is closed."""
-        self._state.open_positions = max(0, self._state.open_positions - 1)
-        logger.info("Position closed for %s — open_positions=%d", symbol, self._state.open_positions)
+        with self._state_lock:
+            self._state.open_positions = max(0, self._state.open_positions - 1)
+            count = self._state.open_positions
+        logger.info("Position closed for %s — open_positions=%d", symbol, count)
 
     def size_order(self, signal) -> PositionSizingResult:
         """
@@ -834,6 +842,12 @@ class RiskManager:
 
         Non-blocking: returns sizing unchanged on any error.
         """
+        if self._halt or self._trading_halted:
+            return PositionSizingResult(
+                symbol=sizing.symbol, direction=sizing.direction, quantity=0.0,
+                notional_usd=0.0, approved=False, reason="halted",
+            )
+
         _FACTOR_VAR_LIMIT = float(os.getenv("RISK_FACTOR_VAR_LIMIT", "0.40"))
 
         try:
@@ -999,9 +1013,24 @@ class RiskManager:
 
         # Temporarily update equity so sizing reflects the supplied balance.
         prev_equity = self._state.account_equity
-        self._state.account_equity = equity
+        with self._state_lock:
+            self._state.account_equity = equity
         result = self.size_order(sig)
-        self._state.account_equity = prev_equity
+        with self._state_lock:
+            self._state.account_equity = prev_equity
+
+        # Clamp result quantity so an inflated equity argument can't produce a
+        # position larger than _MAX_POSITION_PCT of the true account equity.
+        if prev_equity > 0 and result.quantity > 0 and result.notional_usd > 0:
+            max_notional = prev_equity * _MAX_POSITION_PCT
+            if result.notional_usd > max_notional:
+                scale = max_notional / result.notional_usd
+                result.quantity = result.quantity * scale
+                result.notional_usd = max_notional
+                logger.debug(
+                    "calculate_position_size: clamped to %.4f qty (equity cap %.0f)",
+                    result.quantity, max_notional,
+                )
 
         # Patch stop/take-profit if supplied
         if stop_loss_price is not None:
