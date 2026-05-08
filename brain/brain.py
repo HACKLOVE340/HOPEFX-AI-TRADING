@@ -474,7 +474,7 @@ class HOPEFXBrain:
                             for p in (positions or [])
                         }
                         self.state.open_trades_count = len(positions or [])
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         logger.warning("Broker timeout getting positions")
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
@@ -500,7 +500,7 @@ class HOPEFXBrain:
                             }
                             for o in (orders or [])
                         ]
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         logger.warning("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
@@ -872,7 +872,7 @@ class HOPEFXBrain:
             # Limit to max 5 signals per cycle
             await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             global _decision_timeout_last_logged
             now = time.monotonic()
             if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
@@ -995,7 +995,7 @@ class HOPEFXBrain:
                         if success:
                             logger.info("Closed position %s", position_id)
 
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 logger.error("Signal execution timeout: %s", signal.get("symbol"))
 
             except Exception as e:

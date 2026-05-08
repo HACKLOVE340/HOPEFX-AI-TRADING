@@ -450,7 +450,7 @@ class PolygonProvider(DataProvider):
 
                         yield tick
 
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 logger.warning("Polygon heartbeat timeout")
                 raise
             except Exception as e:

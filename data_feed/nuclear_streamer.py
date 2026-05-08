@@ -797,7 +797,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     # Send a ping to keep the connection alive.
                     await ws.ping()
                     continue
@@ -853,7 +853,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     await ws.ping()
                     continue
 
@@ -934,7 +934,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     await ws.ping()
                     continue
 

@@ -153,7 +153,7 @@ class HealthChecker:
             self._last_results[name] = result
             return result
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             result = HealthCheck(
                 name=name,
                 status=HealthStatus.DEGRADED,
@@ -333,7 +333,7 @@ class HealthChecker:
                 message="Cache unhealthy — using in-memory fallback",
                 details={"using_fallback": True},
             )
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             return HealthCheck(
                 name="cache",
                 status=HealthStatus.DEGRADED,

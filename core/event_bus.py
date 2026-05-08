@@ -571,7 +571,7 @@ class EventBus:
                             ignore_subscribe_messages=True,
                             timeout=1.0,
                         )
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         # No message within the poll window — normal for idle channels
                         continue
                     except Exception:

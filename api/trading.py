@@ -1201,7 +1201,7 @@ async def modify_position(
             ),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("modify_position failed: %s", exc)
@@ -1247,7 +1247,7 @@ async def partial_close_position(
             else partial_fn(position_id, req.quantity),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("partial_close_position failed: %s", exc)
@@ -1337,7 +1337,7 @@ async def cancel_order(
             else cancel_fn(order_id),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("cancel_order failed: %s", exc)
@@ -1380,7 +1380,7 @@ async def modify_order(
             else modify_fn(order_id, **kwargs),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("modify_order failed: %s", exc)
@@ -2024,7 +2024,7 @@ async def get_ohlcv(
                         }
                         for d in data
                     ]
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
         except Exception as exc:
             logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)

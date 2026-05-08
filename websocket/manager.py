@@ -94,7 +94,7 @@ class WebSocketManager:
 
         try:
             raw = await asyncio.wait_for(websocket.recv(), timeout=_AUTH_TIMEOUT)
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             logger.warning("WS auth timeout — closing connection")
             await self._reject(websocket, "auth_timeout")
             return False

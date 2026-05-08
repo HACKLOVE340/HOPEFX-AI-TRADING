@@ -390,7 +390,7 @@ class ProductionDataEngine:
                     return True
                 # Out-of-range price — log and retry without double-penalising health
                 logger.debug("Provider '%s' returned out-of-range price: %s", provider, price)
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 logger.warning(
                     "Provider '%s' timed out (attempt %d/%d)",
                     provider,

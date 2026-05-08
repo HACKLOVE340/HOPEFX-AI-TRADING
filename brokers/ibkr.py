@@ -192,7 +192,7 @@ class IBKRBroker:
                 self._cfg.paper,
             )
             return True
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             logger.error("IBKRBroker: connect timeout after %.0fs", _CONNECT_TIMEOUT)
             return False
         except Exception as exc:
