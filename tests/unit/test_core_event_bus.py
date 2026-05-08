@@ -224,9 +224,11 @@ async def test_event_bus_publish_degraded_uses_local_fallback():
     eb._degraded = True
     received = []
     _local_bus.subscribe_local(CH_TICK, lambda m: received.append(m))
+    before = eb._metrics["published"]
     await eb.publish(CH_TICK, {"type": "tick", "bid": 1901.0})
-    # Local fallback should have delivered
-    assert eb._metrics["errors"] == 1
+    # Degraded mode routes to local fallback and counts as published, not error.
+    assert eb._metrics["published"] == before + 1
+    assert eb._metrics["errors"] == 0
 
 
 @pytest.mark.asyncio
@@ -427,4 +429,10 @@ def test_channel_constants():
     assert CH_SIGNAL == "hopefx:signal"
     assert CH_ORDER == "hopefx:order"
     assert CH_BREACH == "hopefx:breach"
-    assert len(ALL_CHANNELS) == 4
+    # Core channels plus microstructure, volume_delta, risk, equity, news,
+    # sentiment, system, heartbeat added for chart-bot and WS broadcasting.
+    assert len(ALL_CHANNELS) == 12
+    assert "hopefx:tick" in ALL_CHANNELS
+    assert "hopefx:signal" in ALL_CHANNELS
+    assert "hopefx:microstructure" in ALL_CHANNELS
+    assert "hopefx:sentiment" in ALL_CHANNELS

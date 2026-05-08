@@ -1051,6 +1051,8 @@ class TestAssessRiskAndSize:
             "probability": 0.72,
             "confidence": 0.75,
             "direction": "BUY",
+            # TRENDING_UP has scalar 1.0 so recommended_size is returned unchanged.
+            "regime": "TRENDING_UP",
         }
 
     async def test_risk_manager_blocks_returns_none(self):

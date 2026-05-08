@@ -302,9 +302,17 @@ class TestFireRollbackAlert:
         mock_app_state = MagicMock()
         mock_app_state.alert_engine = mock_ae
 
-        with patch.dict(sys.modules, {"core.outbox": MagicMock(write_outbox_event_standalone=MagicMock())}):
-            with patch.dict(sys.modules, {"app": MagicMock(app_state=mock_app_state)}):
-                self.mon._fire_rollback_alert("v2", "v1", "reason")
+        # _fire_rollback_alert does `from core.app_state import app_state` inside
+        # the function body.  Replace both sys.modules entries so the import
+        # resolves to our mock regardless of whether the module is cached.
+        mock_cas_module = MagicMock()
+        mock_cas_module.app_state = mock_app_state
+        mock_outbox = MagicMock(write_outbox_event_standalone=MagicMock())
+        with patch.dict(sys.modules, {
+            "core.outbox": mock_outbox,
+            "core.app_state": mock_cas_module,
+        }):
+            self.mon._fire_rollback_alert("v2", "v1", "reason")
 
         mock_ae.send_alert.assert_called_once()
 
