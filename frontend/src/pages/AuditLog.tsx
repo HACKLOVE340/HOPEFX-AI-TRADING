@@ -11,7 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase } from '../lib/utils';
+import { getWsBase, extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
@@ -170,7 +170,7 @@ const AuditLog: React.FC = () => {
       setPages(d.pages ?? 1);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      const msg = e instanceof Error ? e.message : 'Failed to load audit log';
+      const msg = extractApiError(e, 'Failed to load audit log');
       setError(msg);
     } finally {
       if (mountedRef.current) setLoading(false);
