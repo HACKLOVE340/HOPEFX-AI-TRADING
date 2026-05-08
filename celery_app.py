@@ -208,7 +208,79 @@ if _CELERY_AVAILABLE:
     )
 else:
     # Provide a no-op stub so imports don't fail when Celery is absent.
+
+    class _NoOpInspect:
+        """Returned by _NoOpControl.inspect() — all methods return None.
+
+        Callers (reliability.py, system_health.py, health_engine.py) already
+        guard against None returns, so this degrades gracefully to a
+        "no workers" / "warning" status rather than raising AttributeError.
+        """
+
+        def stats(self) -> None:
+            return None
+
+        def active(self) -> None:
+            return None
+
+        def registered(self) -> None:
+            return None
+
+        def ping(self) -> None:
+            return None
+
+        def active_queues(self) -> None:
+            return None
+
+        def reserved(self) -> None:
+            return None
+
+        def scheduled(self) -> None:
+            return None
+
+        def revoked(self) -> None:
+            return None
+
+        def conf(self) -> None:
+            return None
+
+        def report(self) -> None:
+            return None
+
+    class _NoOpControl:
+        """Stub for celery_app.control when Celery is not installed."""
+
+        def inspect(self, timeout: float = 1.0, destination: list | None = None) -> _NoOpInspect:
+            return _NoOpInspect()
+
+        def broadcast(self, command: str, **kwargs) -> None:
+            pass
+
+        def revoke(self, task_id: str, **kwargs) -> None:
+            pass
+
+        def purge(self) -> int:
+            return 0
+
+        def rate_limit(self, task_name: str, rate_limit: str, **kwargs) -> None:
+            pass
+
+        def time_limit(self, task_name: str, **kwargs) -> None:
+            pass
+
+        def ping(self, destination: list | None = None, timeout: float = 1.0) -> list:
+            return []
+
     class _NoOpCelery:  # type: ignore[no-redef]
+        """Minimal Celery stub used when the celery package is not installed.
+
+        Exposes the subset of the Celery API used by this codebase so all
+        callers can import and call methods without conditional guards.
+        """
+
+        def __init__(self) -> None:
+            self.control = _NoOpControl()
+
         def task(self, *args, **kwargs):
             def decorator(fn):
                 return fn
@@ -217,6 +289,13 @@ else:
 
         def conf(self):
             """No-op configuration accessor for the null Celery stub."""
+            return None
+
+        def send_task(self, name: str, *args, **kwargs) -> None:
+            logger.debug("Celery not installed — send_task(%s) is a no-op", name)
+            return None
+
+        def signature(self, *args, **kwargs):
             return None
 
     app = _NoOpCelery()  # type: ignore[assignment]
