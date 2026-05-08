@@ -91,8 +91,12 @@ async def _broadcast_via_bitgo(
     """
     import httpx
 
-    token = os.environ["BITGO_ACCESS_TOKEN"]
-    wallet_id = os.environ["BITGO_WALLET_ID"]
+    token = os.environ.get("BITGO_ACCESS_TOKEN")
+    if not token:
+        raise RuntimeError("BITGO_ACCESS_TOKEN environment variable is not set")
+    wallet_id = os.environ.get("BITGO_WALLET_ID")
+    if not wallet_id:
+        raise RuntimeError("BITGO_WALLET_ID environment variable is not set")
     passphrase = os.getenv("BITGO_PASSPHRASE", "")
     bitgo_env = os.getenv("BITGO_ENV", "prod")
 
@@ -159,9 +163,15 @@ async def _broadcast_via_fireblocks(
     except ImportError as exc:
         raise RuntimeError("Fireblocks integration requires PyJWT: pip install PyJWT cryptography") from exc
 
-    api_key = os.environ["FIREBLOCKS_API_KEY"]
-    secret_raw = os.environ["FIREBLOCKS_API_SECRET"]
-    vault_id = os.environ["FIREBLOCKS_VAULT_ACCOUNT_ID"]
+    api_key = os.environ.get("FIREBLOCKS_API_KEY")
+    if not api_key:
+        raise RuntimeError("FIREBLOCKS_API_KEY environment variable is not set")
+    secret_raw = os.environ.get("FIREBLOCKS_API_SECRET")
+    if not secret_raw:
+        raise RuntimeError("FIREBLOCKS_API_SECRET environment variable is not set")
+    vault_id = os.environ.get("FIREBLOCKS_VAULT_ACCOUNT_ID")
+    if not vault_id:
+        raise RuntimeError("FIREBLOCKS_VAULT_ACCOUNT_ID environment variable is not set")
 
     # Secret may be a file path or inline PEM
     if os.path.isfile(secret_raw):
@@ -235,7 +245,9 @@ async def _broadcast_via_bitcoin_rpc(
     """
     import httpx
 
-    rpc_url = os.environ["BITCOIN_RPC_URL"]
+    rpc_url = os.environ.get("BITCOIN_RPC_URL")
+    if not rpc_url:
+        raise RuntimeError("BITCOIN_RPC_URL environment variable is not set")
 
     payload = {
         "jsonrpc": "1.0",
