@@ -20,6 +20,8 @@ os.environ.setdefault(
     "SECURITY_JWT_SECRET",
     "test-only-jwt-secret-key-minimum-32-chars!!",
 )
+# Disable the startup gate so tests don't receive 503 before app_state.initialized.
+os.environ.setdefault("STARTUP_GATE", "false")
 # Raise WS rate limits so the test suite (which opens many connections) is
 # not blocked by the per-IP concurrent/rate caps.
 os.environ.setdefault("WS_MAX_CONNECTIONS_PER_IP", "200")
