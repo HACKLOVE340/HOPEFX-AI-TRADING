@@ -166,7 +166,18 @@ class OrderStatus(Enum):
 
 @dataclass
 class Order:
-    """Order data structure"""
+    """Order data structure.
+
+    Canonical fields
+    ----------------
+    average_price : float | None
+        Fill price set by the broker after execution.
+
+    Aliases (read-only properties)
+    --------------------------------
+    average_fill_price  — same as average_price (legacy name used by brokers/__init__.py)
+    filled_price        — same as average_price (legacy name used by cme_comex, cpp_shim)
+    """
 
     id: str
     symbol: str
@@ -183,16 +194,35 @@ class Order:
 
     @property
     def average_fill_price(self) -> float | None:
-        """Alias for average_price."""
+        """Alias for average_price (brokers/__init__.py legacy name)."""
         return self.average_price
+
+    @property
+    def filled_price(self) -> float | None:
+        """Alias for average_price (cme_comex / cpp_shim legacy name)."""
+        return self.average_price
+
+
+# Canonical side values accepted by Position.from_side_str()
+_SIDE_BUY_ALIASES = frozenset({"BUY", "LONG", "buy", "long"})
+_SIDE_SELL_ALIASES = frozenset({"SELL", "SHORT", "sell", "short"})
 
 
 @dataclass
 class Position:
-    """Position data structure"""
+    """Position data structure.
+
+    ``side`` is normalised to ``OrderSide`` (BUY / SELL) on construction.
+    Legacy string values "LONG"/"SHORT"/"BUY"/"SELL" are accepted and
+    automatically converted by ``__post_init__`` — no callers need changing.
+
+    Backward-compat helpers
+    -----------------------
+    side_str  — returns "LONG" / "SHORT" for code that expects the old format
+    """
 
     symbol: str
-    side: str  # "LONG" or "SHORT"
+    side: "OrderSide | str"  # accepts str; normalised to OrderSide in __post_init__
     quantity: float
     entry_price: float
     current_price: float
@@ -202,6 +232,47 @@ class Position:
     take_profit: float | None = None
     timestamp: datetime | None = None
     id: str = ""  # position identifier (defaults to symbol if empty)
+
+    def __post_init__(self) -> None:
+        """Normalise side to OrderSide enum regardless of what was passed."""
+        if isinstance(self.side, str):
+            _s = self.side.upper()
+            if _s in _SIDE_BUY_ALIASES:
+                object.__setattr__(self, "side", OrderSide.BUY)
+            elif _s in _SIDE_SELL_ALIASES:
+                object.__setattr__(self, "side", OrderSide.SELL)
+            else:
+                raise ValueError(
+                    f"Position.side {self.side!r} is not recognised. "
+                    "Use 'BUY', 'SELL', 'LONG', or 'SHORT'."
+                )
+
+    @property
+    def side_str(self) -> str:
+        """Return 'LONG' / 'SHORT' for legacy callers that expect the old str format."""
+        return "LONG" if self.side == OrderSide.BUY else "SHORT"
+
+    @classmethod
+    def from_side_str(
+        cls,
+        symbol: str,
+        side: "str | OrderSide",
+        quantity: float,
+        entry_price: float,
+        current_price: float,
+        unrealized_pnl: float,
+        **kwargs,
+    ) -> "Position":
+        """Construct a Position accepting 'LONG'/'SHORT'/'BUY'/'SELL' or OrderSide."""
+        return cls(
+            symbol=symbol,
+            side=side,  # __post_init__ handles normalisation
+            quantity=quantity,
+            entry_price=entry_price,
+            current_price=current_price,
+            unrealized_pnl=unrealized_pnl,
+            **kwargs,
+        )
 
 
 @dataclass
