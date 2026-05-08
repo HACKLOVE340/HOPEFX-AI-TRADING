@@ -1314,7 +1314,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             await _manager.send(
                 cid,
                 {
@@ -1365,7 +1365,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         _manager.authenticate(cid, user_id)
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
@@ -1527,9 +1527,10 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         msg = json.loads(raw)
-    except (TimeoutError, json.JSONDecodeError):
-        await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
-        await _safe_ws_close(websocket, code=4001)
+    except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+        await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
+        return
+    except WebSocketDisconnect:
         return
 
     if msg.get("type") != "auth":
@@ -1583,12 +1584,12 @@ async def ws_nuclear(websocket: WebSocket) -> None:
 
     def _get_nuclear_state() -> dict | None:
         try:
-            from api.nuclear import _get_supervisor as _sup, _get_orchestrator as _orch
+            from brain.nuclear_supervisor import get_nuclear_supervisor as _get_sup
+            from risk.orchestrator import risk_orchestrator as _orch_singleton
 
-            sup = _sup()
-            orch = _orch()
+            sup = _get_sup()
             sup_status = sup.get_status() if sup else {}
-            orch_status = orch.get_status() if orch else {}
+            orch_status = _orch_singleton.get_status() if _orch_singleton else {}
             return {
                 "severity": sup_status.get("nuclear_level", 0),
                 "action": sup_status.get("action", "normal"),
@@ -1666,7 +1667,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
+            except (TimeoutError, asyncio.TimeoutError):  # nosec B110 — poll timeout is expected; loop continues
                 pass
             except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
                 break
