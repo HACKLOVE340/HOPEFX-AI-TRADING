@@ -79,6 +79,31 @@ except Exception:
     _ML_AVAILABLE = False
     logger.debug("ml package unavailable — signal engine will use fallback logic")
 
+# ── Hybrid Ensemble predictor (XGBoost + LSTM + RL, Phase 5) ─────────────────
+_hybrid_predictor: Any | None = None
+_HYBRID_ENABLED: bool = os.getenv("HYBRID_ENSEMBLE_ENABLED", "true").lower() in ("1", "true", "yes")
+
+
+def _get_hybrid_predictor() -> Any | None:
+    """Return HybridEnsemblePredictor singleton (XGBoost + LSTM + RL blend)."""
+    global _hybrid_predictor
+    if not _HYBRID_ENABLED or not _ML_AVAILABLE:
+        return None
+    if _hybrid_predictor is not None:
+        return _hybrid_predictor
+    try:
+        from ml.advanced_predictor import get_hybrid_predictor
+        _hybrid_predictor = get_hybrid_predictor()
+        status = _hybrid_predictor.component_status
+        logger.info(
+            "HybridEnsemblePredictor loaded — xgb=%s lstm=%s rl=%s",
+            status.get("xgb_available"), status.get("lstm_available"), status.get("rl_available"),
+        )
+        return _hybrid_predictor
+    except Exception as exc:
+        logger.debug("HybridEnsemblePredictor unavailable: %s", exc)
+        return None
+
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
 _anomaly_store: Any | None = None
 
@@ -793,18 +818,38 @@ def _compute_ml_probability(
 
     Returns (ml_probability: float, model_version: str).
 
-    Path 1 (preferred): advanced_oos.pkl — full macro + MTF feature set.
-    Path 2 (fallback):  basic xgb_macro.pkl — stationary OHLCV features.
-    Path 3 (no model):  returns base_confidence unchanged.
+    Path 1 (preferred): HybridEnsemblePredictor — XGBoost + LSTM + RL ensemble.
+    Path 2:             AdvancedPredictor — XGBoost with full macro + MTF features.
+    Path 3 (fallback):  basic xgb_macro.pkl — stationary OHLCV features.
+    Path 4 (no model):  returns base_confidence unchanged.
     """
     if not _ML_AVAILABLE:
         return base_confidence, "none"
 
     try:
+        # Path 1: Full hybrid ensemble (XGBoost + LSTM + RL)
+        hybrid = _get_hybrid_predictor()
+        if hybrid is not None:
+            adv_predictor = get_advanced_predictor()
+            if adv_predictor is not None and adv_predictor.is_available:
+                ohlcv_df = _build_ohlcv_df(data)
+                macro_df = _fetch_macro_df(ohlcv_df)
+                try:
+                    prob = hybrid.predict_proba(ohlcv_df, macro_df=macro_df)
+                    if isinstance(prob, (int, float)) and 0.0 <= prob <= 1.0:
+                        logger.debug(
+                            "HybridEnsemble prob=%.4f for %s", prob, symbol
+                        )
+                        return float(prob), "hybrid_ensemble_v1"
+                except Exception as _he:
+                    logger.debug("HybridEnsemble predict failed (%s) — falling back to AdvancedPredictor", _he)
+
+        # Path 2: Advanced XGBoost (Phase 1-4 chain)
         adv_predictor = get_advanced_predictor()
         if adv_predictor is not None and adv_predictor.is_available:
             return _predict_advanced(adv_predictor, data, symbol, app_state)
 
+        # Path 3: Basic macro XGBoost
         active_model = get_active_model()
         model_ver = get_model_version()
         if active_model is not None:
