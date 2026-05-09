@@ -427,10 +427,21 @@ class AuthService:
                 _record(False, "user_not_found")
                 return False, "Invalid credentials", None
 
-            # Brute-force lockout — Redis TTL-based (fast path) with DB fallback
+            # Brute-force lockout — Redis counter-based (fast path, cross-pod)
+            # with DB fallback when Redis is unavailable.
+            #
+            # Redis key layout:
+            #   hopefx:auth:lockout:{user_id}   — SET when account is locked (TTL=LOCKOUT_MINUTES*60)
+            #   hopefx:auth:failures:{user_id}  — INCR counter of recent failures (same TTL)
+            #
+            # Every failed attempt increments the failures counter in Redis so
+            # all pods see the same count without a DB round-trip. When the
+            # counter reaches MAX_LOGIN_ATTEMPTS the lockout key is set.
             _LOCKOUT_KEY = f"hopefx:auth:lockout:{user.id}"
+            _FAILURES_KEY = f"hopefx:auth:failures:{user.id}"
             _LOCKOUT_TTL_SECS = LOCKOUT_MINUTES * 60
             _redis_locked = False
+            _rc = None
             try:
                 import redis as _redis_sync
                 _rc = _redis_sync.from_url(
@@ -462,11 +473,14 @@ class AuthService:
                 .count()
             )
             if recent_failures >= MAX_LOGIN_ATTEMPTS:
-                # Set Redis TTL key so subsequent checks are O(1)
-                try:
-                    _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
-                except Exception:  # nosec B110
-                    pass
+                # Mirror lockout to Redis so other pods see it immediately.
+                if _rc is not None:
+                    try:
+                        _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
+                        # Reset the failures counter — lockout key is now authoritative.
+                        _rc.delete(_FAILURES_KEY)
+                    except Exception:  # nosec B110
+                        pass
                 _record(False, "account_locked")
                 return (
                     False,
@@ -475,6 +489,21 @@ class AuthService:
                 )
 
             if not verify_password(password, user.hashed_password):
+                # Mirror this failure to Redis so all pods have an up-to-date count.
+                if _rc is not None:
+                    try:
+                        pipe = _rc.pipeline()
+                        pipe.incr(_FAILURES_KEY)
+                        # Set/refresh TTL on the failures counter so it expires
+                        # after the lockout window even if no further attempts occur.
+                        pipe.expire(_FAILURES_KEY, _LOCKOUT_TTL_SECS)
+                        results = pipe.execute()
+                        # If the counter just reached the threshold, set the lockout key.
+                        if results and results[0] >= MAX_LOGIN_ATTEMPTS:
+                            _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
+                            _rc.delete(_FAILURES_KEY)
+                    except Exception:  # nosec B110
+                        pass
                 _record(False, "wrong_password")
                 return False, "Invalid credentials", None
 
@@ -509,15 +538,21 @@ class AuthService:
             user.last_login_ip = ip_address
             _record(True)
 
-            # Clear Redis lockout key on successful login
+            # Clear Redis lockout and failures keys on successful login.
+            # _rc may already be set from the lockout check above; if not,
+            # create a fresh connection.
             try:
-                import redis as _redis_sync
-                _rc = _redis_sync.from_url(
-                    os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-                    decode_responses=True,
-                    socket_timeout=1,
+                if _rc is None:
+                    import redis as _redis_sync
+                    _rc = _redis_sync.from_url(
+                        os.getenv("REDIS_URL", "redis://localhost:6379/0"),
+                        decode_responses=True,
+                        socket_timeout=1,
+                    )
+                _rc.delete(
+                    f"hopefx:auth:lockout:{user.id}",
+                    f"hopefx:auth:failures:{user.id}",
                 )
-                _rc.delete(f"hopefx:auth:lockout:{user.id}")
             except Exception:  # nosec B110
                 pass
 
