@@ -167,11 +167,12 @@ def _create_or_update(email: str, username: str, password: str, reset: bool) -> 
 
 def _generate_token(user_id: str) -> str:
     """Generate a short-lived (15 min) JWT for immediate login verification."""
+    from auth.jwt import _get_access_token_expire_minutes
     from datetime import timedelta
 
     return create_access_token(
         data={"sub": user_id, "role": "superadmin", "type": "access"},
-        expires_delta=timedelta(minutes=15),
+        expires_delta=timedelta(minutes=_get_access_token_expire_minutes()),
     )
 
 

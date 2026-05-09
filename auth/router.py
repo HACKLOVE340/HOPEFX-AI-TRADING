@@ -627,10 +627,10 @@ async def login(
     _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
 
     if access_token:
-        # Cookie max_age must match the token TTL — read the same env var the
-        # service uses (default 60 min, not 15) so the cookie doesn't expire
-        # before the token does, which would force unnecessary re-logins.
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
+        # Cookie max_age must match the JWT TTL exactly — use the canonical
+        # function so both always read the same env var with the same default.
+        from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
+        _max_age = _jwt_expire_min() * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=access_token,
@@ -679,13 +679,12 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
-    # Rotate the access token cookie to match the new token.
-    # Use the same env var and default (60 min) as /login so the cookie
-    # lifetime is always consistent with the token TTL.
+    # Rotate the access token cookie to match the new token TTL exactly.
     new_access = tokens.get("access_token", "")
     if new_access:
         _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
+        from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
+        _max_age = _jwt_expire_min() * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=new_access,
