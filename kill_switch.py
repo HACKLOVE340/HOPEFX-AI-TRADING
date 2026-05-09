@@ -348,11 +348,32 @@ class KillSwitch:
 
         The check is best-effort: failure never prevents startup.
         """
+        await self.check_broker_cod()
+
+    async def check_broker_cod(self) -> None:
+        """
+        Public entry point: verify broker-level Cancel-on-Disconnect (CoD).
+
+        Called twice:
+          1. From ``start()`` — early check; broker may not be connected yet,
+             in which case the check is deferred (logged at DEBUG).
+          2. From ``app.startup_event()`` after all components are initialised
+             — broker is guaranteed to be connected at this point.
+
+        Resolution order for the broker object:
+          1. ``execution.engine.get_active_broker()``
+          2. ``execution.smart_router.get_router()._primary_broker``
+          3. ``core.app_state.app_state.broker``
+
+        The check is best-effort: failure never prevents startup.
+        """
+        broker = None
+
         try:
             from execution.engine import get_active_broker
             broker = get_active_broker()
         except Exception:
-            broker = None
+            pass
 
         if broker is None:
             try:
@@ -364,7 +385,14 @@ class KillSwitch:
                 pass
 
         if broker is None:
-            logger.debug("KillSwitch._check_broker_cod: no active broker yet — CoD check deferred")
+            try:
+                from core.app_state import app_state as _app_state
+                broker = getattr(_app_state, "broker", None)
+            except Exception:
+                pass
+
+        if broker is None:
+            logger.debug("KillSwitch.check_broker_cod: no active broker yet — CoD check deferred")
             return
 
         broker_name = getattr(broker, "name", type(broker).__name__)

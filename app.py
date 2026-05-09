@@ -690,6 +690,18 @@ async def startup_event():
         logger.info("API SERVER READY")
         logger.info("=" * 70)
 
+        # Re-run broker-level CoD check now that the broker is connected.
+        # The first check in kill_switch.start() runs before the broker
+        # connects and is silently deferred; this second check runs after
+        # all components are initialised so the broker is guaranteed to be
+        # available.  Failure is non-fatal — logged at WARNING only.
+        try:
+            await kill_switch.check_broker_cod()
+            _tasks_done.append("kill_switch_cod_check")
+        except Exception as _cod_err:
+            logger.warning("kill_switch CoD post-startup check failed (non-fatal): %s", _cod_err)
+            _tasks_failed.append(f"kill_switch_cod_check: {_cod_err}")
+
         # Mark startup probe as complete so /api/health/startup returns 200
         try:
             from api.health import mark_startup_complete as _mark_startup_complete
