@@ -290,18 +290,22 @@ def require_role(minimum_role: str):
 def validate_order_symbol(symbol: str) -> str:
     """Validate symbol is in the allowed set (prevents injection via symbol field).
 
-    Normalises common alternate formats before checking:
+    Normalises common alternate formats to canonical MT5 form before checking:
       XAU/USD  -> XAUUSD
       XAU_USD  -> XAUUSD
       xauusd   -> XAUUSD
     """
-    upper = symbol.upper().strip().replace("/", "").replace("_", "").replace("-", "")
-    if upper not in ALLOWED_SYMBOLS:
+    try:
+        from utils.symbol import canonical as _canonical
+        canonical = _canonical(symbol.strip())
+    except Exception:
+        canonical = symbol.upper().strip().replace("/", "").replace("_", "").replace("-", "")
+    if canonical not in ALLOWED_SYMBOLS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Symbol '{symbol}' is not permitted. Allowed: {sorted(ALLOWED_SYMBOLS)}",
         )
-    return upper
+    return canonical
 
 
 def validate_order_quantity(quantity: float) -> float:

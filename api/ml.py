@@ -184,7 +184,8 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
             broker = getattr(app_state, "broker", None)
             if broker and hasattr(broker, "get_market_data"):
-                raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
+                from utils.symbol import canonical as _canonical
+                raw = broker.get_market_data(_canonical(symbol), "1h", lookback)
                 if raw:
                     df = pd.DataFrame(raw)
                     df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
@@ -247,7 +248,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
         "(checked price_engine, CSV files, paper broker, MarketDataRepository). "
         "Ensure the data layer is running or place a CSV in data/%s_H1.csv.",
         symbol,
-        symbol.upper().replace("/", "_").replace("-", "_"),
+        __import__("utils.symbol", fromlist=["to_oanda"]).to_oanda(symbol),
     )
     return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
@@ -729,7 +730,8 @@ async def predict(
                 )
         except ImportError:
             ...  # nosec B110
-    symbol_upper = symbol.upper().replace("-", "/")
+    from utils.symbol import canonical as _canonical
+    symbol_upper = _canonical(symbol)
     now_iso = datetime.now(UTC).isoformat()
     predictor = _get_predictor()
 

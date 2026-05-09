@@ -355,14 +355,13 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
 
     import pandas as pd
 
-    sym_key = symbol.upper().replace("/", "_").replace("-", "_")
-    if "_" not in sym_key and len(sym_key) == 6:
-        sym_key = sym_key[:3] + "_" + sym_key[3:]
+    from utils.symbol import canonical as _canonical, to_oanda as _to_oanda
+    sym_key = _to_oanda(symbol)   # OANDA form (XAU_USD) matches CSV filenames
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = [
         data_dir / f"{sym_key}_H1.csv",
-        data_dir / f"{sym_key.replace('_', '')}_H1.csv",
+        data_dir / f"{_canonical(symbol)}_H1.csv",  # fallback: no-separator form
     ]
     for csv_path in candidates:
         if csv_path.exists():
@@ -802,8 +801,9 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
     for sym in sym_list:
         if sym in series:
             continue
-        sym_key = sym.upper().replace("/", "_").replace("-", "_")
-        sym_compact = sym_key.replace("_", "")
+        from utils.symbol import canonical as _canonical, to_oanda as _to_oanda
+        sym_key = _to_oanda(sym)       # OANDA form: XAU_USD (matches CSV filenames)
+        sym_compact = _canonical(sym)  # MT5 form: XAUUSD
         candidates = [
             data_dir / f"{sym_key}_D1.csv",
             data_dir / f"{sym_key}_H1.csv",

@@ -38,7 +38,8 @@ router = APIRouter(prefix="/api/risk", tags=["Risk Calculator"])
 
 def _get_live_price(symbol: str) -> float | None:
     """Try multiple sources to get a live mid price for the symbol."""
-    sym = symbol.upper().replace("-", "_").replace("/", "_")
+    from utils.symbol import canonical as _canonical
+    sym = _canonical(symbol)  # canonical MT5 form for internal lookups
 
     # 1. Try the trading app state (fastest — already in memory)
     try:
