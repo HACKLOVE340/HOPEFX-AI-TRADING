@@ -18,15 +18,21 @@ exclude = [
 
 [lint]
 select = [
-    "E", "W", "F", "B", "S",
-    "UP",
-    "SIM",
-    "RUF",
-    "PIE",
-    "PLR",
-    "PLW",
-    "C4",
-    "N",
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "B",   # flake8-bugbear (L-9: enforced in CI via ruff)
+    "S",   # flake8-bandit (security)
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
+    "PIE", # flake8-pie
+    "PLR", # pylint refactor
+    "PLW", # pylint warnings
+    "C4",  # flake8-comprehensions
+    "N",   # pep8-naming
+    # Note: pylint W1300 (bad-format-string) is enforced separately via the
+    # "pylint W1300 gate" CI step — ruff does not cover %-format mismatches.
 ]
 ignore = [
     "E501",
