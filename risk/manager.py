@@ -293,7 +293,7 @@ class RiskState:
     open_positions: int = 0
     daily_pnl: float = 0.0
     total_pnl: float = 0.0
-    trade_day: int = 0
+    trade_day: tuple = (0, 0, 0)  # (year, month, day) — prevents month-boundary false resets
 
     @property
     def current_drawdown(self) -> float:
@@ -308,7 +308,8 @@ class RiskState:
         return max(0.0, (self.day_open_equity - self.account_equity) / self.day_open_equity)
 
     def update_equity(self, equity: float) -> None:
-        today = datetime.now(UTC).day
+        now = datetime.now(UTC)
+        today = (now.year, now.month, now.day)
         if today != self.trade_day:
             self.day_open_equity = equity
             self.trade_day = today
@@ -487,7 +488,7 @@ class RiskManager:
             account_equity=equity,
             peak_equity=equity,
             day_open_equity=equity,
-            trade_day=datetime.now(UTC).day,
+            trade_day=tuple(datetime.now(UTC).timetuple()[:3]),
         )
         self._pnl_history: deque = deque(maxlen=_VAR_WINDOW)
         self._sizing_history: list[dict] = []
@@ -2050,14 +2051,17 @@ class RiskManager:
 
     def close_position(self, position_id: str, pnl: float = 0.0) -> None:
         """Remove a position by id and record its P&L."""
-        self._open_positions_list = [p for p in self._open_positions_list if p.get("id") != position_id]
-        self._state.open_positions = len(self._open_positions_list)
-        self._state.daily_pnl += pnl
-        self._state.total_pnl += pnl
-        self._state.account_equity += pnl
-        self._state.peak_equity = max(self._state.peak_equity, self._state.account_equity)
-        if self._dd_tracker is not None:
-            self._dd_tracker.update(equity=self._state.account_equity)
+        with self._state_lock:
+            self._open_positions_list = [
+                p for p in self._open_positions_list if p.get("id") != position_id
+            ]
+            self._state.open_positions = len(self._open_positions_list)
+            self._state.daily_pnl += pnl
+            self._state.total_pnl += pnl
+            self._state.account_equity += pnl
+            self._state.peak_equity = max(self._state.peak_equity, self._state.account_equity)
+            if self._dd_tracker is not None:
+                self._dd_tracker.update(equity=self._state.account_equity)
 
     def validate_trade(
         self,

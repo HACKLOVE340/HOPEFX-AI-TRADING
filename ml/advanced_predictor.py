@@ -208,6 +208,7 @@ class AdvancedPredictor:
         self._min_bars = min_bars
         self._model: Any | None = None
         self._feature_names: list | None = None
+        self._feature_means: dict[str, float] = {}
         self._n_features: int = 176
         self._adapter: _SGDAdapter | None = None
         self._meta: dict[str, Any] = {}
@@ -412,6 +413,15 @@ class AdvancedPredictor:
                             self._feature_names = list(step.feature_names_in_)
                             self._n_features = len(self._feature_names)
                             break
+                # Extract per-feature training means from scaler in pipeline (if any)
+                self._feature_means = {}
+                if hasattr(payload, "steps"):
+                    for _, step in payload.steps:
+                        if hasattr(step, "mean_") and hasattr(step, "feature_names_in_"):
+                            self._feature_means = dict(
+                                zip(list(step.feature_names_in_), step.mean_.tolist())
+                            )
+                            break
                 self._adapter = _SGDAdapter(self._n_features)
                 logger.info(
                     "AdvancedPredictor loaded: %s  features=%d  OOS_acc=%.4f",
@@ -502,9 +512,9 @@ class AdvancedPredictor:
             return X
         missing = [c for c in self._feature_names if c not in X.columns]
         if missing:
-            logger.debug("Filling %d missing features with 0", len(missing))
+            logger.debug("Filling %d missing features with training mean (or 0)", len(missing))
             for col in missing:
-                X[col] = 0.0
+                X[col] = self._feature_means.get(col, 0.0)
         return X[self._feature_names]
 
     # ── Core prediction ───────────────────────────────────────────────────────
@@ -609,7 +619,16 @@ class AdvancedPredictor:
         # ── Base model probability ────────────────────────────────────────────
         try:
             proba = self._model.predict_proba(X)
-            base_prob = float(proba[0][1] if proba.shape[1] > 1 else proba[0][0])
+            if proba.shape[1] > 1:
+                # Resolve the "buy/positive" class index from model.classes_ when available
+                classes = getattr(self._model, "classes_", None)
+                if classes is not None and 1 in classes:
+                    pos_idx = list(classes).index(1)
+                else:
+                    pos_idx = 1
+                base_prob = float(proba[0][pos_idx])
+            else:
+                base_prob = float(proba[0][0])
             base_prob = float(np.clip(base_prob, 0.0, 1.0))
         except Exception as exc:
             logger.warning("Model predict_proba failed: %s", exc)
@@ -620,6 +639,7 @@ class AdvancedPredictor:
         if self._adapter is not None and ONLINE_LEARNING_ENABLED:
             adapter_prob = self._adapter.predict_proba(X.values[0])
             if adapter_prob is not None:
+                adapter_prob = float(np.clip(adapter_prob, 0.0, 1.0))
                 prob = (1.0 - ADAPTER_BLEND) * base_prob + ADAPTER_BLEND * adapter_prob
 
         # ── Confidence & abstain ──────────────────────────────────────────────

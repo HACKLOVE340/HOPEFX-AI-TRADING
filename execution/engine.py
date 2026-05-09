@@ -24,6 +24,7 @@ Design invariants:
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import os
 import time
@@ -139,10 +140,16 @@ class ExecutionRequest:
             raise ValueError(f"quantity must be > 0, got {self.quantity}")
         if self.order_type not in ("MARKET", "LIMIT", "STOP"):
             raise ValueError(f"order_type must be MARKET/LIMIT/STOP, got {self.order_type!r}")
-        if self.order_type == "LIMIT" and self.price is None:
-            raise ValueError("price required for LIMIT orders")
-        if self.order_type == "STOP" and self.stop_price is None:
-            raise ValueError("stop_price required for STOP orders")
+        if self.order_type == "LIMIT":
+            if self.price is None:
+                raise ValueError("price required for LIMIT orders")
+            if self.price <= 0:
+                raise ValueError(f"price must be > 0 for LIMIT orders, got {self.price}")
+        if self.order_type == "STOP":
+            if self.stop_price is None:
+                raise ValueError("stop_price required for STOP orders")
+            if self.stop_price <= 0:
+                raise ValueError(f"stop_price must be > 0 for STOP orders, got {self.stop_price}")
 
 
 @dataclass
@@ -237,7 +244,11 @@ class EngineCircuitBreaker:
         async with self._lock:
             if not self._open:
                 return
-            elapsed = time.monotonic() - (self._opened_at or 0)
+            if self._opened_at is None:
+                logger.error("EngineCircuitBreaker: _open=True but _opened_at=None — forcing close")
+                self._open = False
+                return
+            elapsed = time.monotonic() - self._opened_at
             if elapsed >= self._reset_sec:
                 logger.info(
                     "ENGINE CIRCUIT BREAKER: auto-reset after %.0fs.",
@@ -315,7 +326,7 @@ class ExecutionEngine:
         self._total_fills = 0
         self._total_blocks = 0
         self._total_errors = 0
-        self._latencies_ms: list[float] = []  # rolling 100
+        self._latencies_ms: collections.deque = collections.deque(maxlen=100)  # rolling 100
 
         self._running = False
         self._lock = asyncio.Lock()
@@ -1432,9 +1443,7 @@ class ExecutionEngine:
         )
 
     def _record_latency(self, latency_ms: float) -> None:
-        self._latencies_ms.append(latency_ms)
-        if len(self._latencies_ms) > 100:
-            self._latencies_ms.pop(0)
+        self._latencies_ms.append(latency_ms)  # deque(maxlen=100) auto-evicts oldest
         # Emit to Prometheus histogram for real-time SLA alerting.
         # Lazy-import so prometheus_client is optional (degrades gracefully).
         try:
@@ -1446,10 +1455,11 @@ class ExecutionEngine:
 
     def get_metrics(self) -> dict[str, Any]:
         """Return execution metrics snapshot."""
-        avg_latency = sum(self._latencies_ms) / len(self._latencies_ms) if self._latencies_ms else 0.0
-        p99_latency = (
-            sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)] if len(self._latencies_ms) >= 100 else 0.0
-        )
+        import numpy as _np
+
+        lat_arr = list(self._latencies_ms)
+        avg_latency = sum(lat_arr) / len(lat_arr) if lat_arr else 0.0
+        p99_latency = float(_np.percentile(lat_arr, 99)) if lat_arr else 0.0
         return {
             "total_orders": self._total_orders,
             "total_fills": self._total_fills,

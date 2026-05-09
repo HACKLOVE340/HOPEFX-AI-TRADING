@@ -114,7 +114,7 @@ class _OandaFallback:
             "order": {
                 "type": "MARKET",
                 "instrument": instrument,
-                "units": str(int(oanda_units)),
+                "units": str(round(oanda_units)),
             }
         }
 

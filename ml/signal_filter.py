@@ -442,7 +442,8 @@ class SignalFilter:
 
         Resets automatically when win-rate recovers above CB_MIN_ACCURACY.
         """
-        outcomes = list(self._outcomes.get(symbol, [])) or list(self._global_outcomes)
+        # Use only per-symbol outcomes to avoid cross-symbol contamination
+        outcomes = list(self._outcomes.get(symbol, []))
         if len(outcomes) < _CB_MIN_OUTCOMES:
             return FilterResult(passed=True, confidence=confidence)
 
@@ -617,12 +618,12 @@ class SignalFilter:
                     confidence=confidence,
                     regime=regime,
                 )
-        elif dir_upper in ("SELL", "SHORT") and confidence > threshold_short:
+        elif dir_upper in ("SELL", "SHORT") and confidence < threshold_short:
             return FilterResult(
                 passed=False,
                 gate="confidence",
                 reason=(
-                    f"SELL confidence {confidence:.3f} > threshold {threshold_short:.3f}"
+                    f"SELL confidence {confidence:.3f} < threshold {threshold_short:.3f}"
                     + (f" (regime={regime})" if tighten else "")
                 ),
                 confidence=confidence,

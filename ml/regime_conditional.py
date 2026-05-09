@@ -537,6 +537,12 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         self._regime_counts: dict[int, int] = {}
         self._feature_names: list[str] = []
         self._is_fitted = False
+        # Debounce: require 3 consecutive bars before confirming a regime change
+        self._debounce_regime_id: int | None = None
+        self._debounce_candidate: int | None = None
+        self._debounce_count: int = 0
+        _REGIME_DEBOUNCE_BARS: int = 3
+        self._regime_debounce_bars = _REGIME_DEBOUNCE_BARS
 
     # ── Fitting ───────────────────────────────────────────────────────────────
 
@@ -604,12 +610,14 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
             raise RuntimeError("Call fit() before predict_proba()")
 
         labels = detect_regime_labels(X, self.hurst_col, self.adx_col)
-        proba = np.zeros((len(X), 2), dtype=float)
+        proba = np.full((len(X), 2), 0.5, dtype=float)  # default neutral
 
-        for regime in [REGIME_MEAN_REVERTING, REGIME_TRENDING, REGIME_MIXED]:
+        for regime in [REGIME_MEAN_REVERTING, REGIME_TRENDING, REGIME_MIXED,
+                       REGIME_HIGH_VOL_PARABOLIC]:
             mask = (labels == regime).values
             if not mask.any():
                 continue
+            # Parabolic bars fall back to global model (no directional conviction)
             model = self._regime_models.get(regime, self._global_model)
             proba[mask] = model.predict_proba(X.iloc[mask])
 
@@ -831,7 +839,17 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         # ── Step 5: Regime-conditional prediction ─────────────────────────────
         last_row = X_aligned.iloc[[-1]]
         labels = detect_regime_labels(last_row, self.hurst_col, self.adx_col)
-        regime_id = int(labels.iloc[0])
+        raw_regime_id = int(labels.iloc[0])
+
+        # Debounce: only confirm regime change after N consecutive bars
+        if raw_regime_id == self._debounce_candidate:
+            self._debounce_count += 1
+        else:
+            self._debounce_candidate = raw_regime_id
+            self._debounce_count = 1
+        if self._debounce_count >= self._regime_debounce_bars or self._debounce_regime_id is None:
+            self._debounce_regime_id = raw_regime_id
+        regime_id = self._debounce_regime_id
         regime_name = REGIME_NAMES.get(regime_id, "unknown")
 
         # ── Step 5a: Parabolic-bubble abstain gate ────────────────────────────
