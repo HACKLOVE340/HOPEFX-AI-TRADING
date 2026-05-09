@@ -29,6 +29,7 @@ import os
 import time
 import traceback
 import uuid
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -315,7 +316,7 @@ class ExecutionEngine:
         self._total_fills = 0
         self._total_blocks = 0
         self._total_errors = 0
-        self._latencies_ms: list[float] = []  # rolling 100
+        self._latencies_ms: deque[float] = deque(maxlen=100)  # rolling 100, O(1) append/evict
 
         self._running = False
         self._lock = asyncio.Lock()
@@ -1432,9 +1433,7 @@ class ExecutionEngine:
         )
 
     def _record_latency(self, latency_ms: float) -> None:
-        self._latencies_ms.append(latency_ms)
-        if len(self._latencies_ms) > 100:
-            self._latencies_ms.pop(0)
+        self._latencies_ms.append(latency_ms)  # deque(maxlen=100) auto-evicts oldest
         # Emit to Prometheus histogram for real-time SLA alerting.
         # Lazy-import so prometheus_client is optional (degrades gracefully).
         try:
@@ -1446,10 +1445,10 @@ class ExecutionEngine:
 
     def get_metrics(self) -> dict[str, Any]:
         """Return execution metrics snapshot."""
-        avg_latency = sum(self._latencies_ms) / len(self._latencies_ms) if self._latencies_ms else 0.0
-        p99_latency = (
-            sorted(self._latencies_ms)[int(len(self._latencies_ms) * 0.99)] if len(self._latencies_ms) >= 100 else 0.0
-        )
+        n = len(self._latencies_ms)
+        avg_latency = sum(self._latencies_ms) / n if n else 0.0
+        # p99 is meaningful for any sample ≥ 2; returning 0.0 for < 100 hid early latency spikes
+        p99_latency = sorted(self._latencies_ms)[int(n * 0.99)] if n >= 2 else 0.0
         return {
             "total_orders": self._total_orders,
             "total_fills": self._total_fills,

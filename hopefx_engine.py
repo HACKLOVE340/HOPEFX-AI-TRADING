@@ -40,7 +40,7 @@ import signal
 import sys
 from collections import deque
 from datetime import datetime, timezone
-from typing import ClassVar
+
 
 import pandas as pd
 
@@ -82,12 +82,17 @@ def validate_startup_environment() -> list[str]:
     - Python version >= 3.10
     """
 
-    warnings: ClassVar[list[str]] = []
-    errors: ClassVar[list[str]] = []
+    warnings: list[str] = []
+    errors: list[str] = []
     is_production = os.environ.get("APP_ENV", "development") == "production"
     is_test = os.environ.get("APP_ENV", "") == "test"
 
     # Python version
+    if sys.version_info < (3, 10):
+        errors.append(
+            f"Python {sys.version_info.major}.{sys.version_info.minor} is not supported; "
+            "Python >= 3.10 is required"
+        )
 
     # JWT secret
     jwt_secret = os.environ.get("SECURITY_JWT_SECRET", "")
