@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 import numpy as np
@@ -230,7 +230,7 @@ class HOPEFXBrain:
         Routes that return non-2xx are flagged in Redis for alerting.
         """
         redis = await _get_redis()
-        flagged: ClassVar[list[str]] = []
+        flagged: list[str] = []
 
         for route in self.app.routes:
             path: str = getattr(route, "path", "")
@@ -413,7 +413,7 @@ class HOPEFXBrain:
         redis = await _get_redis()
 
         # Drain up to 10 vulnerability entries per cycle
-        raw_entries: ClassVar[list[str]] = []
+        raw_entries: list[str] = []
         if redis:
             raw_entries = await redis.lrange("scan:vuln_queue", 0, 9)
             if raw_entries:

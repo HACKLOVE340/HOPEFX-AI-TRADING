@@ -47,7 +47,6 @@ import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import ClassVar
 import logging
 
 logger = logging.getLogger(__name__)
@@ -447,7 +446,7 @@ def stage_risk_sizing() -> str:
         confidence = 0.72
         probability = 0.65
         data_quality = 1.0
-        features: ClassVar[dict] = {}
+        features: dict = {}
         tick_mid = last_close
         tick_spread = 1.0
 

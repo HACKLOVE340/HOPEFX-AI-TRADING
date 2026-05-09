@@ -25,7 +25,6 @@ import contextlib
 import logging
 import os
 from pathlib import Path
-from typing import ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +233,7 @@ def validate_schema(engine) -> dict[str, list[str]]:
     inspector = sa_inspect(engine)
     existing = set(inspector.get_table_names())
 
-    required: ClassVar[set[str]] = set()
+    required: set[str] = set()
     for base_path in ("database.models", "database.user_models"):
         try:
             import importlib

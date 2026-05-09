@@ -26,7 +26,7 @@ import uuid
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import Any, ClassVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -284,7 +284,7 @@ class MobileTradingEngine:
             logger.warning("MobileTradingEngine.close_all: get_positions failed: %s", exc)
 
         closed = 0
-        errors: ClassVar[list[str]] = []
+        errors: list[str] = []
         for pos in positions:
             pos_id = pos.get("id") or pos.get("position_id") or pos.get("trade_id")
             if not pos_id:

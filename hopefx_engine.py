@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from typing import ClassVar
 import logging
 import os
 import signal
@@ -204,8 +205,8 @@ class HopeFXEngine:
     # Safety caps on position size to prevent runaway sizing.
     # Units are troy ounces (oz) for XAU/USD gold spot.
     # 1 standard lot = 100 oz; mini lot = 10 oz.
-    MAX_LIVE_POSITION_SIZE: float = 1.0  # max 1 oz (0.01 standard lot) for live trading
-    MAX_PAPER_POSITION_SIZE: float = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
+    MAX_LIVE_POSITION_SIZE: ClassVar[float] = 1.0  # max 1 oz (0.01 standard lot) for live trading
+    MAX_PAPER_POSITION_SIZE: ClassVar[float] = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
 
     def __init__(self) -> None:
         # ── broker config ─────────────────────────────────────────────────────
