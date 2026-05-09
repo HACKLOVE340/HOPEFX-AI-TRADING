@@ -528,6 +528,8 @@ class PaperTradingBroker(BaseBroker):
 
             # Calculate new average entry price
             total_qty = pos.quantity + fill_qty
+            if total_qty <= 0:
+                return
             pos.entry_price = ((pos.entry_price * pos.quantity) + (fill_price * fill_qty)) / total_qty
             pos.quantity = total_qty
             pos.total_commission += order.commission

@@ -150,10 +150,14 @@ class OnlineLearner:
         """
         Single online training step with EWC and replay.
 
+        Returns 0.0 immediately when model or optimizer are unavailable (torch not installed).
+
         Args:
             new_data: (features, labels) from latest batch
             validation_data: Optional validation set for EWC update
         """
+        if self.model is None or self.optimizer is None or self.ewc is None:
+            return 0.0
         # Add to replay buffer
         X_new, y_new = new_data
         for i in range(len(X_new)):
@@ -215,6 +219,8 @@ class OnlineLearner:
         Fast adaptation to detected market regime.
         Uses regime-specific learning rate and EWC weight.
         """
+        if self.optimizer is None or self.ewc is None:
+            return
         # Adjust learning rate based on regime volatility
         if regime == "volatile":
             for param_group in self.optimizer.param_groups:
@@ -236,8 +242,8 @@ class OnlineLearner:
             if len(self.train_losses) > 10
             else 0,
             "buffer_size": len(self.replay_buffer),
-            "ewc_lambda": self.ewc.lambda_ewc,
-            "current_lr": self.optimizer.param_groups[0]["lr"],
+            "ewc_lambda": self.ewc.lambda_ewc if self.ewc is not None else None,
+            "current_lr": self.optimizer.param_groups[0]["lr"] if self.optimizer is not None else None,
         }
 
 
