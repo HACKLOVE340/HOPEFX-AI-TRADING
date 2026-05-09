@@ -28,7 +28,7 @@ import logging
 import os
 from typing import Any
 
-from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+from brokers.base import BrokerConnector, Order, OrderSide, OrderStatus, OrderType, Position, AccountInfo
 
 logger = logging.getLogger(__name__)
 
@@ -670,7 +670,7 @@ class MT5Broker(BrokerConnector):
                     side=OrderSide.BUY if o.get("type", 0) in (0, 2, 4) else OrderSide.SELL,
                     type=OrderType.MARKET,
                     quantity=float(o.get("volume", 0)),
-                    status="PENDING",
+                    status=OrderStatus.PENDING,
                 )
         return None
 

@@ -396,7 +396,8 @@ class IBKRConnector(BrokerConnector):
             try:
                 if self._ib and not self._ib.isConnected():
                     logger.warning("IBKRConnector: heartbeat detected disconnection. Reconnecting…")
-                    self.reconnect()
+                    with self._lock:
+                        self.reconnect()
             except Exception as exc:
                 logger.error("IBKRConnector heartbeat error: %s", exc)
                 self._capture_sentry(exc)
@@ -616,11 +617,13 @@ class IBKRConnector(BrokerConnector):
                     current_price = float(ticker.marketPrice()) if ticker and ticker.marketPrice() else 0.0
                 except Exception as _price_exc:
                     logger.debug("Could not fetch market price for %s: %s", pos.contract.symbol, _price_exc)
-                    current_price = 0.0
+                    current_price = None  # resolved after entry_price is computed
 
                 avg_cost = pos.avgCost
                 qty = abs(pos.position)
                 entry_price = avg_cost / qty if qty > 0 else 0.0
+                if current_price is None:
+                    current_price = entry_price  # fallback to cost basis; avoids inflated/deflated P&L
                 unrealized_pnl = (current_price - entry_price) * qty * (1 if pos.position > 0 else -1)
 
                 result.append(
