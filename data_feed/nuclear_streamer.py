@@ -660,7 +660,7 @@ class NuclearStreamer:
             # Find the largest group of sources whose prices agree within
             # _CONSENSUS_TOLERANCE_PCT of each other.
             best_group: list[float] = []
-            for ref_src, (ref_price, _) in active_sources:
+            for _ref_src, (ref_price, _) in active_sources:
                 group = [
                     p for _, (p, _) in active_sources
                     if ref_price > 0 and abs(p - ref_price) / ref_price * 100 <= _CONSENSUS_TOLERANCE_PCT

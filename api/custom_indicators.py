@@ -244,7 +244,7 @@ async def preview_indicator(
             period = int(m.group(1)) if m else 20
             k = 2 / (period + 1)
             ema = closes[0]
-            for i, c in enumerate(closes):
+            for _i, c in enumerate(closes):
                 ema = c * k + ema * (1 - k)
                 result.append(round(ema, 5))
         elif formula.startswith("RSI("):

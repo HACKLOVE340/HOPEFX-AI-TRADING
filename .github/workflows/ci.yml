@@ -262,14 +262,25 @@ jobs:
             api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
             data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/ \
             || true
-          # Run again with --fail-under to block on new W1300 violations.
-          # --fail-under=9.0 allows the existing codebase score while blocking
-          # regressions; tighten as the backlog is cleared.
+          # Run again without --fail-under fallback to block on W1300 violations.
           pylint \
             --disable=all \
             --enable=W1300 \
             --rcfile=.pylintrc \
             --output-format=text \
+            api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
+            data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/
+
+      # flake8-bugbear: detects likely bugs and design problems not caught by
+      # ruff (mutable defaults, bare except, loop variable capture, etc.).
+      # Only B-series checks are enabled; E/W/F codes are handled by ruff.
+      # Config lives in .flake8 at the repo root.
+      - name: flake8-bugbear gate
+        run: |
+          pip install --retries 5 --timeout 60 \
+            "flake8>=7.0.0,<8.0.0" \
+            "flake8-bugbear>=24.0.0,<25.0.0"
+          flake8 \
             api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
             data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/
 

@@ -419,7 +419,7 @@ class AdvancedPredictor:
                     for _, step in payload.steps:
                         if hasattr(step, "mean_") and hasattr(step, "feature_names_in_"):
                             self._feature_means = dict(
-                                zip(list(step.feature_names_in_), step.mean_.tolist())
+                                zip(list(step.feature_names_in_), step.mean_.tolist(), strict=False)
                             )
                             break
                 self._adapter = _SGDAdapter(self._n_features)

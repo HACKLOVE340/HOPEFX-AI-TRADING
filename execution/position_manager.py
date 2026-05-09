@@ -63,7 +63,7 @@ def _prom_positions_open_set(symbol: str, value: float) -> None:
     if _PROM_AVAILABLE:
         try:
             _positions_open_gauge.labels(symbol=symbol).set(value)
-        except (ConnectionError, OSError, RuntimeError):
+        except (OSError, RuntimeError):
             logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
@@ -71,7 +71,7 @@ def _prom_pnl_observe(pnl: float) -> None:
     if _PROM_AVAILABLE:
         try:
             _position_pnl_histogram.observe(pnl)
-        except (ConnectionError, OSError, RuntimeError):
+        except (OSError, RuntimeError):
             logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
@@ -79,7 +79,7 @@ def _prom_mutation(op: str) -> None:
     if _PROM_AVAILABLE:
         try:
             _position_mutations_counter.labels(operation=op).inc()
-        except (ConnectionError, OSError, RuntimeError):
+        except (OSError, RuntimeError):
             logger.debug("Suppressed exception (no detail) in %s", __name__)
 
 
@@ -248,7 +248,7 @@ class PositionManager:
                 from execution.redis_state import AsyncRedisStateStore
 
                 self._redis_store = AsyncRedisStateStore(redis_client)
-            except (ImportError, ConnectionError, RuntimeError) as exc:
+            except (ImportError, RuntimeError) as exc:
                 logger.warning("PositionManager: could not initialise AsyncRedisStateStore: %s", exc)
 
         logger.info("PositionManager initialised (redis=%s)", redis_client is not None)
@@ -341,7 +341,7 @@ class PositionManager:
                 if self._redis_store is not None:
                     try:
                         await self._redis_store.save_position(pos.to_dict())
-                    except (ConnectionError, RuntimeError, OSError) as exc:
+                    except (RuntimeError, OSError) as exc:
                         # Two-phase rollback: remove the in-memory record so
                         # state stays consistent if Redis is unavailable.
                         del self._positions[symbol]
@@ -431,7 +431,7 @@ class PositionManager:
                 if self._redis_store is not None:
                     try:
                         await self._redis_store.remove_position(symbol)
-                    except (ConnectionError, RuntimeError, OSError) as exc:
+                    except (RuntimeError, OSError) as exc:
                         # Two-phase rollback: restore the in-memory record so
                         # state stays consistent if Redis removal fails.
                         self._positions[symbol] = pos
@@ -513,7 +513,7 @@ class PositionManager:
             if self._redis_store is not None:
                 try:
                     await self._redis_store.save_position(pos.to_dict())
-                except (ConnectionError, RuntimeError, OSError) as exc:
+                except (RuntimeError, OSError) as exc:
                     logger.warning("PositionManager: Redis persist failed on update: %s", exc)
 
         _prom_mutation("update")
@@ -611,7 +611,7 @@ class PositionManager:
                     _prom_positions_open_set(pos.symbol, 1)
             logger.info("PositionManager: restored %d position(s) from Redis", len(positions))
             return len(positions)
-        except (ConnectionError, RuntimeError, OSError) as exc:
+        except (RuntimeError, OSError) as exc:
             logger.warning("PositionManager: failed to restore from Redis: %s", exc)
             return 0
 

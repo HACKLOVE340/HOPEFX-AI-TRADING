@@ -2367,7 +2367,7 @@ def _trade_to_dict(t) -> dict:
         "side":        getattr(t, "side", "") or "",
         "quantity":    qty_float,
         "entry_price": float(getattr(t, "entry_price", 0) or 0),
-        "exit_price":  float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None,
+        "exit_price":  float(t.exit_price) if getattr(t, "exit_price", None) is not None else None,
         "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0),
         "commission":  float(getattr(t, "commission", 0) or 0),
         "status":      status_str,

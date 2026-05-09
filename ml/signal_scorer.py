@@ -497,7 +497,7 @@ def _score_mtf_confluence(
     }
 
     trend_votes = []
-    for tf, trend in timeframe_trends.items():
+    for _tf, trend in timeframe_trends.items():
         if trend in ("up", "down"):
             trend_votes.append((trend == "up") == is_long)
 

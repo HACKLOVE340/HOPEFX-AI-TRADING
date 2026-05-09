@@ -92,7 +92,7 @@ def _load_model(model_name: str) -> Any | None:
         return None
 
     obj = None
-    for loader_name, loader in (("joblib", None), ("pickle", None)):
+    for loader_name, _loader in (("joblib", None), ("pickle", None)):
         try:
             if loader_name == "joblib":
                 import joblib
@@ -168,7 +168,7 @@ def _shap_tree_importance(model: Any, feature_names: list[str]) -> list[dict[str
 
     features = [
         {"feature": str(fn), "importance": round(float(imp / total), 6), "shap_mean": round(float(imp), 6)}
-        for fn, imp in zip(feature_names, mean_abs)
+        for fn, imp in zip(feature_names, mean_abs, strict=False)
     ]
     return sorted(features, key=lambda x: x["importance"], reverse=True)
 
@@ -179,7 +179,7 @@ def _builtin_importance(model: Any, feature_names: list[str]) -> list[dict[str, 
     total = importances.sum() + 1e-12
     features = [
         {"feature": str(fn), "importance": round(float(imp / total), 6)}
-        for fn, imp in zip(feature_names, importances)
+        for fn, imp in zip(feature_names, importances, strict=False)
     ]
     return sorted(features, key=lambda x: x["importance"], reverse=True)
 
@@ -256,7 +256,7 @@ def get_shap_values(model_name: str, top_n: int = 30) -> dict[str, Any]:
         coef = np.abs(model.coef_.flatten())
         total = coef.sum() + 1e-12
         features = sorted(
-            [{"feature": fn, "importance": round(float(c / total), 6)} for fn, c in zip(feature_names, coef)],
+            [{"feature": fn, "importance": round(float(c / total), 6)} for fn, c in zip(feature_names, coef, strict=False)],
             key=lambda x: x["importance"],
             reverse=True,
         )

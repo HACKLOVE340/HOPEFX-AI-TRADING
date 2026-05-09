@@ -244,7 +244,7 @@ class DriftDetectorService:
         with self._lock:
             tracker_items = list(self._trackers.items())
 
-        for model, tracker in tracker_items:
+        for _model, tracker in tracker_items:
             report = tracker.get_report()
             reports.append(report)
             if report.get("drifted") or report.get("status") == "drift_detected":

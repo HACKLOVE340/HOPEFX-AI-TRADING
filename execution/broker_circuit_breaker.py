@@ -185,7 +185,7 @@ class BrokerCircuitBreaker:
             return result
         except CircuitOpenError:
             raise
-        except (ConnectionError, TimeoutError, ValueError, RuntimeError, OSError) as exc:
+        except (ValueError, RuntimeError, OSError) as exc:
             error_type = _classify_error(exc)
             await self.record_failure(error_type)
             raise

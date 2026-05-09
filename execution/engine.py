@@ -1398,8 +1398,8 @@ class ExecutionEngine:
                 None,
                 lambda: self._redis.setex(key, 604800, payload),
             )
-        except (ConnectionError, OSError, RuntimeError) as exc:
-            # Redis failure must not block execution
+        except (OSError, RuntimeError) as exc:
+            # Redis failure must not block execution (ConnectionError is a subclass of OSError)
             logger.error("ExecutionEngine: Redis persist failed: %s", exc)
             self._capture_sentry(exc)
 

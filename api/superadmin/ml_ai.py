@@ -413,7 +413,7 @@ async def get_model_explainability(
                 importance = [
                     {"feature": str(feat), "importance": round(float(imp), 6)}
                     for feat, imp in sorted(
-                        zip(features, clf.feature_importances_),
+                        zip(features, clf.feature_importances_, strict=False),
                         key=lambda x: x[1], reverse=True
                     )
                 ]

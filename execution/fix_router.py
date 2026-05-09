@@ -278,7 +278,7 @@ class FIXRouter:
             self._adapter.start()
             logger.info("FIXRouter: FIX session started.")
             return True
-        except (ImportError, OSError, ConnectionError, ValueError, RuntimeError) as exc:
+        except (ImportError, OSError, ValueError, RuntimeError) as exc:
             logger.warning(
                 "FIXRouter: FIX session unavailable (%s) — will use OANDA REST fallback.",
                 exc,
@@ -376,7 +376,7 @@ class FIXRouter:
         try:
             fill = await self._fallback.send(symbol, direction, units)
             await self._on_fill(fill)
-        except (TimeoutError, RuntimeError, ConnectionError, ValueError) as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             self._reject_count += 1
             logger.error("FIXRouter: all routes failed for order #%d: %s", self._order_count, exc, exc_info=True)
             await bus.publish_breach(
