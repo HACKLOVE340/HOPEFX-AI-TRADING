@@ -346,7 +346,9 @@ class DatabaseManager:
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt  # Exponential backoff
                     logger.info("Retrying in %ss...", wait_time)
-                    time.sleep(wait_time)
+                    # threading.Event.wait() releases the GIL so the asyncio
+                    # event loop is not starved when called from run_in_executor.
+                    threading.Event().wait(timeout=wait_time)
 
             except SATimeoutError as e:
                 last_error = e
@@ -389,7 +391,9 @@ class DatabaseManager:
                 if attempt < self.max_retries - 1:
                     wait_time = 2**attempt
                     logger.warning("DB retry %s/%s in %ss: %s", attempt + 1, self.max_retries, wait_time, e)
-                    time.sleep(wait_time)
+                    # threading.Event.wait() releases the GIL so the asyncio
+                    # event loop is not starved when called from run_in_executor.
+                    threading.Event().wait(timeout=wait_time)
                 else:
                     raise
 

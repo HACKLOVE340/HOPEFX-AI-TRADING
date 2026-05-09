@@ -343,7 +343,10 @@ class MarketDataCache:
                         exc,
                     )
                 if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (2**attempt))
+                    # threading.Event.wait() releases the GIL during the sleep so
+                    # the asyncio event loop is not starved when this runs in a
+                    # thread-pool executor (run_in_executor).
+                    threading.Event().wait(timeout=self.retry_delay * (2**attempt))
 
         self._connection_failed = True
         self._using_fallback = True
@@ -442,7 +445,10 @@ class MarketDataCache:
                 except Exception:  # nosec B110
                     pass
                 if attempt < self.max_retries - 1:
-                    time.sleep(self.retry_delay * (2**attempt))
+                    # threading.Event.wait() releases the GIL during the sleep so
+                    # the asyncio event loop is not starved when this runs in a
+                    # thread-pool executor (run_in_executor).
+                    threading.Event().wait(timeout=self.retry_delay * (2**attempt))
 
         # All retries failed — activate fallback
         self._connection_failed = True
