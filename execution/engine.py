@@ -869,7 +869,10 @@ class ExecutionEngine:
 
         Blocks the order if free margin would be insufficient (margin_available /
         margin_used < MIN_MARGIN_BUFFER after the notional of this order).
-        Non-fatal on broker API failure — logs warning and proceeds.
+
+        Fail-closed: any unexpected exception from the broker API blocks the
+        trade rather than allowing it through. A broken margin check must never
+        silently permit an order that could blow the account.
         """
         if self._broker is None:
             return None
@@ -877,7 +880,11 @@ class ExecutionEngine:
             loop = asyncio.get_running_loop()
             account = await loop.run_in_executor(None, self._broker.get_account_info)
             if account is None:
-                return None
+                # Broker returned no account data — cannot verify margin; block.
+                msg = "[MARGIN_CHECK_FAILED] Broker returned no account info — blocking order (fail-closed)"
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
 
             margin_available = float(getattr(account, "margin_available", 0) or 0)
             margin_used = float(getattr(account, "margin_used", 0) or 0)
@@ -909,8 +916,18 @@ class ExecutionEngine:
                     logger.warning(msg)
                     await self._inc_blocks()
                     return self._blocked_report(request, msg, t0)
-        except (AttributeError, TypeError, RuntimeError, OSError) as exc:
-            logger.warning("ExecutionEngine: margin check failed (non-fatal): %s", exc)
+        except (AttributeError, TypeError) as exc:
+            # Data-shape errors from a malformed account object — block (fail-closed).
+            msg = f"[MARGIN_CHECK_FAILED] Malformed account data: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
+        except (RuntimeError, OSError) as exc:
+            # Broker connectivity error — cannot verify margin; block (fail-closed).
+            msg = f"[MARGIN_CHECK_FAILED] Broker unreachable: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
         return None
 
     async def _check_leverage(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
@@ -919,7 +936,9 @@ class ExecutionEngine:
 
         Leverage = order_notional / account_equity.
         Blocks if leverage > MAX_LEVERAGE_RATIO.
-        Non-fatal on broker API failure — logs warning and proceeds.
+
+        Fail-closed: any unexpected exception from the broker API blocks the
+        trade rather than allowing it through.
         """
         if self._broker is None:
             return None
@@ -931,10 +950,19 @@ class ExecutionEngine:
             loop = asyncio.get_running_loop()
             account = await loop.run_in_executor(None, self._broker.get_account_info)
             if account is None:
-                return None
+                msg = "[LEVERAGE_CHECK_FAILED] Broker returned no account info — blocking order (fail-closed)"
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
             equity = float(getattr(account, "equity", getattr(account, "balance", 0)) or 0)
             if equity <= 0:
-                return None
+                msg = (
+                    f"[LEVERAGE_CHECK_FAILED] Account equity is zero or negative ({equity}) "
+                    "— blocking order (fail-closed)"
+                )
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
             leverage = notional / equity
             if leverage > _MAX_LEVERAGE_RATIO:
                 msg = (
@@ -944,8 +972,16 @@ class ExecutionEngine:
                 logger.warning(msg)
                 await self._inc_blocks()
                 return self._blocked_report(request, msg, t0)
-        except (AttributeError, TypeError, RuntimeError, OSError) as exc:
-            logger.warning("ExecutionEngine: leverage check failed (non-fatal): %s", exc)
+        except (AttributeError, TypeError) as exc:
+            msg = f"[LEVERAGE_CHECK_FAILED] Malformed account data: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
+        except (RuntimeError, OSError) as exc:
+            msg = f"[LEVERAGE_CHECK_FAILED] Broker unreachable: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
         return None
 
     async def _try_algo_routing(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
