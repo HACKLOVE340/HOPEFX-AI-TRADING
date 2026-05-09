@@ -515,10 +515,30 @@ class SelfHealer:
         self._healing_cooldown_sec: int = 300
         self._log_level: str = "standard"  # minimal|standard|verbose|debug
         self._protected_paths: list[str] = [
+            # Core live-trading execution files — must never be auto-patched
             "live_trading.py",
+            "execution/engine.py",
+            "execution/order_gateway.py",
+            "execution/trade_executor.py",
+            "execution/paper_runner.py",
+            "execution/broker_circuit_breaker.py",
+            # Risk and kill-switch — safety-critical
             "risk_manager.py",
+            "risk/manager.py",
+            "risk/pre_trade_gate.py",
+            "risk/circuit_breakers.py",
+            "kill_switch.py",
+            # Auth — credential and session security
+            "auth/jwt.py",
+            "auth/service.py",
+            # ML model artifacts and config secrets
             "ml/models/",
             "config/secrets/",
+            # Broker connectors — live order routing
+            "brokers/paper_trading.py",
+            "brokers/oanda_broker.py",
+            "brokers/mt5_broker.py",
+            "brokers/ibkr_connector.py",
         ]
         self._tests_enabled: bool = True
         self._test_categories: dict[str, bool] = {
