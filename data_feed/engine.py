@@ -64,9 +64,22 @@ import yaml
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
-# Plausible XAUUSD price range used to reject obviously bad ticks.
-_PRICE_MIN = 1_000.0
-_PRICE_MAX = 10_000.0
+# Default plausible price bounds per symbol.  Overridden by
+# ``data_feed.price_bounds.<SYMBOL>.min/max`` in config/data_feed.yaml.
+# Keys are canonical uppercase symbols (e.g. "XAUUSD", "XAGUSD").
+_DEFAULT_PRICE_BOUNDS: dict[str, tuple[float, float]] = {
+    "XAUUSD": (1_000.0, 10_000.0),   # Gold / USD
+    "XAGUSD": (5.0, 500.0),           # Silver / USD
+    "XPTUSD": (200.0, 5_000.0),       # Platinum / USD
+    "XPDUSD": (200.0, 10_000.0),      # Palladium / USD
+    "EURUSD": (0.5, 2.5),
+    "GBPUSD": (0.5, 3.0),
+    "USDJPY": (50.0, 250.0),
+    "BTCUSD": (1_000.0, 1_000_000.0),
+}
+# Fallback bounds used when a symbol is not in the table above.
+_FALLBACK_PRICE_MIN = 0.0
+_FALLBACK_PRICE_MAX = float("inf")
 
 # How long (seconds) a circuit-breaker stays open before re-trying.
 _CIRCUIT_BREAKER_COOLDOWN = 60
@@ -187,6 +200,30 @@ class ProductionDataEngine:
     def __init__(self, config_path: str = "config/data_feed.yaml") -> None:
         self._raw_config = self._load_config(config_path)
         self._cfg = self._raw_config["data_feed"]
+
+        # Per-symbol price bounds — loaded from config, falling back to the
+        # built-in table.  Bounds are keyed by canonical uppercase symbol.
+        self._price_bounds: dict[str, tuple[float, float]] = dict(_DEFAULT_PRICE_BOUNDS)
+        cfg_bounds = self._cfg.get("price_bounds", {})
+        for sym, bounds in cfg_bounds.items():
+            sym_upper = sym.upper()
+            try:
+                lo = float(bounds.get("min", _FALLBACK_PRICE_MIN))
+                hi = float(bounds.get("max", _FALLBACK_PRICE_MAX))
+                self._price_bounds[sym_upper] = (lo, hi)
+                logger.debug("Price bounds loaded from config: %s [%.2f, %.2f]", sym_upper, lo, hi)
+            except (TypeError, ValueError) as exc:
+                logger.warning("Invalid price_bounds config for %s: %s — using defaults", sym, exc)
+
+        # Active symbol (used for bound lookups; defaults to XAUUSD)
+        self._symbol: str = self._cfg.get("symbol", "XAUUSD").upper()
+        self._price_min, self._price_max = self._price_bounds.get(
+            self._symbol, (_FALLBACK_PRICE_MIN, _FALLBACK_PRICE_MAX)
+        )
+        logger.info(
+            "Price bounds for %s: [%.2f, %.2f]",
+            self._symbol, self._price_min, self._price_max,
+        )
 
         # State
         self.current_price: float | None = None
@@ -383,13 +420,16 @@ class ProductionDataEngine:
         for attempt in range(1, max_retries + 1):
             try:
                 price = await self._call_rest_provider(provider)
-                if price and _PRICE_MIN < price < _PRICE_MAX:
+                if price and self._price_min < price < self._price_max:
                     self._record_price(price)
                     self._fail_count[provider] = 0
                     await self._broadcast(price)
                     return True
                 # Out-of-range price — log and retry without double-penalising health
-                logger.debug("Provider '%s' returned out-of-range price: %s", provider, price)
+                logger.debug(
+                    "Provider '%s' returned out-of-range price for %s: %s (bounds: [%.2f, %.2f])",
+                    provider, self._symbol, price, self._price_min, self._price_max,
+                )
             except (TimeoutError, asyncio.TimeoutError):
                 logger.warning(
                     "Provider '%s' timed out (attempt %d/%d)",
@@ -454,7 +494,7 @@ class ProductionDataEngine:
                 return False
 
         price = await self._mt5_backup.get_price()
-        if price and _PRICE_MIN < price < _PRICE_MAX:
+        if price and self._price_min < price < self._price_max:
             self._record_price(price)
             await self._broadcast(price)
             return True
