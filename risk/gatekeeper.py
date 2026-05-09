@@ -199,7 +199,8 @@ class Gatekeeper:
         self._kill_active: bool = False
         self._paused_until: float = 0.0
         self._daily_trades: int = 0
-        self._trade_day: int = datetime.now(UTC).day
+        _now = datetime.now(UTC)
+        self._trade_day: tuple = (_now.year, _now.month, _now.day)
         self._running: bool = False
         self._pass_count: int = 0
         self._block_count: int = 0
@@ -714,7 +715,8 @@ class Gatekeeper:
 
     def _reset_daily_counter_locked(self) -> None:
         """Thread-safe daily counter reset.  Call only while holding self._lock."""
-        today = datetime.now(UTC).day
+        now = datetime.now(UTC)
+        today = (now.year, now.month, now.day)
         if today != self._trade_day:
             self._daily_trades = 0
             self._trade_day = today

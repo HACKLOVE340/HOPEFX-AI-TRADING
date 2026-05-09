@@ -462,7 +462,7 @@ class SmartRouter:
                 latency_ms = float(result.get("latency_ms", 100.0))
                 fill_price = float(result.get("fill_price", order_request["mid_price"]))
                 expected = order_request["ask"] if direction == "long" else order_request["bid"]
-                slippage_bps = abs(fill_price - expected) / max(expected, 1e-9) * 10_000
+                slippage_bps = abs(fill_price - expected) / expected * 10_000 if expected > 0 else 0.0
                 self._states[broker_id].record_fill(latency_ms, slippage_bps)
 
         return result
@@ -562,7 +562,7 @@ class SmartRouter:
                         "ask" if order_request.get("direction") == "long" else "bid",
                         fill_price,
                     )
-                    slippage_bps = abs(fill_price - expected) / max(expected, 1) * 10000
+                    slippage_bps = abs(fill_price - expected) / expected * 10000 if expected > 0 else 0.0
                     self._states[broker_id].record_fill(latency_ms, slippage_bps)
                     # Record the sent message for FIA 3.4 sliding-window accounting.
                     self._throttler.record_message(order_request.get("order_type", "order"))

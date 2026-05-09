@@ -20,6 +20,7 @@ import asyncio
 import logging
 import threading
 import uuid
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -287,7 +288,7 @@ class AlertEngine:
 
         # History
         self._history_size = self.config.get("history_size", 1000)
-        self._trigger_history: list[AlertTrigger] = []
+        self._trigger_history: deque[AlertTrigger] = deque(maxlen=self._history_size)
 
         # Notification callbacks
         self._notification_handlers: list[Callable] = []
@@ -738,10 +739,8 @@ class AlertEngine:
             notify_channels=alert.notify_channels,
         )
 
-        # Store in history
+        # Store in history (deque auto-evicts oldest at maxlen)
         self._trigger_history.append(trigger)
-        if len(self._trigger_history) > self._history_size:
-            self._trigger_history.pop(0)
 
         # Update stats
         self._stats["total_triggers"] += 1

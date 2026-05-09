@@ -430,7 +430,7 @@ class AdvancedModelPredictor:
             "confidence": round(float(confidence), 4),
             "model_version": self._version,
             "bars_used": len(ohlcv),
-            "last_close": float(last.get("close", last.iloc[-1])),
+            "last_close": float(last["close"]) if "close" in last.index else float(last.iloc[-1]),
         }
 
 

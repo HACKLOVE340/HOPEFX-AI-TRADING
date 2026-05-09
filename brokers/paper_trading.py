@@ -662,7 +662,7 @@ class PaperTradingBroker(BrokerConnector):
                 position.symbol,
                 position.entry_price,
             )
-            if position.side == "LONG":
+            if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY"):
                 unrealized_pnl = (current_price - position.entry_price) * position.quantity
             else:
                 unrealized_pnl = (position.entry_price - current_price) * position.quantity
@@ -705,7 +705,7 @@ class PaperTradingBroker(BrokerConnector):
         )
 
         # Calculate gross P&L at slippage-adjusted exit price
-        if position.side == "LONG":
+        if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY"):
             gross_pnl = (exit_price - position.entry_price) * position.quantity
         else:
             gross_pnl = (position.entry_price - exit_price) * position.quantity
@@ -959,6 +959,8 @@ class PaperTradingBroker(BrokerConnector):
 
             # For simplicity, assume same side
             total_quantity = position.quantity + quantity
+            if total_quantity <= 0:
+                return
             avg_price = (position.entry_price * position.quantity + price * quantity) / total_quantity
 
             position.quantity = total_quantity

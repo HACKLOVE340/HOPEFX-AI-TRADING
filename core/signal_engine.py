@@ -407,9 +407,10 @@ def _build_ohlcv_df(data: dict[str, Any]) -> "pd.DataFrame":
     >= 100 bars for reliable rolling-window feature computation.
     """
 
-    prices = data.get("prices", [data["close"]])
-    highs = data.get("highs", [data["high"]])
-    lows = data.get("lows", [data["low"]])
+    _close = data.get("close", 0.0)
+    prices = data.get("prices", [_close])
+    highs = data.get("highs", [data.get("high", _close)])
+    lows = data.get("lows", [data.get("low", _close)])
     volumes = data.get("volumes", [data.get("volume", 0)])
     n = len(prices)
 
@@ -424,10 +425,10 @@ def _build_ohlcv_df(data: dict[str, Any]) -> "pd.DataFrame":
     )
     # Overwrite last bar with actual OHLCV from the tick
     ohlcv_df.iloc[-1] = [
-        data["open"],
-        data["high"],
-        data["low"],
-        data["close"],
+        data.get("open", _close),
+        data.get("high", _close),
+        data.get("low", _close),
+        _close,
         data.get("volume", 0),
     ]
     return ohlcv_df
@@ -762,7 +763,7 @@ def _predict_basic(
     Returns (prob, model_ver).
     """
 
-    prices = data.get("prices", [data["close"]])
+    prices = data.get("prices", [data.get("close", 0.0)])
     closes = pd.Series(prices, dtype=float)
 
     def _safe_pct(n: int) -> float:
@@ -780,10 +781,10 @@ def _predict_basic(
         return float(np.nan_to_num(val, nan=0.0, posinf=0.0, neginf=0.0))
 
     feat = {
-        "close": float(data["close"]) if np.isfinite(data["close"]) else 0.0,
-        "open": float(data["open"]) if np.isfinite(data["open"]) else 0.0,
-        "high": float(data["high"]) if np.isfinite(data["high"]) else 0.0,
-        "low": float(data["low"]) if np.isfinite(data["low"]) else 0.0,
+        "close": float(data.get("close", 0.0)) if np.isfinite(float(data.get("close", 0.0))) else 0.0,
+        "open": float(data.get("open", 0.0)) if np.isfinite(float(data.get("open", 0.0))) else 0.0,
+        "high": float(data.get("high", 0.0)) if np.isfinite(float(data.get("high", 0.0))) else 0.0,
+        "low": float(data.get("low", 0.0)) if np.isfinite(float(data.get("low", 0.0))) else 0.0,
         "volume": float(data.get("volume", 0) or 0),
         "ret_1": _safe_pct(1),
         "ret_5": _safe_pct(5),
@@ -1652,7 +1653,7 @@ def _compute_atr(highs: list, lows: list, closes: list, entry_price: float) -> f
     """
     import numpy as np
 
-    if len(highs) < _ATR_MIN_BARS or len(lows) < _ATR_MIN_BARS:
+    if len(highs) < _ATR_MIN_BARS or len(lows) < _ATR_MIN_BARS or len(closes) < _ATR_MIN_BARS:
         return entry_price * _ATR_FALLBACK_FRAC
 
     h = np.array(highs[-(_ATR_MIN_BARS + 1) :], dtype=float)
@@ -1759,10 +1760,10 @@ def _push_mtf_bar(
         bar = pd.DataFrame(
             [
                 {
-                    "open": data.get("open", data["close"]),
-                    "high": data.get("high", data["close"]),
-                    "low": data.get("low", data["close"]),
-                    "close": data["close"],
+                    "open": data.get("open", data.get("close", 0.0)),
+                    "high": data.get("high", data.get("close", 0.0)),
+                    "low": data.get("low", data.get("close", 0.0)),
+                    "close": data.get("close", 0.0),
                     "volume": data.get("volume", 0.0),
                 }
             ],
@@ -1815,7 +1816,7 @@ async def _tick(app_state: Any) -> None:
             app_state=app_state,
         )
 
-        entry_price = getattr(signal, "entry_price", data["close"])
+        entry_price = getattr(signal, "entry_price", data.get("close", 0.0))
         sl_raw, tp_raw = _resolve_sl_tp(signal, data, direction, entry_price)
 
         # ── Regime detection ──────────────────────────────────────────────────
@@ -1870,6 +1871,25 @@ async def _tick(app_state: Any) -> None:
         except Exception as _sm_exc:
             logger.debug("macro fetch for scorer failed (non-fatal): %s", _sm_exc)
         _enrich_with_signal_score(signal_payload, ohlcv_proxy, symbol, macro_df=_scorer_macro)
+
+        # ── Factor Attribution ────────────────────────────────────────────────
+        # Append live portfolio factor attribution (market/size/value betas and
+        # residual alpha) to the payload so subscribers can see factor P&L.
+        # Best-effort: fetches live positions from broker, falls back gracefully.
+        try:
+            _broker = getattr(app_state, "broker", None)
+            if _broker is not None:
+                _raw_pos = await _broker.get_positions()
+                _pos_map = {
+                    getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0))
+                    for p in (_raw_pos or [])
+                }
+                _total_pnl = sum(float(getattr(p, "unrealized_pnl", 0)) for p in (_raw_pos or []))
+                signal_payload = _enrich_signal_with_factors(
+                    signal_payload, _pos_map, _total_pnl, app_state=app_state
+                )
+        except Exception as _fac_exc:
+            logger.debug("Factor enrichment skipped (non-fatal): %s", _fac_exc)
 
         # ── Factor Attribution ────────────────────────────────────────────────
         # Append live portfolio factor attribution (market/size/value betas and

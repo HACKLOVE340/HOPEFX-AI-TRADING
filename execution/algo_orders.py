@@ -267,6 +267,22 @@ class AlgoOrder(ABC):
             if result and result.get("success"):
                 fill_price = result.get("fill_price", 0.0)
                 filled_qty = result.get("filled_quantity", quantity)
+                if not (fill_price > 0):
+                    logger.warning(
+                        "AlgoOrder %s: child fill_price invalid (%.6f) — skipping fill record",
+                        self.algo_id,
+                        fill_price,
+                    )
+                    child.status = "rejected"
+                    return child
+                if not (filled_qty > 0):
+                    logger.warning(
+                        "AlgoOrder %s: child filled_qty invalid (%.6f) — skipping fill record",
+                        self.algo_id,
+                        filled_qty,
+                    )
+                    child.status = "rejected"
+                    return child
                 child.fill_price = fill_price
                 child.filled_quantity = filled_qty
                 child.status = "filled"
@@ -458,10 +474,10 @@ class VWAPOrder(AlgoOrder):
         while len(quantities) < self.num_slices:
             quantities.append(0.0)
 
-        # Ensure total matches (fix rounding)
+        # Ensure total matches (fix rounding); clamp to avoid negative slice
         diff = self.total_quantity - sum(quantities)
         if quantities:
-            quantities[-1] += diff
+            quantities[-1] = max(0.0, quantities[-1] + diff)
 
         return quantities
 
