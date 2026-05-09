@@ -32,6 +32,17 @@ UTC = timezone.utc
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from api.auth import TokenPayload, get_current_user
+
+# ── Withdrawal rate limit ─────────────────────────────────────────────────────
+# Enforced via Depends() on the /withdraw route so it appears in OpenAPI docs
+# and is applied before the handler body runs.
+try:
+    from rate_limiting.advanced import rate_limit_dependency as _rl_dep
+    from rate_limiting_configuration import WITHDRAWAL_RATE as _WITHDRAWAL_RATE  # type: ignore[import]
+    _withdraw_rate_limit = _rl_dep(_WITHDRAWAL_RATE)
+except Exception:  # pragma: no cover — rate limiting optional in dev
+    async def _withdraw_rate_limit(request: Request) -> None:  # type: ignore[misc]
+        pass
 from pydantic import BaseModel, Field
 
 
@@ -531,7 +542,11 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     status_code=202,
     summary="Initiate a fiat withdrawal",
 )
-async def fiat_withdraw(req: FiatWithdrawRequest, user: TokenPayload = Depends(get_current_user)):
+async def fiat_withdraw(
+    req: FiatWithdrawRequest,
+    user: TokenPayload = Depends(get_current_user),
+    _rl: None = Depends(_withdraw_rate_limit),
+):
     """
     Initiate a fiat (USD) withdrawal to bank account or card.
 

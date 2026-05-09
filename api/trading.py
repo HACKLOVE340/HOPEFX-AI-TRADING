@@ -194,6 +194,15 @@ def _reset_order_rl_cache() -> None:
     _order_rl_cache.clear()
 
 
+async def _order_rate_limit_dep(user: "TokenPayload" = Depends(require_kyc)) -> None:
+    """FastAPI Depends() wrapper for order rate limiting.
+
+    Wired directly onto the /orders and /order route decorators so the limit
+    appears in OpenAPI docs and is enforced before the handler body runs.
+    """
+    _check_order_rate_limit(user.sub)
+
+
 def _check_order_rate_limit(user_id: str) -> None:
     """Raise HTTP 429 if the user has exceeded the order rate limit.
 
@@ -820,6 +829,7 @@ async def place_order(
     order: OrderRequest,
     user: TokenPayload = Depends(require_kyc),
     _role: TokenPayload = Depends(require_role("trader")),
+    _rl: None = Depends(_order_rate_limit_dep),
 ):
     """
     Place a new order.
@@ -839,7 +849,7 @@ async def place_order(
     _check_subscription_gate(user.sub, user.role)
     _check_kill_switch()  # hard block — must be first
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
-    _check_order_rate_limit(user.sub)
+    # Rate limit enforced via Depends(_order_rate_limit_dep) above.
     await _validate_order(order)
     await _apply_risk_checks(order, user.sub)
     _log_compliance(order, user.sub)

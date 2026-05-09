@@ -295,6 +295,15 @@ def reset_rate_limit_state() -> None:
     _rl_redis_probed = False
 
 
+async def _login_rate_limit_dep(request: Request) -> None:
+    """FastAPI Depends() wrapper for login IP rate limiting.
+
+    Wired directly onto the /login route decorator so the limit is enforced
+    before the handler body runs and appears in OpenAPI docs.
+    """
+    _check_ip_rate_limit(_get_client_ip(request))
+
+
 def _svc():
     if _auth_service is None:
         raise HTTPException(status_code=503, detail="Auth service not initialised")
@@ -531,7 +540,12 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
 
 
 @router.post("/login")
-async def login(body: LoginRequest, request: Request, response: Response):
+async def login(
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    _rl: None = Depends(_login_rate_limit_dep),
+):
     """Authenticate and receive access + refresh tokens.
 
     Accepts either ``email`` or ``username`` in the request body.
@@ -549,7 +563,7 @@ async def login(body: LoginRequest, request: Request, response: Response):
             detail="Either 'email' or 'username' is required.",
         )
 
-    _check_ip_rate_limit(_get_client_ip(request))
+    # Rate limit enforced via Depends(_login_rate_limit_dep) on the route decorator.
     ip = _client_ip(request)
     device = request.headers.get("User-Agent", "")
 
