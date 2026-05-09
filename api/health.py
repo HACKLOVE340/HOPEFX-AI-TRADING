@@ -255,7 +255,7 @@ async def _check_database() -> ComponentStatus:
 
             sync_engine = getattr(_app_state, "db_engine", None)
             if sync_engine is not None:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
 
                 def _ping() -> None:
                     with sync_engine.connect() as conn:
@@ -1112,7 +1112,7 @@ async def _deep_check_broker() -> DeepCheckResult:
             info = await asyncio.wait_for(
                 broker.get_account_info()
                 if asyncio.iscoroutinefunction(broker.get_account_info)
-                else asyncio.get_event_loop().run_in_executor(None, broker.get_account_info),
+                else asyncio.get_running_loop().run_in_executor(None, broker.get_account_info),
                 timeout=_CHECK_TIMEOUT_SEC,
             )
             latency_ms = (time.perf_counter() - t0) * 1000

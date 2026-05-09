@@ -129,7 +129,7 @@ async def _check_redis() -> ComponentStatus:
             with borrow_client() as r:
                 r.ping()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await asyncio.wait_for(
             loop.run_in_executor(None, _ping),
             timeout=_TIMEOUT_S,
@@ -230,7 +230,7 @@ async def _check_broker() -> ComponentStatus:
         def _get_info():
             return broker.get_account_info()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         info = await asyncio.wait_for(
             loop.run_in_executor(None, _get_info),
             timeout=_TIMEOUT_S,

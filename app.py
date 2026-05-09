@@ -478,7 +478,7 @@ async def lifespan(_app: FastAPI):
     _io_executor = concurrent_futures.ThreadPoolExecutor(
         max_workers=32, thread_name_prefix="hopefx-io"
     )
-    asyncio.get_event_loop().set_default_executor(_io_executor)
+    asyncio.get_running_loop().set_default_executor(_io_executor)
 
     await kill_switch.start()
 
@@ -893,14 +893,17 @@ async def shutdown_event():
     tasks = getattr(app_state, "background_tasks", [])
     if tasks:
         logger.info("Cancelling %d background task(s)...", len(tasks))
-        current_loop = asyncio.get_event_loop()
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
         same_loop_tasks = []
         for task in tasks:
             if task.done():
                 continue
             try:
                 # asyncio.Task.get_loop() available in Python 3.7+
-                if hasattr(task, "get_loop") and task.get_loop() is not current_loop:
+                if current_loop is not None and hasattr(task, "get_loop") and task.get_loop() is not current_loop:
                     continue
                 task.cancel()
                 same_loop_tasks.append(task)

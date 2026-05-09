@@ -216,13 +216,16 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 return bars
 
         try:
-            loop = _asyncio_ml.get_event_loop()
-            if loop.is_running():
+            try:
+                _running_loop = _asyncio_ml.get_running_loop()
+            except RuntimeError:
+                _running_loop = None
+            if _running_loop is not None:
                 import concurrent.futures as _cf
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     bars = _ex.submit(_asyncio_ml.run, _fetch_db_ohlcv()).result(timeout=10)
             else:
-                bars = loop.run_until_complete(_fetch_db_ohlcv())
+                bars = _asyncio_ml.run(_fetch_db_ohlcv())
         except Exception:
             bars = _asyncio_ml.run(_fetch_db_ohlcv())
 
@@ -512,7 +515,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                             from ml.inference_engine import get_inference_engine
                             return get_inference_engine().health()
 
-                        loop = asyncio.get_event_loop()
+                        loop = asyncio.get_running_loop()
                         with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
                             try:
                                 h = await asyncio.wait_for(
@@ -555,7 +558,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
             from ml.inference_engine import get_inference_engine
             return get_inference_engine().health()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
             try:
                 h = await asyncio.wait_for(

@@ -229,7 +229,13 @@ class FIXRouter:
             # because PaperTradingBroker.connect() only sets self.connected=True.
             import asyncio
 
-            asyncio.get_event_loop().run_until_complete(broker.connect())
+            try:
+                _loop = asyncio.get_running_loop()
+                # Already inside an event loop — schedule as a fire-and-forget task.
+                _loop.create_task(broker.connect())
+            except RuntimeError:
+                # No running loop — safe to use asyncio.run().
+                asyncio.run(broker.connect())
             logger.info(
                 "FIXRouter: PaperTradingBroker initialised (balance=%.2f slippage=%s)",
                 broker.initial_balance,

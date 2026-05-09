@@ -374,7 +374,7 @@ async def reorder_watchlist(
                         )
                     db.commit()
 
-            await asyncio.get_event_loop().run_in_executor(None, _reorder)
+            await asyncio.get_running_loop().run_in_executor(None, _reorder)
     except Exception as exc:
         logger.debug("watchlist reorder DB error: %s", exc)
 

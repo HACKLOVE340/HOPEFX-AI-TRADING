@@ -212,9 +212,9 @@ async def _polygon_recv_status(
     """
     if isinstance(expected, str):
         expected = (expected,)
-    deadline = asyncio.get_event_loop().time() + timeout
+    deadline = asyncio.get_running_loop().time() + timeout
     while True:
-        remaining = deadline - asyncio.get_event_loop().time()
+        remaining = deadline - asyncio.get_running_loop().time()
         if remaining <= 0:
             return None
         try:

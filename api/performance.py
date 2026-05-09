@@ -119,13 +119,17 @@ def _load_equity_curve() -> list[EquityPoint]:
                 return await repo.get_by_user(user_id=None, status="closed", limit=50000)
 
         try:
-            loop = _asyncio2.get_event_loop()
-            if loop.is_running():
+            try:
+                _asyncio2.get_running_loop()
+                _loop_running = True
+            except RuntimeError:
+                _loop_running = False
+            if _loop_running:
                 import concurrent.futures as _cf
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     trades = _ex.submit(_asyncio2.run, _fetch_closed_trades()).result(timeout=10)
             else:
-                trades = loop.run_until_complete(_fetch_closed_trades())
+                trades = _asyncio2.run(_fetch_closed_trades())
         except Exception:
             trades = _asyncio2.run(_fetch_closed_trades())
 
@@ -177,13 +181,17 @@ def _db_trade_count() -> int:
                     return len(rows)
 
         try:
-            loop = _asyncio3.get_event_loop()
-            if loop.is_running():
+            try:
+                _asyncio3.get_running_loop()
+                _loop_running3 = True
+            except RuntimeError:
+                _loop_running3 = False
+            if _loop_running3:
                 import concurrent.futures as _cf
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     return _ex.submit(_asyncio3.run, _count()).result(timeout=5)
             else:
-                return loop.run_until_complete(_count())
+                return _asyncio3.run(_count())
         except Exception:
             return _asyncio3.run(_count())
     except Exception as exc:
@@ -562,13 +570,17 @@ def _load_trades() -> list[dict]:
                 return await repo.get_by_user(user_id=None, limit=500)
 
         try:
-            loop = _asyncio4.get_event_loop()
-            if loop.is_running():
+            try:
+                _asyncio4.get_running_loop()
+                _loop_running4 = True
+            except RuntimeError:
+                _loop_running4 = False
+            if _loop_running4:
                 import concurrent.futures as _cf
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     rows = _ex.submit(_asyncio4.run, _fetch_all_trades()).result(timeout=10)
             else:
-                rows = loop.run_until_complete(_fetch_all_trades())
+                rows = _asyncio4.run(_fetch_all_trades())
         except Exception:
             rows = _asyncio4.run(_fetch_all_trades())
 

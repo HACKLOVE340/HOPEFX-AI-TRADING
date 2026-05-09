@@ -807,8 +807,11 @@ class MarketDataOrchestrator:
         # ── Async tick subscriber fanout (fire-and-forget) ────────────────
         for _name, _coro_fn in list(self._async_tick_callbacks.items()):
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                if loop is not None:
                     asyncio.create_task(_coro_fn(tick), name=f"tick_cb_{_name}")
             except Exception as _exc:
                 logger.debug("Orchestrator: async tick callback %s error: %s", _name, _exc)

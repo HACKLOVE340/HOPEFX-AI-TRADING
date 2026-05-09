@@ -979,7 +979,7 @@ class AsyncTickStore:
 
     async def _run(self, fn: "Callable", *args: "Any", **kwargs: "Any") -> "Any":
         import asyncio
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         import functools
         return await loop.run_in_executor(
             self._get_executor(), functools.partial(fn, *args, **kwargs)

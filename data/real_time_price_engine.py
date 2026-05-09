@@ -821,7 +821,7 @@ class RealTimePriceEngine:
             }
             period = _period_map.get(interval, "60d")
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             def _fetch() -> list[OHLCV]:
                 ticker = yf.Ticker(ticker_sym)

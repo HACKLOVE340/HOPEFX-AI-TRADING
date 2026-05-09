@@ -389,7 +389,7 @@ async def init_database(s: Any) -> Any:
 
         # Run alembic upgrade in a thread executor so it doesn't block the
         # async event loop during startup (alembic is synchronous I/O).
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None, lambda: alembic_command.upgrade(alembic_cfg, "head")
         )

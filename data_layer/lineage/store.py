@@ -845,19 +845,19 @@ class DataLineageStore:
         """
         Async-safe tick recording. Enqueues without blocking the event loop.
 
-        Uses asyncio.get_event_loop().run_in_executor to offload the
-        queue.put_nowait call (which is CPU-bound but very fast).
+        Uses asyncio.get_running_loop().run_in_executor to offload the
+        synchronous record_tick call without blocking the event loop.
         """
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: self.record_tick(tick))
 
     async def record_news_async(self, article: NewsArticle, parent_id: str | None = None) -> None:
         """Async-safe news article recording."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: self.record_news(article))
 
     async def record_signal_async(
@@ -874,7 +874,7 @@ class DataLineageStore:
         """Async-safe signal recording."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: self.record_signal(
@@ -892,7 +892,7 @@ class DataLineageStore:
         """Async-safe flush. Runs the synchronous flush in a thread executor."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.flush)
 
     # ── Lineage graph traversal ───────────────────────────────────────────────
