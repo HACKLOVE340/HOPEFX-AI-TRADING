@@ -179,7 +179,7 @@ const PropFirmTracker: React.FC = () => {
   const errorMsg = error ? extractApiError(error, 'An error occurred') : null;
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <span style={{ fontSize: 28 }}>🛡️</span>
         <h1 style={s.title}>Prop Firm Challenge Tracker</h1>

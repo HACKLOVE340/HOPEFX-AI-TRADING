@@ -201,7 +201,7 @@ const WalkForward: React.FC = () => {
 
   if (apiError || !data) {
     return (
-      <div style={s.page}>
+      <div className="page-content">
         <h1 style={s.title}>Walk-Forward Analysis</h1>
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: '#94a3b8', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
@@ -226,7 +226,7 @@ const WalkForward: React.FC = () => {
   if (!data)   return <div style={s.loading}>No walk-forward data available.</div>;
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Walk-Forward Validation</h1>

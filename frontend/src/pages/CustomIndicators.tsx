@@ -189,7 +189,7 @@ const CustomIndicators: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <PageHeader
         title="Custom Indicator Builder"
         icon="📐"
