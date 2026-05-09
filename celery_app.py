@@ -61,6 +61,13 @@ def _redis_lock(name: str, timeout: int = 3600):
     Raises RuntimeError when the lock is already held so the caller
     can detect concurrent execution and exit early. Yields without
     locking when Redis is unavailable (dev/test environments).
+
+    Args:
+        name:    Lock key suffix (e.g. "ml_train").
+        timeout: Lock TTL in seconds.  MUST be strictly greater than the
+                 Celery task's ``time_limit`` — if the lock expires before
+                 the task finishes, a second instance can start concurrently.
+                 Rule of thumb: timeout = time_limit + 60.
     """
     try:
         import redis as _redis_mod  # type: ignore[import-untyped]
@@ -382,7 +389,10 @@ def ml_daily_full_retrain(self=None):
     import asyncio
 
     try:
-        with _redis_lock("ml_train", timeout=4200):
+        # Lock TTL must exceed time_limit so the lock does not expire while
+        # the task is still running (which would allow a second instance to
+        # start).  Use time_limit + 60 s as the minimum safe buffer.
+        with _redis_lock("ml_train", timeout=4260):
             from ml.hourly_trainer import HourlyTrainer
 
             trainer = HourlyTrainer()
@@ -412,7 +422,9 @@ def subscription_expiry_check(self=None):
     updates their tier in both the database and Stripe.
     """
     try:
-        with _redis_lock("subscription_expiry", timeout=180):
+        # Lock TTL must exceed time_limit (180 s) so the lock does not expire
+        # while the task is still running.  Use time_limit + 60 s buffer.
+        with _redis_lock("subscription_expiry", timeout=240):
             from database.connection import SessionLocal
             from monetization.subscription import SubscriptionManager, SubscriptionTier
 
@@ -456,7 +468,9 @@ def affiliate_commission_payout(self=None):
     threshold and triggers the payout via the configured payment provider.
     """
     try:
-        with _redis_lock("affiliate_payout", timeout=360):
+        # Lock TTL must exceed time_limit (360 s) so the lock does not expire
+        # while the task is still running.  Use time_limit + 60 s buffer.
+        with _redis_lock("affiliate_payout", timeout=420):
             from monetization.affiliate import AffiliateManager
 
             mgr = AffiliateManager()
