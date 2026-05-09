@@ -634,6 +634,19 @@ async def startup_event():
         _registry.print_table()
         _push_state_to_api_modules(app_state)
 
+        # Initialise the async DB pool so get_async_db() and the /api/health/ready
+        # db_pool check work correctly.  Must run after the registry (which runs
+        # alembic migrations) so the schema is guaranteed to exist.
+        try:
+            from database.async_connection import AsyncConnectionPool, set_default_pool as _set_pool
+            _async_pool = AsyncConnectionPool()
+            await _async_pool.connect()
+            _set_pool(_async_pool)
+            app_state.async_db_pool = _async_pool
+            logger.info("Async DB pool initialised and registered as default pool")
+        except Exception as _pool_err:
+            logger.warning("Async DB pool init failed (non-fatal): %s", _pool_err)
+
         # Populate _tasks_done / _tasks_failed from the registry results so
         # mark_startup_complete() and the health endpoint report accurate state.
         for _cname, _comp in _components.items():

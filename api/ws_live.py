@@ -764,10 +764,18 @@ async def _price_broadcaster_live_only() -> None:
 
     Used as a direct-poll fallback when the EventBus is unavailable but
     a broker is connected (e.g. paper broker with market_prices populated).
-    Sends no_live_feed when no live price is available for a symbol.
+
+    Before sending no_live_feed for a symbol, checks _yf_last_prices — if
+    yfinance has already fetched a price for that symbol we synthesize a tick
+    from it rather than triggering the banner.  no_live_feed is only sent when
+    both the broker AND yfinance have no price for a symbol.
     """
     global _prices_seeded
     _no_feed_warned: set[str] = set()
+    # Give yfinance time to complete its first fetch before we start warning.
+    # _yfinance_price_broadcaster runs concurrently and fetches immediately on
+    # startup; 20 s is enough headroom even on a slow connection.
+    _startup_grace_until = asyncio.get_event_loop().time() + 20
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -782,17 +790,42 @@ async def _price_broadcaster_live_only() -> None:
                 any_live = True
                 _no_feed_warned.discard(symbol)
                 await _manager.broadcast("prices", tick)
-            elif symbol not in _no_feed_warned:
-                _no_feed_warned.add(symbol)
-                await _manager.broadcast(
-                    "prices",
-                    {
-                        "type": "no_live_feed",
-                        "symbol": symbol,
-                        "message": (f"No live price for {symbol}. Connect a broker in Settings."),
-                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                    },
-                )
+            else:
+                # Level 5: use yfinance cache to synthesize a tick so the
+                # no_live_feed banner is not shown when yfinance is working.
+                yf_price = _yf_last_prices.get(symbol)
+                if yf_price and yf_price > 0:
+                    any_live = True
+                    _no_feed_warned.discard(symbol)
+                    cfg = _SYMBOLS.get(symbol, {})
+                    spread = cfg.get("spread", yf_price * 0.0002)
+                    prev = _open_prices.get(symbol, yf_price)
+                    change_pct = ((yf_price - prev) / prev * 100) if prev > 0 else 0.0
+                    await _manager.broadcast("prices", {
+                        "type": "price_tick",
+                        "data": {
+                            "symbol": symbol,
+                            "bid": round(yf_price - spread / 2, 5),
+                            "ask": round(yf_price + spread / 2, 5),
+                            "mid": round(yf_price, 5),
+                            "spread": spread,
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                            "change_pct": round(change_pct, 4),
+                        },
+                    })
+                elif symbol not in _no_feed_warned and asyncio.get_event_loop().time() > _startup_grace_until:
+                    # Only warn after the grace period so we don't flash the
+                    # banner during the initial yfinance fetch.
+                    _no_feed_warned.add(symbol)
+                    await _manager.broadcast(
+                        "prices",
+                        {
+                            "type": "no_live_feed",
+                            "symbol": symbol,
+                            "message": (f"No live price for {symbol}. Connect a broker in Settings."),
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                        },
+                    )
         if not any_live:
             # All symbols missing — slow down polling to avoid log spam
             await asyncio.sleep(9)
@@ -816,12 +849,21 @@ async def _yfinance_price_broadcaster() -> None:
 
     Used when no broker or EventBus is available (API-only / dev mode).
     Sends genuine price_tick messages — no synthetic or mock data.
+
+    Fetches immediately on startup (no initial sleep) so _yf_last_prices is
+    populated before _price_broadcaster_live_only's grace period expires.
     """
     import time as _time
     _POLL_INTERVAL = 15  # seconds between yfinance fetches
+    first_run = True
 
     while True:
-        await asyncio.sleep(_POLL_INTERVAL)
+        if first_run:
+            first_run = False
+            # Small yield so the event loop can start other tasks, then fetch.
+            await asyncio.sleep(0.5)
+        else:
+            await asyncio.sleep(_POLL_INTERVAL)
         if _manager.connection_count == 0:
             continue
         try:

@@ -413,8 +413,10 @@ class AsyncConnectionPool:
         def on_close(dbapi_conn, connection_record):
             self.metrics.disconnect_count += 1
 
-        # overflow and timeout events only exist on QueuePool, not NullPool.
-        if not self.config.use_null_pool:
+        # overflow and timeout events only exist on QueuePool, not NullPool or StaticPool.
+        from sqlalchemy.pool import NullPool as _NullPool, StaticPool as _StaticPool
+        _pool_cls = type(sync_engine.pool)
+        if not self.config.use_null_pool and _pool_cls not in (_NullPool, _StaticPool):
             @event.listens_for(sync_engine.pool, "overflow")
             def on_overflow(dbapi_conn, connection_record):
                 self.metrics.overflow_count += 1
