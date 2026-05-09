@@ -130,7 +130,16 @@ def is_access_token_revoked(jti: str) -> bool:
 
 
 # ── Constants ────────────────────────────────────────────────────────────────
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+# Access-token lifetime is the single source of truth in auth/jwt.py.
+# Do NOT define a local ACCESS_TOKEN_EXPIRE_MINUTES constant here — it would
+# diverge from jwt.py's _get_access_token_expire_minutes() which reads the
+# same env var but with a different default (15 min vs the old 60 min here).
+# All callers in this module use _access_token_expire_minutes() instead.
+def _access_token_expire_minutes() -> int:
+    """Delegate to auth.jwt for the single source of truth on token lifetime."""
+    from auth.jwt import _get_access_token_expire_minutes as _jwt_expire
+    return _jwt_expire()
+
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
 LOCKOUT_MINUTES = int(os.getenv("LOCKOUT_MINUTES", "15"))
@@ -519,7 +528,7 @@ class AuthService:
                     "access_token": access_token,
                     "refresh_token": raw_refresh,
                     "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
-                    "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                    "expires_in": _access_token_expire_minutes() * 60,
                     "user": {
                         "id": user.id,
                         "email": user.email,
@@ -588,7 +597,7 @@ class AuthService:
                     "access_token": access_token,
                     "refresh_token": raw_new,
                     "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
-                    "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+                    "expires_in": _access_token_expire_minutes() * 60,
                 },
             )
 
@@ -744,7 +753,7 @@ class AuthService:
             "jti": secrets.token_hex(16),  # unique token ID for blacklisting
             "iat": int(now.timestamp()),
             "exp": int(
-                (now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp(),
+                (now + timedelta(minutes=_access_token_expire_minutes())).timestamp(),
             ),
             "type": "access",
         }
