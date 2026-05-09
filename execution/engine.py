@@ -320,6 +320,9 @@ class ExecutionEngine:
 
         self._running = False
         self._lock = asyncio.Lock()
+        # Dedicated counter lock — keeps metric mutations off the general _lock
+        # so lifecycle operations (start/stop) never contend with hot-path counters.
+        self._counter_lock = asyncio.Lock()
 
         # Tick feed integration — last validated tick per symbol
         # Updated by TickFeedManager bridge via update_last_tick()
@@ -347,26 +350,28 @@ class ExecutionEngine:
 
     # ------------------------------------------------------------------
     # Thread-safe counter helpers
+    # All mutations go through _counter_lock so reads in get_metrics_async()
+    # see a consistent snapshot and never race with concurrent increments.
     # ------------------------------------------------------------------
 
     async def _inc_orders(self) -> None:
-        async with self._lock:
+        async with self._counter_lock:
             self._total_orders += 1
 
     async def _inc_fills(self) -> None:
-        async with self._lock:
+        async with self._counter_lock:
             self._total_fills += 1
 
     async def _inc_blocks(self) -> None:
-        async with self._lock:
+        async with self._counter_lock:
             self._total_blocks += 1
 
     async def _inc_errors(self) -> None:
-        async with self._lock:
+        async with self._counter_lock:
             self._total_errors += 1
 
     async def _append_latency(self, latency_ms: float) -> None:
-        async with self._lock:
+        async with self._counter_lock:
             self._latencies_ms.append(latency_ms)
 
     # ------------------------------------------------------------------
@@ -1479,12 +1484,14 @@ class ExecutionEngine:
         n = len(latencies)
         avg_latency = sum(latencies) / n if n else 0.0
         p99_latency = sorted(latencies)[int(n * 0.99)] if n >= 2 else 0.0
+        total_orders = self._total_orders
+        total_fills = self._total_fills
         return {
-            "total_orders": self._total_orders,
-            "total_fills": self._total_fills,
+            "total_orders": total_orders,
+            "total_fills": total_fills,
             "total_blocks": self._total_blocks,
             "total_errors": self._total_errors,
-            "fill_rate": self._total_fills / max(self._total_orders, 1),
+            "fill_rate": total_fills / max(total_orders, 1),
             "avg_latency_ms": avg_latency,
             "p99_latency_ms": p99_latency,
             "circuit_breaker_open": self._circuit_breaker.is_open,
@@ -1492,7 +1499,7 @@ class ExecutionEngine:
 
     async def get_metrics_async(self) -> dict[str, Any]:
         """Return a fully consistent metrics snapshot under the counter lock."""
-        async with self._lock:
+        async with self._counter_lock:
             latencies = list(self._latencies_ms)
             total_orders = self._total_orders
             total_fills = self._total_fills
