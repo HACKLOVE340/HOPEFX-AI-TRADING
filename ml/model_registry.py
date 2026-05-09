@@ -493,6 +493,52 @@ class ModelRegistry:
         """Return a single version entry by name, or None."""
         return self._load()["versions"].get(name)
 
+    def refresh_digest(self, name: str) -> str:
+        """Recompute and persist the SHA-256 digest for *name* after the artifact changes.
+
+        Call this immediately after retraining overwrites a model file so the
+        manifest digest stays in sync with the artifact on disk. Without this,
+        verify() will report a mismatch for every request after a retrain.
+
+        Parameters
+        ----------
+        name : Version name whose artifact has been updated.
+
+        Returns
+        -------
+        The new hex digest string.
+
+        Raises
+        ------
+        KeyError          : If *name* is not in the registry.
+        FileNotFoundError : If the artifact file no longer exists.
+        """
+        manifest = self._load()
+        if name not in manifest["versions"]:
+            raise KeyError(f"Version '{name}' not found in registry")
+
+        entry = manifest["versions"][name]
+        artifact = Path(entry["file"])
+        if not artifact.exists():
+            raise FileNotFoundError(f"Artifact missing: {artifact}")
+
+        old_digest = entry.get("sha256", "")
+        new_digest = sha256_file(artifact)
+
+        if new_digest == old_digest:
+            logger.debug("ModelRegistry: digest unchanged for '%s' (%s…)", name, new_digest[:12])
+            return new_digest
+
+        entry["sha256"] = new_digest
+        self._save(manifest)
+        logger.info(
+            "ModelRegistry: digest refreshed for '%s'  old=%s… new=%s…",
+            name,
+            old_digest[:12],
+            new_digest[:12],
+        )
+        return new_digest
+
     def retire(self, name: str) -> None:
         """Mark *name* as retired without changing the active version."""
         manifest = self._load()

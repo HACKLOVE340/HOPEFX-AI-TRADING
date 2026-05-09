@@ -903,13 +903,43 @@ async def trigger_retrain(
                 "train_with_macro.py",
             )
             if Path(script).exists():
-                subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
+                result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
                     capture_output=True,
                     check=False,
                 )
+                if result.returncode != 0:
+                    logger.error(
+                        "Retrain script exited with code %d: %s",
+                        result.returncode,
+                        result.stderr.decode(errors="replace")[-2000:],
+                    )
+                    return
                 logger.info("Model retraining completed")
+
+                # Refresh the registry digest for the active model so that
+                # verify_active() reflects the newly written artifact.
+                # Without this, every integrity check after retrain reports
+                # a SHA-256 mismatch against the stale pre-retrain digest.
+                try:
+                    from ml.model_registry import get_registry
+                    reg = get_registry()
+                    active = reg.active_version()
+                    if active:
+                        new_digest = reg.refresh_digest(active["name"])
+                        logger.info(
+                            "Registry digest refreshed for '%s' after retrain: %s…",
+                            active["name"],
+                            new_digest[:16],
+                        )
+                    else:
+                        logger.warning(
+                            "Retrain complete but no active version in registry — "
+                            "run registry.register() to add the new artifact."
+                        )
+                except Exception as reg_exc:
+                    logger.error("Failed to refresh registry digest after retrain: %s", reg_exc)
             else:
                 logger.warning("train_with_macro.py not found — skipping retrain")
         except Exception as exc:
