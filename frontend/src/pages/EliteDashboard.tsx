@@ -525,7 +525,7 @@ const EliteDashboard: React.FC = () => {
   }
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 4 }}>
         <div style={s.heading}>⭐ Elite Dashboard</div>
         <div style={{ display: 'flex', gap: 8 }}>
