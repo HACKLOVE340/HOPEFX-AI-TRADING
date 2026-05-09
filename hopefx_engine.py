@@ -41,6 +41,27 @@ import sys
 from collections import deque
 from datetime import datetime, timezone
 
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+# Optional: gracefully degrade when prometheus_client is not installed.
+try:
+    from prometheus_client import Counter as _PCounter
+
+    _NEWS_QUEUE_DROPS = _PCounter(
+        "hopefx_news_queue_drops_total",
+        "Number of news events dropped because the internal queue was full",
+    )
+    _NEWS_QUEUE_ENQUEUED = _PCounter(
+        "hopefx_news_queue_enqueued_total",
+        "Number of news events successfully enqueued for poll-mode consumers",
+    )
+except Exception:  # pragma: no cover — prometheus_client optional
+    class _NoopCounter:  # type: ignore[no-redef]
+        def inc(self, amount: float = 1) -> None:
+            pass
+
+    _NEWS_QUEUE_DROPS = _NoopCounter()  # type: ignore[assignment]
+    _NEWS_QUEUE_ENQUEUED = _NoopCounter()  # type: ignore[assignment]
+
 
 import pandas as pd
 
@@ -292,16 +313,35 @@ class HopeFXEngine:
         Called internally whenever the engine receives a news item from
         the broker stream, economic calendar, or sentiment feed.
         """
-        # Push to queue for poll-mode consumers (non-blocking; drop if full)
-        with contextlib.suppress(asyncio.QueueFull):
+        # Push to queue for poll-mode consumers (non-blocking).
+        # Log and count drops so queue saturation is visible in dashboards.
+        try:
             self._news_queue.put_nowait(event)
+            _NEWS_QUEUE_ENQUEUED.inc()
+        except asyncio.QueueFull:
+            _NEWS_QUEUE_DROPS.inc()
+            logger.warning(
+                "news_queue full (maxsize=%d) — dropping event type=%r source=%r. "
+                "Increase EVENT_BUS_NEWS_QUEUE_MAXSIZE or speed up consumers.",
+                self._news_queue.maxsize,
+                event.get("type", "unknown"),
+                event.get("source", "unknown"),
+            )
 
         # Fire all registered async callbacks concurrently
         if self._news_callbacks:
-            await asyncio.gather(
+            results = await asyncio.gather(
                 *(cb(event) for cb in self._news_callbacks),
                 return_exceptions=True,
             )
+            # Log any callback errors so they don't vanish silently.
+            for cb, result in zip(self._news_callbacks, results):
+                if isinstance(result, BaseException):
+                    logger.error(
+                        "News callback %s raised: %s",
+                        getattr(cb, "__qualname__", repr(cb)),
+                        result,
+                    )
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
