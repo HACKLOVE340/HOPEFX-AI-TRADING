@@ -256,14 +256,23 @@ class DatabaseManager:
         return False
 
     def _record_success(self):
-        """Record successful operation; close circuit if in half-open state."""
+        """Record successful operation; fully reset circuit state.
+
+        Any successful DB operation resets the failure counter to zero.
+        Previously this decremented by 1, meaning 5 failures required 5
+        successes to fully reset — leaving the circuit one failure away
+        from re-opening after only a single new error.
+        """
         if self._circuit_half_open:
             self._circuit_open = False
             self._circuit_half_open = False
             self._failure_count = 0
+            self._last_failure_time = None
             logger.info("Database circuit breaker CLOSED after successful probe")
-        else:
-            self._failure_count = max(0, self._failure_count - 1)
+        elif self._failure_count > 0:
+            # Reset fully on any success — partial decrement left stale failure
+            # counts that caused premature re-opening on the next error.
+            self._failure_count = 0
 
     def _record_failure(self, exc: Exception | None = None):
         """Record failed operation; re-open circuit from half-open if probe fails."""
@@ -273,7 +282,8 @@ class DatabaseManager:
             self._metrics.error_count += 1
 
         if self._circuit_half_open:
-            # Probe failed — stay open, reset half-open flag
+            # Probe failed — stay open, reset half-open flag so the next
+            # recovery window check can issue a fresh probe.
             self._circuit_half_open = False
             logger.warning("Database circuit breaker probe FAILED — staying OPEN: %s", exc)
         elif self._failure_count >= self._circuit_threshold:
@@ -647,13 +657,17 @@ class AsyncDatabaseManager:
             )
 
     def _record_success(self) -> None:
+        """Reset circuit state fully on any successful operation."""
         if self._circuit_half_open:
             self._circuit_open = False
             self._circuit_half_open = False
             self._failure_count = 0
+            self._last_failure_time = None
             logger.info("AsyncDatabaseManager circuit breaker CLOSED after successful probe")
-        else:
-            self._failure_count = max(0, self._failure_count - 1)
+        elif self._failure_count > 0:
+            # Reset fully — partial decrement left stale failure counts that
+            # caused premature re-opening on the next error.
+            self._failure_count = 0
 
     @asynccontextmanager
     async def async_session(self) -> "AsyncGenerator[AsyncSession, None]":
