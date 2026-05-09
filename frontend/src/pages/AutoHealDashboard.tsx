@@ -354,7 +354,7 @@ const AutoHealDashboard: React.FC = () => {
   const highThreats = threats.filter(t => t.severity === 'high' && !t.quarantined).length;
 
   return (
-    <div style={pageStyle}>
+    <div className="page-content">
       <PageHeader
         title="Auto-Heal & Antivirus"
         subtitle="Code integrity monitor · Self-healing engine · Malware scanner"

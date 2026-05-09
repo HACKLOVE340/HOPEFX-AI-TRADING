@@ -296,7 +296,7 @@ const Settings: React.FC = () => {
         @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
 
-      <div style={S.page}>
+      <div className="page-content">
         <div style={S.header}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
             <h1 style={S.heading}>Settings</h1>
