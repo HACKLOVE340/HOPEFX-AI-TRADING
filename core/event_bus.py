@@ -253,6 +253,25 @@ class MemoryMappedEventStore:
 # ─────────────────────────────────────────────────────────────────────────────
 # In-process fallback bus (active when Redis is unreachable)
 # ─────────────────────────────────────────────────────────────────────────────
+# Module-level constant so the maxsize is evaluated once at import time,
+# not re-read from the environment on every subscribe() call.
+_LOCAL_QUEUE_MAXSIZE: int = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
+
+# Prometheus counter for fallback queue drops (optional — degrades gracefully)
+try:
+    from prometheus_client import Counter as _PCounter
+    _EVENT_BUS_QUEUE_DROPS = _PCounter(
+        "hopefx_event_bus_queue_drops_total",
+        "Messages dropped from the in-process fallback queue when full",
+        ["channel"],
+    )
+except Exception:  # pragma: no cover
+    class _NoopCounter:  # type: ignore[no-redef]
+        def labels(self, **_kw):
+            return self
+        def inc(self, _n: float = 1) -> None:
+            pass
+    _EVENT_BUS_QUEUE_DROPS = _NoopCounter()  # type: ignore[assignment]
 
 
 class _LocalBus:
@@ -524,8 +543,8 @@ class EventBus:
         """
         if self._degraded:
             # Local fallback: feed a bounded queue from _local_bus handlers.
-            # Maxsize prevents unbounded memory growth when consumers are slow.
-            _LOCAL_QUEUE_MAXSIZE = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
+            # _LOCAL_QUEUE_MAXSIZE is a module-level constant (default 10 000)
+            # so it is evaluated once at import time, not on every subscribe().
             queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=_LOCAL_QUEUE_MAXSIZE)
 
             async def _enqueue(msg: dict) -> None:
@@ -540,7 +559,13 @@ class EventBus:
                     try:
                         queue.put_nowait(msg)
                     except asyncio.QueueFull:
-                        logger.warning("EventBus local queue full — dropping message on %s", channels)
+                        ch_label = channels[0] if channels else "unknown"
+                        logger.warning(
+                            "EventBus local queue full (maxsize=%d) — dropping message on %s",
+                            _LOCAL_QUEUE_MAXSIZE,
+                            channels,
+                        )
+                        _EVENT_BUS_QUEUE_DROPS.labels(channel=ch_label).inc()
 
             for ch in channels:
                 _local_bus.subscribe_local(ch, _enqueue)
