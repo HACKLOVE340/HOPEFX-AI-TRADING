@@ -202,16 +202,34 @@ class ProductionDataEngine:
         self._cfg = self._raw_config["data_feed"]
 
         # Per-symbol price bounds — loaded from config, falling back to the
-        # built-in table.  Bounds are keyed by canonical uppercase symbol.
+        # built-in table.  Bounds are keyed by canonical MT5 form (no separator,
+        # uppercase) so "XAU_USD", "XAU/USD", and "XAUUSD" all resolve to the
+        # same entry.  utils.symbol.canonical handles the normalisation; the
+        # inline fallback strips separators manually when the module is absent.
         self._price_bounds: dict[str, tuple[float, float]] = dict(_DEFAULT_PRICE_BOUNDS)
+        try:
+            from utils.symbol import canonical as _canonical_sym_bounds
+        except ImportError:
+            def _canonical_sym_bounds(s: str) -> str:  # type: ignore[misc]
+                return s.upper().replace("/", "").replace("_", "").replace(" ", "").replace("-", "")
+
         cfg_bounds = self._cfg.get("price_bounds", {})
         for sym, bounds in cfg_bounds.items():
-            sym_upper = sym.upper()
+            sym_canonical = _canonical_sym_bounds(sym)
             try:
                 lo = float(bounds.get("min", _FALLBACK_PRICE_MIN))
                 hi = float(bounds.get("max", _FALLBACK_PRICE_MAX))
-                self._price_bounds[sym_upper] = (lo, hi)
-                logger.debug("Price bounds loaded from config: %s [%.2f, %.2f]", sym_upper, lo, hi)
+                if lo >= hi:
+                    logger.warning(
+                        "Price bounds config for %s has min (%.2f) >= max (%.2f) — using defaults",
+                        sym_canonical, lo, hi,
+                    )
+                    continue
+                self._price_bounds[sym_canonical] = (lo, hi)
+                logger.debug(
+                    "Price bounds loaded from config: %s [%.2f, %.2f] (raw key: %r)",
+                    sym_canonical, lo, hi, sym,
+                )
             except (TypeError, ValueError) as exc:
                 logger.warning("Invalid price_bounds config for %s: %s — using defaults", sym, exc)
 
