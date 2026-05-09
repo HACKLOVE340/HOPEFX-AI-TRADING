@@ -33,6 +33,19 @@ UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
+
+class StalePriceError(RuntimeError):
+    """Raised when the paper broker's price feed is stale and PAPER_RAISE_ON_STALE=true.
+
+    In live-adjacent paper trading (e.g. shadow mode alongside a live account)
+    filling orders at a stale price produces misleading P&L. Set
+    PAPER_RAISE_ON_STALE=true to block fills instead of silently using
+    an outdated price.
+
+    Set PAPER_RAISE_ON_STALE=false (default) to retain the legacy warn-and-fill
+    behaviour for offline demo / backtesting scenarios.
+    """
+
 # ── Per-symbol spread table (bid-ask half-spread in price units) ──────────────
 # Sources: typical retail broker spreads during liquid hours.
 # Used as the base spread; actual slippage adds a random component on top.
@@ -253,6 +266,9 @@ class PaperTradingBroker(BrokerConnector):
         # Symbols absent from this dict are using hardcoded fallback prices.
         self._price_timestamps: dict[str, float] = {}
         self._price_stale_secs = float(os.getenv("PAPER_PRICE_STALE_SECONDS", "120"))
+        # When True, raise StalePriceError instead of filling at a stale/fallback price.
+        # Default False to preserve offline demo / backtest behaviour.
+        self._raise_on_stale: bool = os.getenv("PAPER_RAISE_ON_STALE", "false").lower() in ("1", "true", "yes")
 
         # Optional price feed / engine — set via set_price_feed().
         # Queried in place_order() to refresh prices before filling.
@@ -484,29 +500,43 @@ class PaperTradingBroker(BrokerConnector):
                 logger.debug("price_feed lookup failed for %s: %s", symbol, _exc)
 
         if current_price == 0.0:
-            logger.warning("Unknown symbol %s, using default price 1000.0", symbol)
-            current_price = 1000.0
+            # No price available from feed or market_prices table — cannot fill.
+            # Raise unconditionally: filling at an invented price produces
+            # meaningless P&L regardless of PAPER_RAISE_ON_STALE setting.
+            raise StalePriceError(
+                f"No price available for {symbol}: live feed not connected and "
+                "symbol not in market_prices table. Connect a price feed or add "
+                "the symbol to the market_prices dict before placing orders."
+            )
 
-        # Staleness guard: warn but never block — paper trading must stay
-        # operational even when the live feed is temporarily disconnected.
+        # Staleness guard — check whether the price came from a live feed tick.
         last_update = self._price_timestamps.get(symbol)
         if last_update is not None:
             age = time.time() - last_update
             if self._price_stale_secs > 0 and age > self._price_stale_secs:
+                msg = (
+                    f"Price feed stale for {symbol}: last live update {age:.0f}s ago "
+                    f"(threshold={self._price_stale_secs:.0f}s). "
+                    f"Last known price={current_price:.5f}."
+                )
+                if self._raise_on_stale:
+                    raise StalePriceError(msg + " Set PAPER_RAISE_ON_STALE=false to warn-and-fill instead.")
                 logger.warning(
-                    "Price feed stale for %s: last update %.0fs ago (threshold=%.0fs). "
-                    "Filling at last known price %.5f — reconnect feed for accurate fills.",
-                    symbol,
-                    age,
-                    self._price_stale_secs,
-                    current_price,
+                    "%s Filling at stale price — reconnect feed for accurate fills.", msg
                 )
         else:
+            # Price came from the hardcoded market_prices table, not a live feed.
+            msg = (
+                f"ORDER on {symbol} using hardcoded fallback price {current_price:.5f} "
+                "— no live feed tick received for this symbol."
+            )
+            if self._raise_on_stale:
+                raise StalePriceError(
+                    msg + " Connect a live price feed or set PAPER_RAISE_ON_STALE=false "
+                    "to allow fills at hardcoded prices (offline/demo mode only)."
+                )
             logger.warning(
-                "ORDER on %s using hardcoded fallback price %.5f — no live feed has connected. "
-                "Set PAPER_PRICE_STALE_SECONDS=0 to suppress this warning in offline demo mode.",
-                symbol,
-                current_price,
+                "%s Set PAPER_PRICE_STALE_SECONDS=0 to suppress in offline demo mode.", msg
             )
 
         # Create order
