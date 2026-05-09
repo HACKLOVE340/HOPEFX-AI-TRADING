@@ -43,19 +43,13 @@ from collections import deque
 from datetime import datetime, timezone
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
-# Optional: gracefully degrade when prometheus_client is not installed.
+# Imported from core.metrics so they are registered in the shared Prometheus
+# registry and exported via /metrics regardless of import order.
+# core.metrics provides no-op stubs when prometheus_client is not installed.
 try:
-    from prometheus_client import Counter as _PCounter
-
-    _NEWS_QUEUE_DROPS = _PCounter(
-        "hopefx_news_queue_drops_total",
-        "Number of news events dropped because the internal queue was full",
-    )
-    _NEWS_QUEUE_ENQUEUED = _PCounter(
-        "hopefx_news_queue_enqueued_total",
-        "Number of news events successfully enqueued for poll-mode consumers",
-    )
-except Exception:  # pragma: no cover — prometheus_client optional
+    from core.metrics import NEWS_QUEUE_DROPS as _NEWS_QUEUE_DROPS
+    from core.metrics import NEWS_QUEUE_ENQUEUED as _NEWS_QUEUE_ENQUEUED
+except Exception:  # pragma: no cover — core.metrics import failure (test isolation)
     class _NoopCounter:  # type: ignore[no-redef]
         def inc(self, amount: float = 1) -> None:
             pass

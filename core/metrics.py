@@ -10,16 +10,18 @@ Exposes standard metrics via prometheus_client. The /metrics endpoint
 in app.py serves these in the Prometheus text exposition format.
 
 Metrics defined here:
-  hopefx_http_requests_total        — request count by method/path/status
+  hopefx_http_requests_total           — request count by method/path/status
   hopefx_http_request_duration_seconds — request latency histogram
-  hopefx_orders_total               — orders placed by symbol/side/status
-  hopefx_active_positions           — current open position count
-  hopefx_pnl_total                  — cumulative realised P&L
-  hopefx_ws_connections_active      — live WebSocket connections
-  hopefx_auth_attempts_total        — login attempts by outcome
-  hopefx_aml_blocks_total           — AML-blocked withdrawal count
-  hopefx_reconciler_cycles_total    — position reconciler cycle count
-  hopefx_reconciler_mismatches_total — position mismatches detected
+  hopefx_orders_total                  — orders placed by symbol/side/status
+  hopefx_active_positions              — current open position count
+  hopefx_pnl_total                     — cumulative realised P&L
+  hopefx_ws_connections_active         — live WebSocket connections
+  hopefx_auth_attempts_total           — login attempts by outcome
+  hopefx_aml_blocks_total              — AML-blocked withdrawal count
+  hopefx_reconciler_cycles_total       — position reconciler cycle count
+  hopefx_reconciler_mismatches_total   — position mismatches detected
+  hopefx_news_queue_enqueued_total     — news events successfully enqueued
+  hopefx_news_queue_drops_total        — news events dropped (queue full)
 """
 
 from __future__ import annotations
@@ -105,6 +107,17 @@ if _PROM_AVAILABLE:
         "hopefx_sharpe_gate_passed",
         "1 when the Sharpe credibility gate has passed, 0 otherwise",
     )
+    # ── News queue (H-5) ─────────────────────────────────────────────────────
+    # Registered here (not in hopefx_engine.py) so they appear in /metrics
+    # regardless of whether the engine module has been imported.
+    NEWS_QUEUE_ENQUEUED = Counter(
+        "hopefx_news_queue_enqueued_total",
+        "News events successfully enqueued for poll-mode consumers",
+    )
+    NEWS_QUEUE_DROPS = Counter(
+        "hopefx_news_queue_drops_total",
+        "News events dropped because the internal queue was full",
+    )
 else:
     import os as _os
 
@@ -144,6 +157,7 @@ else:
     PNL_TOTAL = WS_CONNECTIONS = AUTH_ATTEMPTS = AML_BLOCKS = _Stub()
     RECONCILER_CYCLES = RECONCILER_MISMATCHES = _Stub()
     SHARPE_N_TRADES = SHARPE_RATIO = SHARPE_GATE_PASSED = _Stub()
+    NEWS_QUEUE_ENQUEUED = NEWS_QUEUE_DROPS = _Stub()
 
 
 # ── Middleware helper ─────────────────────────────────────────────────────────
