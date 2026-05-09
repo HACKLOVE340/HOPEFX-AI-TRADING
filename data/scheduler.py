@@ -878,6 +878,6 @@ if __name__ == "__main__":
             logger.info("\nUpdate complete: %s total new bars", total)
             for tf, n in results.items():
                 path = _csv_path(args.symbol, tf)
-                logger.info("  %s  %s new bars  →  %s", tf:>4, n:>5, path)
+                logger.info("  %s  %s new bars  →  %s", f"{tf:>4}", f"{n:>5}", path)
 
     asyncio.run(_main())

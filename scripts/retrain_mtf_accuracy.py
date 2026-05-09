@@ -739,7 +739,7 @@ def main() -> int:
     logger.info("\n" + "=" * 65)
     logger.info("MTF RETRAIN SUMMARY")
     logger.info("=" * 65)
-    logger.info("  Data:              58Y XAUUSD (%s bars)", len(df):,)
+    logger.info("  Data:              58Y XAUUSD (%s bars)", f"{len(df):,}")
     logger.info("  Features:          %s (selected from %s)", len(selected_features), len(feature_cols))
     logger.info("  Horizon:           %s bars", HORIZON)
     logger.info("  Ensemble:          XGB + RF + LGB + meta-LR")

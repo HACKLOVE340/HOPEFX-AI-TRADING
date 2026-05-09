@@ -438,7 +438,7 @@ if __name__ == "__main__":
 
     order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1950.0)
     result = validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
-    logger.info("\nValid order test: %s (risk: %s)", result.valid, result.risk_pct:.2%)
+    logger.info("\nValid order test: %s (risk: %s)", result.valid, f"{result.risk_pct:.2%}")
 
     big_order = Order(symbol="XAUUSD", side="buy", qty=1.0)
     result = validator.validate_order(big_order, current_price=2000.0, account_balance=10000.0)

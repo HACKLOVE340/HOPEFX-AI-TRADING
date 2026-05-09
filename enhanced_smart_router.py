@@ -748,7 +748,7 @@ if __name__ == "__main__":
         logger.info("Filled: %.2f", result['filled_size'])
         logger.info("Avg Price: %.4f", result['avg_price'])
         logger.info("VWAP: %.4f", result['vwap'])
-        logger.info("Implementation Shortfall: %s", result['implementation_shortfall']:.4%)
+        logger.info("Implementation Shortfall: %s", f"{result['implementation_shortfall']:.4%}")
         logger.info("Total Fees: $%.2f", result['total_fees'])
         logger.info("Avg Slippage: %.2f bps", result['total_slippage_bps'])
         logger.info("Duration: %.2fs", result['duration_seconds'])

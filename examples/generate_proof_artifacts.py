@@ -440,7 +440,7 @@ dff = dff.dropna(subset=["target"])
 
 X = dff[FEATURE_COLS].values
 y = dff["target"].values
-logger.info("  %s samples, %s features, class balance: %s up-days", len(X), len(FEATURE_COLS), y.mean():.2%)
+logger.info("  %s samples, %s features, class balance: %s up-days", len(X), len(FEATURE_COLS), f"{y.mean():.2%}")
 
 
 # ── 3. Train RandomForest ─────────────────────────────────────────────────────
@@ -812,6 +812,6 @@ logger.info("\n" + "=" * 55)
 logger.info("  BACKTEST SUMMARY")
 logger.info("=" * 55)
 for k, v in perf.items():
-    logger.info("  %s %s", k:<28, v)
+    logger.info("  %s %s", f"{k:<28}", v)
 logger.info("=" * 55)
 logger.info("\nAll artifacts saved. Ready to commit.")

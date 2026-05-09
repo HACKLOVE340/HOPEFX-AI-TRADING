@@ -361,8 +361,8 @@ Examples:
                 acc = m.get("accuracy", m.get("rmse", "n/a"))
                 f1 = m.get("f1", "n/a")
                 path = info.get("model_path", "")
-                logger.info("  %s accuracy=%s  f1=%s", name:<20, acc, f1)
-                logger.info("  %s saved → %s", '':20, path)
+                logger.info("  %s accuracy=%s  f1=%s", f"{name:<20}", acc, f1)
+                logger.info("  %s saved → %s", f"{'':20}", path)
         except Exception:
             logger.exception("Failed for %s: %s", sym)
             all_ok = False

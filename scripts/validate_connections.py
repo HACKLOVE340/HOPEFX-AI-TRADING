@@ -402,7 +402,7 @@ def run_checks(strict: bool = False) -> int:
 
         icon = "✅" if status == GREEN else ("⚠️ " if status == YELLOW else "❌")
         tag = "[CRITICAL]    " if cat == CRITICAL else "[non-critical]"
-        logger.info("  %s %s %s %s", icon, tag, name:<30, msg[:60])
+        logger.info("  %s %s %s %s", icon, tag, f"{name:<30}", msg[:60])
 
     logger.info("")
     logger.info("─" * 70)

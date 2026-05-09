@@ -1310,11 +1310,11 @@ def main():
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]
     if oos_acc >= 0.68:
-        logger.info("  ✓ OOS TARGET MET: %s >= 68.0%% (validated production threshold)", oos_acc:.1%)
+        logger.info("  ✓ OOS TARGET MET: %s >= 68.0%% (validated production threshold)", f"{oos_acc:.1%}")
     elif oos_acc >= 0.55:
-        logger.warning("  ⚠ OOS above chance (%s) but below 68%% production threshold", oos_acc:.1%)
+        logger.warning("  ⚠ OOS above chance (%s) but below 68%% production threshold", f"{oos_acc:.1%}")
     elif oos_acc > 0:
-        logger.info("  ✗ OOS below target (%s) — check feature quality and data volume", oos_acc:.1%)
+        logger.info("  ✗ OOS below target (%s) — check feature quality and data volume", f"{oos_acc:.1%}")
     elif final_acc >= 0.85:
         logger.info("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
     elif final_acc >= 0.70:

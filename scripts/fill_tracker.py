@@ -286,10 +286,10 @@ def print_report(ledger: dict[str, Any]) -> None:
     logger.info("=" * 60)
     logger.info("  HOPEFX Paper Trading Fill Gate")
     logger.info("=" * 60)
-    logger.info("  Fills recorded : %s", fill_count:,)
-    logger.info("  Gate target    : %s", FILL_GATE_TARGET:,)
+    logger.info("  Fills recorded : %s", f"{fill_count:,}")
+    logger.info("  Gate target    : %s", f"{FILL_GATE_TARGET:,}")
     logger.info("  Progress       : %.1f%%  [%s/%s]", pct, fill_count, FILL_GATE_TARGET)
-    logger.info("  Remaining      : %s", remaining:,)
+    logger.info("  Remaining      : %s", f"{remaining:,}")
     logger.info("  Gate status    : %s", 'PASSED' if gate_passed else 'NOT YET PASSED')
     if ledger.get("first_fill_at"):
         logger.info("  First fill     : %s", ledger['first_fill_at'])
@@ -307,7 +307,7 @@ def print_report(ledger: dict[str, Any]) -> None:
         logger.info("  - Risk committee sign-off")
     else:
         logger.info("")
-        logger.info("  Gate NOT PASSED. Need %s more fills before Phase 3.", remaining:,)
+        logger.info("  Gate NOT PASSED. Need %s more fills before Phase 3.", f"{remaining:,}")
         logger.info("  Run paper_trading_starter.py to accumulate fills.")
     logger.info("")
 

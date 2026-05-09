@@ -33,7 +33,7 @@ Usage (programmatic)
 
     runner = MutationTestRunner(modules=["risk", "execution"])
     report = await runner.run()
-    logger.info("Mutation score: %s", report.score:.1%)
+    logger.info("Mutation score: %s", f"{report.score:.1%}")
 
 Configuration (env vars)
 ------------------------

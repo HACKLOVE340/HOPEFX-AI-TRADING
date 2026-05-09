@@ -2047,8 +2047,8 @@ def run_ml_test():
     logger.info("Predictions generated: %s", report['predictions_generated'])
 
     if report["recent_performance"]["accuracy"] is not None:
-        logger.info("\nRecent accuracy: %s", report['recent_performance']['accuracy']:.1%)
-        logger.info("Average confidence: %s", report['recent_performance']['avg_confidence']:.1%)
+        logger.info("\nRecent accuracy: %s", f"{report['recent_performance']['accuracy']:.1%}")
+        logger.info("Average confidence: %s", f"{report['recent_performance']['avg_confidence']:.1%}")
 
     logger.info("\nFeatures used: %s", report['feature_count'])
     logger.info("Top 5 features:")

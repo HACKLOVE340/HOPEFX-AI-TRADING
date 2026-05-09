@@ -65,7 +65,7 @@ def print_metrics(analyzer, symbol: str) -> None:
     if clusters:
         logger.info("  Volume clusters :")
         for cluster in clusters:
-            logger.info("    %10.4f  %s  strength=%.2f", cluster.price_level, cluster.cluster_type:<12, cluster.strength)
+            logger.info("    %10.4f  %s  strength=%.2f", cluster.price_level, f"{cluster.cluster_type:<12}", cluster.strength)
 
 
 async def run_example(max_ticks: int = 100) -> None:

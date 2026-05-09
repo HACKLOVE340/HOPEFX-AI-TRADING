@@ -137,7 +137,7 @@ async def _run(args: argparse.Namespace) -> None:
     logger.info("  Granularity : %s", args.granularity)
     logger.info("  From        : %s", from_dt.strftime('%Y-%m-%d'))
     logger.info("  To          : %s", to_dt.strftime('%Y-%m-%d'))
-    logger.info("  Est. bars   : ~%s", total_bars_estimate:,)
+    logger.info("  Est. bars   : ~%s", f"{total_bars_estimate:,}")
     logger.info("  Output      : %s", output_path)
     logger.info("  OANDA key   : %s", 'SET' if os.getenv('OANDA_API_KEY') else 'NOT SET (yfinance fallback)')
     logger.info("")
@@ -164,7 +164,7 @@ async def _run(args: argparse.Namespace) -> None:
 
     logger.info("")
     logger.info("=" * 50)
-    logger.info("Backfill complete: %s bars appended to %s", count:,, output_path)
+    logger.info("Backfill complete: %s bars appended to %s", f"{count:,}", output_path)
 
     if output_path.exists():
         size_kb = output_path.stat().st_size / 1024

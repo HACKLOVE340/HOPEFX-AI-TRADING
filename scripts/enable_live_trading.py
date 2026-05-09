@@ -266,7 +266,7 @@ def main() -> None:
     logger.warning("WARNING: Live trading uses REAL MONEY.")
     logger.info("Start with the minimum position size ($100 max).")
     logger.info("!" * 60)
-    logger.info("\nType exactly: "%s"", _CONFIRM_PHRASE)
+    logger.info('\nType exactly: "%s"', _CONFIRM_PHRASE)
     logger.info("(or Ctrl+C to cancel)\n")
 
     try:
@@ -276,7 +276,7 @@ def main() -> None:
         sys.exit(0)
 
     if user_input != _CONFIRM_PHRASE:
-        logger.info("\n✗ Confirmation phrase did not match. Expected: "%s"", _CONFIRM_PHRASE)
+        logger.info('\n✗ Confirmation phrase did not match. Expected: "%s"', _CONFIRM_PHRASE)
         sys.exit(1)
 
     enable_live_trading()

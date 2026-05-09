@@ -513,7 +513,7 @@ def print_component_status_report() -> None:
             ComponentHealth.UNKNOWN: "⚪",
         }.get(status.health, "⚪")
 
-        logger.info("%s %s %s v%s - %s", health_icon, icon, name:15, status.version:8, status.health.value)
+        logger.info("%s %s %s v%s - %s", health_icon, icon, f"{name:15}", f"{status.version:8}", status.health.value)
 
         if status.features:
             logger.info("     Features: %s", ', '.join(status.features[:3]))
