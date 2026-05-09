@@ -20,6 +20,7 @@ Features:
 """
 
 import logging
+from collections import deque
 from datetime import datetime, timezone
 
 UTC = timezone.utc
@@ -69,9 +70,13 @@ class StrategyBrain:
         self.strategy_performance: dict[str, dict[str, float]] = {}
         self.strategy_weights: dict[str, float] = {}
 
-        # Signal history
-        self.signal_history: list[dict[str, Any]] = []
-        self.consensus_signals: list[Signal] = []
+        # Signal history — bounded deques prevent unbounded memory growth.
+        # Defaults: 1000 signal entries and 500 consensus signals.
+        # Override via config keys "max_signal_history" / "max_consensus_signals".
+        _max_sig = int(self.config.get("max_signal_history", 1000))
+        _max_con = int(self.config.get("max_consensus_signals", 500))
+        self.signal_history: deque[dict[str, Any]] = deque(maxlen=_max_sig)
+        self.consensus_signals: deque[Signal] = deque(maxlen=_max_con)
 
         # Statistics
         self.stats = {
