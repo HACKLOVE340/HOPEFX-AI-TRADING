@@ -102,12 +102,12 @@ const Affiliate:React.FC=()=>{
     navigator.clipboard.writeText(`${window.location.origin}/?ref=${account.code}`).then(()=>{setCopied(true);if(copiedTimerRef.current)clearTimeout(copiedTimerRef.current);copiedTimerRef.current=setTimeout(()=>setCopied(false),2500);});
   };
 
-  if(!userId)return(<div style={st.page}><p style={{color:'#94a3b8'}}>Please log in to view your affiliate dashboard.</p></div>);
-  if(loading)return(<div style={st.page}><p style={{color:'#94a3b8'}}>Loading affiliate data…</p></div>);
-  if(apiError)return(<div style={st.page}><h1 style={st.heading}>Affiliate Program</h1><div style={st.errorBox}><strong>Error:</strong> {apiError}<button onClick={loadData} style={st.retryBtn}>Retry</button></div></div>);
+  if(!userId)return(<div className="page-content"><p style={{color:'#94a3b8'}}>Please log in to view your affiliate dashboard.</p></div>);
+  if(loading)return(<div className="page-content"><p style={{color:'#94a3b8'}}>Loading affiliate data…</p></div>);
+  if(apiError)return(<div className="page-content"><h1 style={st.heading}>Affiliate Program</h1><div style={st.errorBox}><strong>Error:</strong> {apiError}<button onClick={loadData} style={st.retryBtn}>Retry</button></div></div>);
 
   if(!account)return(
-    <div style={st.page}>
+    <div className="page-content">
       <h1 style={st.heading}>Affiliate Program</h1>
       <div style={st.enrollCard}>
         <h2 style={{fontSize:22,marginBottom:12,color:'#f8fafc'}}>Earn by referring traders</h2>
@@ -120,7 +120,7 @@ const Affiliate:React.FC=()=>{
 
   const referralLink=`${window.location.origin}/?ref=${account.code}`;
   return(
-    <div style={st.page}>
+    <div className="page-content">
       <div style={st.pageHeader}>
         <div>
           <h1 style={st.heading}>Affiliate Program</h1>

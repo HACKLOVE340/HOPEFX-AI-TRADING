@@ -43,15 +43,7 @@ const Fallback: React.FC = () => (
 const SystemReliability: React.FC = () => (
   <>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    <div style={{
-      minHeight: '100vh',
-      background: '#0f172a',
-      color: '#f1f5f9',
-      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-      padding: '32px 24px',
-      boxSizing: 'border-box',
-    }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+    <div className="page-content">
         <PageHeader
           title="System Reliability Dashboard"
         icon="🔬"
@@ -83,7 +75,6 @@ const SystemReliability: React.FC = () => (
         </Suspense>
 
         <CrossLinkBar links={SR_CROSS_LINKS} title="Related" style={{ marginTop: 32 }} />
-      </div>
     </div>
   </>
 );

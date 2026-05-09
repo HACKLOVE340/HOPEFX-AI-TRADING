@@ -183,7 +183,7 @@ const Marketplace: React.FC = () => {
   });
 
   return (
-    <div style={st.page}>
+    <div className="page-content">
       <div style={st.pageHeader}>
         <div><h1 style={st.heading}>Strategy Marketplace</h1>{stats&&<p style={st.statsLine}>{stats.total_strategies} strategies · {stats.total_subscribers.toLocaleString()} subscribers</p>}</div>
         <button

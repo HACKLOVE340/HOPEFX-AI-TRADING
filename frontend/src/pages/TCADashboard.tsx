@@ -349,7 +349,7 @@ const TCADashboard: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={pg.page}>
+    <div className="page-content">
       <PageHeader
         title="Transaction Cost Analysis"
         subtitle="Signal-price vs fill-price slippage across all brokers and sessions"

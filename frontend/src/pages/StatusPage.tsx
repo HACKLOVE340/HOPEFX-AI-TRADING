@@ -158,12 +158,12 @@ const StatusPage: React.FC = () => {
   }, [load]);
 
   if (loading) {
-    return <div style={styles.page}><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
+    return <div className="page-content"><p style={{ color: '#64748b' }}>Checking system status…</p></div>;
   }
 
   if (error || !data) {
     return (
-      <div style={styles.page}>
+      <div className="page-content">
         <div style={{ ...styles.banner, background: '#450a0a', border: '1px solid #dc2626' }}>
           <span style={{ fontSize: 32 }}>❌</span>
           <div>
@@ -186,7 +186,7 @@ const StatusPage: React.FC = () => {
     : 100;
 
   return (
-    <div style={styles.page}>
+    <div className="page-content">
       {/* Banner */}
       <div style={{
         ...styles.banner,

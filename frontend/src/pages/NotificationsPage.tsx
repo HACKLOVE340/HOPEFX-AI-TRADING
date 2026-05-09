@@ -112,7 +112,7 @@ const NotificationsPage: React.FC = () => {
   const unreadCount = items.filter(n => !n.read).length;
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
+    <div className="page-content">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>

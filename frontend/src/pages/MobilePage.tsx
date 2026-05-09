@@ -232,7 +232,7 @@ const MobilePage: React.FC = () => {
     : DEFAULT_FEATURES;
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 20px' }}>
+    <div className="page-content">
       <PageHeader
         title="Mobile App"
         subtitle="Trade on the go with the HOPEFX mobile app for iOS and Android."

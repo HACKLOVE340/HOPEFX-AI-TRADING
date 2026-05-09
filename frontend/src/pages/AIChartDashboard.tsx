@@ -221,7 +221,7 @@ export default function AIChartDashboard() {
   const [timeframe, setTimeframe] = useState<TF>('1h');
 
   return (
-    <div className="flex flex-col h-screen bg-[#080c14] overflow-hidden">
+    <div className="page-content" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
 
       {/* ── Top bar ────────────────────────────────────────────────── */}
       <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a0f1a] border-b border-[#1e2d3d] shrink-0">
