@@ -169,7 +169,15 @@
   /* ── Page content ── */
   .page-content {
     @apply px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5;
-    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    max-width: 1536px; /* screen-2xl */
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
   }
 
   .card {
