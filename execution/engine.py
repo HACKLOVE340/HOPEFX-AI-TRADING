@@ -346,6 +346,30 @@ class ExecutionEngine:
             )
 
     # ------------------------------------------------------------------
+    # Thread-safe counter helpers
+    # ------------------------------------------------------------------
+
+    async def _inc_orders(self) -> None:
+        async with self._lock:
+            self._total_orders += 1
+
+    async def _inc_fills(self) -> None:
+        async with self._lock:
+            self._total_fills += 1
+
+    async def _inc_blocks(self) -> None:
+        async with self._lock:
+            self._total_blocks += 1
+
+    async def _inc_errors(self) -> None:
+        async with self._lock:
+            self._total_errors += 1
+
+    async def _append_latency(self, latency_ms: float) -> None:
+        async with self._lock:
+            self._latencies_ms.append(latency_ms)
+
+    # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
@@ -482,7 +506,7 @@ class ExecutionEngine:
                 logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
             t0 = time.monotonic()
-            self._total_orders += 1
+            await self._inc_orders()
 
             _enriched = self._enrich_price_from_data_layer(request, t0)
             if isinstance(_enriched, ExecutionReport):
@@ -612,7 +636,7 @@ class ExecutionEngine:
             from data_layer.orchestrator import orchestrator
 
             if orchestrator._started and not orchestrator.is_safe_to_trade():
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0)
 
             if request.price is None and request.order_type == "MARKET":
@@ -684,16 +708,16 @@ class ExecutionEngine:
         """
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, f"[KILL_SWITCH] {reason}", t0)
 
         if not self._running:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, "[ENGINE_STOPPED]", t0)
 
         # ── LIVE_MODE_CONFIRMED safety gate ───────────────────────────────────
         if not self._live_mode_confirmed and self._is_live_broker():
-            self._total_blocks += 1
+            await self._inc_blocks()
             msg = (
                 "[LIVE_MODE_NOT_CONFIRMED] Live broker detected but LIVE_MODE_CONFIRMED "
                 "is not set. Set LIVE_MODE_CONFIRMED=true in the environment to allow "
@@ -743,7 +767,7 @@ class ExecutionEngine:
                     f"order blocked to prevent adverse execution"
                 )
                 logger.warning(msg)
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(request, msg, t0)
         except (ImportError, AttributeError, RuntimeError) as exc:
             logger.debug("Spread spike check failed (non-fatal): %s", exc)
@@ -759,25 +783,25 @@ class ExecutionEngine:
         try:
             await self._circuit_breaker.check()
         except RuntimeError as exc:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, f"[CIRCUIT_BREAKER] {exc}", t0)
 
         try:
             gate_reason = await self._run_pre_trade_gate(request)
         except (TimeoutError, RuntimeError) as exc:
-            self._total_blocks += 1
+            await self._inc_blocks()
             logger.error("ExecutionEngine: pre-trade gate error for %s: %s", request.request_id, exc)
             self._capture_sentry(exc)
             return self._blocked_report(request, f"[GATE_ERROR] {exc}", t0)
 
         if gate_reason is not None:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, gate_reason, t0)
 
         # ── Self-trade prevention ─────────────────────────────────────────────
         stp_reason = self._check_self_trade(request)
         if stp_reason is not None:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, stp_reason, t0)
 
         # ── Margin check ──────────────────────────────────────────────────────
@@ -878,7 +902,7 @@ class ExecutionEngine:
                         f"order_notional={notional:.2f})"
                     )
                     logger.warning(msg)
-                    self._total_blocks += 1
+                    await self._inc_blocks()
                     return self._blocked_report(request, msg, t0)
         except (AttributeError, TypeError, RuntimeError, OSError) as exc:
             logger.warning("ExecutionEngine: margin check failed (non-fatal): %s", exc)
@@ -913,7 +937,7 @@ class ExecutionEngine:
                     f"(notional={notional:.2f} equity={equity:.2f})"
                 )
                 logger.warning(msg)
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(request, msg, t0)
         except (AttributeError, TypeError, RuntimeError, OSError) as exc:
             logger.warning("ExecutionEngine: leverage check failed (non-fatal): %s", exc)
@@ -987,7 +1011,7 @@ class ExecutionEngine:
             from ml.sharpe_circuit_breaker import get_sharpe_cb
 
             if get_sharpe_cb().is_open(model_version):
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(
                     request,
                     f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — rolling Sharpe below threshold",
@@ -1041,7 +1065,7 @@ class ExecutionEngine:
             )
             self._capture_sentry(exc)
             await self._circuit_breaker.record_failure()
-            self._total_errors += 1
+            await self._inc_errors()
             return ExecutionReport(
                 request_id=request.request_id,
                 status=ExecutionStatus.ERROR,
@@ -1053,7 +1077,7 @@ class ExecutionEngine:
             await self._handle_fill_success(request, report)
         else:
             await self._circuit_breaker.record_failure()
-            self._total_errors += 1
+            await self._inc_errors()
 
         return report
 
@@ -1066,8 +1090,8 @@ class ExecutionEngine:
         to the caller. Circuit-breaker success and metrics are always recorded.
         """
         await self._circuit_breaker.record_success()
-        self._total_fills += 1
-        self._record_latency(report.latency_ms)
+        await self._inc_fills()
+        await self._record_latency(report.latency_ms)
 
         for coro, label in [
             (self._persist_to_redis(request, report), "redis"),
@@ -1432,8 +1456,8 @@ class ExecutionEngine:
             message=reason,
         )
 
-    def _record_latency(self, latency_ms: float) -> None:
-        self._latencies_ms.append(latency_ms)  # deque(maxlen=100) auto-evicts oldest
+    async def _record_latency(self, latency_ms: float) -> None:
+        await self._append_latency(latency_ms)  # lock-protected deque append
         # Emit to Prometheus histogram for real-time SLA alerting.
         # Lazy-import so prometheus_client is optional (degrades gracefully).
         try:
@@ -1444,17 +1468,45 @@ class ExecutionEngine:
             logger.debug("Prometheus histogram observe failed: %s", _prom_exc)
 
     def get_metrics(self) -> dict[str, Any]:
-        """Return execution metrics snapshot."""
-        n = len(self._latencies_ms)
-        avg_latency = sum(self._latencies_ms) / n if n else 0.0
-        # p99 is meaningful for any sample ≥ 2; returning 0.0 for < 100 hid early latency spikes
-        p99_latency = sorted(self._latencies_ms)[int(n * 0.99)] if n >= 2 else 0.0
+        """Return execution metrics snapshot (best-effort sync read).
+
+        Counter reads are individually atomic in CPython (GIL), so this is
+        safe for monitoring/health endpoints that cannot await.  For a
+        fully consistent snapshot use get_metrics_async().
+        """
+        # Take a local copy of the deque to avoid mutation during iteration
+        latencies = list(self._latencies_ms)
+        n = len(latencies)
+        avg_latency = sum(latencies) / n if n else 0.0
+        p99_latency = sorted(latencies)[int(n * 0.99)] if n >= 2 else 0.0
         return {
             "total_orders": self._total_orders,
             "total_fills": self._total_fills,
             "total_blocks": self._total_blocks,
             "total_errors": self._total_errors,
             "fill_rate": self._total_fills / max(self._total_orders, 1),
+            "avg_latency_ms": avg_latency,
+            "p99_latency_ms": p99_latency,
+            "circuit_breaker_open": self._circuit_breaker.is_open,
+        }
+
+    async def get_metrics_async(self) -> dict[str, Any]:
+        """Return a fully consistent metrics snapshot under the counter lock."""
+        async with self._lock:
+            latencies = list(self._latencies_ms)
+            total_orders = self._total_orders
+            total_fills = self._total_fills
+            total_blocks = self._total_blocks
+            total_errors = self._total_errors
+        n = len(latencies)
+        avg_latency = sum(latencies) / n if n else 0.0
+        p99_latency = sorted(latencies)[int(n * 0.99)] if n >= 2 else 0.0
+        return {
+            "total_orders": total_orders,
+            "total_fills": total_fills,
+            "total_blocks": total_blocks,
+            "total_errors": total_errors,
+            "fill_rate": total_fills / max(total_orders, 1),
             "avg_latency_ms": avg_latency,
             "p99_latency_ms": p99_latency,
             "circuit_breaker_open": self._circuit_breaker.is_open,
