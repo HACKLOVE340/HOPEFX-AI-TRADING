@@ -1048,7 +1048,7 @@ class DeepLearningModel:
         logger.info("Online update completed with lr=%s", new_lr)
 
     def save(self, filepath: str):
-        """Save model and configuration"""
+        """Save model and configuration, then refresh the registry digest."""
         if self.model:
             self.model.save(f"{filepath}/model.h5")
 
@@ -1064,6 +1064,23 @@ class DeepLearningModel:
                 json.dump(config_dict, f, indent=2)
 
             logger.info("Model saved to %s", filepath)
+
+            # Refresh the registry digest so verify_active() reflects the new
+            # artifact. Without this, integrity checks report a SHA-256 mismatch
+            # against the stale pre-save digest.
+            try:
+                from ml.model_registry import get_registry
+                reg = get_registry()
+                active = reg.active_version()
+                if active:
+                    new_digest = reg.refresh_digest(active["name"])
+                    logger.info(
+                        "Registry digest refreshed for '%s' after save: %s…",
+                        active["name"],
+                        new_digest[:16],
+                    )
+            except Exception as _reg_exc:
+                logger.warning("Failed to refresh registry digest after save: %s", _reg_exc)
 
     def load(self, filepath: str):
         """Load model and configuration"""

@@ -397,6 +397,30 @@ def ml_daily_full_retrain(self=None):
 
             trainer = HourlyTrainer()
             asyncio.run(trainer.run_full_retrain())
+
+            # Refresh the registry digest for the active model so that
+            # verify_active() reflects the newly written artifact.
+            # Without this, every integrity check after retrain reports
+            # a SHA-256 mismatch against the stale pre-retrain digest.
+            try:
+                from ml.model_registry import get_registry
+                reg = get_registry()
+                active = reg.active_version()
+                if active:
+                    new_digest = reg.refresh_digest(active["name"])
+                    logger.info(
+                        "ml_daily_full_retrain: registry digest refreshed for '%s' — %s…",
+                        active["name"],
+                        new_digest[:16],
+                    )
+                else:
+                    logger.warning(
+                        "ml_daily_full_retrain: retrain complete but no active version in "
+                        "registry — run registry.register() to add the new artifact."
+                    )
+            except Exception as reg_exc:
+                logger.error("ml_daily_full_retrain: failed to refresh registry digest: %s", reg_exc)
+
         return {"status": "ok"}
     except RuntimeError as exc:
         if "already held" in str(exc):
