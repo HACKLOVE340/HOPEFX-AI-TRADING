@@ -635,7 +635,7 @@ const Dashboard: React.FC = () => {
   const acc = account;
 
   return (
-    <div className="page-content" style={{ maxWidth: 1280, margin: '0 auto', width: '100%' }}>
+    <div className="page-content">
       <PageHeader
         title="Dashboard"
         subtitle="Real-time trading overview"
