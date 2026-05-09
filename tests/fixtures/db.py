@@ -140,14 +140,11 @@ def db_engine():
         await engine.dispose()
 
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Inside an async context (e.g. pytest-asyncio) — schedule disposal
-            loop.create_task(_dispose())
-        else:
-            loop.run_until_complete(_dispose())
+        loop = asyncio.get_running_loop()
+        # Inside an async context (e.g. pytest-asyncio) — schedule disposal
+        loop.create_task(_dispose())
     except RuntimeError:
-        # No event loop — create a temporary one for cleanup
+        # No running loop — run synchronously
         asyncio.run(_dispose())
 
 
