@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import json
 import logging
 import math
 import os
@@ -148,10 +149,28 @@ class SharpeCircuitBreaker:
     auto-reset after RESET_AFTER_S seconds.
     """
 
-    def __init__(self) -> None:
+    # Redis key prefix for persisted circuit state.
+    _REDIS_KEY_PREFIX = "sharpe_cb:state:"
+    # TTL for persisted state — 7 days; long enough to survive weekend gaps.
+    _REDIS_TTL_S = 7 * 24 * 3600
+
+    def __init__(self, redis_client=None) -> None:
         self._states: dict[str, CircuitState] = {}
         self._running: bool = False
         self._lock = asyncio.Lock()
+        # Optional Redis client for state persistence across restarts.
+        # Accepts any redis.Redis / redis.asyncio.Redis compatible client.
+        self._redis = redis_client
+        if self._redis is None:
+            try:
+                import redis as _redis_lib
+                _url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+                self._redis = _redis_lib.from_url(_url, decode_responses=True, socket_connect_timeout=2)
+            except Exception as _e:
+                logger.debug("SharpeCircuitBreaker: Redis unavailable, state not persisted: %s", _e)
+                self._redis = None
+        # Restore any previously persisted state on startup.
+        self._restore_all()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -160,9 +179,11 @@ class SharpeCircuitBreaker:
         Record a trade P&L for the given model version.
 
         Thread-safe for single-producer use (deque append is atomic in CPython).
+        Persists updated window to Redis so restarts resume from current state.
         """
         state = self._get_or_create(model_version)
         state.record(pnl)
+        self._persist_state(state)
 
     def is_open(self, model_version: str) -> bool:
         """
@@ -188,6 +209,7 @@ class SharpeCircuitBreaker:
                 state.opened_at = None
                 state.consecutive_bad_windows = 0
                 state.trip_reason = ""
+                self._persist_state(state)
                 return False
 
         return True
@@ -200,6 +222,7 @@ class SharpeCircuitBreaker:
             state.opened_at = None
             state.consecutive_bad_windows = 0
             state.trip_reason = ""
+            self._persist_state(state)
             logger.info("SharpeCircuitBreaker: manually reset for '%s'", model_version)
 
     def get_status(self) -> dict[str, dict]:
@@ -246,6 +269,73 @@ class SharpeCircuitBreaker:
 
     def stop(self) -> None:
         self._running = False
+
+    # ── Redis persistence ─────────────────────────────────────────────────────
+
+    def _persist_state(self, state: CircuitState) -> None:
+        """Persist a single CircuitState to Redis.
+
+        Stores circuit open/closed status, the rolling P&L window, and
+        trip metadata so restarts resume from the correct state rather than
+        starting fresh (which would allow a tripped model to trade again).
+        """
+        if self._redis is None:
+            return
+        try:
+            key = f"{self._REDIS_KEY_PREFIX}{state.model_version}"
+            payload = json.dumps({
+                "is_open": state.is_open,
+                "opened_at": state.opened_at,
+                "consecutive_bad_windows": state.consecutive_bad_windows,
+                "trip_reason": state.trip_reason,
+                "total_trades": state.total_trades,
+                "last_sharpe": state.last_sharpe,
+                # Persist the rolling window so Sharpe calculation continues
+                # across restarts without a cold-start gap.
+                "pnl_window": list(state.pnl_window),
+            })
+            self._redis.setex(key, self._REDIS_TTL_S, payload)
+        except Exception as exc:
+            logger.warning("SharpeCircuitBreaker: failed to persist state for '%s': %s", state.model_version, exc)
+
+    def _restore_all(self) -> None:
+        """Restore all persisted CircuitState entries from Redis on startup."""
+        if self._redis is None:
+            return
+        try:
+            pattern = f"{self._REDIS_KEY_PREFIX}*"
+            keys = self._redis.keys(pattern)
+            for key in keys:
+                raw = self._redis.get(key)
+                if not raw:
+                    continue
+                try:
+                    data = json.loads(raw)
+                    version = key[len(self._REDIS_KEY_PREFIX):]
+                    state = CircuitState(model_version=version)
+                    state.is_open = bool(data.get("is_open", False))
+                    state.opened_at = data.get("opened_at")
+                    state.consecutive_bad_windows = int(data.get("consecutive_bad_windows", 0))
+                    state.trip_reason = data.get("trip_reason", "")
+                    state.total_trades = int(data.get("total_trades", 0))
+                    state.last_sharpe = data.get("last_sharpe")
+                    # Restore the rolling P&L window (bounded by WINDOW_TRADES).
+                    pnl_window = data.get("pnl_window", [])
+                    state.pnl_window = collections.deque(
+                        (float(x) for x in pnl_window),
+                        maxlen=WINDOW_TRADES,
+                    )
+                    self._states[version] = state
+                    logger.info(
+                        "SharpeCircuitBreaker: restored state for '%s' (open=%s, window=%d trades)",
+                        version,
+                        state.is_open,
+                        len(state.pnl_window),
+                    )
+                except Exception as parse_exc:
+                    logger.warning("SharpeCircuitBreaker: failed to parse state for key '%s': %s", key, parse_exc)
+        except Exception as exc:
+            logger.warning("SharpeCircuitBreaker: failed to restore state from Redis: %s", exc)
 
     # ── Internal ──────────────────────────────────────────────────────────────
 
@@ -316,6 +406,9 @@ class SharpeCircuitBreaker:
             state.model_version,
             state.trip_reason,
         )
+
+        # Persist tripped state immediately so other pods and restarts see it.
+        self._persist_state(state)
 
         # Fire outbox event for cross-pod propagation
         self._fire_trip_event(state)
