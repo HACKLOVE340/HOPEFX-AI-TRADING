@@ -178,7 +178,7 @@ const WatchlistPage: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={{ ...s.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={s.title}>Watchlist</h1>
