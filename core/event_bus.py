@@ -545,10 +545,17 @@ class EventBus:
             for ch in channels:
                 _local_bus.subscribe_local(ch, _enqueue)
 
-            while True:
-                msg = await queue.get()
-                self._metrics["delivered"] += 1
-                yield msg
+            try:
+                while True:
+                    msg = await queue.get()
+                    self._metrics["delivered"] += 1
+                    yield msg
+            finally:
+                # Always unregister the handler when the generator exits (normal
+                # or via GeneratorExit / cancellation) to prevent handler list
+                # growth and the associated memory leak.
+                for ch in channels:
+                    _local_bus.unsubscribe_local(ch, _enqueue)
             return  # unreachable; satisfies type checker
 
         # Redis path with auto-reconnect.
