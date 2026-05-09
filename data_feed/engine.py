@@ -215,8 +215,14 @@ class ProductionDataEngine:
             except (TypeError, ValueError) as exc:
                 logger.warning("Invalid price_bounds config for %s: %s — using defaults", sym, exc)
 
-        # Active symbol (used for bound lookups; defaults to XAUUSD)
-        self._symbol: str = self._cfg.get("symbol", "XAUUSD").upper()
+        # Active symbol — normalised to canonical MT5 form (no separator).
+        # Uses utils.symbol.canonical so "XAU_USD", "XAU/USD", "GOLD" etc.
+        # all resolve to "XAUUSD" for price-bounds lookups.
+        try:
+            from utils.symbol import canonical as _canonical_sym
+            self._symbol: str = _canonical_sym(self._cfg.get("symbol", "XAUUSD"))
+        except ImportError:
+            self._symbol = self._cfg.get("symbol", "XAUUSD").upper().replace("_", "").replace("/", "")
         self._price_min, self._price_max = self._price_bounds.get(
             self._symbol, (_FALLBACK_PRICE_MIN, _FALLBACK_PRICE_MAX)
         )

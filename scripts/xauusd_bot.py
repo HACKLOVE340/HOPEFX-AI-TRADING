@@ -53,7 +53,8 @@ class PaperBroker:
         """
         try:
             from data_layer.orchestrator import orchestrator
-            tick = orchestrator.get_latest_tick(symbol.replace("XAUUSD", "XAU_USD"))
+            from utils.symbol import to_oanda
+            tick = orchestrator.get_latest_tick(to_oanda(symbol))
             if tick is None:
                 raise RuntimeError(
                     f"No live tick available for {symbol}. "

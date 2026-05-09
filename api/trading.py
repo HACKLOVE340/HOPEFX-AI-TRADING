@@ -3295,8 +3295,13 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
 
 
 def _normalise_symbol(symbol: str) -> str:
-    """Convert XAU/USD → XAU_USD for the price engine."""
-    return symbol.replace("/", "_").upper()
+    """Convert any symbol variant to OANDA/price-engine form (XAU_USD).
+
+    Delegates to utils.symbol.to_oanda so all normalisation logic lives
+    in one place.  Kept as a module-level function for backward compat.
+    """
+    from utils.symbol import to_oanda
+    return to_oanda(symbol)
 
 
 @router.get("/levels", response_model=None, summary="Support and resistance levels for a symbol")

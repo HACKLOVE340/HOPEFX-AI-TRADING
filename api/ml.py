@@ -143,10 +143,9 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     """
     import pathlib
 
-    symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
-    # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
-    if "_" not in symbol_upper and len(symbol_upper) == 6:
-        symbol_upper = symbol_upper[:3] + "_" + symbol_upper[3:]
+    from utils.symbol import to_oanda
+    # Normalise: XAU/USD, XAUUSD, xau_usd → XAU_USD
+    symbol_upper = to_oanda(symbol)
 
     # 1. Live price engine async buffer — skip (sync context here)
 
