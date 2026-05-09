@@ -31,7 +31,7 @@ from __future__ import annotations
 import logging
 import math
 import os
-from collections import defaultdict
+from collections import defaultdict, deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -286,7 +286,8 @@ class MarketContextProvider:
                         ]
                         if log_returns:
                             vol = float(np.std(log_returns))
-                            return vol, "redis_ohlcv"
+                            if math.isfinite(vol) and vol > 0:
+                                return vol, "redis_ohlcv"
             except (ConnectionError, RuntimeError, ValueError, TypeError) as exc:
                 logger.debug("TCA: Redis OHLCV vol lookup failed for %s: %s", symbol, exc)
 
@@ -314,9 +315,9 @@ class TCAEngine:
         self._active_orders: dict[str, dict[str, Any]] = {}
         self._completed: list[TCAMetrics] = []
 
-        # VWAP/TWAP caches: symbol → list of (datetime, price, volume)
-        self._vwap_cache: dict[str, list[tuple[datetime, Decimal, Decimal]]] = {}
-        self._twap_cache: dict[str, list[tuple[datetime, Decimal]]] = {}
+        # VWAP/TWAP caches: symbol → deque of (datetime, price[, volume])
+        self._vwap_cache: dict[str, deque[tuple[datetime, Decimal, Decimal]]] = {}
+        self._twap_cache: dict[str, deque[tuple[datetime, Decimal]]] = {}
 
         self._cost_callbacks: list[Callable[[TCAMetrics], None]] = []
 
@@ -362,19 +363,15 @@ class TCAEngine:
             order["first_fill_time"] = now
             order["time_to_first_fill_ms"] = (now - order["arrival_time"]).total_seconds() * 1000
 
-        # Update VWAP cache from fill
+        # Update VWAP/TWAP caches from fill (deque auto-evicts at maxlen)
         symbol = order["symbol"]
         if symbol not in self._vwap_cache:
-            self._vwap_cache[symbol] = []
+            self._vwap_cache[symbol] = deque(maxlen=10_000)
         self._vwap_cache[symbol].append((now, fill.price, fill.quantity))
-        if len(self._vwap_cache[symbol]) > 10_000:
-            self._vwap_cache[symbol].pop(0)
 
         if symbol not in self._twap_cache:
-            self._twap_cache[symbol] = []
+            self._twap_cache[symbol] = deque(maxlen=10_000)
         self._twap_cache[symbol].append((now, fill.price))
-        if len(self._twap_cache[symbol]) > 10_000:
-            self._twap_cache[symbol].pop(0)
 
     async def complete_order(self, order_id: str, status: str = "FILLED") -> TCAMetrics:
         """Complete tracking and calculate metrics using real market context."""
@@ -543,19 +540,15 @@ class TCAEngine:
             ts=now,
         )
 
-        # VWAP cache
+        # VWAP cache (deque auto-evicts oldest at maxlen)
         if symbol not in self._vwap_cache:
-            self._vwap_cache[symbol] = []
+            self._vwap_cache[symbol] = deque(maxlen=10_000)
         self._vwap_cache[symbol].append((now, tick.mid, tick.volume))
-        if len(self._vwap_cache[symbol]) > 10_000:
-            self._vwap_cache[symbol].pop(0)
 
-        # TWAP cache
+        # TWAP cache (deque auto-evicts oldest at maxlen)
         if symbol not in self._twap_cache:
-            self._twap_cache[symbol] = []
+            self._twap_cache[symbol] = deque(maxlen=10_000)
         self._twap_cache[symbol].append((now, tick.mid))
-        if len(self._twap_cache[symbol]) > 10_000:
-            self._twap_cache[symbol].pop(0)
 
     def get_stats(self, n: int = 100) -> dict[str, Any]:
         """Rolling execution quality statistics."""

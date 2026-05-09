@@ -24,6 +24,7 @@ Design invariants:
 from __future__ import annotations
 
 import asyncio
+import collections
 import logging
 import os
 import time
@@ -140,10 +141,16 @@ class ExecutionRequest:
             raise ValueError(f"quantity must be > 0, got {self.quantity}")
         if self.order_type not in ("MARKET", "LIMIT", "STOP"):
             raise ValueError(f"order_type must be MARKET/LIMIT/STOP, got {self.order_type!r}")
-        if self.order_type == "LIMIT" and self.price is None:
-            raise ValueError("price required for LIMIT orders")
-        if self.order_type == "STOP" and self.stop_price is None:
-            raise ValueError("stop_price required for STOP orders")
+        if self.order_type == "LIMIT":
+            if self.price is None:
+                raise ValueError("price required for LIMIT orders")
+            if self.price <= 0:
+                raise ValueError(f"price must be > 0 for LIMIT orders, got {self.price}")
+        if self.order_type == "STOP":
+            if self.stop_price is None:
+                raise ValueError("stop_price required for STOP orders")
+            if self.stop_price <= 0:
+                raise ValueError(f"stop_price must be > 0 for STOP orders, got {self.stop_price}")
 
 
 @dataclass
@@ -238,7 +245,11 @@ class EngineCircuitBreaker:
         async with self._lock:
             if not self._open:
                 return
-            elapsed = time.monotonic() - (self._opened_at or 0)
+            if self._opened_at is None:
+                logger.error("EngineCircuitBreaker: _open=True but _opened_at=None — forcing close")
+                self._open = False
+                return
+            elapsed = time.monotonic() - self._opened_at
             if elapsed >= self._reset_sec:
                 logger.info(
                     "ENGINE CIRCUIT BREAKER: auto-reset after %.0fs.",

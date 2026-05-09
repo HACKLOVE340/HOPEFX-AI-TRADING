@@ -183,6 +183,16 @@ class WebSocketPriceFeed(PriceFeedBase):
 
                 logger.info("WebSocket connected, subscribed to %s symbols", len(self.symbols))
 
+                # Cancel any leftover tasks from a previous connection cycle
+                for _dangling in (
+                    getattr(self, "_receive_task", None),
+                    getattr(self, "_heartbeat_task", None),
+                ):
+                    if _dangling is not None and not _dangling.done():
+                        _dangling.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await _dangling
+
                 # Start tasks
                 self._receive_task = asyncio.create_task(self._receive_loop())
                 self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
@@ -253,9 +263,21 @@ class WebSocketPriceFeed(PriceFeedBase):
             if symbol not in self.symbols:
                 return
 
+            # Prefer feed-provided timestamp to avoid local-clock skew
+            _raw_ts = data.get("time")
+            if _raw_ts:
+                try:
+                    _tick_ts = datetime.fromisoformat(str(_raw_ts).rstrip("Z")).replace(
+                        tzinfo=UTC
+                    ).timestamp()
+                except (ValueError, TypeError):
+                    _tick_ts = time.time()
+            else:
+                _tick_ts = time.time()
+
             tick = Tick(
                 symbol=symbol,
-                timestamp=time.time(),
+                timestamp=_tick_ts,
                 bid=float(data.get("best_bid", 0)),
                 ask=float(data.get("best_ask", 0)),
                 mid=(float(data.get("best_bid", 0)) + float(data.get("best_ask", 0))) / 2,

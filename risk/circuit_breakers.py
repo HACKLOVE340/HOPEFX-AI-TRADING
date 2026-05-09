@@ -222,10 +222,10 @@ class CircuitBreaker:
             )
             return
 
-        # Check consecutive losses
+        # Check consecutive losses — either condition alone is enough to halt
         if (
             self.consecutive_losses >= self.limits.max_consecutive_losses
-            and self.loss_streak_amount >= self.limits.max_loss_streak_pct * self.session_start_balance
+            or self.loss_streak_amount >= self.limits.max_loss_streak_pct * self.session_start_balance
         ):
             await self._trigger_circuit_breaker(
                 "LOSS_STREAK",

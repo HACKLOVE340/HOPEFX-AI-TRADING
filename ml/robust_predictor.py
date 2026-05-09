@@ -729,11 +729,15 @@ class RobustPredictor:
             from data_layer.orchestrator import orchestrator
 
             dl_feats = orchestrator.get_ml_features()
-            if dl_feats:
+            if dl_feats and not features.empty:
+                # Only assign to the most recent bar to prevent lookahead bias
+                # when this method is called on multi-bar historical DataFrames.
+                last_idx = features.index[-1]
                 for key, val in dl_feats.items():
-                    # Broadcast scalar to all rows (same value for every bar —
-                    # represents the current live state, not a per-bar series)
-                    features[f"dl_{key}"] = float(val)
+                    col = f"dl_{key}"
+                    if col not in features.columns:
+                        features[col] = float("nan")
+                    features.loc[last_idx, col] = float(val)
         except Exception as _exc:
             logger.debug("RobustPredictor: data layer injection skipped: %s", _exc)
 

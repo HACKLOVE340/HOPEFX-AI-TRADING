@@ -345,7 +345,7 @@ def _task(**kwargs):
 # ── ML tasks ─────────────────────────────────────────────────────────────────
 
 
-@_task(name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360)
+@_task(name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360)  # lock timeout must be <= time_limit
 def ml_hourly_online_update(self=None):
     """
     Incremental online-learning update for all configured symbols.
@@ -356,7 +356,7 @@ def ml_hourly_online_update(self=None):
     import asyncio
 
     try:
-        with _redis_lock("ml_train", timeout=420):
+        with _redis_lock("ml_train", timeout=355):
             from ml.hourly_trainer import HourlyTrainer
 
             trainer = HourlyTrainer()

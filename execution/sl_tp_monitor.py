@@ -300,8 +300,7 @@ class SLTPMonitor:
                         try:
                             await self._pm.close_position(
                                 symbol=symbol,
-                                close_price=trigger_price,
-                                close_time=datetime.now(UTC),
+                                fill_price=trigger_price,
                             )
                         except Exception as pm_exc:
                             logger.warning("SLTPMonitor: pm.close_position error: %s", pm_exc)

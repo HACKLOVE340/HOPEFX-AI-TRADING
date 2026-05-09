@@ -1533,11 +1533,15 @@ def _compute_drawdown_series(
 
 def _calculate_sortino(returns: "np.ndarray", target: float = 0.0) -> float:
     """Sortino ratio: excess return over target divided by downside deviation."""
-    downside = returns[returns < target]
+    arr = np.asarray(returns, dtype=float)
+    arr = arr[np.isfinite(arr)]  # drop NaN/inf before any calculation
+    if len(arr) == 0:
+        return 0.0
+    downside = arr[arr < target]
     if len(downside) == 0:
         return 0.0
     downside_std = float(np.std(downside))
-    return float((np.mean(returns) - target) / downside_std) if downside_std > 0 else 0.0
+    return float((np.mean(arr) - target) / downside_std) if downside_std > 0 else 0.0
 
 
 def _calculate_calmar(returns: "np.ndarray", max_dd: float) -> float:
@@ -1569,7 +1573,7 @@ def _build_trade_statistics(trades: list, pnls: list[float]) -> dict[str, Any]:
         "winning_trades": len(wins),
         "losing_trades": len(losses),
         "win_rate": len(wins) / len(trades) if trades else 0,
-        "profit_factor": abs(sum(wins) / sum(losses)) if losses else float("inf"),
+        "profit_factor": abs(sum(wins) / sum(losses)) if losses and sum(losses) != 0 else float("inf"),
         "payoff_ratio": abs(float(np.mean(wins)) / float(np.mean(losses))) if wins and losses else 0,
         "total_pnl": sum(pnls),
         "avg_trade_pnl": float(np.mean(pnls)),
@@ -2186,10 +2190,12 @@ class EnhancedBacktestEngine:
             else 0,
             mfe=position.max_favorable_excursion,
             mae=position.max_adverse_excursion,
-            mfe_pct=position.max_favorable_excursion / position.avg_entry_price * 100
-            if position.avg_entry_price
+            mfe_pct=position.max_favorable_excursion / (abs(position.size) * position.avg_entry_price) * 100
+            if position.avg_entry_price and position.size
             else 0,
-            mae_pct=position.max_adverse_excursion / position.avg_entry_price * 100 if position.avg_entry_price else 0,
+            mae_pct=position.max_adverse_excursion / (abs(position.size) * position.avg_entry_price) * 100
+            if position.avg_entry_price and position.size
+            else 0,
         )
 
         # Update position
