@@ -203,7 +203,7 @@ const CopyTrading: React.FC = () => {
     : '0.00';
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Copy Trading Marketplace</h1>

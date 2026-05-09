@@ -244,7 +244,7 @@ const EconomicCalendar: React.FC = () => {
   }, {});
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       {/* Header */}
       <div style={s.header}>
         <div>

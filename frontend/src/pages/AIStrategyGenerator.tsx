@@ -153,7 +153,7 @@ const AIStrategyGenerator: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#94a3b8' }}>
