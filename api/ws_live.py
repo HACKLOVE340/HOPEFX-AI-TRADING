@@ -31,8 +31,8 @@ Message format (client → server):
 
 Authentication
 --------------
-Clients MUST send an auth message within AUTH_TIMEOUT_SECONDS of connecting,
-or the connection is closed with code 4001.
+Clients MUST send an auth message within AUTH_TIMEOUT_SECONDS (default 5 s)
+of connecting, or the connection is closed with code 4001.
 
   { "type": "auth", "token": "Bearer eyJ..." }
 
@@ -75,7 +75,10 @@ _last_mid: dict[str, float] = {}
 _last_mid_lock = _threading.Lock()
 
 # ── Auth / heartbeat config ───────────────────────────────────────────────────
-AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "30"))
+# 5 s is sufficient for any legitimate client on a normal connection.
+# 30 s was too long — it allowed unauthenticated connections to hold a slot
+# for half a minute, enabling trivial resource exhaustion.
+AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "5"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
 # Set to "false" to allow unauthenticated connections (dev/demo mode only).

@@ -18,7 +18,7 @@ Authentication flow
 1. Client connects.
 2. Server sends ``{"type": "auth_required"}``.
 3. Client must send ``{"type": "auth", "token": "Bearer <jwt>"}`` within
-   ``AUTH_TIMEOUT_SECONDS`` (default 10 s).
+   ``AUTH_TIMEOUT_SECONDS`` (default 5 s).
 4. Server validates the JWT via ``auth.jwt.decode_access_token``.
 5. On success: server sends ``{"type": "auth_ok", "user_id": "..."}`` and
    the connection is admitted to the broadcast pool.
@@ -28,7 +28,7 @@ Authentication flow
 Environment variables
 ---------------------
     WS_AUTH_REQUIRED      — "true" (default) / "false" (dev/demo only)
-    WS_AUTH_TIMEOUT       — seconds to wait for auth message (default 10)
+    WS_AUTH_TIMEOUT       — seconds to wait for auth message (default 5)
     SECURITY_JWT_SECRET   — JWT signing secret (required in production)
 """
 
@@ -43,7 +43,10 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _AUTH_REQUIRED: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
-_AUTH_TIMEOUT: float = float(os.getenv("WS_AUTH_TIMEOUT", "30"))
+# 5 s is sufficient for any legitimate client on a normal connection.
+# 30 s was too long — it allowed unauthenticated connections to hold a slot
+# for half a minute, enabling trivial resource exhaustion.
+_AUTH_TIMEOUT: float = float(os.getenv("WS_AUTH_TIMEOUT", "5"))
 
 
 def _validate_token(token: str) -> dict | None:
