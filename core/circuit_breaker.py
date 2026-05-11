@@ -252,15 +252,23 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         reset_timeout: float = 60.0,
-    ) -> CircuitBreaker:
-        """Return (or create) the named circuit breaker from the global registry."""
-        if name not in cls._registry:
-            cls._registry[name] = cls(
+    ) -> "CircuitBreaker":
+        """Return (or create) the named circuit breaker from the global registry.
+
+        Uses setdefault() for atomic check-and-insert under the GIL so two
+        concurrent callers always get the same CircuitBreaker instance.
+        The previous check-then-set pattern was not atomic: two coroutines
+        could both pass the 'not in' check and create two different instances,
+        causing each to track failures independently and never opening.
+        """
+        return cls._registry.setdefault(
+            name,
+            cls(
                 name=name,
                 failure_threshold=failure_threshold,
                 reset_timeout=reset_timeout,
-            )
-        return cls._registry[name]
+            ),
+        )
 
     @classmethod
     def all_statuses(cls) -> dict[str, dict]:
