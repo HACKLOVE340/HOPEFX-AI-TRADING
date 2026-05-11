@@ -738,12 +738,23 @@ async def _record_fill(
     filled_qty = _get("filled_quantity", "quantity") or order.quantity
 
     # Reject if broker signalled a failure status in the result.
-    result_status = _get("status")
-    if result_status in ("rejected", "error", "cancelled"):
-        reason = _get("reason") or result_status
+    # Order.status is an OrderStatus enum; normalise to lowercase string so
+    # the comparison works regardless of whether the broker returns an enum
+    # value (e.g. OrderStatus.REJECTED) or a plain string (e.g. "rejected").
+    raw_status = _get("status")
+    result_status_str = (
+        raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
+    ).lower()
+    if result_status_str in ("rejected", "error", "cancelled"):
+        # Prefer rejected_reason attribute (Order dataclass), then generic reason.
+        reason = (
+            _get("rejected_reason")
+            or _get("reason")
+            or result_status_str
+        )
         logger.error(
             "Order rejected by broker: user=%s symbol=%s side=%s status=%s reason=%s",
-            user_id, order.symbol, order.side, result_status, reason,
+            user_id, order.symbol, order.side, result_status_str, reason,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
