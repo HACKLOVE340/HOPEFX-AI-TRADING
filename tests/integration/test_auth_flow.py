@@ -421,6 +421,54 @@ class TestTokenRefresh:
         r2 = client.post("/api/auth/refresh", json={"refresh_token": old_refresh})
         assert r2.status_code == 401
 
+    def test_old_access_token_revoked_after_refresh(self, client):
+        """After token rotation the old access token must be blacklisted.
+
+        Regression: service.refresh() did not revoke the old access token,
+        so a stolen token remained valid for its full TTL even after the
+        legitimate owner refreshed.  The fix passes old_access_token to
+        service.refresh() which blacklists it via the JTI blacklist.
+        """
+        tokens = self._login_tokens(client)
+        old_access = tokens["access_token"]
+        old_refresh = tokens["refresh_token"]
+
+        # Rotate — pass the old access token in the Authorization header
+        r = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": old_refresh},
+            headers={"Authorization": f"Bearer {old_access}"},
+        )
+        assert r.status_code == 200, r.text
+
+        # The old access token must now be rejected on a protected endpoint
+        me = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {old_access}"},
+        )
+        assert me.status_code == 401, (
+            f"Old access token still accepted after refresh (status={me.status_code})"
+        )
+
+        # The new access token must still work
+        new_access = r.json()["access_token"]
+        me2 = client.get(
+            "/api/auth/me",
+            headers={"Authorization": f"Bearer {new_access}"},
+        )
+        assert me2.status_code == 200, f"New access token rejected (status={me2.status_code})"
+
+    def test_refresh_without_old_access_token_still_works(self, client):
+        """Refresh without Authorization header must succeed (old_access_token is optional)."""
+        tokens = self._login_tokens(client)
+        r = client.post(
+            "/api/auth/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+            # No Authorization header — cookie-only clients
+        )
+        assert r.status_code == 200
+        assert "access_token" in r.json()
+
 
 # ── Logout ────────────────────────────────────────────────────────────────────
 

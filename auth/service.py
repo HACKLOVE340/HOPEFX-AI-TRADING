@@ -628,9 +628,15 @@ class AuthService:
         self,
         raw_refresh_token: str,
         ip_address: str = "unknown",
+        old_access_token: str | None = None,
     ) -> tuple[bool, str, dict | None]:
         """
-        Rotate refresh token. Old token is revoked, new pair issued.
+        Rotate refresh token. Old refresh session is revoked, new pair issued.
+
+        ``old_access_token`` — the caller's current access token (from the
+        Authorization header).  When supplied, it is immediately blacklisted so
+        it cannot be reused after the rotation.  Without this, a stolen access
+        token would remain valid for its full TTL even after the owner refreshed.
         """
         from database.user_models import User, UserSession
 
@@ -670,16 +676,35 @@ class AuthService:
             )
             session.commit()
 
-            return (
-                True,
-                "Token refreshed",
-                {
-                    "access_token": access_token,
-                    "refresh_token": raw_new,
-                    "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
-                    "expires_in": _access_token_expire_minutes() * 60,
-                },
-            )
+        # Blacklist the old access token *after* the DB transaction commits so
+        # the new session is durable before we invalidate the old credential.
+        # This is the same pattern used by logout().
+        if old_access_token:
+            try:
+                payload = jwt.decode(
+                    old_access_token,
+                    _get_secret(),
+                    algorithms=[ALGORITHM],
+                )
+                jti = payload.get("jti")
+                exp = payload.get("exp", 0)
+                if jti:
+                    ttl = max(0, exp - int(_now().timestamp()))
+                    revoke_access_token(jti, ttl + 60)  # +60s buffer
+            except Exception as _exc:
+                # Expired or invalid — already unusable, no need to blacklist.
+                logger.debug("refresh: old access token not blacklisted: %s", _exc)
+
+        return (
+            True,
+            "Token refreshed",
+            {
+                "access_token": access_token,
+                "refresh_token": raw_new,
+                "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
+                "expires_in": _access_token_expire_minutes() * 60,
+            },
+        )
 
     # ── Logout ────────────────────────────────────────────────────────────────
 

@@ -399,7 +399,7 @@ def _get_current_user_id(
     try:
         import jwt
 
-        from auth.service import _get_secret
+        from auth.service import _get_secret, is_access_token_revoked
 
         secret = _get_secret()  # raises RuntimeError if unset or too short
         payload = jwt.decode(
@@ -410,6 +410,11 @@ def _get_current_user_id(
         )
         if payload.get("type") != "access":
             raise ValueError("Not an access token")
+        # Check JTI blacklist — tokens revoked via logout or token rotation
+        # must be rejected even if the signature and expiry are still valid.
+        jti = payload.get("jti")
+        if jti and is_access_token_revoked(jti):
+            raise ValueError("Token has been revoked")
         return payload["sub"]
     except RuntimeError as exc:
         # Misconfigured secret — do not mask as 401
@@ -665,6 +670,10 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     The refresh token is read from the request body (``refresh_token`` field)
     or, as a fallback, from the ``hopefx_refresh_token`` cookie so that
     cookie-only clients (e.g. server-side rendering) work without JS.
+
+    The current access token (Authorization header or hopefx_access_token
+    cookie) is blacklisted immediately after rotation so it cannot be reused
+    even within its remaining TTL.
     """
     _check_ip_rate_limit(_get_client_ip(request))
     # Resolve token: body → cookie → 401
@@ -674,8 +683,22 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="refresh_token is required (body or cookie)",
         )
+    # Extract the old access token so service.refresh() can blacklist it.
+    # Try Authorization header first, then the access-token cookie.
+    old_access_token: str | None = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        old_access_token = auth_header[7:].strip() or None
+    if not old_access_token:
+        old_access_token = request.cookies.get("hopefx_access_token") or None
+
     ok, msg, tokens = await asyncio.to_thread(
-        functools.partial(_svc().refresh, refresh_token, ip_address=_client_ip(request))
+        functools.partial(
+            _svc().refresh,
+            refresh_token,
+            ip_address=_client_ip(request),
+            old_access_token=old_access_token,
+        )
     )
     if not ok:
         raise HTTPException(status_code=401, detail=msg)
