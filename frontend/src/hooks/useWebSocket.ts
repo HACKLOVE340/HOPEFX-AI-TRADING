@@ -15,7 +15,25 @@ import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAl
 
 // Module-level map: symbol → last known mid price, used to compute change_pct
 // when the server sends 0 or omits the field.
-const _lastMid: Record<string, number> = {};
+// Capped at MAX_TRACKED_SYMBOLS entries to prevent unbounded growth when the
+// server sends unexpected or malformed symbol strings. Oldest entry is evicted
+// when the cap is reached (insertion-order eviction via Map iteration).
+const MAX_TRACKED_SYMBOLS = 100;
+const _lastMid = new Map<string, number>();
+
+function _setLastMid(symbol: string, mid: number): void {
+  if (!_lastMid.has(symbol) && _lastMid.size >= MAX_TRACKED_SYMBOLS) {
+    // Evict the oldest entry (first key in Map insertion order)
+    const oldest = _lastMid.keys().next().value;
+    if (oldest !== undefined) _lastMid.delete(oldest);
+  }
+  _lastMid.set(symbol, mid);
+}
+
+// Test-only exports — not part of the public API.
+// Imported by websocket_messages.test.ts to inspect and reset internal state.
+export const _setLastMid_testOnly = _setLastMid;
+export const _lastMid_testOnly    = _lastMid;
 
 const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
@@ -155,13 +173,13 @@ export function useWebSocket(enabled = true) {
         // Compute change_pct from previous mid if server sends 0 or omits it.
         // _lastMid is a module-level map so it persists across reconnects.
         const mid = raw.mid ?? ((raw.bid + raw.ask) / 2);
-        const prev = _lastMid[raw.symbol];
+        const prev = _lastMid.get(raw.symbol);
         const computed_change_pct = raw.change_pct
           ? raw.change_pct
           : prev != null && prev !== 0
             ? ((mid - prev) / prev) * 100
             : 0;
-        _lastMid[raw.symbol] = mid;
+        _setLastMid(raw.symbol, mid);
         const tick: PriceTick = { ...raw, change_pct: computed_change_pct };
         setPrice(tick);
         // Clear the no-live-feed banner once real ticks arrive.
@@ -321,12 +339,12 @@ export function useWebSocket(enabled = true) {
       for (const [rawSymbol, raw] of Object.entries(res.data)) {
         const symbol = normaliseSymbol(rawSymbol);
         const mid    = (raw.bid + raw.ask) / 2;
-        const prev   = _lastMid[symbol];
+        const prev   = _lastMid.get(symbol);
         const rawAny = raw as Record<string, unknown>;
         const change_pct = prev != null && prev !== 0
           ? ((mid - prev) / prev) * 100
           : (typeof rawAny['change_pct'] === 'number' ? (rawAny['change_pct'] as number) : 0);
-        _lastMid[symbol] = mid;
+        _setLastMid(symbol, mid);
         setPrice({
           symbol,
           bid:        raw.bid,
@@ -374,8 +392,11 @@ export function useWebSocket(enabled = true) {
 
     ws.onmessage = (event) => handleMessage(event.data as string);
     ws.onerror = () => {
+      // Only update status here. Do NOT start the REST poll — onclose always
+      // fires after onerror, so starting the poll here creates a race where
+      // both WS (still in CLOSING state) and REST poll run simultaneously,
+      // producing duplicate price updates until onopen fires on reconnect.
       getState().setWsStatus('error');
-      startRestPoll(); // WS errored — start REST fallback
     };
 
     ws.onclose = () => {
@@ -383,7 +404,10 @@ export function useWebSocket(enabled = true) {
       if (unmounted.current) return;
       getState().setWsStatus('disconnected');
       authedRef.current = false;
-      startRestPoll(); // WS closed — start REST fallback
+      // Start REST fallback only here — onclose is the definitive signal that
+      // the connection is gone (fires after onerror when there is an error,
+      // and directly when the server closes cleanly).
+      startRestPoll();
       const delay = reconnectDelay.current;
       // Add ±10% jitter to prevent thundering herd when many clients reconnect
       const jitter = delay * (0.9 + Math.random() * 0.2);
