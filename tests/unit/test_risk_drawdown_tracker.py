@@ -415,3 +415,46 @@ class TestStatus:
         assert s["last_equity"] == pytest.approx(95_000.0)
         assert s["total_hwm"] == pytest.approx(100_000.0)
         assert s["drawdown_mode"] == "equity"
+
+    def test_status_drawdown_pct_consistent(self):
+        """status() total_drawdown_pct must match the actual equity loss."""
+        t = _tracker(initial_balance=100_000.0)
+        t.update(equity=90_000.0)
+        s = t.status()
+        # 10% drawdown from 100k HWM
+        assert s["total_drawdown_pct"] == pytest.approx(10.0, abs=0.01)
+
+    def test_status_thread_safety(self):
+        """Concurrent update() and status() calls must not produce inconsistent
+        snapshots (e.g. drawdown_pct computed from a stale HWM)."""
+        import threading
+
+        t = _tracker(initial_balance=100_000.0)
+        errors: list[str] = []
+
+        def _updater():
+            for i in range(200):
+                equity = 100_000.0 - i * 10
+                t.update(equity=equity)
+
+        def _reader():
+            for _ in range(200):
+                s = t.status()
+                hwm = s["total_hwm"]
+                eq = s["last_equity"]
+                dd = s["total_drawdown_pct"]
+                # Recompute expected DD from the snapshot values
+                if hwm > 0:
+                    expected = round(max(0.0, (hwm - eq) / hwm) * 100, 4)
+                    if abs(dd - expected) > 0.01:
+                        errors.append(
+                            f"Inconsistent snapshot: hwm={hwm} eq={eq} dd={dd} expected={expected}"
+                        )
+
+        t1 = threading.Thread(target=_updater)
+        t2 = threading.Thread(target=_reader)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+        assert errors == [], f"Thread-safety violations: {errors[:3]}"
