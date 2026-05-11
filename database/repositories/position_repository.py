@@ -82,8 +82,13 @@ class PositionRepository(AsyncRepository[Position]):
         position.current_price = current_price
         if unrealized_pnl is not None:
             position.unrealized_pnl = unrealized_pnl
-        # Recompute market value
-        qty = position.quantity or position.size or 0.0
+        # Recompute market value — use explicit None check so a quantity of
+        # 0.0 (falsy) does not fall through to the size field incorrectly.
+        qty = (
+            position.quantity if position.quantity is not None
+            else position.size if position.size is not None
+            else 0.0
+        )
         position.market_value = current_price * qty
         session.add(position)
         await session.flush()

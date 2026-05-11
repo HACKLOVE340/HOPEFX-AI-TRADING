@@ -100,8 +100,14 @@ class SignalRepository(AsyncRepository[Signal]):
         executed: bool | None = None,
         limit: int = 100,
     ) -> Sequence[Signal]:
-        """Return signals associated with a user via their trades."""
-        from sqlalchemy import join
+        """Return signals associated with a user via their trades.
+
+        Uses an INNER JOIN so only signals that are linked to a trade owned
+        by the user are returned.  The previous LEFT OUTER JOIN put the
+        Trade.user_id filter in the WHERE clause which turned the outer join
+        into an implicit inner join while also excluding unlinked signals —
+        the worst of both worlds.
+        """
         from database.models import Trade
 
         conditions = [Trade.user_id == user_id]
@@ -112,7 +118,7 @@ class SignalRepository(AsyncRepository[Signal]):
 
         stmt = (
             select(Signal)
-            .join(Trade, Signal.trade_id == Trade.trade_id, isouter=True)
+            .join(Trade, Signal.trade_id == Trade.trade_id)
             .where(and_(*conditions))
             .order_by(desc(Signal.generated_at))
             .limit(limit)
