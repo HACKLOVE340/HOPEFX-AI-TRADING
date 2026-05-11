@@ -206,7 +206,7 @@ async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(_requ
         return {"ok": True, "model": body.model, "version": body.version, "status": "deployed"}
     except Exception as exc:
         logger.warning("deploy_model %s@%s failed: %s", body.model, body.version, exc)
-        raise HTTPException(status_code=500, detail=f"Deploy failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Deploy failed.") from exc
 
 
 @router.post("/ml/rollback/{model_name}")
@@ -246,7 +246,7 @@ async def rollback_model(model_name: str, user: TokenPayload = Depends(_require_
         raise
     except Exception as exc:
         logger.warning("rollback_model %s failed: %s", model_name, exc)
-        raise HTTPException(status_code=500, detail=f"Rollback failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Rollback failed.") from exc
 
 
 @router.get("/ml/metrics")

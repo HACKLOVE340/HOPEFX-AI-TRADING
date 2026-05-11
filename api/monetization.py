@@ -1283,7 +1283,7 @@ async def withdraw_affiliate_commission(
         }
     except Exception as exc:
         logger.warning("withdraw_affiliate_commission: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+        raise HTTPException(status_code=400, detail="Payment processing error.") from None
 
 
 @router.patch("/affiliate/{affiliate_id}/payment-method")

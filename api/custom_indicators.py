@@ -184,7 +184,7 @@ async def calculate_indicator(body: CalculateRequest) -> dict:
         raise
     except Exception as exc:
         logger.warning("calculate_indicator: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Indicator calculation failed.") from None
 
 
 class PreviewRequest(BaseModel):
@@ -401,7 +401,7 @@ async def apply_indicator(
         }
     except Exception as exc:
         logger.warning("apply_indicator calculate: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Indicator calculation failed.") from None
 
 
 class TestIndicatorRequest(BaseModel):

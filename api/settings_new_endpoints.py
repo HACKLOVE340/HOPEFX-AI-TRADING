@@ -466,7 +466,7 @@ async def trigger_backup(user: TokenPayload = Depends(require_role("admin"))):
         _save_to_db("last_manual_backup", {"triggered_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
         return {"status": "started"}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Backup failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Backup failed.") from exc
 
 
 # ── Global kill switch (admin only) ──────────────────────────────────────────
@@ -524,9 +524,9 @@ async def test_smtp(payload: SmtpTestPayload, user: TokenPayload = Depends(requi
         server.quit()
         return {"status": "sent"}
     except smtplib.SMTPException as exc:
-        raise HTTPException(status_code=502, detail=f"SMTP error: {exc}") from exc
+        raise HTTPException(status_code=502, detail="SMTP error.") from exc
     except OSError as exc:
-        raise HTTPException(status_code=502, detail=f"Connection failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail="Connection failed.") from exc
 
 
 # NOTE: GET /api/admin/settings and POST /api/admin/settings are handled by

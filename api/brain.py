@@ -464,7 +464,7 @@ async def brain_complete(
                 completion_tokens=resp.usage.completion_tokens if resp.usage else None,
             )
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"OpenAI error: {exc}") from exc
+            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
 
     if backend == "ollama":
         try:
@@ -482,7 +482,7 @@ async def brain_complete(
                 model=model,
             )
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Ollama error: {exc}") from exc
+            raise HTTPException(status_code=502, detail="LLM backend error.") from exc
 
     raise HTTPException(
         status_code=503,
@@ -523,7 +523,7 @@ async def brain_embed(
                 dimensions=len(vectors[0]) if vectors else 0,
             )
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"OpenAI embed error: {exc}") from exc
+            raise HTTPException(status_code=502, detail="LLM embed error.") from exc
 
     if backend == "ollama":
         try:
@@ -546,7 +546,7 @@ async def brain_embed(
                 dimensions=len(vectors[0]) if vectors else 0,
             )
         except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"Ollama embed error: {exc}") from exc
+            raise HTTPException(status_code=502, detail="LLM embed error.") from exc
 
     raise HTTPException(
         status_code=503,

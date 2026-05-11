@@ -55,7 +55,7 @@ def _get_allocator() -> Any:
         logger.error("StrategyAllocator unavailable: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Portfolio allocator subsystem unavailable: {exc}",
+            detail="Portfolio allocator subsystem unavailable.",
         ) from exc
 
 
@@ -345,5 +345,5 @@ async def get_registry(
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to read registry: {exc}",
+            detail="Failed to read registry.",
         ) from exc

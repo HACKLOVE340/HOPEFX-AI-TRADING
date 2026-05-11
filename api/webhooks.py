@@ -170,7 +170,7 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid alert payload: {exc}",
+            detail="Invalid alert payload.",
         )
 
     direction = _action_to_direction(alert.action)

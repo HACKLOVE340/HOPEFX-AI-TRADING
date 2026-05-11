@@ -1215,7 +1215,7 @@ async def modify_position(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("modify_position failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
 
     logger.info(
         "Position modified: user=%s position_id=%s sl=%s tp=%s trail=%s",
@@ -1261,7 +1261,7 @@ async def partial_close_position(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("partial_close_position failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
 
     logger.info(
         "Partial close: user=%s position_id=%s quantity=%s",
@@ -1351,7 +1351,7 @@ async def cancel_order(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("cancel_order failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
 
     logger.info("Order cancelled: user=%s order_id=%s", user.sub, order_id)
     return result or {"status": "cancelled", "order_id": order_id}
@@ -1394,7 +1394,7 @@ async def modify_order(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
     except Exception as exc:
         logger.exception("modify_order failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
 
     logger.info("Order modified: user=%s order_id=%s changes=%s", user.sub, order_id, kwargs)
     return result or {"status": "ok", "order_id": order_id}

@@ -72,7 +72,7 @@ def _get_live_store() -> Any:
             logger.error("Failed to create AnomalyWeightStore: %s", exc)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Anomaly detection subsystem unavailable: {exc}",
+                detail="Anomaly detection subsystem unavailable.",
             ) from exc
     return _live_store
 
@@ -306,7 +306,7 @@ async def fit_anomaly_detector(
         logger.error("Anomaly fit failed for %s: %s", body.symbol, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Anomaly detector fit failed: {exc}",
+            detail="Anomaly detector fit failed.",
         ) from exc
 
     return FitResponse(
@@ -389,7 +389,7 @@ async def score_bars(
         logger.error("Anomaly score failed for %s: %s", body.symbol, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Anomaly scoring failed: {exc}",
+            detail="Anomaly scoring failed.",
         ) from exc
 
     return ScoreResponse(
@@ -460,7 +460,7 @@ async def flag_anomalies(
         logger.error("Anomaly flag failed for %s: %s", body.symbol, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Anomaly flagging failed: {exc}",
+            detail="Anomaly flagging failed.",
         ) from exc
 
     return FlagResponse(
@@ -547,7 +547,7 @@ async def anomaly_report(
         logger.error("Anomaly report failed for %s: %s", symbol, exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Anomaly report failed: {exc}",
+            detail="Anomaly report failed.",
         ) from exc
 
 
