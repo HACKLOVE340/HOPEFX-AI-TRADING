@@ -100,15 +100,19 @@ def _save_history(user_id: str, history: list[dict]) -> None:
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class SaveCalcRequest(BaseModel):
-    symbol:       str   = Field(..., min_length=3, max_length=20)
-    entry_price:  float = Field(..., gt=0)
-    stop_loss:    float = Field(..., gt=0)
-    take_profit:  float = Field(..., gt=0)
-    position_size: float = Field(default=0.01, gt=0)
+    symbol:          str   = Field(..., min_length=3, max_length=20)
+    # direction MUST be declared before stop_loss and take_profit so that
+    # Pydantic v2 field_validators on those fields can read info.data["direction"].
+    # Pydantic v2 populates info.data with fields declared *before* the current
+    # field in source order; fields declared after are absent from info.data.
+    direction:       str   = Field(default="long", pattern="^(long|short)$")
+    entry_price:     float = Field(..., gt=0)
+    stop_loss:       float = Field(..., gt=0)
+    take_profit:     float = Field(..., gt=0)
+    position_size:   float = Field(default=0.01, gt=0)
     account_balance: float = Field(default=10000.0, gt=0)
-    risk_pct:     float = Field(default=1.0, gt=0, le=100)
-    direction:    str   = Field(default="long", pattern="^(long|short)$")
-    notes:        str | None = None
+    risk_pct:        float = Field(default=1.0, gt=0, le=100)
+    notes:           str | None = None
 
     @field_validator("stop_loss")
     @classmethod
