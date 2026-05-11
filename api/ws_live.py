@@ -55,6 +55,7 @@ is preserved server-side (stateless design).
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import os
@@ -135,15 +136,21 @@ class LiveConnectionManager:
         self._user_ids: dict[str, str | None] = {}
         # connection_id → heartbeat miss count
         self._hb_misses: dict[str, int] = {}
-        self._counter = 0
+        # itertools.count is thread-safe in CPython (C-level increment) and
+        # produces unique IDs even when multiple coroutines call connect()
+        # concurrently — no lock needed for ID generation.
+        self._counter = itertools.count(1)
 
     def _new_id(self) -> str:
-        self._counter += 1
-        return f"conn_{self._counter}"
+        return f"conn_{next(self._counter)}"
 
     async def connect(self, ws: WebSocket) -> str:
-        await ws.accept()
+        # Generate the ID before the await so the counter advances atomically
+        # relative to other synchronous code. The await in ws.accept() is a
+        # suspension point; generating the ID first ensures no two connections
+        # share the same ID even if accept() yields to another coroutine.
         cid = self._new_id()
+        await ws.accept()
         self._connections[cid] = ws
         self._subscriptions[cid] = set()
         self._user_ids[cid] = None
@@ -196,17 +203,24 @@ class LiveConnectionManager:
                 self.disconnect(cid)
 
     async def broadcast(self, channel: str, msg: dict) -> None:
+        """Send to all connections subscribed to channel.
+
+        JSON serialization is performed once before the loop so the cost is
+        O(1) regardless of the number of connected clients. Previously the
+        message was serialized inside the loop — O(n) allocations per tick.
+
+        Empty subscription set = subscribed to all channels (pre-subscribe
+        state while the client is still sending its subscribe message).
         """
-        Send to all connections subscribed to channel.
-        Empty subscription set = subscribed to all channels.
-        """
+        # Serialize once — reuse the string for every send.
+        payload = json.dumps(msg)
         dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
                 if ws:
                     try:
-                        await ws.send_text(json.dumps(msg))
+                        await ws.send_text(payload)
                     except Exception as exc:
                         logger.debug("WS broadcast failed for %s: %s", cid, exc)
                         dead.append(cid)
@@ -223,10 +237,12 @@ class LiveConnectionManager:
             pass
 
     async def send_to_user(self, user_id: str, channel: str, msg: dict) -> None:
-        """
-        Send a message only to connections belonging to a specific user.
+        """Send a message only to connections belonging to a specific user.
+
         Used for per-user channels: account updates, position fills, alerts.
+        JSON is serialized once before the loop (same rationale as broadcast).
         """
+        payload = json.dumps(msg)
         dead: list[str] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
@@ -236,7 +252,7 @@ class LiveConnectionManager:
                 ws = self._connections.get(cid)
                 if ws:
                     try:
-                        await ws.send_text(json.dumps(msg))
+                        await ws.send_text(payload)
                     except Exception as exc:
                         logger.debug("WS user-send failed for %s: %s", cid, exc)
                         dead.append(cid)
