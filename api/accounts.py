@@ -161,12 +161,12 @@ def _db_update_sub_account(account_id: str, owner_id: str, updates: dict) -> dic
     try:
         from sqlalchemy import text as _text
         set_parts = ", ".join(f"{k} = :{k}" for k in safe_updates)
-        updates = safe_updates
-        updates["account_id"] = account_id
-        updates["owner_id"] = owner_id
+        # Build params dict separately — do not mutate safe_updates in place
+        # as that would add account_id/owner_id to the column set on the next call.
+        params = {**safe_updates, "account_id": account_id, "owner_id": owner_id}
         db.execute(
             _text(f"UPDATE sub_accounts SET {set_parts} WHERE id = :account_id AND owner_id = :owner_id"),  # nosec B608
-            updates,
+            params,
         )
         db.commit()
         row = db.execute(
@@ -210,6 +210,35 @@ def _save_index(owner_id: str, ids: list[str]) -> None:
 
 
 def _get_account(owner_id: str, account_id: str) -> dict | None:
+    return _store_get(_account_key(owner_id, account_id))
+
+
+def _get_account_any(owner_id: str, account_id: str) -> dict | None:
+    """Return a sub-account from the DB table first, then the key-value store.
+
+    Accounts created via the DB path are not present in the key-value store,
+    so endpoints that only call _get_account() return 404 for those accounts.
+    This helper checks both sources so all creation paths are covered.
+    """
+    # 1. DB-backed sub_accounts table (primary path)
+    db = _db_session()
+    if db is not None:
+        try:
+            from sqlalchemy import text as _text
+            row = db.execute(
+                _text(
+                    "SELECT * FROM sub_accounts "
+                    "WHERE id = :aid AND owner_id = :oid AND is_active = true"
+                ),
+                {"aid": account_id, "oid": owner_id},
+            ).fetchone()
+            if row is not None:
+                return dict(row._mapping)
+        except Exception as exc:
+            logger.debug("_get_account_any DB lookup failed: %s", exc)
+        finally:
+            db.close()
+    # 2. Key-value store fallback
     return _store_get(_account_key(owner_id, account_id))
 
 
@@ -380,7 +409,7 @@ async def get_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return details of a single sub-account owned by the current user."""
-    acc = _get_account(user.sub, account_id)
+    acc = _get_account_any(user.sub, account_id)
     if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
     return acc
@@ -393,7 +422,7 @@ async def update_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Update sub-account fields."""
-    acc = _get_account(user.sub, account_id)
+    acc = _get_account_any(user.sub, account_id)
     if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
 
@@ -425,7 +454,7 @@ async def delete_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> None:
     """Delete a sub-account. Cannot delete the last active account."""
-    acc = _get_account(user.sub, account_id)
+    acc = _get_account_any(user.sub, account_id)
     if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
 
@@ -465,8 +494,8 @@ async def transfer_between_sub_accounts(
     # locks, defeating the serialization entirely.
     _TRANSFER_LOCKS.setdefault(user.sub, asyncio.Lock())
     async with _TRANSFER_LOCKS[user.sub]:
-        src = _get_account(user.sub, account_id)
-        dst = _get_account(user.sub, req.to_account_id)
+        src = _get_account_any(user.sub, account_id)
+        dst = _get_account_any(user.sub, req.to_account_id)
 
         if src is None:
             raise HTTPException(status_code=404, detail="Source sub-account not found")
