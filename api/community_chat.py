@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -450,14 +451,31 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
     """
     import asyncio
 
-    # Auth — token passed as query param (same pattern as /ws/live)
+    # Auth — token passed as query param (same pattern as /ws/live).
+    # FIX: invalid or missing tokens must reject the connection, not silently
+    # allow unauthenticated access.  Chat rooms contain user-generated content
+    # that should only be visible to authenticated members.
     token_param = websocket.query_params.get("token", "")
-    if token_param:
-        try:
-            from api.auth import decode_access_token
-            decode_access_token(token_param)
-        except Exception:  # nosec B110
-            pass  # allow unauthenticated reads; writes gated via REST
+    _ws_chat_auth_required: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+
+    if _ws_chat_auth_required:
+        _chat_user_id: str | None = None
+        if token_param:
+            try:
+                from api.auth import decode_access_token
+                _payload = decode_access_token(token_param)
+                _chat_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
+            except Exception:
+                _chat_user_id = None
+
+        if _chat_user_id is None:
+            # Must accept before closing — FastAPI requires accept() before close()
+            await websocket.accept()
+            await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED", "message": "Valid JWT required"}))
+            await websocket.close(code=4001)
+            return
+    else:
+        _chat_user_id = "anonymous"
 
     await websocket.accept()
 

@@ -1442,13 +1442,26 @@ async def _ws_handle_message(cid: str, msg: dict) -> None:
         _manager.record_pong(cid)
         await _manager.send(cid, {"type": "pong"})
     elif msg_type == "auth":
-        payload = _validate_ws_token(msg.get("token", ""))
-        if payload:
-            user_id = str(payload.get("sub", "unknown"))
-            _manager.authenticate(cid, user_id)
-            await _manager.send(cid, {"type": "auth_ok", "user_id": user_id})
+        # FIX: block re-authentication after the connection is already authenticated.
+        # Allowing re-auth mid-session lets a connected user escalate to a different
+        # user_id by sending a second auth message with a different token.
+        if _manager.is_authenticated(cid):
+            await _manager.send(
+                cid,
+                {
+                    "type": "error",
+                    "code": "ALREADY_AUTHENTICATED",
+                    "message": "Connection is already authenticated; re-auth is not permitted",
+                },
+            )
         else:
-            await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            payload = _validate_ws_token(msg.get("token", ""))
+            if payload:
+                user_id = str(payload.get("sub", "unknown"))
+                _manager.authenticate(cid, user_id)
+                await _manager.send(cid, {"type": "auth_ok", "user_id": user_id})
+            else:
+                await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
     else:
         await _manager.send(
             cid, {"type": "error", "code": "UNKNOWN_MESSAGE_TYPE", "message": f"Unknown message type: {msg_type}"}
