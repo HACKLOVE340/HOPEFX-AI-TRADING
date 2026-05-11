@@ -13,79 +13,101 @@ DB-backed storage that survives restarts.
 
 All operations degrade gracefully to in-memory fallback when the DB is
 unavailable (dev mode, missing DB, etc.).
+
+Session management
+------------------
+Each public function opens its own short-lived session via SessionLocal(),
+performs the operation, and closes the session in a finally block.
+The previous implementation called ctx.__enter__() on the context-manager
+returned by mgr.session() but never called __exit__(), leaking a DB
+connection on every call.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from contextlib import contextmanager
+from typing import Any, Generator
 
 logger = logging.getLogger(__name__)
 
 
-def _get_session():
-    """Return a live SQLAlchemy Session, or None when the DB is unavailable."""
-    try:
-        from database.connection import get_db_manager
+@contextmanager
+def _session_ctx() -> Generator:
+    """Yield a SQLAlchemy Session and guarantee it is closed on exit.
 
-        mgr = get_db_manager()
-        if not mgr:
-            return None
-        ctx = mgr.session()
-        return ctx.__enter__()  # caller closes/rolls back in finally block
+    Yields None when the DB is unavailable so callers can guard with::
+
+        with _session_ctx() as session:
+            if session is None:
+                return default_value
+            ...
+    """
+    session = None
+    try:
+        from database.connection import SessionLocal  # type: ignore[import]
+
+        session = SessionLocal()
+        yield session
     except Exception as exc:  # pylint: disable=broad-exception-caught
-        logger.debug("db_store: could not obtain DB session: %s", exc)  # nosec B105 - logs exception type, no secrets
-        return None
+        logger.debug("db_store: could not obtain DB session: %s", exc)
+        yield None
+    finally:
+        if session is not None:
+            try:
+                session.close()
+            except Exception:  # pylint: disable=broad-exception-caught
+                pass
 
 
 def db_get(key: str) -> Any | None:
-    """
-    Retrieve a JSON-decoded value from the configurations table.
+    """Retrieve a JSON-decoded value from the configurations table.
+
     Returns None on miss or error.
     """
     try:
         from database.models import Configuration
 
-        session = _get_session()
-        if not session:
-            return None
-        record = session.query(Configuration).filter_by(config_key=key).first()
-        if record and record.config_value:
-            return json.loads(record.config_value)
+        with _session_ctx() as session:
+            if session is None:
+                return None
+            record = session.query(Configuration).filter_by(config_key=key).first()
+            if record and record.config_value:
+                return json.loads(record.config_value)
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_get failed: %s", type(exc).__name__)
     return None
 
 
 def db_set(key: str, value: Any, changed_by: str = "system") -> bool:
-    """
-    Persist a JSON-serialisable value to the configurations table.
+    """Persist a JSON-serialisable value to the configurations table.
+
     Returns True on success, False on failure.
     """
     try:
         from database.models import Configuration
 
-        session = _get_session()
-        if not session:
-            return False
+        with _session_ctx() as session:
+            if session is None:
+                return False
 
-        serialised = json.dumps(value)
-        existing = session.query(Configuration).filter_by(config_key=key).first()
-        if existing:
-            existing.config_value = serialised
-            existing.changed_by = changed_by
-        else:
-            record = Configuration(
-                environment="production",
-                config_key=key,
-                config_value=serialised,
-                changed_by=changed_by,
-                change_reason="api_db_store",
-            )
-            session.add(record)
-        session.commit()
-        return True
+            serialised = json.dumps(value)
+            existing = session.query(Configuration).filter_by(config_key=key).first()
+            if existing:
+                existing.config_value = serialised
+                existing.changed_by = changed_by
+            else:
+                record = Configuration(
+                    environment="production",
+                    config_key=key,
+                    config_value=serialised,
+                    changed_by=changed_by,
+                    change_reason="api_db_store",
+                )
+                session.add(record)
+            session.commit()
+            return True
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_set failed: %s", type(exc).__name__)
         return False
@@ -96,12 +118,12 @@ def db_delete(key: str) -> bool:
     try:
         from database.models import Configuration
 
-        session = _get_session()
-        if not session:
-            return False
-        session.query(Configuration).filter_by(config_key=key).delete()
-        session.commit()
-        return True
+        with _session_ctx() as session:
+            if session is None:
+                return False
+            session.query(Configuration).filter_by(config_key=key).delete()
+            session.commit()
+            return True
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_delete failed: %s", type(exc).__name__)
         return False
@@ -112,11 +134,15 @@ def db_keys_prefix(prefix: str) -> list[str]:
     try:
         from database.models import Configuration
 
-        session = _get_session()
-        if not session:
-            return []
-        records = session.query(Configuration.config_key).filter(Configuration.config_key.like(f"{prefix}%")).all()
-        return [r[0] for r in records]
+        with _session_ctx() as session:
+            if session is None:
+                return []
+            records = (
+                session.query(Configuration.config_key)
+                .filter(Configuration.config_key.like(f"{prefix}%"))
+                .all()
+            )
+            return [r[0] for r in records]
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_keys_prefix(%s) failed: %s", prefix, exc)
         return []
