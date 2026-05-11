@@ -1684,8 +1684,8 @@ async def get_account(
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
                         _max_dd = max(_max_dd, dd)
-                    # max_drawdown as fraction 0-1 (frontend multiplies by 100 for display)
-                    _max_dd = round(_max_dd, 4)
+                    # max_drawdown as percentage 0-100 (consistent with live-broker path)
+                    _max_dd = round(_max_dd * 100, 2)
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
@@ -1725,12 +1725,11 @@ async def get_account(
         _equity = round(_balance + _unrealized, 2)
         _daily_pnl_pct = round((_daily_pnl / _balance * 100) if _balance > 0 else 0.0, 4)
 
-        # Kill switch state
+        # Kill switch state — use the injected helper so tests can override
         _ks_active = False
         try:
-            from app import kill_switch as _ks
-            active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
-            _ks_active = bool(active() if callable(active) else active)
+            _ks = _get_kill_switch()
+            _ks_active = bool(_ks and _ks.is_active())
         except Exception:  # nosec B110
             pass
 
@@ -1823,7 +1822,7 @@ async def get_account(
                 win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
 
                 # Equity curve for drawdown + Sharpe
-                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
                 eq_vals: list[float] = []
                 running = starting
                 for p in pnls:
@@ -1870,12 +1869,11 @@ async def get_account(
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
 
-    # ── Kill switch state ─────────────────────────────────────────────────────
+    # ── Kill switch state — use the injected helper so tests can override ─────
     kill_switch_active = False
     try:
-        from app import kill_switch as _ks
-        active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
-        kill_switch_active = bool(active() if callable(active) else active)
+        _ks = _get_kill_switch()
+        kill_switch_active = bool(_ks and _ks.is_active())
     except Exception:  # nosec B110
         pass
 
