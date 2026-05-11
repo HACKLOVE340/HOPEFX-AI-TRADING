@@ -473,8 +473,9 @@ class PaperTradingBroker(BrokerConnector):
         # Generate order ID
         order_id = str(uuid.uuid4())
 
-        # Get current market price — try price feed first for freshest data
-        # Normalize symbol case to avoid case-sensitive lookup misses
+        # Get current market price — try price feed first for freshest data.
+        # When the feed provides real bid/ask we store them so the fill can
+        # use the correct side of the spread (buy at ask, sell at bid).
         _sym_upper = symbol.upper()
         current_price = (
             self.market_prices.get(symbol)
@@ -482,6 +483,10 @@ class PaperTradingBroker(BrokerConnector):
             or self.market_prices.get(symbol.lower())
             or 0.0
         )
+        # Real bid/ask from the live feed — None means use SlippageModel spread table.
+        _live_bid: float | None = None
+        _live_ask: float | None = None
+
         if self._price_feed is not None:
             try:
                 broker_sym = symbol.replace("/", "")
@@ -490,12 +495,19 @@ class PaperTradingBroker(BrokerConnector):
                     or self._price_feed.get_last_price(symbol)
                 )
                 if tick is not None:
-                    mid = getattr(tick, "mid", None) or (
-                        (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                    )
-                    if mid and mid > 0:
-                        self.update_market_price(symbol, float(mid))
-                        current_price = float(mid)
+                    tick_bid = float(getattr(tick, "bid", 0) or 0)
+                    tick_ask = float(getattr(tick, "ask", 0) or 0)
+                    tick_mid = getattr(tick, "mid", None)
+                    if tick_mid is None and tick_bid > 0 and tick_ask > 0:
+                        tick_mid = (tick_bid + tick_ask) / 2.0
+                    tick_mid = float(tick_mid or 0)
+                    if tick_mid > 0:
+                        self.update_market_price(symbol, tick_mid)
+                        current_price = tick_mid
+                    # Preserve real bid/ask for directional fill pricing
+                    if tick_bid > 0 and tick_ask > 0:
+                        _live_bid = tick_bid
+                        _live_ask = tick_ask
             except Exception as _exc:
                 logger.debug("price_feed lookup failed for %s: %s", symbol, _exc)
 
@@ -554,13 +566,55 @@ class PaperTradingBroker(BrokerConnector):
 
         # Process order
         if order_type == OrderType.MARKET:
-            # Apply slippage model — fills at a realistic price, not mid
-            fill_price = self._slippage.fill_price(
-                symbol=symbol,
-                mid_price=current_price,
-                side=side,
-                quantity=quantity,
-            )
+            # Directional fill pricing:
+            #   BUY  → start from ask (buyer crosses the spread)
+            #   SELL → start from bid (seller crosses the spread)
+            # When real bid/ask are available from the live feed, use them
+            # directly as the reference price so the spread is not double-counted
+            # (SlippageModel would otherwise add a synthetic spread on top of mid).
+            # When only mid is available, fall back to SlippageModel which adds
+            # the spread from its internal table.
+            _is_buy = str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG")
+            if _live_bid is not None and _live_ask is not None:
+                # Use real spread: buy fills at ask + impact + noise,
+                # sell fills at bid - impact - noise.
+                _ref_price = _live_ask if _is_buy else _live_bid
+                fill_price = self._slippage.fill_price(
+                    symbol=symbol,
+                    mid_price=_ref_price,   # reference is already the correct side
+                    side=side,
+                    quantity=quantity,
+                )
+                # Override the spread component: SlippageModel will add its
+                # table spread on top of _ref_price, which double-counts.
+                # Suppress the spread by temporarily zeroing the override,
+                # then restore it.  We achieve this by using the "zero" model
+                # path only for the spread component — instead, compute impact
+                # + noise directly without the spread term.
+                # Simpler: use the slippage model with the real-side price as
+                # mid and set the symbol's spread override to 0 for this call.
+                _saved = self._slippage._spread_overrides.get(symbol)
+                self._slippage._spread_overrides[symbol] = 0.0  # spread already in ref price
+                fill_price = self._slippage.fill_price(
+                    symbol=symbol,
+                    mid_price=_ref_price,
+                    side=side,
+                    quantity=quantity,
+                )
+                # Restore spread override
+                if _saved is None:
+                    self._slippage._spread_overrides.pop(symbol, None)
+                else:
+                    self._slippage._spread_overrides[symbol] = _saved
+            else:
+                # No live bid/ask — use mid + SlippageModel spread table
+                fill_price = self._slippage.fill_price(
+                    symbol=symbol,
+                    mid_price=current_price,
+                    side=side,
+                    quantity=quantity,
+                )
+
             order.status = OrderStatus.FILLED
             order.filled_quantity = quantity
             order.average_price = fill_price
@@ -576,11 +630,12 @@ class PaperTradingBroker(BrokerConnector):
             self._snapshot_equity()
 
             logger.info(
-                "Market order filled: %s %s %s mid=%.5f fill=%.5f slip=%.5f commission=%.4f",
+                "Market order filled: %s %s %s mid=%.5f ref=%.5f fill=%.5f slip=%.5f commission=%.4f",
                 side.value,
                 quantity,
                 symbol,
                 current_price,
+                _live_ask if _is_buy else (_live_bid if _live_bid else current_price),
                 fill_price,
                 fill_price - current_price,
                 commission,
@@ -695,14 +750,51 @@ class PaperTradingBroker(BrokerConnector):
         position = self.positions[symbol]
         mid_price = self.market_prices.get(symbol, position.entry_price)
 
-        # Closing a LONG = selling; closing a SHORT = buying
+        # Closing a LONG = selling (fills at bid); closing a SHORT = buying (fills at ask).
         close_side = OrderSide.SELL if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY") else OrderSide.BUY
-        exit_price = self._slippage.fill_price(
-            symbol=symbol,
-            mid_price=mid_price,
-            side=close_side,
-            quantity=position.quantity,
-        )
+        _is_close_buy = close_side == OrderSide.BUY
+
+        # Fetch real bid/ask from price feed if available
+        _close_bid: float | None = None
+        _close_ask: float | None = None
+        if self._price_feed is not None:
+            try:
+                broker_sym = symbol.replace("/", "")
+                tick = (
+                    self._price_feed.get_last_price(broker_sym)
+                    or self._price_feed.get_last_price(symbol)
+                )
+                if tick is not None:
+                    tb = float(getattr(tick, "bid", 0) or 0)
+                    ta = float(getattr(tick, "ask", 0) or 0)
+                    if tb > 0 and ta > 0:
+                        _close_bid, _close_ask = tb, ta
+                        mid_price = (tb + ta) / 2.0
+            except Exception as _exc:
+                logger.debug("close_position price_feed lookup failed for %s: %s", symbol, _exc)
+
+        if _close_bid is not None and _close_ask is not None:
+            # Use real spread: close-buy fills at ask, close-sell fills at bid
+            _ref_price = _close_ask if _is_close_buy else _close_bid
+            _saved = self._slippage._spread_overrides.get(symbol)
+            self._slippage._spread_overrides[symbol] = 0.0  # spread already in ref price
+            exit_price = self._slippage.fill_price(
+                symbol=symbol,
+                mid_price=_ref_price,
+                side=close_side,
+                quantity=position.quantity,
+            )
+            if _saved is None:
+                self._slippage._spread_overrides.pop(symbol, None)
+            else:
+                self._slippage._spread_overrides[symbol] = _saved
+        else:
+            exit_price = self._slippage.fill_price(
+                symbol=symbol,
+                mid_price=mid_price,
+                side=close_side,
+                quantity=position.quantity,
+            )
 
         # Calculate gross P&L at slippage-adjusted exit price
         if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY"):
