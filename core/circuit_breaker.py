@@ -236,12 +236,18 @@ class CircuitBreaker:
         return self._failure_count
 
     def status(self) -> dict[str, Any]:
+        # asyncio.Lock is not re-entrant and cannot be acquired from sync
+        # context, so we take a snapshot of each field individually.  CPython's
+        # GIL makes individual attribute reads atomic, so the snapshot is
+        # consistent enough for observability purposes.
         return {
             "name": self.name,
             "state": self._state.name,
             "failure_count": self._failure_count,
+            "success_count": self._success_count,
             "last_error": self._last_error,
             "opened_at": self._opened_at,
+            "is_open": self._state == CBState.OPEN,
         }
 
     # ── Class-level registry ──────────────────────────────────────────────────
