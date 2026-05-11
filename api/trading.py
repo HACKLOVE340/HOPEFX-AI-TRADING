@@ -2274,7 +2274,7 @@ async def start_paper_trading(
 
     account = {
         "user_id": user.sub,
-        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "10000")),
+        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "100000")),
         "currency": "USD",
         "mode": "paper",
         "activated_at": datetime.now(timezone.utc).isoformat(),
