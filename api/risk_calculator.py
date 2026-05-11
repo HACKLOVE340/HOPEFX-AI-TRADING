@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, HTTPException, Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.auth import TokenPayload, get_current_user
 
@@ -110,6 +110,42 @@ class SaveCalcRequest(BaseModel):
     direction:    str   = Field(default="long", pattern="^(long|short)$")
     notes:        str | None = None
 
+    @field_validator("stop_loss")
+    @classmethod
+    def _validate_stop_loss(cls, v: float, info) -> float:
+        data = info.data
+        entry = data.get("entry_price")
+        direction = data.get("direction", "long")
+        if entry is None:
+            return v
+        if direction == "long" and v >= entry:
+            raise ValueError(
+                f"stop_loss ({v}) must be below entry_price ({entry}) for a long trade"
+            )
+        if direction == "short" and v <= entry:
+            raise ValueError(
+                f"stop_loss ({v}) must be above entry_price ({entry}) for a short trade"
+            )
+        return v
+
+    @field_validator("take_profit")
+    @classmethod
+    def _validate_take_profit(cls, v: float, info) -> float:
+        data = info.data
+        entry = data.get("entry_price")
+        direction = data.get("direction", "long")
+        if entry is None:
+            return v
+        if direction == "long" and v <= entry:
+            raise ValueError(
+                f"take_profit ({v}) must be above entry_price ({entry}) for a long trade"
+            )
+        if direction == "short" and v >= entry:
+            raise ValueError(
+                f"take_profit ({v}) must be below entry_price ({entry}) for a short trade"
+            )
+        return v
+
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
@@ -148,7 +184,10 @@ async def save_calculation(
     user: TokenPayload = Depends(get_current_user),
 ):
     """Persist a risk/reward calculation for later reference."""
-    # Compute derived fields
+    # Compute derived fields.
+    # Validators on SaveCalcRequest guarantee SL/TP are on the correct side of
+    # entry, so risk_pts and reward_pts are always positive here.  The explicit
+    # guards below defend against floating-point edge cases (e.g. entry == sl).
     if body.direction == "long":
         risk_pts   = body.entry_price - body.stop_loss
         reward_pts = body.take_profit - body.entry_price
@@ -156,7 +195,12 @@ async def save_calculation(
         risk_pts   = body.stop_loss - body.entry_price
         reward_pts = body.entry_price - body.take_profit
 
-    rr_ratio = round(reward_pts / risk_pts, 2) if risk_pts > 0 else 0
+    if risk_pts <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail="stop_loss must differ from entry_price (risk distance is zero)",
+        )
+    rr_ratio = round(reward_pts / risk_pts, 2) if reward_pts > 0 else 0.0
     risk_usd = round(body.account_balance * body.risk_pct / 100, 2)
 
     calc = {
