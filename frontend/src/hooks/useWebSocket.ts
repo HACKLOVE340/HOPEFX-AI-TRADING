@@ -93,6 +93,10 @@ export function useWebSocket(enabled = true) {
   const restPollTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
   const unmounted      = useRef(false);
   const authedRef      = useRef(false);
+  // Stable ref to the latest connect function so onclose setTimeout always
+  // calls the current version rather than a stale closure captured at the
+  // time the WebSocket was created.
+  const connectRef     = useRef<() => void>(() => {});
 
   // Stable ref to useStore.getState — never changes, so it's safe in
   // useCallback deps without causing reconnect loops on every render.
@@ -161,10 +165,13 @@ export function useWebSocket(enabled = true) {
         setWsStatus('connected');
         // Clear stale no-live-feed banner on successful reconnect.
         setNoLiveFeed(false);
+        // Include 'system' channel so nuclear_halt / circuit_breaker events
+        // are received after auth-required reconnects (was missing here but
+        // present in the non-auth 'connected' path).
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
         }));
         break;
 
@@ -412,9 +419,16 @@ export function useWebSocket(enabled = true) {
       // Add ±10% jitter to prevent thundering herd when many clients reconnect
       const jitter = delay * (0.9 + Math.random() * 0.2);
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_MS);
-      reconnectTimer.current = setTimeout(connect, jitter);
+      // Use connectRef so the timeout always calls the latest connect function
+      // rather than the stale closure captured when this WebSocket was created.
+      reconnectTimer.current = setTimeout(() => connectRef.current(), jitter);
     };
   }, [handleMessage, getState, startHeartbeat, startRestPoll, stopRestPoll]);
+
+  // Keep connectRef current so onclose setTimeout always calls the latest version.
+  useEffect(() => {
+    connectRef.current = connect;
+  });
 
   useEffect(() => {
     if (!enabled) return;
