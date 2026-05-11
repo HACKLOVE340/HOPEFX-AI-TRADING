@@ -457,9 +457,13 @@ async def transfer_between_sub_accounts(
     if account_id == req.to_account_id:
         raise HTTPException(status_code=400, detail="Source and destination must be different accounts")
 
-    # Serialize transfers per user to prevent double-spend TOCTOU race
-    if user.sub not in _TRANSFER_LOCKS:
-        _TRANSFER_LOCKS[user.sub] = asyncio.Lock()
+    # Serialize transfers per user to prevent double-spend TOCTOU race.
+    # dict.setdefault is atomic in CPython (GIL-protected) — two concurrent
+    # coroutines calling setdefault for the same key will both get the same
+    # Lock object. The previous check-then-set pattern was not atomic: two
+    # coroutines could both pass the 'not in' check and create two different
+    # locks, defeating the serialization entirely.
+    _TRANSFER_LOCKS.setdefault(user.sub, asyncio.Lock())
     async with _TRANSFER_LOCKS[user.sub]:
         src = _get_account(user.sub, account_id)
         dst = _get_account(user.sub, req.to_account_id)
@@ -491,6 +495,10 @@ async def transfer_between_sub_accounts(
 
         _save_account(user.sub, src)
         _save_account(user.sub, dst)
+        # Capture balances inside the lock so the return values are always
+        # defined even if an exception is raised before this point.
+        _result_src_bal = new_src_bal
+        _result_dst_bal = new_dst_bal
 
     logger.info(
         "Transfer %.2f from %s to %s by user %s",
@@ -501,8 +509,8 @@ async def transfer_between_sub_accounts(
         "from_account_id": account_id,
         "to_account_id": req.to_account_id,
         "amount": req.amount,
-        "from_balance": new_src_bal,
-        "to_balance": new_dst_bal,
+        "from_balance": _result_src_bal,
+        "to_balance": _result_dst_bal,
         "note": req.note,
     }
 
