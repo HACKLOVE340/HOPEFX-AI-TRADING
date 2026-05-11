@@ -799,7 +799,11 @@ class AlertEngine:
         limit: int = 50,
     ) -> list[AlertTrigger]:
         """Get trigger history."""
-        history = self._trigger_history.copy()
+        # Convert deque to list immediately — deque does not support slice
+        # notation (deque[-limit:] raises TypeError), so we must have a list
+        # before applying the limit.  Filters also produce lists, but the
+        # unfiltered path previously returned a deque.copy() and then sliced it.
+        history: list[AlertTrigger] = list(self._trigger_history)
 
         if symbol:
             history = [t for t in history if t.symbol == symbol]
