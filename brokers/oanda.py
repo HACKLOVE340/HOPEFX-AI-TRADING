@@ -149,13 +149,28 @@ def _resolve_env(value: Any) -> str:
 
 
 def _units(direction: str, quantity: float) -> int:
-    """OANDA uses signed units: positive = buy, negative = sell."""
+    """Return signed integer units for the OANDA v20 API.
+
+    OANDA requires units as a signed integer string: positive = buy,
+    negative = sell.  Fractional quantities are rounded to the nearest
+    integer.
+
+    Raises ValueError when rounding would produce 0 units (e.g. quantity=0.3),
+    which OANDA rejects with UNITS_INVALID.  Callers must validate that
+    quantity >= 1 before calling this function, or catch ValueError and
+    reject the order upstream.
+    """
     qty = abs(quantity)
     rounded = round(qty)
+    if rounded == 0:
+        raise ValueError(
+            f"Quantity {quantity} rounds to 0 units — OANDA requires at least 1 unit. "
+            "Minimum order size is 1 unit of the base currency."
+        )
     if abs(rounded - qty) > 0.01:
         logger.warning(
             "Quantity rounded from %.4f to %d units (%.4f lost) for %s order",
-            qty, rounded, qty - rounded, direction,
+            qty, rounded, abs(qty - rounded), direction,
         )
     return rounded if direction.lower() in ("long", "buy") else -rounded
 
@@ -318,7 +333,11 @@ class OANDABroker:
         if quantity <= 0:
             return {"status": "rejected", "reason": "zero_quantity", "broker": "oanda"}
 
-        units = _units(direction, quantity)
+        try:
+            units = _units(direction, quantity)
+        except ValueError as exc:
+            logger.error("OANDABroker.place_order: %s", exc)
+            return {"status": "rejected", "reason": "quantity_rounds_to_zero", "broker": "oanda"}
 
         # Build OANDA order body
         order_body: dict[str, Any] = {
@@ -731,7 +750,16 @@ class OANDAConnector:
         """Place a market or limit order. Returns None when not connected."""
         if not self.connected or not self.session:
             return None
-        units = str(int(quantity)) if side == _OrderSide.BUY else str(-int(quantity))
+        try:
+            # Use _units() for consistent rounding, zero-guard, and sign logic.
+            # OANDAConnector.place_order() previously used int(quantity) which
+            # truncates (not rounds) and silently sends 0 units for fractional
+            # quantities like 0.9, causing OANDA to reject with UNITS_INVALID.
+            raw_units = _units(side.value if hasattr(side, "value") else str(side), quantity)
+        except ValueError as exc:
+            logger.error("OANDAConnector.place_order: %s", exc)
+            return None
+        units = str(raw_units)
         body: dict[str, Any] = {"order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}}
         if order_type == _OrderType.MARKET:
             body["order"]["type"] = "MARKET"

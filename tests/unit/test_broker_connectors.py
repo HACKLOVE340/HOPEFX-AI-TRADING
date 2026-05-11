@@ -1756,3 +1756,79 @@ class TestTopstepTraderConnector:
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True
         assert broker.connect() is True
+
+
+# ---------------------------------------------------------------------------
+# _units() regression tests
+# Bug: _units() returned int 0 for fractional quantities (e.g. 0.3), which
+# OANDA rejects with UNITS_INVALID. OANDAConnector.place_order() used
+# int(quantity) (truncation, not rounding) with no zero-guard at all.
+# ---------------------------------------------------------------------------
+
+
+class TestOandaUnits:
+    """Unit tests for brokers.oanda._units() helper."""
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from brokers.oanda import _units
+        self._units = _units
+
+    def test_buy_positive(self):
+        assert self._units("buy", 1.0) == 1
+
+    def test_sell_negative(self):
+        assert self._units("sell", 1.0) == -1
+
+    def test_long_alias(self):
+        assert self._units("long", 5.0) == 5
+
+    def test_short_alias(self):
+        assert self._units("short", 5.0) == -5
+
+    def test_rounds_to_nearest(self):
+        # round(2.4) = 2, round(2.6) = 3
+        assert self._units("buy", 2.4) == 2
+        assert self._units("buy", 2.6) == 3
+
+    def test_zero_quantity_raises(self):
+        """quantity=0.3 rounds to 0 — must raise ValueError, not silently send 0."""
+        with pytest.raises(ValueError, match="rounds to 0 units"):
+            self._units("buy", 0.3)
+
+    def test_zero_quantity_sell_raises(self):
+        with pytest.raises(ValueError, match="rounds to 0 units"):
+            self._units("sell", 0.4)
+
+    def test_exactly_zero_raises(self):
+        with pytest.raises(ValueError):
+            self._units("buy", 0.0)
+
+    def test_negative_quantity_raises(self):
+        """Negative quantity also rounds to 0 — must raise."""
+        with pytest.raises(ValueError):
+            self._units("buy", -0.3)
+
+    def test_large_quantity(self):
+        assert self._units("buy", 100_000.0) == 100_000
+        assert self._units("sell", 100_000.0) == -100_000
+
+    def test_case_insensitive_direction(self):
+        assert self._units("BUY", 1.0) == 1
+        assert self._units("SELL", 1.0) == -1
+        assert self._units("Long", 1.0) == 1
+        assert self._units("Short", 1.0) == -1
+
+    def test_warning_on_significant_rounding(self, caplog):
+        """Quantities that round by more than 0.01 must emit a warning."""
+        import logging
+        with caplog.at_level(logging.WARNING, logger="brokers.oanda"):
+            self._units("buy", 1.6)  # rounds to 2, diff=0.4 > 0.01
+        assert any("rounded" in r.message.lower() for r in caplog.records)
+
+    def test_no_warning_on_exact_integer(self, caplog):
+        """Exact integers must not emit a rounding warning."""
+        import logging
+        with caplog.at_level(logging.WARNING, logger="brokers.oanda"):
+            self._units("buy", 3.0)
+        assert not any("rounded" in r.message.lower() for r in caplog.records)
