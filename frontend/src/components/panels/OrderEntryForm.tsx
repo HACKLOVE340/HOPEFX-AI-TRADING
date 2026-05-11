@@ -199,14 +199,28 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
+  // The cleanup also fires on unmount, preventing setState-after-unmount.
   useEffect(() => {
     if (!result) return;
     if (resultTimer.current) clearTimeout(resultTimer.current);
     resultTimer.current = setTimeout(() => setResult(null), 4_000);
     return () => {
-      if (resultTimer.current) clearTimeout(resultTimer.current);
+      if (resultTimer.current) {
+        clearTimeout(resultTimer.current);
+        resultTimer.current = null;
+      }
     };
   }, [result]);
+
+  // Clear the timer on unmount regardless of result state.
+  useEffect(() => {
+    return () => {
+      if (resultTimer.current) {
+        clearTimeout(resultTimer.current);
+        resultTimer.current = null;
+      }
+    };
+  }, []);
 
   const tick       = prices[symbol];
   const entryPrice = orderType === 'market'
@@ -287,7 +301,12 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, 
     } finally {
       setSubmitting(false);
     }
-  }, [symbol, side, orderType, qty, limitPx, sl, tp, qc, onOrderPlaced]);
+  // entryPrice is derived from tick (live price) and limitPx. It must be in
+  // the deps array so handleSubmit always validates SL/TP against the current
+  // price rather than the price at the time the callback was last created.
+  // Omitting it caused stale-closure bugs where SL/TP validation used an
+  // outdated entry price after a price tick updated tick?.ask / tick?.bid.
+  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced]);
 
   return (
     <Panel title="Order Entry">
