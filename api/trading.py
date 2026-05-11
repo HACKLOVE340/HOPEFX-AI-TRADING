@@ -1649,10 +1649,19 @@ async def get_account(
             if _async_pool is None:
                 raise RuntimeError("Async DB pool not initialised")
             async with _async_pool.session() as _db:
-                _trade_repo = _TradeRepo(_db)
-                _pos_repo = _PosRepo(_db)
-                closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
-                open_positions = await _pos_repo.get_open_positions(symbol=None)
+                # Repositories are stateless — session is the first positional
+                # arg on every method, not a constructor arg. Instantiate with
+                # no args and pass _db explicitly on each call.
+                _trade_repo = _TradeRepo()
+                _pos_repo = _PosRepo()
+                # get_by_user returns all trades for the user; filter to closed
+                # in Python. get_by_user has no status parameter.
+                _all_trades = await _trade_repo.get_by_user(_db, user_id=user.sub, limit=10000)
+                closed = [t for t in _all_trades if getattr(t, "status", None) == "closed"
+                          or not getattr(t, "is_open", True)]
+                # Filter open positions to this user only — passing user_id=None
+                # would return all users' positions (data isolation breach).
+                open_positions = await _pos_repo.get_open_positions(_db, user_id=user.sub, symbol=None)
                 _open_trades = len(open_positions)
 
                 if closed:
@@ -1660,8 +1669,8 @@ async def get_account(
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
-                    # win_rate as fraction 0-1 (frontend multiplies by 100 for display)
-                    _win_rate = round(len(wins) / len(pnls), 4) if pnls else 0.0
+                    # win_rate as percentage 0-100 (consistent with live-broker path)
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -1793,12 +1802,18 @@ async def get_account(
         if _async_pool is None:
             raise RuntimeError("Async DB pool not initialised")
         async with _async_pool.session() as _db:
-            _trade_repo = _TradeRepo(_db)
-            _pos_repo = _PosRepo(_db)
-            # Closed trades for stats — user_id=None fetches all (admin view)
-            closed = await _trade_repo.get_by_user(user_id=None, status="closed", limit=10000)
-            # Open positions count via PositionRepository
-            open_positions = await _pos_repo.get_open_positions(symbol=None)
+            # Repositories are stateless — session is the first positional arg
+            # on every method, not a constructor arg.
+            _trade_repo = _TradeRepo()
+            _pos_repo = _PosRepo()
+            # Scope to the authenticated user — user_id=None would return all
+            # users' trades, leaking cross-user data (data isolation breach).
+            # get_by_user has no status parameter; filter closed trades in Python.
+            _all_trades = await _trade_repo.get_by_user(_db, user_id=user.sub, limit=10000)
+            closed = [t for t in _all_trades if getattr(t, "status", None) == "closed"
+                      or not getattr(t, "is_open", True)]
+            # Filter open positions to this user only.
+            open_positions = await _pos_repo.get_open_positions(_db, user_id=user.sub, symbol=None)
             open_trades = len(open_positions)
 
             if closed:
@@ -2330,14 +2345,14 @@ async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: in
         if _async_pool is None:
             raise RuntimeError("Async DB pool not initialised")
         async with _async_pool.session() as _db:
-            repo = _TradeRepo(_db)
+            # Repository is stateless — pass session as first positional arg.
+            repo = _TradeRepo()
             trades = await repo.get_by_user(
+                _db,
                 user_id=user_id,
-                symbol=symbol.upper() if symbol else None,
                 limit=limit,
-                offset=offset,
             )
-            return trades
+            return list(trades)
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
