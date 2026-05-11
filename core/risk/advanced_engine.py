@@ -110,14 +110,26 @@ class GARCHModel:
         return np.sqrt(np.nan_to_num(forecasts, nan=0.0, posinf=0.0))
 
     def simulate(self, n_sims: int = 10000, horizon: int = 5) -> np.ndarray:
-        """Simulate future paths."""
+        """Simulate future paths using GARCH(1,1)-t dynamics.
+
+        Bug fixed: at t=0 the previous code used simulated[:, t-1] which
+        resolves to simulated[:, -1] (the last column, all zeros at init).
+        This made the t=0 variance update use zero lagged returns regardless
+        of the unconditional variance, producing a degenerate first step.
+        Fix: seed a separate prev_return array from the unconditional variance
+        so the t=0 update is consistent with the GARCH recursion.
+        """
         simulated = np.zeros((n_sims, horizon))
-        variance = np.ones(n_sims) * self.omega / (1 - self.alpha - self.beta)
+        unconditional_var = self.omega / max(1 - self.alpha - self.beta, 1e-8)
+        variance = np.ones(n_sims) * unconditional_var
+        # Seed lagged return from unconditional std so t=0 is not degenerate.
+        prev_return = np.sqrt(unconditional_var) * stats.t.rvs(self.nu, size=n_sims)
 
         for t in range(horizon):
-            variance = self.omega + self.alpha * simulated[:, t - 1] ** 2 + self.beta * variance
+            variance = self.omega + self.alpha * prev_return ** 2 + self.beta * variance
             variance = np.nan_to_num(variance, nan=0.0, posinf=0.0)
             simulated[:, t] = np.sqrt(np.maximum(variance, 0.0)) * stats.t.rvs(self.nu, size=n_sims)
+            prev_return = simulated[:, t]
 
         return simulated
 
@@ -208,7 +220,15 @@ class MonteCarloRiskEngine:
         )
 
     def _stress_correlation(self, weights: dict[str, float]) -> float:
-        """Calculate correlation under stress (tail dependence)."""
+        """Calculate mean pairwise correlation under stress (tail dependence).
+
+        Bug fixed: the previous implementation returned the mean of the full
+        correlation matrix including the diagonal (all 1.0). For a 2-asset
+        portfolio this gave (1 + rho + rho + 1) / 4 instead of rho, inflating
+        the stress correlation metric and causing false risk-limit breaches.
+        Fix: mask the diagonal before computing the mean so only off-diagonal
+        (pairwise) correlations are averaged.
+        """
         if len(self.historical_returns) < 100:
             return 0.5
 
@@ -218,7 +238,13 @@ class MonteCarloRiskEngine:
         if len(stress_data) < 10:
             return 0.5
 
-        return float(stress_data.corr().values.mean())
+        corr_matrix = stress_data.corr().values
+        n = corr_matrix.shape[0]
+        if n < 2:
+            return 0.5
+        # Average off-diagonal elements only (exclude self-correlation = 1.0)
+        mask = ~np.eye(n, dtype=bool)
+        return float(corr_matrix[mask].mean())
 
 
 class RealTimeRiskMonitor:
