@@ -775,7 +775,7 @@ async def _price_broadcaster_live_only() -> None:
     # Give yfinance time to complete its first fetch before we start warning.
     # _yfinance_price_broadcaster runs concurrently and fetches immediately on
     # startup; 20 s is enough headroom even on a slow connection.
-    _startup_grace_until = asyncio.get_event_loop().time() + 20
+    _startup_grace_until = asyncio.get_running_loop().time() + 20
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -813,7 +813,7 @@ async def _price_broadcaster_live_only() -> None:
                             "change_pct": round(change_pct, 4),
                         },
                     })
-                elif symbol not in _no_feed_warned and asyncio.get_event_loop().time() > _startup_grace_until:
+                elif symbol not in _no_feed_warned and asyncio.get_running_loop().time() > _startup_grace_until:
                     # Only warn after the grace period so we don't flash the
                     # banner during the initial yfinance fetch.
                     _no_feed_warned.add(symbol)
