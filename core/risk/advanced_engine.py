@@ -188,6 +188,16 @@ class MonteCarloRiskEngine:
 
     def calculate_portfolio_risk(self, weights: dict[str, float]) -> RiskMetrics:
         """Calculate full risk metrics via Monte Carlo."""
+        # Guard: copula needs at least one fitted marginal; return zero-risk
+        # metrics when no assets have been added rather than crashing inside
+        # np.random.multivariate_normal with an empty covariance matrix.
+        if not self.garch_models or not self.copula.marginals:
+            return RiskMetrics(
+                var_95=0.0, var_99=0.0, cvar_95=0.0, cvar_99=0.0,
+                volatility=0.0, max_drawdown=0.0, tail_risk=0.0,
+                correlation_stress=0.0,
+            )
+
         copula_sims = self.copula.simulate(self.n_sims)
 
         scaled_returns = pd.DataFrame()
@@ -195,6 +205,15 @@ class MonteCarloRiskEngine:
             if col in self.garch_models:
                 vol = self.garch_models[col].forecast(len(copula_sims))
                 scaled_returns[col] = copula_sims[col] * vol[: len(copula_sims)]
+
+        # Guard: if no columns matched GARCH models, return zero-risk metrics
+        # rather than letting sum() return int 0 and crashing on .fillna().
+        if scaled_returns.empty:
+            return RiskMetrics(
+                var_95=0.0, var_99=0.0, cvar_95=0.0, cvar_99=0.0,
+                volatility=0.0, max_drawdown=0.0, tail_risk=0.0,
+                correlation_stress=0.0,
+            )
 
         portfolio_returns = sum(scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns)
         portfolio_returns = portfolio_returns.fillna(0.0)
@@ -266,10 +285,33 @@ class RealTimeRiskMonitor:
         positions: dict[str, Decimal],
         prices: dict[str, Decimal],
     ):
-        """Recalculate risk with current positions."""
-        total_value = sum(positions[s] * prices[s] for s in positions)
+        """Recalculate risk with current positions.
 
-        weights = {s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0 for s in positions}
+        Handles three edge cases that previously caused crashes or silent errors:
+        1. Empty positions dict — returns [] without calling the risk engine
+           (which would fail with an empty copula model).
+        2. Symbol in positions but missing from prices — skipped rather than
+           raising KeyError.
+        3. total_value == 0 (all positions have zero price) — returns [] to
+           avoid ZeroDivisionError in the weight calculation.
+        """
+        if not positions:
+            return []
+
+        # Only include symbols present in both dicts to avoid KeyError
+        common = {s for s in positions if s in prices}
+        if not common:
+            return []
+
+        total_value = sum(positions[s] * prices[s] for s in common)
+
+        if total_value <= 0:
+            return []
+
+        weights = {
+            s: float(positions[s] * prices[s] / total_value)
+            for s in common
+        }
 
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()
