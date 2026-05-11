@@ -24,8 +24,10 @@ Wires together Tasks 25–29 plus payment-method management:
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -344,6 +346,15 @@ async def create_payment_intent(
     user_ip = body.user_ip or request.client.host if request.client else None
     user_agent = request.headers.get("user-agent", "")
 
+    # Idempotency: if the client did not supply a key, derive one from the
+    # stable tuple (user_id, amount, currency) so that retries within the
+    # same billing cycle do not create duplicate PaymentIntents.
+    # The key is scoped to the user so different users with the same amount
+    # never collide.
+    effective_idempotency_key = body.idempotency_key or hashlib.sha256(
+        f"{user.sub}:{body.amount_usd}:{body.currency}".encode()
+    ).hexdigest()
+
     result = client.create_payment_intent(
         customer_id=customer_id,
         amount_usd=Decimal(str(body.amount_usd)),
@@ -352,7 +363,7 @@ async def create_payment_intent(
         metadata=body.metadata,
         user_ip=user_ip,
         user_agent=user_agent,
-        idempotency_key=body.idempotency_key,
+        idempotency_key=effective_idempotency_key,
     )
 
     if not result.success:
@@ -496,20 +507,31 @@ async def flutterwave_init(
 
     Shown as primary checkout option for users in West/Central Africa
     (detected by IP geolocation on the frontend).
+
+    Idempotency: tx_ref is derived from (user_id, plan, amount, currency) so
+    that retrying the same checkout does not create a second payment session.
+    The client should pass the returned tx_ref to /verify after payment.
     """
+    # Deterministic tx_ref — same user+plan+amount+currency always maps to the
+    # same reference, so a network retry cannot create a duplicate charge.
+    idempotent_tx_ref = "FLW-" + hashlib.sha256(
+        f"{user.sub}:{body.plan}:{body.amount}:{body.currency}".encode()
+    ).hexdigest()[:24]
+
     try:
         flw = _get_flutterwave()
         result = flw.initialize_payment(
             user_id=user.sub,
             amount=Decimal(str(body.amount)),
             currency=body.currency,
+            tx_ref=idempotent_tx_ref,
         )
         return {
-            "tx_ref": result["tx_ref"],
+            "tx_ref": result.get("tx_ref", idempotent_tx_ref),
             "payment_link": result["payment_link"],
             "amount": result["amount"],
             "currency": result["currency"],
-            "fee": result["fee"],
+            "fee": result.get("fee", 0),
             "plan": body.plan,
         }
     except Exception as exc:
@@ -522,11 +544,45 @@ async def flutterwave_verify(
     body: FlutterwaveVerifyBody,
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Verify a Flutterwave transaction and activate the subscription."""
+    """
+    Verify a Flutterwave transaction and activate the subscription.
+
+    Idempotency: if this tx_ref has already been verified and the subscription
+    activated, return the cached result immediately without calling Flutterwave
+    again or re-activating the subscription.  This prevents double-activation
+    when the client retries on a network timeout.
+    """
+    # Check whether this tx_ref was already processed for this user.
+    # Uses a lightweight DB/cache key: flw_verified:{user_id}:{tx_ref}
+    _verified_cache_key = f"flw_verified:{user.sub}:{body.tx_ref}"
+    try:
+        from api.db_store import db_get, db_set  # type: ignore[import]
+        cached = db_get(_verified_cache_key)
+        if cached and cached.get("status") == "verified":
+            logger.info(
+                "Flutterwave verify: tx_ref=%s already processed for user=%s — returning cached result",
+                body.tx_ref,
+                user.sub,
+            )
+            return {"verified": True, "tx_ref": body.tx_ref, "status": "verified", "idempotent": True}
+    except Exception as _cache_exc:
+        logger.debug("flutterwave_verify: cache lookup failed (non-fatal): %s", _cache_exc)
+        db_set = None  # type: ignore[assignment]
+
     try:
         flw = _get_flutterwave()
         result = flw.verify_transaction(body.tx_ref)
         if result.get("status") == "verified":
+            # Persist the verified state so retries are idempotent
+            try:
+                if db_set is not None:
+                    db_set(
+                        _verified_cache_key,
+                        {"status": "verified", "tx_ref": body.tx_ref, "user_id": user.sub},
+                        changed_by=user.sub,
+                    )
+            except Exception as _persist_exc:
+                logger.warning("flutterwave_verify: failed to persist idempotency record: %s", _persist_exc)
             return {"verified": True, "tx_ref": body.tx_ref, "status": "verified"}
         return {
             "verified": False,
