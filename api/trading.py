@@ -687,25 +687,15 @@ def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) ->
     except Exception as exc:
         logger.debug("gate.record_fill skipped: %s", exc)
 
-    try:
-        import pandas as _pd
-
-        from core.signal_engine import notify_fill as _notify_fill
-
-        _features = _pd.DataFrame(
-            [
-                {
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                    "fill_price": result.average_fill_price or 0.0,
-                    "source": "rest_api",
-                }
-            ]
-        )
-        _notify_fill(_features, label=1, primary_prob=None)
-    except Exception as exc:
-        logger.debug("notify_fill skipped: %s", exc)
+    # Online learner: do NOT call notify_fill with a fabricated label=1 here.
+    # The label (profitable=1 / loss=0) is only known when the trade closes.
+    # Passing label=1 at fill time poisons the model by teaching it that every
+    # REST-API order is profitable.  The trade-close path should call
+    # notify_trade_close(features, realized_pnl) with the real outcome instead.
+    logger.debug(
+        "Online learner fill notification deferred to trade close: %s %s",
+        order.side, order.symbol,
+    )
 
 
 async def _record_fill(
@@ -1115,6 +1105,26 @@ async def close_position(
         )
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
+
+    # Notify Phase-3 online learner with the real outcome label.
+    # realized_pnl comes from the broker close response; fall back to 0.0
+    # when unavailable so the learner records a neutral (loss) label rather
+    # than a fabricated profitable one.
+    try:
+        import pandas as _pd
+        from core.signal_engine import notify_trade_close as _notify_close
+
+        _realized = float(
+            getattr(success, "realized_pnl", None)
+            or (success.get("realized_pnl") if isinstance(success, dict) else None)
+            or 0.0
+        )
+        _close_features = _pd.DataFrame(
+            [{"position_id": position_id, "user_id": user.sub, "source": "rest_api_close"}]
+        )
+        _notify_close(_close_features, realized_pnl=_realized, primary_prob=None)
+    except Exception as _ol_exc:
+        logger.debug("notify_trade_close skipped: %s", _ol_exc)
 
     # Publish POSITION_CLOSED to the legacy event bus so StrategyOrchestra
     # can update its allocation tracking and rebalancer.

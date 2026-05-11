@@ -892,6 +892,30 @@ def notify_fill(
         logger.debug("notify_fill failed (non-fatal): %s", exc)
 
 
+def notify_trade_close(
+    features: "pd.DataFrame",
+    realized_pnl: float,
+    primary_prob: float | None = None,
+) -> None:
+    """
+    Notify the online learner when a trade closes with a known outcome (Phase 3).
+
+    This is the correct call site for the online learner — the label is derived
+    from the actual realized P&L so the model learns from real outcomes rather
+    than fabricated fill-time labels.
+
+    Parameters
+    ----------
+    features      : Feature DataFrame captured at signal/fill time.
+    realized_pnl  : Actual realized P&L for the closed trade.
+    primary_prob  : Primary model probability at signal time.
+
+    Safe to call when FEATURE_ONLINE_LEARNING=false — no-op in that case.
+    """
+    label = 1 if realized_pnl > 0 else 0
+    notify_fill(features, label=label, primary_prob=primary_prob)
+
+
 # ── Factor model integration ──────────────────────────────────────────────────
 # The LiveFactorEngine is started by startup_factories.py and stored on
 # app_state.factor_engine.  The signal engine reads factor exposures and
@@ -1545,7 +1569,18 @@ def _notify_online_learner(
     order: Any,
     signal_payload: dict[str, Any],
 ) -> None:
-    """Notify Phase-3 online learner of a confirmed fill — best-effort."""
+    """Store fill features for Phase-3 online learner — best-effort.
+
+    The online learner requires a ground-truth label (profitable=1 / loss=0)
+    which is only known when the trade closes.  Calling notify_fill here with
+    a fabricated label=1 would poison the model by teaching it that every
+    auto-trade is profitable regardless of outcome.
+
+    Instead, we store the fill features on the signal_payload so the trade
+    close path can call notify_trade_close(features, realized_pnl) with the
+    real outcome.  If the close path is unavailable the features are discarded
+    — this is preferable to corrupting the online model with false labels.
+    """
     try:
         fill_price = (
             getattr(order, "average_fill_price", None)
@@ -1564,9 +1599,15 @@ def _notify_online_learner(
                 }
             ]
         )
-        notify_fill(features, label=1, primary_prob=signal_payload.get("probability"))
+        # Attach features to the payload so the trade-close path can call
+        # notify_trade_close(features, realized_pnl) with the real outcome.
+        signal_payload["_online_learner_features"] = features
+        logger.debug(
+            "Online learner fill features stored for %s %s — label deferred to trade close",
+            direction, symbol,
+        )
     except Exception as exc:
-        logger.debug("notify_fill skipped after auto-trade: %s", exc)
+        logger.debug("_notify_online_learner skipped: %s", exc)
 
 
 async def _execute_if_approved(
