@@ -1510,27 +1510,26 @@ async def _broadcast_fill(
 ) -> None:
     """Broadcast the fill over WebSocket — best-effort."""
     try:
+
         def _real_price(val: Any) -> float | None:
             """Return val as float only if it is a genuine numeric type (int/float).
             Rejects None, MagicMock, and other non-numeric objects."""
+            import math
+
             if val is None:
                 return None
             if not isinstance(val, (int, float)):
                 return None
             try:
                 f = float(val)
-                return f if f == f and f > 0 else None  # reject NaN and zero
+                return f if not math.isnan(f) and f > 0 else None
             except (TypeError, ValueError):
                 return None
 
         fill_price: float = (
             _real_price(getattr(order, "average_fill_price", None))
             or _real_price(getattr(order, "average_price", None))
-            or (
-                _real_price(order.get("fill_price"))
-                if isinstance(order, dict)
-                else None
-            )
+            or (_real_price(order.get("fill_price")) if isinstance(order, dict) else None)
             or float(signal_payload["entry_price"])
         )
         trade_id = (

@@ -1394,7 +1394,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {
@@ -1445,7 +1445,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         _manager.authenticate(cid, user_id)
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
