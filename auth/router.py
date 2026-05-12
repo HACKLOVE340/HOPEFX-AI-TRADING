@@ -22,7 +22,6 @@ Endpoints:
   GET  /auth/me                — current user profile
 """
 
-
 import asyncio
 import functools
 import hmac

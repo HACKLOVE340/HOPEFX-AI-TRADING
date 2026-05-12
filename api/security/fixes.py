@@ -33,7 +33,6 @@ Register in core/router_registry.py::
     app.include_router(fixes_router)
 """
 
-
 import json
 import logging
 from datetime import datetime, timezone

@@ -16,7 +16,6 @@ Register with:
     register_email_webhook(app)
 """
 
-
 import logging
 import os
 from typing import ClassVar

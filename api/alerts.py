@@ -15,7 +15,6 @@ Registered in app.py as a static router (prefix /api/alerts) so it is always
 available even when the lifespan-registered alert_engine router is not.
 """
 
-
 import logging
 from typing import Any
 

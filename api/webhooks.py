@@ -34,7 +34,6 @@ TradingView alert message format (JSON body)
 }
 """
 
-
 import hashlib
 import hmac
 import logging

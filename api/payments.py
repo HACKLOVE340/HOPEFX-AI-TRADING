@@ -17,7 +17,6 @@ POST /api/payments/webhook                 — on-chain confirmation callback
                                              (HMAC-SHA256 verified)
 """
 
-
 import hashlib
 import hmac
 import json

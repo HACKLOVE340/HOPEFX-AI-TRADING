@@ -15,7 +15,6 @@ Register with:
     register_page_routes(app)
 """
 
-
 import logging
 from pathlib import Path
 
