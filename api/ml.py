@@ -533,7 +533,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                                     win_rate = accuracy
                                     total_signals = total
                                     note = note or "Accuracy derived from live predict/fallback ratio"
-                            except (TimeoutError, Exception) as _exc:
+                            except Exception as _exc:
                                 logger.debug("InferenceEngine health timed out or failed: %s", _exc)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
@@ -586,7 +586,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                         evaluated_at=datetime.now(UTC).isoformat(),
                         note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
                     )
-            except (TimeoutError, Exception) as _exc:
+            except Exception as _exc:
                 logger.debug("InferenceEngine health fallback timed out: %s", _exc)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)

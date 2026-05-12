@@ -65,7 +65,15 @@ import asyncio
 import logging
 import os
 import time
-from datetime import UTC, datetime
+import sys
+from datetime import datetime
+
+if sys.version_info >= (3, 11):
+    from datetime import UTC
+else:
+    from datetime import timezone
+
+    UTC = timezone.utc
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
