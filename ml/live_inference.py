@@ -372,12 +372,16 @@ class AdvancedModelPredictor:
                         logger.warning(
                             "High feature imputation: %d/%d (%.0f%%) columns zeroed for %s — "
                             "MacroStore or data layer likely unavailable; signal quality degraded",
-                            len(missing), len(expected), impute_frac * 100, symbol,
+                            len(missing),
+                            len(expected),
+                            impute_frac * 100,
+                            symbol,
                         )
                     else:
                         logger.debug(
                             "Filling %d missing features with 0 for %s",
-                            len(missing), symbol,
+                            len(missing),
+                            symbol,
                         )
                     for col in missing:
                         X[col] = 0.0

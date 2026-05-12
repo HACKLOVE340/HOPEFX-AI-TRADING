@@ -691,9 +691,7 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
             # last_signal_at: try engine attr
             last_sig = getattr(eng, "_last_signal_at", None)
             if last_sig is not None:
-                result["last_signal_at"] = (
-                    last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
-                )
+                result["last_signal_at"] = last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
 
         # Decision engine counters (cycles, executed, blocked, errors, execution_rate)
         if app_state and hasattr(app_state, "decision_engine"):
@@ -974,11 +972,7 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
         db = SessionLocal()
         try:
             # All trades opened today
-            today_trades = (
-                db.query(Trade)
-                .filter(Trade.entry_time >= today_start)
-                .all()
-            )
+            today_trades = db.query(Trade).filter(Trade.entry_time >= today_start).all()
             metrics["trades_today"] = len(today_trades)
 
             # Open positions from DB (override engine count if DB has more)
@@ -988,9 +982,7 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
             # PnL today: sum of total_pnl for closed trades opened today
             closed_today = [t for t in today_trades if not t.is_open]
             if closed_today:
-                metrics["pnl_today"] = round(
-                    sum(float(t.total_pnl or 0.0) for t in closed_today), 2
-                )
+                metrics["pnl_today"] = round(sum(float(t.total_pnl or 0.0) for t in closed_today), 2)
                 winning = sum(1 for t in closed_today if (t.total_pnl or 0.0) > 0)
                 metrics["win_rate_today"] = round(winning / len(closed_today), 4)
 

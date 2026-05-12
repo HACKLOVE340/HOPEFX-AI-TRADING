@@ -516,7 +516,7 @@ def print_component_status_report() -> None:
         logger.info("%s %s %s v%s - %s", health_icon, icon, f"{name:15}", f"{status.version:8}", status.health.value)
 
         if status.features:
-            logger.info("     Features: %s", ', '.join(status.features[:3]))
+            logger.info("     Features: %s", ", ".join(status.features[:3]))
 
         if status.error:
             error_display = status.error[:60] + "..." if len(status.error) > 60 else status.error

@@ -505,14 +505,24 @@ class IBKRBroker(BrokerConnector):
         if not self._assert_connected("get_market_data") or not _IB_AVAILABLE:
             return []
         _bar_size_map = {
-            "1m": "1 min", "5m": "5 mins", "15m": "15 mins", "30m": "30 mins",
-            "1h": "1 hour", "4h": "4 hours", "1d": "1 day",
+            "1m": "1 min",
+            "5m": "5 mins",
+            "15m": "15 mins",
+            "30m": "30 mins",
+            "1h": "1 hour",
+            "4h": "4 hours",
+            "1d": "1 day",
         }
         bar_size = _bar_size_map.get(timeframe, "1 hour")
         # Duration string: approximate from limit × bar size
         _duration_map = {
-            "1 min": "1 D", "5 mins": "5 D", "15 mins": "10 D",
-            "30 mins": "20 D", "1 hour": "30 D", "4 hours": "60 D", "1 day": "365 D",
+            "1 min": "1 D",
+            "5 mins": "5 D",
+            "15 mins": "10 D",
+            "30 mins": "20 D",
+            "1 hour": "30 D",
+            "4 hours": "60 D",
+            "1 day": "365 D",
         }
         duration = _duration_map.get(bar_size, "30 D")
         contract = _build_contract(symbol, "CASH", "IDEALPRO", "USD")

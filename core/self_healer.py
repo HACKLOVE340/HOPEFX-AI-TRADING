@@ -49,9 +49,13 @@ class _SelfHealerProxy:
     async def scan(self) -> dict:
 
         result = await _scan_wrapper(self._healer)
-        self._healer._last_celery_scan_ts = __import__("datetime").datetime.now(  # type: ignore[attr-defined]
-            __import__("datetime").timezone.utc
-        ).isoformat()
+        self._healer._last_celery_scan_ts = (
+            __import__("datetime")
+            .datetime.now(  # type: ignore[attr-defined]
+                __import__("datetime").timezone.utc
+            )
+            .isoformat()
+        )
         return result
 
     def __getattr__(self, name: str):

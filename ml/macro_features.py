@@ -143,9 +143,13 @@ def _load_macro_from_csv(start: datetime, end: datetime) -> pd.DataFrame:
             series = raw.loc[mask, "value"].rename(series_name)
             if len(series) > 0:
                 frames[series_name] = series
-                logger.debug("Loaded macro CSV %s: %d rows (%s → %s)",
-                             fname, len(series),
-                             series.index[0].date(), series.index[-1].date())
+                logger.debug(
+                    "Loaded macro CSV %s: %d rows (%s → %s)",
+                    fname,
+                    len(series),
+                    series.index[0].date(),
+                    series.index[-1].date(),
+                )
         except Exception as exc:
             logger.warning("Failed to load macro CSV %s: %s", fname, exc)
 
@@ -155,7 +159,8 @@ def _load_macro_from_csv(start: datetime, end: datetime) -> pd.DataFrame:
     df = pd.concat(frames.values(), axis=1).ffill()
     logger.info(
         "Macro data (CSV fallback): %d bars, %d series (%s → %s)",
-        len(df), len(df.columns),
+        len(df),
+        len(df.columns),
         df.index[0].date() if len(df) else "n/a",
         df.index[-1].date() if len(df) else "n/a",
     )
@@ -208,7 +213,8 @@ def fetch_macro_history(
             df = pd.concat(frames.values(), axis=1).ffill()
             logger.info(
                 "Macro data (Yahoo Finance): %d bars, %d series (%s → %s)",
-                len(df), len(df.columns),
+                len(df),
+                len(df.columns),
                 df.index[0].date() if len(df) else "n/a",
                 df.index[-1].date() if len(df) else "n/a",
             )

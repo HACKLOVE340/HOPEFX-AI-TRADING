@@ -121,6 +121,7 @@ class DrawdownTracker:
 
         # Lock protects all mutable state against concurrent update() / record_fill() calls
         import threading as _threading
+
         self._lock = _threading.Lock()
 
         # All-time trailing HWM — never decreases

@@ -356,7 +356,8 @@ def _load_ohlcv_for_indicator(symbol: str, periods: int) -> dict:
     import pandas as pd
 
     from utils.symbol import canonical as _canonical, to_oanda as _to_oanda
-    sym_key = _to_oanda(symbol)   # OANDA form (XAU_USD) matches CSV filenames
+
+    sym_key = _to_oanda(symbol)  # OANDA form (XAU_USD) matches CSV filenames
 
     data_dir = pathlib.Path(__file__).parent.parent / "data"
     candidates = [
@@ -802,7 +803,8 @@ async def _collect_series_from_engine(pe: Any, sym_list: list[str], window: int)
         if sym in series:
             continue
         from utils.symbol import canonical as _canonical, to_oanda as _to_oanda
-        sym_key = _to_oanda(sym)       # OANDA form: XAU_USD (matches CSV filenames)
+
+        sym_key = _to_oanda(sym)  # OANDA form: XAU_USD (matches CSV filenames)
         sym_compact = _canonical(sym)  # MT5 form: XAUUSD
         candidates = [
             data_dir / f"{sym_key}_D1.csv",

@@ -462,6 +462,7 @@ async def get_leaderboard_profile(trader_id: str):
     """Return a single trader's leaderboard profile."""
     try:
         from api.profiles import _manager
+
         profile = _manager.get_profile(trader_id)
         if not profile:
             raise HTTPException(status_code=404, detail="Trader not found")
@@ -488,6 +489,7 @@ async def get_leaderboard_stats(trader_id: str):
     """Return detailed performance stats for a leaderboard trader."""
     try:
         from api.profiles import _manager
+
         profile = _manager.get_profile(trader_id)
         if not profile:
             return {"trader_id": trader_id, "total_trades": 0, "win_rate": 0.0, "sharpe_ratio": 0.0}
@@ -817,7 +819,6 @@ async def copy_trader(
     }
 
 
-
 # ── /api/copy/* alias router ──────────────────────────────────────────────────
 # Frontend calls /api/copy/* (without /social prefix).
 # These aliases forward to the same logic as _copy_router.
@@ -897,6 +898,7 @@ async def _copy_performance(
 ):
     try:
         from api.profiles import _manager
+
         profile = _manager.get_profile(trader_id)
         if not profile:
             return {"trader_id": trader_id, "total_return_pct": 0.0, "win_rate": 0.0, "followers": 0}
@@ -961,6 +963,7 @@ async def ws_social_feed(websocket: WebSocket) -> None:
     if token:
         try:
             from api.auth import decode_token
+
             _payload = decode_token(token)
             _sf_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
         except Exception:
@@ -971,11 +974,15 @@ async def ws_social_feed(websocket: WebSocket) -> None:
     await websocket.accept()
 
     if _sf_user_id is None:
-        await websocket.send_text(_json.dumps({
-            "type": "error",
-            "code": "AUTH_REQUIRED",
-            "message": "Valid JWT required as ?token= query parameter",
-        }))
+        await websocket.send_text(
+            _json.dumps(
+                {
+                    "type": "error",
+                    "code": "AUTH_REQUIRED",
+                    "message": "Valid JWT required as ?token= query parameter",
+                }
+            )
+        )
         await websocket.close(code=4001)
         return
     _sf_connections.add(websocket)

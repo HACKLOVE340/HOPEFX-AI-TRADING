@@ -371,6 +371,7 @@ class KillSwitch:
 
         try:
             from execution.engine import get_active_broker
+
             broker = get_active_broker()
         except Exception:
             pass
@@ -378,6 +379,7 @@ class KillSwitch:
         if broker is None:
             try:
                 from execution.smart_router import get_router
+
                 router = get_router()
                 if router is not None:
                     broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
@@ -387,6 +389,7 @@ class KillSwitch:
         if broker is None:
             try:
                 from core.app_state import app_state as _app_state
+
                 broker = getattr(_app_state, "broker", None)
             except Exception:
                 pass
@@ -405,7 +408,8 @@ class KillSwitch:
             except Exception as exc:
                 logger.warning(
                     "KillSwitch: broker CoD check raised on %s (non-fatal): %s",
-                    broker_name, exc,
+                    broker_name,
+                    exc,
                 )
             return
 

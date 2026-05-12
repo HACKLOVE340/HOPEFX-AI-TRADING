@@ -284,6 +284,7 @@ async def kyc_status_alias(user: TokenPayload = Depends(get_current_user)):
     """Return KYC status for the authenticated user."""
     try:
         from api.db_store import db_get
+
         record = db_get(f"kyc:{user.sub}") or {}
         return {
             "status": record.get("status", "not_started"),
@@ -293,16 +294,23 @@ async def kyc_status_alias(user: TokenPayload = Depends(get_current_user)):
             "documents": record.get("documents", []),
         }
     except Exception:
-        return {"status": "not_started", "submitted_at": None, "reviewed_at": None,
-                "rejection_reason": None, "documents": []}
+        return {
+            "status": "not_started",
+            "submitted_at": None,
+            "reviewed_at": None,
+            "rejection_reason": None,
+            "documents": [],
+        }
 
 
 @kyc_alias_router.post("/submit", summary="Submit KYC application (alias)")
 async def kyc_submit_alias(user: TokenPayload = Depends(get_current_user)):
     """Submit KYC application — multipart form handled by frontend."""
     from datetime import datetime, timezone
+
     try:
         from api.db_store import db_get, db_set
+
         record = db_get(f"kyc:{user.sub}") or {}
         record["status"] = "pending"
         record["submitted_at"] = datetime.now(timezone.utc).isoformat()
@@ -318,6 +326,7 @@ async def kyc_documents_alias(user: TokenPayload = Depends(get_current_user)):
     """Return uploaded KYC documents for the authenticated user."""
     try:
         from api.db_store import db_get
+
         record = db_get(f"kyc:{user.sub}") or {}
         return {"documents": record.get("documents", []), "total": len(record.get("documents", []))}
     except Exception:
@@ -354,6 +363,7 @@ async def kyc_upload_document_alias(
         if bucket:
             try:
                 import boto3  # type: ignore[import]
+
                 s3 = boto3.client("s3")
                 s3.put_object(
                     Bucket=bucket,
@@ -388,6 +398,7 @@ async def kyc_upload_document_alias(
 
     try:
         from api.db_store import db_get, db_set
+
         record = db_get(f"kyc:{user.sub}") or {}
         docs = record.get("documents", [])
         docs.append(doc)

@@ -709,7 +709,9 @@ class Gatekeeper:
         except Exception:
             # Fail-closed: unknown macro impact treated as maximum (1.0) so
             # the _IMPACT_BLACKOUT threshold check blocks the trade.
-            logger.warning("_get_impact_score_from_orch: orchestrator call failed — returning 1.0 (fail-closed)", exc_info=True)
+            logger.warning(
+                "_get_impact_score_from_orch: orchestrator call failed — returning 1.0 (fail-closed)", exc_info=True
+            )
             return 1.0
 
     def _get_sentiment(self, signal) -> float:

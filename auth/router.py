@@ -67,9 +67,7 @@ def _get_signing_secret() -> str:
     """
     secret = os.getenv("SECURITY_JWT_SECRET", "")
     if not secret or len(secret) < 32:
-        raise RuntimeError(
-            "SECURITY_JWT_SECRET must be set (≥32 chars) before issuing signed tokens"
-        )
+        raise RuntimeError("SECURITY_JWT_SECRET must be set (≥32 chars) before issuing signed tokens")
     return secret
 
 
@@ -119,8 +117,8 @@ _SALT_EMAIL_VERIFY = "hopefx-email-verify-v1"
 _SALT_PASSWORD_RESET = "hopefx-password-reset-v1"
 
 # Token TTLs
-_EMAIL_VERIFY_TTL = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(24 * 3600)))   # 24 h
-_PASSWORD_RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(3600)))    # 1 h
+_EMAIL_VERIFY_TTL = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(24 * 3600)))  # 24 h
+_PASSWORD_RESET_TTL = int(os.getenv("PASSWORD_RESET_TTL_SECONDS", str(3600)))  # 1 h
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
@@ -132,6 +130,7 @@ _auth_service = None
 # ── Per-IP rate limiter ───────────────────────────────────────────────────────
 # Sliding-window counter: max N requests per window_seconds per IP.
 # Uses Redis when available, falls back to in-memory (single-process only).
+
 
 def _parse_int_env(name: str, default: int) -> int:
     """Parse an integer env var, raising a clear error if the value is not a plain integer.
@@ -151,7 +150,7 @@ def _parse_int_env(name: str, default: int) -> int:
         ) from exc
 
 
-_AUTH_RATE_LIMIT = _parse_int_env("AUTH_RATE_LIMIT_REQUESTS", 10)   # max attempts (module-level default)
+_AUTH_RATE_LIMIT = _parse_int_env("AUTH_RATE_LIMIT_REQUESTS", 10)  # max attempts (module-level default)
 _AUTH_RATE_WINDOW = _parse_int_env("AUTH_RATE_LIMIT_WINDOW_SECONDS", 60)  # seconds
 
 
@@ -170,6 +169,7 @@ def _get_rate_window() -> int:
         return int(os.getenv("AUTH_RATE_LIMIT_WINDOW_SECONDS", str(_AUTH_RATE_WINDOW)))
     except (ValueError, TypeError):
         return _AUTH_RATE_WINDOW
+
 
 # Trusted reverse-proxy IPs — only these may set X-Forwarded-For.
 # Comma-separated list; defaults to loopback only.
@@ -206,6 +206,7 @@ def _get_rl_redis():
     _rl_redis_probed = True
     try:
         import redis as _redis
+
         r = _redis.Redis(
             host=os.getenv("REDIS_HOST", "localhost"),
             port=int(os.getenv("REDIS_PORT", "6379")),
@@ -635,6 +636,7 @@ async def login(
         # Cookie max_age must match the JWT TTL exactly — use the canonical
         # function so both always read the same env var with the same default.
         from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
+
         _max_age = _jwt_expire_min() * 60
         response.set_cookie(
             key="hopefx_access_token",
@@ -707,6 +709,7 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     if new_access:
         _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
         from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
+
         _max_age = _jwt_expire_min() * 60
         response.set_cookie(
             key="hopefx_access_token",
@@ -836,9 +839,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     by the signature — no DB timestamp lookup required on redemption.
     """
     _check_ip_rate_limit(_get_client_ip(request))
-    _, msg, raw_reset_token = await asyncio.to_thread(
-        functools.partial(_svc().request_password_reset, body.email)
-    )
+    _, msg, raw_reset_token = await asyncio.to_thread(functools.partial(_svc().request_password_reset, body.email))
     if raw_reset_token:
         signed_reset_token = _make_signed_token(
             {"tok": raw_reset_token, "email": body.email},
@@ -883,9 +884,7 @@ async def reset_password(body: ResetPasswordRequest, request: Request):
         raise HTTPException(status_code=400, detail="Malformed reset token") from None
 
     # 3. Service validates hash, updates password, revokes all sessions
-    ok, msg = await asyncio.to_thread(
-        functools.partial(_svc().reset_password, raw_token, body.new_password)
-    )
+    ok, msg = await asyncio.to_thread(functools.partial(_svc().reset_password, raw_token, body.new_password))
     if not ok:
         raise HTTPException(status_code=400, detail=msg) from None
     return {"message": msg}
@@ -1039,7 +1038,7 @@ async def get_csrf_token(response: Response) -> dict:
         key=_CSRF_COOKIE_NAME,
         value=token,
         max_age=_CSRF_COOKIE_MAX_AGE,
-        httponly=False,   # JS must read it to set the header
+        httponly=False,  # JS must read it to set the header
         samesite="strict",
         secure=secure,
         path="/",

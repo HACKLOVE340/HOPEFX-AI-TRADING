@@ -129,11 +129,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     """
     to_encode = data.copy()
     now = datetime.now(UTC)
-    expire = (
-        now + expires_delta
-        if expires_delta
-        else now + timedelta(minutes=_get_access_token_expire_minutes())
-    )
+    expire = now + expires_delta if expires_delta else now + timedelta(minutes=_get_access_token_expire_minutes())
     # Inject standard claims — do not overwrite caller-supplied jti if present
     to_encode.setdefault("jti", str(uuid.uuid4()))
     to_encode.setdefault("type", "access")

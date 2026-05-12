@@ -148,10 +148,7 @@ class MacroStore:
         converted to UTC; tz-naive values are assumed to be UTC.
         """
         raw = pd.Timestamp(as_of)
-        if raw.tzinfo is not None:
-            ts = raw.tz_convert("UTC")
-        else:
-            ts = raw.tz_localize("UTC")
+        ts = raw.tz_convert("UTC") if raw.tzinfo is not None else raw.tz_localize("UTC")
         if series_name not in self._series:
             self._series[series_name] = pd.Series(dtype=float, name=series_name)
         self._series[series_name][ts] = float(value)

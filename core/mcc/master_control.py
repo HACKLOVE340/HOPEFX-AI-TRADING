@@ -566,5 +566,6 @@ class MasterControlCore:
 
         logger.info("All strategies deactivated")
 
+
 # Alias for backward compatibility
 MasterControlCentre = MasterControlCore

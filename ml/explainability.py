@@ -96,9 +96,11 @@ def _load_model(model_name: str) -> Any | None:
         try:
             if loader_name == "joblib":
                 import joblib
+
                 obj = joblib.load(str(pkl_path))
             else:
                 import pickle
+
                 with open(pkl_path, "rb") as f:
                     obj = pickle.load(f)
             break
@@ -129,9 +131,7 @@ def _get_sample_data(model_name: str, model: Any) -> np.ndarray | None:
         if pred._model is None:
             pred._load()
         feature_names = pred._feature_names or []
-        n_features = len(feature_names) or (
-            model.n_features_in_ if hasattr(model, "n_features_in_") else 50
-        )
+        n_features = len(feature_names) or (model.n_features_in_ if hasattr(model, "n_features_in_") else 50)
 
         # Build a small background matrix from XAUUSD data
         df = pd.read_csv(Path("data/XAUUSD_40Y.csv"), parse_dates=["Date"])
@@ -157,11 +157,8 @@ def _shap_tree_importance(model: Any, feature_names: list[str]) -> list[dict[str
     else:
         shap_values = explainer.shap_values(np.zeros((10, model.n_features_in_)))
 
-    if isinstance(shap_values, list):
-        # Multi-class: use class-1 SHAP (bullish probability)
-        sv = np.abs(shap_values[1])
-    else:
-        sv = np.abs(shap_values)
+    # Multi-class: use class-1 SHAP (bullish probability)
+    sv = np.abs(shap_values[1]) if isinstance(shap_values, list) else np.abs(shap_values)
 
     mean_abs = sv.mean(axis=0)
     total = mean_abs.sum() + 1e-12
@@ -256,7 +253,10 @@ def get_shap_values(model_name: str, top_n: int = 30) -> dict[str, Any]:
         coef = np.abs(model.coef_.flatten())
         total = coef.sum() + 1e-12
         features = sorted(
-            [{"feature": fn, "importance": round(float(c / total), 6)} for fn, c in zip(feature_names, coef, strict=False)],
+            [
+                {"feature": fn, "importance": round(float(c / total), 6)}
+                for fn, c in zip(feature_names, coef, strict=False)
+            ],
             key=lambda x: x["importance"],
             reverse=True,
         )

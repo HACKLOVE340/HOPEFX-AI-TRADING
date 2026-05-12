@@ -82,7 +82,9 @@ class GARCHModel:
                 neginf=1e-300,
             )
             log_likelihood = -np.sum(
-                np.log(np.where(pdf_vals > 0, pdf_vals, 1e-300))  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
+                np.log(
+                    np.where(pdf_vals > 0, pdf_vals, 1e-300)
+                )  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
             )
             return log_likelihood
 
@@ -126,7 +128,7 @@ class GARCHModel:
         prev_return = np.sqrt(unconditional_var) * stats.t.rvs(self.nu, size=n_sims)
 
         for t in range(horizon):
-            variance = self.omega + self.alpha * prev_return ** 2 + self.beta * variance
+            variance = self.omega + self.alpha * prev_return**2 + self.beta * variance
             variance = np.nan_to_num(variance, nan=0.0, posinf=0.0)
             simulated[:, t] = np.sqrt(np.maximum(variance, 0.0)) * stats.t.rvs(self.nu, size=n_sims)
             prev_return = simulated[:, t]
@@ -193,8 +195,13 @@ class MonteCarloRiskEngine:
         # np.random.multivariate_normal with an empty covariance matrix.
         if not self.garch_models or not self.copula.marginals:
             return RiskMetrics(
-                var_95=0.0, var_99=0.0, cvar_95=0.0, cvar_99=0.0,
-                volatility=0.0, max_drawdown=0.0, tail_risk=0.0,
+                var_95=0.0,
+                var_99=0.0,
+                cvar_95=0.0,
+                cvar_99=0.0,
+                volatility=0.0,
+                max_drawdown=0.0,
+                tail_risk=0.0,
                 correlation_stress=0.0,
             )
 
@@ -210,8 +217,13 @@ class MonteCarloRiskEngine:
         # rather than letting sum() return int 0 and crashing on .fillna().
         if scaled_returns.empty:
             return RiskMetrics(
-                var_95=0.0, var_99=0.0, cvar_95=0.0, cvar_99=0.0,
-                volatility=0.0, max_drawdown=0.0, tail_risk=0.0,
+                var_95=0.0,
+                var_99=0.0,
+                cvar_95=0.0,
+                cvar_99=0.0,
+                volatility=0.0,
+                max_drawdown=0.0,
+                tail_risk=0.0,
                 correlation_stress=0.0,
             )
 
@@ -308,10 +320,7 @@ class RealTimeRiskMonitor:
         if total_value <= 0:
             return []
 
-        weights = {
-            s: float(positions[s] * prices[s] / total_value)
-            for s in common
-        }
+        weights = {s: float(positions[s] * prices[s] / total_value) for s in common}
 
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()

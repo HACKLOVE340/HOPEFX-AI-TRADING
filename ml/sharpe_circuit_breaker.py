@@ -164,6 +164,7 @@ class SharpeCircuitBreaker:
         if self._redis is None:
             try:
                 import redis as _redis_lib
+
                 _url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
                 self._redis = _redis_lib.from_url(_url, decode_responses=True, socket_connect_timeout=2)
             except Exception as _e:
@@ -283,17 +284,19 @@ class SharpeCircuitBreaker:
             return
         try:
             key = f"{self._REDIS_KEY_PREFIX}{state.model_version}"
-            payload = json.dumps({
-                "is_open": state.is_open,
-                "opened_at": state.opened_at,
-                "consecutive_bad_windows": state.consecutive_bad_windows,
-                "trip_reason": state.trip_reason,
-                "total_trades": state.total_trades,
-                "last_sharpe": state.last_sharpe,
-                # Persist the rolling window so Sharpe calculation continues
-                # across restarts without a cold-start gap.
-                "pnl_window": list(state.pnl_window),
-            })
+            payload = json.dumps(
+                {
+                    "is_open": state.is_open,
+                    "opened_at": state.opened_at,
+                    "consecutive_bad_windows": state.consecutive_bad_windows,
+                    "trip_reason": state.trip_reason,
+                    "total_trades": state.total_trades,
+                    "last_sharpe": state.last_sharpe,
+                    # Persist the rolling window so Sharpe calculation continues
+                    # across restarts without a cold-start gap.
+                    "pnl_window": list(state.pnl_window),
+                }
+            )
             self._redis.setex(key, self._REDIS_TTL_S, payload)
         except Exception as exc:
             logger.warning("SharpeCircuitBreaker: failed to persist state for '%s': %s", state.model_version, exc)
@@ -311,7 +314,7 @@ class SharpeCircuitBreaker:
                     continue
                 try:
                     data = json.loads(raw)
-                    version = key[len(self._REDIS_KEY_PREFIX):]
+                    version = key[len(self._REDIS_KEY_PREFIX) :]
                     state = CircuitState(model_version=version)
                     state.is_open = bool(data.get("is_open", False))
                     state.opened_at = data.get("opened_at")

@@ -358,9 +358,7 @@ class IBKRConnector(BrokerConnector):
                     self._account_id,
                 )
                 self._capture_sentry(
-                    RuntimeError(
-                        f"IBKR Cancel-on-Disconnect is DISABLED for account {self._account_id}"
-                    )
+                    RuntimeError(f"IBKR Cancel-on-Disconnect is DISABLED for account {self._account_id}")
                 )
             else:
                 # Tag not returned by this TWS version — log at WARNING so
@@ -373,9 +371,7 @@ class IBKRConnector(BrokerConnector):
                 )
         except Exception as exc:
             # Never let a CoD check failure prevent the connection from succeeding.
-            logger.warning(
-                "IBKRConnector: Cancel-on-Disconnect check failed (non-fatal): %s", exc
-            )
+            logger.warning("IBKRConnector: Cancel-on-Disconnect check failed (non-fatal): %s", exc)
 
     def _start_heartbeat(self) -> None:
         """Start background thread that pings TWS to detect stale connections."""
@@ -434,12 +430,26 @@ class IBKRConnector(BrokerConnector):
 
         # Forex pairs: 6-char symbols like EURUSD, GBPJPY, etc.
         _FOREX_PAIRS = frozenset(
-            {"EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD",
-             "USDCAD", "EURGBP", "EURJPY", "GBPJPY", "USDHKD", "USDSGD",
-             "EURCHF", "AUDNZD"}
+            {
+                "EURUSD",
+                "GBPUSD",
+                "USDJPY",
+                "USDCHF",
+                "AUDUSD",
+                "NZDUSD",
+                "USDCAD",
+                "EURGBP",
+                "EURJPY",
+                "GBPJPY",
+                "USDHKD",
+                "USDSGD",
+                "EURCHF",
+                "AUDNZD",
+            }
         )
         if sym in _FOREX_PAIRS:
             from ib_insync import Forex  # type: ignore[import]
+
             base, quote = sym[:3], sym[3:]
             c = Forex(sym, baseCurrency=base, currency=quote)
             self._ib.qualifyContracts(c)
@@ -448,12 +458,14 @@ class IBKRConnector(BrokerConnector):
         # Silver / other metals
         if sym in ("XAGUSD", "SILVER", "XAG"):
             from ib_insync import Commodity  # type: ignore[import]
+
             c = Commodity("XAGUSD", "SMART", "USD")
             self._ib.qualifyContracts(c)
             return c
 
         # Default: treat as US equity on SMART
         from ib_insync import Stock  # type: ignore[import]
+
         c = Stock(symbol, "SMART", _XAUUSD_CURRENCY)
         self._ib.qualifyContracts(c)
         return c

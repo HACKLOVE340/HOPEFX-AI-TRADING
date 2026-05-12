@@ -194,7 +194,7 @@ class AsyncExecutionEngine:
                 if latency > 100:
                     logger.warning("High submission latency: %sms", latency)
 
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 logger.error("Order submission timeout: %s", order.id)
 
                 order.status = OrderStatus.REJECTED

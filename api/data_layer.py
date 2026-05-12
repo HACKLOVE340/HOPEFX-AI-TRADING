@@ -77,6 +77,7 @@ async def get_latest_tick(
         fallback_price: float | None = None
         try:
             import yfinance as _yf
+
             _ticker = _yf.Ticker("GC=F" if symbol in ("XAU_USD", "XAUUSD") else symbol)
             _info = _ticker.fast_info
             fallback_price = float(_info.last_price) if hasattr(_info, "last_price") and _info.last_price else None

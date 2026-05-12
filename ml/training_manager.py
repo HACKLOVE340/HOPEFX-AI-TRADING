@@ -242,9 +242,11 @@ class TrainingManager:
         """Dispatch to the appropriate training module and return metrics."""
         if model == "advanced_oos":
             from ml.train_advanced import retrain_advanced_predictor
+
             return retrain_advanced_predictor()
         if model == "lstm_signal":
             from ml.lstm_signal_layer import retrain_lstm
+
             return retrain_lstm()
         if model in ("rl_ppo", "rl"):
             from ml.rl_agent import RLAgent
@@ -256,12 +258,14 @@ class TrainingManager:
             df = df.rename(columns={"Date": "timestamp"})
             df = df[df["timestamp"] >= "2018-01-01"]
             from ml.rl_agent import ForexTradingEnv
+
             env = ForexTradingEnv(df.to_dict("records"), initial_balance=10000.0)
             agent = RLAgent(model_name="hopefx_ppo")
             agent.train(env, timesteps=100_000, verbose=0)
             return {"status": "ok", "windows": len(env._features)}
         if model == "hybrid_ensemble":
             from ml.advanced_predictor import get_hybrid_predictor
+
             hyb = get_hybrid_predictor()
             status = hyb.component_status
             return {"meta_trained": status["meta_trained"]}

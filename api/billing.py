@@ -225,6 +225,7 @@ async def get_subscription(user: TokenPayload = Depends(get_current_user)):
     trial_days_remaining: int | None = None
     if is_trial and sub.end_date:
         from datetime import datetime, timezone as _tz
+
         delta = sub.end_date - datetime.now(_tz.utc)
         trial_days_remaining = max(0, delta.days)
 
@@ -301,7 +302,11 @@ async def stripe_webhook(request: Request):
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
-    logger.info("Stripe webhook processed: event_type=%s result_status=%s", event.get("type"), result.get("status") if isinstance(result, dict) else "ok")
+    logger.info(
+        "Stripe webhook processed: event_type=%s result_status=%s",
+        event.get("type"),
+        result.get("status") if isinstance(result, dict) else "ok",
+    )
     return {"received": True}
 
 
@@ -350,9 +355,9 @@ async def create_payment_intent(
     # same billing cycle do not create duplicate PaymentIntents.
     # The key is scoped to the user so different users with the same amount
     # never collide.
-    effective_idempotency_key = body.idempotency_key or hashlib.sha256(
-        f"{user.sub}:{body.amount_usd}:{body.currency}".encode()
-    ).hexdigest()
+    effective_idempotency_key = (
+        body.idempotency_key or hashlib.sha256(f"{user.sub}:{body.amount_usd}:{body.currency}".encode()).hexdigest()
+    )
 
     result = client.create_payment_intent(
         customer_id=customer_id,
@@ -472,10 +477,7 @@ async def activate_free_tier(body: FreeTierBody):
         "tier": "starter",
         "trial": True,
         "trial_days": _TRIAL_DAYS,
-        "message": (
-            f"Welcome! You have a {_TRIAL_DAYS}-day free trial of the Starter plan. "
-            "No credit card required."
-        ),
+        "message": (f"Welcome! You have a {_TRIAL_DAYS}-day free trial of the Starter plan. No credit card required."),
         "features": ["paper_trading", "journal", "performance", "alerts", "wallet"],
         "upgrade_url": "/pricing",
     }
@@ -513,9 +515,9 @@ async def flutterwave_init(
     """
     # Deterministic tx_ref — same user+plan+amount+currency always maps to the
     # same reference, so a network retry cannot create a duplicate charge.
-    idempotent_tx_ref = "FLW-" + hashlib.sha256(
-        f"{user.sub}:{body.plan}:{body.amount}:{body.currency}".encode()
-    ).hexdigest()[:24]
+    idempotent_tx_ref = (
+        "FLW-" + hashlib.sha256(f"{user.sub}:{body.plan}:{body.amount}:{body.currency}".encode()).hexdigest()[:24]
+    )
 
     try:
         flw = _get_flutterwave()
@@ -556,6 +558,7 @@ async def flutterwave_verify(
     _verified_cache_key = f"flw_verified:{user.sub}:{body.tx_ref}"
     try:
         from api.db_store import db_get, db_set  # type: ignore[import]
+
         cached = db_get(_verified_cache_key)
         if cached and cached.get("status") == "verified":
             logger.info(
@@ -1290,12 +1293,14 @@ async def get_ticket_timeline(
 
     # Build timeline from ticket fields — real events stored in ticket dict
     events: list[dict] = []
-    events.append({
-        "event": "created",
-        "timestamp": ticket.get("created_at"),
-        "actor": "user",
-        "detail": f"Ticket {ticket_id} submitted with priority '{ticket.get('priority', 'normal')}'",
-    })
+    events.append(
+        {
+            "event": "created",
+            "timestamp": ticket.get("created_at"),
+            "actor": "user",
+            "detail": f"Ticket {ticket_id} submitted with priority '{ticket.get('priority', 'normal')}'",
+        }
+    )
 
     # Append any stored reply/status-change events
     for ev in ticket.get("timeline_events", []):
@@ -1303,12 +1308,14 @@ async def get_ticket_timeline(
 
     # If ticket is resolved, add resolution event
     if ticket.get("status") == "resolved" and ticket.get("resolved_at"):
-        events.append({
-            "event": "resolved",
-            "timestamp": ticket.get("resolved_at"),
-            "actor": "support",
-            "detail": ticket.get("resolution_note", "Ticket resolved"),
-        })
+        events.append(
+            {
+                "event": "resolved",
+                "timestamp": ticket.get("resolved_at"),
+                "actor": "support",
+                "detail": ticket.get("resolution_note", "Ticket resolved"),
+            }
+        )
 
     events.sort(key=lambda e: e.get("timestamp") or "")
 
@@ -1410,13 +1417,14 @@ async def list_custom_dev_requests(
     }
 
 
-
 # ── Subscription management ───────────────────────────────────────────────────
+
 
 @router.post("/subscription/cancel", summary="Cancel active subscription")
 async def cancel_subscription(user: TokenPayload = Depends(get_current_user)):
     try:
         from api.db_store import db_get, db_set
+
         sub = db_get(f"subscription:{user.sub}") or {}
         sub["cancel_at_period_end"] = True
         sub["cancelled_at"] = datetime.now(UTC).isoformat()
@@ -1430,6 +1438,7 @@ async def cancel_subscription(user: TokenPayload = Depends(get_current_user)):
 async def resume_subscription(user: TokenPayload = Depends(get_current_user)):
     try:
         from api.db_store import db_get, db_set
+
         sub = db_get(f"subscription:{user.sub}") or {}
         sub["cancel_at_period_end"] = False
         sub["resumed_at"] = datetime.now(UTC).isoformat()
@@ -1447,6 +1456,7 @@ async def change_subscription_plan(body: dict, user: TokenPayload = Depends(get_
         raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {', '.join(sorted(valid_plans))}")
     try:
         from api.db_store import db_get, db_set
+
         sub = db_get(f"subscription:{user.sub}") or {}
         old_plan = sub.get("plan", "free")
         sub["plan"] = plan
@@ -1465,6 +1475,7 @@ async def set_default_payment_method(
 ):
     try:
         from api.db_store import db_get, db_set
+
         methods = db_get(f"payment_methods:{user.sub}") or []
         for m in methods:
             m["is_default"] = m.get("id") == payment_method_id
@@ -1482,9 +1493,10 @@ async def list_invoices(
 ):
     try:
         from api.db_store import db_get
+
         invoices = db_get(f"invoices:{user.sub}") or []
         invoices.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        page = invoices[offset: offset + limit]
+        page = invoices[offset : offset + limit]
         return {"invoices": page, "total": len(invoices), "limit": limit, "offset": offset}
     except Exception:
         return {"invoices": [], "total": 0, "limit": limit, "offset": offset}
@@ -1494,6 +1506,7 @@ async def list_invoices(
 async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_user)):
     try:
         from api.db_store import db_get
+
         invoices = db_get(f"invoices:{user.sub}") or []
         inv = next((i for i in invoices if i.get("id") == invoice_id), None)
         if not inv:
@@ -1509,16 +1522,21 @@ async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_
 # Delegates to /api/payments/crypto/* under the hood; exposed here so the
 # frontend cryptoCheckoutApi can use a single /billing prefix.
 
+
 @router.get("/crypto/rates", summary="Live crypto exchange rates for checkout")
 async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
     """Return live BTC/ETH/USDT rates in USD for the crypto checkout flow."""
     try:
         import aiohttp
-        async with aiohttp.ClientSession() as session, session.get(
-            "https://api.coingecko.com/api/v3/simple/price",
-            params={"ids": "bitcoin,ethereum,tether", "vs_currencies": "usd"},
-            timeout=aiohttp.ClientTimeout(total=5),
-        ) as resp:
+
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "bitcoin,ethereum,tether", "vs_currencies": "usd"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp,
+        ):
             data = await resp.json()
             return {
                 "BTC": {"rate": data.get("bitcoin", {}).get("usd", 0), "symbol": "BTC"},
@@ -1530,9 +1548,9 @@ async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
         logger.debug("crypto rates fetch error: %s", exc)
         # Fallback approximate rates
         return {
-            "BTC":  {"rate": 65000.0, "symbol": "BTC"},
-            "ETH":  {"rate": 3500.0,  "symbol": "ETH"},
-            "USDT": {"rate": 1.0,     "symbol": "USDT"},
+            "BTC": {"rate": 65000.0, "symbol": "BTC"},
+            "ETH": {"rate": 3500.0, "symbol": "ETH"},
+            "USDT": {"rate": 1.0, "symbol": "USDT"},
             "timestamp": datetime.now(UTC).isoformat(),
             "source": "fallback",
         }
@@ -1545,6 +1563,7 @@ async def create_crypto_order(
 ):
     """Create a crypto payment order and return a deposit address."""
     import uuid as _uuid
+
     currency = str(payload.get("currency", "BTC")).upper()
     amount_usd = float(payload.get("amount_usd", 0))
     if amount_usd <= 0:
@@ -1556,22 +1575,24 @@ async def create_crypto_order(
     # Delegate to payments router for address generation
     try:
         from api.payments import _generate_address
+
         address = _generate_address(currency, user.sub, "mainnet")
     except Exception:
         address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
 
     order = {
-        "order_id":   order_id,
-        "user_id":    user.sub,
-        "currency":   currency,
+        "order_id": order_id,
+        "user_id": user.sub,
+        "currency": currency,
         "amount_usd": amount_usd,
-        "address":    address,
-        "status":     "pending",
+        "address": address,
+        "status": "pending",
         "created_at": datetime.now(UTC).isoformat(),
         "expires_at": None,
     }
     try:
         from api.db_store import db_set, db_get
+
         orders = db_get(f"crypto_orders:{user.sub}") or []
         orders.append(order)
         db_set(f"crypto_orders:{user.sub}", orders)
@@ -1587,6 +1608,7 @@ async def get_crypto_order(order_id: str, user: TokenPayload = Depends(get_curre
     """Return the current status of a crypto payment order."""
     try:
         from api.db_store import db_get
+
         order = db_get(f"crypto_order:{order_id}")
         if not order or order.get("user_id") != user.sub:
             raise HTTPException(status_code=404, detail="Order not found") from None
@@ -1602,6 +1624,7 @@ async def cancel_crypto_order(order_id: str, user: TokenPayload = Depends(get_cu
     """Cancel a pending crypto payment order."""
     try:
         from api.db_store import db_get, db_set
+
         order = db_get(f"crypto_order:{order_id}")
         if not order or order.get("user_id") != user.sub:
             raise HTTPException(status_code=404, detail="Order not found") from None

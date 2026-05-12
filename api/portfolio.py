@@ -559,15 +559,17 @@ async def portfolio_positions(
         if broker is not None and hasattr(broker, "get_positions"):
             raw = await broker.get_positions()
             for p in raw:
-                positions_list.append({
-                    "symbol": getattr(p, "symbol", ""),
-                    "side": getattr(p, "side", "long"),
-                    "quantity": float(getattr(p, "quantity", 0.0)),
-                    "entry_price": float(getattr(p, "entry_price", 0.0)),
-                    "current_price": float(getattr(p, "current_price", 0.0)),
-                    "unrealised_pnl": float(getattr(p, "unrealised_pnl", 0.0)),
-                    "market_value": float(getattr(p, "market_value", 0.0)),
-                })
+                positions_list.append(
+                    {
+                        "symbol": getattr(p, "symbol", ""),
+                        "side": getattr(p, "side", "long"),
+                        "quantity": float(getattr(p, "quantity", 0.0)),
+                        "entry_price": float(getattr(p, "entry_price", 0.0)),
+                        "current_price": float(getattr(p, "current_price", 0.0)),
+                        "unrealised_pnl": float(getattr(p, "unrealised_pnl", 0.0)),
+                        "market_value": float(getattr(p, "market_value", 0.0)),
+                    }
+                )
     except Exception as exc:
         logger.warning("portfolio_positions: broker fetch failed: %s", exc)
 

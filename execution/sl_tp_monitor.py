@@ -37,7 +37,7 @@ import asyncio
 import contextlib
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)

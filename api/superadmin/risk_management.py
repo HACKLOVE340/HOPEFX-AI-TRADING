@@ -36,11 +36,12 @@ router = APIRouter()
 UTC = timezone.utc
 
 _CB_STATE_KEY = "superadmin:risk:circuit_breakers"
-_STRESS_KEY   = "superadmin:risk:stress_results"
-_BREACH_KEY   = "superadmin:risk:prop_breaches"
+_STRESS_KEY = "superadmin:risk:stress_results"
+_BREACH_KEY = "superadmin:risk:prop_breaches"
 
 
 # ── Circuit Breakers ──────────────────────────────────────────────────────────
+
 
 def _load_cb_states() -> list[dict]:
     """Load circuit breaker states from the live risk module, falling back to Redis cache."""
@@ -49,15 +50,22 @@ def _load_cb_states() -> list[dict]:
         # Attempt to get the global registry if it exists
         try:
             from risk.circuit_breakers import _GLOBAL_REGISTRY
+
             for name, cb in _GLOBAL_REGISTRY.items():
-                states.append({
-                    "name": name,
-                    "state": cb.state.value if hasattr(cb, "state") else "closed",
-                    "failure_count": getattr(cb, "failure_count", 0),
-                    "last_failure": cb.last_failure_time.isoformat() if getattr(cb, "last_failure_time", None) else None,
-                    "last_success": cb.last_success_time.isoformat() if getattr(cb, "last_success_time", None) else None,
-                    "threshold": getattr(cb, "failure_threshold", 5),
-                })
+                states.append(
+                    {
+                        "name": name,
+                        "state": cb.state.value if hasattr(cb, "state") else "closed",
+                        "failure_count": getattr(cb, "failure_count", 0),
+                        "last_failure": cb.last_failure_time.isoformat()
+                        if getattr(cb, "last_failure_time", None)
+                        else None,
+                        "last_success": cb.last_success_time.isoformat()
+                        if getattr(cb, "last_success_time", None)
+                        else None,
+                        "threshold": getattr(cb, "failure_threshold", 5),
+                    }
+                )
         except (ImportError, AttributeError):  # nosec B110
             pass
     except Exception as exc:
@@ -67,6 +75,7 @@ def _load_cb_states() -> list[dict]:
         # Fall back to Redis-persisted state
         try:
             from cache.redis_client import get_sync_redis_client
+
             rc = get_sync_redis_client()
             if rc:
                 raw = rc.get(_CB_STATE_KEY)
@@ -78,12 +87,54 @@ def _load_cb_states() -> list[dict]:
     if not states:
         # Bootstrap with known breaker names from the codebase
         states = [
-            {"name": "daily_drawdown",    "state": "closed", "failure_count": 0, "last_failure": None, "last_success": None, "threshold": 3},
-            {"name": "total_drawdown",    "state": "closed", "failure_count": 0, "last_failure": None, "last_success": None, "threshold": 1},
-            {"name": "order_rate",        "state": "closed", "failure_count": 0, "last_failure": None, "last_success": None, "threshold": 10},
-            {"name": "position_size",     "state": "closed", "failure_count": 0, "last_failure": None, "last_success": None, "threshold": 5},
-            {"name": "broker_connection", "state": "closed", "failure_count": 0, "last_failure": None, "last_success": None, "threshold": 3},
-            {"name": "ml_engine",         "state": "closed", "failure_count": 0, "last_failure": None, "last_success": None, "threshold": 5},
+            {
+                "name": "daily_drawdown",
+                "state": "closed",
+                "failure_count": 0,
+                "last_failure": None,
+                "last_success": None,
+                "threshold": 3,
+            },
+            {
+                "name": "total_drawdown",
+                "state": "closed",
+                "failure_count": 0,
+                "last_failure": None,
+                "last_success": None,
+                "threshold": 1,
+            },
+            {
+                "name": "order_rate",
+                "state": "closed",
+                "failure_count": 0,
+                "last_failure": None,
+                "last_success": None,
+                "threshold": 10,
+            },
+            {
+                "name": "position_size",
+                "state": "closed",
+                "failure_count": 0,
+                "last_failure": None,
+                "last_success": None,
+                "threshold": 5,
+            },
+            {
+                "name": "broker_connection",
+                "state": "closed",
+                "failure_count": 0,
+                "last_failure": None,
+                "last_success": None,
+                "threshold": 3,
+            },
+            {
+                "name": "ml_engine",
+                "state": "closed",
+                "failure_count": 0,
+                "last_failure": None,
+                "last_success": None,
+                "threshold": 5,
+            },
         ]
         _persist_cb_states(states)
     return states
@@ -92,6 +143,7 @@ def _load_cb_states() -> list[dict]:
 def _persist_cb_states(states: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_CB_STATE_KEY, json.dumps(states), ex=3600)
@@ -127,6 +179,7 @@ async def reset_circuit_breaker(
     # Also reset on live object if available
     try:
         from risk.circuit_breakers import _GLOBAL_REGISTRY
+
         if name in _GLOBAL_REGISTRY:
             _GLOBAL_REGISTRY[name].reset()
     except Exception:  # nosec B110
@@ -153,6 +206,7 @@ async def force_open_circuit_breaker(
     _persist_cb_states(states)
     try:
         from risk.circuit_breakers import _GLOBAL_REGISTRY
+
         if name in _GLOBAL_REGISTRY:
             _GLOBAL_REGISTRY[name].force_open()
     except Exception:  # nosec B110
@@ -162,6 +216,7 @@ async def force_open_circuit_breaker(
 
 
 # ── VaR / ES Metrics ─────────────────────────────────────────────────────────
+
 
 @router.get("/risk/var")
 async def get_var_metrics(
@@ -184,6 +239,7 @@ async def get_var_metrics(
     # Try Redis cache first (populated by risk engine)
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("risk:var:latest")
@@ -202,17 +258,13 @@ async def get_var_metrics(
 
         db = SessionLocal()
         try:
-            trades = (
-                db.query(Trade)
-                .filter(Trade.status == "closed")
-                .order_by(Trade.closed_at.desc())
-                .limit(500)
-                .all()
-            )
+            trades = db.query(Trade).filter(Trade.status == "closed").order_by(Trade.closed_at.desc()).limit(500).all()
             if trades:
                 pnls = [float(t.pnl or 0) for t in trades]
                 returns = np.array(pnls)
-                portfolio_value = sum(float(t.entry_price or 0) * float(t.quantity or 0) for t in trades[:10]) or 100_000.0
+                portfolio_value = (
+                    sum(float(t.entry_price or 0) * float(t.quantity or 0) for t in trades[:10]) or 100_000.0
+                )
 
                 # Drop NaN before any aggregation to prevent silent propagation
                 returns = returns[~np.isnan(returns)]
@@ -236,25 +288,28 @@ async def get_var_metrics(
                 downside_vals = returns[returns < 0]
                 downside = float(np.nan_to_num(downside_vals.std())) if len(downside_vals) > 0 else 1.0
                 downside = downside or 1.0
-                sharpe = mean_r / std_r * (252 ** 0.5)
-                sortino = mean_r / downside * (252 ** 0.5)
+                sharpe = mean_r / std_r * (252**0.5)
+                sortino = mean_r / downside * (252**0.5)
                 calmar = mean_r / abs(max_dd) if max_dd != 0 else 0.0
 
-                metrics.update({
-                    "var_95": round(var_95, 2),
-                    "var_99": round(var_99, 2),
-                    "expected_shortfall": round(es, 2),
-                    "max_drawdown": round(max_dd, 2),
-                    "current_drawdown": round(current_dd, 2),
-                    "sharpe_ratio": round(sharpe, 4),
-                    "sortino_ratio": round(sortino, 4),
-                    "calmar_ratio": round(calmar, 4),
-                    "portfolio_value": round(portfolio_value, 2),
-                    "trade_count": len(trades),
-                })
+                metrics.update(
+                    {
+                        "var_95": round(var_95, 2),
+                        "var_99": round(var_99, 2),
+                        "expected_shortfall": round(es, 2),
+                        "max_drawdown": round(max_dd, 2),
+                        "current_drawdown": round(current_dd, 2),
+                        "sharpe_ratio": round(sharpe, 4),
+                        "sortino_ratio": round(sortino, 4),
+                        "calmar_ratio": round(calmar, 4),
+                        "portfolio_value": round(portfolio_value, 2),
+                        "trade_count": len(trades),
+                    }
+                )
                 # Cache result
                 try:
                     from cache.redis_client import get_sync_redis_client
+
                     rc = get_sync_redis_client()
                     if rc:
                         rc.set("risk:var:latest", json.dumps(metrics), ex=300)
@@ -270,6 +325,7 @@ async def get_var_metrics(
 
 # ── Stress Tests ──────────────────────────────────────────────────────────────
 
+
 @router.get("/risk/stress-tests")
 async def get_stress_test_results(
     user: TokenPayload = Depends(_require_superadmin),
@@ -277,6 +333,7 @@ async def get_stress_test_results(
     results: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_STRESS_KEY)
@@ -299,12 +356,11 @@ async def run_stress_test(
     try:
         from database.connection import SessionLocal
         from database.models import Trade
+
         db = SessionLocal()
         try:
             open_trades = db.query(Trade).filter(Trade.status == "open").all()
-            portfolio_value = sum(
-                float(t.entry_price or 0) * float(t.quantity or 0) for t in open_trades
-            ) or 100_000.0
+            portfolio_value = sum(float(t.entry_price or 0) * float(t.quantity or 0) for t in open_trades) or 100_000.0
         finally:
             db.close()
     except Exception:  # nosec B110
@@ -338,6 +394,7 @@ async def run_stress_test(
         # Cache results
         try:
             from cache.redis_client import get_sync_redis_client
+
             rc = get_sync_redis_client()
             if rc:
                 rc.set(_STRESS_KEY, json.dumps(results_list), ex=3600)
@@ -359,6 +416,7 @@ async def run_stress_test(
 
 # ── Prop Firm Breaches ────────────────────────────────────────────────────────
 
+
 @router.get("/risk/prop-breaches")
 async def get_prop_breaches(
     status: str | None = Query(None),
@@ -371,6 +429,7 @@ async def get_prop_breaches(
     # Pull from Redis cache
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_BREACH_KEY)
@@ -388,10 +447,17 @@ async def get_prop_breaches(
         try:
             rows = (
                 db.query(AuditLogEntry)
-                .filter(AuditLogEntry.event_type.in_([
-                    "prop_breach", "daily_loss_breach", "drawdown_breach",
-                    "position_size_breach", "news_trading_breach",
-                ]))
+                .filter(
+                    AuditLogEntry.event_type.in_(
+                        [
+                            "prop_breach",
+                            "daily_loss_breach",
+                            "drawdown_breach",
+                            "position_size_breach",
+                            "news_trading_breach",
+                        ]
+                    )
+                )
                 .order_by(AuditLogEntry.created_at.desc())
                 .limit(limit)
                 .all()
@@ -401,20 +467,22 @@ async def get_prop_breaches(
                 bid = f"breach_{r.id}"
                 if bid not in existing_ids:
                     meta = json.loads(r.metadata or "{}") if r.metadata else {}
-                    breaches.append({
-                        "breach_id": bid,
-                        "user_id": str(r.user_id) if r.user_id else "unknown",
-                        "username": meta.get("username", "unknown"),
-                        "account_id": meta.get("account_id", "unknown"),
-                        "breach_type": r.event_type.replace("_breach", ""),
-                        "threshold": float(meta.get("threshold", 0)),
-                        "actual_value": float(meta.get("actual_value", 0)),
-                        "severity": meta.get("severity", "warning"),
-                        "status": "open",
-                        "detected_at": r.created_at.isoformat() if r.created_at else _utcnow().isoformat(),
-                        "resolved_at": None,
-                        "notes": r.detail,
-                    })
+                    breaches.append(
+                        {
+                            "breach_id": bid,
+                            "user_id": str(r.user_id) if r.user_id else "unknown",
+                            "username": meta.get("username", "unknown"),
+                            "account_id": meta.get("account_id", "unknown"),
+                            "breach_type": r.event_type.replace("_breach", ""),
+                            "threshold": float(meta.get("threshold", 0)),
+                            "actual_value": float(meta.get("actual_value", 0)),
+                            "severity": meta.get("severity", "warning"),
+                            "status": "open",
+                            "detected_at": r.created_at.isoformat() if r.created_at else _utcnow().isoformat(),
+                            "resolved_at": None,
+                            "notes": r.detail,
+                        }
+                    )
         finally:
             db.close()
     except Exception as exc:
@@ -429,6 +497,7 @@ async def get_prop_breaches(
 
 
 # ── Drawdown Statistics ───────────────────────────────────────────────────────
+
 
 @router.get("/risk/drawdown")
 async def get_drawdown_stats(
@@ -483,19 +552,24 @@ async def get_drawdown_stats(
             if all_dd_pcts:
                 # Replace NaN with 0 before comparisons to prevent silent propagation
                 arr = np.nan_to_num(np.array(all_dd_pcts), nan=0.0)
-                stats.update({
-                    "current_drawdown_pct": round(float(arr.mean()), 4),
-                    "max_drawdown_pct": round(float(arr.max()), 4),
-                    "accounts_in_drawdown": accounts_in_dd,
-                    "accounts_near_limit": accounts_near_limit,
-                    "drawdown_distribution": [
-                        {"bucket": "0-2%",  "count": int((arr < 0.02).sum())},  # healer: ignore — arr is nan_to_num guarded above
-                        {"bucket": "2-5%",  "count": int(((arr >= 0.02) & (arr < 0.05)).sum())},  # healer: ignore
-                        {"bucket": "5-8%",  "count": int(((arr >= 0.05) & (arr < 0.08)).sum())},  # healer: ignore
-                        {"bucket": "8-10%", "count": int(((arr >= 0.08) & (arr < 0.10)).sum())},  # healer: ignore
-                        {"bucket": ">10%",  "count": int((arr >= 0.10).sum())},  # healer: ignore
-                    ],
-                })
+                stats.update(
+                    {
+                        "current_drawdown_pct": round(float(arr.mean()), 4),
+                        "max_drawdown_pct": round(float(arr.max()), 4),
+                        "accounts_in_drawdown": accounts_in_dd,
+                        "accounts_near_limit": accounts_near_limit,
+                        "drawdown_distribution": [
+                            {
+                                "bucket": "0-2%",
+                                "count": int((arr < 0.02).sum()),
+                            },  # healer: ignore — arr is nan_to_num guarded above
+                            {"bucket": "2-5%", "count": int(((arr >= 0.02) & (arr < 0.05)).sum())},  # healer: ignore
+                            {"bucket": "5-8%", "count": int(((arr >= 0.05) & (arr < 0.08)).sum())},  # healer: ignore
+                            {"bucket": "8-10%", "count": int(((arr >= 0.08) & (arr < 0.10)).sum())},  # healer: ignore
+                            {"bucket": ">10%", "count": int((arr >= 0.10).sum())},  # healer: ignore
+                        ],
+                    }
+                )
         finally:
             db.close()
     except Exception as exc:

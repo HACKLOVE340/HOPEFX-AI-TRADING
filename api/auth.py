@@ -240,6 +240,7 @@ def get_current_user(
     try:
         if not hasattr(request.state, "background_tasks"):
             from starlette.background import BackgroundTasks as _BT
+
             request.state.background_tasks = _BT()
         request.state.background_tasks.add_task(_update_session_activity, payload.sub)
     except Exception:
@@ -297,6 +298,7 @@ def validate_order_symbol(symbol: str) -> str:
     """
     try:
         from utils.symbol import canonical as _canonical
+
         canonical = _canonical(symbol.strip())
     except Exception:
         canonical = symbol.upper().strip().replace("/", "").replace("_", "").replace("-", "")

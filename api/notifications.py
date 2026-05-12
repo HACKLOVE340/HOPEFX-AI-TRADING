@@ -28,12 +28,13 @@ router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 _NOTIF_PREFIX = "hopefx:notif:"
 _PREFS_PREFIX = "hopefx:notif:prefs:"
 
+
 def _redis():
     try:
         import redis as _r
         import os
-        c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-                        socket_connect_timeout=1, socket_timeout=1)
+
+        c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=1, socket_timeout=1)
         c.ping()
         return c
     except Exception:
@@ -184,6 +185,7 @@ def _seed_demo_notifs(user_id: str) -> None:
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
 
+
 class PrefsUpdate(BaseModel):
     email: bool | None = None
     push: bool | None = None
@@ -204,6 +206,7 @@ class SubscribeBody(BaseModel):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+
 @router.get("")
 async def list_notifications(
     page: int = Query(1, ge=1),
@@ -217,7 +220,7 @@ async def list_notifications(
         notifs = [n for n in notifs if not n.get("read")]
     total = len(notifs)
     start = (page - 1) * limit
-    page_items = notifs[start: start + limit]
+    page_items = notifs[start : start + limit]
     return {
         "notifications": page_items,
         "total": total,
@@ -297,8 +300,10 @@ async def subscribe(body: SubscribeBody, user: TokenPayload = Depends(get_curren
 
 # ── Internal helper — push a notification to a user ──────────────────────────
 
-def push_notification(user_id: str, notif_type: str, title: str, message: str,
-                      priority: str = "normal", action_url: str | None = None) -> dict:
+
+def push_notification(
+    user_id: str, notif_type: str, title: str, message: str, priority: str = "normal", action_url: str | None = None
+) -> dict:
     """Push a notification to a user's notification centre. Called internally."""
     notif = {
         "id": str(uuid.uuid4()),
@@ -320,6 +325,7 @@ async def send_test_notification(
 ) -> dict:
     """Push a test notification to verify the notification pipeline is working."""
     from datetime import datetime, timezone
+
     test_notif = {
         "id": f"test_{int(__import__('time').time())}",
         "type": "system",
@@ -332,6 +338,7 @@ async def send_test_notification(
     # The module exports the singleton as `bus`, not `event_bus`.
     try:
         from core.event_bus import bus
+
         await bus.publish(f"notifications:{user.sub}", test_notif)
     except Exception as exc:
         logger.debug("test notification event bus: %s", exc)

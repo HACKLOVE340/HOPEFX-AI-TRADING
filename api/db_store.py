@@ -56,6 +56,7 @@ def _session_ctx() -> Generator:
     finally:
         if session is not None:
             import contextlib
+
             with contextlib.suppress(Exception):
                 session.close()
 
@@ -136,11 +137,7 @@ def db_keys_prefix(prefix: str) -> list[str]:
         with _session_ctx() as session:
             if session is None:
                 return []
-            records = (
-                session.query(Configuration.config_key)
-                .filter(Configuration.config_key.like(f"{prefix}%"))
-                .all()
-            )
+            records = session.query(Configuration.config_key).filter(Configuration.config_key.like(f"{prefix}%")).all()
             return [r[0] for r in records]
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.debug("db_keys_prefix(%s) failed: %s", prefix, exc)

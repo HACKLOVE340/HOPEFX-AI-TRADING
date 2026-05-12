@@ -144,6 +144,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     import pathlib
 
     from utils.symbol import to_oanda
+
     # Normalise: XAU/USD, XAUUSD, xau_usd → XAU_USD
     symbol_upper = to_oanda(symbol)
 
@@ -185,6 +186,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
             broker = getattr(app_state, "broker", None)
             if broker and hasattr(broker, "get_market_data"):
                 from utils.symbol import canonical as _canonical
+
                 raw = broker.get_market_data(_canonical(symbol), "1h", lookback)
                 if raw:
                     df = pd.DataFrame(raw)
@@ -222,6 +224,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 _running_loop = None
             if _running_loop is not None:
                 import concurrent.futures as _cf
+
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     bars = _ex.submit(_asyncio_ml.run, _fetch_db_ohlcv()).result(timeout=10)
             else:
@@ -361,9 +364,9 @@ class AccuracyThresholds(BaseModel):
     accuracy_good: float = float(os.getenv("ML_THRESHOLD_ACCURACY_GOOD", "0.60"))
     accuracy_warn: float = float(os.getenv("ML_THRESHOLD_ACCURACY_WARN", "0.50"))
     win_rate_good: float = float(os.getenv("ML_THRESHOLD_WIN_RATE_GOOD", "0.55"))
-    sharpe_good:   float = float(os.getenv("ML_THRESHOLD_SHARPE_GOOD",   "1.50"))
-    sharpe_warn:   float = float(os.getenv("ML_THRESHOLD_SHARPE_WARN",   "0.50"))
-    f1_good:       float = float(os.getenv("ML_THRESHOLD_F1_GOOD",       "0.60"))
+    sharpe_good: float = float(os.getenv("ML_THRESHOLD_SHARPE_GOOD", "1.50"))
+    sharpe_warn: float = float(os.getenv("ML_THRESHOLD_SHARPE_WARN", "0.50"))
+    f1_good: float = float(os.getenv("ML_THRESHOLD_F1_GOOD", "0.60"))
 
 
 class AccuracyResponse(BaseModel):
@@ -513,6 +516,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
 
                         def _engine_health() -> dict:
                             from ml.inference_engine import get_inference_engine
+
                             return get_inference_engine().health()
 
                         loop = asyncio.get_running_loop()
@@ -556,6 +560,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
 
         def _engine_health_fallback() -> dict:
             from ml.inference_engine import get_inference_engine
+
             return get_inference_engine().health()
 
         loop = asyncio.get_running_loop()
@@ -731,6 +736,7 @@ async def predict(
         except ImportError:
             ...  # nosec B110
     from utils.symbol import canonical as _canonical
+
     symbol_upper = _canonical(symbol)
     now_iso = datetime.now(UTC).isoformat()
     predictor = _get_predictor()
@@ -858,11 +864,10 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("tra
     orchestrator_features: list[dict] = []
     try:
         from data_layer.orchestrator import orchestrator as _orch
+
         live_features = _orch.get_ml_features()
         orchestrator_features = [
-            {"name": k, "value": v, "source": "orchestrator"}
-            for k, v in sorted(live_features.items())
-            if v is not None
+            {"name": k, "value": v, "source": "orchestrator"} for k, v in sorted(live_features.items()) if v is not None
         ]
     except Exception as _exc:
         logger.debug("Orchestrator ML features unavailable: %s", _exc)
@@ -925,6 +930,7 @@ async def trigger_retrain(
                 # a SHA-256 mismatch against the stale pre-retrain digest.
                 try:
                     from ml.model_registry import get_registry
+
                     reg = get_registry()
                     active = reg.active_version()
                     if active:
@@ -1149,6 +1155,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
 
         if not model_available:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=result)
         return result
 
@@ -1473,6 +1480,7 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     agent_state: dict = {}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("rl:agent:status")
@@ -1485,23 +1493,21 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
     now_iso = datetime.now(timezone.utc).isoformat()
     last_updated = agent_state.get(
         "last_updated",
-        datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat()
-        if latest_mtime
-        else now_iso,
+        datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat() if latest_mtime else now_iso,
     )
 
     return {
         # Fields required by the frontend RLStatus interface
-        "status":        agent_state.get("status", "idle" if models else "no_model"),
-        "episode":       int(agent_state.get("episode", 0)),
-        "total_reward":  float(agent_state.get("total_reward", 0.0)),
-        "win_rate":      float(agent_state.get("win_rate", 0.0)),
-        "last_updated":  last_updated,
+        "status": agent_state.get("status", "idle" if models else "no_model"),
+        "episode": int(agent_state.get("episode", 0)),
+        "total_reward": float(agent_state.get("total_reward", 0.0)),
+        "win_rate": float(agent_state.get("win_rate", 0.0)),
+        "last_updated": last_updated,
         "model_version": agent_state.get("model_version", latest_version),
         # Extended fields for the model inventory table
-        "model_dir":     _MODEL_DIR,
-        "models":        models,
-        "count":         len(models),
+        "model_dir": _MODEL_DIR,
+        "models": models,
+        "count": len(models),
     }
 
 
@@ -1834,6 +1840,7 @@ async def get_drift_status() -> dict:
             status["drift_z_max"] = round(getattr(eng, "_drift_z_max", 0.0), 3)
             try:
                 from ml.drift_monitor import get_drift_monitor
+
                 monitor = get_drift_monitor()
                 status["psi_monitor_loaded"] = monitor._stats != {}
                 status["framework"] = "z-score + PSI + KS-test (production)"
@@ -1861,6 +1868,7 @@ async def get_sharpe_circuit_breaker_status() -> dict:
     """
     try:
         from ml.sharpe_circuit_breaker import get_sharpe_cb
+
         cb = get_sharpe_cb()
         states = cb.get_status()
         any_open = any(v.get("is_open", False) for v in states.values())
@@ -1887,6 +1895,7 @@ async def get_sharpe_circuit_breaker_status() -> dict:
 
 # ── SHAP / Feature Importance ────────────────────────────────────────────────
 
+
 @router.get(
     "/explain/{model_name}",
     summary="SHAP feature importance for a deployed model",
@@ -1901,6 +1910,7 @@ async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
     not available for the model type.
     """
     from ml.explainability import get_shap_values
+
     return get_shap_values(model_name, top_n=top_n)
 
 
@@ -1912,10 +1922,12 @@ async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
 async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict:
     """Return XGBoost/RF built-in feature_importances_ (faster than SHAP)."""
     from ml.explainability import get_feature_importance
+
     return get_feature_importance(model_name, top_n=top_n)
 
 
 # ── Model-level Drift Detector (KS-test) ─────────────────────────────────────
+
 
 @router.get(
     "/model-drift",
@@ -1930,10 +1942,12 @@ async def get_model_drift() -> dict:
     Status values: ``stable`` | ``warning`` | ``drift_detected``
     """
     from ml.drift_detector import get_drift_detector
+
     return get_drift_detector().get_all_drift()
 
 
 # ── A/B Testing ───────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/ab-tests",
@@ -1943,6 +1957,7 @@ async def get_model_drift() -> dict:
 async def list_ab_tests() -> dict:
     """Return all active A/B model comparison tests."""
     from ml.ab_testing import get_ab_test_manager
+
     return {"tests": get_ab_test_manager().list_tests()}
 
 
@@ -1964,6 +1979,7 @@ async def create_ab_test(
     ``traffic_split`` fraction of requests are routed to the challenger.
     """
     from ml.ab_testing import get_ab_test_manager
+
     test = get_ab_test_manager().create_test(
         challenger_model=challenger_model,
         traffic_split=traffic_split,
@@ -1985,6 +2001,7 @@ async def record_ab_result(
 ) -> dict:
     """Record whether the ``arm`` prediction was correct."""
     from ml.ab_testing import get_ab_test_manager
+
     mgr = get_ab_test_manager()
     ok = mgr.record_result(test_id, arm, correct=correct)
     return {"recorded": ok}
@@ -1998,11 +2015,13 @@ async def record_ab_result(
 async def stop_ab_test(test_id: str, winner: str | None = None) -> dict:
     """Stop a running A/B test and optionally declare a winner."""
     from ml.ab_testing import get_ab_test_manager
+
     stopped = get_ab_test_manager().stop_test(test_id, winner=winner)
     return {"stopped": stopped, "test_id": test_id}
 
 
 # ── Training Manager ──────────────────────────────────────────────────────────
+
 
 @router.get(
     "/training-jobs",
@@ -2012,6 +2031,7 @@ async def stop_ab_test(test_id: str, winner: str | None = None) -> dict:
 async def list_training_jobs() -> dict:
     """Return all active and recently completed model training jobs."""
     from ml.training_manager import get_training_manager
+
     return {"jobs": get_training_manager().list_jobs()}
 
 
@@ -2029,6 +2049,7 @@ async def start_training_job(model: str) -> dict:
     ``hybrid_ensemble``, ``xgb_macro``, ``rf_macro``.
     """
     from ml.training_manager import get_training_manager
+
     job = get_training_manager().start_job(model)
     return job.__dict__ if hasattr(job, "__dict__") else job
 
@@ -2041,6 +2062,7 @@ async def start_training_job(model: str) -> dict:
 async def cancel_training_job(job_id: str) -> dict:
     """Cancel a background training job by ID."""
     from ml.training_manager import get_training_manager
+
     cancelled = get_training_manager().cancel_job(job_id)
     return {"cancelled": cancelled, "job_id": job_id}
 

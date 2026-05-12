@@ -46,6 +46,7 @@ class StalePriceError(RuntimeError):
     behaviour for offline demo / backtesting scenarios.
     """
 
+
 # ── Per-symbol spread table (bid-ask half-spread in price units) ──────────────
 # Sources: typical retail broker spreads during liquid hours.
 # Used as the base spread; actual slippage adds a random component on top.
@@ -357,6 +358,7 @@ class PaperTradingBroker(BrokerConnector):
         except Exception as exc:
             self._redis_state = None
             import os as _os
+
             _explicitly_configured = bool(_os.getenv("REDIS_URL", "").strip())
             if _explicitly_configured:
                 # REDIS_URL was set but Redis is unreachable — operator needs to know.
@@ -490,10 +492,7 @@ class PaperTradingBroker(BrokerConnector):
         if self._price_feed is not None:
             try:
                 broker_sym = symbol.replace("/", "")
-                tick = (
-                    self._price_feed.get_last_price(broker_sym)
-                    or self._price_feed.get_last_price(symbol)
-                )
+                tick = self._price_feed.get_last_price(broker_sym) or self._price_feed.get_last_price(symbol)
                 if tick is not None:
                     tick_bid = float(getattr(tick, "bid", 0) or 0)
                     tick_ask = float(getattr(tick, "ask", 0) or 0)
@@ -533,9 +532,7 @@ class PaperTradingBroker(BrokerConnector):
                 )
                 if self._raise_on_stale:
                     raise StalePriceError(msg + " Set PAPER_RAISE_ON_STALE=false to warn-and-fill instead.")
-                logger.warning(
-                    "%s Filling at stale price — reconnect feed for accurate fills.", msg
-                )
+                logger.warning("%s Filling at stale price — reconnect feed for accurate fills.", msg)
         else:
             # Price came from the hardcoded market_prices table, not a live feed.
             msg = (
@@ -547,9 +544,7 @@ class PaperTradingBroker(BrokerConnector):
                     msg + " Connect a live price feed or set PAPER_RAISE_ON_STALE=false "
                     "to allow fills at hardcoded prices (offline/demo mode only)."
                 )
-            logger.warning(
-                "%s Set PAPER_PRICE_STALE_SECONDS=0 to suppress in offline demo mode.", msg
-            )
+            logger.warning("%s Set PAPER_PRICE_STALE_SECONDS=0 to suppress in offline demo mode.", msg)
 
         # Create order
         order = Order(
@@ -581,7 +576,7 @@ class PaperTradingBroker(BrokerConnector):
                 _ref_price = _live_ask if _is_buy else _live_bid
                 fill_price = self._slippage.fill_price(
                     symbol=symbol,
-                    mid_price=_ref_price,   # reference is already the correct side
+                    mid_price=_ref_price,  # reference is already the correct side
                     side=side,
                     quantity=quantity,
                 )
@@ -623,8 +618,7 @@ class PaperTradingBroker(BrokerConnector):
             commission = self._deduct_commission(quantity)
 
             # Update position at the slippage-adjusted fill price
-            self._update_position(symbol, side, quantity, fill_price,
-                                  stop_loss=stop_loss, take_profit=take_profit)
+            self._update_position(symbol, side, quantity, fill_price, stop_loss=stop_loss, take_profit=take_profit)
 
             # Record equity snapshot after every fill
             self._snapshot_equity()
@@ -760,10 +754,7 @@ class PaperTradingBroker(BrokerConnector):
         if self._price_feed is not None:
             try:
                 broker_sym = symbol.replace("/", "")
-                tick = (
-                    self._price_feed.get_last_price(broker_sym)
-                    or self._price_feed.get_last_price(symbol)
-                )
+                tick = self._price_feed.get_last_price(broker_sym) or self._price_feed.get_last_price(symbol)
                 if tick is not None:
                     tb = float(getattr(tick, "bid", 0) or 0)
                     ta = float(getattr(tick, "ask", 0) or 0)

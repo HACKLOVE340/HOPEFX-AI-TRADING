@@ -492,7 +492,9 @@ async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_u
 
     # Build affiliate dict and inject payout_email from payment_details
     aff_dict = affiliate.to_dict()
-    aff_dict.setdefault("payout_email", affiliate.payment_details.get("payout_email") or affiliate.payment_details.get("email"))
+    aff_dict.setdefault(
+        "payout_email", affiliate.payment_details.get("payout_email") or affiliate.payment_details.get("email")
+    )
 
     return {
         "has_affiliate_account": True,
@@ -787,9 +789,7 @@ async def get_marketplace_subscriptions(user: TokenPayload = Depends(get_current
         purchases = db_get(f"marketplace:purchases:{user.sub}") or []
         return {"subscriptions": purchases if isinstance(purchases, list) else []}
     except Exception:
-        logger.exception(
-            "Failed to load marketplace subscriptions for user %s", user.sub
-        )
+        logger.exception("Failed to load marketplace subscriptions for user %s", user.sub)
         return {"subscriptions": []}
 
 
@@ -1245,6 +1245,7 @@ async def get_platform_revenue(user: TokenPayload = Depends(require_role("admin"
 
 # ── Affiliate extended endpoints ──────────────────────────────────────────────
 
+
 @router.get("/affiliate/{affiliate_id}/commissions")
 async def get_affiliate_commissions(
     affiliate_id: str,
@@ -1259,7 +1260,7 @@ async def get_affiliate_commissions(
     except Exception as exc:
         logger.debug("get_affiliate_commissions: %s", exc)
         items = []
-    page = items[offset: offset + limit]
+    page = items[offset : offset + limit]
     return {"commissions": page, "total": len(items)}
 
 

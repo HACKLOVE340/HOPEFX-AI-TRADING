@@ -189,6 +189,7 @@ async def update_notification_prefs(
 
 # ── Mobile app config ─────────────────────────────────────────────────────────
 
+
 @router.get("/config", summary="Mobile app configuration")
 async def get_mobile_config(user: TokenPayload = Depends(get_current_user)):
     """
@@ -196,6 +197,7 @@ async def get_mobile_config(user: TokenPayload = Depends(get_current_user)):
     feature flags, and API base URL.
     """
     import os as _os
+
     return {
         "min_version": "1.0.0",
         "latest_version": "1.0.0",
@@ -216,12 +218,14 @@ async def get_mobile_config(user: TokenPayload = Depends(get_current_user)):
 
 # ── Mobile sessions ───────────────────────────────────────────────────────────
 
+
 @router.get("/sessions", summary="Active mobile sessions")
 async def list_mobile_sessions(user: TokenPayload = Depends(get_current_user)):
     """Return active mobile sessions for the authenticated user."""
     try:
         from database.connection import SessionLocal
         from database.user_models import UserSession
+
         db = SessionLocal()
         try:
             sessions = (
@@ -260,15 +264,15 @@ async def revoke_mobile_session(
     try:
         from database.connection import SessionLocal
         from database.user_models import UserSession
+
         db = SessionLocal()
         try:
             session = (
-                db.query(UserSession)
-                .filter(UserSession.id == session_id, UserSession.user_id == user.sub)
-                .first()
+                db.query(UserSession).filter(UserSession.id == session_id, UserSession.user_id == user.sub).first()
             )
             if not session:
                 from fastapi import HTTPException as _HTTPException
+
                 raise _HTTPException(status_code=404, detail="Session not found")
             session.is_active = False
             db.commit()

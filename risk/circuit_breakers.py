@@ -122,10 +122,10 @@ class CircuitBreaker:
         self.daily_pnl = 0.0
         self.total_pnl = 0.0
         self.peak_balance = 0.0
-        self.current_drawdown = 0.0       # total drawdown from all-time peak
-        self.daily_drawdown = 0.0         # drawdown from today's open balance
+        self.current_drawdown = 0.0  # total drawdown from all-time peak
+        self.daily_drawdown = 0.0  # drawdown from today's open balance
         self.session_start_balance = 0.0
-        self.day_open_balance = 0.0       # balance at start of current trading day
+        self.day_open_balance = 0.0  # balance at start of current trading day
         self._current_day: int = datetime.now(UTC).day
 
         # Order tracking

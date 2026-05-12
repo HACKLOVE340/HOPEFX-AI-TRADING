@@ -24,7 +24,6 @@ Design invariants:
 from __future__ import annotations
 
 import asyncio
-import collections
 import logging
 import os
 import time
@@ -640,7 +639,9 @@ class ExecutionEngine:
     # execute() sub-steps — each ≤ 30 lines, independently testable
     # ------------------------------------------------------------------
 
-    async def _enrich_price_from_data_layer(self, request: ExecutionRequest, t0: float) -> ExecutionRequest | ExecutionReport:
+    async def _enrich_price_from_data_layer(
+        self, request: ExecutionRequest, t0: float
+    ) -> ExecutionRequest | ExecutionReport:
         """
         Check data-layer safety and inject the current mid-price when absent.
 

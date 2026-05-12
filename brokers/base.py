@@ -243,8 +243,7 @@ class Position:
                 object.__setattr__(self, "side", OrderSide.SELL)
             else:
                 raise ValueError(
-                    f"Position.side {self.side!r} is not recognised. "
-                    "Use 'BUY', 'SELL', 'LONG', or 'SHORT'."
+                    f"Position.side {self.side!r} is not recognised. Use 'BUY', 'SELL', 'LONG', or 'SHORT'."
                 )
 
     @property

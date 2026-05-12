@@ -308,30 +308,33 @@ async def init_database(s: Any) -> Any:
     if not is_sqlite:
         try:
             from config.settings import get_settings as _get_settings
+
             _db_cfg = _get_settings().db
-            _pool_size    = int(os.getenv("DB_POOL_SIZE",    str(_db_cfg.pool_size)))
+            _pool_size = int(os.getenv("DB_POOL_SIZE", str(_db_cfg.pool_size)))
             _max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(_db_cfg.max_overflow)))
-            _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT",  str(_db_cfg.pool_timeout)))
-            _pool_recycle = int(os.getenv("DB_POOL_RECYCLE",   str(_db_cfg.pool_recycle)))
+            _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT", str(_db_cfg.pool_timeout)))
+            _pool_recycle = int(os.getenv("DB_POOL_RECYCLE", str(_db_cfg.pool_recycle)))
             _pool_pre_ping = _db_cfg.pool_pre_ping
         except Exception as _cfg_err:
-            logger.warning(
-                "Could not load DatabaseSettings — using legacy env-var defaults: %s", _cfg_err
-            )
-            _pool_size    = int(os.getenv("DB_POOL_SIZE", "20"))
+            logger.warning("Could not load DatabaseSettings — using legacy env-var defaults: %s", _cfg_err)
+            _pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
             _max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", "10"))
             _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT", "30"))
             _pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))
             _pool_pre_ping = True
 
-        engine_kwargs["pool_size"]     = _pool_size
-        engine_kwargs["max_overflow"]  = _max_overflow
-        engine_kwargs["pool_timeout"]  = _pool_timeout
-        engine_kwargs["pool_recycle"]  = _pool_recycle
+        engine_kwargs["pool_size"] = _pool_size
+        engine_kwargs["max_overflow"] = _max_overflow
+        engine_kwargs["pool_timeout"] = _pool_timeout
+        engine_kwargs["pool_recycle"] = _pool_recycle
         engine_kwargs["pool_pre_ping"] = _pool_pre_ping
         logger.info(
             "DB pool: size=%d overflow=%d timeout=%.0fs recycle=%ds pre_ping=%s",
-            _pool_size, _max_overflow, _pool_timeout, _pool_recycle, _pool_pre_ping,
+            _pool_size,
+            _max_overflow,
+            _pool_timeout,
+            _pool_recycle,
+            _pool_pre_ping,
         )
 
     # ── connect_args ──────────────────────────────────────────────────────────
@@ -359,16 +362,14 @@ async def init_database(s: Any) -> Any:
             # psycopg2 / psycopg3 driver — use options string
             engine_kwargs["connect_args"] = {
                 "connect_timeout": connect_timeout,
-                "options": (
-                    f"-c statement_timeout={stmt_timeout_ms} "
-                    f"-c application_name={app_name}"
-                ),
+                "options": (f"-c statement_timeout={stmt_timeout_ms} -c application_name={app_name}"),
             }
 
     # SQLite: use NullPool so each call gets a fresh connection and no idle
     # connection holds the file lock while alembic runs in a thread executor.
     if is_sqlite:
         from sqlalchemy.pool import NullPool as _NullPool
+
         engine_kwargs["poolclass"] = _NullPool
         engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 
@@ -391,6 +392,7 @@ async def init_database(s: Any) -> Any:
 
         # Resolve the head revision without touching the DB.
         from alembic.script import ScriptDirectory as _ScriptDir
+
         _script = _ScriptDir.from_config(alembic_cfg)
         _head_rev = _script.get_current_head()
 
@@ -403,9 +405,7 @@ async def init_database(s: Any) -> Any:
             # Run alembic upgrade in a thread executor so it doesn't block the
             # async event loop during startup (alembic is synchronous I/O).
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                None, lambda: alembic_command.upgrade(alembic_cfg, "head")
-            )
+            await loop.run_in_executor(None, lambda: alembic_command.upgrade(alembic_cfg, "head"))
             logger.info(
                 "Database migrations applied (alembic upgrade head, was=%s)",
                 _current_rev or "none",
@@ -535,6 +535,7 @@ async def init_cache(s: Any) -> Any:
     _ssl_context = None
     try:
         from config.settings import get_settings as _get_settings
+
         _redis_cfg = _get_settings().redis
         _ssl_context = _redis_cfg.build_ssl_context()
         if _ssl_context is not None:
@@ -814,9 +815,7 @@ async def init_auth(s: Any) -> Any:
                     now = _dt.now(_tz.utc)
                     deleted = (
                         _db.query(UserSession)
-                        .filter(
-                            (UserSession.expires_at < now) | (UserSession.is_revoked.is_(True))
-                        )
+                        .filter((UserSession.expires_at < now) | (UserSession.is_revoked.is_(True)))
                         .delete(synchronize_session=False)
                     )
                     _db.commit()
@@ -875,6 +874,7 @@ def _ensure_bootstrap_users(session_factory) -> None:
                     logger.info("Bootstrap user role corrected: %s -> %s", email, role)
                 # Sync password — if .env was regenerated the hash will be stale
                 from auth.service import verify_password as _vp
+
                 if not _vp(password, existing.hashed_password):
                     existing.hashed_password = hash_password(password)
                     existing.status = UserStatus.ACTIVE.value
@@ -969,9 +969,7 @@ async def init_broker(s: Any) -> Any:
                 "Configured broker 'mt5' is unavailable and FALLBACK_TO_PAPER is not set. "
                 "Fix broker credentials or set FALLBACK_TO_PAPER=true to start in paper mode."
             )
-        log_activity(
-            "MT5 broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)"
-        )
+        log_activity("MT5 broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)")
 
     if broker_type == "oanda":
         if not oanda_token or not oanda_account:
@@ -1821,12 +1819,14 @@ async def init_inference_engine(s: Any) -> Any:
 
             _rc = await _get_redis()
             if _rc is not None:
-                _payload = _json.dumps({
-                    "model_available": health.get("model_available", False),
-                    "model_version": health.get("model_version", "none"),
-                    "calibrator": health.get("calibrator_available", False),
-                    "online_learning": health.get("online_learning_enabled", False),
-                })
+                _payload = _json.dumps(
+                    {
+                        "model_available": health.get("model_available", False),
+                        "model_version": health.get("model_version", "none"),
+                        "calibrator": health.get("calibrator_available", False),
+                        "online_learning": health.get("online_learning_enabled", False),
+                    }
+                )
                 await _rc.set("ml:model:status", _payload, ex=3600)
                 logger.debug("ml:model:status published to Redis")
         except Exception as _ml_redis_exc:
@@ -2778,6 +2778,7 @@ async def init_mcc(s: Any) -> Any | None:
         if broker is not None:
             market_prices = getattr(broker, "market_prices", {})
             from decimal import Decimal as _D
+
             for sym, price in market_prices.items():
                 if price and price > 0:
                     mcc.current_prices[sym] = _D(str(price))
@@ -3097,6 +3098,7 @@ async def init_multi_source_feed(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except Exception:
+
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
@@ -3134,11 +3136,14 @@ async def init_multi_source_feed(s: Any) -> Any:
                 if price_engine_ref is not None and hasattr(price_engine_ref, "on_new_price"):
                     try:
                         import inspect as _inspect
+
                         _sig = _inspect.signature(price_engine_ref.on_new_price)
                         _nparams = sum(
-                            1 for p in _sig.parameters.values()
+                            1
+                            for p in _sig.parameters.values()
                             if p.default is _inspect.Parameter.empty
-                            and p.kind not in (
+                            and p.kind
+                            not in (
                                 _inspect.Parameter.VAR_POSITIONAL,
                                 _inspect.Parameter.VAR_KEYWORD,
                             )

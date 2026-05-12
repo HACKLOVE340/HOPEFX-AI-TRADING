@@ -174,6 +174,7 @@ def register_routers(
     # New routers added for full frontend coverage
     try:
         from api.notifications import router as notifications_router
+
         _notifications_router = notifications_router
     except Exception as _e:
         logger.warning("Notifications router not loaded: %s", _e)
@@ -182,6 +183,7 @@ def register_routers(
     try:
         from api.community_chat import router as community_chat_router
         from api.community_chat import ws_router as community_chat_ws_router
+
         _community_chat_router = community_chat_router
         _community_chat_ws_router = community_chat_ws_router
     except Exception as _e:
@@ -191,6 +193,7 @@ def register_routers(
 
     try:
         from api.kyc import kyc_alias_router as _kyc_alias_router
+
         _kyc_alias = _kyc_alias_router
     except Exception as _e:
         logger.warning("KYC alias router not loaded: %s", _e)
@@ -198,6 +201,7 @@ def register_routers(
 
     try:
         from api.webhooks import router as _webhooks_router
+
         _webhooks = _webhooks_router
     except Exception as _e:
         logger.warning("Webhooks router not loaded: %s", _e)
@@ -343,6 +347,7 @@ def register_routers(
         # Always register signals router even when not passed explicitly
         try:
             from api.signals import create_signals_router as _create_sig_router
+
             _sig_router = _create_sig_router()
             if _sig_router is not None:
                 _include_router_deduped(app, _sig_router)
@@ -437,12 +442,14 @@ def register_routers(
         from api.nuclear_strategy import router as nuclear_strategy_router
 
         _include_router_deduped(
-            app, nuclear_router,
+            app,
+            nuclear_router,
             prefix="/api/nuclear",
             tags=["nuclear"],
         )
         _include_router_deduped(
-            app, nuclear_strategy_router,
+            app,
+            nuclear_strategy_router,
             prefix="/api/nuclear-strategy",
             tags=["nuclear-strategy"],
         )

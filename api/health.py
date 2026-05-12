@@ -605,6 +605,7 @@ async def _check_master_control() -> ComponentStatus:
             # Try the module-level singleton
             try:
                 from core.mcc import master_control as _mc_mod  # type: ignore[import]
+
                 mcc = getattr(_mc_mod, "_mcc_instance", None)
             except Exception:
                 pass
@@ -700,8 +701,16 @@ async def _run_all_checks() -> list[ComponentStatus]:
     )
     statuses: list[ComponentStatus] = []
     names = [
-        "redis", "database", "kill_switch", "ml_model", "orchestrator",
-        "broker", "db_migrations", "price_engine", "brain", "master_control",
+        "redis",
+        "database",
+        "kill_switch",
+        "ml_model",
+        "orchestrator",
+        "broker",
+        "db_migrations",
+        "price_engine",
+        "brain",
+        "master_control",
         "db_pool",
     ]
     for i, result in enumerate(results):

@@ -65,30 +65,18 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             # Users
             overview["total_users"] = db.query(User).count()
             overview["active_users_24h"] = (
-                db.query(User)
-                .filter(User.last_login_at >= now - timedelta(hours=24))
-                .count()
+                db.query(User).filter(User.last_login_at >= now - timedelta(hours=24)).count()
             )
-            overview["new_users_7d"] = (
-                db.query(User)
-                .filter(User.created_at >= now - timedelta(days=7))
-                .count()
-            )
+            overview["new_users_7d"] = db.query(User).filter(User.created_at >= now - timedelta(days=7)).count()
 
             # Trades opened today
-            overview["total_trades_today"] = (
-                db.query(Trade).filter(Trade.entry_time >= today_start).count()
-            )
+            overview["total_trades_today"] = db.query(Trade).filter(Trade.entry_time >= today_start).count()
 
             # Open positions
-            overview["open_positions"] = (
-                db.query(Trade).filter(Trade.is_open == True).count()
-            )
+            overview["open_positions"] = db.query(Trade).filter(Trade.is_open == True).count()
 
             # Signals generated today
-            overview["signals_generated_today"] = (
-                db.query(Signal).filter(Signal.generated_at >= today_start).count()
-            )
+            overview["signals_generated_today"] = db.query(Signal).filter(Signal.generated_at >= today_start).count()
 
             # Active (non-revoked, non-expired) sessions
             overview["active_sessions"] = (
@@ -106,9 +94,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     db.query(func.sum(WalletTransaction.amount))  # pylint: disable=not-callable
                     .filter(
                         WalletTransaction.created_at >= mtd_start,
-                        WalletTransaction.transaction_type.in_(
-                            ["deposit", "subscription", "fee_credit", "commission"]
-                        ),
+                        WalletTransaction.transaction_type.in_(["deposit", "subscription", "fee_credit", "commission"]),
                         WalletTransaction.status == "completed",
                     )
                     .scalar()
@@ -119,9 +105,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
 
             # Active DB connections (PostgreSQL only; silently skipped on SQLite)
             try:
-                row = db.execute(
-                    text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
-                ).scalar()
+                row = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")).scalar()
                 overview["db_connections"] = int(row or 0)
             except Exception:
                 pass
@@ -137,9 +121,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             from monetization.analytics import revenue_analytics
 
             rev = revenue_analytics.get_revenue_by_period(mtd_start, now)
-            overview["revenue_mtd"] = round(
-                float(sum(rev.values())) if isinstance(rev, dict) else float(rev or 0), 2
-            )
+            overview["revenue_mtd"] = round(float(sum(rev.values())) if isinstance(rev, dict) else float(rev or 0), 2)
         except Exception as exc:
             logger.debug("overview: revenue_analytics unavailable: %s", exc)
 
@@ -167,12 +149,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             ]:
                 if p.exists():
                     data = _json.loads(p.read_text())
-                    acc = float(
-                        data.get("accuracy")
-                        or data.get("oos_accuracy")
-                        or data.get("test_accuracy")
-                        or 0.0
-                    )
+                    acc = float(data.get("accuracy") or data.get("oos_accuracy") or data.get("test_accuracy") or 0.0)
                     if acc > 0.0:
                         overview["ml_model_accuracy"] = round(acc, 4)
                         break

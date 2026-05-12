@@ -51,6 +51,7 @@ Usage
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -62,15 +63,15 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # Key / channel constants — single source of truth for the entire system.
-TICK_KEY_PREFIX = "tick"                    # tick:SYMBOL
-DL_TICK_KEY_PREFIX = "hopefx:dl:tick"      # hopefx:dl:tick:SYMBOL
-PRICE_KEY_PREFIX = "price"                  # price:SYMBOL (legacy)
-PUBSUB_CHANNEL_PREFIX = "hopefx:tick"      # hopefx:tick:SYMBOL
-CH_TICK = "hopefx:tick"                     # legacy broadcast channel
-LEGACY_QUEUE = "price_queue"               # NuclearStreamer compat list
+TICK_KEY_PREFIX = "tick"  # tick:SYMBOL
+DL_TICK_KEY_PREFIX = "hopefx:dl:tick"  # hopefx:dl:tick:SYMBOL
+PRICE_KEY_PREFIX = "price"  # price:SYMBOL (legacy)
+PUBSUB_CHANNEL_PREFIX = "hopefx:tick"  # hopefx:tick:SYMBOL
+CH_TICK = "hopefx:tick"  # legacy broadcast channel
+LEGACY_QUEUE = "price_queue"  # NuclearStreamer compat list
 
-TICK_KEY_TTL = int(os.getenv("TICK_KEY_TTL", "30"))   # seconds
-LEGACY_QUEUE_MAX = 1000                                 # max entries in price_queue
+TICK_KEY_TTL = int(os.getenv("TICK_KEY_TTL", "30"))  # seconds
+LEGACY_QUEUE_MAX = 1000  # max entries in price_queue
 
 # Backpressure: maximum number of ticks buffered in the internal write queue.
 # When full, the oldest entry is evicted (ticks are ephemeral).
@@ -98,15 +99,21 @@ try:
         "Current depth of the internal write queue",
     )
 except Exception:  # pragma: no cover
-    class _NoopMetric:  # type: ignore[no-redef]
-        def inc(self, _n: float = 1) -> None: pass
-        def set(self, _v: float) -> None: pass
-        def labels(self, **_kw): return self
 
-    _TICK_WRITES_TOTAL = _NoopMetric()   # type: ignore[assignment]
-    _TICK_WRITE_ERRORS = _NoopMetric()   # type: ignore[assignment]
-    _TICK_QUEUE_DROPS  = _NoopMetric()   # type: ignore[assignment]
-    _TICK_QUEUE_DEPTH  = _NoopMetric()   # type: ignore[assignment]
+    class _NoopMetric:  # type: ignore[no-redef]
+        def inc(self, _n: float = 1) -> None:
+            pass
+
+        def set(self, _v: float) -> None:
+            pass
+
+        def labels(self, **_kw):
+            return self
+
+    _TICK_WRITES_TOTAL = _NoopMetric()  # type: ignore[assignment]
+    _TICK_WRITE_ERRORS = _NoopMetric()  # type: ignore[assignment]
+    _TICK_QUEUE_DROPS = _NoopMetric()  # type: ignore[assignment]
+    _TICK_QUEUE_DEPTH = _NoopMetric()  # type: ignore[assignment]
 
 
 def build_tick_payload(
@@ -166,9 +173,7 @@ class RedisTickWriter:
 
         # Bounded write queue — the core backpressure mechanism.
         # maxsize=0 would be unbounded; we always set an explicit limit.
-        self._write_queue: asyncio.Queue[dict] = asyncio.Queue(
-            maxsize=max(1, write_queue_maxsize)
-        )
+        self._write_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=max(1, write_queue_maxsize))
         self._worker_task: asyncio.Task[None] | None = None
         self._stopping: bool = False
 
@@ -211,9 +216,7 @@ class RedisTickWriter:
 
         connected = await self.connect()
         self._stopping = False
-        self._worker_task = asyncio.create_task(
-            self._write_worker(), name="redis_tick_writer_worker"
-        )
+        self._worker_task = asyncio.create_task(self._write_worker(), name="redis_tick_writer_worker")
         return connected
 
     async def stop(self) -> None:
@@ -226,17 +229,14 @@ class RedisTickWriter:
         if self._worker_task is not None and not self._worker_task.done():
             try:
                 await asyncio.wait_for(self._write_queue.join(), timeout=5.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(
-                    "RedisTickWriter: queue did not drain within 5 s — "
-                    "%d ticks may be lost",
+                    "RedisTickWriter: queue did not drain within 5 s — %d ticks may be lost",
                     self._write_queue.qsize(),
                 )
             self._worker_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._worker_task
-            except asyncio.CancelledError:
-                pass
         self._redis = None
 
     async def close(self) -> None:
@@ -280,8 +280,7 @@ class RedisTickWriter:
             _TICK_QUEUE_DROPS.inc()
             if self._drop_count % 100 == 1:
                 logger.warning(
-                    "RedisTickWriter: write queue full (maxsize=%d) — "
-                    "evicting oldest tick. Total drops so far: %d",
+                    "RedisTickWriter: write queue full (maxsize=%d) — evicting oldest tick. Total drops so far: %d",
                     self._write_queue.maxsize,
                     self._drop_count,
                 )
@@ -320,10 +319,8 @@ class RedisTickWriter:
                         break  # queue drained — exit cleanly
                 else:
                     try:
-                        payload = await asyncio.wait_for(
-                            self._write_queue.get(), timeout=0.5
-                        )
-                    except asyncio.TimeoutError:
+                        payload = await asyncio.wait_for(self._write_queue.get(), timeout=0.5)
+                    except TimeoutError:
                         continue
 
                 await self._flush_one(payload)
@@ -411,11 +408,7 @@ class RedisTickWriter:
         if ts is None:
             return None
         try:
-            ts_float = (
-                float(ts)
-                if isinstance(ts, (int, float))
-                else datetime.fromisoformat(str(ts)).timestamp()
-            )
+            ts_float = float(ts) if isinstance(ts, (int, float)) else datetime.fromisoformat(str(ts)).timestamp()
             return time.time() - ts_float
         except Exception:
             return None
@@ -430,9 +423,7 @@ class RedisTickWriter:
             "drop_count": self._drop_count,
             "queue_depth": self._write_queue.qsize(),
             "queue_maxsize": self._write_queue.maxsize,
-            "worker_running": (
-                self._worker_task is not None and not self._worker_task.done()
-            ),
+            "worker_running": (self._worker_task is not None and not self._worker_task.done()),
             "tick_key_ttl": self._ttl,
         }
 
