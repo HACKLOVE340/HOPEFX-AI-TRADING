@@ -904,11 +904,13 @@ class HybridEnsemblePredictor:
         """XGBoost probability via AdvancedPredictor base model."""
         try:
             pred = get_predictor()
+            # _load() acquires pred._lock internally — do not hold it here to
+            # avoid a deadlock (threading.Lock is not reentrant).
+            if pred._model is None:
+                pred._load()
+            if pred._model is None:
+                return 0.5
             with pred._lock:
-                if pred._model is None:
-                    pred._load()
-                if pred._model is None:
-                    return 0.5
                 X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
                 X_df = pred._align_features(X_df)
                 X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)

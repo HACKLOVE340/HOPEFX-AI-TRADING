@@ -283,7 +283,8 @@ class TestPosition:
     def test_position_fields(self):
         p = self._make_position()
         assert p.symbol == "AAPL"
-        assert p.side == "LONG"
+        # side is normalised to OrderSide enum; side_str returns the legacy string
+        assert p.side_str == "LONG"
         assert p.quantity == 10.0
 
     def test_realized_pnl_default(self):
