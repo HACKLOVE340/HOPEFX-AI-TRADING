@@ -16,9 +16,9 @@ Tests cover:
     implement the same fetch(symbol, cfg) -> float | None protocol.
     No mocks of internal MultiSourceTickFeed methods.
 """
+
 from __future__ import annotations
 
-import asyncio
 import time
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -39,8 +39,10 @@ _CFG = Path("config/multi_source_feed.yaml")
 
 # ── Stub source adapters ──────────────────────────────────────────────────────
 
+
 class _FixedSource:
     """Always returns a fixed price."""
+
     def __init__(self, price: float | None, name: str = "fixed") -> None:
         self._price = price
         self.name = name
@@ -56,6 +58,7 @@ class _FixedSource:
 
 class _FailingSource:
     """Always raises an exception."""
+
     name = "failing"
 
     async def fetch(self, symbol: str, cfg: dict) -> float | None:
@@ -67,6 +70,7 @@ class _FailingSource:
 
 class _CountingSource:
     """Returns a price on every N-th call, None otherwise."""
+
     def __init__(self, price: float, succeed_every: int = 1) -> None:
         self._price = price
         self._every = succeed_every
@@ -262,8 +266,11 @@ class TestMultiSourceTickFeedSubscription:
 
     def test_subscribe_two_param(self):
         feed = self._feed()
+
         class Sub:
-            async def on_new_price(self, symbol, price): pass
+            async def on_new_price(self, symbol, price):
+                pass
+
         sub = Sub()
         feed.subscribe(sub)
         assert len(feed._subscribers) == 1
@@ -272,8 +279,11 @@ class TestMultiSourceTickFeedSubscription:
 
     def test_subscribe_one_param(self):
         feed = self._feed()
+
         class Sub:
-            async def on_new_price(self, price): pass
+            async def on_new_price(self, price):
+                pass
+
         sub = Sub()
         feed.subscribe(sub)
         _, n = feed._subscribers[0]
@@ -281,15 +291,20 @@ class TestMultiSourceTickFeedSubscription:
 
     def test_subscribe_no_handler_ignored(self):
         feed = self._feed()
+
         class NoHandler:
             pass
+
         feed.subscribe(NoHandler())
         assert len(feed._subscribers) == 0
 
     def test_unsubscribe_removes_component(self):
         feed = self._feed()
+
         class Sub:
-            async def on_new_price(self, symbol, price): pass
+            async def on_new_price(self, symbol, price):
+                pass
+
         sub = Sub()
         feed.subscribe(sub)
         feed.unsubscribe(sub)
@@ -301,8 +316,11 @@ class TestMultiSourceTickFeedSubscription:
 
     def test_multiple_subscribers(self):
         feed = self._feed()
+
         class Sub:
-            async def on_new_price(self, symbol, price): pass
+            async def on_new_price(self, symbol, price):
+                pass
+
         feed.subscribe(Sub())
         feed.subscribe(Sub())
         assert len(feed._subscribers) == 2
@@ -319,9 +337,11 @@ class TestMultiSourceTickFeedBroadcast:
     async def test_two_param_subscriber_receives_symbol_and_price(self):
         feed = self._feed()
         received = []
+
         class Sub:
             async def on_new_price(self, symbol, price):
                 received.append((symbol, price))
+
         feed.subscribe(Sub())
         await feed._broadcast("XAUUSD", 1950.0)
         assert received == [("XAUUSD", 1950.0)]
@@ -330,9 +350,11 @@ class TestMultiSourceTickFeedBroadcast:
     async def test_one_param_subscriber_receives_price(self):
         feed = self._feed()
         received = []
+
         class Sub:
             async def on_new_price(self, price):
                 received.append(price)
+
         feed.subscribe(Sub())
         await feed._broadcast("XAUUSD", 1950.0)
         assert received == [1950.0]
@@ -342,12 +364,15 @@ class TestMultiSourceTickFeedBroadcast:
         feed = self._feed()
         two_calls = []
         one_calls = []
+
         class TwoSub:
             async def on_new_price(self, symbol, price):
                 two_calls.append((symbol, price))
+
         class OneSub:
             async def on_new_price(self, price):
                 one_calls.append(price)
+
         feed.subscribe(TwoSub())
         feed.subscribe(OneSub())
         await feed._broadcast("EURUSD", 1.0875)
@@ -357,9 +382,11 @@ class TestMultiSourceTickFeedBroadcast:
     @pytest.mark.asyncio
     async def test_subscriber_exception_does_not_crash_broadcast(self):
         feed = self._feed()
+
         class BadSub:
             async def on_new_price(self, symbol, price):
                 raise RuntimeError("subscriber exploded")
+
         feed.subscribe(BadSub())
         await feed._broadcast("XAUUSD", 1950.0)  # must not raise
 
@@ -372,9 +399,11 @@ class TestMultiSourceTickFeedBroadcast:
     async def test_multiple_symbols_routed_correctly(self):
         feed = self._feed()
         received = []
+
         class Sub:
             async def on_new_price(self, symbol, price):
                 received.append((symbol, price))
+
         feed.subscribe(Sub())
         await feed._broadcast("XAUUSD", 1950.0)
         await feed._broadcast("EURUSD", 1.0875)
@@ -394,23 +423,27 @@ class TestMultiSourceTickFeedPolling:
 
     @pytest.mark.asyncio
     async def test_valid_price_recorded(self):
-        feed = self._feed_with_sources({
-            "yfinance": _FixedSource(1950.0),
-            "alpha_vantage": _FixedSource(None),
-            "twelve_data": _FixedSource(None),
-        })
+        feed = self._feed_with_sources(
+            {
+                "yfinance": _FixedSource(1950.0),
+                "alpha_vantage": _FixedSource(None),
+                "twelve_data": _FixedSource(None),
+            }
+        )
         feed._running = True
         # Run one poll cycle manually.
-        state = feed._states["XAUUSD"]
+        _state = feed._states["XAUUSD"]
         sym_cfg = feed._symbol_cfgs.get("XAUUSD", {})
         price = await feed._fetch_with_retry("XAUUSD", "yfinance", sym_cfg)
         assert price == pytest.approx(1950.0)
 
     @pytest.mark.asyncio
     async def test_out_of_range_price_rejected(self):
-        feed = self._feed_with_sources({
-            "yfinance": _FixedSource(0.01),  # below XAUUSD price_min=1000
-        })
+        feed = self._feed_with_sources(
+            {
+                "yfinance": _FixedSource(0.01),  # below XAUUSD price_min=1000
+            }
+        )
         state = feed._states["XAUUSD"]
         assert state.is_price_valid(0.01) is False
 
@@ -424,18 +457,22 @@ class TestMultiSourceTickFeedPolling:
 
     @pytest.mark.asyncio
     async def test_fetch_with_retry_returns_none_on_all_failures(self):
-        feed = self._feed_with_sources({
-            "yfinance": _FailingSource(),
-        })
+        feed = self._feed_with_sources(
+            {
+                "yfinance": _FailingSource(),
+            }
+        )
         feed._max_retries = 2
         price = await feed._fetch_with_retry("XAUUSD", "yfinance", {})
         assert price is None
 
     @pytest.mark.asyncio
     async def test_fetch_with_retry_succeeds_on_second_attempt(self):
-        feed = self._feed_with_sources({
-            "yfinance": _CountingSource(price=1950.0, succeed_every=2),
-        })
+        feed = self._feed_with_sources(
+            {
+                "yfinance": _CountingSource(price=1950.0, succeed_every=2),
+            }
+        )
         feed._max_retries = 3
         price = await feed._fetch_with_retry("XAUUSD", "yfinance", {})
         assert price == pytest.approx(1950.0)
@@ -455,16 +492,14 @@ class TestMultiSourceTickFeedEnabledGuard:
         feed = MultiSourceTickFeed(config_path=_CFG, symbols=["XAUUSD"])
         # Simulate alpha_vantage disabled.
         feed._source_enabled["alpha_vantage"] = False
-        feed._active_order = [
-            s for s in feed._fallback_order if feed._source_enabled.get(s, True)
-        ]
+        feed._active_order = [s for s in feed._fallback_order if feed._source_enabled.get(s, True)]
         assert "alpha_vantage" not in feed._active_order
         assert "yfinance" in feed._active_order
         assert "twelve_data" in feed._active_order
 
     def test_all_disabled_falls_back_to_full_order(self):
         feed = MultiSourceTickFeed(config_path=_CFG, symbols=["XAUUSD"])
-        feed._source_enabled = {s: False for s in feed._fallback_order}
+        feed._source_enabled = dict.fromkeys(feed._fallback_order, False)
         active = [s for s in feed._fallback_order if feed._source_enabled.get(s, True)]
         # Empty list — fallback to full order.
         result = active or list(feed._fallback_order)
@@ -520,8 +555,11 @@ class TestMultiSourceTickFeedStatus:
 
     def test_status_subscriber_count(self):
         feed = MultiSourceTickFeed(config_path=_CFG, symbols=["XAUUSD"])
+
         class Sub:
-            async def on_new_price(self, symbol, price): pass
+            async def on_new_price(self, symbol, price):
+                pass
+
         feed.subscribe(Sub())
         assert feed.status()["subscriber_count"] == 1
 
@@ -582,10 +620,12 @@ class TestMultiSourceTickFeedLifecycle:
 class TestGetFeedStatus:
     def setup_method(self):
         import data_feed.multi_source_feed as msf
+
         msf._feed_instance = None
 
     def teardown_method(self):
         import data_feed.multi_source_feed as msf
+
         msf._feed_instance = None
 
     def test_get_feed_status_before_init(self):
@@ -594,7 +634,7 @@ class TestGetFeedStatus:
         assert s["symbols"] == {}
 
     def test_get_feed_status_after_init(self):
-        feed = get_multi_source_feed(config_path=_CFG, symbols=["XAUUSD"])
+        _feed = get_multi_source_feed(config_path=_CFG, symbols=["XAUUSD"])
         s = get_feed_status()
         assert "XAUUSD" in s["symbols"]
 

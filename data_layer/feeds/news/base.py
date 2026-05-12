@@ -132,13 +132,10 @@ class NewsFeedBase(ABC):
                 # DNS / connection-refused errors are permanent for this session;
                 # retrying will not help until the host is reachable again.
                 exc_str = str(exc)
-                is_permanent = (
-                    isinstance(exc, aiohttp.ClientConnectorError)
-                    and (
-                        "Could not contact DNS servers" in exc_str
-                        or "Name or service not known" in exc_str
-                        or "Connection refused" in exc_str
-                    )
+                is_permanent = isinstance(exc, aiohttp.ClientConnectorError) and (
+                    "Could not contact DNS servers" in exc_str
+                    or "Name or service not known" in exc_str
+                    or "Connection refused" in exc_str
                 )
                 if is_permanent:
                     logger.debug(

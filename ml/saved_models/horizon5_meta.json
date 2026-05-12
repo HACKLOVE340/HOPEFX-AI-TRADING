@@ -6,7 +6,7 @@
   "symbol": "GC=F",
   "macro_features": false,
   "stacking": false,
-  "trained_at": "2026-05-12T09:46:05.098046+00:00",
+  "trained_at": "2026-05-12T11:06:09.493772+00:00",
   "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training.",
   "oos_accuracy": null,
   "oos_f1": null,

@@ -267,9 +267,7 @@ class WebSocketPriceFeed(PriceFeedBase):
             _raw_ts = data.get("time")
             if _raw_ts:
                 try:
-                    _tick_ts = datetime.fromisoformat(str(_raw_ts).rstrip("Z")).replace(
-                        tzinfo=UTC
-                    ).timestamp()
+                    _tick_ts = datetime.fromisoformat(str(_raw_ts).rstrip("Z")).replace(tzinfo=UTC).timestamp()
                 except (ValueError, TypeError):
                     _tick_ts = time.time()
             else:
@@ -819,14 +817,12 @@ class RealTimePriceEngine:
         "15m": "15m",
         "30m": "30m",
         "1h": "1h",
-        "4h": "1h",   # yfinance has no 4h; use 1h and let caller aggregate
+        "4h": "1h",  # yfinance has no 4h; use 1h and let caller aggregate
         "1d": "1d",
         "1w": "1wk",
     }
 
-    async def _get_ohlcv_yfinance(
-        self, symbol: str, timeframe: str, limit: int
-    ) -> list[OHLCV]:
+    async def _get_ohlcv_yfinance(self, symbol: str, timeframe: str, limit: int) -> list[OHLCV]:
         """Fetch OHLCV from yfinance in a thread pool (non-blocking)."""
         try:
             import yfinance as yf
@@ -838,8 +834,13 @@ class RealTimePriceEngine:
             # Determine period based on limit + interval.
             # 1h capped at 60d (~1440 bars) — 730d is too slow for a REST fallback.
             _period_map = {
-                "1m": "7d", "5m": "60d", "15m": "60d", "30m": "60d",
-                "1h": "60d", "1d": "5y", "1wk": "10y",
+                "1m": "7d",
+                "5m": "60d",
+                "15m": "60d",
+                "30m": "60d",
+                "1h": "60d",
+                "1d": "5y",
+                "1wk": "10y",
             }
             period = _period_map.get(interval, "60d")
 
@@ -869,7 +870,9 @@ class RealTimePriceEngine:
             if data:
                 logger.info(
                     "OHLCV yfinance: %s %s — %d bars fetched",
-                    symbol, timeframe, len(data),
+                    symbol,
+                    timeframe,
+                    len(data),
                 )
             return data
         except Exception as exc:
@@ -895,13 +898,21 @@ class RealTimePriceEngine:
             bars: list[OHLCV] = []
             for i in range(limit):
                 ts = now - (limit - i) * 3600
-                bars.append(OHLCV(
-                    timestamp=ts,
-                    open=price, high=price, low=price, close=price, volume=0.0,
-                ))
+                bars.append(
+                    OHLCV(
+                        timestamp=ts,
+                        open=price,
+                        high=price,
+                        low=price,
+                        close=price,
+                        volume=0.0,
+                    )
+                )
             logger.debug(
                 "OHLCV broker fallback: %s — %d synthetic bars (static price %.2f)",
-                symbol, len(bars), price,
+                symbol,
+                len(bars),
+                price,
             )
             return bars
         except Exception as exc:
@@ -936,8 +947,12 @@ class RealTimePriceEngine:
             price = market_prices.get(symbol)
             if price and price > 0:
                 spread_map = {
-                    "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
-                    "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+                    "XAUUSD": 0.30,
+                    "XAGUSD": 0.03,
+                    "EURUSD": 0.0001,
+                    "GBPUSD": 0.0002,
+                    "USDJPY": 0.02,
+                    "BTCUSD": 10.0,
                 }
                 spread = spread_map.get(symbol, price * 0.0002)
                 return Tick(

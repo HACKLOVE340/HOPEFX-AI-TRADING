@@ -414,6 +414,7 @@ class PaperTradingRunner:
     def run(self) -> None:
         """Sync wrapper — runs the async loop to completion."""
         import asyncio as _asyncio
+
         _asyncio.run(self.run_async())
 
         # Session complete

@@ -23,8 +23,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -32,6 +31,7 @@ UTC = timezone.utc
 
 
 # ── Minimal stubs for injected dependencies ───────────────────────────────────
+
 
 def _make_tick(symbol="XAUUSD", mid=2000.0, bid=1999.5, ask=2000.5, confidence=0.9):
     return SimpleNamespace(
@@ -165,6 +165,7 @@ def _make_engine(
 
 # ── Direction-flip regression test ───────────────────────────────────────────
 
+
 class TestDirectionFlip:
     """
     Regression for the bug where _on_fill read self._open_positions[symbol]
@@ -197,6 +198,7 @@ class TestDirectionFlip:
 
         # Build a SHORT signal
         from execution.hopefx_engine import ExecutionSignal
+
         signal = ExecutionSignal(
             signal_id="sig-short-1",
             symbol="XAUUSD",
@@ -274,6 +276,7 @@ class TestDirectionFlip:
         initial_equity = engine._current_equity
 
         from execution.hopefx_engine import ExecutionSignal
+
         signal = ExecutionSignal(
             signal_id="sig-long-2",
             symbol="XAUUSD",
@@ -347,6 +350,7 @@ class TestDirectionFlip:
         initial_equity = engine._current_equity
 
         from execution.hopefx_engine import ExecutionSignal
+
         signal = ExecutionSignal(
             signal_id="sig-long-2",
             symbol="XAUUSD",
@@ -400,6 +404,7 @@ class TestDirectionFlip:
 
 # ── Pending order tracking ────────────────────────────────────────────────────
 
+
 class TestPendingOrders:
     @pytest.mark.asyncio
     async def test_pending_order_stored(self):
@@ -409,6 +414,7 @@ class TestPendingOrders:
 
         # Bypass the full tick loop — call _route_and_execute directly
         from execution.hopefx_engine import ExecutionSignal
+
         signal = ExecutionSignal(
             signal_id="sig-pend-1",
             symbol="XAUUSD",
@@ -440,6 +446,7 @@ class TestPendingOrders:
         engine = _make_engine(router=router)
 
         from execution.hopefx_engine import ExecutionSignal
+
         signal = ExecutionSignal(
             signal_id="sig-pend-2",
             symbol="EURUSD",
@@ -491,6 +498,7 @@ class TestPendingOrders:
 
 
 # ── State machine: PAUSED ─────────────────────────────────────────────────────
+
 
 class TestStateMachinePaused:
     @pytest.mark.asyncio
@@ -565,6 +573,7 @@ class TestStateMachinePaused:
 
 
 # ── get_open_position helper ──────────────────────────────────────────────────
+
 
 class TestGetOpenPosition:
     def test_returns_none_when_no_position(self):

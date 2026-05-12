@@ -18,9 +18,7 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import json
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -28,9 +26,11 @@ import pytest
 
 # ── LiveConnectionManager unit tests ─────────────────────────────────────────
 
+
 class TestLiveConnectionManager:
     def _make_manager(self):
         from api.ws_live import LiveConnectionManager
+
         return LiveConnectionManager()
 
     def test_new_connection_is_not_authenticated(self):
@@ -68,6 +68,7 @@ class TestLiveConnectionManager:
 
 
 # ── Re-auth mid-session blocked ───────────────────────────────────────────────
+
 
 class TestReAuthBlocked:
     """
@@ -120,16 +121,14 @@ class TestReAuthBlocked:
             validate_calls[0] += 1
             return {"sub": "attacker-user"}
 
-        with patch("api.ws_live._manager", mgr), \
-             patch("api.ws_live._validate_ws_token", _mock_validate):
+        with patch("api.ws_live._manager", mgr), patch("api.ws_live._validate_ws_token", _mock_validate):
             await _ws_handle_message("c1", {"type": "auth", "token": "Bearer attacker-token"})
 
-        assert validate_calls[0] == 0, (
-            "_validate_ws_token must not be called for already-authenticated connections"
-        )
+        assert validate_calls[0] == 0, "_validate_ws_token must not be called for already-authenticated connections"
 
 
 # ── ws_live auth gate ─────────────────────────────────────────────────────────
+
 
 class TestWsLiveAuthGate:
     @pytest.mark.asyncio
@@ -158,9 +157,11 @@ class TestWsLiveAuthGate:
 
         mgr.send = _mock_send
 
-        with patch("api.ws_live._manager", mgr), \
-             patch("api.ws_live._validate_ws_token", return_value=None), \
-             patch("api.ws_live._safe_ws_close", _mock_safe_close):
+        with (
+            patch("api.ws_live._manager", mgr),
+            patch("api.ws_live._validate_ws_token", return_value=None),
+            patch("api.ws_live._safe_ws_close", _mock_safe_close),
+        ):
             result = await _ws_auth_gate("c1", ws)
 
         assert result is False
@@ -188,8 +189,10 @@ class TestWsLiveAuthGate:
         ws = MagicMock()
         ws.receive_text = AsyncMock(return_value=json.dumps({"type": "auth", "token": "Bearer valid-token"}))
 
-        with patch("api.ws_live._manager", mgr), \
-             patch("api.ws_live._validate_ws_token", return_value={"sub": "user-123", "role": "trader"}):
+        with (
+            patch("api.ws_live._manager", mgr),
+            patch("api.ws_live._validate_ws_token", return_value={"sub": "user-123", "role": "trader"}),
+        ):
             result = await _ws_auth_gate("c1", ws)
 
         assert result is True
@@ -220,10 +223,9 @@ class TestWsLiveAuthGate:
         mgr.send = _mock_send
 
         ws = MagicMock()
-        ws.receive_text = AsyncMock(side_effect=asyncio.TimeoutError())
+        ws.receive_text = AsyncMock(side_effect=TimeoutError())
 
-        with patch("api.ws_live._manager", mgr), \
-             patch("api.ws_live._safe_ws_close", _mock_safe_close):
+        with patch("api.ws_live._manager", mgr), patch("api.ws_live._safe_ws_close", _mock_safe_close):
             result = await _ws_auth_gate("c1", ws)
 
         assert result is False
@@ -232,6 +234,7 @@ class TestWsLiveAuthGate:
 
 
 # ── social_feed: accept before close ─────────────────────────────────────────
+
 
 class TestSocialFeedAuthOrder:
     """
@@ -262,15 +265,15 @@ class TestSocialFeedAuthOrder:
 
         # Patch _json and _sf_connections used inside the function
         import api.social_feed as sf_mod
+
         with patch.object(sf_mod, "_sf_connections", set()):
             from api.social_feed import ws_social_feed
+
             await ws_social_feed(ws)
 
         assert "accept" in call_order, "accept() must be called"
         accept_idx = call_order.index("accept")
         close_entries = [i for i, v in enumerate(call_order) if v.startswith("close:")]
         assert close_entries, "close() must be called"
-        assert accept_idx < close_entries[0], (
-            f"accept() must come before close(). Order: {call_order}"
-        )
+        assert accept_idx < close_entries[0], f"accept() must come before close(). Order: {call_order}"
         assert any("4001" in v for v in call_order), "Must close with code 4001"

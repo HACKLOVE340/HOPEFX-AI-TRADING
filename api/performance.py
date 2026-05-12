@@ -66,7 +66,7 @@ def _build_equity_points(equity_values: list[tuple], starting: float) -> list[Eq
         dd = (eq - peak) / peak if peak > 0 else 0.0  # negative fraction
         if hasattr(ts_raw, "isoformat"):
             ts_str = ts_raw.isoformat()
-        elif isinstance(ts_raw, (int, float)):
+        elif isinstance(ts_raw, int | float):
             ts_str = _dt.datetime.fromtimestamp(float(ts_raw), tz=_dt.timezone.utc).isoformat()
         else:
             ts_str = str(ts_raw)

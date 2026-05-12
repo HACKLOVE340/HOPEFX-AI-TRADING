@@ -43,7 +43,6 @@ Integration
     allocator.mount_router(app)
 """
 
-
 import json
 import logging
 import os

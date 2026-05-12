@@ -63,7 +63,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Awaitable
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -71,30 +71,33 @@ UTC = timezone.utc
 
 # ── Timeframe registry ────────────────────────────────────────────────────────
 
+
 @dataclass(frozen=True)
 class TimeframeConfig:
     """Definition of a single timeframe."""
-    name: str           # e.g. "1m"
-    seconds: int        # bar duration in seconds
+
+    name: str  # e.g. "1m"
+    seconds: int  # bar duration in seconds
 
 
 STANDARD_TIMEFRAMES: dict[str, TimeframeConfig] = {
-    "1s":  TimeframeConfig("1s",  1),
-    "5s":  TimeframeConfig("5s",  5),
+    "1s": TimeframeConfig("1s", 1),
+    "5s": TimeframeConfig("5s", 5),
     "10s": TimeframeConfig("10s", 10),
     "30s": TimeframeConfig("30s", 30),
-    "1m":  TimeframeConfig("1m",  60),
-    "3m":  TimeframeConfig("3m",  180),
-    "5m":  TimeframeConfig("5m",  300),
+    "1m": TimeframeConfig("1m", 60),
+    "3m": TimeframeConfig("3m", 180),
+    "5m": TimeframeConfig("5m", 300),
     "15m": TimeframeConfig("15m", 900),
     "30m": TimeframeConfig("30m", 1800),
-    "1h":  TimeframeConfig("1h",  3600),
-    "4h":  TimeframeConfig("4h",  14400),
-    "1d":  TimeframeConfig("1d",  86400),
+    "1h": TimeframeConfig("1h", 3600),
+    "4h": TimeframeConfig("4h", 14400),
+    "1d": TimeframeConfig("1d", 86400),
 }
 
 
 # ── Bar state ─────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class BarState:
@@ -104,19 +107,20 @@ class BarState:
     All prices are in the instrument's native units (USD for XAUUSD).
     ``vwap`` is computed lazily from ``_cum_pv / _cum_vol``.
     """
+
     symbol: str
     timeframe: str
-    bar_open_ts: float          # Unix timestamp of bar open
-    bar_close_ts: float         # Unix timestamp of bar close (exclusive)
+    bar_open_ts: float  # Unix timestamp of bar open
+    bar_close_ts: float  # Unix timestamp of bar close (exclusive)
     open: float
     high: float
     low: float
     close: float
     volume: float = 0.0
     tick_count: int = 0
-    buy_volume: float = 0.0     # Lee-Ready classified buy volume
-    sell_volume: float = 0.0    # Lee-Ready classified sell volume
-    _cum_pv: float = field(default=0.0, repr=False)   # Σ(price × volume)
+    buy_volume: float = 0.0  # Lee-Ready classified buy volume
+    sell_volume: float = 0.0  # Lee-Ready classified sell volume
+    _cum_pv: float = field(default=0.0, repr=False)  # Σ(price × volume)
     _cum_vol: float = field(default=0.0, repr=False)  # Σ(volume)
 
     @property
@@ -306,9 +310,7 @@ class OHLCVBuilder:
                 continue
 
             # Tick is past the current bar's close — close it (and any gaps).
-            gap_bars = await self._close_and_advance(
-                key, bar, tf, price, volume, timestamp, trade_side
-            )
+            gap_bars = await self._close_and_advance(key, bar, tf, price, volume, timestamp, trade_side)
             closed.extend(gap_bars)
 
         return closed
@@ -453,7 +455,9 @@ class OHLCVBuilder:
             except Exception as exc:
                 logger.error(
                     "OHLCVBuilder callback error for %s/%s: %s",
-                    bar.symbol, bar.timeframe, exc,
+                    bar.symbol,
+                    bar.timeframe,
+                    exc,
                 )
 
     async def flush(self, symbol: str | None = None) -> list[BarState]:
@@ -466,10 +470,7 @@ class OHLCVBuilder:
         now = time.time()
         flushed: list[BarState] = []
 
-        keys = [
-            k for k in list(self._open_bars.keys())
-            if symbol is None or k[0] == symbol
-        ]
+        keys = [k for k in list(self._open_bars.keys()) if symbol is None or k[0] == symbol]
         for key in keys:
             bar = self._open_bars.pop(key, None)
             if bar is None:

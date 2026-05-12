@@ -23,7 +23,6 @@ Covered endpoints / files:
 from __future__ import annotations
 
 import os
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -67,8 +66,10 @@ class TestTradingBrokerErrorsNotLeaked:
         mock_state = MagicMock()
         mock_state.broker = mock_broker
 
-        with patch.object(trading_mod, "app_state", mock_state), \
-             patch.object(trading_mod, "_check_kill_switch", return_value=None):
+        with (
+            patch.object(trading_mod, "app_state", mock_state),
+            patch.object(trading_mod, "_check_kill_switch", return_value=None),
+        ):
             resp = client.patch(
                 "/api/trading/positions/pos-001",
                 json={"stop_loss": 1900.0},
@@ -86,8 +87,10 @@ class TestTradingBrokerErrorsNotLeaked:
         mock_state = MagicMock()
         mock_state.broker = mock_broker
 
-        with patch.object(trading_mod, "app_state", mock_state), \
-             patch.object(trading_mod, "_check_kill_switch", return_value=None):
+        with (
+            patch.object(trading_mod, "app_state", mock_state),
+            patch.object(trading_mod, "_check_kill_switch", return_value=None),
+        ):
             resp = client.delete("/api/trading/orders/ord-001")
 
         assert resp.status_code == 502
@@ -102,8 +105,10 @@ class TestTradingBrokerErrorsNotLeaked:
         mock_state = MagicMock()
         mock_state.broker = mock_broker
 
-        with patch.object(trading_mod, "app_state", mock_state), \
-             patch.object(trading_mod, "_check_kill_switch", return_value=None):
+        with (
+            patch.object(trading_mod, "app_state", mock_state),
+            patch.object(trading_mod, "_check_kill_switch", return_value=None),
+        ):
             resp = client.patch(
                 "/api/trading/orders/ord-001",
                 json={"price": 2000.0},
@@ -121,8 +126,10 @@ class TestTradingBrokerErrorsNotLeaked:
         mock_state = MagicMock()
         mock_state.broker = mock_broker
 
-        with patch.object(trading_mod, "app_state", mock_state), \
-             patch.object(trading_mod, "_check_kill_switch", return_value=None):
+        with (
+            patch.object(trading_mod, "app_state", mock_state),
+            patch.object(trading_mod, "_check_kill_switch", return_value=None),
+        ):
             resp = client.post(
                 "/api/trading/positions/pos-001/partial-close",
                 json={"quantity": 0.5},
@@ -223,8 +230,10 @@ class TestMlAnomalyErrorsNotLeaked:
         mock_store = MagicMock()
         mock_store.status.return_value = {"fitted": False, "buffer_size": 0}
 
-        with patch("api.ml_anomaly._get_live_store", return_value=mock_store), \
-             patch("api.ml_anomaly._load_ohlcv", side_effect=RuntimeError(_INTERNAL_MSG)):
+        with (
+            patch("api.ml_anomaly._get_live_store", return_value=mock_store),
+            patch("api.ml_anomaly._load_ohlcv", side_effect=RuntimeError(_INTERNAL_MSG)),
+        ):
             resp = client.post("/api/ml/anomaly/fit", json={"symbol": "XAUUSD"})
 
         assert resp.status_code == 500
@@ -254,8 +263,10 @@ class TestBrainLLMErrorsNotLeaked:
         mock_openai = MagicMock()
         mock_openai.chat.completions.create.side_effect = RuntimeError(_INTERNAL_MSG)
 
-        with patch.object(brain_mod, "_detect_llm_backend", return_value=("openai", "gpt-4")), \
-             patch.dict("sys.modules", {"openai": mock_openai}):
+        with (
+            patch.object(brain_mod, "_detect_llm_backend", return_value=("openai", "gpt-4")),
+            patch.dict("sys.modules", {"openai": mock_openai}),
+        ):
             resp = client.post("/api/brain/complete", json={"prompt": "hello"})
 
         assert resp.status_code in (502, 503)
@@ -269,8 +280,10 @@ class TestBrainLLMErrorsNotLeaked:
         mock_httpx = MagicMock()
         mock_httpx.post.side_effect = RuntimeError(_INTERNAL_MSG)
 
-        with patch.object(brain_mod, "_detect_llm_backend", return_value=("ollama", "llama3")), \
-             patch.dict("sys.modules", {"httpx": mock_httpx}):
+        with (
+            patch.object(brain_mod, "_detect_llm_backend", return_value=("ollama", "llama3")),
+            patch.dict("sys.modules", {"httpx": mock_httpx}),
+        ):
             resp = client.post("/api/brain/complete", json={"prompt": "hello"})
 
         assert resp.status_code in (502, 503)
@@ -284,8 +297,10 @@ class TestBrainLLMErrorsNotLeaked:
         mock_openai = MagicMock()
         mock_openai.embeddings.create.side_effect = RuntimeError(_INTERNAL_MSG)
 
-        with patch.object(brain_mod, "_detect_llm_backend", return_value=("openai", "text-embedding-3-small")), \
-             patch.dict("sys.modules", {"openai": mock_openai}):
+        with (
+            patch.object(brain_mod, "_detect_llm_backend", return_value=("openai", "text-embedding-3-small")),
+            patch.dict("sys.modules", {"openai": mock_openai}),
+        ):
             resp = client.post("/api/brain/embed", json={"input": "test text"})
 
         assert resp.status_code in (502, 503)
@@ -299,8 +314,10 @@ class TestBrainLLMErrorsNotLeaked:
         mock_httpx = MagicMock()
         mock_httpx.post.side_effect = RuntimeError(_INTERNAL_MSG)
 
-        with patch.object(brain_mod, "_detect_llm_backend", return_value=("ollama", "nomic-embed-text")), \
-             patch.dict("sys.modules", {"httpx": mock_httpx}):
+        with (
+            patch.object(brain_mod, "_detect_llm_backend", return_value=("ollama", "nomic-embed-text")),
+            patch.dict("sys.modules", {"httpx": mock_httpx}),
+        ):
             resp = client.post("/api/brain/embed", json={"input": "test text"})
 
         assert resp.status_code in (502, 503)

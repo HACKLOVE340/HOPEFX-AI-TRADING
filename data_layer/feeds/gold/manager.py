@@ -248,9 +248,7 @@ class GoldFeedManager:
                 # Log first poll error per source as WARNING; suppress repeats
                 # to DEBUG so the log is not flooded when an API is offline.
                 if src not in self._poll_error_warned:
-                    logger.warning(
-                        "GoldFeedManager poll error source=%s: %s", src.value, exc
-                    )
+                    logger.warning("GoldFeedManager poll error source=%s: %s", src.value, exc)
                     self._poll_error_warned.add(src)
                 else:
                     logger.debug(

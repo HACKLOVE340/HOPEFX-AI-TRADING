@@ -322,7 +322,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     _write_env(ENV_FILE, env)
 
     logger.info("Rotated %s", key)
-    logger.info("  Old: %s", '(not set)' if not old_val else '(redacted)')
+    logger.info("  Old: %s", "(not set)" if not old_val else "(redacted)")
     logger.info("  New: (redacted — see %s)", ENV_FILE)
     logger.info("\nRestart the application to pick up the new value.")
     if key in ("SECURITY_JWT_SECRET",):

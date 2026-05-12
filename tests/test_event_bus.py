@@ -21,7 +21,6 @@ Covers:
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -29,6 +28,7 @@ from core.event_bus import CH_TICK, EventBus, _LocalBus
 
 
 # ── _LocalBus per-handler isolation ──────────────────────────────────────────
+
 
 class TestLocalBusIsolation:
     @pytest.mark.asyncio
@@ -65,6 +65,7 @@ class TestLocalBusIsolation:
         def make_bad(name):
             def _h(msg):
                 raise ValueError(f"{name} is broken")
+
             _h.__qualname__ = name
             return _h
 
@@ -137,6 +138,7 @@ class TestLocalBusIsolation:
 
 # ── EventBus.dispatch_to_handlers ────────────────────────────────────────────
 
+
 class TestDispatchToHandlers:
     @pytest.mark.asyncio
     async def test_bad_handler_does_not_prevent_others(self):
@@ -199,6 +201,7 @@ class TestDispatchToHandlers:
 
 # ── EventBus.run_subscriber ───────────────────────────────────────────────────
 
+
 class TestRunSubscriber:
     @pytest.mark.asyncio
     async def test_handler_exception_does_not_stop_subscription(self):
@@ -258,6 +261,7 @@ class TestRunSubscriber:
 
 
 # ── subscribe() local fallback — caller exception isolation ──────────────────
+
 
 class TestSubscribeLocalFallbackIsolation:
     @pytest.mark.asyncio

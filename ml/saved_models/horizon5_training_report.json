@@ -10,7 +10,7 @@
   "cv_sample_count": 371,
   "oos_sample_count": 0,
   "feature_count": 193,
-  "trained_at": "2026-05-12T09:46:05.098046+00:00",
+  "trained_at": "2026-05-12T11:06:09.493772+00:00",
   "walkforward": {
     "folds": [
       {

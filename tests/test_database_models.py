@@ -27,6 +27,7 @@ import pytest
 
 # ── FK / ondelete metadata assertions ────────────────────────────────────────
 
+
 class TestForeignKeyConstraints:
     """Verify FK definitions without touching a real database."""
 
@@ -40,6 +41,7 @@ class TestForeignKeyConstraints:
 
     def test_order_account_id_has_fk_and_set_null(self):
         from database.models import Order
+
         fks = self._fk_map(Order)
         assert "account_id" in fks, "Order.account_id must have a FK to accounts.id"
         target, ondelete = fks["account_id"]
@@ -48,6 +50,7 @@ class TestForeignKeyConstraints:
 
     def test_order_trade_id_has_set_null(self):
         from database.models import Order
+
         fks = self._fk_map(Order)
         assert "trade_id" in fks
         _, ondelete = fks["trade_id"]
@@ -55,6 +58,7 @@ class TestForeignKeyConstraints:
 
     def test_signal_trade_id_has_set_null(self):
         from database.models import Signal
+
         fks = self._fk_map(Signal)
         assert "trade_id" in fks
         _, ondelete = fks["trade_id"]
@@ -62,6 +66,7 @@ class TestForeignKeyConstraints:
 
     def test_account_user_id_has_cascade(self):
         from database.models import Account
+
         fks = self._fk_map(Account)
         assert "user_id" in fks
         target, ondelete = fks["user_id"]
@@ -70,6 +75,7 @@ class TestForeignKeyConstraints:
 
     def test_position_account_id_has_fk_and_set_null(self):
         from database.models import Position
+
         fks = self._fk_map(Position)
         assert "account_id" in fks, "Position.account_id must have a FK to accounts.id"
         target, ondelete = fks["account_id"]
@@ -78,6 +84,7 @@ class TestForeignKeyConstraints:
 
     def test_position_user_id_has_fk_and_set_null(self):
         from database.models import Position
+
         fks = self._fk_map(Position)
         assert "user_id" in fks, "Position.user_id must have a FK to users.id"
         target, ondelete = fks["user_id"]
@@ -86,6 +93,7 @@ class TestForeignKeyConstraints:
 
 
 # ── Index registration ────────────────────────────────────────────────────────
+
 
 class TestIndexRegistration:
     """Verify all required indexes are registered in Base.metadata."""
@@ -109,6 +117,7 @@ class TestIndexRegistration:
 
     def _all_index_names(self) -> set[str]:
         from database.models import Base
+
         return {idx.name for t in Base.metadata.tables.values() for idx in t.indexes}
 
     def test_all_required_indexes_present(self):
@@ -130,6 +139,7 @@ class TestIndexRegistration:
 
 
 # ── Live cascade / SET NULL tests (SQLite in-memory) ─────────────────────────
+
 
 @pytest.fixture
 def db_session():
@@ -160,6 +170,7 @@ class TestCascadeDeleteLive:
 
     def _make_user(self, session, user_id: str = "user-1"):
         from database.models import User
+
         u = User(
             id=user_id,
             email=f"{user_id}@test.com",
@@ -172,6 +183,7 @@ class TestCascadeDeleteLive:
 
     def _make_account(self, session, user_id: str, account_id: int = 1):
         from database.models import Account
+
         a = Account(id=account_id, user_id=int(user_id.split("-")[-1]) if user_id.split("-")[-1].isdigit() else None)
         session.add(a)
         session.flush()
@@ -209,9 +221,7 @@ class TestCascadeDeleteLive:
 
         refreshed = db_session.query(Order).filter_by(order_id="O-001").first()
         assert refreshed is not None, "Order must still exist after Trade deletion"
-        assert refreshed.trade_id is None, (
-            f"Order.trade_id must be NULL after Trade deletion, got {refreshed.trade_id}"
-        )
+        assert refreshed.trade_id is None, f"Order.trade_id must be NULL after Trade deletion, got {refreshed.trade_id}"
 
     def test_deleting_trade_nullifies_signal_trade_id(self, db_session):
         """Deleting a Trade must SET NULL on Signal.trade_id."""

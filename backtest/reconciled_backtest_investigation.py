@@ -12,6 +12,7 @@ New code should import directly from backtesting:
 
     from backtesting.reconciled_backtest_investigation import sweep_confidence_thresholds
 """
+
 from __future__ import annotations
 
 import warnings
@@ -23,7 +24,7 @@ warnings.warn(
     stacklevel=2,
 )
 
-from backtesting.reconciled_backtest_investigation import (  # noqa: F401, E402
+from backtesting.reconciled_backtest_investigation import (
     load_reconciled_trades,
     sweep_confidence_thresholds,
     sweep_hold_periods,

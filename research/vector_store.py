@@ -44,13 +44,10 @@ import numpy as np
 try:
     import ta as _ta_check  # noqa: F401
 except ImportError:
-    try:
+    import contextlib
+
+    with contextlib.suppress(ImportError):
         from research import ta_compat as _ta_shim  # noqa: F401
-    except ImportError:
-        try:
-            import research.ta_compat as _ta_shim  # noqa: F401
-        except ImportError:
-            pass
 
 logger = logging.getLogger(__name__)
 

@@ -1070,6 +1070,7 @@ class DeepLearningModel:
             # against the stale pre-save digest.
             try:
                 from ml.model_registry import get_registry
+
                 reg = get_registry()
                 active = reg.active_version()
                 if active:
@@ -2059,15 +2060,15 @@ def run_ml_test():
     logger.info("ML PREDICTOR REPORT")
     logger.info("=" * 80)
 
-    logger.info("\nModels in ensemble: %s", report['models'])
-    logger.info("Weights: %s", report['weights'])
-    logger.info("Predictions generated: %s", report['predictions_generated'])
+    logger.info("\nModels in ensemble: %s", report["models"])
+    logger.info("Weights: %s", report["weights"])
+    logger.info("Predictions generated: %s", report["predictions_generated"])
 
     if report["recent_performance"]["accuracy"] is not None:
-        logger.info("\nRecent accuracy: %.1f%%", report['recent_performance']['accuracy'] * 100)
-        logger.info("Average confidence: %.1f%%", report['recent_performance']['avg_confidence'] * 100)
+        logger.info("\nRecent accuracy: %.1f%%", report["recent_performance"]["accuracy"] * 100)
+        logger.info("Average confidence: %.1f%%", report["recent_performance"]["avg_confidence"] * 100)
 
-    logger.info("\nFeatures used: %s", report['feature_count'])
+    logger.info("\nFeatures used: %s", report["feature_count"])
     logger.info("Top 5 features:")
     for feat, imp in list(report["top_features"].items())[:5]:
         logger.info("  %s: %.4f", feat, imp)

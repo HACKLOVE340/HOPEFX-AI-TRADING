@@ -664,6 +664,7 @@ class DataScheduler:
         # In development, stagger the first run by 60s so the server is fully
         # responsive before the yfinance batch fetch saturates the thread pool.
         import os as _os
+
         if _os.getenv("APP_ENV", "development").lower() in ("development", "dev"):
             logger.info("DataScheduler: deferring first run by 60s (dev mode)")
             await asyncio.sleep(60)
@@ -867,7 +868,7 @@ if __name__ == "__main__":
             logger.info("Data saved to: %s", _csv_path(args.symbol, args.granularity))
         elif args.timeframe:
             if args.timeframe not in TIMEFRAME_SECONDS:
-                logger.info("Unknown timeframe '%s'. Supported: %s", args.timeframe, ', '.join(ALL_TIMEFRAMES))
+                logger.info("Unknown timeframe '%s'. Supported: %s", args.timeframe, ", ".join(ALL_TIMEFRAMES))
                 return
             count = await _update_timeframe(args.symbol, args.timeframe)
             logger.info("Fetched and appended %s new bars for %s/%s.", count, args.symbol, args.timeframe)

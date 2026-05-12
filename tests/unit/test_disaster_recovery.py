@@ -15,11 +15,8 @@ Covers:
 from __future__ import annotations
 
 import gzip
-import hashlib
 import json
-import tempfile
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import timezone
 
 import pytest
 
@@ -34,6 +31,7 @@ UTC = timezone.utc
 class TestSystemState:
     def test_fields_accessible(self):
         from utils.disaster_recovery import SystemState
+
         s = SystemState(
             timestamp="2025-01-01T00:00:00+00:00",
             event_store_position=42,
@@ -50,6 +48,7 @@ class TestSystemState:
     def test_dataclass_asdict(self):
         from dataclasses import asdict
         from utils.disaster_recovery import SystemState
+
         s = SystemState(
             timestamp="2025-01-01T00:00:00+00:00",
             event_store_position=0,
@@ -77,7 +76,8 @@ class TestContinuousBackup:
 
     def test_init_creates_backup_dir(self, backup_dir):
         from utils.disaster_recovery import ContinuousBackup
-        cb = ContinuousBackup(backup_path=str(backup_dir))
+
+        _cb = ContinuousBackup(backup_path=str(backup_dir))
         assert backup_dir.exists()
 
     @pytest.mark.asyncio
@@ -201,6 +201,7 @@ class TestContinuousBackup:
 class TestFailoverManager:
     def test_init_sets_node_id(self):
         from utils.disaster_recovery import FailoverManager
+
         fm = FailoverManager(node_id="node-1", peers=["node-2", "node-3"])
         assert fm.node_id == "node-1"
         assert fm.peers == ["node-2", "node-3"]
@@ -209,6 +210,7 @@ class TestFailoverManager:
     @pytest.mark.asyncio
     async def test_election_highest_node_id_wins(self):
         from utils.disaster_recovery import FailoverManager
+
         # node-3 is lexicographically highest
         fm = FailoverManager(node_id="node-3", peers=["node-1", "node-2"])
         await fm.start_election()
@@ -217,6 +219,7 @@ class TestFailoverManager:
     @pytest.mark.asyncio
     async def test_election_lower_node_id_loses(self):
         from utils.disaster_recovery import FailoverManager
+
         fm = FailoverManager(node_id="node-1", peers=["node-2", "node-3"])
         await fm.start_election()
         assert fm.is_primary is False
@@ -224,25 +227,30 @@ class TestFailoverManager:
     @pytest.mark.asyncio
     async def test_election_single_node_wins(self):
         from utils.disaster_recovery import FailoverManager
+
         fm = FailoverManager(node_id="node-1", peers=[])
         await fm.start_election()
         assert fm.is_primary is True
 
     def test_heartbeat_port_constant(self):
         from utils.disaster_recovery import FailoverManager
+
         assert FailoverManager.HEARTBEAT_PORT == 8765
 
     def test_failover_timeout_default(self):
         from utils.disaster_recovery import FailoverManager
+
         fm = FailoverManager(node_id="node-1", peers=[])
         assert fm.failover_timeout == 15
 
     def test_heartbeat_interval_default(self):
         from utils.disaster_recovery import FailoverManager
+
         fm = FailoverManager(node_id="node-1", peers=[])
         assert fm.heartbeat_interval == 5
 
     def test_last_peer_heartbeat_initially_empty(self):
         from utils.disaster_recovery import FailoverManager
+
         fm = FailoverManager(node_id="node-1", peers=["node-2"])
         assert fm.last_peer_heartbeat == {}

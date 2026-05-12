@@ -157,21 +157,15 @@ class DataLineageStore:
 
         # parent_id was added after the initial schema — add it when absent.
         if "parent_id" not in existing_columns:
-            migrations.append(
-                "ALTER TABLE lineage_records ADD COLUMN parent_id TEXT"
-            )
-            migrations.append(
-                "CREATE INDEX IF NOT EXISTS idx_lineage_parent_id "
-                "ON lineage_records(parent_id)"
-            )
+            migrations.append("ALTER TABLE lineage_records ADD COLUMN parent_id TEXT")
+            migrations.append("CREATE INDEX IF NOT EXISTS idx_lineage_parent_id ON lineage_records(parent_id)")
 
         # schema_version defaulted to TEXT in some early builds — ensure INTEGER.
         # SQLite does not support ALTER COLUMN, so we only add the index if the
         # column already exists (it always does from the original schema).
         if "schema_version" in existing_columns:
             migrations.append(
-                "CREATE INDEX IF NOT EXISTS idx_lineage_schema_version "
-                "ON lineage_records(schema_version)"
+                "CREATE INDEX IF NOT EXISTS idx_lineage_schema_version ON lineage_records(schema_version)"
             )
 
         for sql in migrations:
@@ -838,7 +832,6 @@ class DataLineageStore:
         except Exception as exc:
             logger.warning("DataLineageStore prune error: %s", exc)
 
-
     # ── Async write API ───────────────────────────────────────────────────────
 
     async def record_tick_async(self, tick: GoldTick, parent_id: str | None = None) -> None:
@@ -994,10 +987,16 @@ class DataLineageStore:
             )
             return [
                 {
-                    "id": r[0], "record_type": r[1], "schema_version": r[2],
-                    "lineage_id": r[3], "parent_id": r[4], "source": r[5],
-                    "symbol": r[6], "timestamp": r[7],
-                    "payload": json.loads(r[8]), "created_at": r[9],
+                    "id": r[0],
+                    "record_type": r[1],
+                    "schema_version": r[2],
+                    "lineage_id": r[3],
+                    "parent_id": r[4],
+                    "source": r[5],
+                    "symbol": r[6],
+                    "timestamp": r[7],
+                    "payload": json.loads(r[8]),
+                    "created_at": r[9],
                 }
                 for r in cursor.fetchall()
             ]
@@ -1055,12 +1054,14 @@ class DataLineageStore:
         for r in chain:
             payload = r.get("payload", {})
             op = payload.get("operation", r["record_type"].lower())
-            transformations.append({
-                "operation": op,
-                "source": r.get("source"),
-                "timestamp": r.get("timestamp"),
-                "record_type": r["record_type"],
-            })
+            transformations.append(
+                {
+                    "operation": op,
+                    "source": r.get("source"),
+                    "timestamp": r.get("timestamp"),
+                    "record_type": r["record_type"],
+                }
+            )
 
         root = chain[-1] if chain else {}
 
@@ -1091,6 +1092,7 @@ class DataLineageStore:
             return {}
         since = datetime.now(UTC).replace(microsecond=0)
         from datetime import timedelta
+
         since = since - timedelta(hours=hours)
 
         try:

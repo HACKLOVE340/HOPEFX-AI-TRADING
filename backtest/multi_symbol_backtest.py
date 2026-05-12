@@ -12,18 +12,18 @@ New code should import directly from backtesting:
 
     from backtesting.multi_symbol_backtest import run_backtest, compute_pooled_metrics
 """
+
 from __future__ import annotations
 
 import warnings
 
 warnings.warn(
-    "backtest.multi_symbol_backtest is a compatibility shim. "
-    "Import from backtesting.multi_symbol_backtest directly.",
+    "backtest.multi_symbol_backtest is a compatibility shim. Import from backtesting.multi_symbol_backtest directly.",
     DeprecationWarning,
     stacklevel=2,
 )
 
-from backtesting.multi_symbol_backtest import (  # noqa: F401, E402
+from backtesting.multi_symbol_backtest import (
     fetch_ohlcv,
     build_features,
     backtest_symbol,

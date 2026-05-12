@@ -290,12 +290,12 @@ def print_report(ledger: dict[str, Any]) -> None:
     logger.info("  Gate target    : %s", f"{FILL_GATE_TARGET:,}")
     logger.info("  Progress       : %.1f%%  [%s/%s]", pct, fill_count, FILL_GATE_TARGET)
     logger.info("  Remaining      : %s", f"{remaining:,}")
-    logger.info("  Gate status    : %s", 'PASSED' if gate_passed else 'NOT YET PASSED')
+    logger.info("  Gate status    : %s", "PASSED" if gate_passed else "NOT YET PASSED")
     if ledger.get("first_fill_at"):
-        logger.info("  First fill     : %s", ledger['first_fill_at'])
+        logger.info("  First fill     : %s", ledger["first_fill_at"])
     if ledger["fills"]:
-        logger.info("  Last fill      : %s", ledger['fills'][-1]['time'])
-    logger.info("  Last sync      : %s", ledger.get('last_sync_at', 'never'))
+        logger.info("  Last fill      : %s", ledger["fills"][-1]["time"])
+    logger.info("  Last sync      : %s", ledger.get("last_sync_at", "never"))
     logger.info("=" * 60)
 
     if gate_passed:

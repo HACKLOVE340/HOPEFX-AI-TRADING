@@ -35,8 +35,7 @@ def _make_trending_ohlcv(n: int = 30, direction: str = "up") -> pd.DataFrame:
     highs = closes + 1.0
     lows = closes - 1.0
     opens = closes + 0.2
-    return pd.DataFrame({"open": opens, "high": highs, "low": lows, "close": closes,
-                          "volume": np.ones(n) * 1000})
+    return pd.DataFrame({"open": opens, "high": highs, "low": lows, "close": closes, "volume": np.ones(n) * 1000})
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -120,8 +119,7 @@ class TestRegimeDetection:
         closes = 2000.0 + 10.0 * np.arange(30)
         highs = closes + 0.5
         lows = closes - 0.5
-        df = pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes,
-                            "volume": np.ones(30) * 1000})
+        df = pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes, "volume": np.ones(30) * 1000})
         regime = brain.detect_regime(df, symbol="XAU/USD")
         assert regime == Regime.TRENDING_UP
 
@@ -129,8 +127,7 @@ class TestRegimeDetection:
         closes = 2000.0 - 10.0 * np.arange(30)
         highs = closes + 0.5
         lows = closes - 0.5
-        df = pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes,
-                            "volume": np.ones(30) * 1000})
+        df = pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes, "volume": np.ones(30) * 1000})
         regime = brain.detect_regime(df, symbol="XAU/USD")
         assert regime == Regime.TRENDING_DOWN
 
@@ -138,10 +135,9 @@ class TestRegimeDetection:
         # ATR > REGIME_VOLATILE_THRESHOLD (default 0.8%) of price
         # Price = 100, ATR must be > 0.8 → so ATR > 0.8
         closes = np.full(30, 100.0) + np.random.default_rng(1).normal(0, 0.01, 30)
-        highs = closes + 2.0   # high-low spread → large ATR
+        highs = closes + 2.0  # high-low spread → large ATR
         lows = closes - 2.0
-        df = pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes,
-                            "volume": np.ones(30) * 1000})
+        df = pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes, "volume": np.ones(30) * 1000})
         regime = brain.detect_regime(df, symbol="XAU/USD")
         assert regime == Regime.VOLATILE
 
@@ -252,6 +248,7 @@ class TestProcessBar:
 
     def test_to_dict_serialisable(self, brain):
         import json
+
         ohlcv = _make_ohlcv(n=30)
         d = brain.process_bar(ohlcv, symbol="XAU/USD")
         d_dict = d.to_dict()
@@ -328,8 +325,10 @@ class TestMLPredictor:
 class TestSignalAggregation:
     def test_both_neutral_returns_hold(self, brain):
         direction, confidence, reason = brain._aggregate_signals(
-            ml_direction="neutral", ml_confidence=0.0,
-            strategy_direction="neutral", strategy_confidence=0.0,
+            ml_direction="neutral",
+            ml_confidence=0.0,
+            strategy_direction="neutral",
+            strategy_confidence=0.0,
         )
         assert direction == "hold"
         assert confidence == 0.0
@@ -337,8 +336,10 @@ class TestSignalAggregation:
 
     def test_both_agree_long_boosts_confidence(self, brain):
         direction, confidence, reason = brain._aggregate_signals(
-            ml_direction="long", ml_confidence=0.7,
-            strategy_direction="long", strategy_confidence=0.6,
+            ml_direction="long",
+            ml_confidence=0.7,
+            strategy_direction="long",
+            strategy_confidence=0.6,
         )
         assert direction == "long"
         assert confidence > 0.6
@@ -346,16 +347,20 @@ class TestSignalAggregation:
 
     def test_disagreement_returns_hold(self, brain):
         direction, confidence, reason = brain._aggregate_signals(
-            ml_direction="long", ml_confidence=0.8,
-            strategy_direction="short", strategy_confidence=0.8,
+            ml_direction="long",
+            ml_confidence=0.8,
+            strategy_direction="short",
+            strategy_confidence=0.8,
         )
         assert direction == "hold"
         assert "conflict" in reason
 
     def test_ml_only_long_at_reduced_confidence(self, brain):
         direction, confidence, reason = brain._aggregate_signals(
-            ml_direction="long", ml_confidence=0.7,
-            strategy_direction="neutral", strategy_confidence=0.0,
+            ml_direction="long",
+            ml_confidence=0.7,
+            strategy_direction="neutral",
+            strategy_confidence=0.0,
         )
         assert direction == "long"
         assert confidence < 0.7
@@ -363,16 +368,20 @@ class TestSignalAggregation:
 
     def test_strategy_only_low_confidence_returns_hold(self, brain):
         direction, confidence, reason = brain._aggregate_signals(
-            ml_direction="neutral", ml_confidence=0.0,
-            strategy_direction="long", strategy_confidence=0.10,  # < MIN_CONFIDENCE 0.30
+            ml_direction="neutral",
+            ml_confidence=0.0,
+            strategy_direction="long",
+            strategy_confidence=0.10,  # < MIN_CONFIDENCE 0.30
         )
         assert direction == "hold"
         assert reason == "strategy_low_confidence"
 
     def test_ml_low_confidence_returns_hold(self, brain):
         direction, confidence, reason = brain._aggregate_signals(
-            ml_direction="long", ml_confidence=0.10,  # < MIN_CONFIDENCE 0.30
-            strategy_direction="neutral", strategy_confidence=0.0,
+            ml_direction="long",
+            ml_confidence=0.10,  # < MIN_CONFIDENCE 0.30
+            strategy_direction="neutral",
+            strategy_confidence=0.0,
         )
         assert direction == "hold"
         assert reason == "ml_low_confidence"
@@ -388,8 +397,10 @@ class TestHorizonHold:
 
         predictor = MagicMock()
         predictor.predict.return_value = {
-            "probability": 0.80, "confidence": 0.60,
-            "direction": "long", "abstain": False,
+            "probability": 0.80,
+            "confidence": 0.60,
+            "direction": "long",
+            "abstain": False,
         }
         b.inject(ml_predictor=predictor)
         ohlcv = _make_ohlcv(n=30)
@@ -399,8 +410,10 @@ class TestHorizonHold:
 
         # Now flip ML to short
         predictor.predict.return_value = {
-            "probability": 0.20, "confidence": 0.60,
-            "direction": "short", "abstain": False,
+            "probability": 0.20,
+            "confidence": 0.60,
+            "direction": "short",
+            "abstain": False,
         }
         d2 = b.process_bar(ohlcv, symbol="XAU/USD")
 
@@ -415,8 +428,10 @@ class TestHorizonHold:
 
         predictor = MagicMock()
         predictor.predict.return_value = {
-            "probability": 0.80, "confidence": 0.60,
-            "direction": "short", "abstain": False,
+            "probability": 0.80,
+            "confidence": 0.60,
+            "direction": "short",
+            "abstain": False,
         }
         b.inject(ml_predictor=predictor)
         ohlcv = _make_ohlcv(n=30)

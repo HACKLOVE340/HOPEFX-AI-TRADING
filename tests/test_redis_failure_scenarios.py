@@ -8,12 +8,12 @@ Covers graceful degradation when Redis is unavailable:
   4. EventBus degrades to local fallback on connection failure
   5. WS tick cache write failure does not crash broadcaster
 """
+
 import os
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -23,11 +23,13 @@ import pytest
 # 1. Token blacklist Redis failure
 # ---------------------------------------------------------------------------
 
+
 class TestTokenBlacklistRedisFailure:
     """When Redis is down the blacklist degrades to in-memory."""
 
     def _make_blacklist(self):
         from auth.service import _TokenBlacklist
+
         bl = _TokenBlacklist.__new__(_TokenBlacklist)
         bl._redis = None
         bl._mem = set()
@@ -80,6 +82,7 @@ class TestTokenBlacklistRedisFailure:
 # ---------------------------------------------------------------------------
 # 2. EventBus degrades gracefully on Redis connection failure
 # ---------------------------------------------------------------------------
+
 
 class TestEventBusRedisFailure:
     @pytest.mark.asyncio
@@ -142,11 +145,13 @@ class TestEventBusRedisFailure:
 # 3. Paper trading broker survives Redis failure
 # ---------------------------------------------------------------------------
 
+
 class TestPaperBrokerRedisFailure:
     """PaperTradingBroker stores positions in memory when Redis is unavailable."""
 
     def _make_broker(self):
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker.__new__(PaperTradingBroker)
         broker._positions = {}
         broker._orders = {}
@@ -177,6 +182,7 @@ class TestPaperBrokerRedisFailure:
 # 4. WS tick cache write failure does not crash broadcaster
 # ---------------------------------------------------------------------------
 
+
 class TestTickCacheWriteFailure:
     @pytest.mark.asyncio
     async def test_redis_write_failure_does_not_stop_broadcast(self):
@@ -203,7 +209,7 @@ class TestTickCacheWriteFailure:
     async def test_none_redis_does_not_attempt_write(self):
         """When Redis client is None, the write block is skipped entirely."""
         redis_client = None
-        symbol = "XAUUSD"
+        _symbol = "XAUUSD"
         writes = []
 
         if redis_client is not None:
@@ -216,9 +222,11 @@ class TestTickCacheWriteFailure:
 # 5. Token blacklist: full revoke + check cycle without Redis
 # ---------------------------------------------------------------------------
 
+
 class TestBlacklistCycleNoRedis:
     def test_revoke_then_check_is_consistent(self):
         from auth.service import _TokenBlacklist
+
         bl = _TokenBlacklist.__new__(_TokenBlacklist)
         bl._redis = None
         bl._mem = set()

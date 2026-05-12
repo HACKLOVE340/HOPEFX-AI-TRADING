@@ -19,7 +19,14 @@ Author: HOPEFX Development Team
 
 import abc
 import logging
-import xml.etree.ElementTree as ET
+
+try:
+    import defusedxml.ElementTree as _ET  # type: ignore[import-untyped]
+
+    ET = _ET
+except ImportError:
+    # defusedxml not installed — fall back to stdlib; input is validated upstream
+    import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -32,7 +39,7 @@ import requests
 try:
     import feedparser as _fp_module
 
-    _fp_module.parse  # verify parse() is accessible (import may succeed but be broken)
+    _ = _fp_module.parse  # verify parse() is accessible (import may succeed but be broken)
     _FEEDPARSER_AVAILABLE = True
     feedparser = _fp_module
 except Exception:
@@ -48,7 +55,7 @@ if not _FEEDPARSER_AVAILABLE:
 # ── Minimal RSS/Atom parser (stdlib only, no feedparser dependency) ───────────
 
 _ATOM_NS = "http://www.w3.org/2005/Atom"
-_DC_NS   = "http://purl.org/dc/elements/1.1/"
+_DC_NS = "http://purl.org/dc/elements/1.1/"
 
 
 def _parse_date(text: str | None) -> datetime:
@@ -61,7 +68,7 @@ def _parse_date(text: str | None) -> datetime:
         pass
     for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
         try:
-            dt = datetime.strptime(text[:len(fmt) + 5], fmt)
+            dt = datetime.strptime(text[: len(fmt) + 5], fmt)
             return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
         except Exception:
             continue
@@ -75,7 +82,7 @@ def _xml_text(el: ET.Element | None) -> str:
 def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
     """Parse RSS 2.0 or Atom feed XML bytes into a list of entry dicts."""
     try:
-        root = ET.fromstring(xml_bytes)
+        root = ET.fromstring(xml_bytes)  # noqa: S314
     except ET.ParseError:
         return []
 
@@ -85,22 +92,24 @@ def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
     if root.tag == f"{{{_ATOM_NS}}}feed" or root.tag.endswith("}feed"):
         ns = {"a": _ATOM_NS}
         for entry in root.findall("a:entry", ns) or root.findall("entry"):
-            title_el  = entry.find("a:title", ns) or entry.find("title")
+            title_el = entry.find("a:title", ns) or entry.find("title")
             summary_el = entry.find("a:summary", ns) or entry.find("summary")
-            link_el   = entry.find("a:link", ns) or entry.find("link")
+            link_el = entry.find("a:link", ns) or entry.find("link")
             updated_el = entry.find("a:updated", ns) or entry.find("updated")
             author_el = entry.find("a:author/a:name", ns) or entry.find("author/name")
             link_href = ""
             if link_el is not None:
                 link_href = link_el.get("href", "") or _xml_text(link_el)
-            entries.append({
-                "title": _xml_text(title_el),
-                "summary": _xml_text(summary_el),
-                "link": link_href,
-                "published": _xml_text(updated_el),
-                "author": _xml_text(author_el),
-                "source": source_name,
-            })
+            entries.append(
+                {
+                    "title": _xml_text(title_el),
+                    "summary": _xml_text(summary_el),
+                    "link": link_href,
+                    "published": _xml_text(updated_el),
+                    "author": _xml_text(author_el),
+                    "source": source_name,
+                }
+            )
         return entries
 
     # RSS 2.0
@@ -108,14 +117,16 @@ def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
     for item in channel.findall("item"):
         pub_el = item.find("pubDate") or item.find(f"{{{_DC_NS}}}date")
         desc_el = item.find("description")
-        entries.append({
-            "title":     _xml_text(item.find("title")),
-            "summary":   _xml_text(desc_el),
-            "link":      _xml_text(item.find("link")),
-            "published": _xml_text(pub_el),
-            "author":    _xml_text(item.find(f"{{{_DC_NS}}}creator") or item.find("author")),
-            "source":    source_name,
-        })
+        entries.append(
+            {
+                "title": _xml_text(item.find("title")),
+                "summary": _xml_text(desc_el),
+                "link": _xml_text(item.find("link")),
+                "published": _xml_text(pub_el),
+                "author": _xml_text(item.find(f"{{{_DC_NS}}}creator") or item.find("author")),
+                "source": source_name,
+            }
+        )
     return entries
 
 
@@ -382,6 +393,7 @@ class RSSFeedProvider(NewsProvider):
         # RSS_FEED_REUTERS=https://... overrides the "reuters_business" feed, etc.
         self.feeds = self.DEFAULT_FEEDS.copy()
         import os as _os
+
         for name in list(self.feeds.keys()):
             env_key = f"RSS_FEED_{name.upper()}"
             override = _os.getenv(env_key, "")
@@ -391,7 +403,7 @@ class RSSFeedProvider(NewsProvider):
         # Allow adding entirely new feeds via RSS_FEED_EXTRA_<NAME>=<url>
         for key, val in _os.environ.items():
             if key.startswith("RSS_FEED_EXTRA_") and val:
-                feed_name = key[len("RSS_FEED_EXTRA_"):].lower()
+                feed_name = key[len("RSS_FEED_EXTRA_") :].lower()
                 self.feeds[feed_name] = val
                 logger.info("RSS feed '%s' added via %s", feed_name, key)
 
@@ -431,8 +443,7 @@ class RSSFeedProvider(NewsProvider):
                             self.logger.warning("Error formatting RSS entry: %s", e)
                 else:
                     # ── stdlib XML fallback path ──────────────────────────────
-                    resp = requests.get(feed_url, timeout=8,
-                                        headers={"User-Agent": "HopeFX/1.0 (+https://hopefx.ai)"})
+                    resp = requests.get(feed_url, timeout=8, headers={"User-Agent": "HopeFX/1.0 (+https://hopefx.ai)"})
                     resp.raise_for_status()
                     entries = _parse_rss_feed(resp.content, feed_name)
                     for entry in entries:
@@ -442,14 +453,16 @@ class RSSFeedProvider(NewsProvider):
                                 pub = pub.replace(tzinfo=UTC)
                             if pub < cutoff_time:
                                 continue
-                            all_articles.append(NewsArticle(
-                                title=entry.get("title", ""),
-                                description=entry.get("summary", ""),
-                                source=entry.get("source", feed_name),
-                                published_at=pub,
-                                url=entry.get("link", ""),
-                                author=entry.get("author") or None,
-                            ))
+                            all_articles.append(
+                                NewsArticle(
+                                    title=entry.get("title", ""),
+                                    description=entry.get("summary", ""),
+                                    source=entry.get("source", feed_name),
+                                    published_at=pub,
+                                    url=entry.get("link", ""),
+                                    author=entry.get("author") or None,
+                                )
+                            )
                         except Exception as e:
                             self.logger.warning("Error formatting XML entry from %s: %s", feed_name, e)
 

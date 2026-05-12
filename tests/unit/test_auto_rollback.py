@@ -19,7 +19,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import time
 import pytest
 
@@ -32,6 +31,7 @@ import pytest
 class TestRollbackStrategy:
     def test_strategy_constants_defined(self):
         from resilience.auto_rollback import RollbackStrategy
+
         assert RollbackStrategy.SOFT == "soft"
         assert RollbackStrategy.MEDIUM == "medium"
         assert RollbackStrategy.HARD == "hard"
@@ -46,6 +46,7 @@ class TestRollbackStrategy:
 class TestRollbackResult:
     def test_to_dict_contains_required_keys(self):
         from resilience.auto_rollback import RollbackResult
+
         r = RollbackResult(success=True, strategy="soft", reason="test")
         d = r.to_dict()
         assert "success" in d
@@ -58,6 +59,7 @@ class TestRollbackResult:
 
     def test_to_dict_values(self):
         from resilience.auto_rollback import RollbackResult
+
         r = RollbackResult(
             success=True,
             strategy="soft",
@@ -74,15 +76,18 @@ class TestRollbackResult:
 
     def test_default_actions_and_errors_empty(self):
         from resilience.auto_rollback import RollbackResult
+
         r = RollbackResult(success=False, strategy="medium", reason="auto")
         assert r.actions_taken == []
         assert r.errors == []
 
     def test_rolled_back_at_is_iso_string(self):
         from resilience.auto_rollback import RollbackResult
+
         r = RollbackResult(success=True, strategy="soft", reason="test")
         # Should be parseable as ISO datetime
         from datetime import datetime
+
         dt = datetime.fromisoformat(r.rolled_back_at)
         assert dt is not None
 
@@ -95,6 +100,7 @@ class TestRollbackResult:
 class TestRollbackTrigger:
     def test_should_trigger_when_condition_true(self):
         from resilience.auto_rollback import RollbackTrigger
+
         t = RollbackTrigger(
             name="test",
             condition=lambda: True,
@@ -104,6 +110,7 @@ class TestRollbackTrigger:
 
     def test_should_not_trigger_when_condition_false(self):
         from resilience.auto_rollback import RollbackTrigger
+
         t = RollbackTrigger(
             name="test",
             condition=lambda: False,
@@ -113,6 +120,7 @@ class TestRollbackTrigger:
 
     def test_should_not_trigger_when_disabled(self):
         from resilience.auto_rollback import RollbackTrigger
+
         t = RollbackTrigger(
             name="test",
             condition=lambda: True,
@@ -123,6 +131,7 @@ class TestRollbackTrigger:
 
     def test_should_not_trigger_within_cooldown(self):
         from resilience.auto_rollback import RollbackTrigger
+
         t = RollbackTrigger(
             name="test",
             condition=lambda: True,
@@ -133,6 +142,7 @@ class TestRollbackTrigger:
 
     def test_should_trigger_after_cooldown_expires(self):
         from resilience.auto_rollback import RollbackTrigger
+
         t = RollbackTrigger(
             name="test",
             condition=lambda: True,
@@ -157,6 +167,7 @@ class TestRollbackTrigger:
 
     def test_mark_triggered_updates_last_triggered(self):
         from resilience.auto_rollback import RollbackTrigger
+
         t = RollbackTrigger(name="test", condition=lambda: True)
         before = t._last_triggered
         t.mark_triggered()
@@ -171,10 +182,12 @@ class TestRollbackTrigger:
 class TestAutoRollbackManager:
     def _make_manager(self):
         from resilience.auto_rollback import AutoRollbackManager
+
         return AutoRollbackManager()
 
     def test_register_trigger_adds_to_list(self):
-        from resilience.auto_rollback import AutoRollbackManager, RollbackTrigger
+        from resilience.auto_rollback import RollbackTrigger
+
         mgr = self._make_manager()
         t = RollbackTrigger(name="my_trigger", condition=lambda: False)
         mgr.register_trigger(t)
@@ -241,6 +254,7 @@ class TestAutoRollbackManager:
 
     def test_get_status_trigger_count(self):
         from resilience.auto_rollback import RollbackTrigger
+
         mgr = self._make_manager()
         initial_count = len(mgr._triggers)
         mgr.register_trigger(RollbackTrigger(name="extra", condition=lambda: False))
@@ -253,12 +267,14 @@ class TestAutoRollbackManager:
     @pytest.mark.asyncio
     async def test_check_triggers_fires_when_condition_met(self):
         from resilience.auto_rollback import RollbackTrigger
+
         mgr = self._make_manager()
         fired = []
 
         async def _patched_rollback(strategy, reason, target_files=None):
             fired.append(reason)
             from resilience.auto_rollback import RollbackResult
+
             return RollbackResult(success=True, strategy=strategy, reason=reason)
 
         mgr.rollback = _patched_rollback
@@ -276,12 +292,14 @@ class TestAutoRollbackManager:
     @pytest.mark.asyncio
     async def test_check_triggers_skips_when_condition_false(self):
         from resilience.auto_rollback import RollbackTrigger
+
         mgr = self._make_manager()
         fired = []
 
         async def _patched_rollback(strategy, reason, target_files=None):
             fired.append(reason)
             from resilience.auto_rollback import RollbackResult
+
             return RollbackResult(success=True, strategy=strategy, reason=reason)
 
         mgr.rollback = _patched_rollback

@@ -120,12 +120,7 @@ def _setup_timescaledb(engine) -> None:
     try:
         with engine.begin() as conn:
             # Check if TimescaleDB is available
-            result = conn.execute(
-                text(
-                    "SELECT COUNT(*) FROM pg_available_extensions "
-                    "WHERE name = 'timescaledb'"
-                )
-            )
+            result = conn.execute(text("SELECT COUNT(*) FROM pg_available_extensions WHERE name = 'timescaledb'"))
             if result.scalar() == 0:
                 logger.info(
                     "TimescaleDB extension not available on this PostgreSQL server — "
@@ -134,19 +129,14 @@ def _setup_timescaledb(engine) -> None:
                 return
 
             # Create extension if not already present
-            conn.execute(
-                text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
-            )
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
             logger.info("TimescaleDB extension enabled")
 
             # Convert tables to hypertables
             for table_name, time_col, chunk_interval in _HYPERTABLES:
                 # Check if already a hypertable
                 result = conn.execute(
-                    text(
-                        "SELECT COUNT(*) FROM timescaledb_information.hypertables "
-                        "WHERE hypertable_name = :tbl"
-                    ),
+                    text("SELECT COUNT(*) FROM timescaledb_information.hypertables WHERE hypertable_name = :tbl"),
                     {"tbl": table_name},
                 )
                 if result.scalar() > 0:
@@ -177,13 +167,13 @@ def _setup_timescaledb(engine) -> None:
                 )
                 logger.info(
                     "Hypertable created: %s (time_col=%s, chunk=%s)",
-                    table_name, time_col, chunk_interval,
+                    table_name,
+                    time_col,
+                    chunk_interval,
                 )
 
     except Exception as exc:
-        logger.warning(
-            "TimescaleDB setup failed (non-fatal — falling back to plain PostgreSQL): %s", exc
-        )
+        logger.warning("TimescaleDB setup failed (non-fatal — falling back to plain PostgreSQL): %s", exc)
 
 
 def check_extensions(engine) -> dict[str, bool]:
@@ -203,18 +193,16 @@ def check_extensions(engine) -> dict[str, bool]:
         with engine.connect() as conn:
             for ext in _REQUIRED_EXTENSIONS + _OPTIONAL_EXTENSIONS:
                 row = conn.execute(
-                    text(
-                        "SELECT COUNT(*) FROM pg_extension WHERE extname = :ext"
-                    ),
+                    text("SELECT COUNT(*) FROM pg_extension WHERE extname = :ext"),
                     {"ext": ext},
                 )
                 installed = row.scalar() > 0
                 results[ext] = installed
                 if not installed and ext in _REQUIRED_EXTENSIONS:
                     logger.warning(
-                        "Required PostgreSQL extension '%s' is NOT installed. "
-                        "Run: CREATE EXTENSION IF NOT EXISTS %s;",
-                        ext, ext,
+                        "Required PostgreSQL extension '%s' is NOT installed. Run: CREATE EXTENSION IF NOT EXISTS %s;",
+                        ext,
+                        ext,
                     )
     except Exception as exc:
         logger.warning("Extension check failed: %s", exc)

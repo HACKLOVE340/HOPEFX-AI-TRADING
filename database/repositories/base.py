@@ -50,6 +50,7 @@ class Page(Generic[ModelT]):
         if self.page_size == 0:
             return 0
         import math
+
         return math.ceil(self.total / self.page_size)
 
     @property
@@ -89,9 +90,7 @@ class AsyncRepository(Generic[ModelT]):
         await session.refresh(instance)
         return instance
 
-    async def bulk_create(
-        self, session: AsyncSession, rows: list[dict[str, Any]]
-    ) -> list[ModelT]:
+    async def bulk_create(self, session: AsyncSession, rows: list[dict[str, Any]]) -> list[ModelT]:
         """Bulk-insert multiple rows and return the created instances."""
         instances = [self.model(**row) for row in rows]
         session.add_all(instances)
@@ -127,9 +126,7 @@ class AsyncRepository(Generic[ModelT]):
 
     # ── Update ─────────────────────────────────────────────────────────────────
 
-    async def update(
-        self, session: AsyncSession, instance: ModelT, **kwargs: Any
-    ) -> ModelT:
+    async def update(self, session: AsyncSession, instance: ModelT, **kwargs: Any) -> ModelT:
         """Update *instance* with the given keyword arguments."""
         for key, value in kwargs.items():
             setattr(instance, key, value)
@@ -162,7 +159,7 @@ class AsyncRepository(Generic[ModelT]):
         page_size: int = 20,
         *,
         stmt=None,
-    ) -> "Page[ModelT]":
+    ) -> Page[ModelT]:
         """
         Return a paginated result for the model.
 
@@ -242,9 +239,7 @@ class AsyncRepository(Generic[ModelT]):
         dialect_name = self._dialect_name(session)
 
         if dialect_name == "postgresql":
-            return await self._pg_bulk_upsert(
-                session, rows, conflict_columns, update_columns
-            )
+            return await self._pg_bulk_upsert(session, rows, conflict_columns, update_columns)
         # Fallback for SQLite / other dialects
         return await self._fallback_bulk_upsert(session, rows)
 
@@ -290,7 +285,9 @@ class AsyncRepository(Generic[ModelT]):
         for row in rows:
             pk_vals = {k: row[k] for k in pk_names if k in row}
             if pk_vals:
-                existing = await session.get(self.model, tuple(pk_vals.values()) if len(pk_vals) > 1 else list(pk_vals.values())[0])
+                existing = await session.get(
+                    self.model, tuple(pk_vals.values()) if len(pk_vals) > 1 else list(pk_vals.values())[0]
+                )
                 if existing is not None:
                     for k, v in row.items():
                         setattr(existing, k, v)

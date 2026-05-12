@@ -224,6 +224,7 @@ class MobileAPIServer:
             return self.broker
         try:
             from core.app_state import app_state as _state
+
             return getattr(_state, "broker", None)
         except Exception:
             return None
@@ -232,6 +233,7 @@ class MobileAPIServer:
     async def _call_broker(method, *args, **kwargs):
         """Call sync or async broker method and return result."""
         import inspect
+
         result = method(*args, **kwargs)
         if inspect.iscoroutine(result):
             result = await result
@@ -246,9 +248,7 @@ class MobileAPIServer:
             "balance": float(getattr(info, "balance", 0) or 0),
             "equity": float(getattr(info, "equity", 0) or 0),
             "margin_used": float(getattr(info, "margin_used", 0) or 0),
-            "margin_available": float(
-                getattr(info, "margin_available", getattr(info, "free_margin", 0)) or 0
-            ),
+            "margin_available": float(getattr(info, "margin_available", getattr(info, "free_margin", 0)) or 0),
             "open_trades": 0,
             "daily_pnl": 0.0,
             "monthly_pnl": 0.0,
@@ -453,6 +453,7 @@ class MobileAPIServer:
                     # Fall back to price engine via app_state
                     try:
                         from core.app_state import app_state as _state
+
                         pe = getattr(_state, "price_engine", None)
                         if pe:
                             tick = pe.get_last_price(symbol)
@@ -464,7 +465,7 @@ class MobileAPIServer:
                                     last_update=datetime.now(UTC),
                                     spread=float(tick.ask) - float(tick.bid),
                                 )
-                    except Exception:  # noqa: BLE001 — tick parse failure falls through to 503
+                    except Exception:
                         pass
                     raise HTTPException(status_code=503, detail="Quote unavailable")
 
@@ -524,7 +525,8 @@ class MobileAPIServer:
                         raise ValueError(f"Risk check failed: {reason}")
 
                 # Place order
-                result = await self._call_broker(broker.place_order,
+                result = await self._call_broker(
+                    broker.place_order,
                     user_id=user_id,
                     symbol=order.symbol,
                     side=order.side,
@@ -581,7 +583,7 @@ class MobileAPIServer:
                 raw_trades = await self._call_broker(getter)
 
                 result = []
-                for t in (raw_trades or []):
+                for t in raw_trades or []:
                     if isinstance(t, dict):
                         td = t
                     else:
@@ -600,20 +602,22 @@ class MobileAPIServer:
                         }
                     try:
                         entry_t = datetime.fromisoformat(str(td.get("entry_time", datetime.now(UTC).isoformat())))
-                        result.append(TradeData(
-                            trade_id=str(td.get("trade_id", "")),
-                            symbol=str(td.get("symbol", "")),
-                            side=str(td.get("side", "buy")),
-                            entry_price=float(td.get("entry_price", 0)),
-                            quantity=float(td.get("quantity", 0)),
-                            current_price=float(td.get("current_price", td.get("entry_price", 0))),
-                            pnl=float(td.get("pnl", 0)),
-                            pnl_percentage=float(td.get("pnl_percentage", 0)),
-                            entry_time=entry_t,
-                            duration_seconds=int((datetime.now(UTC) - entry_t).total_seconds()),
-                            spread=float(td.get("spread", 0)),
-                        ))
-                    except Exception:  # noqa: BLE001 — malformed trade dict skipped
+                        result.append(
+                            TradeData(
+                                trade_id=str(td.get("trade_id", "")),
+                                symbol=str(td.get("symbol", "")),
+                                side=str(td.get("side", "buy")),
+                                entry_price=float(td.get("entry_price", 0)),
+                                quantity=float(td.get("quantity", 0)),
+                                current_price=float(td.get("current_price", td.get("entry_price", 0))),
+                                pnl=float(td.get("pnl", 0)),
+                                pnl_percentage=float(td.get("pnl_percentage", 0)),
+                                entry_time=entry_t,
+                                duration_seconds=int((datetime.now(UTC) - entry_t).total_seconds()),
+                                spread=float(td.get("spread", 0)),
+                            )
+                        )
+                    except Exception:
                         pass
                 return result
 
@@ -692,18 +696,20 @@ class MobileAPIServer:
                 else:
                     performance = []
 
+                import contextlib
+
                 result = []
-                for p in (performance or []):
-                    try:
-                        result.append(PerformanceData(
-                            day=p["date"],
-                            pnl=float(p["pnl"]),
-                            trades=int(p["trades"]),
-                            win_rate=float(p["win_rate"]),
-                            max_drawdown=float(p["max_drawdown"]),
-                        ))
-                    except Exception:  # noqa: BLE001 — malformed portfolio entry skipped
-                        pass
+                for p in performance or []:
+                    with contextlib.suppress(Exception):
+                        result.append(
+                            PerformanceData(
+                                day=p["date"],
+                                pnl=float(p["pnl"]),
+                                trades=int(p["trades"]),
+                                win_rate=float(p["win_rate"]),
+                                max_drawdown=float(p["max_drawdown"]),
+                            )
+                        )
                 return result
 
             except HTTPException:

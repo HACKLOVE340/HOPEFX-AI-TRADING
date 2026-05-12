@@ -70,7 +70,7 @@ _REPEATED_ERROR_THRESHOLD = 3
 # Use idempotent helpers from core.prom_registry so re-importing this module
 # (e.g. in tests) never raises ValueError on duplicate metric registration.
 
-from core.prom_registry import prom_counter as _pc, prom_gauge as _pg  # noqa: E402
+from core.prom_registry import prom_counter as _pc, prom_gauge as _pg
 
 _ROLLBACK_TOTAL = _pc(
     "hopefx_rollback_total",
@@ -493,12 +493,12 @@ class AutoRollbackManager:
 
         import re as _re
 
-        for rel_path in target_files:
+        for _raw_path in target_files:
             # Normalise Windows-style backslashes to forward slashes before
             # validation.  The self-healer stores paths using os.sep which is
             # '\\' on Windows; git always accepts forward slashes on all
             # platforms, so we normalise unconditionally.
-            rel_path = str(rel_path).replace("\\", "/")
+            rel_path = str(_raw_path).replace("\\", "/")
 
             # Validate path is a safe relative file path before passing to subprocess.
             # Allowed: letters, digits, dot, underscore, forward-slash, hyphen, space.

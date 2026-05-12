@@ -176,6 +176,7 @@ def app(mock_broker, mock_brain, tmp_path, monkeypatch):
     os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
     import types
+
     state = types.SimpleNamespace(
         broker=mock_broker,
         brain=mock_brain,
@@ -519,6 +520,7 @@ class TestBrokerRejectionHandling:
 
     def test_string_rejected_status_returns_400(self, client, monkeypatch):
         """Plain string 'rejected' status must also trigger HTTP 400."""
+
         async def _fake_place(*args, **kwargs):
             return {"order_id": "ord-str-rej", "status": "rejected", "reason": "Risk limit"}
 

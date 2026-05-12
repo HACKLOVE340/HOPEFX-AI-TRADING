@@ -354,7 +354,7 @@ Examples:
                 csv_path=args.csv,
                 years=args.years,
             )
-            logger.info("\n%s", '=' * 50)
+            logger.info("\n%s", "=" * 50)
             logger.info("Results for %s:", sym)
             for name, info in results.items():
                 m = info.get("metrics") or {}

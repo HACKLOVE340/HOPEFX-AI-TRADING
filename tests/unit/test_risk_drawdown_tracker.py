@@ -447,9 +447,7 @@ class TestStatus:
                 if hwm > 0:
                     expected = round(max(0.0, (hwm - eq) / hwm) * 100, 4)
                     if abs(dd - expected) > 0.01:
-                        errors.append(
-                            f"Inconsistent snapshot: hwm={hwm} eq={eq} dd={dd} expected={expected}"
-                        )
+                        errors.append(f"Inconsistent snapshot: hwm={hwm} eq={eq} dd={dd} expected={expected}")
 
         t1 = threading.Thread(target=_updater)
         t2 = threading.Thread(target=_reader)

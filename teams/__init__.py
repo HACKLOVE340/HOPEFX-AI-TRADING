@@ -899,7 +899,9 @@ def create_teams_router(manager: "TeamManager"):
         }
 
     @router.patch("/{team_id}/members/{user_id}")
-    async def update_member(team_id: str, user_id: str, req: ChangeRoleRequest, user: TokenPayload = Depends(_get_current_user)):
+    async def update_member(
+        team_id: str, user_id: str, req: ChangeRoleRequest, user: TokenPayload = Depends(_get_current_user)
+    ):
         """Update a member's role (PATCH alias for PUT /{team_id}/members/{user_id}/role)."""
         try:
             new_role = UserRole(req.new_role)

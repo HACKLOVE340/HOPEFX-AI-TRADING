@@ -141,8 +141,7 @@ class FinBERTScorer:
             logger.info("FinBERTScorer: ProsusAI/finbert loaded successfully")
         except Exception as exc:
             logger.info(
-                "FinBERTScorer: transformers/finbert not available (%s) — "
-                "falling back to VADER for FinBERT slot",
+                "FinBERTScorer: transformers/finbert not available (%s) — falling back to VADER for FinBERT slot",
                 exc,
             )
 
@@ -189,6 +188,7 @@ class FinBERTScorer:
         """VADER fallback when FinBERT is unavailable."""
         try:
             from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # type: ignore[import]
+
             sia = SentimentIntensityAnalyzer()
             return round(sia.polarity_scores(text)["compound"], 4)
         except Exception:
@@ -217,8 +217,15 @@ class SocialMediaSentiment:
         self._last_poll: float = 0.0
         self._lock = asyncio.Lock()
         self._gold_keywords = {
-            "gold", "xau", "xauusd", "bullion", "precious metals",
-            "gold price", "gold futures", "comex", "spot gold",
+            "gold",
+            "xau",
+            "xauusd",
+            "bullion",
+            "precious metals",
+            "gold price",
+            "gold futures",
+            "comex",
+            "spot gold",
         }
 
     async def poll(self) -> float:
@@ -267,7 +274,9 @@ class SocialMediaSentiment:
                 self._post_count += len(scores)
                 logger.debug(
                     "SocialMediaSentiment: scored %d posts avg=%.3f ema=%.3f",
-                    len(scores), batch_avg, self._ema,
+                    len(scores),
+                    batch_avg,
+                    self._ema,
                 )
 
             self._last_poll = now
@@ -516,9 +525,7 @@ class NewsSentimentEngine:
             # Update FinBERT EMA (score headline + summary)
             text = f"{article.headline} {article.summary}"[:512]
             finbert_score = self._finbert.score(text)
-            self._finbert_ema = (
-                _SENTIMENT_EMA_ALPHA * finbert_score + (1.0 - _SENTIMENT_EMA_ALPHA) * self._finbert_ema
-            )
+            self._finbert_ema = _SENTIMENT_EMA_ALPHA * finbert_score + (1.0 - _SENTIMENT_EMA_ALPHA) * self._finbert_ema
 
             # Prometheus
             if self._prom_art_count:
@@ -772,7 +779,10 @@ class NewsSentimentEngine:
         if new_regime != self._regime:
             logger.info(
                 "SentimentRegime transition: %s → %s (ema=%.3f momentum=%.4f)",
-                self._regime, new_regime, blended, momentum,
+                self._regime,
+                new_regime,
+                blended,
+                momentum,
             )
             self._prev_regime = self._regime
             self._regime = new_regime
@@ -876,11 +886,7 @@ class NewsSentimentEngine:
                         "source": getattr(a, "source", ""),
                         "sentiment_score": getattr(a, "sentiment_score", 0.0),
                         "sentiment_label": getattr(a, "sentiment_label", "neutral"),
-                        "published_at": (
-                            a.published_at.isoformat()
-                            if getattr(a, "published_at", None)
-                            else None
-                        ),
+                        "published_at": (a.published_at.isoformat() if getattr(a, "published_at", None) else None),
                         "url": getattr(a, "url", None),
                     }
                     for a in (raw or [])[:5]

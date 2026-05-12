@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,6 +23,7 @@ import pytest
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _user(sub: str = "user-123", email: str = "test@hopefx.io") -> SimpleNamespace:
     return SimpleNamespace(sub=sub, email=email)
 
@@ -31,6 +31,7 @@ def _user(sub: str = "user-123", email: str = "test@hopefx.io") -> SimpleNamespa
 # ─────────────────────────────────────────────────────────────────────────────
 # Stripe PaymentIntent idempotency
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestStripePaymentIntentIdempotency:
     """
@@ -137,14 +138,13 @@ class TestStripePaymentIntentIdempotency:
             await create_payment_intent(body1, request, user)
             await create_payment_intent(body2, request, user)
 
-        assert captured_keys[0] != captured_keys[1], (
-            "Different amounts must produce different idempotency keys"
-        )
+        assert captured_keys[0] != captured_keys[1], "Different amounts must produce different idempotency keys"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Flutterwave init — deterministic tx_ref
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestFlutterwaveInitIdempotency:
     @pytest.mark.asyncio
@@ -174,9 +174,7 @@ class TestFlutterwaveInitIdempotency:
             r2 = await flutterwave_init(body, user)
             tx_refs.extend([r1["tx_ref"], r2["tx_ref"]])
 
-        assert tx_refs[0] == tx_refs[1], (
-            f"Same user+plan+amount must produce same tx_ref: {tx_refs}"
-        )
+        assert tx_refs[0] == tx_refs[1], f"Same user+plan+amount must produce same tx_ref: {tx_refs}"
 
     @pytest.mark.asyncio
     async def test_different_plans_produce_different_tx_refs(self):
@@ -207,6 +205,7 @@ class TestFlutterwaveInitIdempotency:
 # Flutterwave verify — idempotency guard
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestFlutterwaveVerifyIdempotency:
     @pytest.mark.asyncio
     async def test_second_verify_returns_cached_result(self):
@@ -219,9 +218,11 @@ class TestFlutterwaveVerifyIdempotency:
         call_count = [0]
 
         mock_flw = MagicMock()
+
         def _verify(tx_ref):
             call_count[0] += 1
             return {"status": "verified"}
+
         mock_flw.verify_transaction.side_effect = _verify
 
         cache: dict = {}
@@ -235,31 +236,33 @@ class TestFlutterwaveVerifyIdempotency:
         body = FlutterwaveVerifyBody(tx_ref="FLW-TEST-123")
         user = _user()
 
-        with patch("api.billing._get_flutterwave", return_value=mock_flw), \
-             patch("api.billing.db_get", _db_get, create=True), \
-             patch("api.billing.db_set", _db_set, create=True):
+        with (
+            patch("api.billing._get_flutterwave", return_value=mock_flw),
+            patch("api.billing.db_get", _db_get, create=True),
+            patch("api.billing.db_set", _db_set, create=True),
+        ):
             # Patch the import inside the function
-            import api.billing as billing_mod
             with patch.dict("sys.modules", {"api.db_store": MagicMock(db_get=_db_get, db_set=_db_set)}):
                 r1 = await flutterwave_verify(body, user)
                 # Manually seed the cache as the function would
                 cache[f"flw_verified:{user.sub}:{body.tx_ref}"] = {
-                    "status": "verified", "tx_ref": body.tx_ref, "user_id": user.sub
+                    "status": "verified",
+                    "tx_ref": body.tx_ref,
+                    "user_id": user.sub,
                 }
                 r2 = await flutterwave_verify(body, user)
 
         assert r1["verified"] is True
         assert r2["verified"] is True
         # Second call must be idempotent — Flutterwave called only once
-        assert call_count[0] == 1, (
-            f"Flutterwave.verify_transaction called {call_count[0]} times; expected 1"
-        )
+        assert call_count[0] == 1, f"Flutterwave.verify_transaction called {call_count[0]} times; expected 1"
         assert r2.get("idempotent") is True
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Crypto webhook — duplicate delivery guard
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestCryptoWebhookIdempotency:
     def _make_payment(self, status: str = "confirming") -> dict:
@@ -290,20 +293,24 @@ class TestCryptoWebhookIdempotency:
         def _update(pid, **kw):
             update_calls[0] += 1
 
-        payload = json.dumps({
-            "payment_id": "PAY_test123",
-            "status": "complete",
-            "confirmations": 3,
-            "tx_hash": "0xabc",
-        }).encode()
+        payload = json.dumps(
+            {
+                "payment_id": "PAY_test123",
+                "status": "complete",
+                "confirmations": 3,
+                "tx_hash": "0xabc",
+            }
+        ).encode()
 
         request = MagicMock()
         request.body = AsyncMock(return_value=payload)
         request.client.host = "127.0.0.1"
 
-        with patch("api.payments._load_payment", _load), \
-             patch("api.payments._update_payment", _update), \
-             patch("api.payments.os.getenv", side_effect=lambda k, d="": "false" if k == "CRYPTO_WEBHOOK_VERIFY" else d):
+        with (
+            patch("api.payments._load_payment", _load),
+            patch("api.payments._update_payment", _update),
+            patch("api.payments.os.getenv", side_effect=lambda k, d="": "false" if k == "CRYPTO_WEBHOOK_VERIFY" else d),
+        ):
             result = await payment_webhook(request, x_webhook_signature=None)
 
         assert result["idempotent"] is True
@@ -322,20 +329,24 @@ class TestCryptoWebhookIdempotency:
         def _update(pid, **kw):
             update_calls[0] += 1
 
-        payload = json.dumps({
-            "payment_id": "PAY_test123",
-            "status": "complete",
-            "confirmations": 3,
-            "tx_hash": "0xabc",
-        }).encode()
+        payload = json.dumps(
+            {
+                "payment_id": "PAY_test123",
+                "status": "complete",
+                "confirmations": 3,
+                "tx_hash": "0xabc",
+            }
+        ).encode()
 
         request = MagicMock()
         request.body = AsyncMock(return_value=payload)
         request.client.host = "127.0.0.1"
 
-        with patch("api.payments._load_payment", _load), \
-             patch("api.payments._update_payment", _update), \
-             patch("api.payments.os.getenv", side_effect=lambda k, d="": "false" if k == "CRYPTO_WEBHOOK_VERIFY" else d):
+        with (
+            patch("api.payments._load_payment", _load),
+            patch("api.payments._update_payment", _update),
+            patch("api.payments.os.getenv", side_effect=lambda k, d="": "false" if k == "CRYPTO_WEBHOOK_VERIFY" else d),
+        ):
             result = await payment_webhook(request, x_webhook_signature=None)
 
         assert result.get("idempotent") is not True
@@ -345,6 +356,7 @@ class TestCryptoWebhookIdempotency:
 # ─────────────────────────────────────────────────────────────────────────────
 # Fiat deposit/withdraw — UUID-based references (no timestamp collision)
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestFiatReferenceUniqueness:
     @pytest.mark.asyncio
@@ -367,7 +379,6 @@ class TestFiatReferenceUniqueness:
     @pytest.mark.asyncio
     async def test_deposit_address_payment_ids_are_unique(self):
         """Two generate_deposit_address calls must produce different payment_ids."""
-        import api.payments as pm
 
         ids: list[str] = []
 
@@ -376,11 +387,12 @@ class TestFiatReferenceUniqueness:
 
         mock_rates = {"BTC": 50000.0}
 
-        with patch("api.payments._save_payment", _save), \
-             patch("api.payments._generate_address", return_value="bc1qtest"), \
-             patch("payments.crypto.rate_feed.get_rates", AsyncMock(return_value=mock_rates)):
+        with (
+            patch("api.payments._save_payment", _save),
+            patch("api.payments._generate_address", return_value="bc1qtest"),
+            patch("payments.crypto.rate_feed.get_rates", AsyncMock(return_value=mock_rates)),
+        ):
             from api.payments import AddressRequest, generate_deposit_address
-            from api.auth import TokenPayload
 
             user = _user()
             req = AddressRequest(currency="BTC", plan_id="professional", amount_usd=100.0, user_id=user.sub)

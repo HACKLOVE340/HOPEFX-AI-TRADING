@@ -70,6 +70,7 @@ def _finnhub_key() -> str:
     """Read FINNHUB_API_KEY at call time so .env loading order doesn't matter."""
     return os.getenv("FINNHUB_API_KEY", "").strip()
 
+
 # ── Historical gold reaction lookup ──────────────────────────────────────────
 # Empirical average absolute gold move (USD) in 30 minutes after event release.
 # Source: analysis of 2015-2024 gold reactions to macro events.
@@ -177,19 +178,19 @@ def _safe_float(val) -> float | None:
 
 _RECURRING_HIGH_IMPACT: list[dict] = [
     # FOMC — 8 meetings/year, Wednesday 18:00 UTC
-    {"name": "FOMC Rate Decision",       "country": "US", "currency": "USD", "weekday": 2, "hour": 18, "minute": 0},
+    {"name": "FOMC Rate Decision", "country": "US", "currency": "USD", "weekday": 2, "hour": 18, "minute": 0},
     # NFP — first Friday of month, 12:30 UTC
-    {"name": "Non-Farm Payrolls",         "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
+    {"name": "Non-Farm Payrolls", "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
     # CPI — mid-month Wednesday, 12:30 UTC
-    {"name": "CPI",                       "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
+    {"name": "CPI", "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
     # Core PCE — last Friday of month, 12:30 UTC
-    {"name": "Core PCE",                  "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
+    {"name": "Core PCE", "country": "US", "currency": "USD", "weekday": 4, "hour": 12, "minute": 30},
     # GDP — last Wednesday of month, 12:30 UTC
-    {"name": "GDP",                       "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
+    {"name": "GDP", "country": "US", "currency": "USD", "weekday": 2, "hour": 12, "minute": 30},
     # Initial Jobless Claims — every Thursday, 12:30 UTC
-    {"name": "Initial Jobless Claims",    "country": "US", "currency": "USD", "weekday": 3, "hour": 12, "minute": 30},
+    {"name": "Initial Jobless Claims", "country": "US", "currency": "USD", "weekday": 3, "hour": 12, "minute": 30},
     # ECB Rate Decision — 6 meetings/year, Thursday 12:15 UTC
-    {"name": "ECB Rate Decision",         "country": "EU", "currency": "EUR", "weekday": 3, "hour": 12, "minute": 15},
+    {"name": "ECB Rate Decision", "country": "EU", "currency": "EUR", "weekday": 3, "hour": 12, "minute": 15},
 ]
 
 
@@ -332,10 +333,7 @@ class MacroCalendarEngine:
         """
         events = await self._fetch_finnhub_calendar()
         if not events:
-            logger.debug(
-                "MacroCalendarEngine: Finnhub returned 0 events — "
-                "loading hardcoded fallback schedule"
-            )
+            logger.debug("MacroCalendarEngine: Finnhub returned 0 events — loading hardcoded fallback schedule")
             events = _build_hardcoded_fallback_events()
 
         async with self._lock:
@@ -383,16 +381,10 @@ class MacroCalendarEngine:
                 params={"from": start, "to": end, "token": key},
             ) as resp:
                 if resp.status == 401:
-                    logger.warning(
-                        "MacroCalendarEngine: Finnhub returned 401 — "
-                        "check FINNHUB_API_KEY is valid"
-                    )
+                    logger.warning("MacroCalendarEngine: Finnhub returned 401 — check FINNHUB_API_KEY is valid")
                     return []
                 if resp.status == 429:
-                    logger.warning(
-                        "MacroCalendarEngine: Finnhub rate-limited (429) — "
-                        "will retry on next refresh cycle"
-                    )
+                    logger.warning("MacroCalendarEngine: Finnhub rate-limited (429) — will retry on next refresh cycle")
                     return []
                 resp.raise_for_status()
                 data = await resp.json()
@@ -815,14 +807,16 @@ class MacroCalendarEngine:
                 continue
             if e.actual is None:
                 continue
-            results.append({
-                "name": e.name,
-                "scheduled_at": e.scheduled_at.isoformat(),
-                "surprise_factor": self.compute_surprise_factor(e),
-                "surprise_pct": e.surprise_pct,
-                "impact": e.impact.value,
-                "gold_impact_score": e.gold_impact_score,
-            })
+            results.append(
+                {
+                    "name": e.name,
+                    "scheduled_at": e.scheduled_at.isoformat(),
+                    "surprise_factor": self.compute_surprise_factor(e),
+                    "surprise_pct": e.surprise_pct,
+                    "impact": e.impact.value,
+                    "gold_impact_score": e.gold_impact_score,
+                }
+            )
         return sorted(results, key=lambda x: x["scheduled_at"], reverse=True)
 
     # ── Event clustering ──────────────────────────────────────────────────────
@@ -932,13 +926,15 @@ class MacroCalendarEngine:
             for event in high_events:
                 start = event.scheduled_at - timedelta(minutes=_BLACKOUT_BEFORE_MIN)
                 end = event.scheduled_at + timedelta(minutes=_BLACKOUT_AFTER_MIN)
-                member = _json.dumps({
-                    "start": start.isoformat(),
-                    "end": end.isoformat(),
-                    "event_name": event.name,
-                    "gold_impact_score": event.gold_impact_score,
-                    "surprise_pct": event.surprise_pct,
-                })
+                member = _json.dumps(
+                    {
+                        "start": start.isoformat(),
+                        "end": end.isoformat(),
+                        "event_name": event.name,
+                        "gold_impact_score": event.gold_impact_score,
+                        "surprise_pct": event.surprise_pct,
+                    }
+                )
                 pipe_data[member] = start.timestamp()
 
             def _write():
@@ -970,6 +966,7 @@ class MacroCalendarEngine:
             return []
         try:
             import json as _json
+
             now = datetime.now(UTC)
             now_epoch = now.timestamp()
             # Get all windows that started in the last BLACKOUT_BEFORE_MIN + BLACKOUT_AFTER_MIN

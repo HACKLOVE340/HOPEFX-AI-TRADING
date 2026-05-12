@@ -180,13 +180,13 @@ def _print_result(r: StageResult) -> None:
 
 
 def _print_header(title: str) -> None:
-    logger.info("\n%s%s%s%s", _CYAN, _BOLD, '─' * 60, _RESET)
+    logger.info("\n%s%s%s%s", _CYAN, _BOLD, "─" * 60, _RESET)
     logger.info("%s%s  %s%s", _CYAN, _BOLD, title, _RESET)
-    logger.info("%s%s%s%s", _CYAN, _BOLD, '─' * 60, _RESET)
+    logger.info("%s%s%s%s", _CYAN, _BOLD, "─" * 60, _RESET)
 
 
 def _print_summary(report: ValidationReport) -> None:
-    logger.info("\n%s%s%s", _BOLD, '═' * 60, _RESET)
+    logger.info("\n%s%s%s", _BOLD, "═" * 60, _RESET)
     colour = _GREEN if report.passed else _RED
     label = "ALL STAGES PASSED" if report.passed else "VALIDATION FAILED"
     logger.info("%s%s  %s  (%s/%s stages)%s", colour, _BOLD, label, report.n_passed, len(report.results), _RESET)
@@ -196,7 +196,7 @@ def _print_summary(report: ValidationReport) -> None:
             if not r.passed or not r.sla_ok:
                 tag = "SLOW" if r.passed else "FAIL"
                 logger.info("    %s[%s]%s %s", _RED, tag, _RESET, r.name)
-    logger.info("%s%s%s\n", _BOLD, '═' * 60, _RESET)
+    logger.info("%s%s%s\n", _BOLD, "═" * 60, _RESET)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

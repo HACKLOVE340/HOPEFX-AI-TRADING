@@ -516,9 +516,7 @@ _DEFAULT_MAX_SPREAD_PCT = 0.05  # 5% fallback for unknown symbols
 
 # Maximum allowed divergence between any two sources as a fraction of the
 # consensus mid price.  Prices more than 0.5% apart indicate a stale/bad feed.
-_MAX_CROSS_SOURCE_DIVERGENCE_PCT: float = float(
-    os.environ.get("DQE_CROSS_SOURCE_MAX_DIFF_PCT", "0.5")
-) / 100.0
+_MAX_CROSS_SOURCE_DIVERGENCE_PCT: float = float(os.environ.get("DQE_CROSS_SOURCE_MAX_DIFF_PCT", "0.5")) / 100.0
 
 
 def validate_tick_spread(

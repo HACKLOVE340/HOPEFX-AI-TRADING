@@ -252,9 +252,9 @@ class SentimentSignal:
 
     timestamp: datetime
     symbol: str
-    score: float          # -1.0 to +1.0
-    momentum: float       # score delta over last N articles
-    label: str            # "bullish" | "bearish" | "neutral"
+    score: float  # -1.0 to +1.0
+    momentum: float  # score delta over last N articles
+    label: str  # "bullish" | "bearish" | "neutral"
     article_count_1h: int
     bullish_ratio: float  # 0.0 to 1.0
     regime: str = "neutral"  # "risk_on" | "risk_off" | "neutral"
@@ -287,9 +287,9 @@ class VolumeDeltaBar:
     """
 
     symbol: str
-    bar_open: datetime    # UTC bar open time
-    bar_close: datetime   # UTC bar close time
-    timeframe_s: int      # bar duration in seconds
+    bar_open: datetime  # UTC bar open time
+    bar_close: datetime  # UTC bar close time
+    timeframe_s: int  # bar duration in seconds
     open: float
     high: float
     low: float
@@ -297,7 +297,7 @@ class VolumeDeltaBar:
     volume: float
     buy_volume: float
     sell_volume: float
-    delta: float          # buy_volume - sell_volume
+    delta: float  # buy_volume - sell_volume
     cumulative_delta: float
     tick_count: int = 0
     source: FeedSource = FeedSource.AGGREGATED
@@ -342,7 +342,7 @@ class OrderBookSnapshot:
     timestamp: datetime
     bids: list[OrderBookLevel] = field(default_factory=list)
     asks: list[OrderBookLevel] = field(default_factory=list)
-    sequence: int = 0       # exchange sequence number for gap detection
+    sequence: int = 0  # exchange sequence number for gap detection
     source: str = ""
     lineage_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
@@ -404,12 +404,12 @@ class DataLineageRecord:
 
     lineage_id: str
     timestamp: datetime
-    data_type: str        # "tick" | "ohlcv" | "news" | "macro" | "signal" | "prediction"
+    data_type: str  # "tick" | "ohlcv" | "news" | "macro" | "signal" | "prediction"
     source: str
-    operation: str        # "ingest" | "normalize" | "quality_check" | "aggregate" | "publish"
+    operation: str  # "ingest" | "normalize" | "quality_check" | "aggregate" | "publish"
     symbol: str = ""
     parent_id: str | None = None
-    checksum: str = ""    # SHA-256 hex digest of payload
+    checksum: str = ""  # SHA-256 hex digest of payload
     payload_size_bytes: int = 0
     tags: dict[str, str] = field(default_factory=dict)
 
@@ -430,13 +430,12 @@ class DataLineageRecord:
     @classmethod
     def for_tick(
         cls,
-        tick: "GoldTick",
+        tick: GoldTick,
         operation: str = "ingest",
         parent_id: str | None = None,
-    ) -> "DataLineageRecord":
+    ) -> DataLineageRecord:
         """Convenience factory for creating a lineage record from a GoldTick."""
         import hashlib
-        import json as _json
 
         payload = f"{tick.symbol}:{tick.timestamp.isoformat()}:{tick.bid}:{tick.ask}"
         checksum = hashlib.sha256(payload.encode()).hexdigest()

@@ -59,12 +59,13 @@ class DatabaseMetrics:
     pool_size: int = 0
     pool_overflow: int = 0
     pool_timeout_count: int = 0
-    # Latency tracking (rolling 100-sample window)
+    # Latency tracking (rolling window)
+    _LATENCY_WINDOW: int = 100
     _latency_samples: list = field(default_factory=list, repr=False, compare=False)
 
     def record_latency(self, ms: float) -> None:
         self._latency_samples.append(ms)
-        if len(self._latency_samples) > 100:
+        if len(self._latency_samples) > self._LATENCY_WINDOW:
             self._latency_samples.pop(0)
 
     @property
@@ -173,6 +174,7 @@ class DatabaseManager:
                 # file-lock deadlocks when alembic or other components also open
                 # the same DB file concurrently during startup.
                 from sqlalchemy.pool import NullPool as _NullPool
+
                 self._engine = create_engine(
                     sync_url,
                     poolclass=_NullPool,
@@ -245,9 +247,7 @@ class DatabaseManager:
             return True
 
         # Transition OPEN → HALF-OPEN after recovery window
-        if self._last_failure_time and (
-            time.time() - self._last_failure_time > self._circuit_recovery_time
-        ):
+        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
             if not self._circuit_half_open:
                 self._circuit_half_open = True
                 logger.info("Database circuit breaker entering HALF-OPEN state — probe allowed")
@@ -634,9 +634,7 @@ class AsyncDatabaseManager:
         """
         if not self._circuit_open:
             return True
-        if self._last_failure_time and (
-            time.time() - self._last_failure_time > self._circuit_recovery_time
-        ):
+        if self._last_failure_time and (time.time() - self._last_failure_time > self._circuit_recovery_time):
             if not self._circuit_half_open:
                 self._circuit_half_open = True
                 logger.info("AsyncDatabaseManager circuit breaker entering HALF-OPEN — probe allowed")
@@ -682,9 +680,7 @@ class AsyncDatabaseManager:
         OperationalError up to max_retries times with exponential back-off.
         """
         if not self._check_circuit():
-            raise ConnectionError(
-                "AsyncDatabaseManager circuit breaker is OPEN — service temporarily unavailable."
-            )
+            raise ConnectionError("AsyncDatabaseManager circuit breaker is OPEN — service temporarily unavailable.")
 
         last_exc: Exception | None = None
         for attempt in range(self.max_retries):

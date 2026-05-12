@@ -44,7 +44,7 @@ import os
 import threading
 import time
 import traceback
-from collections import OrderedDict, defaultdict, deque
+from collections import OrderedDict, deque
 from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
@@ -126,8 +126,8 @@ class MarketDataCache:
         # exceeds _ACCESS_LOG_MAX_KEYS, preventing unbounded memory growth
         # in systems with many distinct symbols or key patterns.
         self._access_log: OrderedDict[str, deque] = OrderedDict()
-        self._hot_keys: dict[str, float] = {}   # key → current rps
-        self._access_lock = threading.Lock()    # protects _access_log / _hot_keys
+        self._hot_keys: dict[str, float] = {}  # key → current rps
+        self._access_lock = threading.Lock()  # protects _access_log / _hot_keys
 
     # ------------------------------------------------------------------
     # Hot-key detection
@@ -165,7 +165,9 @@ class MarketDataCache:
                 if key not in self._hot_keys:
                     logger.warning(
                         "HOT KEY detected: key=%s rps=%.1f threshold=%.1f",
-                        key, rps, self._hot_key_threshold_rps,
+                        key,
+                        rps,
+                        self._hot_key_threshold_rps,
                     )
                 self._hot_keys[key] = rps
             else:
@@ -296,10 +298,10 @@ class MarketDataCache:
             self._log_error("get_or_compute.compute", exc)
             return None
         finally:
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 self._r.delete(lock_key)
-            except Exception:  # nosec B110
-                pass
 
     def invalidate(self, key: str) -> bool:
         """

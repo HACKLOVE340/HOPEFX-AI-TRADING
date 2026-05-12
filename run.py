@@ -220,18 +220,18 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     logger.info("  Broker  : %s", args.broker)
     logger.info("  Mode    : %s", args.mode)
     logger.info("  Config  : %s", args.config)
-    logger.info("  Practice: %s", os.environ.get('OANDA_PRACTICE', 'true'))
+    logger.info("  Practice: %s", os.environ.get("OANDA_PRACTICE", "true"))
     logger.info("")
 
     # Prop firm rules
     logger.info("  Prop Firm Rules:")
-    logger.info("    daily_dd        : %.1f%%", prop_cfg.get('daily_dd', 0.05) * 100)
-    logger.info("    max_dd          : %.1f%%", prop_cfg.get('max_dd', 0.10) * 100)
-    logger.info("    news_blackout   : ±%s min", prop_cfg.get('news_blackout', 5))
-    logger.info("    weekend_close   : %s", prop_cfg.get('weekend_close', True))
-    logger.info("    breach_action   : %s", prop_cfg.get('breach_action', 'pause'))
-    logger.info("    max_daily_trades: %s", prop_cfg.get('max_daily_trades', 20))
-    logger.info("    enabled         : %s", prop_cfg.get('enabled', True))
+    logger.info("    daily_dd        : %.1f%%", prop_cfg.get("daily_dd", 0.05) * 100)
+    logger.info("    max_dd          : %.1f%%", prop_cfg.get("max_dd", 0.10) * 100)
+    logger.info("    news_blackout   : ±%s min", prop_cfg.get("news_blackout", 5))
+    logger.info("    weekend_close   : %s", prop_cfg.get("weekend_close", True))
+    logger.info("    breach_action   : %s", prop_cfg.get("breach_action", "pause"))
+    logger.info("    max_daily_trades: %s", prop_cfg.get("max_daily_trades", 20))
+    logger.info("    enabled         : %s", prop_cfg.get("enabled", True))
     logger.info("")
 
     # Env validation

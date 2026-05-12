@@ -22,7 +22,6 @@ import asyncio
 import itertools
 import json
 import os
-import time
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -42,28 +41,34 @@ os.environ.setdefault(
 # 1. core/app_state.py — get_app_state() accessor
 # ===========================================================================
 
+
 class TestGetAppState:
     """get_app_state() must exist and return the module-level singleton."""
 
     def test_get_app_state_importable(self):
         from core.app_state import get_app_state
+
         assert callable(get_app_state)
 
     def test_get_app_state_returns_singleton(self):
         from core.app_state import app_state, get_app_state
+
         assert get_app_state() is app_state
 
     def test_get_app_state_returns_app_state_instance(self):
         from core.app_state import AppState, get_app_state
+
         result = get_app_state()
         assert isinstance(result, AppState)
 
     def test_get_app_state_called_twice_same_object(self):
         from core.app_state import get_app_state
+
         assert get_app_state() is get_app_state()
 
     def test_app_state_has_expected_attributes(self):
         from core.app_state import get_app_state
+
         state = get_app_state()
         # Core attributes that risk_calculator.py and other callers rely on
         assert hasattr(state, "broker")
@@ -74,6 +79,7 @@ class TestGetAppState:
 # ===========================================================================
 # 2. api/db_store.py — session context manager closes sessions
 # ===========================================================================
+
 
 class TestDbStoreSessionLeak:
     """_session_ctx() must close the session even when an exception occurs."""
@@ -117,12 +123,14 @@ class TestDbStoreSessionLeak:
     def test_session_ctx_yields_none_on_import_error(self):
         """When SessionLocal is unavailable, _session_ctx yields None."""
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("db_store_isolated", "api/db_store.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         # Patch SessionLocal to raise ImportError
         import sys
+
         fake_conn = MagicMock()
         fake_conn.SessionLocal = MagicMock(side_effect=ImportError("no db"))
         with patch.dict(sys.modules, {"database.connection": fake_conn}):
@@ -132,11 +140,13 @@ class TestDbStoreSessionLeak:
     def test_db_get_returns_none_when_db_unavailable(self):
         """db_get degrades gracefully when the DB is unavailable."""
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("db_store_get", "api/db_store.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         import sys
+
         fake_conn = MagicMock()
         fake_conn.SessionLocal = MagicMock(side_effect=Exception("db down"))
         with patch.dict(sys.modules, {"database.connection": fake_conn}):
@@ -146,11 +156,13 @@ class TestDbStoreSessionLeak:
     def test_db_set_returns_false_when_db_unavailable(self):
         """db_set returns False gracefully when the DB is unavailable."""
         import importlib.util
+
         spec = importlib.util.spec_from_file_location("db_store_set", "api/db_store.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
         import sys
+
         fake_conn = MagicMock()
         fake_conn.SessionLocal = MagicMock(side_effect=Exception("db down"))
         with patch.dict(sys.modules, {"database.connection": fake_conn}):
@@ -162,16 +174,17 @@ class TestDbStoreSessionLeak:
 # 3. api/risk_calculator.py — SL/TP validation + division-by-zero guard
 # ===========================================================================
 
+
 class TestRiskCalculatorValidation:
     """SaveCalcRequest must reject invalid SL/TP placement and guard division by zero."""
 
     def _make_request_class(self):
         """Return SaveCalcRequest using the real module import."""
         from api.risk_calculator import SaveCalcRequest
+
         return SaveCalcRequest
 
     def test_long_sl_below_entry_is_valid(self):
-        from pydantic import ValidationError
         SaveCalcRequest = self._make_request_class()
         # SL below entry for long — valid
         req = SaveCalcRequest(
@@ -185,18 +198,20 @@ class TestRiskCalculatorValidation:
 
     def test_long_sl_above_entry_is_rejected(self):
         from pydantic import ValidationError
+
         SaveCalcRequest = self._make_request_class()
         with pytest.raises(ValidationError, match="stop_loss.*must be below entry_price"):
             SaveCalcRequest(
                 symbol="XAUUSD",
                 entry_price=2000.0,
-                stop_loss=2010.0,   # above entry — invalid for long
+                stop_loss=2010.0,  # above entry — invalid for long
                 take_profit=2020.0,
                 direction="long",
             )
 
     def test_long_tp_below_entry_is_rejected(self):
         from pydantic import ValidationError
+
         SaveCalcRequest = self._make_request_class()
         with pytest.raises(ValidationError, match="take_profit.*must be above entry_price"):
             SaveCalcRequest(
@@ -208,12 +223,11 @@ class TestRiskCalculatorValidation:
             )
 
     def test_short_sl_above_entry_is_valid(self):
-        from pydantic import ValidationError
         SaveCalcRequest = self._make_request_class()
         req = SaveCalcRequest(
             symbol="EURUSD",
             entry_price=1.1000,
-            stop_loss=1.1050,   # above entry — valid for short
+            stop_loss=1.1050,  # above entry — valid for short
             take_profit=1.0950,
             direction="short",
         )
@@ -221,18 +235,20 @@ class TestRiskCalculatorValidation:
 
     def test_short_sl_below_entry_is_rejected(self):
         from pydantic import ValidationError
+
         SaveCalcRequest = self._make_request_class()
         with pytest.raises(ValidationError, match="stop_loss.*must be above entry_price"):
             SaveCalcRequest(
                 symbol="EURUSD",
                 entry_price=1.1000,
-                stop_loss=1.0950,   # below entry — invalid for short
+                stop_loss=1.0950,  # below entry — invalid for short
                 take_profit=1.0900,
                 direction="short",
             )
 
     def test_short_tp_above_entry_is_rejected(self):
         from pydantic import ValidationError
+
         SaveCalcRequest = self._make_request_class()
         with pytest.raises(ValidationError, match="take_profit.*must be below entry_price"):
             SaveCalcRequest(
@@ -249,12 +265,12 @@ class TestRiskCalculatorValidation:
         req = SaveCalcRequest(
             symbol="XAUUSD",
             entry_price=2000.0,
-            stop_loss=1990.0,   # risk = 10 pts
-            take_profit=2030.0, # reward = 30 pts → R:R = 3.0
+            stop_loss=1990.0,  # risk = 10 pts
+            take_profit=2030.0,  # reward = 30 pts → R:R = 3.0
             direction="long",
         )
         # Compute as the handler does
-        risk_pts   = req.entry_price - req.stop_loss    # 10
+        risk_pts = req.entry_price - req.stop_loss  # 10
         reward_pts = req.take_profit - req.entry_price  # 30
         assert risk_pts > 0
         assert reward_pts > 0
@@ -279,18 +295,18 @@ class TestRiskCalculatorValidation:
 # 4. auth/jwt.py — SECRET_KEY module attribute returns str, not property object
 # ===========================================================================
 
+
 class TestJwtSecretKey:
     """auth.jwt.SECRET_KEY must return the secret string via __getattr__."""
 
     def _load_jwt_module(self, secret: str):
         """Load auth/jwt.py in isolation with a given secret."""
-        import importlib.util, sys, types
+        import importlib.util
+
         env_backup = os.environ.copy()
         os.environ["SECURITY_JWT_SECRET"] = secret
         try:
-            spec = importlib.util.spec_from_file_location(
-                f"auth_jwt_{id(secret)}", "auth/jwt.py"
-            )
+            spec = importlib.util.spec_from_file_location(f"auth_jwt_{id(secret)}", "auth/jwt.py")
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
             return mod
@@ -308,15 +324,16 @@ class TestJwtSecretKey:
     def test_secret_key_returns_correct_value(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
         mod = self._load_jwt_module(secret)
-        assert mod.SECRET_KEY == secret
+        assert secret == mod.SECRET_KEY
 
     def test_secret_key_matches_get_secret(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
         mod = self._load_jwt_module(secret)
-        assert mod.SECRET_KEY == mod._get_secret()
+        assert mod._get_secret() == mod.SECRET_KEY
 
     def test_get_secret_raises_when_unset(self):
         import importlib.util
+
         env_backup = os.environ.copy()
         os.environ.pop("SECURITY_JWT_SECRET", None)
         os.environ.pop("JWT_SECRET_KEY", None)
@@ -332,6 +349,7 @@ class TestJwtSecretKey:
 
     def test_get_secret_raises_for_short_secret(self):
         import importlib.util
+
         env_backup = os.environ.copy()
         os.environ["SECURITY_JWT_SECRET"] = "tooshort"
         try:
@@ -346,6 +364,7 @@ class TestJwtSecretKey:
 
     def test_get_secret_raises_for_placeholder(self):
         import importlib.util
+
         env_backup = os.environ.copy()
         os.environ["SECURITY_JWT_SECRET"] = "CHANGE_ME_this_is_a_placeholder_value_long_enough"
         try:
@@ -362,6 +381,7 @@ class TestJwtSecretKey:
 # ===========================================================================
 # 5. api/ws_live.py — unique connection IDs + O(1) JSON serialization
 # ===========================================================================
+
 
 class _MockWS:
     """Minimal WebSocket stand-in that records sent frames."""
@@ -386,6 +406,7 @@ class TestLiveConnectionManagerFixes:
 
     def setup_method(self):
         from api.ws_live import LiveConnectionManager
+
         self.mgr = LiveConnectionManager()
 
     async def test_connection_ids_are_unique(self):
@@ -408,6 +429,7 @@ class TestLiveConnectionManagerFixes:
     async def test_counter_uses_itertools_count(self):
         """_counter must be an itertools.count instance, not a plain int."""
         from api.ws_live import LiveConnectionManager
+
         mgr = LiveConnectionManager()
         assert isinstance(mgr._counter, type(itertools.count()))
 
@@ -463,8 +485,8 @@ class TestLiveConnectionManagerFixes:
 
         await self.mgr.broadcast("prices", {"type": "price_tick"})
 
-        assert len(ws1.sent) == 1   # subscribed to prices
-        assert len(ws2.sent) == 0   # not subscribed to prices
+        assert len(ws1.sent) == 1  # subscribed to prices
+        assert len(ws2.sent) == 0  # not subscribed to prices
 
     async def test_disconnect_removes_all_state(self):
         """disconnect() must remove connection from all internal dicts."""
@@ -482,6 +504,7 @@ class TestLiveConnectionManagerFixes:
     async def test_many_concurrent_connects_unique_ids(self):
         """Simulate many concurrent connects and verify all IDs are unique."""
         from api.ws_live import LiveConnectionManager
+
         mgr = LiveConnectionManager()
         n = 50
         websockets = [_MockWS() for _ in range(n)]

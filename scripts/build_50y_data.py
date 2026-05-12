@@ -483,25 +483,25 @@ def main() -> int:
     logger.info("\n" + "=" * 65)
     logger.info("50Y XAUUSD Dataset Summary")
     logger.info("=" * 65)
-    logger.info("  Rows:           %d", stats['n_bars'])
-    logger.info("  Date range:     %s", stats['date_range'])
-    logger.info("  Years covered:  %s", stats['years_covered'])
-    logger.info("  Full Sharpe:    %.3f", stats['sharpe_full'])
-    logger.info("  Max drawdown:   %.1f%%", stats['max_drawdown_full'] * 100)
-    logger.info("  Ann. return:    %.1f%%", stats['annualised_return'] * 100)
-    logger.info("  Ann. vol:       %.1f%%", stats['annualised_vol'] * 100)
+    logger.info("  Rows:           %d", stats["n_bars"])
+    logger.info("  Date range:     %s", stats["date_range"])
+    logger.info("  Years covered:  %s", stats["years_covered"])
+    logger.info("  Full Sharpe:    %.3f", stats["sharpe_full"])
+    logger.info("  Max drawdown:   %.1f%%", stats["max_drawdown_full"] * 100)
+    logger.info("  Ann. return:    %.1f%%", stats["annualised_return"] * 100)
+    logger.info("  Ann. vol:       %.1f%%", stats["annualised_vol"] * 100)
     logger.info("")
     logger.info("Source coverage:")
     for src, cov in coverage.items():
         if cov["rows"]:
-            logger.info("  %-38s %6d rows  %s → %s", src, cov['rows'], cov['from'], cov['to'])
+            logger.info("  %-38s %6d rows  %s → %s", src, cov["rows"], cov["from"], cov["to"])
         else:
             logger.info("  %-38s   unavailable", src)
     logger.info("")
     logger.info("Crisis Period Validation:")
     for name, r in crisis.items():
         if "error" in r:
-            logger.info("  %-24s INSUFFICIENT DATA (%d bars)", name, r['n_bars'])
+            logger.info("  %-24s INSUFFICIENT DATA (%d bars)", name, r["n_bars"])
         else:
             logger.info(
                 f"  {name:<24} n={r['n_bars']:>4}  "

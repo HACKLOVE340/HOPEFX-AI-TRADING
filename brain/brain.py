@@ -223,6 +223,7 @@ class HOPEFXBrain:
         self._last_cycle_time = time.time()
         # In development use a 5s cycle to avoid hammering yfinance/thread pool.
         import os as _brain_os
+
         _dev = _brain_os.getenv("APP_ENV", "development").lower() in ("development", "dev")
         self._target_cycle_time = float(_brain_os.getenv("BRAIN_CYCLE_SEC", "5.0" if _dev else "1.0"))
 
@@ -264,8 +265,7 @@ class HOPEFXBrain:
             )
         else:
             logger.info(
-                "HOPEFXBrain: all critical components injected "
-                "(broker=%s price_engine=%s strategy_manager=%s)",
+                "HOPEFXBrain: all critical components injected (broker=%s price_engine=%s strategy_manager=%s)",
                 type(self.broker).__name__,
                 type(self.price_engine).__name__,
                 type(self.strategy_manager).__name__ if self.strategy_manager else "None",
@@ -400,7 +400,7 @@ class HOPEFXBrain:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
             except asyncio.CancelledError:
                 raise
-            except (TimeoutError, asyncio.TimeoutError):  # nosec B110
+            except TimeoutError:  # nosec B110
                 pass
 
     @staticmethod
@@ -437,16 +437,14 @@ class HOPEFXBrain:
                 if self.broker:
                     try:
                         raw = self.broker.get_account_info()
-                        account = await asyncio.wait_for(
-                            self._await_or_return(raw), timeout=5.0
-                        )
+                        account = await asyncio.wait_for(self._await_or_return(raw), timeout=5.0)
                         if account is not None:
                             bal, eq, mu, fm = self._extract_account_fields(account)
                             self.state.account_balance = bal
                             self.state.equity = eq
                             self.state.margin_used = mu
                             self.state.free_margin = fm
-                    except (TimeoutError, asyncio.TimeoutError):
+                    except TimeoutError:
                         logger.warning("Broker timeout getting account info")
                         raise
                     except Exception as e:
@@ -456,9 +454,7 @@ class HOPEFXBrain:
                 if self.broker:
                     try:
                         raw = self.broker.get_positions()
-                        positions = await asyncio.wait_for(
-                            self._await_or_return(raw), timeout=5.0
-                        )
+                        positions = await asyncio.wait_for(self._await_or_return(raw), timeout=5.0)
                         self.state.active_positions = {
                             p.id: {
                                 "id": p.id,
@@ -474,7 +470,7 @@ class HOPEFXBrain:
                             for p in (positions or [])
                         }
                         self.state.open_trades_count = len(positions or [])
-                    except (TimeoutError, asyncio.TimeoutError):
+                    except TimeoutError:
                         logger.warning("Broker timeout getting positions")
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
@@ -486,9 +482,7 @@ class HOPEFXBrain:
                 if self.broker and hasattr(self.broker, "get_pending_orders"):
                     try:
                         raw = self.broker.get_pending_orders()
-                        orders = await asyncio.wait_for(
-                            self._await_or_return(raw), timeout=5.0
-                        )
+                        orders = await asyncio.wait_for(self._await_or_return(raw), timeout=5.0)
                         self.state.pending_orders = [
                             {
                                 "id": o.id,
@@ -500,7 +494,7 @@ class HOPEFXBrain:
                             }
                             for o in (orders or [])
                         ]
-                    except (TimeoutError, asyncio.TimeoutError):
+                    except TimeoutError:
                         logger.warning("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
@@ -842,8 +836,10 @@ class HOPEFXBrain:
     async def _make_strategy_decisions(self):
         """Execute strategy logic - WITH TIMEOUTS AND CONCURRENCY CONTROL"""
         if not self.strategy_manager:
-            logger.warning("HOPEFXBrain: strategy_manager is None — no signals will be generated. "
-                           "Check that init_strategy_brain completed successfully at startup.")
+            logger.warning(
+                "HOPEFXBrain: strategy_manager is None — no signals will be generated. "
+                "Check that init_strategy_brain completed successfully at startup."
+            )
             return
 
         try:
@@ -872,7 +868,7 @@ class HOPEFXBrain:
             # Limit to max 5 signals per cycle
             await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             global _decision_timeout_last_logged
             now = time.monotonic()
             if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
@@ -995,7 +991,7 @@ class HOPEFXBrain:
                         if success:
                             logger.info("Closed position %s", position_id)
 
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 logger.error("Signal execution timeout: %s", signal.get("symbol"))
 
             except Exception as e:

@@ -142,6 +142,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         records = engine.get_execution_audit_trail(order_id=order_id, limit=1)
         if not records:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail=f"No execution found for order {order_id}")
         return records[0]
 
@@ -184,12 +185,14 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         result = []
         for name, stats in venues.items():
             n = stats["executions"] or 1
-            result.append({
-                "venue": name,
-                "executions": stats["executions"],
-                "avg_slippage": stats["total_slippage"] / n,
-                "avg_latency_ms": stats["total_latency"] / n,
-            })
+            result.append(
+                {
+                    "venue": name,
+                    "executions": stats["executions"],
+                    "avg_slippage": stats["total_slippage"] / n,
+                    "avg_latency_ms": stats["total_latency"] / n,
+                }
+            )
         return result
 
     return router
@@ -313,7 +316,13 @@ async def get_transparency_summary(days: int = 30):
         }
     except Exception as exc:
         _alias_logger.warning("transparency summary failed: %s", exc)
-        return {"total_executions": 0, "avg_slippage_bps": 0, "best_execution_score": 0, "fill_rate": 1.0, "period_days": days}
+        return {
+            "total_executions": 0,
+            "avg_slippage_bps": 0,
+            "best_execution_score": 0,
+            "fill_rate": 1.0,
+            "period_days": days,
+        }
 
 
 @router.get("/venues", summary="Trading venue performance")

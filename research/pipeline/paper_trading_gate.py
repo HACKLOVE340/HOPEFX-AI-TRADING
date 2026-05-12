@@ -287,21 +287,21 @@ class PaperTradingGate:
         logger.info("=" * 60)
         logger.info("OANDA Paper Trading Gate Status")
         logger.info("=" * 60)
-        logger.info("  Run start (UTC) : %s", s['run_start_utc'] or 'NOT SET')
-        logger.info("  Elapsed days    : %s", s['elapsed_days'])
-        logger.info("  Fill count      : %s", s['fill_count'])
+        logger.info("  Run start (UTC) : %s", s["run_start_utc"] or "NOT SET")
+        logger.info("  Elapsed days    : %s", s["elapsed_days"])
+        logger.info("  Fill count      : %s", s["fill_count"])
         if s["sharpe_before"] is not None:
             drop = s["sharpe_before"] - s["sharpe_after"]
-            logger.info("  Sharpe before   : %.3f", s['sharpe_before'])
-            logger.info("  Sharpe after    : %.3f", s['sharpe_after'])
+            logger.info("  Sharpe before   : %.3f", s["sharpe_before"])
+            logger.info("  Sharpe after    : %.3f", s["sharpe_after"])
             logger.info("  Sharpe drop     : %.3f", drop)
         logger.info("")
         p2 = "✅ READY" if s["phase2_ready"] else "❌ NOT READY"
         p3 = "✅ READY" if s["phase3_ready"] else "❌ NOT READY"
         logger.info("  Phase 2 (Anomaly)  : %s", p2)
-        logger.info("    %s", s['phase2_reason'])
+        logger.info("    %s", s["phase2_reason"])
         logger.info("  Phase 3 (Online)   : %s", p3)
-        logger.info("    %s", s['phase3_reason'])
+        logger.info("    %s", s["phase3_reason"])
         logger.info("=" * 60)
 
 

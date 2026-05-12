@@ -32,7 +32,7 @@ def _make_broker(seed: int = 42) -> PaperTradingBroker:
     broker = PaperTradingBroker(
         config={
             "initial_balance": 100_000.0,
-            "slippage_model": "zero",   # zero noise so we can assert exact prices
+            "slippage_model": "zero",  # zero noise so we can assert exact prices
         },
         seed=seed,
     )
@@ -54,6 +54,7 @@ def _attach_feed(broker: PaperTradingBroker, bid: float, ask: float) -> None:
     # Also seed market_prices so the staleness guard doesn't fire
     broker.market_prices["XAUUSD"] = (bid + ask) / 2.0
     import time
+
     broker._price_timestamps["XAUUSD"] = time.time()
 
 
@@ -76,9 +77,7 @@ class TestBuyFillsAtAsk:
         assert order.average_price == pytest.approx(ask, abs=1e-6), (
             f"BUY should fill at ask={ask}, got {order.average_price}"
         )
-        assert order.average_price >= mid, (
-            f"BUY fill {order.average_price} must be >= mid {mid}"
-        )
+        assert order.average_price >= mid, f"BUY fill {order.average_price} must be >= mid {mid}"
 
     def test_sell_fills_at_bid_not_mid(self):
         """SELL market order must fill at bid (or below), never above mid."""
@@ -106,9 +105,7 @@ class TestBuyFillsAtAsk:
         assert order.average_price == pytest.approx(bid, abs=1e-6), (
             f"SELL should fill at bid={bid}, got {order.average_price}"
         )
-        assert order.average_price <= mid, (
-            f"SELL fill {order.average_price} must be <= mid {mid}"
-        )
+        assert order.average_price <= mid, f"SELL fill {order.average_price} must be <= mid {mid}"
 
     def test_buy_and_sell_are_not_equal(self):
         """BUY and SELL fills must differ by at least the spread."""
@@ -143,8 +140,7 @@ class TestBuyFillsAtAsk:
 
         diff = buy_order.average_price - sell_order.average_price
         assert diff >= spread * 0.9, (
-            f"buy={buy_order.average_price} sell={sell_order.average_price} "
-            f"diff={diff} expected >= spread={spread}"
+            f"buy={buy_order.average_price} sell={sell_order.average_price} diff={diff} expected >= spread={spread}"
         )
 
 
@@ -173,8 +169,7 @@ class TestClosePositionSpread:
         # Entry at ask (2001), exit at bid (1999) → loss of 2 per unit
         expected_balance = 100_000.0 + (bid - entry_price) * 1.0
         assert broker.balance == pytest.approx(expected_balance, abs=0.01), (
-            f"balance={broker.balance} expected={expected_balance} "
-            f"entry={entry_price} exit_bid={bid}"
+            f"balance={broker.balance} expected={expected_balance} entry={entry_price} exit_bid={bid}"
         )
 
     def test_no_feed_falls_back_to_slippage_model(self):
@@ -182,6 +177,7 @@ class TestClosePositionSpread:
         broker = _make_broker()
         broker.market_prices["XAUUSD"] = 2000.0
         import time
+
         broker._price_timestamps["XAUUSD"] = time.time()
 
         broker.place_order(

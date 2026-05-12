@@ -55,12 +55,10 @@ _SYNC_URL: str
 
 if _DATABASE_URL.startswith("postgresql"):
     # Convert postgresql:// → postgresql+asyncpg:// for async engine
-    _ASYNC_URL = _DATABASE_URL.replace(
-        "postgresql://", "postgresql+asyncpg://", 1
-    ).replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
-    _SYNC_URL = _DATABASE_URL.replace(
-        "postgresql+asyncpg://", "postgresql://", 1
+    _ASYNC_URL = _DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1).replace(
+        "postgresql+psycopg2://", "postgresql+asyncpg://", 1
     )
+    _SYNC_URL = _DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
 else:
     # SQLite in-memory for CI — uses aiosqlite for async
     _ASYNC_URL = "sqlite+aiosqlite:///:memory:"
@@ -68,7 +66,7 @@ else:
 
 # ── SQLAlchemy imports (guarded) ──────────────────────────────────────────────
 try:
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import create_engine, text  # noqa: F401
     from sqlalchemy.ext.asyncio import (
         AsyncSession,
         async_sessionmaker,
@@ -93,6 +91,7 @@ try:
     # Position model is optional — not all deployments have it yet
     try:
         from database.models import Position as _Position
+
         _POSITION_MODEL_AVAILABLE = True
     except ImportError:
         _POSITION_MODEL_AVAILABLE = False
@@ -377,6 +376,7 @@ async def trade_repo(async_db_session: AsyncSession):
     """TradeRepository wired to the test session."""
     try:
         from database.repositories.trade_repository import TradeRepository
+
         return TradeRepository(async_db_session)
     except ImportError:
         pytest.skip("TradeRepository not available")
@@ -387,6 +387,7 @@ async def signal_repo(async_db_session: AsyncSession):
     """SignalRepository wired to the test session."""
     try:
         from database.repositories.signal_repository import SignalRepository
+
         return SignalRepository(async_db_session)
     except ImportError:
         pytest.skip("SignalRepository not available")
@@ -397,6 +398,7 @@ async def position_repo(async_db_session: AsyncSession):
     """PositionRepository wired to the test session."""
     try:
         from database.repositories.position_repository import PositionRepository
+
         return PositionRepository(async_db_session)
     except ImportError:
         pytest.skip("PositionRepository not available")
@@ -407,6 +409,7 @@ async def market_data_repo(async_db_session: AsyncSession):
     """MarketDataRepository wired to the test session."""
     try:
         from database.repositories.market_data_repository import MarketDataRepository
+
         return MarketDataRepository(async_db_session)
     except ImportError:
         pytest.skip("MarketDataRepository not available")

@@ -27,11 +27,10 @@ Regression tests for all bugs fixed in the session-3 scan:
 from __future__ import annotations
 
 import ast
-import importlib
 import math
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -39,6 +38,7 @@ ROOT = Path(__file__).parent.parent
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _parse(rel_path: str) -> ast.Module:
     """Parse a source file and return its AST."""
@@ -54,14 +54,13 @@ def _source(rel_path: str) -> str:
 # api/performance.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestPerformanceFixes:
     def test_datetime_imported_at_module_level(self):
         """datetime must be imported at module level (not only inside functions)."""
         src = _source("api/performance.py")
         # The fix adds 'from datetime import datetime' at the top
-        assert "from datetime import datetime" in src, (
-            "api/performance.py must import datetime at module level"
-        )
+        assert "from datetime import datetime" in src, "api/performance.py must import datetime at module level"
 
     def test_no_unused_start_variable(self):
         """The bare 'curve[0].equity' useless attribute access must be gone."""
@@ -72,24 +71,17 @@ class TestPerformanceFixes:
             "Unused 'start' variable must be removed from _compute_public_stats"
         )
         # The bare attribute access (B018) must also be gone
-        assert "    curve[0].equity\n" not in src, (
-            "Bare 'curve[0].equity' useless attribute access must be removed"
-        )
+        assert "    curve[0].equity\n" not in src, "Bare 'curve[0].equity' useless attribute access must be removed"
 
     def test_datetime_min_uses_local_variable(self):
         """datetime.min must be captured in a local variable before the lambda."""
         src = _source("api/performance.py")
-        assert "_dt_min = datetime.min" in src, (
-            "datetime.min must be captured as _dt_min before the sorted() lambda"
-        )
-        assert "or _dt_min" in src, (
-            "sorted() lambda must reference _dt_min, not bare datetime.min"
-        )
+        assert "_dt_min = datetime.min" in src, "datetime.min must be captured as _dt_min before the sorted() lambda"
+        assert "or _dt_min" in src, "sorted() lambda must reference _dt_min, not bare datetime.min"
 
     def test_build_equity_points_computes_drawdown(self):
         """_build_equity_points logic: drawdown must be negative when equity falls."""
         # Test the logic directly without importing the full api package
-        from datetime import datetime, timezone
 
         class EquityPoint:
             def __init__(self, timestamp, equity, drawdown, balance):
@@ -116,6 +108,7 @@ class TestPerformanceFixes:
 
     def test_compute_public_stats_no_crash_on_empty(self):
         """_compute_public_stats must return zero stats on empty curve."""
+
         # Test the logic directly without importing the full api package
         class PublicPerformance:
             def __init__(self, **kw):
@@ -124,8 +117,12 @@ class TestPerformanceFixes:
         def _compute_public_stats(curve):
             if not curve:
                 return PublicPerformance(
-                    total_trades=0, win_rate=None, avg_return_pct=None,
-                    sharpe=None, max_drawdown_pct=0.0, start_date="—",
+                    total_trades=0,
+                    win_rate=None,
+                    avg_return_pct=None,
+                    sharpe=None,
+                    max_drawdown_pct=0.0,
+                    start_date="—",
                     note="Paper trading not yet started.",
                 )
             return PublicPerformance(total_trades=len(curve))
@@ -138,17 +135,18 @@ class TestPerformanceFixes:
 # api/journal.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestJournalFixes:
     def test_create_entry_raises_from_exc(self):
         """create_entry must use 'raise HTTPException(...) from exc' (B904)."""
         src = _source("api/journal.py")
         # After fix: 'raise HTTPException(status_code=500, ...) from exc'
-        assert "raise HTTPException(status_code=500, detail=\"Failed to create journal entry\") from exc" in src
+        assert 'raise HTTPException(status_code=500, detail="Failed to create journal entry") from exc' in src
 
     def test_update_entry_raises_from_exc(self):
         """update_entry must use 'raise HTTPException(...) from exc' (B904)."""
         src = _source("api/journal.py")
-        assert "raise HTTPException(status_code=500, detail=\"Failed to update journal entry\") from exc" in src
+        assert 'raise HTTPException(status_code=500, detail="Failed to update journal entry") from exc' in src
 
     def test_no_unused_noqa_directive(self):
         """The unused noqa: PLC0415 directive must be removed."""
@@ -159,6 +157,7 @@ class TestJournalFixes:
 # ═══════════════════════════════════════════════════════════════════════════════
 # api/custom_indicators.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestCustomIndicatorsFixes:
     def test_status_imported_from_fastapi(self):
@@ -186,17 +185,17 @@ class TestCustomIndicatorsFixes:
 # api/db_store.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestDbStoreFixes:
     def test_contextlib_suppress_used_for_session_close(self):
         """Session close must use contextlib.suppress instead of try/except/pass."""
         src = _source("api/db_store.py")
-        assert "contextlib.suppress" in src, (
-            "api/db_store.py must use contextlib.suppress for session.close()"
-        )
+        assert "contextlib.suppress" in src, "api/db_store.py must use contextlib.suppress for session.close()"
 
     def test_session_close_exception_suppressed(self):
         """contextlib.suppress(Exception) must swallow errors from session.close()."""
         import contextlib
+
         call_count = 0
 
         class BadSession:
@@ -215,6 +214,7 @@ class TestDbStoreFixes:
 # ═══════════════════════════════════════════════════════════════════════════════
 # api/health.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestHealthFixes:
     def test_pool_healthy_ternary(self):
@@ -240,6 +240,7 @@ class TestHealthFixes:
 # api/security_dashboard.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSecurityDashboardFixes:
     def test_httpexception_imported(self):
         """HTTPException must be imported in security_dashboard.py."""
@@ -252,10 +253,7 @@ class TestSecurityDashboardFixes:
         """The module AST must not reference undefined HTTPException."""
         tree = _parse("api/security_dashboard.py")
         # Collect all Name nodes used in Raise statements
-        raises = [
-            node for node in ast.walk(tree)
-            if isinstance(node, ast.Raise) and node.exc is not None
-        ]
+        raises = [node for node in ast.walk(tree) if isinstance(node, ast.Raise) and node.exc is not None]
         # All raises should reference HTTPException which is now imported
         assert len(raises) > 0, "security_dashboard.py must have raise statements"
 
@@ -263,6 +261,7 @@ class TestSecurityDashboardFixes:
 # ═══════════════════════════════════════════════════════════════════════════════
 # api/social_feed.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSocialFeedFixes:
     def test_asyncio_timeout_uses_alias(self):
@@ -283,6 +282,7 @@ class TestSocialFeedFixes:
 # api/ws_live.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestWsLiveFixes:
     def test_safe_ws_close_uses_contextlib_suppress(self):
         """_safe_ws_close must use contextlib.suppress instead of try/except/pass."""
@@ -296,13 +296,13 @@ class TestWsLiveFixes:
         count = src.count("global _prices_seeded")
         # Only the function that ASSIGNS to it should have the global declaration
         assert count <= 1, (
-            "Only one 'global _prices_seeded' declaration should exist "
-            "(in the function that assigns to it)"
+            "Only one 'global _prices_seeded' declaration should exist (in the function that assigns to it)"
         )
 
     def test_contextlib_suppress_swallows_runtime_error(self):
         """contextlib.suppress(RuntimeError) must swallow RuntimeError."""
         import contextlib
+
         called = []
 
         async def fake_close():
@@ -323,6 +323,7 @@ class TestWsLiveFixes:
 # api/trading.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestTradingFixes:
     def test_no_stray_from_exc_on_out_of_scope(self):
         """No 'from exc' should appear where exc is not in scope."""
@@ -330,7 +331,10 @@ class TestTradingFixes:
         # The specific bad pattern: raise HTTPException(...) from exc
         # where exc is not defined in the enclosing except clause
         # Check the CVaR gate line — it was inside an if block, not except
-        assert 'raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"CVaR limit breached: {reason}") from exc' not in src
+        assert (
+            'raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"CVaR limit breached: {reason}") from exc'
+            not in src
+        )
 
     def test_no_stray_from_exc_strategy_performance(self):
         """Strategy performance endpoint must not reference undefined exc."""
@@ -354,6 +358,7 @@ class TestTradingFixes:
 # api/billing.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestBillingFixes:
     def test_no_stray_from_exc_on_non_except_raise(self):
         """Raises outside except blocks must not reference undefined exc."""
@@ -364,7 +369,7 @@ class TestBillingFixes:
     def test_no_stray_from_exc_on_plan_validation(self):
         """Plan validation raise must not reference undefined exc."""
         src = _source("api/billing.py")
-        assert "raise HTTPException(status_code=400, detail=f\"Invalid plan." in src
+        assert 'raise HTTPException(status_code=400, detail=f"Invalid plan.' in src
         # Must NOT have 'from exc' appended
         lines = [l for l in src.splitlines() if "Invalid plan." in l]
         for line in lines:
@@ -375,21 +380,29 @@ class TestBillingFixes:
 # api/webhooks.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestWebhooksFixes:
     def test_json_parse_raises_from_exc(self):
         """JSON parse failure must raise HTTPException from exc (B904)."""
         src = _source("api/webhooks.py")
-        assert "raise HTTPException(\n            status_code=status.HTTP_400_BAD_REQUEST,\n            detail=\"Request body must be valid JSON.\",\n        ) from exc" in src
+        assert (
+            'raise HTTPException(\n            status_code=status.HTTP_400_BAD_REQUEST,\n            detail="Request body must be valid JSON.",\n        ) from exc'
+            in src
+        )
 
     def test_alert_parse_raises_from_exc(self):
         """Alert payload parse failure must raise HTTPException from exc (B904)."""
         src = _source("api/webhooks.py")
-        assert "raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail=\"Invalid alert payload.\",\n        ) from exc" in src
+        assert (
+            'raise HTTPException(\n            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,\n            detail="Invalid alert payload.",\n        ) from exc'
+            in src
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # api/superadmin/infrastructure.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSuperadminInfrastructureFixes:
     def test_redis_info_uses_contextlib_suppress(self):
@@ -400,6 +413,7 @@ class TestSuperadminInfrastructureFixes:
     def test_suppress_swallows_redis_error(self):
         """contextlib.suppress(Exception) must swallow Redis errors."""
         import contextlib
+
         info: dict = {}
         with contextlib.suppress(Exception):
             raise ConnectionError("Redis down")
@@ -409,6 +423,7 @@ class TestSuperadminInfrastructureFixes:
 # ═══════════════════════════════════════════════════════════════════════════════
 # api/superadmin/risk_management.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestSuperadminRiskManagementFixes:
     def test_global_registry_not_aliased_as_reg(self):
@@ -428,36 +443,35 @@ class TestSuperadminRiskManagementFixes:
 # api/superadmin/security_infra.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSuperadminSecurityInfraFixes:
     def test_subprocess_run_has_check_false(self):
         """subprocess.run for clamscan must have check=False (PLW1510)."""
         src = _source("api/superadmin/security_infra.py")
         # Find the clamscan subprocess.run call
-        clamscan_block = src[src.find("clamscan"):]
-        first_run = clamscan_block[:clamscan_block.find(")") + 1]
-        assert "check=False" in first_run, (
-            "subprocess.run for clamscan must have explicit check=False"
-        )
+        clamscan_block = src[src.find("clamscan") :]
+        first_run = clamscan_block[: clamscan_block.find(")") + 1]
+        assert "check=False" in first_run, "subprocess.run for clamscan must have explicit check=False"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # api/superadmin/system_health.py
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSuperadminSystemHealthFixes:
     def test_pg_dump_subprocess_has_check_false(self):
         """subprocess.run for pg_dump must have check=False (PLW1510)."""
         src = _source("api/superadmin/system_health.py")
-        pg_dump_block = src[src.find("pg_dump"):]
-        first_run = pg_dump_block[:pg_dump_block.find(")") + 1]
-        assert "check=False" in first_run, (
-            "subprocess.run for pg_dump must have explicit check=False"
-        )
+        pg_dump_block = src[src.find("pg_dump") :]
+        first_run = pg_dump_block[: pg_dump_block.find(")") + 1]
+        assert "check=False" in first_run, "subprocess.run for pg_dump must have explicit check=False"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # auth/router.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestAuthRouterFixes:
     def test_parse_int_env_raises_from_exc(self):
@@ -466,14 +480,14 @@ class TestAuthRouterFixes:
         assert "raise ValueError(" in src
         # The raise must be followed by 'from exc'
         idx = src.find("raise ValueError(")
-        block = src[idx:idx + 300]
+        block = src[idx : idx + 300]
         assert "from exc" in block, "_parse_int_env must raise ValueError from exc"
 
     def test_no_stray_from_login_exc(self):
         """Raises outside the login except block must not reference _login_exc."""
         src = _source("auth/router.py")
         # These lines were incorrectly getting 'from _login_exc'
-        assert 'raise HTTPException(status_code=401, detail=msg) from _login_exc' not in src
+        assert "raise HTTPException(status_code=401, detail=msg) from _login_exc" not in src
         assert 'raise HTTPException(status_code=500, detail="Authentication service error") from _login_exc' not in src
 
     def test_parse_int_env_raises_value_error(self):
@@ -482,7 +496,9 @@ class TestAuthRouterFixes:
         try:
             # Import the function by executing the relevant portion
             import importlib.util
-            spec = importlib.util.spec_from_file_location("auth_router", ROOT / "auth" / "router.py")
+
+            _spec = importlib.util.spec_from_file_location("auth_router", ROOT / "auth" / "router.py")
+
             # We can't fully import auth.router without all deps, so test the logic directly
             def _parse_int_env(name: str, default: int, env: dict) -> int:
                 raw = env.get(name)
@@ -491,9 +507,7 @@ class TestAuthRouterFixes:
                 try:
                     return int(raw)
                 except ValueError as exc:
-                    raise ValueError(
-                        f"Environment variable {name}={raw!r} must be a plain integer"
-                    ) from exc
+                    raise ValueError(f"Environment variable {name}={raw!r} must be a plain integer") from exc
 
             assert _parse_int_env("X", 10, {}) == 10
             assert _parse_int_env("X", 10, {"X": "42"}) == 42
@@ -506,6 +520,7 @@ class TestAuthRouterFixes:
 # ═══════════════════════════════════════════════════════════════════════════════
 # core/event_bus.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestEventBusFixes:
     def test_unsubscribe_local_uses_contextlib_suppress(self):
@@ -558,6 +573,7 @@ class TestEventBusFixes:
 # ═══════════════════════════════════════════════════════════════════════════════
 # core/startup_factories.py
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestStartupFactoriesFixes:
     def test_alembic_command_error_used_in_except(self):
@@ -642,6 +658,7 @@ def test_file_parses_without_syntax_error(rel_path: str):
 # Ruff clean: all fixed files must pass ruff check
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 def test_ruff_clean_on_all_fixed_files():
     """All fixed files must pass ruff check with zero errors."""
     import subprocess
@@ -655,6 +672,4 @@ def test_ruff_clean_on_all_fixed_files():
         check=False,
     )
     if result.returncode != 0:
-        pytest.fail(
-            f"ruff found issues in fixed files:\n{result.stdout}\n{result.stderr}"
-        )
+        pytest.fail(f"ruff found issues in fixed files:\n{result.stdout}\n{result.stderr}")

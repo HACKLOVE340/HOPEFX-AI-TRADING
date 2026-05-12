@@ -173,6 +173,7 @@ class TestMeasureLatency:
 class TestPerformanceProfiler:
     def test_log_stores_metric(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         p.log("api", "latency_ms", 12.5)
         assert "api" in p.metrics
@@ -181,6 +182,7 @@ class TestPerformanceProfiler:
 
     def test_log_multiple_values(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         for v in [10.0, 20.0, 30.0]:
             p.log("api", "latency_ms", v)
@@ -188,11 +190,13 @@ class TestPerformanceProfiler:
 
     def test_get_stats_empty_returns_empty_dict(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         assert p.get_stats("nonexistent", "metric") == {}
 
     def test_get_stats_returns_statistics(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         for v in [10.0, 20.0, 30.0, 40.0, 50.0]:
             p.log("api", "latency_ms", v)
@@ -207,6 +211,7 @@ class TestPerformanceProfiler:
     def test_get_stats_mean_correct(self):
         from utils.ultimate_helpers import PerformanceProfiler
         import pytest
+
         p = PerformanceProfiler()
         for v in [10.0, 20.0, 30.0]:
             p.log("api", "latency_ms", v)
@@ -216,6 +221,7 @@ class TestPerformanceProfiler:
     def test_get_stats_min_max_correct(self):
         from utils.ultimate_helpers import PerformanceProfiler
         import pytest
+
         p = PerformanceProfiler()
         for v in [5.0, 15.0, 25.0]:
             p.log("api", "latency_ms", v)
@@ -225,6 +231,7 @@ class TestPerformanceProfiler:
 
     def test_snapshot_returns_dict(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         snap = p.snapshot()
         assert isinstance(snap, dict)
@@ -233,18 +240,21 @@ class TestPerformanceProfiler:
 
     def test_snapshot_cpu_in_valid_range(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         snap = p.snapshot()
         assert 0.0 <= snap["cpu_percent"] <= 100.0
 
     def test_snapshot_memory_in_valid_range(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         snap = p.snapshot()
         assert 0.0 <= snap["memory_percent"] <= 100.0
 
     def test_multiple_components_tracked_independently(self):
         from utils.ultimate_helpers import PerformanceProfiler
+
         p = PerformanceProfiler()
         p.log("api", "latency_ms", 10.0)
         p.log("db", "query_ms", 50.0)

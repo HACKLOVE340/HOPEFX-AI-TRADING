@@ -138,14 +138,24 @@ class TestPositionSizingResult:
 
         shared_ts = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
         r1 = PositionSizingResult(
-            symbol="XAUUSD", direction="long", quantity=1.0,
-            notional_usd=1950.0, stop_loss_usd=1940.0, take_profit_usd=1970.0,
-            risk_usd=10.0, created_at=shared_ts,
+            symbol="XAUUSD",
+            direction="long",
+            quantity=1.0,
+            notional_usd=1950.0,
+            stop_loss_usd=1940.0,
+            take_profit_usd=1970.0,
+            risk_usd=10.0,
+            created_at=shared_ts,
         )
         r2 = PositionSizingResult(
-            symbol="XAUUSD", direction="long", quantity=1.0,
-            notional_usd=1950.0, stop_loss_usd=1940.0, take_profit_usd=1970.0,
-            risk_usd=10.0, created_at=shared_ts,
+            symbol="XAUUSD",
+            direction="long",
+            quantity=1.0,
+            notional_usd=1950.0,
+            stop_loss_usd=1940.0,
+            take_profit_usd=1970.0,
+            risk_usd=10.0,
+            created_at=shared_ts,
         )
         r1._halt_reason_override = "reason_a"
         r2._halt_reason_override = "reason_b"

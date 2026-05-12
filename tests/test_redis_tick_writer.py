@@ -50,6 +50,7 @@ def _make_writer(maxsize: int = 10) -> RedisTickWriter:
 
 # ── write() is non-blocking ───────────────────────────────────────────────────
 
+
 class TestWriteNonBlocking:
     @pytest.mark.asyncio
     async def test_write_returns_immediately_without_awaiting_redis(self):
@@ -64,9 +65,7 @@ class TestWriteNonBlocking:
             result = await writer.write("XAUUSD", 2000.0, "test")
 
         assert result is True
-        assert flush_calls[0] == 0, (
-            "write() must not call _flush_one directly — only the background worker should"
-        )
+        assert flush_calls[0] == 0, "write() must not call _flush_one directly — only the background worker should"
 
     @pytest.mark.asyncio
     async def test_write_returns_false_when_no_redis(self):
@@ -80,6 +79,7 @@ class TestWriteNonBlocking:
 
 
 # ── Bounded queue ─────────────────────────────────────────────────────────────
+
 
 class TestBoundedQueue:
     @pytest.mark.asyncio
@@ -143,6 +143,7 @@ class TestBoundedQueue:
 
 # ── Background worker ─────────────────────────────────────────────────────────
 
+
 class TestBackgroundWorker:
     @pytest.mark.asyncio
     async def test_worker_drains_queue_and_calls_flush(self):
@@ -203,6 +204,7 @@ class TestBackgroundWorker:
 
 # ── stop() drains queue ───────────────────────────────────────────────────────
 
+
 class TestStop:
     @pytest.mark.asyncio
     async def test_stop_drains_queue(self):
@@ -224,12 +226,11 @@ class TestStop:
             # stop() must be inside the patch context so the worker can still flush
             await writer.stop()
 
-            assert len(flushed) == 10, (
-                f"stop() must drain all 10 ticks before returning. flushed={len(flushed)}"
-            )
+            assert len(flushed) == 10, f"stop() must drain all 10 ticks before returning. flushed={len(flushed)}"
 
 
 # ── status() ─────────────────────────────────────────────────────────────────
+
 
 class TestStatus:
     @pytest.mark.asyncio
@@ -257,6 +258,7 @@ class TestStatus:
 
 # ── get_tick_writer() singleton safety ───────────────────────────────────────
 
+
 class TestSingletonSafety:
     @pytest.mark.asyncio
     async def test_concurrent_calls_return_same_instance(self):
@@ -282,9 +284,7 @@ class TestSingletonSafety:
             )
 
         # All three must be the same object
-        assert results[0] is results[1] is results[2], (
-            "get_tick_writer() must return the same singleton instance"
-        )
+        assert results[0] is results[1] is results[2], "get_tick_writer() must return the same singleton instance"
 
         # Cleanup
         mod._writer_instance = None
@@ -292,6 +292,7 @@ class TestSingletonSafety:
 
 
 # ── build_tick_payload ────────────────────────────────────────────────────────
+
 
 class TestBuildTickPayload:
     def test_required_fields_present(self):

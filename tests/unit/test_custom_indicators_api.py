@@ -68,8 +68,10 @@ def client(store: dict[str, Any]) -> TestClient:
         store[key] = value
 
     # Patch db_store in the custom_indicators module
-    with patch("api.custom_indicators.db_get", side_effect=_db_get), \
-         patch("api.custom_indicators.db_set", side_effect=_db_set):
+    with (
+        patch("api.custom_indicators.db_get", side_effect=_db_get),
+        patch("api.custom_indicators.db_set", side_effect=_db_set),
+    ):
         yield TestClient(app, raise_server_exceptions=True)
 
 

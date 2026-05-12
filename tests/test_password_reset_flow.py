@@ -8,6 +8,7 @@ Covers the full cycle:
   4. Minimum password length enforcement
   5. Login with new password after reset
 """
+
 import os
 
 os.environ.setdefault("APP_ENV", "test")
@@ -24,6 +25,7 @@ UTC = timezone.utc
 # ---------------------------------------------------------------------------
 # Minimal in-memory session factory (avoids DB dependency)
 # ---------------------------------------------------------------------------
+
 
 class _FakeUser:
     def __init__(self, email="trader@example.com", password="hashedpw"):
@@ -44,9 +46,7 @@ class _FakeSession:
         return self
 
     def filter_by(self, **kwargs):
-        if self._user and all(
-            getattr(self._user, k, None) == v for k, v in kwargs.items()
-        ):
+        if self._user and all(getattr(self._user, k, None) == v for k, v in kwargs.items()):
             return self
         # Return empty result if no match
         self._no_match = True
@@ -81,6 +81,7 @@ def _sf_no_user():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_service(user=None):
     from auth.service import AuthService
 
@@ -95,6 +96,7 @@ def _make_service(user=None):
 # ---------------------------------------------------------------------------
 # Tests: request_password_reset
 # ---------------------------------------------------------------------------
+
 
 class TestRequestPasswordReset:
     def test_unknown_email_returns_success_no_token(self):
@@ -152,6 +154,7 @@ class TestRequestPasswordReset:
             yield _CISession(user=user)
 
         from auth.service import AuthService
+
         svc = AuthService.__new__(AuthService)
         svc._sf = sf
 
@@ -164,10 +167,12 @@ class TestRequestPasswordReset:
 # Tests: reset_password
 # ---------------------------------------------------------------------------
 
+
 class TestResetPassword:
     def _user_with_token(self, token_raw, expired=False):
         """Build a user whose reset token matches token_raw."""
         from auth.service import _hash_token
+
         user = _FakeUser()
         user.password_reset_token = _hash_token(token_raw)
         if expired:
@@ -191,7 +196,7 @@ class TestResetPassword:
         assert user.password_reset_token is None  # one-time use: token cleared
 
     def test_invalid_token_returns_error(self):
-        user = self._user_with_token("correcttoken")
+        _user = self._user_with_token("correcttoken")
         svc = _make_service(user=None)  # no matching user for wrong token
         ok, msg = svc.reset_password("wrongtoken", "NewSecurePass1!")
         assert ok is False
@@ -230,6 +235,7 @@ class TestResetPassword:
 
     def test_password_stored_as_bcrypt_hash(self):
         from auth.jwt import verify_password
+
         token = "anothertesttoken9876543"
         user = self._user_with_token(token)
         new_pw = "MyNewPassword123!"
@@ -245,6 +251,7 @@ class TestResetPassword:
 # Tests: full router round-trip (httpx TestClient)
 # ---------------------------------------------------------------------------
 
+
 class TestPasswordResetRouter:
     """Integration-level tests through the FastAPI router."""
 
@@ -252,6 +259,7 @@ class TestPasswordResetRouter:
     def _mock_service(self, monkeypatch):
         """Inject a mock AuthService into the router."""
         from auth import router as _router
+
         self._mock_svc = MagicMock()
         monkeypatch.setattr(_router, "_svc", lambda: self._mock_svc)
 

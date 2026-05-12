@@ -12,9 +12,9 @@ Uses real YFinanceSource code paths.  The synchronous yfinance.download()
 call is patched at the pandas-DataFrame level so no network I/O occurs, but
 all parsing, validation, and error-handling logic runs against real code.
 """
+
 from __future__ import annotations
 
-import asyncio
 from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
@@ -27,6 +27,7 @@ _YF_MOD = "data_feed.sources.yfinance_source"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_df(close: float) -> pd.DataFrame:
     """Return a minimal single-row DataFrame matching yfinance output."""
@@ -94,9 +95,11 @@ class TestYFinanceSourceFetch:
         src = YFinanceSource()
         cfg = {"yfinance_ticker": "SI=F"}
         captured = {}
+
         def fake_download(ticker, **kwargs):
             captured["ticker"] = ticker
             return _make_df(25.50)
+
         with _patch_yf(side_effect=fake_download):
             await src.fetch("XAGUSD", cfg)
         assert captured["ticker"] == "SI=F"
@@ -106,9 +109,11 @@ class TestYFinanceSourceFetch:
         src = YFinanceSource(period="5d", interval="5m")
         cfg = {"yfinance_ticker": "GC=F"}
         captured = {}
+
         def fake_download(ticker, **kwargs):
             captured.update(kwargs)
             return _make_df(1950.0)
+
         with _patch_yf(side_effect=fake_download):
             await src.fetch("XAUUSD", cfg)
         assert captured["period"] == "5d"

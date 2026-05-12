@@ -26,16 +26,16 @@ Author: HOPEFX Development Team
 """
 
 # ── Module constants ─────────────────────────────────────────────────────────
-_RISK_HIGH             = 70
-_RISK_MEDIUM           = 50
-_RISK_LOW              = 30
-_RISK_VERY_LOW         = 20   # corrected: base global risk when no events are present
-_EVENT_WEIGHT_MAJOR    = 6
+_RISK_HIGH = 70
+_RISK_MEDIUM = 50
+_RISK_LOW = 30
+_RISK_VERY_LOW = 20  # corrected: base global risk when no events are present
+_EVENT_WEIGHT_MAJOR = 6
 _EVENT_WEIGHT_MODERATE = 4
-_EVENT_WEIGHT_MINOR    = 5
-_EVENT_WEIGHT_MICRO    = 3
-_BULLISH_RATIO_STRONG  = 2
-_BLACKOUT_MINUTES      = 60
+_EVENT_WEIGHT_MINOR = 5
+_EVENT_WEIGHT_MICRO = 3
+_BULLISH_RATIO_STRONG = 2
+_BLACKOUT_MINUTES = 60
 
 import asyncio
 import contextlib
@@ -434,8 +434,7 @@ class GeopoliticalRiskProvider:
         _env = os.getenv("ENVIRONMENT", "").lower()
         if os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci"):
             logger.debug(
-                "GeopoliticalRiskProvider: cache refresh skipped in CI/test environment "
-                "(HOPEFX_CI=%s ENVIRONMENT=%s)",
+                "GeopoliticalRiskProvider: cache refresh skipped in CI/test environment (HOPEFX_CI=%s ENVIRONMENT=%s)",
                 os.getenv("HOPEFX_CI", ""),
                 os.getenv("ENVIRONMENT", ""),
             )
@@ -602,9 +601,7 @@ class GeopoliticalRiskProvider:
             return events
         else:
             self._source_failures["worldmonitor"] += 1
-            _failed_sources.append(
-                f"worldmonitor (consecutive_failures={self._source_failures['worldmonitor']})"
-            )
+            _failed_sources.append(f"worldmonitor (consecutive_failures={self._source_failures['worldmonitor']})")
 
         # ── 2. GDELT fallback (always attempted — free, no key) ───────────────
         gdelt_events = await self._fetch_events_from_gdelt()
@@ -614,9 +611,7 @@ class GeopoliticalRiskProvider:
             return gdelt_events
         else:
             self._source_failures["gdelt"] += 1
-            _failed_sources.append(
-                f"gdelt (consecutive_failures={self._source_failures['gdelt']})"
-            )
+            _failed_sources.append(f"gdelt (consecutive_failures={self._source_failures['gdelt']})")
 
         # ── 3. ACLED fallback (requires ACLED_API_KEY + ACLED_EMAIL) ──────────
         acled_events = await self._fetch_events_from_acled(timeout_s)
@@ -626,9 +621,7 @@ class GeopoliticalRiskProvider:
             return acled_events
         else:
             self._source_failures["acled"] += 1
-            _failed_sources.append(
-                f"acled (consecutive_failures={self._source_failures['acled']})"
-            )
+            _failed_sources.append(f"acled (consecutive_failures={self._source_failures['acled']})")
 
         # ── 4. ReliefWeb fallback (free, no key) ──────────────────────────────
         reliefweb_events = await self._fetch_events_from_reliefweb(timeout_s)
@@ -638,9 +631,7 @@ class GeopoliticalRiskProvider:
             return reliefweb_events
         else:
             self._source_failures["reliefweb"] += 1
-            _failed_sources.append(
-                f"reliefweb (consecutive_failures={self._source_failures['reliefweb']})"
-            )
+            _failed_sources.append(f"reliefweb (consecutive_failures={self._source_failures['reliefweb']})")
 
         # ── 5. Serve stale cache (with TTL guard) ─────────────────────────────
         # Only serve stale cache if it is not too old.  Beyond
@@ -685,8 +676,7 @@ class GeopoliticalRiskProvider:
             self._all_sources_warned = True
         else:
             logger.debug(
-                "All geopolitical data sources still unavailable (warning suppressed). "
-                "Failed: %s",
+                "All geopolitical data sources still unavailable (warning suppressed). Failed: %s",
                 ", ".join(_failed_sources),
             )
 
@@ -697,8 +687,7 @@ class GeopoliticalRiskProvider:
         static = self._get_static_fallback_events()
         if static:
             logger.info(
-                "GeopoliticalRiskProvider: serving %d static fallback events "
-                "(live sources unreachable).",
+                "GeopoliticalRiskProvider: serving %d static fallback events (live sources unreachable).",
                 len(static),
             )
             return static
@@ -1795,27 +1784,51 @@ class WorldMonitorIntegration:
         # Crisis-specific zoomed views aligned with current major conflicts
         crisis_views = {
             "ukraine_russia": self.build_monitor_url(
-                view="europe", lat=49.0, lon=32.0, zoom=5.0, time_range="7d",
+                view="europe",
+                lat=49.0,
+                lon=32.0,
+                zoom=5.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "outages"],
             ),
             "israel_gaza": self.build_monitor_url(
-                view="mena", lat=31.5, lon=35.0, zoom=6.5, time_range="7d",
+                view="mena",
+                lat=31.5,
+                lon=35.0,
+                zoom=6.5,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "nuclear"],
             ),
             "red_sea_houthi": self.build_monitor_url(
-                view="mena", lat=15.0, lon=43.0, zoom=5.5, time_range="7d",
+                view="mena",
+                lat=15.0,
+                lon=43.0,
+                zoom=5.5,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "outages"],
             ),
             "taiwan_strait": self.build_monitor_url(
-                view="asia", lat=24.0, lon=120.0, zoom=6.0, time_range="7d",
+                view="asia",
+                lat=24.0,
+                lon=120.0,
+                zoom=6.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "nuclear"],
             ),
             "sudan_africa": self.build_monitor_url(
-                view="africa", lat=15.0, lon=30.0, zoom=5.0, time_range="7d",
+                view="africa",
+                lat=15.0,
+                lon=30.0,
+                zoom=5.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military"],
             ),
             "korea_peninsula": self.build_monitor_url(
-                view="asia", lat=38.0, lon=127.0, zoom=6.0, time_range="7d",
+                view="asia",
+                lat=38.0,
+                lon=127.0,
+                zoom=6.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "nuclear"],
             ),
         }

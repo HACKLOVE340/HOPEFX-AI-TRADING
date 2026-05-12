@@ -24,7 +24,7 @@
   },
   "sharpe_note": "N=2016 OOS bars. Sharpe SE=0.033. Gate PASSED: need N>=600 trades for credible Sharpe. Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.",
   "horizon": 5,
-  "validated_at": "2026-05-12T09:46:05.098046+00:00",
+  "validated_at": "2026-05-12T11:06:09.493772+00:00",
   "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training.",
   "hold_period_bars": 5,
   "symbol": "GC=F",

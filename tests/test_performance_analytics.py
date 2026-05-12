@@ -29,6 +29,7 @@ UTC = timezone.utc
 
 def _make_trade(pnl: float, pnl_pct: float, symbol: str = "XAUUSD", strategy: str = "test") -> object:
     from analytics.performance import TradeRecord
+
     now = datetime.now(UTC)
     return TradeRecord(
         id=str(uuid.uuid4()),
@@ -51,10 +52,12 @@ def _make_trade(pnl: float, pnl_pct: float, symbol: str = "XAUUSD", strategy: st
 
 def _make_engine(initial_equity: float = 100_000.0) -> object:
     from analytics.performance import PerformanceAnalytics
+
     return PerformanceAnalytics(initial_equity=initial_equity, risk_free_rate=0.05)
 
 
 # ── Sharpe ratio ──────────────────────────────────────────────────────────────
+
 
 class TestSharpeRatio:
     def test_zero_variance_returns_zero(self):
@@ -91,7 +94,6 @@ class TestSharpeRatio:
 
     def test_result_never_nan(self):
         """Sharpe must never return NaN regardless of input."""
-        import numpy as np
         engine = _make_engine()
         # Trades with NaN pnl_percent
         trades = [_make_trade(0.0, float("nan")) for _ in range(3)]
@@ -107,6 +109,7 @@ class TestSharpeRatio:
 
 
 # ── Sortino ratio ─────────────────────────────────────────────────────────────
+
 
 class TestSortinoRatio:
     def test_no_negative_returns_returns_zero(self):
@@ -159,6 +162,7 @@ class TestSortinoRatio:
 
 # ── Profit factor ─────────────────────────────────────────────────────────────
 
+
 class TestProfitFactor:
     def test_no_losing_trades_returns_finite_sentinel(self):
         """
@@ -166,19 +170,19 @@ class TestProfitFactor:
         not float('inf') which breaks JSON serialisation.
         """
         from analytics.performance import MetricPeriod
+
         engine = _make_engine()
         # Add only winning trades
         for _ in range(5):
             engine.trades.append(_make_trade(100.0, 0.01))
 
         report = engine.get_performance_report(MetricPeriod.ALL_TIME)
-        assert math.isfinite(report.profit_factor), (
-            f"profit_factor must be finite, got {report.profit_factor}"
-        )
+        assert math.isfinite(report.profit_factor), f"profit_factor must be finite, got {report.profit_factor}"
         assert report.profit_factor == pytest.approx(999.0)
 
     def test_normal_profit_factor(self):
         from analytics.performance import MetricPeriod
+
         engine = _make_engine()
         engine.trades.append(_make_trade(200.0, 0.02))
         engine.trades.append(_make_trade(-100.0, -0.01))
@@ -189,6 +193,7 @@ class TestProfitFactor:
 
 
 # ── Skewness / Kurtosis ───────────────────────────────────────────────────────
+
 
 class TestSkewnessKurtosis:
     def test_skewness_zero_variance(self):
@@ -237,6 +242,7 @@ class TestSkewnessKurtosis:
 
 # ── Report serialisation — no inf/nan in to_dict() ───────────────────────────
 
+
 class TestReportSerialisation:
     def test_report_to_dict_contains_no_inf_or_nan(self):
         """
@@ -245,13 +251,16 @@ class TestReportSerialisation:
         """
         import json
         from analytics.performance import MetricPeriod
+
         engine = _make_engine()
         # Mix of winning and losing trades
-        engine.trades.extend([
-            _make_trade(200.0, 0.02),
-            _make_trade(-100.0, -0.01),
-            _make_trade(150.0, 0.015),
-        ])
+        engine.trades.extend(
+            [
+                _make_trade(200.0, 0.02),
+                _make_trade(-100.0, -0.01),
+                _make_trade(150.0, 0.015),
+            ]
+        )
 
         report = engine.get_performance_report(MetricPeriod.ALL_TIME)
         d = report.to_dict()
@@ -279,6 +288,7 @@ class TestReportSerialisation:
         """All-winning scenario (profit_factor=999) must serialise cleanly."""
         import json
         from analytics.performance import MetricPeriod
+
         engine = _make_engine()
         for _ in range(5):
             engine.trades.append(_make_trade(100.0, 0.01))

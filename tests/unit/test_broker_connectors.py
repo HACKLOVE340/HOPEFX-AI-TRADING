@@ -1772,6 +1772,7 @@ class TestOandaUnits:
     @pytest.fixture(autouse=True)
     def _import(self):
         from brokers.oanda import _units
+
         self._units = _units
 
     def test_buy_positive(self):
@@ -1822,6 +1823,7 @@ class TestOandaUnits:
     def test_warning_on_significant_rounding(self, caplog):
         """Quantities that round by more than 0.01 must emit a warning."""
         import logging
+
         with caplog.at_level(logging.WARNING, logger="brokers.oanda"):
             self._units("buy", 1.6)  # rounds to 2, diff=0.4 > 0.01
         assert any("rounded" in r.message.lower() for r in caplog.records)
@@ -1829,6 +1831,7 @@ class TestOandaUnits:
     def test_no_warning_on_exact_integer(self, caplog):
         """Exact integers must not emit a rounding warning."""
         import logging
+
         with caplog.at_level(logging.WARNING, logger="brokers.oanda"):
             self._units("buy", 3.0)
         assert not any("rounded" in r.message.lower() for r in caplog.records)

@@ -92,8 +92,11 @@ class TestWebSocketAuthBypass:
         mgr = LiveConnectionManager()
 
         class _FakeWS:
-            async def accept(self): pass
-            async def send_text(self, t): pass
+            async def accept(self):
+                pass
+
+            async def send_text(self, t):
+                pass
 
         cid = await mgr.connect(_FakeWS())
         # Simulate auth failure: _validate_ws_token returns None

@@ -30,17 +30,13 @@ class TradeRepository(AsyncRepository[Trade]):
 
     model = Trade
 
-    async def get_by_trade_id(
-        self, session: AsyncSession, trade_id: str
-    ) -> Trade | None:
+    async def get_by_trade_id(self, session: AsyncSession, trade_id: str) -> Trade | None:
         """Return a trade by its external trade_id."""
         stmt = select(Trade).where(Trade.trade_id == trade_id)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_by_client_order_id(
-        self, session: AsyncSession, client_order_id: str
-    ) -> Trade | None:
+    async def get_by_client_order_id(self, session: AsyncSession, client_order_id: str) -> Trade | None:
         """Return a trade by its idempotency client_order_id."""
         stmt = select(Trade).where(Trade.client_order_id == client_order_id)
         result = await session.execute(stmt)
@@ -54,7 +50,7 @@ class TradeRepository(AsyncRepository[Trade]):
         limit: int = 100,
     ) -> Sequence[Trade]:
         """Return open trades, optionally filtered by symbol and user."""
-        conditions = [Trade.is_open == True]  # noqa: E712
+        conditions = [Trade.is_open == True]
         if symbol:
             conditions.append(Trade.symbol == symbol)
         if user_id:
@@ -124,12 +120,7 @@ class TradeRepository(AsyncRepository[Trade]):
         conditions = [Trade.entry_time >= start, Trade.entry_time <= end]
         if symbol:
             conditions.append(Trade.symbol == symbol)
-        stmt = (
-            select(Trade)
-            .options(selectinload(Trade.account))
-            .where(and_(*conditions))
-            .order_by(Trade.entry_time)
-        )
+        stmt = select(Trade).options(selectinload(Trade.account)).where(and_(*conditions)).order_by(Trade.entry_time)
         result = await session.execute(stmt)
         return result.scalars().all()
 

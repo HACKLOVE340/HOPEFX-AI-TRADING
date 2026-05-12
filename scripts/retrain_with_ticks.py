@@ -339,9 +339,9 @@ async def main() -> None:
     logger.info("TICK RETRAIN COMPLETE")
     logger.info("  Previous accuracy : %.4f", existing_acc)
     logger.info("  New accuracy      : %.4f", new_acc)
-    logger.info("  Improved          : %s", 'YES' if improved else 'NO')
-    logger.info("  Tick features     : %s", len(report['tick_features']))
-    logger.info("  Total features    : %s", report['total_features'])
+    logger.info("  Improved          : %s", "YES" if improved else "NO")
+    logger.info("  Tick features     : %s", len(report["tick_features"]))
+    logger.info("  Total features    : %s", report["total_features"])
     logger.info("  Report saved      : %s", report_path)
     logger.info("=" * 60)
 

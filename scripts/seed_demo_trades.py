@@ -167,16 +167,16 @@ def main() -> None:
         "--user-id",
         default=None,
         help="User ID to seed trades under (default: demo-seed-user). "
-             "Pass the real user UUID to make trades visible in /api/trading/history.",
+        "Pass the real user UUID to make trades visible in /api/trading/history.",
     )
     args = parser.parse_args()
     # Allow --user-id to override the module-level constant
-    global DEMO_USER_ID  # noqa: PLW0603
+    global DEMO_USER_ID
     if args.user_id:
         DEMO_USER_ID = args.user_id
 
     # Import DB after env is set
-    from sqlalchemy import create_engine, text
+    from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
     from database.models import Base, Trade, TradeStatus
@@ -194,12 +194,7 @@ def main() -> None:
             print(f"Cleared {deleted} existing demo trades.")
 
         # Check for existing seeds to avoid duplicates
-        existing_coids = {
-            row[0]
-            for row in db.query(Trade.client_order_id)
-            .filter(Trade.user_id == DEMO_USER_ID)
-            .all()
-        }
+        existing_coids = {row[0] for row in db.query(Trade.client_order_id).filter(Trade.user_id == DEMO_USER_ID).all()}
 
         base_time = datetime.now(UTC).replace(tzinfo=None)
         trades = generate_trades(args.trades, base_time)
@@ -241,11 +236,11 @@ def main() -> None:
             inserted += 1
 
         db.commit()
-        total_pnl = sum(t["total_pnl"] for t in trades[:inserted + skipped])
+        total_pnl = sum(t["total_pnl"] for t in trades[: inserted + skipped])
         print(f"Seeded {inserted} demo trades ({skipped} already existed).")
         print(f"Symbols: {', '.join(SYMBOLS)}")
         print(f"User ID: {DEMO_USER_ID}")
-        print(f"Date range: last 90 days")
+        print("Date range: last 90 days")
         print(f"Net PnL across all seeded trades: ${round(total_pnl, 2)}")
 
     finally:

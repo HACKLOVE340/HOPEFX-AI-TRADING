@@ -618,8 +618,11 @@ class NormalizationPipeline:
         d = df.copy()
         cols = columns or list(d.select_dtypes(include=[np.number]).columns)
         # Exclude already-scaled columns and flag columns
-        cols = [c for c in cols if not c.endswith("_scaled") and c not in
-                ("gap_flag", "ohlcv_valid", "synthetic", "close_outlier")]
+        cols = [
+            c
+            for c in cols
+            if not c.endswith("_scaled") and c not in ("gap_flag", "ohlcv_valid", "synthetic", "close_outlier")
+        ]
 
         for col in cols:
             if col not in d.columns:

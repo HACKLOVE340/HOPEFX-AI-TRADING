@@ -178,9 +178,7 @@ class TestRemoveMember:
         """Invite and accept an invitation to get a real member in the team."""
         from teams import UserRole
 
-        invitation = manager.invite_member(
-            team_id, "member@test.com", UserRole.TRADER, "owner-user"
-        )
+        invitation = manager.invite_member(team_id, "member@test.com", UserRole.TRADER, "owner-user")
         assert invitation is not None, "invite_member returned None (check owner permissions)"
         member = manager.accept_invitation(invitation.token, "member-uid-1", "Test Member")
         assert member is not None

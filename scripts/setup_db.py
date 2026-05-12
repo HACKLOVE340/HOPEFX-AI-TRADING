@@ -159,8 +159,8 @@ def main() -> int:
     is_sqlite = db_url.startswith("sqlite")
 
     logger.info("\n=== HOPEFX Database Setup ===")
-    logger.info("  Database : %s", 'SQLite (dev)' if is_sqlite else 'PostgreSQL (production)')
-    logger.info("  URL      : %s%s", db_url[:60], '...' if len(db_url) > 60 else '')
+    logger.info("  Database : %s", "SQLite (dev)" if is_sqlite else "PostgreSQL (production)")
+    logger.info("  URL      : %s%s", db_url[:60], "..." if len(db_url) > 60 else "")
 
     # ── Migrations ────────────────────────────────────────────────────────────
     if not args.check:
@@ -177,7 +177,7 @@ def main() -> int:
     if found:
         logger.info("  %s  %s tables present", OK, len(found))
     if missing:
-        logger.error("  %s  %s expected tables missing: %s", FAIL, len(missing), ', '.join(sorted(missing)))
+        logger.error("  %s  %s expected tables missing: %s", FAIL, len(missing), ", ".join(sorted(missing)))
         if not args.check:
             logger.info("       Re-run without --check to apply migrations")
     else:
@@ -186,7 +186,7 @@ def main() -> int:
     # ── Redis ─────────────────────────────────────────────────────────────────
     logger.info("\n=== Redis ===")
     if check_redis():
-        logger.info("  %s  Redis connected — %s", OK, os.getenv('REDIS_URL', 'redis://localhost:6379/0'))
+        logger.info("  %s  Redis connected — %s", OK, os.getenv("REDIS_URL", "redis://localhost:6379/0"))
     else:
         logger.warning("  %s  Redis not reachable — start with: redis-server", WARN)
         logger.info("       Paper trading will work without Redis but caching is disabled")

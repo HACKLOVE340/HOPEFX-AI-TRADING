@@ -310,7 +310,9 @@ class PerformanceAnalytics:
         sortino = self._calculate_sortino_ratio(filtered_trades)
         max_dd, max_dd_pct = self._calculate_max_drawdown(period)
         # Guard: max_dd_pct could be nan (empty equity curve) or 0 (no drawdown).
-        _calmar_dd = max_dd_pct if (isinstance(max_dd_pct, float) and np.isfinite(max_dd_pct) and max_dd_pct > 0) else None
+        _calmar_dd = (
+            max_dd_pct if (isinstance(max_dd_pct, float) and np.isfinite(max_dd_pct) and max_dd_pct > 0) else None
+        )
         calmar = (total_return_pct * 365.0 / max(1, (now - start_date).days)) / _calmar_dd if _calmar_dd else 0.0
 
         # Daily metrics
@@ -578,7 +580,9 @@ class PerformanceAnalytics:
 
         ret_arr = np.nan_to_num(
             np.array([t.pnl_percent for t in trades], dtype=float),
-            nan=0.0, posinf=0.0, neginf=0.0,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
         )
         if len(ret_arr) == 0:
             return 0.0
@@ -612,7 +616,9 @@ class PerformanceAnalytics:
 
         returns = np.nan_to_num(
             np.array([t.pnl_percent for t in trades], dtype=float),
-            nan=0.0, posinf=0.0, neginf=0.0,
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
         )
         negative_returns = returns[returns < 0]
 

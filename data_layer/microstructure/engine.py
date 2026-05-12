@@ -154,7 +154,7 @@ class MicrostructureEngine:
         self._prev_bid_depth: float = 0.0
         self._prev_ask_depth: float = 0.0
         self._ofi_l2_delta: float = 0.0  # latest L2 OFI delta
-        self._ofi_l2_ema: float = 0.0    # EMA-smoothed L2 OFI
+        self._ofi_l2_ema: float = 0.0  # EMA-smoothed L2 OFI
         _OFI_L2_ALPHA = float(os.getenv("MICRO_OFI_L2_ALPHA", "0.10"))
         self._ofi_l2_alpha: float = _OFI_L2_ALPHA
 
@@ -412,21 +412,19 @@ class MicrostructureEngine:
             w = window or _PIN_WINDOW
             ticks = list(self._ticks)
             if len(ticks) < 20:
-                return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0,
-                        "buy_ticks": 0, "sell_ticks": 0}
+                return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0, "buy_ticks": 0, "sell_ticks": 0}
             recent = ticks[-w:]
             buy_ticks = sum(1 for t in recent if t.is_buy)
             sell_ticks = len(recent) - buy_ticks
             total = len(recent)
 
             if total == 0:
-                return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0,
-                        "buy_ticks": 0, "sell_ticks": 0}
+                return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0, "buy_ticks": 0, "sell_ticks": 0}
 
             # Estimate model parameters
             imbalance = abs(buy_ticks - sell_ticks)
             alpha = imbalance / total  # fraction of informed periods
-            mu = imbalance / total     # informed arrival rate (normalised)
+            mu = imbalance / total  # informed arrival rate (normalised)
             epsilon = min(buy_ticks, sell_ticks) / total  # uninformed rate
 
             # PIN formula
@@ -505,10 +503,7 @@ class MicrostructureEngine:
             delta_bid = bid_depth - self._prev_bid_depth
             delta_ask = ask_depth - self._prev_ask_depth
             self._ofi_l2_delta = delta_bid - delta_ask
-            self._ofi_l2_ema = (
-                self._ofi_l2_alpha * self._ofi_l2_delta
-                + (1.0 - self._ofi_l2_alpha) * self._ofi_l2_ema
-            )
+            self._ofi_l2_ema = self._ofi_l2_alpha * self._ofi_l2_delta + (1.0 - self._ofi_l2_alpha) * self._ofi_l2_ema
             self._prev_bid_depth = bid_depth
             self._prev_ask_depth = ask_depth
 
@@ -592,8 +587,7 @@ class MicrostructureEngine:
     def _pin_unlocked(self, ticks: list) -> dict[str, float]:
         w = _PIN_WINDOW
         if len(ticks) < 20:
-            return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0,
-                    "buy_ticks": 0, "sell_ticks": 0}
+            return {"pin": 0.0, "alpha": 0.0, "mu": 0.0, "epsilon": 0.0, "buy_ticks": 0, "sell_ticks": 0}
         recent = ticks[-w:]
         buy_ticks = sum(1 for t in recent if t.is_buy)
         sell_ticks = len(recent) - buy_ticks
@@ -604,8 +598,14 @@ class MicrostructureEngine:
         epsilon = min(buy_ticks, sell_ticks) / total
         denom = alpha * mu + 2.0 * epsilon
         pin = float(np.clip((alpha * mu / denom) if denom > 1e-9 else 0.0, 0.0, 1.0))
-        return {"pin": pin, "alpha": alpha, "mu": mu, "epsilon": epsilon,
-                "buy_ticks": buy_ticks, "sell_ticks": sell_ticks}
+        return {
+            "pin": pin,
+            "alpha": alpha,
+            "mu": mu,
+            "epsilon": epsilon,
+            "buy_ticks": buy_ticks,
+            "sell_ticks": sell_ticks,
+        }
 
     # ── Internal processing ───────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ Uses fakeredis.aioredis so the full pipeline, SETEX, PUBLISH, RPUSH, LTRIM
 code paths run against a real in-process Redis implementation.
 No mocks of internal methods.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,11 +23,9 @@ import fakeredis.aioredis as faio
 import pytest
 
 from data_feed.redis_tick_writer import (
-    CH_TICK,
     DL_TICK_KEY_PREFIX,
     LEGACY_QUEUE,
     PRICE_KEY_PREFIX,
-    PUBSUB_CHANNEL_PREFIX,
     TICK_KEY_PREFIX,
     RedisTickWriter,
     build_tick_payload,
@@ -35,6 +34,7 @@ from data_feed.redis_tick_writer import (
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 async def _make_writer(ttl: int = 30) -> tuple[RedisTickWriter, faio.FakeRedis]:
     """Return a connected RedisTickWriter backed by fakeredis."""
@@ -76,6 +76,7 @@ class TestBuildTickPayload:
         p = build_tick_payload("XAUUSD", 1950.0, "yfinance")
         # Must be parseable as ISO 8601
         from datetime import datetime
+
         dt = datetime.fromisoformat(p["timestamp"])
         assert dt is not None
 
@@ -341,6 +342,7 @@ class TestGetTickWriterSingleton:
     @pytest.mark.asyncio
     async def test_get_tick_writer_returns_instance(self):
         import data_feed.redis_tick_writer as rtw_module
+
         rtw_module._writer_instance = None  # reset singleton
         writer = await get_tick_writer()
         assert isinstance(writer, RedisTickWriter)
@@ -348,6 +350,7 @@ class TestGetTickWriterSingleton:
     @pytest.mark.asyncio
     async def test_get_tick_writer_is_singleton(self):
         import data_feed.redis_tick_writer as rtw_module
+
         rtw_module._writer_instance = None
         w1 = await get_tick_writer()
         w2 = await get_tick_writer()

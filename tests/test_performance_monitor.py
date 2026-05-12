@@ -308,10 +308,13 @@ class TestFireRollbackAlert:
         mock_cas_module = MagicMock()
         mock_cas_module.app_state = mock_app_state
         mock_outbox = MagicMock(write_outbox_event_standalone=MagicMock())
-        with patch.dict(sys.modules, {
-            "core.outbox": mock_outbox,
-            "core.app_state": mock_cas_module,
-        }):
+        with patch.dict(
+            sys.modules,
+            {
+                "core.outbox": mock_outbox,
+                "core.app_state": mock_cas_module,
+            },
+        ):
             self.mon._fire_rollback_alert("v2", "v1", "reason")
 
         mock_ae.send_alert.assert_called_once()
