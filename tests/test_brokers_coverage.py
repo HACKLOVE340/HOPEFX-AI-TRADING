@@ -158,10 +158,11 @@ class TestPaperTradingBrokerOrders:
         with pytest.raises(ConnectionError):
             b.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
 
-    def test_unknown_symbol_uses_default_price(self, broker):
-        order = broker.place_order("UNKNOWN_XYZ", OrderSide.BUY, OrderType.MARKET, 1.0)
-        assert order.status == OrderStatus.FILLED
-        assert order.average_price == 1000.0  # default fallback
+    def test_unknown_symbol_raises_stale_price_error(self, broker):
+        from brokers.paper_trading import StalePriceError
+
+        with pytest.raises(StalePriceError):
+            broker.place_order("UNKNOWN_XYZ", OrderSide.BUY, OrderType.MARKET, 1.0)
 
 
 class TestPaperTradingBrokerPositions:
@@ -169,7 +170,8 @@ class TestPaperTradingBrokerPositions:
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 2.0)
         positions = broker.get_positions()
         assert len(positions) == 1
-        assert positions[0].side == "LONG"
+        # Position.side is an OrderSide enum; BUY represents a long position
+        assert positions[0].side == OrderSide.BUY
         assert positions[0].quantity == 2.0
 
     def test_sell_creates_short_position(self, broker):

@@ -225,17 +225,11 @@ class FIXRouter:
                     "slippage_model": os.environ.get("PAPER_SLIPPAGE_MODEL", "gaussian"),
                 }
             )
-            # connect() is async; schedule it — the broker is usable immediately
-            # because PaperTradingBroker.connect() only sets self.connected=True.
-            import asyncio
-
-            try:
-                _loop = asyncio.get_running_loop()
-                # Already inside an event loop — schedule as a fire-and-forget task.
-                _loop.create_task(broker.connect())
-            except RuntimeError:
-                # No running loop — safe to use asyncio.run().
-                asyncio.run(broker.connect())
+            # PaperTradingBroker.connect() only sets self.connected=True and
+            # loads Redis state — it does not open a network socket.  Set the
+            # flag synchronously so the broker is immediately usable regardless
+            # of whether an event loop is running.
+            broker.connected = True
             logger.info(
                 "FIXRouter: PaperTradingBroker initialised (balance=%.2f slippage=%s)",
                 broker.initial_balance,
@@ -243,7 +237,7 @@ class FIXRouter:
             )
             return broker
         except RuntimeError:
-            # No running event loop yet — connect() will be called lazily on first order
+            # Fallback: create broker with connected flag set directly.
             try:
                 from brokers.paper_trading import PaperTradingBroker
 
@@ -253,7 +247,7 @@ class FIXRouter:
                         "slippage_model": os.environ.get("PAPER_SLIPPAGE_MODEL", "gaussian"),
                     }
                 )
-                broker.connected = True  # paper broker is always "connected"
+                broker.connected = True
                 logger.info("FIXRouter: PaperTradingBroker initialised (deferred connect).")
                 return broker
             except Exception as exc:

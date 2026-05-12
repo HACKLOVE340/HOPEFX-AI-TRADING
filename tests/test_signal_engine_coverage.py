@@ -1160,11 +1160,12 @@ class TestNotifyOnlineLearner:
         with patch("core.signal_engine._get_online_learner_store", return_value=None):
             se._notify_online_learner("XAUUSD", "BUY", 1.0, self._order(), self._payload())
 
-    def test_notify_fill_called(self):
-        mock_store = MagicMock()
-        with patch("core.signal_engine._get_online_learner_store", return_value=mock_store):
-            se._notify_online_learner("XAUUSD", "BUY", 1.0, self._order(), self._payload())
-        mock_store.on_fill.assert_called_once()
+    def test_notify_fill_stores_features_in_payload(self):
+        # _notify_online_learner stores fill features in signal_payload for
+        # deferred labelling at trade close — it does NOT call on_fill directly.
+        payload = self._payload()
+        se._notify_online_learner("XAUUSD", "BUY", 1.0, self._order(), payload)
+        assert "_online_learner_features" in payload
 
     def test_raises_does_not_propagate(self):
         mock_store = MagicMock()

@@ -112,11 +112,12 @@ class TestPlaceOrder:
         with pytest.raises(ConnectionError):
             broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
 
-    def test_unknown_symbol_uses_default_price(self):
+    def test_unknown_symbol_raises_stale_price_error(self):
+        from brokers.paper_trading import StalePriceError
+
         broker = _connected_broker()
-        order = broker.place_order("UNKNOWN_SYM_XYZ", OrderSide.BUY, OrderType.MARKET, 1.0)
-        assert order.status == OrderStatus.FILLED
-        assert order.average_price == pytest.approx(1000.0, rel=0.01)
+        with pytest.raises(StalePriceError):
+            broker.place_order("UNKNOWN_SYM_XYZ", OrderSide.BUY, OrderType.MARKET, 1.0)
 
     def test_order_stored_in_orders_dict(self):
         broker = _connected_broker()

@@ -83,23 +83,16 @@ class TestDbStoreSessionLeak:
         mock_session = MagicMock()
         mock_session_local = MagicMock(return_value=mock_session)
 
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("db_store", "api/db_store.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        fake_conn = MagicMock()
+        fake_conn.SessionLocal = mock_session_local
 
-        with patch.dict("sys.modules", {"database.connection": MagicMock(SessionLocal=mock_session_local)}):
-            # Re-import to pick up the patched SessionLocal
-            import importlib
-            import sys
-            # Directly test _session_ctx
-            with patch("database.connection.SessionLocal", mock_session_local):
-                # Simulate what _session_ctx does
-                session = mock_session_local()
-                try:
-                    pass  # successful operation
-                finally:
-                    session.close()
+        with patch.dict("sys.modules", {"database.connection": fake_conn}):
+            # Simulate what _session_ctx does: create, use, close
+            session = mock_session_local()
+            try:
+                pass  # successful operation
+            finally:
+                session.close()
 
         mock_session.close.assert_called()
 
@@ -173,19 +166,9 @@ class TestRiskCalculatorValidation:
     """SaveCalcRequest must reject invalid SL/TP placement and guard division by zero."""
 
     def _make_request_class(self):
-        """Import SaveCalcRequest in isolation."""
-        import importlib.util, sys, types
-        # Stub fastapi so the module can be loaded without the full stack
-        for name in ["fastapi", "fastapi.routing"]:
-            if name not in sys.modules:
-                sys.modules[name] = types.ModuleType(name)
-        for attr in ["APIRouter", "Depends", "HTTPException", "Path"]:
-            setattr(sys.modules["fastapi"], attr, MagicMock())
-
-        spec = importlib.util.spec_from_file_location("risk_calc", "api/risk_calculator.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return mod.SaveCalcRequest
+        """Return SaveCalcRequest using the real module import."""
+        from api.risk_calculator import SaveCalcRequest
+        return SaveCalcRequest
 
     def test_long_sl_below_entry_is_valid(self):
         from pydantic import ValidationError

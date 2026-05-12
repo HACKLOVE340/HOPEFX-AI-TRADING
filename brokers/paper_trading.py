@@ -623,13 +623,18 @@ class PaperTradingBroker(BrokerConnector):
             # Record equity snapshot after every fill
             self._snapshot_equity()
 
+            _ref_price: float = (
+                (_live_ask if _live_ask is not None else current_price)
+                if _is_buy
+                else (_live_bid if _live_bid is not None else current_price)
+            )
             logger.info(
                 "Market order filled: %s %s %s mid=%.5f ref=%.5f fill=%.5f slip=%.5f commission=%.4f",
                 side.value,
                 quantity,
                 symbol,
                 current_price,
-                _live_ask if _is_buy else (_live_bid if _live_bid else current_price),
+                _ref_price,
                 fill_price,
                 fill_price - current_price,
                 commission,
