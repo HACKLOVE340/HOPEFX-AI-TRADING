@@ -16,7 +16,6 @@ Register with:
     register_email_webhook(app)
 """
 
-from __future__ import annotations
 
 import logging
 import os

@@ -33,7 +33,6 @@ Register in core/router_registry.py::
     app.include_router(fixes_router)
 """
 
-from __future__ import annotations
 
 import json
 import logging

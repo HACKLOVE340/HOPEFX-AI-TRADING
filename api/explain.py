@@ -22,7 +22,6 @@ fallback). Limits are configurable via EXPLAIN_RATE_LIMIT and
 EXPLAIN_LATEST_RATE_LIMIT environment variables.
 """
 
-from __future__ import annotations
 
 import logging
 import os

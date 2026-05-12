@@ -357,7 +357,11 @@ def register_routers(
 
     # ── GraphQL ───────────────────────────────────────────────────────────────
     if feature_flags.GRAPHQL_API and graphql_available and graphql_router is not None:
-        _include_router_deduped(app, graphql_router, prefix="/graphql")
+        # include_in_schema=False: strawberry uses from __future__ import annotations
+        # internally, making Request/Response params ForwardRefs that pydantic v2
+        # cannot resolve during OpenAPI schema generation.  The GraphQL endpoint
+        # is self-documenting via GraphiQL; it does not need OpenAPI coverage.
+        _include_router_deduped(app, graphql_router, prefix="/graphql", include_in_schema=False)
         logger.info("GraphQL endpoint mounted at /graphql")
     elif graphql_available and not feature_flags.GRAPHQL_API:
         logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")

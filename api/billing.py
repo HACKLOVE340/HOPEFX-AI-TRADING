@@ -22,7 +22,6 @@ Wires together Tasks 25–29 plus payment-method management:
     DELETE /api/billing/payment-methods/{pm_id}        (detach saved card)
 """
 
-from __future__ import annotations
 
 import hashlib
 import logging

@@ -36,7 +36,6 @@ Security
 - JWT extraction uses SECURITY_JWT_SECRET (same key as the rest of the app).
 """
 
-from __future__ import annotations
 
 import json
 import logging

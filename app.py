@@ -233,6 +233,16 @@ _register_routers(
     signals_router=_signals_router,
 )
 
+# Strawberry GraphQL uses `from __future__ import annotations` internally, which
+# turns Request/Response params into ForwardRef strings that pydantic v2 cannot
+# resolve during OpenAPI schema generation.  Mark those routes as excluded from
+# the schema so /openapi.json succeeds.  GraphQL is self-documenting via GraphiQL.
+from fastapi.routing import APIRoute as _APIRoute
+
+for _route in app.routes:
+    if isinstance(_route, _APIRoute) and _route.path.startswith("/graphql"):
+        _route.include_in_schema = False
+
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
 #   from app import kill_switch

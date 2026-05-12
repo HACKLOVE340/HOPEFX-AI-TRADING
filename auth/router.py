@@ -22,7 +22,6 @@ Endpoints:
   GET  /auth/me                — current user profile
 """
 
-from __future__ import annotations
 
 import asyncio
 import functools
