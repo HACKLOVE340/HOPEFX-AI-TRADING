@@ -841,7 +841,7 @@ def _compute_ml_probability(
                 macro_df = _fetch_macro_df(ohlcv_df, symbol)
                 try:
                     prob = hybrid.predict_proba(ohlcv_df, macro_df=macro_df)
-                    if isinstance(prob, (int, float)) and 0.0 <= prob <= 1.0:
+                    if isinstance(prob, int | float) and 0.0 <= prob <= 1.0:
                         logger.debug("HybridEnsemble prob=%.4f for %s", prob, symbol)
                         return float(prob), "hybrid_ensemble_v1"
                 except Exception as _he:
@@ -1518,7 +1518,7 @@ async def _broadcast_fill(
 
             if val is None:
                 return None
-            if not isinstance(val, (int, float)):
+            if not isinstance(val, int | float):
                 return None
             try:
                 f = float(val)

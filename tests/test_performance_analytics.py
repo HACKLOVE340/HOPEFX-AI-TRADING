@@ -276,7 +276,7 @@ class TestReportSerialisation:
             if isinstance(obj, dict):
                 for k, v in obj.items():
                     _check(v, f"{path}.{k}")
-            elif isinstance(obj, (list, tuple)):
+            elif isinstance(obj, list | tuple):
                 for i, v in enumerate(obj):
                     _check(v, f"{path}[{i}]")
             elif isinstance(obj, float):

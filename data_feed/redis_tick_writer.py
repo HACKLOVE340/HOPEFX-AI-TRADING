@@ -408,7 +408,7 @@ class RedisTickWriter:
         if ts is None:
             return None
         try:
-            ts_float = float(ts) if isinstance(ts, (int, float)) else datetime.fromisoformat(str(ts)).timestamp()
+            ts_float = float(ts) if isinstance(ts, int | float) else datetime.fromisoformat(str(ts)).timestamp()
             return time.time() - ts_float
         except Exception:
             return None

@@ -414,7 +414,7 @@ def _register_default_probes(engine: HealthEngine) -> None:
                     raw = await rc.get(key)
                     if raw:
                         try:
-                            data = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
+                            data = json.loads(raw) if isinstance(raw, str | bytes) else {}
                         except (json.JSONDecodeError, ValueError):
                             data = {}
                         ts_val = data.get("ts", data.get("timestamp", data.get("time")))
