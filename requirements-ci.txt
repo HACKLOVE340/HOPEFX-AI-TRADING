@@ -181,6 +181,12 @@ pytest-asyncio>=0.23.6
 pytest-timeout>=2.2.0
 coverage>=7.0
 zipp>=3.19.1
+# aioresponses: mock aiohttp requests in async tests (test_alpha_vantage_source,
+#               test_twelve_data_source)
+aioresponses>=0.7.6
+# fakeredis: in-process Redis substitute for tests that need Redis without a
+#            running server (test_redis_tick_writer)
+fakeredis>=2.20.0
 
 # ── Linting ───────────────────────────────────────────────────────────────────
 # pylint: W1300 (bad-format-string) catches %-format mismatches that ruff/mypy
