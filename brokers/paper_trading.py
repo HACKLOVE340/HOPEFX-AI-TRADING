@@ -279,25 +279,40 @@ class PaperTradingBroker(BrokerConnector):
         # Last updated: 2025-Q2. These are fallback prices used only when
         # no live feed is available. Update periodically or wire a live feed.
         self.market_prices = {
-            # Precious Metals
-            "XAUUSD": 3300.0,  # Gold (~Mar 2025)
+            # Precious Metals — both compact (MT4/MT5) and underscore (OANDA) formats
+            "XAUUSD": 3300.0,  # Gold (~May 2026)
+            "XAU_USD": 3300.0,  # Gold — OANDA format
             "XAGUSD": 33.50,  # Silver
+            "XAG_USD": 33.50,  # Silver — OANDA format
             "XPTUSD": 980.0,  # Platinum
-            # Major Forex Pairs
+            "XPT_USD": 980.0,  # Platinum — OANDA format
+            # Major Forex Pairs — compact and underscore formats
             "EURUSD": 1.0820,
+            "EUR_USD": 1.0820,
             "GBPUSD": 1.2940,
+            "GBP_USD": 1.2940,
             "USDJPY": 149.50,
+            "USD_JPY": 149.50,
             "USDCHF": 0.8820,
+            "USD_CHF": 0.8820,
             "AUDUSD": 0.6290,
+            "AUD_USD": 0.6290,
             "USDCAD": 1.3850,
+            "USD_CAD": 1.3850,
             "NZDUSD": 0.5720,
+            "NZD_USD": 0.5720,
             # Cross Pairs
             "EURGBP": 0.8360,
+            "EUR_GBP": 0.8360,
             "EURJPY": 161.80,
+            "EUR_JPY": 161.80,
             "GBPJPY": 193.60,
+            "GBP_JPY": 193.60,
             # Crypto
             "BTC/USD": 85000.0,
+            "BTCUSD": 85000.0,
             "ETH/USD": 1900.0,
+            "ETHUSD": 1900.0,
             "SOL/USD": 130.0,
             "XRP/USD": 2.10,
             # US Stocks/ETFs (for reference)
