@@ -290,6 +290,8 @@ class TestPaperTradingBrokerSync:
 
         b = PaperTradingBroker(initial_balance=100_000.0, commission_per_lot=3.5)
         asyncio.run(b.connect())
+        # Seed EUR_USD price so market orders can fill without a live feed
+        b.update_market_price("EUR_USD", 1.1000)
         return b
 
     def test_initial_balance(self, broker):
