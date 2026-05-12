@@ -715,7 +715,6 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
     if result["last_signal_at"] is None:
         try:
             from cache.redis_client import get_sync_redis_client
-            import json as _json
 
             rc = get_sync_redis_client()
             if rc:
@@ -971,7 +970,6 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
     try:
         from database.connection import SessionLocal
         from database.models import Trade
-        from sqlalchemy import func
 
         db = SessionLocal()
         try:
@@ -985,8 +983,7 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
 
             # Open positions from DB (override engine count if DB has more)
             open_count = sum(1 for t in today_trades if t.is_open)
-            if open_count > metrics["open_positions"]:
-                metrics["open_positions"] = open_count
+            metrics["open_positions"] = max(metrics["open_positions"], open_count)
 
             # PnL today: sum of total_pnl for closed trades opened today
             closed_today = [t for t in today_trades if not t.is_open]

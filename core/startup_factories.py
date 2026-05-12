@@ -26,9 +26,10 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import secrets as _secrets_mod
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -418,7 +419,7 @@ async def init_database(s: Any) -> Any:
             logger.info("Database schema ensured via create_all (checkfirst=True)")
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
-    except Exception as exc:
+    except (AlembicCommandError, Exception) as exc:
         # Alembic is installed but upgrade failed. Most common cause on dev
         # machines: the DB was created via create_all before Alembic was
         # introduced, so alembic_version table is missing.
@@ -923,7 +924,7 @@ async def init_risk_manager(s: Any) -> Any:
         import risk.manager as _rm_mod
 
         _rm_mod.risk_manager = rm
-    except Exception:  # noqa: BLE001 — module-level alias is best-effort
+    except Exception:
         pass
     log_activity("Risk Manager initialized")
     return rm
@@ -1705,7 +1706,7 @@ async def init_macro_store(s: Any) -> Any:
             fred_loaded,
             9,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "MacroStoreBridge: timed out after %.0fs — falling back to CSV bootstrap",
             _bridge_timeout,
@@ -1750,7 +1751,7 @@ async def init_macro_store(s: Any) -> Any:
             wgc_injected,
             wgc_status.get("series_fetched", []),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "WGC startup download timed out after %.0fs — gold demand series unavailable",
             _wgc_timeout,
@@ -2034,7 +2035,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
 
 async def init_signal_engine(s: Any) -> Any:
     from api.admin import log_activity
-    from core.signal_engine import run_signal_engine, _ML_AVAILABLE  # noqa: PLC0415
+    from core.signal_engine import run_signal_engine, _ML_AVAILABLE
 
     # Pre-flight: warn loudly if ML package is missing so operators see it in
     # startup logs rather than discovering degraded signals silently at runtime.
@@ -2750,7 +2751,6 @@ async def init_mcc(s: Any) -> Any | None:
     """
     try:
         from core.mcc.master_control import MasterControlCore, MCCConfig
-        from cache.market_data_cache import MarketDataCache
 
         cfg = MCCConfig(
             max_strategies_active=int(os.getenv("MCC_MAX_STRATEGIES", "5")),
@@ -2763,10 +2763,8 @@ async def init_mcc(s: Any) -> Any | None:
         cache = getattr(s, "cache", None)
         db_session = None
         if s.db_session_factory is not None:
-            try:
+            with contextlib.suppress(Exception):
                 db_session = s.db_session_factory()
-            except Exception:  # noqa: BLE001 — DB session creation is best-effort
-                pass
 
         if config_mgr is not None or cache is not None:
             mcc.initialize(

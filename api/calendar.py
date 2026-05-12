@@ -164,7 +164,6 @@ async def get_upcoming(
     user: TokenPayload = Depends(get_current_user),
 ) -> list[EventOut]:
     """Return upcoming economic events within the specified window."""
-    from fastapi import HTTPException
 
     from news.economic_calendar import EventImportance
 

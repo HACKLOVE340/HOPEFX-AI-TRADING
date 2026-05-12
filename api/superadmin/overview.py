@@ -82,7 +82,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
 
             # Open positions
             overview["open_positions"] = (
-                db.query(Trade).filter(Trade.is_open == True).count()  # noqa: E712
+                db.query(Trade).filter(Trade.is_open == True).count()
             )
 
             # Signals generated today
@@ -94,7 +94,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             overview["active_sessions"] = (
                 db.query(UserSession)
                 .filter(
-                    UserSession.is_revoked == False,  # noqa: E712
+                    UserSession.is_revoked == False,
                     UserSession.expires_at > now,
                 )
                 .count()
@@ -123,7 +123,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
                     text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")
                 ).scalar()
                 overview["db_connections"] = int(row or 0)
-            except Exception:  # noqa: BLE001 — SQLite or pg_stat_activity unavailable
+            except Exception:
                 pass
 
         finally:

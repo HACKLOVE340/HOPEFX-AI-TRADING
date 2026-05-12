@@ -117,7 +117,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
         try:
             from ml.inference_engine import get_inference_engine
             predict_count_today = get_inference_engine()._predict_count
-        except Exception:  # noqa: BLE001 — inference engine is optional
+        except Exception:
             pass
 
         for name, info in versions.items():
@@ -155,7 +155,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
 
             saved_dir = pathlib.Path(__file__).parent.parent.parent / "ml" / "saved_models"
             for pkl in sorted(saved_dir.glob("*.pkl")):
-                stat = pkl.stat()
+                pkl.stat()
                 models.append(
                     {
                         "name": pkl.stem,

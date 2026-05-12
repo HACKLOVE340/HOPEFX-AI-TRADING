@@ -295,10 +295,9 @@ class _LocalBus:
 
     def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
         """Remove a previously registered handler. No-op if handler is not registered."""
-        try:
+        import contextlib
+        with contextlib.suppress(ValueError):
             self._handlers.get(channel, []).remove(handler)
-        except ValueError:
-            pass  # handler was not registered — safe to ignore
 
     def clear_channel(self, channel: str) -> None:
         """Remove all handlers for a channel (e.g. on reconnect to avoid duplicates)."""
@@ -569,10 +568,9 @@ class EventBus:
                     queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     # Drop oldest message to make room (LIFO-style eviction)
-                    try:
+                    import contextlib
+                    with contextlib.suppress(asyncio.QueueEmpty):
                         queue.get_nowait()
-                    except asyncio.QueueEmpty:  # nosec B110
-                        pass
                     try:
                         queue.put_nowait(msg)
                     except asyncio.QueueFull:
@@ -629,7 +627,7 @@ class EventBus:
                             ignore_subscribe_messages=True,
                             timeout=1.0,
                         )
-                    except (TimeoutError, asyncio.TimeoutError):
+                    except TimeoutError:
                         # No message within the poll window — normal for idle channels
                         continue
                     except Exception:

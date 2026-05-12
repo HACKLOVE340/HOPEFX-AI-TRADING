@@ -47,7 +47,6 @@ class _SelfHealerProxy:
         self._healer = healer
 
     async def scan(self) -> dict:
-        import time
 
         result = await _scan_wrapper(self._healer)
         self._healer._last_celery_scan_ts = __import__("datetime").datetime.now(  # type: ignore[attr-defined]

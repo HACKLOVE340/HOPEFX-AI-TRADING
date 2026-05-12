@@ -478,7 +478,7 @@ class AuthService:
                 session.query(LoginAttempt)
                 .filter(
                     LoginAttempt.user_id == user.id,
-                    LoginAttempt.success == False,  # noqa: E712
+                    LoginAttempt.success == False,
                     LoginAttempt.attempted_at >= cutoff,
                 )
                 .count()

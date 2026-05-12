@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -100,7 +99,6 @@ async def get_broker_health(
     try:
         from database.connection import SessionLocal
         from database.models import Trade
-        from datetime import datetime, timezone
         db = SessionLocal()
         try:
             today = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)

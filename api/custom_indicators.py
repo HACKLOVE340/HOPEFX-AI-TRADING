@@ -26,7 +26,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -146,7 +146,7 @@ async def list_builtin_indicators() -> dict:
 async def calculate_indicator(body: CalculateRequest) -> dict:
     """Apply a built-in indicator to a data series and return the result."""
     try:
-        from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, ATR, StochasticOscillator, ADX, CCI, OBV, VWAP, WilliamsR, MFI
+        from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, CCI, WilliamsR
 
         ind_type = body.indicator_type.lower()
         data = body.data
@@ -450,7 +450,8 @@ async def test_indicator(
             data=closes,
         ))
         values = calc_result.get("result", {}).get("values", [])
-        sample = [v for v in values if v is not None and not (isinstance(v, float) and v != v)][:20]
+        import math as _math
+        sample = [v for v in values if v is not None and not (isinstance(v, float) and _math.isnan(v))][:20]
         passed = len(sample) > 0
         return {
             "indicator_id": indicator_id,

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -136,7 +137,8 @@ def _load_equity_curve() -> list[EquityPoint]:
         if trades:
             equity = starting
             pairs = []
-            for t in sorted(trades, key=lambda x: getattr(x, "exit_time", None) or datetime.min):
+            _dt_min = datetime.min
+            for t in sorted(trades, key=lambda x: getattr(x, "exit_time", None) or _dt_min):
                 equity += float(getattr(t, "realized_pnl", 0) or 0.0)
                 pairs.append((getattr(t, "exit_time", None), equity))
             if pairs:
@@ -218,7 +220,6 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
         )
 
     values = [p.equity for p in curve]
-    start = curve[0].equity
 
     # Max drawdown — use pre-computed drawdown field if available
     max_dd = abs(min((p.drawdown for p in curve), default=0.0))

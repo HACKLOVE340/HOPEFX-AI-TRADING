@@ -55,10 +55,9 @@ def _session_ctx() -> Generator:
         yield None
     finally:
         if session is not None:
-            try:
+            import contextlib
+            with contextlib.suppress(Exception):
                 session.close()
-            except Exception:  # pylint: disable=broad-exception-caught
-                pass
 
 
 def db_get(key: str) -> Any | None:

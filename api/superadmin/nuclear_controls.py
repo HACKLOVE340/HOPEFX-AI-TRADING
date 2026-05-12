@@ -39,7 +39,6 @@ _HEDGE_STATE_KEY = "superadmin:nuclear:hedge"
 def _get_kill_switch():
     """Return the global KillSwitch instance if available."""
     try:
-        from kill_switch import KillSwitch
         # Try to get the singleton from app state
         try:
             from api.admin import app_state

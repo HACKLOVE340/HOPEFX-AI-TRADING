@@ -35,7 +35,7 @@ import logging
 import os
 from typing import Any, ClassVar
 
-from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType
 
 # Maximum number of TWS reconnection attempts before giving up.
 _MAX_RECONNECT_ATTEMPTS = 3
@@ -148,7 +148,7 @@ class IBKRBroker(BrokerConnector):
                 self._account,
             )
             return True
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.error(
                 "IBKRBroker connect timed out after %ss — is TWS/Gateway running on %s:%s?",
                 _CONNECT_TIMEOUT,

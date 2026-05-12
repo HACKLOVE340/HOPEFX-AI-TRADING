@@ -28,10 +28,10 @@ import os
 import ssl
 import socket
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -448,7 +448,7 @@ async def trigger_antivirus_scan(
         t0 = time.perf_counter()
         proc = subprocess.run(
             ["clamscan", "--recursive", "--no-summary", "/workspaces/HOPEFX-AI-TRADING/uploads"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=30, check=False,
         )
         duration_ms = round((time.perf_counter() - t0) * 1000)
         threats = proc.stdout.count("FOUND")

@@ -23,8 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
-import time
-from datetime import datetime, timezone
+from datetime import timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -47,11 +46,10 @@ def _load_cb_states() -> list[dict]:
     """Load circuit breaker states from the live risk module, falling back to Redis cache."""
     states: list[dict] = []
     try:
-        from risk.circuit_breakers import CircuitBreaker, CircuitState
         # Attempt to get the global registry if it exists
         try:
-            from risk.circuit_breakers import _GLOBAL_REGISTRY as _reg
-            for name, cb in _reg.items():
+            from risk.circuit_breakers import _GLOBAL_REGISTRY
+            for name, cb in _GLOBAL_REGISTRY.items():
                 states.append({
                     "name": name,
                     "state": cb.state.value if hasattr(cb, "state") else "closed",
@@ -128,9 +126,9 @@ async def reset_circuit_breaker(
     _persist_cb_states(states)
     # Also reset on live object if available
     try:
-        from risk.circuit_breakers import _GLOBAL_REGISTRY as _reg
-        if name in _reg:
-            _reg[name].reset()
+        from risk.circuit_breakers import _GLOBAL_REGISTRY
+        if name in _GLOBAL_REGISTRY:
+            _GLOBAL_REGISTRY[name].reset()
     except Exception:  # nosec B110
         pass
     _log_superadmin_action(user, "circuit_breaker_reset", {"name": name})
@@ -154,9 +152,9 @@ async def force_open_circuit_breaker(
         return {"ok": False, "error": f"Circuit breaker '{name}' not found"}
     _persist_cb_states(states)
     try:
-        from risk.circuit_breakers import _GLOBAL_REGISTRY as _reg
-        if name in _reg:
-            _reg[name].force_open()
+        from risk.circuit_breakers import _GLOBAL_REGISTRY
+        if name in _GLOBAL_REGISTRY:
+            _GLOBAL_REGISTRY[name].force_open()
     except Exception:  # nosec B110
         pass
     _log_superadmin_action(user, "circuit_breaker_force_open", {"name": name})
@@ -314,7 +312,7 @@ async def run_stress_test(
 
     # Run real stress test
     try:
-        from risk.stress_test import StressTester, SCENARIOS
+        from risk.stress_test import StressTester
 
         tester = StressTester(position_value=portfolio_value, leverage=1.0)
         all_results = tester.run_all()
@@ -475,7 +473,7 @@ async def get_drawdown_stats(
                 running_max = np.maximum.accumulate(cumulative)
                 drawdowns = (cumulative - running_max) / (running_max + 1e-9)
                 current_dd = float(drawdowns[-1]) if len(drawdowns) > 0 else 0.0
-                max_dd = float(drawdowns.min()) if len(drawdowns) > 0 else 0.0
+                float(drawdowns.min()) if len(drawdowns) > 0 else 0.0
                 all_dd_pcts.append(abs(current_dd))
                 if abs(current_dd) > 0.05:
                     accounts_in_dd += 1

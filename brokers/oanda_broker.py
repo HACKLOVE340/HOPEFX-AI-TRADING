@@ -35,7 +35,7 @@ from typing import Any
 
 import aiohttp
 
-from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType
 
 logger = logging.getLogger(__name__)
 

@@ -97,10 +97,9 @@ if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
 
 async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> None:
     """Close a WebSocket, ignoring errors when it is already closed."""
-    try:
+    import contextlib
+    with contextlib.suppress(RuntimeError):
         await websocket.close(code=code, reason=reason)
-    except RuntimeError:  # nosec B110
-        pass  # already closed
 
 
 def _validate_ws_token(token: str) -> dict | None:
@@ -786,7 +785,6 @@ async def _price_broadcaster_live_only() -> None:
     from it rather than triggering the banner.  no_live_feed is only sent when
     both the broker AND yfinance have no price for a symbol.
     """
-    global _prices_seeded
     _no_feed_warned: set[str] = set()
     # Give yfinance time to complete its first fetch before we start warning.
     # _yfinance_price_broadcaster runs concurrently and fetches immediately on
@@ -1379,7 +1377,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {
@@ -1430,7 +1428,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         _manager.authenticate(cid, user_id)
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
@@ -1605,7 +1603,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         msg = json.loads(raw)
-    except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+    except (TimeoutError, json.JSONDecodeError):
         await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
         return
     except WebSocketDisconnect:
@@ -1631,7 +1629,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     # If the charting engine failed to load at startup, tell the client
     # immediately instead of silently streaming null state every 2 seconds.
     try:
-        from app import app as _app  # noqa: PLC0415
+        from app import app as _app
 
         _nuclear_ok = getattr(_app.state, "nuclear_available", True)
     except Exception:
@@ -1745,7 +1743,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except (TimeoutError, asyncio.TimeoutError):  # nosec B110 — poll timeout is expected; loop continues
+            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
                 pass
             except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
                 break

@@ -480,7 +480,7 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
             reason = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
             reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
             logger.warning("Order blocked by risk manager: user=%s reason=%s", user_id, reason_str)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}") from None
     except HTTPException:
         raise
     except Exception as exc:
@@ -1082,16 +1082,15 @@ async def close_position(
 
             with app_state.db_session_factory() as _db:
                 _pos_row = _db.query(_Pos).filter(_Pos.id == position_id).first()
-                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub:
-                    if user.role not in ("admin", "superadmin"):
-                        logger.warning(
-                            "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
-                            user.sub, position_id, _pos_row.user_id,
-                        )
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You do not own this position",
-                        )
+                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub and user.role not in ("admin", "superadmin"):
+                    logger.warning(
+                        "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
+                        user.sub, position_id, _pos_row.user_id,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You do not own this position",
+                    )
         except HTTPException:
             raise
         except Exception as _idor_exc:
@@ -1232,11 +1231,11 @@ async def modify_position(
             ),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
-        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_position failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info(
         "Position modified: user=%s position_id=%s sl=%s tp=%s trail=%s",
@@ -1278,11 +1277,11 @@ async def partial_close_position(
             else partial_fn(position_id, req.quantity),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
-        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("partial_close_position failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info(
         "Partial close: user=%s position_id=%s quantity=%s",
@@ -1311,12 +1310,12 @@ async def hedge_position(
     positions = await _broker_call("get_positions")
     target = next((p for p in positions if str(p.id) == position_id), None)
     if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.") from None
 
     hedge_side = "sell" if str(getattr(target, "side", "long")).lower() in ("long", "buy") else "buy"
     hedge_qty = float(getattr(target, "quantity", getattr(target, "size", 0)))
     if hedge_qty <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position has zero size.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position has zero size.") from None
 
     hedge_order = OrderRequest(
         symbol=target.symbol,
@@ -1368,11 +1367,11 @@ async def cancel_order(
             else cancel_fn(order_id),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
-        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("cancel_order failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info("Order cancelled: user=%s order_id=%s", user.sub, order_id)
     return result or {"status": "cancelled", "order_id": order_id}
@@ -1411,11 +1410,11 @@ async def modify_order(
             else modify_fn(order_id, **kwargs),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
-        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.")
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_order failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info("Order modified: user=%s order_id=%s changes=%s", user.sub, order_id, kwargs)
     return result or {"status": "ok", "order_id": order_id}
@@ -1457,7 +1456,7 @@ async def get_order_book_depth(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
-        )
+        ) from None
 
     now = _time.time()
 
@@ -2043,7 +2042,7 @@ async def get_ohlcv(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
-        )
+        ) from None
 
     # ── Try price engine first ────────────────────────────────────────────────
     if app_state and app_state.price_engine:
@@ -2068,7 +2067,7 @@ async def get_ohlcv(
                         }
                         for d in data
                     ]
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
         except Exception as exc:
             logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)
@@ -2077,7 +2076,6 @@ async def get_ohlcv(
     # Used when price engine is unavailable or returns flat bars.
     try:
         import yfinance as _yf
-        import pandas as _pd
 
         _YF_MAP = {
             "XAUUSD": "GC=F",  "XAGUSD": "SI=F",    "XPTUSD": "PL=F",
@@ -2593,7 +2591,7 @@ def _register_strategy_crud(r: Any) -> None:
             "strategy_brain",
         }
         if req.strategy_type not in _KNOWN:
-            raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
+            raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}") from None
         sid = str(_uuid.uuid4())[:8]
         record = {
             "id": sid,
@@ -2613,14 +2611,14 @@ def _register_strategy_crud(r: Any) -> None:
     def get_strategy(strategy_id: str, user: TokenPayload = Depends(get_current_user)):
         key = _resolve(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         return _strategy_store[key]
 
     @r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("admin"))):
         key = _resolve(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         del _strategy_store[key]
         return {"status": "deleted"}
 
@@ -2628,7 +2626,7 @@ def _register_strategy_crud(r: Any) -> None:
     def start_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         _strategy_store[key]["enabled"] = True
         return {"status": "started", "strategy_id": strategy_id}
 
@@ -2636,7 +2634,7 @@ def _register_strategy_crud(r: Any) -> None:
     def stop_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         _strategy_store[key]["enabled"] = False
         return {"status": "stopped", "strategy_id": strategy_id}
 
@@ -2801,7 +2799,6 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
     Fast risk metrics snapshot — returns immediately from in-memory broker state.
     No blocking I/O. Falls back to zeros when broker is not yet initialised.
     """
-    import math as _m
 
     try:
         broker = getattr(app_state, "broker", None)
@@ -2873,7 +2870,6 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     Fetches real OHLCV via yfinance for regime detection and ATR calculation.
     Falls back gracefully when the ML stack is unavailable.
     """
-    import math as _math
     import uuid as _uuid
     import time as _time
 
@@ -2921,7 +2917,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
             ]
 
         ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
     except Exception as exc:
         logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
@@ -3100,7 +3096,6 @@ async def get_regime_status(
 
     Uses real OHLCV from yfinance for regime detection.
     """
-    import math as _math
 
     # Normalise symbol — guard against None (optional query param)
     symbol = symbol or "XAUUSD"
@@ -3137,7 +3132,7 @@ async def get_regime_status(
         closes, highs, lows = await asyncio.wait_for(
             loop.run_in_executor(None, _fetch), timeout=25.0
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("regime: yfinance fetch timed out for %s", symbol_norm)
     except Exception as exc:
         logger.warning("regime: yfinance fetch failed for %s: %s", symbol_norm, exc)

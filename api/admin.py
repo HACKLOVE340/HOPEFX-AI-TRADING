@@ -905,7 +905,6 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     Aggregates data from trading engine, subscription manager, and system metrics.
     """
     import time as _time
-    import os as _os2
 
     total_users = 0
     active_users_24h = 0
@@ -950,7 +949,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     # Revenue from analytics
     try:
         from monetization.analytics import revenue_analytics
-        from datetime import datetime as _dt3, timezone as _tz3, timedelta as _td
+        from datetime import datetime as _dt3, timezone as _tz3
         now = _dt3.now(_tz3.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         mtd_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)

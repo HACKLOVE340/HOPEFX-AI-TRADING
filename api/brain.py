@@ -393,14 +393,14 @@ async def brain_health(
 
     if backend == "openai":
         try:
-            import openai  # noqa: PLC0415
+            import openai
             openai.models.list()  # lightweight probe
         except Exception as exc:
             available = False
             detail = str(exc)
     elif backend == "ollama":
         try:
-            import httpx  # noqa: PLC0415
+            import httpx
             r = httpx.get(
                 f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/tags",
                 timeout=3,
@@ -445,7 +445,7 @@ async def brain_complete(
 
     if backend == "openai":
         try:
-            import openai  # noqa: PLC0415
+            import openai
             messages = []
             if body.system:
                 messages.append({"role": "system", "content": body.system})
@@ -468,7 +468,7 @@ async def brain_complete(
 
     if backend == "ollama":
         try:
-            import httpx  # noqa: PLC0415
+            import httpx
             base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             payload: dict = {"model": model, "prompt": body.prompt, "stream": False}
             if body.system:
@@ -512,7 +512,7 @@ async def brain_embed(
 
     if backend == "openai":
         try:
-            import openai  # noqa: PLC0415
+            import openai
             embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
             resp = openai.embeddings.create(model=embed_model, input=texts)
             vectors = [item.embedding for item in resp.data]
@@ -527,7 +527,7 @@ async def brain_embed(
 
     if backend == "ollama":
         try:
-            import httpx  # noqa: PLC0415
+            import httpx
             base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             embed_model = os.getenv("OLLAMA_EMBED_MODEL", model or "nomic-embed-text")
             vectors = []

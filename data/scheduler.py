@@ -233,7 +233,7 @@ async def _fetch_oanda(
                 logger.error("OANDA fetch failed status=%d: %s", resp.status, text[:200])
                 return []
             data = await resp.json()
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.error("OANDA fetch timed out for %s/%s", symbol, granularity)
         return []
     except Exception as exc:
@@ -356,7 +356,7 @@ async def _fetch_yfinance(
                 loop.run_in_executor(None, lambda: ticker.history(period=period, interval=interval)),
                 timeout=12.0,
             )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning("yfinance fetch timed out for %s/%s after 12s", yf_symbol, interval)
         return []
     except Exception as exc:

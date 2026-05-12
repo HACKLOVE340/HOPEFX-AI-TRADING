@@ -195,8 +195,7 @@ class CircuitBreaker:
             logger.info("CircuitBreaker: day rollover — day_open_balance=%.2f", self.day_open_balance)
 
         # Update all-time peak (never decreases)
-        if current_balance > self.peak_balance:
-            self.peak_balance = current_balance
+        self.peak_balance = max(self.peak_balance, current_balance)
 
         # Total drawdown: from all-time peak.  Guard against peak_balance == 0
         # (broker not yet connected or returned 0 on first call).

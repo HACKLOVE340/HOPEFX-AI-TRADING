@@ -95,17 +95,16 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
             label = str(label_raw.value)
         elif label_raw is not None:
             label = str(label_raw)
+        elif polarity >= 0.5:
+            label = "very_bullish"
+        elif polarity >= 0.1:
+            label = "bullish"
+        elif polarity <= -0.5:
+            label = "very_bearish"
+        elif polarity <= -0.1:
+            label = "bearish"
         else:
-            if polarity >= 0.5:
-                label = "very_bullish"
-            elif polarity >= 0.1:
-                label = "bullish"
-            elif polarity <= -0.5:
-                label = "very_bearish"
-            elif polarity <= -0.1:
-                label = "bearish"
-            else:
-                label = "neutral"
+            label = "neutral"
 
         # Gold-specific score from geopolitical risk module
         gold_score = 0.0
@@ -149,7 +148,7 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
         articles = provider.get_news(hours_back=4)
 
         from utils.symbol import canonical as _canonical
-        sym_upper = _canonical(symbol)
+        _canonical(symbol)
         relevant = [
             a for a in articles
             if any(t.lower() in (a.title + " " + (a.description or "")).lower() for t in terms)

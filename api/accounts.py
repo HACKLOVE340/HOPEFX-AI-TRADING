@@ -267,7 +267,7 @@ class CreateSubAccountRequest(BaseModel):
     broker_account_id: str | None = None
 
     @model_validator(mode="after")
-    def require_label_or_name(self) -> "CreateSubAccountRequest":
+    def require_label_or_name(self) -> CreateSubAccountRequest:
         if not (self.label or self.name):
             raise ValueError("Either 'label' or 'name' must be provided")
         return self

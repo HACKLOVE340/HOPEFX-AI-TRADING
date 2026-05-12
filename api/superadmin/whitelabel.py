@@ -22,10 +22,8 @@ GET    /superadmin/whitelabel/tenants/{id}/usage         — tenant usage stats
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-import os
 import secrets
 import uuid
 from typing import Any

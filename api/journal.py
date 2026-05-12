@@ -234,7 +234,7 @@ async def create_entry(
     except Exception as exc:
         db.rollback()
         logger.error("create_entry error: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to create journal entry")
+        raise HTTPException(status_code=500, detail="Failed to create journal entry") from exc
     finally:
         db.close()
 
@@ -305,7 +305,7 @@ async def update_entry(
     except Exception as exc:
         db.rollback()
         logger.error("update_entry error: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to update journal entry")
+        raise HTTPException(status_code=500, detail="Failed to update journal entry") from exc
     finally:
         db.close()
 
@@ -449,7 +449,7 @@ async def get_weekly_report(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     """Return a summary of trades closed in the current calendar week."""
-    from datetime import date, timedelta  # noqa: PLC0415
+    from datetime import date, timedelta
 
     today = date.today()
     week_start = today - timedelta(days=today.weekday())  # Monday

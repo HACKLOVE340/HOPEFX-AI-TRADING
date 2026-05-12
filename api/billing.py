@@ -27,7 +27,6 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
-import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -288,7 +287,7 @@ async def stripe_webhook(request: Request):
     except RuntimeError as exc:
         # Misconfiguration (e.g. missing STRIPE_WEBHOOK_SECRET in production).
         logger.critical("Stripe webhook misconfiguration: %s", exc)
-        raise HTTPException(status_code=500, detail="Webhook endpoint misconfigured — check server logs") from None
+        raise HTTPException(status_code=500, detail="Webhook endpoint misconfigured — check server logs") from exc
 
     if event is None:
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
@@ -536,7 +535,7 @@ async def flutterwave_init(
         }
     except Exception as exc:
         logger.error("Flutterwave init error: %s", exc)
-        raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from None
+        raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from exc
 
 
 @router.post("/payments/flutterwave/verify")
@@ -591,7 +590,7 @@ async def flutterwave_verify(
         }
     except Exception as exc:
         logger.error("Flutterwave verify error: %s", exc)
-        raise HTTPException(status_code=500, detail="Verification failed — check server logs") from None
+        raise HTTPException(status_code=500, detail="Verification failed — check server logs") from exc
 
 
 @router.get("/payments/flutterwave/status")
@@ -1285,9 +1284,9 @@ async def get_ticket_timeline(
 
     ticket = db_get(f"elite:support:{ticket_id}")
     if not ticket or not isinstance(ticket, dict):
-        raise HTTPException(status_code=404, detail="Ticket not found")
+        raise HTTPException(status_code=404, detail="Ticket not found") from None
     if ticket.get("user_id") != user.sub:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="Access denied") from None
 
     # Build timeline from ticket fields — real events stored in ticket dict
     events: list[dict] = []
@@ -1498,12 +1497,12 @@ async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_
         invoices = db_get(f"invoices:{user.sub}") or []
         inv = next((i for i in invoices if i.get("id") == invoice_id), None)
         if not inv:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise HTTPException(status_code=404, detail="Invoice not found") from None
         return inv
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise HTTPException(status_code=404, detail="Invoice not found") from None
 
 
 # ── Crypto checkout (/api/billing/crypto/*) ───────────────────────────────────
@@ -1515,19 +1514,18 @@ async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
     """Return live BTC/ETH/USDT rates in USD for the crypto checkout flow."""
     try:
         import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                "https://api.coingecko.com/api/v3/simple/price",
-                params={"ids": "bitcoin,ethereum,tether", "vs_currencies": "usd"},
-                timeout=aiohttp.ClientTimeout(total=5),
-            ) as resp:
-                data = await resp.json()
-                return {
-                    "BTC": {"rate": data.get("bitcoin", {}).get("usd", 0), "symbol": "BTC"},
-                    "ETH": {"rate": data.get("ethereum", {}).get("usd", 0), "symbol": "ETH"},
-                    "USDT": {"rate": data.get("tether", {}).get("usd", 1), "symbol": "USDT"},
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
+        async with aiohttp.ClientSession() as session, session.get(
+            "https://api.coingecko.com/api/v3/simple/price",
+            params={"ids": "bitcoin,ethereum,tether", "vs_currencies": "usd"},
+            timeout=aiohttp.ClientTimeout(total=5),
+        ) as resp:
+            data = await resp.json()
+            return {
+                "BTC": {"rate": data.get("bitcoin", {}).get("usd", 0), "symbol": "BTC"},
+                "ETH": {"rate": data.get("ethereum", {}).get("usd", 0), "symbol": "ETH"},
+                "USDT": {"rate": data.get("tether", {}).get("usd", 1), "symbol": "USDT"},
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
     except Exception as exc:
         logger.debug("crypto rates fetch error: %s", exc)
         # Fallback approximate rates
@@ -1550,9 +1548,9 @@ async def create_crypto_order(
     currency = str(payload.get("currency", "BTC")).upper()
     amount_usd = float(payload.get("amount_usd", 0))
     if amount_usd <= 0:
-        raise HTTPException(status_code=400, detail="amount_usd must be positive")
+        raise HTTPException(status_code=400, detail="amount_usd must be positive") from None
     if currency not in ("BTC", "ETH", "USDT"):
-        raise HTTPException(status_code=400, detail="Unsupported currency")
+        raise HTTPException(status_code=400, detail="Unsupported currency") from None
 
     order_id = str(_uuid.uuid4())
     # Delegate to payments router for address generation
@@ -1591,12 +1589,12 @@ async def get_crypto_order(order_id: str, user: TokenPayload = Depends(get_curre
         from api.db_store import db_get
         order = db_get(f"crypto_order:{order_id}")
         if not order or order.get("user_id") != user.sub:
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise HTTPException(status_code=404, detail="Order not found") from None
         return order
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="Order not found") from None
 
 
 @router.post("/crypto/order/{order_id}/cancel", summary="Cancel a pending crypto order")
@@ -1606,13 +1604,13 @@ async def cancel_crypto_order(order_id: str, user: TokenPayload = Depends(get_cu
         from api.db_store import db_get, db_set
         order = db_get(f"crypto_order:{order_id}")
         if not order or order.get("user_id") != user.sub:
-            raise HTTPException(status_code=404, detail="Order not found")
+            raise HTTPException(status_code=404, detail="Order not found") from None
         if order.get("status") != "pending":
-            raise HTTPException(status_code=400, detail="Only pending orders can be cancelled")
+            raise HTTPException(status_code=400, detail="Only pending orders can be cancelled") from None
         order["status"] = "cancelled"
         db_set(f"crypto_order:{order_id}", order)
         return {"ok": True, "order_id": order_id, "status": "cancelled"}
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=500, detail="Failed to cancel order")
+        raise HTTPException(status_code=500, detail="Failed to cancel order") from None

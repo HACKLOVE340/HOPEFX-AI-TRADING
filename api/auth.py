@@ -192,7 +192,7 @@ def _update_session_activity(user_id: str) -> None:
                 db.query(UserSession)
                 .filter(
                     UserSession.user_id == user_id,
-                    UserSession.is_revoked == False,  # noqa: E712
+                    UserSession.is_revoked == False,
                 )
                 .order_by(UserSession.created_at.desc())
                 .first()
@@ -242,7 +242,7 @@ def get_current_user(
             from starlette.background import BackgroundTasks as _BT
             request.state.background_tasks = _BT()
         request.state.background_tasks.add_task(_update_session_activity, payload.sub)
-    except Exception:  # noqa: BLE001 — activity tracking must never block auth
+    except Exception:
         pass
 
     return payload

@@ -480,7 +480,7 @@ async def get_leaderboard_profile(trader_id: str):
         raise
     except Exception as exc:
         logger.debug("leaderboard profile lookup failed: %s", exc)
-        raise HTTPException(status_code=404, detail="Trader not found")
+        raise HTTPException(status_code=404, detail="Trader not found") from exc
 
 
 @leaderboard_router.get("/leaderboard/{trader_id}/stats", summary="Trader leaderboard stats")
@@ -985,7 +985,7 @@ async def ws_social_feed(websocket: WebSocket) -> None:
             try:
                 await _asyncio.wait_for(websocket.receive_text(), timeout=30.0)
                 # ignore content — just a keep-alive ping
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 try:
                     await websocket.send_text(_json.dumps({"type": "heartbeat"}))
                 except Exception:

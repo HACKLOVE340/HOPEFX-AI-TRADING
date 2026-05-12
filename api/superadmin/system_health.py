@@ -27,7 +27,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -169,7 +169,7 @@ async def trigger_backup(
             # pg_dump
             result = subprocess.run(
                 ["pg_dump", "--format=custom", f"--file=/tmp/{backup_id}.dump", db_url],
-                capture_output=True, timeout=60,
+                capture_output=True, timeout=60, check=False,
             )
             if result.returncode == 0:
                 size_mb = round(os.path.getsize(f"/tmp/{backup_id}.dump") / 1024 / 1024, 2)
@@ -240,7 +240,6 @@ async def get_scheduled_jobs(
 
     # Try to enrich from APScheduler
     try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
         # Get running scheduler from app state
         from api.admin import app_state
         if app_state and hasattr(app_state, "scheduler"):

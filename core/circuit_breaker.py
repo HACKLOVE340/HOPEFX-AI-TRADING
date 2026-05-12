@@ -258,7 +258,7 @@ class CircuitBreaker:
         name: str,
         failure_threshold: int = 5,
         reset_timeout: float = 60.0,
-    ) -> "CircuitBreaker":
+    ) -> CircuitBreaker:
         """Return (or create) the named circuit breaker from the global registry.
 
         Uses setdefault() for atomic check-and-insert under the GIL so two

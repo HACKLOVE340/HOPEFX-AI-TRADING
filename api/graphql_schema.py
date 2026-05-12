@@ -29,7 +29,6 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 UTC = timezone.utc
 

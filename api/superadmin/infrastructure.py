@@ -107,11 +107,10 @@ async def get_cache_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
         if rc is None:
             return {"available": False, "mode": "none"}
         mode = get_connection_mode()
+        import contextlib
         info: dict[str, Any] = {}
-        try:
+        with contextlib.suppress(Exception):
             info = rc.info()
-        except Exception:  # nosec B110
-            pass
         return {
             "available": True,
             "mode": mode,

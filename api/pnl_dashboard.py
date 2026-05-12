@@ -380,7 +380,6 @@ async def pnl_summary(
     Sharpe ratio is only shown after _MIN_FILLS_FOR_SHARPE fills to prevent
     misleading statistics from small samples.
     """
-    import asyncio as _asyncio
     engine = _get_engine()
     if engine is None:
         # DB fallback: compute summary from closed Trade rows
@@ -496,8 +495,6 @@ async def trade_log(
     The fill_id and lineage_id fields link each fill to the lineage store
     for full audit trail (signal → fill → outcome).
     """
-    import asyncio as _asyncio
-    import functools as _functools
     engine = _get_engine()
     if engine is None:
         # DB fallback: serve closed trades from the Trade table
