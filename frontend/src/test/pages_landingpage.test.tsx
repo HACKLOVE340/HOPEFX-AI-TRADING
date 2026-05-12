@@ -225,13 +225,14 @@ describe('LandingPage — Navbar', () => {
 
   it('renders mobile menu toggle button', async () => {
     await renderLanding();
-    const menuBtn = screen.getByRole('button', { name: /toggle menu/i });
+    // aria-label is "Open menu" when closed, "Close menu" when open
+    const menuBtn = screen.getByRole('button', { name: /open menu|close menu/i });
     expect(menuBtn).toBeInTheDocument();
   });
 
   it('mobile menu opens on toggle click', async () => {
     await renderLanding();
-    const menuBtn = screen.getByRole('button', { name: /toggle menu/i });
+    const menuBtn = screen.getByRole('button', { name: /open menu|close menu/i });
     fireEvent.click(menuBtn);
     // Mobile menu shows additional links — Log in appears again
     const loginLinks = screen.getAllByText(/log in/i);
