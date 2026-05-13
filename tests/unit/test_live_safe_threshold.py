@@ -233,7 +233,7 @@ class TestLiveModeConfirmedGate:
 
         # Force _is_live_broker to return True to simulate a real live broker
         with patch.object(engine, "_is_live_broker", return_value=True):
-            report = engine._check_pre_submission_guards(request, 0.0)
+            report = asyncio.run(engine._check_pre_submission_guards(request, 0.0))
 
         assert report is not None
         assert "LIVE_MODE_NOT_CONFIRMED" in report.message
@@ -245,7 +245,7 @@ class TestLiveModeConfirmedGate:
 
         # Paper broker: _is_live_broker returns False
         with patch.object(engine, "_is_live_broker", return_value=False):
-            report = engine._check_pre_submission_guards(request, 0.0)
+            report = asyncio.run(engine._check_pre_submission_guards(request, 0.0))
 
         assert report is None  # no block
 
@@ -256,7 +256,7 @@ class TestLiveModeConfirmedGate:
 
         # Even with live broker + live_mode_confirmed=True, no live-mode block
         with patch.object(engine, "_is_live_broker", return_value=True):
-            report = engine._check_pre_submission_guards(request, 0.0)
+            report = asyncio.run(engine._check_pre_submission_guards(request, 0.0))
 
         # Should not be blocked by live-mode gate
         if report is not None:
@@ -814,7 +814,7 @@ class TestSpreadMonitor:
         req = _make_request()
         # Patch the spread_monitor module's get_spread_monitor (imported inside the method)
         with patch("execution.spread_monitor.get_spread_monitor", return_value=mock_monitor):
-            report = engine._check_spread_spike(req, 0.0)
+            report = asyncio.run(engine._check_spread_spike(req, 0.0))
 
         assert report is not None
         assert "SPREAD_SPIKE" in report.message
@@ -828,6 +828,6 @@ class TestSpreadMonitor:
 
         req = _make_request()
         with patch("execution.spread_monitor.get_spread_monitor", return_value=mock_monitor):
-            report = engine._check_spread_spike(req, 0.0)
+            report = asyncio.run(engine._check_spread_spike(req, 0.0))
 
         assert report is None

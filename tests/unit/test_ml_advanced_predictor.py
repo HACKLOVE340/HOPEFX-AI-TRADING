@@ -263,10 +263,14 @@ class TestAdvancedPredictorPredict:
         import ml.advanced_predictor as ap
 
         p = self._loaded_predictor(tmp_path)
+        # predict_proba is called with the last row; return shape (1,2)
         p._model.predict_proba.return_value = np.array([[0.1, 0.9]])
-        X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
+        # Multi-row X so std(axis=0) is non-zero — passes the variance gate
+        np.random.seed(0)
+        X = pd.DataFrame(np.random.randn(10, 10), columns=[f"f{i}" for i in range(10)])
         with (
             patch.object(p, "_build_features", return_value=X),
+            patch.object(p, "_align_features", return_value=X),
             patch.object(ap, "THRESHOLD_LONG", 0.58),
             patch.object(ap, "ABSTAIN_LOW", 0.46),
             patch.object(ap, "ABSTAIN_HIGH", 0.54),
@@ -280,9 +284,11 @@ class TestAdvancedPredictorPredict:
 
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.9, 0.1]])
-        X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
+        np.random.seed(1)
+        X = pd.DataFrame(np.random.randn(10, 10), columns=[f"f{i}" for i in range(10)])
         with (
             patch.object(p, "_build_features", return_value=X),
+            patch.object(p, "_align_features", return_value=X),
             patch.object(ap, "THRESHOLD_SHORT", 0.42),
             patch.object(ap, "ABSTAIN_LOW", 0.46),
             patch.object(ap, "ABSTAIN_HIGH", 0.54),
@@ -295,9 +301,11 @@ class TestAdvancedPredictorPredict:
 
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.5, 0.5]])
-        X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
+        np.random.seed(2)
+        X = pd.DataFrame(np.random.randn(10, 10), columns=[f"f{i}" for i in range(10)])
         with (
             patch.object(p, "_build_features", return_value=X),
+            patch.object(p, "_align_features", return_value=X),
             patch.object(ap, "ABSTAIN_LOW", 0.46),
             patch.object(ap, "ABSTAIN_HIGH", 0.54),
         ):

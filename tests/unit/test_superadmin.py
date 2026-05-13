@@ -44,23 +44,47 @@ def _make_superadmin_app() -> FastAPI:
 def _ensure_db_tables() -> None:
     """Drop and recreate all SQLAlchemy tables for a clean test schema.
 
-    drop_all + create_all is necessary because SQLite's create_all() does not
-    add new columns to existing tables.  When the ORM model gains a new column
-    (e.g. kyc_submitted_at) the stale hopefx.db would otherwise cause 500
-    errors on every endpoint that touches the users table.
+    Uses an isolated in-memory SQLite DB so this module never touches the
+    shared hopefx.db file used by other test modules.
     """
     try:
-        from database.connection import engine
+        from sqlalchemy import create_engine
+
         from database.models import Base  # user_models also uses this Base
 
         # Import user_models to register User/Session/LoginAttempt with Base
         import database.user_models  # noqa: F401  # pylint: disable=unused-import
 
-        if Base is not None and engine is not None:
-            Base.metadata.drop_all(engine)
-            Base.metadata.create_all(engine)
+        # Use a unique in-memory DB per test module to avoid cross-module pollution
+        mem_engine = create_engine(
+            "sqlite:///file:superadmin_test?mode=memory&cache=shared&uri=true",
+            connect_args={"check_same_thread": False},
+        )
+        if Base is not None:
+            Base.metadata.drop_all(mem_engine)
+            Base.metadata.create_all(mem_engine)
+
+        # Patch the module-level engine so the app uses our isolated DB
+        import database.connection as _db_conn
+
+        _db_conn.engine = mem_engine  # type: ignore[attr-defined]
+        try:
+            _db_conn._manager._engine = mem_engine  # type: ignore[attr-defined]
+        except Exception:
+            pass
     except Exception:
-        pass  # non-fatal; DB may be unavailable in this environment
+        # Fall back to the shared file DB — drop/recreate for a clean schema
+        try:
+            from database.connection import engine
+            from database.models import Base
+
+            import database.user_models  # noqa: F401
+
+            if Base is not None and engine is not None:
+                Base.metadata.drop_all(engine)
+                Base.metadata.create_all(engine)
+        except Exception:
+            pass
 
 
 @pytest.fixture(scope="module")
@@ -557,7 +581,21 @@ class TestMLEndpoints:
         assert "status" in body
 
     def test_rollback_model_200(self, sa_client):
-        with patch("api.admin.log_activity"):
+        # Mock the registry so the rollback always finds a staging candidate,
+        # regardless of the real registry state on disk.
+        mock_registry = MagicMock()
+        mock_registry._load.return_value = {
+            "active_version": "xgb_v2",
+            "versions": {
+                "xgb_v2": {"state": "active", "registered_at": "2026-05-01T00:00:00+00:00"},
+                "xgb_v1": {"state": "staging", "registered_at": "2026-04-01T00:00:00+00:00"},
+            },
+        }
+        mock_registry.rollback = MagicMock()
+        with (
+            patch("api.admin.log_activity"),
+            patch("ml.model_registry.get_registry", return_value=mock_registry),
+        ):
             resp = sa_client.post("/api/superadmin/ml/rollback/xgboost")
         assert resp.status_code == 200
 

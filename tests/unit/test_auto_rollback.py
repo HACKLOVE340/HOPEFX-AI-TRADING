@@ -204,22 +204,53 @@ class TestAutoRollbackManager:
 
     @pytest.mark.asyncio
     async def test_medium_rollback_runs(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         mgr = self._make_manager()
-        result = await mgr.rollback(strategy="medium", reason="test")
+        mock_healer = MagicMock()
+        mock_healer._run_code_analysis = AsyncMock(return_value=None)
+        mock_healer._drift_events = []
+        mock_healer.apply_config = MagicMock()
+        with patch("security.self_healer.get_healer", return_value=mock_healer):
+            result = await mgr.rollback(strategy="medium", reason="test")
         assert result.strategy == "medium"
         assert isinstance(result.success, bool)
 
     @pytest.mark.asyncio
     async def test_hard_rollback_runs(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         mgr = self._make_manager()
-        result = await mgr.rollback(strategy="hard", reason="test", target_files=[])
+        mock_healer = MagicMock()
+        mock_healer._run_code_analysis = AsyncMock(return_value=None)
+        mock_healer.rebuild_baseline = AsyncMock(return_value=None)
+        mock_healer._drift_events = []
+        mock_healer.apply_config = MagicMock()
+        mock_proc = MagicMock(returncode=0, stdout="", stderr="")
+        with (
+            patch("security.self_healer.get_healer", return_value=mock_healer),
+            patch("subprocess.run", return_value=mock_proc),
+        ):
+            result = await mgr.rollback(strategy="hard", reason="test", target_files=[])
         assert result.strategy == "hard"
         assert isinstance(result.success, bool)
 
     @pytest.mark.asyncio
     async def test_full_rollback_runs(self):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
         mgr = self._make_manager()
-        result = await mgr.rollback(strategy="full", reason="test")
+        mock_healer = MagicMock()
+        mock_healer._run_code_analysis = AsyncMock(return_value=None)
+        mock_healer.rebuild_baseline = AsyncMock(return_value=None)
+        mock_healer._drift_events = []
+        mock_healer.apply_config = MagicMock()
+        mock_proc = MagicMock(returncode=0, stdout="v10.0.0", stderr="")
+        with (
+            patch("security.self_healer.get_healer", return_value=mock_healer),
+            patch("subprocess.run", return_value=mock_proc),
+        ):
+            result = await mgr.rollback(strategy="full", reason="test")
         assert result.strategy == "full"
         assert isinstance(result.success, bool)
 

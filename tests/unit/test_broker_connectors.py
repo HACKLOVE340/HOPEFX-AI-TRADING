@@ -1529,7 +1529,11 @@ class TestBrokerFactory:
 
     def test_create_mt5_broker(self):
         broker = BrokerFactory.create_broker("mt5", MT5_CONFIG)
-        assert isinstance(broker, MT5Connector)
+        # Re-import MT5Connector to get the current class object — TestMT5Connector
+        # reloads brokers.mt5 in setup_method which can leave the module-level
+        # MT5Connector pointing at a stale class.  Check by name to be robust.
+        from brokers.mt5 import MT5Connector as _MT5Connector
+        assert isinstance(broker, _MT5Connector) or type(broker).__name__ == "MT5Connector"
 
     def test_create_ib_broker(self):
         try:
