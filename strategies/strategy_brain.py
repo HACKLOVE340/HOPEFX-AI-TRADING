@@ -500,7 +500,6 @@ class StrategyBrain:
         and converts consensus Signal objects into the action-dict format that
         _execute_signal expects (keys: action, symbol, size, confidence, …).
         """
-        import asyncio
         import inspect
 
         if not self.strategies:
@@ -521,7 +520,7 @@ class StrategyBrain:
                         ohlcv = raw or []
                         if ohlcv:
                             current_price = float(ohlcv[-1].close)
-                    except Exception:  # noqa: BLE001 — OHLCV fetch is best-effort
+                    except Exception:
                         pass
 
                     if current_price == 0.0:
@@ -529,7 +528,7 @@ class StrategyBrain:
                             tick = price_engine.get_last_price(symbol)
                             if tick is not None:
                                 current_price = (tick.bid + tick.ask) / 2.0
-                        except Exception:  # noqa: BLE001 — tick fetch is best-effort
+                        except Exception:
                             pass
 
                 if current_price == 0.0:
@@ -548,19 +547,25 @@ class StrategyBrain:
 
                 if consensus.get("consensus_reached") and consensus.get("consensus_signal"):
                     sig = consensus["consensus_signal"]
-                    action = "buy" if sig.signal_type == __import__("strategies.base", fromlist=["SignalType"]).SignalType.BUY else "sell"
+                    action = (
+                        "buy"
+                        if sig.signal_type == __import__("strategies.base", fromlist=["SignalType"]).SignalType.BUY
+                        else "sell"
+                    )
                     meta = sig.metadata or {}
                     agreeing = meta.get("agreeing_strategies") or ["strategy_brain"]
-                    result_signals.append({
-                        "action": action,
-                        "symbol": symbol,
-                        "size": float(meta.get("size", 0.01)),
-                        "confidence": float(sig.confidence),
-                        "price": float(sig.price),
-                        "entry_price": float(sig.price),
-                        "strategy": agreeing[0] if agreeing else "strategy_brain",
-                        "regime": regime_str,
-                    })
+                    result_signals.append(
+                        {
+                            "action": action,
+                            "symbol": symbol,
+                            "size": float(meta.get("size", 0.01)),
+                            "confidence": float(sig.confidence),
+                            "price": float(sig.price),
+                            "entry_price": float(sig.price),
+                            "strategy": agreeing[0] if agreeing else "strategy_brain",
+                            "regime": regime_str,
+                        }
+                    )
 
             except Exception as e:
                 logger.error("generate_signals error for %s: %s", symbol, e)

@@ -425,6 +425,7 @@ def _seed_user(email: str, username: str, password: str, role_value: str) -> Non
                 changed = True
             # Resync password in case .env was regenerated with a new value
             from auth.service import verify_password as _vp
+
             if not _vp(password, existing.hashed_password):
                 existing.hashed_password = hash_password(password)
                 existing.status = "active"

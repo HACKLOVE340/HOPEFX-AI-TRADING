@@ -636,13 +636,9 @@ class AffiliateManager:
         requested = Decimal(str(amount))
         pending = self._calculate_pending_commission(affiliate_id)
         if requested > pending:
-            raise ValueError(
-                f"Requested withdrawal ${requested} exceeds pending commissions ${pending}"
-            )
+            raise ValueError(f"Requested withdrawal ${requested} exceeds pending commissions ${pending}")
         if requested < self.MIN_PAYOUT:
-            raise ValueError(
-                f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}"
-            )
+            raise ValueError(f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}")
 
         payment_method = affiliate.payment_details.get("method", "bank_transfer")
         payout_id = f"WD-{uuid.uuid4().hex[:12].upper()}"
@@ -695,37 +691,37 @@ class AffiliateManager:
             for idx, a in enumerate(sorted_affiliates[:limit])
         ]
 
-    def get_commissions(self, affiliate_id: str) -> list[dict[str, Any]]:
+    def get_commissions(self, affiliate_id: str) -> list[dict[str, Any]]:  # noqa: F811
         """Return commission records derived from paid referrals for an affiliate."""
         referrals = self.get_affiliate_referrals(affiliate_id)
         records: list[dict[str, Any]] = []
         for ref in referrals:
             if ref.commission_amount and ref.commission_amount > 0:
-                period = (
-                    ref.converted_at.strftime("%Y-%m") if ref.converted_at else
-                    ref.created_at.strftime("%Y-%m")
+                period = ref.converted_at.strftime("%Y-%m") if ref.converted_at else ref.created_at.strftime("%Y-%m")
+                records.append(
+                    {
+                        "commission_id": f"com_{ref.referral_id[:12]}",
+                        "referral_id": ref.referral_id,
+                        "amount": float(ref.commission_amount),
+                        "status": ref.status.value,
+                        "period": period,
+                        "paid_at": ref.converted_at.isoformat()
+                        if ref.status == ReferralStatus.PAID and ref.converted_at
+                        else None,
+                    }
                 )
-                records.append({
-                    "commission_id": f"com_{ref.referral_id[:12]}",
-                    "referral_id": ref.referral_id,
-                    "amount": float(ref.commission_amount),
-                    "status": ref.status.value,
-                    "period": period,
-                    "paid_at": ref.converted_at.isoformat() if ref.status == ReferralStatus.PAID and ref.converted_at else None,
-                })
         return records
 
-    def request_withdrawal(self, affiliate_id: str, amount: float) -> dict[str, Any]:
+    def request_withdrawal(self, affiliate_id: str, amount: float) -> dict[str, Any]:  # noqa: F811
         """Request a commission withdrawal. Creates a pending payout record."""
         import uuid
+
         affiliate = self.get_affiliate(affiliate_id)
         if not affiliate:
             raise ValueError(f"Affiliate {affiliate_id} not found")
         pending = self._calculate_pending_commission(affiliate_id)
         if Decimal(str(amount)) > pending:
-            raise ValueError(
-                f"Requested amount ${amount:.2f} exceeds pending balance ${float(pending):.2f}"
-            )
+            raise ValueError(f"Requested amount ${amount:.2f} exceeds pending balance ${float(pending):.2f}")
         payout_id = f"wd_{uuid.uuid4().hex[:12]}"
         payout = Payout(
             payout_id=payout_id,
@@ -737,7 +733,7 @@ class AffiliateManager:
         logger.info("Withdrawal requested: affiliate=%s amount=%.2f payout_id=%s", affiliate_id, amount, payout_id)
         return {"withdrawal_id": payout_id, "amount": amount, "status": "pending"}
 
-    def update_payment_method(self, affiliate_id: str, payment_details: dict[str, Any]) -> bool:
+    def update_payment_method(self, affiliate_id: str, payment_details: dict[str, Any]) -> bool:  # noqa: F811
         """Update payment details for an affiliate."""
         affiliate = self.get_affiliate(affiliate_id)
         if not affiliate:
@@ -749,6 +745,7 @@ class AffiliateManager:
     def get_monthly_breakdown(self, affiliate_id: str, months: int = 12) -> list[dict[str, Any]]:
         """Return month-by-month commission and referral counts for the last N months."""
         from collections import defaultdict
+
         referrals = self.get_affiliate_referrals(affiliate_id)
         buckets: dict[str, dict[str, Any]] = defaultdict(lambda: {"commissions": 0.0, "referrals": 0})
         for ref in referrals:

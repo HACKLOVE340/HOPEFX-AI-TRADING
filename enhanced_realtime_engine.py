@@ -458,7 +458,7 @@ class PolygonProvider(DataProvider):
 
                         yield tick
 
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 logger.warning("Polygon heartbeat timeout")
                 raise
             except Exception as e:
@@ -1155,10 +1155,10 @@ async def run_realtime_test():
         )
 
     logger.info("\n--- Consensus Stats ---")
-    logger.info("Ticks processed: %s", aggregator.stats['ticks_processed'])
-    logger.info("Consensus formed: %s", aggregator.stats['consensus_formed'])
-    logger.info("Disagreements: %s", aggregator.stats['disagreements'])
-    logger.info("Outliers rejected: %s", aggregator.stats['outliers_rejected'])
+    logger.info("Ticks processed: %s", aggregator.stats["ticks_processed"])
+    logger.info("Consensus formed: %s", aggregator.stats["consensus_formed"])
+    logger.info("Disagreements: %s", aggregator.stats["disagreements"])
+    logger.info("Outliers rejected: %s", aggregator.stats["outliers_rejected"])
 
     # Sample consensus prices
     if consensus_ticks:

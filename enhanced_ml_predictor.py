@@ -2042,15 +2042,15 @@ def run_ml_test():
     logger.info("ML PREDICTOR REPORT")
     logger.info("=" * 80)
 
-    logger.info("\nModels in ensemble: %s", report['models'])
-    logger.info("Weights: %s", report['weights'])
-    logger.info("Predictions generated: %s", report['predictions_generated'])
+    logger.info("\nModels in ensemble: %s", report["models"])
+    logger.info("Weights: %s", report["weights"])
+    logger.info("Predictions generated: %s", report["predictions_generated"])
 
     if report["recent_performance"]["accuracy"] is not None:
         logger.info("\nRecent accuracy: %s", f"{report['recent_performance']['accuracy']:.1%}")
         logger.info("Average confidence: %s", f"{report['recent_performance']['avg_confidence']:.1%}")
 
-    logger.info("\nFeatures used: %s", report['feature_count'])
+    logger.info("\nFeatures used: %s", report["feature_count"])
     logger.info("Top 5 features:")
     for feat, imp in list(report["top_features"].items())[:5]:
         logger.info("  %s: %.4f", feat, imp)

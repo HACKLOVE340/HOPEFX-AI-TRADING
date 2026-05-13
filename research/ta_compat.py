@@ -30,6 +30,7 @@ import pandas as pd
 
 try:
     import talib as _talib
+
     _TALIB_OK = True
 except ImportError:
     _TALIB_OK = False
@@ -44,6 +45,7 @@ def _wrap(arr: np.ndarray, index: pd.Index) -> pd.Series:
 
 
 # ── Momentum ─────────────────────────────────────────────────────────────────
+
 
 class RSIIndicator:
     def __init__(self, close: pd.Series, window: int = 14, fillna: bool = False):
@@ -104,6 +106,7 @@ class StochasticOscillator:
 
 
 # ── Trend ─────────────────────────────────────────────────────────────────────
+
 
 class MACD:
     def __init__(
@@ -207,6 +210,7 @@ class ADXIndicator:
 
 # ── Volatility ────────────────────────────────────────────────────────────────
 
+
 class BollingerBands:
     def __init__(
         self,
@@ -285,6 +289,7 @@ class AverageTrueRange:
 # ── Pure-numpy fallback implementations ──────────────────────────────────────
 # Used only when ta-lib is also unavailable.
 
+
 def _rsi_numpy(close: pd.Series, period: int) -> np.ndarray:
     delta = close.diff()
     gain = delta.clip(lower=0)
@@ -325,20 +330,26 @@ def _bbands_numpy(close, window=20, dev=2):
 
 
 def _atr_numpy(high, low, close, period=14) -> np.ndarray:
-    tr = pd.concat([
-        high - low,
-        (high - close.shift(1)).abs(),
-        (low - close.shift(1)).abs(),
-    ], axis=1).max(axis=1)
+    tr = pd.concat(
+        [
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
     return tr.ewm(com=period - 1, min_periods=period).mean().values
 
 
 def _adx_numpy(high, low, close, period=14) -> np.ndarray:
-    tr = pd.concat([
-        high - low,
-        (high - close.shift(1)).abs(),
-        (low - close.shift(1)).abs(),
-    ], axis=1).max(axis=1)
+    tr = pd.concat(
+        [
+            high - low,
+            (high - close.shift(1)).abs(),
+            (low - close.shift(1)).abs(),
+        ],
+        axis=1,
+    ).max(axis=1)
     plus_dm = (high.diff()).clip(lower=0)
     minus_dm = (-low.diff()).clip(lower=0)
     mask = plus_dm < minus_dm
@@ -353,6 +364,7 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
 
 
 # ── Module assembly ───────────────────────────────────────────────────────────
+
 
 def _build_fake_ta_module() -> types.ModuleType:
     """Assemble a fake ``ta`` module tree and inject into sys.modules."""

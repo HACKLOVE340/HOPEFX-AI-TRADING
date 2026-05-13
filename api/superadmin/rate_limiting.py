@@ -38,6 +38,7 @@ _HITS_PREFIX = "rate_limit:hits:"
 def _load_rules() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_RULES_KEY)
@@ -47,17 +48,58 @@ def _load_rules() -> list[dict]:
         pass
     # Bootstrap with sensible defaults matching core/middleware.py
     return [
-        {"rule_id": "rl_auth",       "endpoint": "/api/auth/*",       "limit": 10,   "window_seconds": 60,  "scope": "per_ip",   "enabled": True, "current_hits": 0},
-        {"rule_id": "rl_trade",      "endpoint": "/api/trading/*",    "limit": 100,  "window_seconds": 60,  "scope": "per_user", "enabled": True, "current_hits": 0},
-        {"rule_id": "rl_global",     "endpoint": "/api/*",            "limit": 1000, "window_seconds": 60,  "scope": "global",   "enabled": True, "current_hits": 0},
-        {"rule_id": "rl_superadmin", "endpoint": "/api/superadmin/*", "limit": 200,  "window_seconds": 60,  "scope": "per_user", "enabled": True, "current_hits": 0},
-        {"rule_id": "rl_ws",         "endpoint": "/ws/*",             "limit": 50,   "window_seconds": 60,  "scope": "per_ip",   "enabled": True, "current_hits": 0},
+        {
+            "rule_id": "rl_auth",
+            "endpoint": "/api/auth/*",
+            "limit": 10,
+            "window_seconds": 60,
+            "scope": "per_ip",
+            "enabled": True,
+            "current_hits": 0,
+        },
+        {
+            "rule_id": "rl_trade",
+            "endpoint": "/api/trading/*",
+            "limit": 100,
+            "window_seconds": 60,
+            "scope": "per_user",
+            "enabled": True,
+            "current_hits": 0,
+        },
+        {
+            "rule_id": "rl_global",
+            "endpoint": "/api/*",
+            "limit": 1000,
+            "window_seconds": 60,
+            "scope": "global",
+            "enabled": True,
+            "current_hits": 0,
+        },
+        {
+            "rule_id": "rl_superadmin",
+            "endpoint": "/api/superadmin/*",
+            "limit": 200,
+            "window_seconds": 60,
+            "scope": "per_user",
+            "enabled": True,
+            "current_hits": 0,
+        },
+        {
+            "rule_id": "rl_ws",
+            "endpoint": "/ws/*",
+            "limit": 50,
+            "window_seconds": 60,
+            "scope": "per_ip",
+            "enabled": True,
+            "current_hits": 0,
+        },
     ]
 
 
 def _save_rules(rules: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_RULES_KEY, json.dumps(rules), ex=86400 * 30)
@@ -74,6 +116,7 @@ async def get_rate_limit_rules(
     # Enrich with live hit counts from Redis
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             for rule in rules:
@@ -153,6 +196,7 @@ async def get_rate_limit_stats(
     stats: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             # Scan for all rate limit hit keys
@@ -173,6 +217,7 @@ async def reset_rate_limit_counter(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.delete(f"{_HITS_PREFIX}{rule_id}")
@@ -192,6 +237,7 @@ async def get_rate_limit_violations(
     try:
         from database.connection import SessionLocal
         from database.models import AuditLogEntry
+
         db = SessionLocal()
         try:
             rows = (
@@ -202,13 +248,15 @@ async def get_rate_limit_violations(
                 .all()
             )
             for r in rows:
-                violations.append({
-                    "violation_id": str(r.id),
-                    "user_id": str(r.user_id) if r.user_id else None,
-                    "ip_address": getattr(r, "ip_address", None),
-                    "endpoint": r.detail or "",
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                })
+                violations.append(
+                    {
+                        "violation_id": str(r.id),
+                        "user_id": str(r.user_id) if r.user_id else None,
+                        "ip_address": getattr(r, "ip_address", None),
+                        "endpoint": r.detail or "",
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                )
         finally:
             db.close()
     except Exception as exc:

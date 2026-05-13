@@ -67,7 +67,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from sqlalchemy import event, text
-    from sqlalchemy.exc import OperationalError, SQLAlchemyError
+    from sqlalchemy.exc import OperationalError, SQLAlchemyError  # noqa: F401
     from sqlalchemy.ext.asyncio import (
         AsyncEngine,
         AsyncSession,
@@ -82,8 +82,7 @@ except ImportError:
     AsyncEngine = None  # type: ignore[assignment,misc]
     AsyncSession = None  # type: ignore[assignment,misc]
     logger.warning(
-        "SQLAlchemy async extensions not available. "
-        "Install with: pip install 'sqlalchemy[asyncio]>=2.0' asyncpg"
+        "SQLAlchemy async extensions not available. Install with: pip install 'sqlalchemy[asyncio]>=2.0' asyncpg"
     )
 
 # ── Pool metrics ──────────────────────────────────────────────────────────────
@@ -110,12 +109,8 @@ class AsyncPoolMetrics:
     invalid: int = 0
 
     # Latency samples (rolling window)
-    _checkout_latency_ms: deque = field(
-        default_factory=lambda: deque(maxlen=200), repr=False
-    )
-    _query_latency_ms: deque = field(
-        default_factory=lambda: deque(maxlen=200), repr=False
-    )
+    _checkout_latency_ms: deque = field(default_factory=lambda: deque(maxlen=200), repr=False)
+    _query_latency_ms: deque = field(default_factory=lambda: deque(maxlen=200), repr=False)
 
     def record_checkout_latency(self, ms: float) -> None:
         self._checkout_latency_ms.append(ms)
@@ -188,25 +183,13 @@ def _resolve_async_db_url() -> str:
 class AsyncPoolConfig:
     """Configuration for the async connection pool."""
 
-    database_url: str = field(
-        default_factory=lambda: _resolve_async_db_url()
-    )
-    pool_size: int = field(
-        default_factory=lambda: int(os.environ.get("DB_POOL_SIZE", "10"))
-    )
-    max_overflow: int = field(
-        default_factory=lambda: int(os.environ.get("DB_MAX_OVERFLOW", "20"))
-    )
-    pool_timeout: float = field(
-        default_factory=lambda: float(os.environ.get("DB_POOL_TIMEOUT", "30"))
-    )
-    pool_recycle: int = field(
-        default_factory=lambda: int(os.environ.get("DB_POOL_RECYCLE", "1800"))
-    )
+    database_url: str = field(default_factory=_resolve_async_db_url)
+    pool_size: int = field(default_factory=lambda: int(os.environ.get("DB_POOL_SIZE", "10")))
+    max_overflow: int = field(default_factory=lambda: int(os.environ.get("DB_MAX_OVERFLOW", "20")))
+    pool_timeout: float = field(default_factory=lambda: float(os.environ.get("DB_POOL_TIMEOUT", "30")))
+    pool_recycle: int = field(default_factory=lambda: int(os.environ.get("DB_POOL_RECYCLE", "1800")))
     pool_pre_ping: bool = True
-    echo: bool = field(
-        default_factory=lambda: os.environ.get("DB_ECHO", "0") == "1"
-    )
+    echo: bool = field(default_factory=lambda: os.environ.get("DB_ECHO", "0") == "1")
     # Use NullPool for testing (no persistent connections).
     use_null_pool: bool = False
 
@@ -237,10 +220,7 @@ class AsyncConnectionPool:
 
     def __init__(self, config: AsyncPoolConfig | None = None) -> None:
         if not _SA_AVAILABLE:
-            raise RuntimeError(
-                "SQLAlchemy async extensions required: "
-                "pip install 'sqlalchemy[asyncio]>=2.0' asyncpg"
-            )
+            raise RuntimeError("SQLAlchemy async extensions required: pip install 'sqlalchemy[asyncio]>=2.0' asyncpg")
         self.config = config or AsyncPoolConfig()
         self._engine: AsyncEngine | None = None
         self._session_factory: async_sessionmaker | None = None
@@ -256,6 +236,7 @@ class AsyncConnectionPool:
         # NullPool to avoid "pool_size/max_overflow not supported" errors.
         if _is_sqlite:
             from sqlalchemy.pool import StaticPool
+
             pool_class = StaticPool
 
         engine_kwargs: dict[str, Any] = {
@@ -306,7 +287,7 @@ class AsyncConnectionPool:
             self._connected = False
             logger.info("AsyncConnectionPool closed")
 
-    async def __aenter__(self) -> "AsyncConnectionPool":
+    async def __aenter__(self) -> AsyncConnectionPool:
         await self.connect()
         return self
 
@@ -415,6 +396,7 @@ class AsyncConnectionPool:
 
         # overflow and timeout events only exist on QueuePool, not NullPool.
         if not self.config.use_null_pool:
+
             @event.listens_for(sync_engine.pool, "overflow")
             def on_overflow(dbapi_conn, connection_record):
                 self.metrics.overflow_count += 1
@@ -428,6 +410,7 @@ class AsyncConnectionPool:
         """Redact password from a database URL for safe logging."""
         try:
             from urllib.parse import urlparse, urlunparse
+
             parsed = urlparse(url)
             if parsed.password:
                 netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
@@ -507,9 +490,7 @@ class AsyncHealthMonitor:
         interval_seconds: float | None = None,
     ) -> None:
         self._pool = pool
-        self._interval = interval_seconds or float(
-            os.environ.get("DB_HEALTH_INTERVAL", "30")
-        )
+        self._interval = interval_seconds or float(os.environ.get("DB_HEALTH_INTERVAL", "30"))
         self._running: bool = False
         self._last_snapshot: dict[str, Any] = {}
         self._consecutive_failures: int = 0
@@ -521,9 +502,7 @@ class AsyncHealthMonitor:
     async def run(self) -> None:
         """Poll the database at ``_interval`` seconds until ``stop()`` is called."""
         self._running = True
-        logger.info(
-            "AsyncHealthMonitor started: interval=%.0fs", self._interval
-        )
+        logger.info("AsyncHealthMonitor started: interval=%.0fs", self._interval)
         while self._running:
             await self._check()
             await asyncio.sleep(self._interval)
@@ -582,9 +561,6 @@ async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
             ...
     """
     if _default_pool is None:
-        raise RuntimeError(
-            "Default async pool not initialised. "
-            "Call set_default_pool() during application startup."
-        )
+        raise RuntimeError("Default async pool not initialised. Call set_default_pool() during application startup.")
     async with _default_pool.session() as sess:
         yield sess

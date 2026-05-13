@@ -65,8 +65,7 @@ import asyncio
 import logging
 import os
 import time
-from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone as _tz
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -103,8 +102,8 @@ _WS_BROADCAST_QUEUE_SIZE = int(os.getenv("ORCHESTRATOR_WS_QUEUE", "256"))
 
 
 class _CircuitState(Enum):
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing — calls rejected
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing — calls rejected
     HALF_OPEN = "half_open"  # Testing recovery
 
 
@@ -142,7 +141,7 @@ class CircuitBreaker:
 
     @property
     def state(self) -> _CircuitState:
-        if self._state == _CircuitState.OPEN:
+        if self._state == _CircuitState.OPEN:  # noqa: SIM102
             if time.monotonic() - self._last_failure_ts >= self._recovery_timeout:
                 self._state = _CircuitState.HALF_OPEN
                 logger.info("CircuitBreaker[%s]: OPEN → HALF_OPEN (probe allowed)", self.name)
@@ -156,7 +155,7 @@ class CircuitBreaker:
         s = self.state
         if s == _CircuitState.CLOSED:
             return True
-        if s == _CircuitState.HALF_OPEN:
+        if s == _CircuitState.HALF_OPEN:  # noqa: SIM103
             return True  # Allow one probe
         return False  # OPEN — reject
 
@@ -175,12 +174,14 @@ class CircuitBreaker:
         self._total_failures += 1
         self._failure_count += 1
         self._last_failure_ts = time.monotonic()
-        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN):
+        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN):  # noqa: SIM102
             if self._failure_count >= self._threshold:
                 self._state = _CircuitState.OPEN
                 logger.warning(
                     "CircuitBreaker[%s]: → OPEN after %d failures (last: %s)",
-                    self.name, self._failure_count, exc,
+                    self.name,
+                    self._failure_count,
+                    exc,
                 )
 
     def reset(self) -> None:
@@ -462,7 +463,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._macro_bridge.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: MacroStoreBridge started")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: MacroStoreBridge timed out after %.0fs "
                 "— macro features degraded (FRED unreachable, neutral series injected)",
@@ -475,7 +476,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._cot_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: CFTCCOTFeed started")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: CFTCCOTFeed timed out after %.0fs "
                 "— COT features zero-filled (CFTC unreachable)",
@@ -488,7 +489,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._imf_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: IMFGoldFeed started")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: IMFGoldFeed timed out after %.0fs "
                 "— IMF features zero-filled (dataservices.imf.org unreachable)",
@@ -501,7 +502,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._yahoo_macro.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: YahooMacroFeed started")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: YahooMacroFeed timed out after %.0fs "
                 "— Yahoo macro features zero-filled (Yahoo Finance unreachable)",
@@ -782,17 +783,19 @@ class MarketDataOrchestrator:
 
         # ── WebSocket broadcast (non-blocking enqueue) ────────────────────
         try:
-            ws_msg = _json.dumps({
-                "type": "tick",
-                "symbol": tick.symbol,
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "mid": tick.mid,
-                "spread": tick.spread,
-                "source": tick.source.value,
-                "quality": tick.quality.value,
-                "timestamp": tick.timestamp.isoformat(),
-            })
+            ws_msg = _json.dumps(
+                {
+                    "type": "tick",
+                    "symbol": tick.symbol,
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "mid": tick.mid,
+                    "spread": tick.spread,
+                    "source": tick.source.value,
+                    "quality": tick.quality.value,
+                    "timestamp": tick.timestamp.isoformat(),
+                }
+            )
             self._ws_broadcaster.enqueue(ws_msg)
         except Exception as exc:
             logger.debug("Orchestrator: WS broadcast enqueue error: %s", exc)
@@ -889,15 +892,12 @@ class MarketDataOrchestrator:
         # 6. Temporal features — session_time and day_of_week
         # These are causal: computed from the as_of timestamp (or now).
         try:
-            ref_time = as_of if as_of is not None else datetime.now(UTC)
+            ref_time = as_of if as_of is not None else datetime.now(_tz.utc)
             # session_time: fraction of the 24h UTC day elapsed [0, 1)
             # Used by the ML model to capture intraday seasonality
             # (gold is most liquid during London/NY overlap 13:00-17:00 UTC)
             seconds_since_midnight = (
-                ref_time.hour * 3600
-                + ref_time.minute * 60
-                + ref_time.second
-                + ref_time.microsecond / 1_000_000
+                ref_time.hour * 3600 + ref_time.minute * 60 + ref_time.second + ref_time.microsecond / 1_000_000
             )
             features["session_time"] = round(seconds_since_midnight / 86400.0, 6)
 
@@ -952,11 +952,7 @@ class MarketDataOrchestrator:
                         "source": getattr(a, "source", ""),
                         "sentiment_score": getattr(a, "sentiment_score", 0.0),
                         "sentiment_label": getattr(a, "sentiment_label", "neutral"),
-                        "published_at": (
-                            a.published_at.isoformat()
-                            if getattr(a, "published_at", None)
-                            else None
-                        ),
+                        "published_at": (a.published_at.isoformat() if getattr(a, "published_at", None) else None),
                         "url": getattr(a, "url", None),
                     }
                     for a in (raw_articles or [])[:5]
@@ -1306,9 +1302,7 @@ class MarketDataOrchestrator:
         # sub-component health indicators for the OrchestratorHealthGrid.
         h["aggregate_health"] = self._compute_aggregate_health(h)
         h["status"] = (
-            "healthy" if h["aggregate_health"] >= 0.7
-            else "degraded" if h["aggregate_health"] >= 0.3
-            else "unhealthy"
+            "healthy" if h["aggregate_health"] >= 0.7 else "degraded" if h["aggregate_health"] >= 0.3 else "unhealthy"
         )
 
         return h
@@ -1336,7 +1330,7 @@ class MarketDataOrchestrator:
             pass
 
         # Redis
-        try:
+        try:  # noqa: SIM105
             score += 0.20 if h.get("redis_healthy", False) else 0.0
         except Exception:  # nosec B110
             pass

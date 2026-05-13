@@ -39,10 +39,14 @@ from api.auth import TokenPayload, get_current_user
 try:
     from rate_limiting.advanced import rate_limit_dependency as _rl_dep
     from rate_limiting_configuration import WITHDRAWAL_RATE as _WITHDRAWAL_RATE  # type: ignore[import]
+
     _withdraw_rate_limit = _rl_dep(_WITHDRAWAL_RATE)
 except Exception:  # pragma: no cover — rate limiting optional in dev
+
     async def _withdraw_rate_limit(request: Request) -> None:  # type: ignore[misc]
         pass
+
+
 from pydantic import BaseModel, Field
 
 
@@ -109,6 +113,7 @@ def _get_db_session():
         logger.warning("payments: app_state db_session_factory unavailable: %s", _exc)
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception as _exc2:
         logger.warning("payments: SessionLocal fallback failed: %s", _exc2)

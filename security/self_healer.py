@@ -850,11 +850,7 @@ class SelfHealer:
         if not redis:
             return
         try:
-            critical_events = [
-                e for e in drift
-                if e.get("protected")
-                or e.get("type") in ("deleted", "new_file")
-            ]
+            critical_events = [e for e in drift if e.get("protected") or e.get("type") in ("deleted", "new_file")]
             for event in critical_events:
                 await redis.rpush(
                     "alerts:critical",
@@ -1522,6 +1518,7 @@ Return the complete fixed file:"""
         superadmin dashboard.
         """
         import os as _os
+
         # Skip diagnostics in development — they make blocking HTTP calls to
         # localhost which starve the single-worker event loop.
         if _os.getenv("APP_ENV", "development").lower() in ("development", "dev", "test"):
@@ -1849,7 +1846,7 @@ Return the complete fixed file:"""
                     proc.communicate(),
                     timeout=float(self._global_test_timeout_sec),
                 )
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 with contextlib.suppress(Exception):
                     proc.kill()
                 self._log(
@@ -2250,9 +2247,7 @@ def _build_eager_heal_router() -> APIRouter:
             "returned": len(issues),
             "issues": issues,
             "log_file": str(_LOG_FILE),
-            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat()
-            if h._last_log_scan_ts
-            else None,
+            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat() if h._last_log_scan_ts else None,
         }
 
     @r.get("/claude-queue", summary="Get pending Claude fix queue")

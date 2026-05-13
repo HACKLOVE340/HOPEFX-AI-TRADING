@@ -32,6 +32,7 @@ Usage
 from __future__ import annotations
 
 import hashlib
+import contextlib
 import logging
 from dataclasses import dataclass
 from pathlib import Path
@@ -45,12 +46,10 @@ try:
     import ta as _ta_check  # noqa: F401
 except ImportError:
     try:
-        from research import ta_compat as _ta_shim  # noqa: F401
+        from research import ta_compat as _ta_shim
     except ImportError:
-        try:
+        with contextlib.suppress(ImportError):
             import research.ta_compat as _ta_shim  # noqa: F401
-        except ImportError:
-            pass
 
 logger = logging.getLogger(__name__)
 

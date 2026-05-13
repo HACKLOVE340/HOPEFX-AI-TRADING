@@ -132,11 +132,7 @@ def _log_superadmin_action(
         db = SessionLocal()
         try:
             # Determine next sequence number and previous hash for chain integrity.
-            last = (
-                db.query(AuditLogEntry)
-                .order_by(AuditLogEntry.sequence_number.desc())
-                .first()
-            )
+            last = db.query(AuditLogEntry).order_by(AuditLogEntry.sequence_number.desc()).first()
             seq = (last.sequence_number + 1) if last else 1
             prev_hash = last.hash_chain if last else "0" * 64
 

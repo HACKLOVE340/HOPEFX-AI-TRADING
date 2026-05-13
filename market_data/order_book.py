@@ -455,7 +455,7 @@ class PolygonL2Feed:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     await ws.ping()
                     continue
 
@@ -657,7 +657,7 @@ class FinnhubTradeFeed:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     await ws.ping()
                     continue
 
@@ -884,8 +884,7 @@ class OrderBookFeed:
                 extra="Set L2_PROVIDER=multi and configure POLYGON_API_KEY.",
             )
             logger.warning(
-                "L2 feed using MockL2Feed (L2_PROVIDER=mock). "
-                "Only permitted in development/test environments."
+                "L2 feed using MockL2Feed (L2_PROVIDER=mock). Only permitted in development/test environments."
             )
             self._provider = MockL2Feed()
         else:

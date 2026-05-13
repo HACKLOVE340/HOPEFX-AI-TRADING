@@ -381,10 +381,10 @@ class NuclearAIChartEngine:
                     continue
 
                 close = [b["close"] for b in bar_list]
-                high  = [b["high"]  for b in bar_list]
-                low   = [b["low"]   for b in bar_list]
-                vol   = [b.get("volume", 0.0) for b in bar_list]
-                n     = len(close)
+                high = [b["high"] for b in bar_list]
+                low = [b["low"] for b in bar_list]
+                vol = [b.get("volume", 0.0) for b in bar_list]
+                n = len(close)
 
                 def _pad(series: list[float], length: int) -> list[float | None]:
                     """Left-pad with None so series aligns to bar timestamps."""
@@ -422,8 +422,8 @@ class NuclearAIChartEngine:
                 # ── MACD ──────────────────────────────────────────────────────
                 macd_line, sig_line, histogram = MACD(fast=12, slow=26, signal=9).calculate_full(close)
                 tf_indicators["MACD"] = {
-                    "macd":      _pad(macd_line, n),
-                    "signal":    _pad(sig_line,  n),
+                    "macd": _pad(macd_line, n),
+                    "signal": _pad(sig_line, n),
                     "histogram": _pad(histogram, n),
                     "type": "oscillator",
                 }
@@ -431,9 +431,9 @@ class NuclearAIChartEngine:
                 # ── Bollinger Bands ───────────────────────────────────────────
                 bb_upper, bb_mid, bb_lower = BollingerBands(period=20, std_dev=2.0).calculate_full(close)
                 tf_indicators["BB"] = {
-                    "upper":  _pad(bb_upper, n),
-                    "middle": _pad(bb_mid,   n),
-                    "lower":  _pad(bb_lower, n),
+                    "upper": _pad(bb_upper, n),
+                    "middle": _pad(bb_mid, n),
+                    "lower": _pad(bb_lower, n),
                     "period": 20,
                     "std_dev": 2.0,
                     "type": "overlay",
@@ -477,9 +477,9 @@ class NuclearAIChartEngine:
                 # ── ADX ───────────────────────────────────────────────────────
                 adx_vals, plus_di, minus_di = ADX(period=14).calculate_full(high, low, close)
                 tf_indicators["ADX"] = {
-                    "adx":      _pad(adx_vals,  n),
-                    "plus_di":  _pad(plus_di,   n),
-                    "minus_di": _pad(minus_di,  n),
+                    "adx": _pad(adx_vals, n),
+                    "plus_di": _pad(plus_di, n),
+                    "minus_di": _pad(minus_di, n),
                     "period": 14,
                     "type": "oscillator",
                 }
@@ -487,11 +487,11 @@ class NuclearAIChartEngine:
                 # ── Ichimoku Cloud ────────────────────────────────────────────
                 ich = Ichimoku(tenkan=9, kijun=26, senkou_b=52).calculate_full(high, low, close)
                 tf_indicators["ICHIMOKU"] = {
-                    "tenkan":   _pad(ich["tenkan"],   n),
-                    "kijun":    _pad(ich["kijun"],    n),
+                    "tenkan": _pad(ich["tenkan"], n),
+                    "kijun": _pad(ich["kijun"], n),
                     "senkou_a": _pad(ich["senkou_a"], n),
                     "senkou_b": _pad(ich["senkou_b"], n),
-                    "chikou":   list(ich["chikou"]),
+                    "chikou": list(ich["chikou"]),
                     "type": "overlay",
                 }
 

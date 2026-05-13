@@ -777,12 +777,12 @@ except Exception as e:
 # =============================================================================
 # SUMMARY
 # =============================================================================
-logger.info("\n%s%s%s", BOLD, '=' * 60, RESET)
+logger.info("\n%s%s%s", BOLD, "=" * 60, RESET)
 logger.info("%sHARDENING AUDIT SUMMARY%s", BOLD, RESET)
 logger.info("  %sPassed:   %s%s", GREEN, len(passed), RESET)
 logger.warning("  %sWarnings: %s%s", YELLOW, len(warned), RESET)
 logger.error("  %sFailed:   %s%s", RED, len(failed), RESET)
-logger.info("%s%s%s", BOLD, '=' * 60, RESET)
+logger.info("%s%s%s", BOLD, "=" * 60, RESET)
 
 if failed:
     logger.error("\n%sFAILED CHECKS:%s", RED, RESET)

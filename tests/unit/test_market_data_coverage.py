@@ -419,7 +419,7 @@ from market_data.redis_cache import MarketDataCache
 class _FakeRedisPipeline:
     """Pipeline proxy that queues commands against a FakeRedis instance."""
 
-    def __init__(self, redis: "FakeRedis"):
+    def __init__(self, redis: FakeRedis):
         self._redis = redis
         self._queue: list[tuple] = []
 
@@ -502,9 +502,12 @@ class FakeRedis:
         if key not in self._zsets:
             return
         self._zsets[key] = {
-            k: s for k, s in self._zsets[key].items()
-            if not (s >= (min_score if min_score != "-inf" else float("-inf")) and
-                    s <= (max_score if max_score != "+inf" else float("inf")))
+            k: s
+            for k, s in self._zsets[key].items()
+            if not (
+                s >= (min_score if min_score != "-inf" else float("-inf"))
+                and s <= (max_score if max_score != "+inf" else float("inf"))
+            )
         }
 
     def zremrangebyrank(self, key, start, stop):

@@ -23,10 +23,12 @@ POST   /api/indicators/calculate          — calculate a built-in indicator on 
 from __future__ import annotations
 
 import logging
+import math
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from starlette import status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -67,6 +69,7 @@ class CalculateRequest(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _load_indicators(user_id: str) -> list[dict]:
     stored = db_get(_INDICATORS_KEY.format(uid=user_id))
     if stored and isinstance(stored, list):
@@ -81,33 +84,62 @@ def _save_indicators(user_id: str, indicators: list[dict]) -> None:
 # ── Built-in indicator catalogue ──────────────────────────────────────────────
 
 _BUILTIN_INDICATORS = [
-    {"type": "sma", "name": "Simple Moving Average", "params": [{"key": "period", "default": 14, "min": 2, "max": 500}]},
-    {"type": "ema", "name": "Exponential Moving Average", "params": [{"key": "period", "default": 14, "min": 2, "max": 500}]},
-    {"type": "wma", "name": "Weighted Moving Average", "params": [{"key": "period", "default": 14, "min": 2, "max": 500}]},
-    {"type": "rsi", "name": "Relative Strength Index", "params": [{"key": "period", "default": 14, "min": 2, "max": 100}]},
-    {"type": "macd", "name": "MACD", "params": [
-        {"key": "fast", "default": 12}, {"key": "slow", "default": 26}, {"key": "signal", "default": 9}
-    ]},
-    {"type": "bollinger", "name": "Bollinger Bands", "params": [
-        {"key": "period", "default": 20}, {"key": "std_dev", "default": 2.0}
-    ]},
+    {
+        "type": "sma",
+        "name": "Simple Moving Average",
+        "params": [{"key": "period", "default": 14, "min": 2, "max": 500}],
+    },
+    {
+        "type": "ema",
+        "name": "Exponential Moving Average",
+        "params": [{"key": "period", "default": 14, "min": 2, "max": 500}],
+    },
+    {
+        "type": "wma",
+        "name": "Weighted Moving Average",
+        "params": [{"key": "period", "default": 14, "min": 2, "max": 500}],
+    },
+    {
+        "type": "rsi",
+        "name": "Relative Strength Index",
+        "params": [{"key": "period", "default": 14, "min": 2, "max": 100}],
+    },
+    {
+        "type": "macd",
+        "name": "MACD",
+        "params": [{"key": "fast", "default": 12}, {"key": "slow", "default": 26}, {"key": "signal", "default": 9}],
+    },
+    {
+        "type": "bollinger",
+        "name": "Bollinger Bands",
+        "params": [{"key": "period", "default": 20}, {"key": "std_dev", "default": 2.0}],
+    },
     {"type": "atr", "name": "Average True Range", "params": [{"key": "period", "default": 14}]},
-    {"type": "stochastic", "name": "Stochastic Oscillator", "params": [
-        {"key": "k_period", "default": 14}, {"key": "d_period", "default": 3}
-    ]},
+    {
+        "type": "stochastic",
+        "name": "Stochastic Oscillator",
+        "params": [{"key": "k_period", "default": 14}, {"key": "d_period", "default": 3}],
+    },
     {"type": "adx", "name": "Average Directional Index", "params": [{"key": "period", "default": 14}]},
     {"type": "cci", "name": "Commodity Channel Index", "params": [{"key": "period", "default": 20}]},
     {"type": "obv", "name": "On-Balance Volume", "params": []},
     {"type": "vwap", "name": "Volume Weighted Average Price", "params": []},
-    {"type": "ichimoku", "name": "Ichimoku Cloud", "params": [
-        {"key": "tenkan", "default": 9}, {"key": "kijun", "default": 26}, {"key": "senkou_b", "default": 52}
-    ]},
+    {
+        "type": "ichimoku",
+        "name": "Ichimoku Cloud",
+        "params": [
+            {"key": "tenkan", "default": 9},
+            {"key": "kijun", "default": 26},
+            {"key": "senkou_b", "default": 52},
+        ],
+    },
     {"type": "williams_r", "name": "Williams %R", "params": [{"key": "period", "default": 14}]},
     {"type": "mfi", "name": "Money Flow Index", "params": [{"key": "period", "default": 14}]},
 ]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("", summary="List user's custom indicators")
 async def list_indicators(user: TokenPayload = Depends(get_current_user)) -> dict:
@@ -146,7 +178,7 @@ async def list_builtin_indicators() -> dict:
 async def calculate_indicator(body: CalculateRequest) -> dict:
     """Apply a built-in indicator to a data series and return the result."""
     try:
-        from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, ATR, StochasticOscillator, ADX, CCI, OBV, VWAP, WilliamsR, MFI
+        from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, CCI, WilliamsR
 
         ind_type = body.indicator_type.lower()
         data = body.data
@@ -205,10 +237,11 @@ async def preview_indicator(
     closes: list[float] = []
     try:
         from brokers.ohlcv_store import OHLCVStore
+
         store = OHLCVStore()
         bars = store.get_bars(body.symbol, "H1", limit=body.periods)
         if bars:
-            closes = [float(b["close"]) for b in bars[-body.periods:]]
+            closes = [float(b["close"]) for b in bars[-body.periods :]]
     except Exception:  # nosec B110
         pass
 
@@ -231,24 +264,27 @@ async def preview_indicator(
     try:
         if formula.startswith("SMA("):
             import re
+
             m = re.search(r"SMA\(.*?,\s*(\d+)\)", formula)
             period = int(m.group(1)) if m else 20
             for i in range(len(closes)):
                 if i < period - 1:
                     result.append(float("nan"))
                 else:
-                    result.append(round(sum(closes[i - period + 1:i + 1]) / period, 5))
+                    result.append(round(sum(closes[i - period + 1 : i + 1]) / period, 5))
         elif formula.startswith("EMA("):
             import re
+
             m = re.search(r"EMA\(.*?,\s*(\d+)\)", formula)
             period = int(m.group(1)) if m else 20
             k = 2 / (period + 1)
             ema = closes[0]
-            for i, c in enumerate(closes):
+            for _i, c in enumerate(closes):
                 ema = c * k + ema * (1 - k)
                 result.append(round(ema, 5))
         elif formula.startswith("RSI("):
             import re
+
             m = re.search(r"RSI\(.*?,\s*(\d+)\)", formula)
             period = int(m.group(1)) if m else 14
             gains, losses = [], []
@@ -258,8 +294,8 @@ async def preview_indicator(
                 losses.append(max(-diff, 0))
             result = [float("nan")] * len(closes)
             for i in range(period, len(closes)):
-                avg_gain = sum(gains[i - period:i]) / period
-                avg_loss = sum(losses[i - period:i]) / period
+                avg_gain = sum(gains[i - period : i]) / period
+                avg_loss = sum(losses[i - period : i]) / period
                 rs = avg_gain / avg_loss if avg_loss > 0 else 100
                 result[i] = round(100 - (100 / (1 + rs)), 2)
         else:
@@ -268,11 +304,7 @@ async def preview_indicator(
     except Exception:
         result = closes
 
-    points = [
-        {"index": i, "value": v}
-        for i, v in enumerate(result)
-        if not (isinstance(v, float) and math.isnan(v))
-    ]
+    points = [{"index": i, "value": v} for i, v in enumerate(result) if not (isinstance(v, float) and math.isnan(v))]
     return {"formula": body.formula, "symbol": body.symbol, "data": points, "total": len(points)}
 
 
@@ -370,6 +402,7 @@ async def apply_indicator(
     closes: list[float] = []
     try:
         from core.app_state import app_state
+
         nuclear = getattr(app_state, "nuclear_streamer", None)
         if nuclear and hasattr(nuclear, "get_ohlcv"):
             candles = nuclear.get_ohlcv(symbol, timeframe, limit)
@@ -388,11 +421,13 @@ async def apply_indicator(
 
     # Calculate
     try:
-        calc_result = await calculate_indicator(CalculateRequest(
-            indicator_type=ind["type"],
-            params=ind.get("params", {}),
-            data=closes,
-        ))
+        calc_result = await calculate_indicator(
+            CalculateRequest(
+                indicator_type=ind["type"],
+                params=ind.get("params", {}),
+                data=closes,
+            )
+        )
         return {
             "indicator_id": indicator_id,
             "symbol": symbol,
@@ -428,6 +463,7 @@ async def test_indicator(
     closes: list[float] = []
     try:
         from core.app_state import app_state
+
         nuclear = getattr(app_state, "nuclear_streamer", None)
         if nuclear and hasattr(nuclear, "get_ohlcv"):
             candles = nuclear.get_ohlcv(body.symbol, body.timeframe, body.limit)
@@ -444,13 +480,15 @@ async def test_indicator(
         }
 
     try:
-        calc_result = await calculate_indicator(CalculateRequest(
-            indicator_type=ind["type"],
-            params=ind.get("params", {}),
-            data=closes,
-        ))
+        calc_result = await calculate_indicator(
+            CalculateRequest(
+                indicator_type=ind["type"],
+                params=ind.get("params", {}),
+                data=closes,
+            )
+        )
         values = calc_result.get("result", {}).get("values", [])
-        sample = [v for v in values if v is not None and not (isinstance(v, float) and v != v)][:20]
+        sample = [v for v in values if v is not None and not (isinstance(v, float) and math.isnan(v))][:20]
         passed = len(sample) > 0
         return {
             "indicator_id": indicator_id,

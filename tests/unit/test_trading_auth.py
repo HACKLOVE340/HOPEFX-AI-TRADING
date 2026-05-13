@@ -176,6 +176,7 @@ def app(mock_broker, mock_brain, tmp_path, monkeypatch):
     os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
     import types
+
     state = types.SimpleNamespace(
         broker=mock_broker,
         brain=mock_brain,

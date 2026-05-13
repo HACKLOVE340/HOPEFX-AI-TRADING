@@ -747,14 +747,14 @@ def main() -> int:
     logger.info("  Walk-forward acc:  %.3f ± %.3f", cv_acc_mean, cv_acc_std)
     logger.info("  Walk-forward AUC:  %.3f", np.mean(cv_aucs))
     logger.info("")
-    logger.info("  OOS accuracy:      %.3f  (all predictions)", oos_metrics['accuracy'])
-    logger.info("  OOS acc confident: %.3f  (conf > %s)", oos_metrics['accuracy_confident'], ABSTAIN_THRESHOLD)
-    logger.info("  OOS AUC:           %.3f", oos_metrics['auc'])
-    logger.info("  OOS F1:            %.3f", oos_metrics['f1'])
+    logger.info("  OOS accuracy:      %.3f  (all predictions)", oos_metrics["accuracy"])
+    logger.info("  OOS acc confident: %.3f  (conf > %s)", oos_metrics["accuracy_confident"], ABSTAIN_THRESHOLD)
+    logger.info("  OOS AUC:           %.3f", oos_metrics["auc"])
+    logger.info("  OOS F1:            %.3f", oos_metrics["f1"])
     logger.info(
         f"  OOS p-value:       {oos_metrics['p_value']:.4f}  {'✓ significant' if oos_metrics['significant'] else '✗ not significant'}"
     )
-    logger.info("  Abstain rate:      %.1f%%", oos_metrics['abstain_rate'] * 100)
+    logger.info("  Abstain rate:      %.1f%%", oos_metrics["abstain_rate"] * 100)
     logger.info("")
 
     target_met = oos_metrics["accuracy_confident"] >= 0.68

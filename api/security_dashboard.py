@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
@@ -252,13 +252,25 @@ async def activate_lockdown(
         mgr = get_lockdown_manager()
         mgr.activate(reason=req.reason, activated_by=user.sub)
         logger.warning("Lockdown ACTIVATED by admin: user=%s reason=%s", user.sub, req.reason)
-        return {"status": "active", "lockdown_active": True, "reason": req.reason, "activated_by": user.sub, "activated_at": activated_at}
+        return {
+            "status": "active",
+            "lockdown_active": True,
+            "reason": req.reason,
+            "activated_by": user.sub,
+            "activated_at": activated_at,
+        }
     except Exception as _exc:
         logger.debug("Lockdown manager unavailable (enable path), using in-memory: %s", _exc)
 
     _lockdown_state = {"active": True, "reason": req.reason, "activated_at": activated_at}
     logger.warning("Lockdown ACTIVATED (in-memory): user=%s reason=%s", user.sub, req.reason)
-    return {"status": "active", "lockdown_active": True, "reason": req.reason, "activated_by": user.sub, "activated_at": activated_at}
+    return {
+        "status": "active",
+        "lockdown_active": True,
+        "reason": req.reason,
+        "activated_by": user.sub,
+        "activated_at": activated_at,
+    }
 
 
 @router.post(
@@ -589,12 +601,14 @@ async def quarantine_threat(
 
 # ── Security status summary ───────────────────────────────────────────────────
 
+
 @router.get("/status", response_model=None, summary="Security system status summary")
 async def get_security_status(user: TokenPayload = Depends(require_role("admin"))):
     """Consolidated security status for the SecurityDashboard page."""
     lockdown_active = False
     try:
         from api.db_store import db_get
+
         ld = db_get("lockdown_status") or {}
         lockdown_active = bool(ld.get("active", False))
     except Exception:  # nosec B110
@@ -605,6 +619,7 @@ async def get_security_status(user: TokenPayload = Depends(require_role("admin")
     pending_fixes = 0
     try:
         from api.security.fixes import _fix_store
+
         pending_fixes = sum(1 for f in _fix_store.values() if f.get("status") == "pending")
     except Exception:  # nosec B110
         pass
@@ -632,6 +647,7 @@ async def unblock_ip_address(
         _blocked_ips.remove(ip)
     try:
         from api.db_store import db_get, db_set
+
         blocked = db_get("blocked_ips") or []
         blocked = [b for b in blocked if b.get("ip") != ip]
         db_set("blocked_ips", blocked, changed_by=user.sub)
@@ -655,17 +671,19 @@ async def block_ip_address(
         _blocked_ips.append(ip)
     try:
         from api.db_store import db_get, db_set
+
         blocked = db_get("blocked_ips") or []
         if not any(b.get("ip") == ip for b in blocked):
-            blocked.append({
-                "ip": ip,
-                "reason": reason,
-                "blocked_by": user.sub,
-                "blocked_at": datetime.now(UTC).isoformat(),
-            })
+            blocked.append(
+                {
+                    "ip": ip,
+                    "reason": reason,
+                    "blocked_by": user.sub,
+                    "blocked_at": datetime.now(UTC).isoformat(),
+                }
+            )
         db_set("blocked_ips", blocked, changed_by=user.sub)
     except Exception:  # nosec B110
         pass
     logger.warning("IP blocked: %s reason=%s by %s", ip, reason, user.sub)
     return {"success": True, "ip": ip, "reason": reason, "action": "blocked"}
-

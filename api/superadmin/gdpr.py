@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -33,14 +31,15 @@ from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_GDPR_REQUESTS_KEY   = "superadmin:gdpr:requests"
-_CONSENT_LOG_KEY     = "superadmin:gdpr:consent_log"
-_RETENTION_KEY       = "superadmin:gdpr:retention_policies"
+_GDPR_REQUESTS_KEY = "superadmin:gdpr:requests"
+_CONSENT_LOG_KEY = "superadmin:gdpr:consent_log"
+_RETENTION_KEY = "superadmin:gdpr:retention_policies"
 
 
 def _load_gdpr_requests() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_GDPR_REQUESTS_KEY)
@@ -54,6 +53,7 @@ def _load_gdpr_requests() -> list[dict]:
 def _save_gdpr_requests(reqs: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_GDPR_REQUESTS_KEY, json.dumps(reqs), ex=86400 * 365)
@@ -74,6 +74,7 @@ async def get_gdpr_requests(
     try:
         from database.connection import SessionLocal
         from database.models import AuditLogEntry
+
         db = SessionLocal()
         try:
             rows = (
@@ -88,17 +89,19 @@ async def get_gdpr_requests(
                 rid = f"gdpr_{row.id}"
                 if rid not in existing_ids:
                     meta = json.loads(row.metadata or "{}") if row.metadata else {}
-                    reqs.append({
-                        "request_id": rid,
-                        "user_id": str(row.user_id) if row.user_id else "unknown",
-                        "username": meta.get("username", "unknown"),
-                        "email": meta.get("email", ""),
-                        "request_type": meta.get("request_type", "export"),
-                        "status": "pending",
-                        "submitted_at": row.created_at.isoformat() if row.created_at else _utcnow().isoformat(),
-                        "completed_at": None,
-                        "notes": row.detail or "",
-                    })
+                    reqs.append(
+                        {
+                            "request_id": rid,
+                            "user_id": str(row.user_id) if row.user_id else "unknown",
+                            "username": meta.get("username", "unknown"),
+                            "email": meta.get("email", ""),
+                            "request_type": meta.get("request_type", "export"),
+                            "status": "pending",
+                            "submitted_at": row.created_at.isoformat() if row.created_at else _utcnow().isoformat(),
+                            "completed_at": None,
+                            "notes": row.detail or "",
+                        }
+                    )
         finally:
             db.close()
     except Exception as exc:
@@ -130,13 +133,15 @@ async def process_gdpr_request(
             found = True
             break
     if not found:
-        reqs.append({
-            "request_id": req_id,
-            "status": "completed" if action == "approve" else "rejected",
-            "completed_at": _utcnow().isoformat(),
-            "processed_by": user.sub,
-            "notes": notes,
-        })
+        reqs.append(
+            {
+                "request_id": req_id,
+                "status": "completed" if action == "approve" else "rejected",
+                "completed_at": _utcnow().isoformat(),
+                "processed_by": user.sub,
+                "notes": notes,
+            }
+        )
     _save_gdpr_requests(reqs)
     _log_superadmin_action(user, f"gdpr_request_{action}", {"req_id": req_id, "notes": notes})
     return {"ok": True, "req_id": req_id, "status": "completed" if action == "approve" else "rejected"}
@@ -152,6 +157,7 @@ async def export_user_data(
         from database.connection import SessionLocal
         from database.user_models import User
         from database.models import Trade, AuditLogEntry
+
         db = SessionLocal()
         try:
             u = db.query(User).filter(User.user_id == user_id).first()
@@ -165,15 +171,23 @@ async def export_user_data(
                 }
             trades = db.query(Trade).filter(Trade.user_id == user_id).limit(1000).all()
             export_data["trades"] = [
-                {"trade_id": str(t.trade_id), "symbol": t.symbol, "side": t.side,
-                 "quantity": float(t.quantity or 0), "pnl": float(t.pnl or 0),
-                 "created_at": t.created_at.isoformat() if t.created_at else None}
+                {
+                    "trade_id": str(t.trade_id),
+                    "symbol": t.symbol,
+                    "side": t.side,
+                    "quantity": float(t.quantity or 0),
+                    "pnl": float(t.pnl or 0),
+                    "created_at": t.created_at.isoformat() if t.created_at else None,
+                }
                 for t in trades
             ]
             audit = db.query(AuditLogEntry).filter(AuditLogEntry.user_id == user_id).limit(500).all()
             export_data["audit_log"] = [
-                {"event_type": a.event_type, "detail": a.detail,
-                 "created_at": a.created_at.isoformat() if a.created_at else None}
+                {
+                    "event_type": a.event_type,
+                    "detail": a.detail,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
                 for a in audit
             ]
         finally:
@@ -195,6 +209,7 @@ async def erase_user_data(
     try:
         from database.connection import SessionLocal
         from database.user_models import User
+
         db = SessionLocal()
         try:
             u = db.query(User).filter(User.user_id == user_id).first()
@@ -224,6 +239,7 @@ async def get_consent_log(
     try:
         from database.connection import SessionLocal
         from database.models import AuditLogEntry
+
         db = SessionLocal()
         try:
             q = db.query(AuditLogEntry).filter(
@@ -234,15 +250,17 @@ async def get_consent_log(
             rows = q.order_by(AuditLogEntry.created_at.desc()).limit(limit).all()
             for r in rows:
                 meta = json.loads(r.metadata or "{}") if r.metadata else {}
-                entries.append({
-                    "entry_id": str(r.id),
-                    "user_id": str(r.user_id) if r.user_id else None,
-                    "event_type": r.event_type,
-                    "consent_type": meta.get("consent_type", "terms"),
-                    "version": meta.get("version", "1.0"),
-                    "ip_address": getattr(r, "ip_address", None),
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                })
+                entries.append(
+                    {
+                        "entry_id": str(r.id),
+                        "user_id": str(r.user_id) if r.user_id else None,
+                        "event_type": r.event_type,
+                        "consent_type": meta.get("consent_type", "terms"),
+                        "version": meta.get("version", "1.0"),
+                        "ip_address": getattr(r, "ip_address", None),
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                )
         finally:
             db.close()
     except Exception as exc:
@@ -251,7 +269,7 @@ async def get_consent_log(
 
 
 _DEFAULT_RETENTION = {
-    "trade_records_days": 2555,   # 7 years (regulatory)
+    "trade_records_days": 2555,  # 7 years (regulatory)
     "audit_log_days": 2555,
     "user_pii_days": 365,
     "session_logs_days": 90,
@@ -267,6 +285,7 @@ async def get_retention_policies(
     policies = _DEFAULT_RETENTION.copy()
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_RETENTION_KEY)
@@ -284,6 +303,7 @@ async def update_retention_policies(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_RETENTION_KEY)

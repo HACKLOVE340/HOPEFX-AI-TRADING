@@ -851,7 +851,6 @@ def _register_signal_read_routes(router: Any) -> None:
 
     from api.auth import TokenPayload as _TokenPayload
     from api.auth import get_current_user as _get_current_user
-    from monetization.subscription import require_plan as _require_plan
 
     @router.get(
         "",

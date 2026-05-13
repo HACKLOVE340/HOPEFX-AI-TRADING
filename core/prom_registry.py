@@ -24,7 +24,7 @@ Usage::
 
 from __future__ import annotations
 
-from typing import List, Optional, Sequence
+from typing import Sequence
 
 try:
     from prometheus_client import Counter, Gauge, Histogram, Summary, REGISTRY
@@ -52,7 +52,7 @@ def prom_counter(
     name: str,
     documentation: str,
     labelnames: Sequence[str] = (),
-) -> "Optional[Counter]":
+) -> Counter | None:
     """Return (or create) a Counter without raising on duplicate registration."""
     if not _AVAILABLE:
         return None
@@ -66,7 +66,7 @@ def prom_gauge(
     name: str,
     documentation: str,
     labelnames: Sequence[str] = (),
-) -> "Optional[Gauge]":
+) -> Gauge | None:
     """Return (or create) a Gauge without raising on duplicate registration."""
     if not _AVAILABLE:
         return None
@@ -80,8 +80,8 @@ def prom_histogram(
     name: str,
     documentation: str,
     labelnames: Sequence[str] = (),
-    buckets: "Sequence[float]" = Histogram.DEFAULT_BUCKETS if _AVAILABLE else (),  # type: ignore[attr-defined]
-) -> "Optional[Histogram]":
+    buckets: Sequence[float] = Histogram.DEFAULT_BUCKETS if _AVAILABLE else (),  # type: ignore[attr-defined]
+) -> Histogram | None:
     """Return (or create) a Histogram without raising on duplicate registration."""
     if not _AVAILABLE:
         return None
@@ -95,7 +95,7 @@ def prom_summary(
     name: str,
     documentation: str,
     labelnames: Sequence[str] = (),
-) -> "Optional[Summary]":
+) -> Summary | None:
     """Return (or create) a Summary without raising on duplicate registration."""
     if not _AVAILABLE:
         return None

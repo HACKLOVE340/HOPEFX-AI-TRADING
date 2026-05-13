@@ -248,7 +248,9 @@ class OutboxRelay:
                         row.status = "published"
                         logger.debug(
                             "outbox: idempotency skip id=%d key=%s (already published as id=%d)",
-                            row.id, row.idempotency_key, already.id,
+                            row.id,
+                            row.idempotency_key,
+                            already.id,
                         )
                         continue
 

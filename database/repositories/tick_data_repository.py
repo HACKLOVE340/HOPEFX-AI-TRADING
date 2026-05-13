@@ -71,7 +71,7 @@ class TickDataRepository(AsyncRepository[TickData]):
         )
         session.add(tick)
         await session.flush()
-        try:
+        try:  # noqa: SIM105
             await session.refresh(tick)
         except Exception:  # nosec B110
             pass  # BigInteger PK refresh may fail on SQLite; safe to ignore
@@ -126,12 +126,7 @@ class TickDataRepository(AsyncRepository[TickData]):
         conditions = [TickData.symbol == symbol]
         if source:
             conditions.append(TickData.source == source)
-        stmt = (
-            select(TickData)
-            .where(and_(*conditions))
-            .order_by(desc(TickData.ts_ns))
-            .limit(n)
-        )
+        stmt = select(TickData).where(and_(*conditions)).order_by(desc(TickData.ts_ns)).limit(n)
         result = await session.execute(stmt)
         rows = list(result.scalars().all())
         return list(reversed(rows))
@@ -155,11 +150,7 @@ class TickDataRepository(AsyncRepository[TickData]):
             conditions.append(TickData.source == source)
         if quality:
             conditions.append(TickData.quality == quality)
-        stmt = (
-            select(TickData)
-            .where(and_(*conditions))
-            .order_by(asc(TickData.ts_ns))
-        )
+        stmt = select(TickData).where(and_(*conditions)).order_by(asc(TickData.ts_ns))
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -196,12 +187,7 @@ class TickDataRepository(AsyncRepository[TickData]):
         conditions = [TickData.symbol == symbol]
         if source:
             conditions.append(TickData.source == source)
-        stmt = (
-            select(TickData)
-            .where(and_(*conditions))
-            .order_by(desc(TickData.ts_ns))
-            .limit(1)
-        )
+        stmt = select(TickData).where(and_(*conditions)).order_by(desc(TickData.ts_ns)).limit(1)
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 

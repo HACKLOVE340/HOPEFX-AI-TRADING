@@ -702,7 +702,7 @@ def main():
         logger.info(
             f"  Walk-forward accuracy : {wf['mean_accuracy']:.3f} ± {wf['std_accuracy']:.3f}",
         )
-        logger.info("  Walk-forward F1       : %.3f", wf['mean_f1'])
+        logger.info("  Walk-forward F1       : %.3f", wf["mean_f1"])
         mean_sharpe = wf.get("mean_sharpe", 0.0)
         logger.info(
             f"  Walk-forward Sharpe   : {mean_sharpe:.3f}  (annualised, 1-bar, no costs — N < 250: SE ≈ ±0.54)",
@@ -711,9 +711,9 @@ def main():
             f"  p-value (vs random)   : {wf['p_value']:.4f}"
             f"  {'✓ significant' if wf['significant'] else '✗ not significant'}",
         )
-        logger.info("  Final holdout accuracy: %.3f", fin['accuracy'])
-        logger.info("  Final holdout F1      : %.3f", fin['f1'])
-        logger.info("  Features used         : %s", fin['feature_count'])
+        logger.info("  Final holdout accuracy: %.3f", fin["accuracy"])
+        logger.info("  Final holdout F1      : %.3f", fin["f1"])
+        logger.info("  Features used         : %s", fin["feature_count"])
         if f"oos_{model_type}" in report:
             oos = report[f"oos_{model_type}"]
             sig = "✓ significant" if oos["significant"] else "✗ not significant"
@@ -724,9 +724,9 @@ def main():
             logger.info(
                 f"  OOS accuracy          : {oos['accuracy']:.3f} ± {acc_se:.3f}  (n={oos['oos_size']})",
             )
-            logger.info("  OOS F1                : %.3f", oos['f1'])
-            logger.info("  OOS AUC               : %.3f", oos.get('auc', 0.0))
-            logger.info("  OOS p-value (binomial): %.4f  %s", oos['p_value_binomial'], sig)
+            logger.info("  OOS F1                : %.3f", oos["f1"])
+            logger.info("  OOS AUC               : %.3f", oos.get("auc", 0.0))
+            logger.info("  OOS p-value (binomial): %.4f  %s", oos["p_value_binomial"], sig)
 
     logger.info("")
     logger.info("  ─── Sharpe significance ─────────────────────────────────────")

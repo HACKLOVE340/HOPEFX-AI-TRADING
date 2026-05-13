@@ -31,10 +31,10 @@ Public API
   get_multi_source_feed — module-level singleton factory
   get_feed_status       — returns status dict for the singleton (diagnostics)
 """
+
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import inspect
 import logging
 import os
@@ -74,6 +74,7 @@ _FALLBACK_ORDER = ["yfinance", "alpha_vantage", "twelve_data"]
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _resolve_env(v: Any) -> str:
     """Expand ``${VAR:default}`` placeholders in YAML string values."""
     if not isinstance(v, str):
@@ -101,8 +102,7 @@ def _required_param_count(handler: Any) -> int:
             1
             for p in sig.parameters.values()
             if p.default is inspect.Parameter.empty
-            and p.kind
-            not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+            and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
         )
     except (ValueError, TypeError):
         return 1
@@ -110,11 +110,19 @@ def _required_param_count(handler: Any) -> int:
 
 # ── Per-symbol state ──────────────────────────────────────────────────────────
 
+
 class _SymbolState:
     __slots__ = (
-        "symbol", "current_price", "last_update", "active_source",
-        "fail_counts", "circuit_open_at", "history",
-        "price_min", "price_max", "last_price_for_anomaly",
+        "symbol",
+        "current_price",
+        "last_update",
+        "active_source",
+        "fail_counts",
+        "circuit_open_at",
+        "history",
+        "price_min",
+        "price_max",
+        "last_price_for_anomaly",
     )
 
     def __init__(self, symbol: str, price_min: float, price_max: float, history_size: int) -> None:
@@ -152,7 +160,9 @@ class _SymbolState:
                 _CBG.labels(symbol=self.symbol, source=source).set(1)
             logger.warning(
                 "MultiSourceFeed[%s]: circuit OPEN for '%s' after %d failures",
-                self.symbol, source, self.fail_counts[source],
+                self.symbol,
+                source,
+                self.fail_counts[source],
             )
 
     def record_success(self, source: str, price: float) -> None:
@@ -192,6 +202,7 @@ class _SymbolState:
 
 
 # ── Main feed class ───────────────────────────────────────────────────────────
+
 
 class MultiSourceTickFeed:
     """
@@ -237,9 +248,9 @@ class MultiSourceTickFeed:
             "twelve_data": bool(self._cfg.get("twelve_data", {}).get("enabled", True)),
         }
         # Effective fallback order — only enabled sources.
-        self._active_order: list[str] = [
-            s for s in self._fallback_order if self._source_enabled.get(s, True)
-        ] or list(self._fallback_order)
+        self._active_order: list[str] = [s for s in self._fallback_order if self._source_enabled.get(s, True)] or list(
+            self._fallback_order
+        )
 
         symbols_cfg = self._cfg.get("symbols", {})
         active = symbols or list(symbols_cfg.keys()) or ["XAUUSD"]
@@ -329,7 +340,8 @@ class MultiSourceTickFeed:
         self._subscribers.append((component, n))
         logger.info(
             "MultiSourceTickFeed: %s subscribed (on_new_price params=%d)",
-            type(component).__name__, n,
+            type(component).__name__,
+            n,
         )
 
     def unsubscribe(self, component: Any) -> None:
@@ -341,9 +353,7 @@ class MultiSourceTickFeed:
         if self._running:
             return
         self._running = True
-        self._session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self._timeout_s)
-        )
+        self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout_s))
         self._sources = self._build_sources()
 
         # Share the session with HTTP-based sources.
@@ -360,19 +370,13 @@ class MultiSourceTickFeed:
             self._tick_writer = RedisTickWriter(tick_key_ttl=self._tick_key_ttl)
             await self._tick_writer.connect()
         except Exception as exc:
-            logger.warning(
-                "MultiSourceTickFeed: RedisTickWriter init failed (non-fatal): %s", exc
-            )
+            logger.warning("MultiSourceTickFeed: RedisTickWriter init failed (non-fatal): %s", exc)
             self._tick_writer = None
 
         # Launch one polling task per symbol plus the health monitor.
         for sym in self._states:
-            self._tasks.append(
-                asyncio.create_task(self._poll_symbol(sym), name=f"msf_poll_{sym}")
-            )
-        self._tasks.append(
-            asyncio.create_task(self._health_monitor(), name="msf_health")
-        )
+            self._tasks.append(asyncio.create_task(self._poll_symbol(sym), name=f"msf_poll_{sym}"))
+        self._tasks.append(asyncio.create_task(self._health_monitor(), name="msf_health"))
 
         logger.info(
             "MultiSourceTickFeed started | %d symbol(s) | refresh=%.1fs | redis=%s",
@@ -407,17 +411,10 @@ class MultiSourceTickFeed:
         return {
             "running": self._running,
             "symbols": {sym: st.status() for sym, st in self._states.items()},
-            "sources": {
-                n: s.status() if hasattr(s, "status") else {}
-                for n, s in self._sources.items()
-            },
+            "sources": {n: s.status() if hasattr(s, "status") else {} for n, s in self._sources.items()},
             "source_enabled": self._source_enabled,
             "active_fallback_order": self._active_order,
-            "redis": (
-                self._tick_writer.status()
-                if self._tick_writer
-                else {"redis_connected": False}
-            ),
+            "redis": (self._tick_writer.status() if self._tick_writer else {"redis_connected": False}),
             "subscriber_count": len(self._subscribers),
             "redis_errors": self._redis_errors,
         }
@@ -437,13 +434,18 @@ class MultiSourceTickFeed:
                 if state.is_anomalous(price, self._anomaly_pct):
                     logger.warning(
                         "MultiSourceFeed[%s]: anomaly from '%s': %.4f→%.4f — discarded",
-                        symbol, source, state.last_price_for_anomaly, price,
+                        symbol,
+                        source,
+                        state.last_price_for_anomaly,
+                        price,
                     )
                     state.record_failure(source, self._cb_threshold)
                 elif not state.is_price_valid(price):
                     logger.warning(
                         "MultiSourceFeed[%s]: out-of-range from '%s': %.4f — discarded",
-                        symbol, source, price,
+                        symbol,
+                        source,
+                        price,
                     )
                     state.record_failure(source, self._cb_threshold)
                 else:
@@ -458,14 +460,15 @@ class MultiSourceTickFeed:
                             _LG.labels(symbol=symbol, source=source).set(latency_ms)
                         if _SG:
                             _SG.labels(symbol=symbol).set(
-                                self._active_order.index(source)
-                                if source in self._active_order
-                                else -1
+                                self._active_order.index(source) if source in self._active_order else -1
                             )
 
                     logger.debug(
                         "MultiSourceFeed[%s]: %.4f via '%s' (%.0f ms)",
-                        symbol, price, source, latency_ms,
+                        symbol,
+                        price,
+                        source,
+                        latency_ms,
                     )
                     await self._publish(symbol, price, source)
                     await self._broadcast(symbol, price)
@@ -476,14 +479,14 @@ class MultiSourceTickFeed:
                     state.active_source = nxt
                     logger.warning(
                         "MultiSourceFeed[%s]: '%s' failed — switching to '%s'",
-                        symbol, source, nxt,
+                        symbol,
+                        source,
+                        nxt,
                     )
 
             await asyncio.sleep(self._refresh_s)
 
-    async def _fetch_with_retry(
-        self, symbol: str, source: str, sym_cfg: dict
-    ) -> float | None:
+    async def _fetch_with_retry(self, symbol: str, source: str, sym_cfg: dict) -> float | None:
         adapter = self._sources.get(source)
         if adapter is None:
             return None
@@ -498,7 +501,11 @@ class MultiSourceTickFeed:
             except Exception as exc:
                 logger.warning(
                     "MultiSourceFeed[%s/%s]: attempt %d/%d: %s",
-                    symbol, source, attempt, self._max_retries, exc,
+                    symbol,
+                    source,
+                    attempt,
+                    self._max_retries,
+                    exc,
                 )
             if attempt < self._max_retries:
                 await asyncio.sleep(0.5 * attempt)
@@ -535,7 +542,9 @@ class MultiSourceTickFeed:
             except Exception as exc:
                 logger.error(
                     "MultiSourceFeed[%s]: subscriber %s call error: %s",
-                    symbol, type(component).__name__, exc,
+                    symbol,
+                    type(component).__name__,
+                    exc,
                 )
 
         if not tasks:
@@ -547,7 +556,9 @@ class MultiSourceTickFeed:
             if isinstance(result, Exception):
                 logger.error(
                     "MultiSourceFeed[%s]: subscriber %s raised: %s",
-                    symbol, type(component).__name__, result,
+                    symbol,
+                    type(component).__name__,
+                    result,
                 )
 
     async def _health_monitor(self) -> None:
@@ -560,13 +571,9 @@ class MultiSourceTickFeed:
                     continue
                 age_s = (now - state.last_update).total_seconds()
                 if age_s > self._max_stale_s:
-                    logger.warning(
-                        "MultiSourceFeed[%s]: stale (%.0f s) — rotating source", sym, age_s
-                    )
+                    logger.warning("MultiSourceFeed[%s]: stale (%.0f s) — rotating source", sym, age_s)
                     state.record_failure(state.active_source, self._cb_threshold)
-                    state.active_source = state.pick_source(
-                        self._active_order, self._cb_cooldown
-                    )
+                    state.active_source = state.pick_source(self._active_order, self._cb_cooldown)
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

@@ -271,6 +271,6 @@ docker-compose.prod.yml
 # Paper trading state (contains account snapshots)
 paper_trading_state.json
 paper_run_*.json
--e 
+-e
 # Auto-generated at runtime by security/antivirus.py
 security/yara_rules/

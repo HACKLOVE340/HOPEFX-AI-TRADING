@@ -57,33 +57,33 @@ logger = logging.getLogger(__name__)
 
 # ── channel names ─────────────────────────────────────────────────────────────
 # Core trading channels
-CH_TICK          = "hopefx:tick"           # raw market tick (bid/ask/timestamp)
-CH_SIGNAL        = "hopefx:signal"         # ML/RL trade signal (direction, confidence)
-CH_ORDER         = "hopefx:order"          # order request / fill confirmation
-CH_BREACH        = "hopefx:breach"         # risk breach / kill event
+CH_TICK = "hopefx:tick"  # raw market tick (bid/ask/timestamp)
+CH_SIGNAL = "hopefx:signal"  # ML/RL trade signal (direction, confidence)
+CH_ORDER = "hopefx:order"  # order request / fill confirmation
+CH_BREACH = "hopefx:breach"  # risk breach / kill event
 
 # Market microstructure channels (ws_live chart-bot)
 CH_MICROSTRUCTURE = "hopefx:microstructure"  # L2 order book snapshot
-CH_VOLUME_DELTA   = "hopefx:volume_delta"    # cumulative delta bar
+CH_VOLUME_DELTA = "hopefx:volume_delta"  # cumulative delta bar
 
 # Risk & equity channels
-CH_RISK_UPDATE   = "hopefx:risk_update"    # risk engine snapshot
+CH_RISK_UPDATE = "hopefx:risk_update"  # risk engine snapshot
 CH_EQUITY_UPDATE = "hopefx:equity_update"  # account equity snapshot
 
 # News & sentiment channels
-CH_NEWS_ITEM     = "hopefx:news_item"      # single news article
-CH_SENTIMENT     = "hopefx:sentiment"      # sentiment signal + recent articles
+CH_NEWS_ITEM = "hopefx:news_item"  # single news article
+CH_SENTIMENT = "hopefx:sentiment"  # sentiment signal + recent articles
 
 # System / admin channels
-CH_SYSTEM        = "hopefx:system"         # system-level events (halt, maintenance)
-CH_HEARTBEAT     = "hopefx:heartbeat"      # liveness heartbeat
+CH_SYSTEM = "hopefx:system"  # system-level events (halt, maintenance)
+CH_HEARTBEAT = "hopefx:heartbeat"  # liveness heartbeat
 
 # Convenience groupings
 MARKET_CHANNELS = (CH_TICK, CH_MICROSTRUCTURE, CH_VOLUME_DELTA)
 TRADING_CHANNELS = (CH_SIGNAL, CH_ORDER, CH_BREACH)
 ACCOUNT_CHANNELS = (CH_RISK_UPDATE, CH_EQUITY_UPDATE)
-INFO_CHANNELS    = (CH_NEWS_ITEM, CH_SENTIMENT)
-SYSTEM_CHANNELS  = (CH_SYSTEM, CH_HEARTBEAT)
+INFO_CHANNELS = (CH_NEWS_ITEM, CH_SENTIMENT)
+SYSTEM_CHANNELS = (CH_SYSTEM, CH_HEARTBEAT)
 
 ALL_CHANNELS = (
     CH_TICK,
@@ -276,7 +276,7 @@ class _LocalBus:
 
     def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
         """Remove a previously registered handler. No-op if handler is not registered."""
-        try:
+        try:  # noqa: SIM105
             self._handlers.get(channel, []).remove(handler)
         except ValueError:
             pass  # handler was not registered — safe to ignore
@@ -533,7 +533,7 @@ class EventBus:
                     queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     # Drop oldest message to make room (LIFO-style eviction)
-                    try:
+                    try:  # noqa: SIM105
                         queue.get_nowait()
                     except asyncio.QueueEmpty:  # nosec B110
                         pass
@@ -587,7 +587,7 @@ class EventBus:
                             ignore_subscribe_messages=True,
                             timeout=1.0,
                         )
-                    except (TimeoutError, asyncio.TimeoutError):
+                    except TimeoutError:
                         # No message within the poll window — normal for idle channels
                         continue
                     except Exception:

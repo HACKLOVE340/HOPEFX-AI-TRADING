@@ -17,6 +17,7 @@ GET /api/performance/public         — public summary stats (no auth required)
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 import math
 
 from fastapi import APIRouter, Depends
@@ -34,10 +35,10 @@ from pathlib import Path as _Path
 
 
 class EquityPoint(BaseModel):
-    timestamp: str   # ISO-8601 datetime string, e.g. "2025-01-15T14:30:00"
-    equity:    float  # Equity in account currency
-    drawdown:  float  # Drawdown as negative fraction, e.g. -0.05 = -5%
-    balance:   float  # Balance (same as equity when no open positions)
+    timestamp: str  # ISO-8601 datetime string, e.g. "2025-01-15T14:30:00"
+    equity: float  # Equity in account currency
+    drawdown: float  # Drawdown as negative fraction, e.g. -0.05 = -5%
+    balance: float  # Balance (same as equity when no open positions)
 
 
 class PublicPerformance(BaseModel):
@@ -56,6 +57,7 @@ class PublicPerformance(BaseModel):
 def _build_equity_points(equity_values: list[tuple], starting: float) -> list[EquityPoint]:
     """Convert a list of (datetime_or_ts, equity_value) pairs into EquityPoint list with drawdown."""
     import datetime as _dt
+
     points: list[EquityPoint] = []
     peak = starting
     for ts_raw, eq_val in equity_values:
@@ -83,6 +85,7 @@ def _load_equity_curve() -> list[EquityPoint]:
       4. Empty list — frontend handles the empty case gracefully
     """
     import os as _os
+
     starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
 
     # ── 1. Live engine fill history ───────────────────────────────────────────
@@ -126,6 +129,7 @@ def _load_equity_curve() -> list[EquityPoint]:
                 _loop_running = False
             if _loop_running:
                 import concurrent.futures as _cf
+
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     trades = _ex.submit(_asyncio2.run, _fetch_closed_trades()).result(timeout=10)
             else:
@@ -188,6 +192,7 @@ def _db_trade_count() -> int:
                 _loop_running3 = False
             if _loop_running3:
                 import concurrent.futures as _cf
+
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     return _ex.submit(_asyncio3.run, _count()).result(timeout=5)
             else:
@@ -218,7 +223,6 @@ def _compute_public_stats(curve: list[EquityPoint]) -> PublicPerformance:
         )
 
     values = [p.equity for p in curve]
-    start = curve[0].equity
 
     # Max drawdown — use pre-computed drawdown field if available
     max_dd = abs(min((p.drawdown for p in curve), default=0.0))
@@ -278,6 +282,7 @@ async def equity_curve(
     Requires any authenticated user.
     """
     import asyncio as _asyncio
+
     return await _asyncio.to_thread(_load_equity_curve)
 
 
@@ -293,6 +298,7 @@ async def public_performance():
     misleading statistics from small samples.
     """
     import asyncio as _asyncio
+
     curve = await _asyncio.to_thread(_load_equity_curve)
     return _compute_public_stats(curve)
 
@@ -386,6 +392,7 @@ async def list_weekly_reports(
 
 # ── Additional endpoints required by frontend ─────────────────────────────────
 
+
 @router.get("/summary", summary="Performance summary (alias for /public)")
 async def performance_summary(_user: TokenPayload = Depends(require_role("user"))):
     """
@@ -393,6 +400,7 @@ async def performance_summary(_user: TokenPayload = Depends(require_role("user")
     Used by Portfolio.tsx and other authenticated pages.
     """
     import asyncio as _asyncio
+
     curve = await _asyncio.to_thread(_load_equity_curve)
     return _compute_public_stats(curve)
 
@@ -413,10 +421,15 @@ async def trade_breakdown(
 ):
     """Return trade counts and P&L grouped by symbol and strategy."""
     import asyncio as _asyncio
+
     trades = await _asyncio.to_thread(_load_trades)
     by_symbol: dict = {}
     by_strategy: dict = {}
-    by_session: dict = {"london": {"trades": 0, "pnl": 0.0}, "new_york": {"trades": 0, "pnl": 0.0}, "asian": {"trades": 0, "pnl": 0.0}}
+    by_session: dict = {
+        "london": {"trades": 0, "pnl": 0.0},
+        "new_york": {"trades": 0, "pnl": 0.0},
+        "asian": {"trades": 0, "pnl": 0.0},
+    }
 
     for t in trades:
         sym = t.get("symbol", "UNKNOWN")
@@ -469,6 +482,7 @@ async def trade_breakdown(
 async def performance_attribution(_user: TokenPayload = Depends(require_role("trader"))):
     """Return P&L attribution broken down by signal source, regime, and macro factor."""
     import asyncio as _asyncio
+
     trades = await _asyncio.to_thread(_load_trades)
     total_pnl = sum(float(t.get("realized_pnl", 0.0) or 0.0) for t in trades)
     return {
@@ -491,6 +505,7 @@ async def performance_attribution(_user: TokenPayload = Depends(require_role("tr
 async def performance_metrics(_user: TokenPayload = Depends(require_role("user"))):
     """Alias for /summary — used by frontend performanceApi.getMetrics()."""
     import asyncio as _asyncio
+
     curve = await _asyncio.to_thread(_load_equity_curve)
     return _compute_public_stats(curve)
 
@@ -512,8 +527,20 @@ async def export_performance(
 
     # CSV export
     output = io.StringIO()
-    fieldnames = ["trade_id", "symbol", "side", "quantity", "entry_price", "exit_price",
-                  "realized_pnl", "commission", "status", "strategy", "entry_time", "exit_time"]
+    fieldnames = [
+        "trade_id",
+        "symbol",
+        "side",
+        "quantity",
+        "entry_price",
+        "exit_price",
+        "realized_pnl",
+        "commission",
+        "status",
+        "strategy",
+        "entry_time",
+        "exit_time",
+    ]
     writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     for t in trades:
@@ -531,6 +558,7 @@ def _load_trades() -> list[dict]:
     # 1. Live engine fill history
     try:
         from core.app_state import app_state
+
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -577,6 +605,7 @@ def _load_trades() -> list[dict]:
                 _loop_running4 = False
             if _loop_running4:
                 import concurrent.futures as _cf
+
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     rows = _ex.submit(_asyncio4.run, _fetch_all_trades()).result(timeout=10)
             else:
@@ -597,20 +626,28 @@ def _load_trades() -> list[dict]:
                 status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "open")
                 entry_time = getattr(t, "entry_time", None)
                 exit_time = getattr(t, "exit_time", None)
-                result.append({
-                    "trade_id":     getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
-                    "symbol":       getattr(t, "symbol", None) or "UNKNOWN",
-                    "side":         getattr(t, "side", None) or "buy",
-                    "quantity":     float(qty or 0.0),
-                    "entry_price":  float(getattr(t, "entry_price", 0) or 0.0),
-                    "exit_price":   float(getattr(t, "exit_price", None)) if getattr(t, "exit_price", None) is not None else None,
-                    "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0.0),
-                    "commission":   float(getattr(t, "commission", 0) or 0.0),
-                    "status":       status_str,
-                    "strategy":     getattr(t, "strategy", None) or "unknown",
-                    "entry_time":   entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or ""),
-                    "exit_time":    exit_time.isoformat() if hasattr(exit_time, "isoformat") else (str(exit_time) if exit_time else None),
-                })
+                result.append(
+                    {
+                        "trade_id": getattr(t, "trade_id", None) or str(getattr(t, "id", "")),
+                        "symbol": getattr(t, "symbol", None) or "UNKNOWN",
+                        "side": getattr(t, "side", None) or "buy",
+                        "quantity": float(qty or 0.0),
+                        "entry_price": float(getattr(t, "entry_price", 0) or 0.0),
+                        "exit_price": float(getattr(t, "exit_price", None))
+                        if getattr(t, "exit_price", None) is not None
+                        else None,
+                        "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0.0),
+                        "commission": float(getattr(t, "commission", 0) or 0.0),
+                        "status": status_str,
+                        "strategy": getattr(t, "strategy", None) or "unknown",
+                        "entry_time": entry_time.isoformat()
+                        if hasattr(entry_time, "isoformat")
+                        else str(entry_time or ""),
+                        "exit_time": exit_time.isoformat()
+                        if hasattr(exit_time, "isoformat")
+                        else (str(exit_time) if exit_time else None),
+                    }
+                )
             return result
     except Exception as exc:
         logger.debug("_load_trades DB: %s", exc)
@@ -618,6 +655,7 @@ def _load_trades() -> list[dict]:
     # 3. In-process db_store fallback
     try:
         from api.db_store import db_get
+
         stored = db_get("performance:trades")
         if stored and isinstance(stored, list):
             return stored

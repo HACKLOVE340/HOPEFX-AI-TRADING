@@ -448,10 +448,13 @@ class TestFireTripEvent:
         mock_app_state_module = MagicMock()
         mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
 
-        with patch.dict("sys.modules", {
-            "core.outbox": mock_outbox,
-            "core.app_state": mock_app_state_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "core.outbox": mock_outbox,
+                "core.app_state": mock_app_state_module,
+            },
+        ):
             cb._fire_trip_event(state)  # must not raise
 
     def test_fire_trip_event_calls_alert_engine_when_available(self):
@@ -466,10 +469,13 @@ class TestFireTripEvent:
         mock_app_state_module = MagicMock()
         mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
 
-        with patch.dict("sys.modules", {
-            "core.outbox": mock_outbox,
-            "core.app_state": mock_app_state_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "core.outbox": mock_outbox,
+                "core.app_state": mock_app_state_module,
+            },
+        ):
             cb._fire_trip_event(state)
 
         mock_ae.send_alert.assert_called_once()

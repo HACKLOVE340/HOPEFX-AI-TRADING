@@ -53,15 +53,15 @@ import json
 import logging
 import os
 import time
-from typing import Any, ClassVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # ── Optional FastAPI / WebSockets ─────────────────────────────────────────────
 try:
-    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect  # noqa: F401
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import JSONResponse  # noqa: F401
 
     _FASTAPI_AVAILABLE = True
 except ImportError:
@@ -219,7 +219,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
                     raw = await asyncio.wait_for(ws.receive_text(), timeout=60.0)
                     msg = json.loads(raw)
                     await _handle_client_message(ws, msg, chart_engine)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     # Client silent for 60s — send ping
                     await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
                 except WebSocketDisconnect:
@@ -326,9 +326,11 @@ def create_standalone_app() -> Any:
         raise RuntimeError("FastAPI is required for standalone mode")
 
     app = FastAPI(title="HOPEFX Nuclear Dashboard WS", version="1.0.0")
-    _ws_origins = [o.strip() for o in os.getenv(
-        "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
-    ).split(",") if o.strip()]
+    _ws_origins = [
+        o.strip()
+        for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+        if o.strip()
+    ]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_ws_origins,

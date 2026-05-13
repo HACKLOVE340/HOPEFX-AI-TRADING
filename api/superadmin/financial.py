@@ -626,6 +626,7 @@ async def resolve_reconciliation(
 
 # ── Wallets ───────────────────────────────────────────────────────────────────
 
+
 @router.get("/financial/wallets")
 async def list_wallets(
     page: int = Query(1, ge=1),
@@ -635,10 +636,12 @@ async def list_wallets(
     """Platform wallet balances and transaction summaries."""
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
                 from database.models import WalletTransaction
+
                 offset = (page - 1) * page_size
                 rows = (
                     db.query(WalletTransaction)
@@ -677,13 +680,13 @@ async def list_payouts(
     """Affiliate and withdrawal payout queue."""
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
                 from database.models import WalletTransaction
-                q = db.query(WalletTransaction).filter(
-                    WalletTransaction.transaction_type == "payout"
-                )
+
+                q = db.query(WalletTransaction).filter(WalletTransaction.transaction_type == "payout")
                 if status != "all":
                     q = q.filter(WalletTransaction.status == status)
                 total = q.count()
@@ -713,6 +716,7 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
     """Platform-wide fee configuration."""
     try:
         from config.config_manager import ConfigManager
+
         cfg = ConfigManager()
         fees = cfg.get("fees", {})
         if fees:
@@ -722,13 +726,16 @@ async def get_fee_config(user: TokenPayload = Depends(_require_superadmin)) -> d
     # Fallback: read from DB Configuration table
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
                 from database.models import Configuration
+
                 row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
                 if row and row.value:
                     import json as _json
+
                     return {"fees": _json.loads(row.value) if isinstance(row.value, str) else row.value}
     except Exception as exc:
         logger.warning("fee_config db: %s", exc)
@@ -751,10 +758,12 @@ async def update_fee_config(body: dict, user: TokenPayload = Depends(_require_su
     try:
         from database.connection import get_db_manager
         import json as _json
+
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
                 from database.models import Configuration
+
                 row = db.query(Configuration).filter(Configuration.key == "fee_config").first()
                 if row:
                     row.value = _json.dumps(body)

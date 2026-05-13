@@ -261,6 +261,7 @@ if _ks_router is not None:
 # ── Health check endpoints (/health, /health/ready, /health/detailed) ─────────
 try:
     from health_check_service import health_router as _health_router
+
     app.include_router(_health_router)
     logger.info("Health check router registered at /health")
 except Exception as _hc_exc:
@@ -475,9 +476,7 @@ async def lifespan(_app: FastAPI):
     setup_rate_limiting(_app)
     # Increase the default thread pool so yfinance / blocking I/O calls
     # don't starve when many background tasks are running.
-    _io_executor = concurrent_futures.ThreadPoolExecutor(
-        max_workers=32, thread_name_prefix="hopefx-io"
-    )
+    _io_executor = concurrent_futures.ThreadPoolExecutor(max_workers=32, thread_name_prefix="hopefx-io")
     asyncio.get_running_loop().set_default_executor(_io_executor)
 
     await kill_switch.start()
@@ -495,9 +494,9 @@ async def lifespan(_app: FastAPI):
     # data-dependent endpoints until app_state.initialized is True.
     _startup_task = asyncio.create_task(startup_event(), name="startup_event")
     _startup_task.add_done_callback(
-        lambda t: logger.error("startup_event failed: %s", t.exception())
-        if not t.cancelled() and t.exception()
-        else None
+        lambda t: (
+            logger.error("startup_event failed: %s", t.exception()) if not t.cancelled() and t.exception() else None
+        )
     )
     # Start Sharpe circuit breaker as a top-level lifespan task so it always
     # runs even if startup_event() raises before reaching the call inside it.
@@ -768,7 +767,7 @@ async def _start_data_layer_orchestrator(state) -> None:
         await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
         state.data_layer_orchestrator = orchestrator
         logger.info("Data layer orchestrator started")
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning(
             "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
             "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "

@@ -110,6 +110,7 @@ class _SGDAdapter:
         self._lock = threading.Lock()
         # Rolling win/loss counter for adaptive class weighting (last 100 outcomes)
         from collections import deque as _deque
+
         self._recent_labels: _deque[int] = _deque(maxlen=100)
         self._init_clf()
 
@@ -419,7 +420,7 @@ class AdvancedPredictor:
                     for _, step in payload.steps:
                         if hasattr(step, "mean_") and hasattr(step, "feature_names_in_"):
                             self._feature_means = dict(
-                                zip(list(step.feature_names_in_), step.mean_.tolist())
+                                zip(list(step.feature_names_in_), step.mean_.tolist(), strict=False)
                             )
                             break
                 self._adapter = _SGDAdapter(self._n_features)
@@ -490,11 +491,13 @@ class AdvancedPredictor:
                     logger.warning(
                         "AdvancedPredictor: data layer unavailable for %d predictions — "
                         "signal quality may be degraded: %s",
-                        self._dl_failure_count, exc,
+                        self._dl_failure_count,
+                        exc,
                     )
                 else:
                     logger.debug(
-                        "AdvancedPredictor: data layer injection failed (non-fatal): %s", exc,
+                        "AdvancedPredictor: data layer injection failed (non-fatal): %s",
+                        exc,
                     )
 
             return X.iloc[[-1]]
@@ -613,7 +616,9 @@ class AdvancedPredictor:
             zero_cols = X.columns[zero_var_mask].tolist()[:10]
             logger.warning(
                 "AdvancedPredictor: %d/%d features have zero variance %s — signal quality degraded",
-                zero_var_count, X.shape[1], zero_cols,
+                zero_var_count,
+                X.shape[1],
+                zero_cols,
             )
 
         # ── Base model probability ────────────────────────────────────────────
@@ -622,10 +627,7 @@ class AdvancedPredictor:
             if proba.shape[1] > 1:
                 # Resolve the "buy/positive" class index from model.classes_ when available
                 classes = getattr(self._model, "classes_", None)
-                if classes is not None and 1 in classes:
-                    pos_idx = list(classes).index(1)
-                else:
-                    pos_idx = 1
+                pos_idx = list(classes).index(1) if classes is not None and 1 in classes else 1
                 base_prob = float(proba[0][pos_idx])
             else:
                 base_prob = float(proba[0][0])
@@ -851,6 +853,7 @@ class HybridEnsemblePredictor:
             return
         try:
             import pickle
+
             with open(meta_path, "rb") as f:
                 state = pickle.load(f)
             self._meta = state.get("meta")
@@ -926,12 +929,9 @@ class HybridEnsemblePredictor:
             from research.pipeline.models_deep import DeepPredictor
 
             import os as _os
+
             _lstm_env = _os.getenv("LSTM_MODEL_PATH", "")
-            model_path = (
-                Path(_lstm_env)
-                if _lstm_env
-                else Path(__file__).parent / "saved_models" / "lstm_signal.pt"
-            )
+            model_path = Path(_lstm_env) if _lstm_env else Path(__file__).parent / "saved_models" / "lstm_signal.pt"
             if not model_path.exists():
                 return 0.5
             dp = DeepPredictor.load(model_path)

@@ -49,15 +49,15 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # Key / channel constants — single source of truth for the entire system.
-TICK_KEY_PREFIX = "tick"                    # tick:SYMBOL
-DL_TICK_KEY_PREFIX = "hopefx:dl:tick"      # hopefx:dl:tick:SYMBOL
-PRICE_KEY_PREFIX = "price"                  # price:SYMBOL (legacy)
-PUBSUB_CHANNEL_PREFIX = "hopefx:tick"      # hopefx:tick:SYMBOL
-CH_TICK = "hopefx:tick"                     # legacy broadcast channel
-LEGACY_QUEUE = "price_queue"               # NuclearStreamer compat list
+TICK_KEY_PREFIX = "tick"  # tick:SYMBOL
+DL_TICK_KEY_PREFIX = "hopefx:dl:tick"  # hopefx:dl:tick:SYMBOL
+PRICE_KEY_PREFIX = "price"  # price:SYMBOL (legacy)
+PUBSUB_CHANNEL_PREFIX = "hopefx:tick"  # hopefx:tick:SYMBOL
+CH_TICK = "hopefx:tick"  # legacy broadcast channel
+LEGACY_QUEUE = "price_queue"  # NuclearStreamer compat list
 
-TICK_KEY_TTL = int(os.getenv("TICK_KEY_TTL", "30"))   # seconds
-LEGACY_QUEUE_MAX = 1000                                 # max entries in price_queue
+TICK_KEY_TTL = int(os.getenv("TICK_KEY_TTL", "30"))  # seconds
+LEGACY_QUEUE_MAX = 1000  # max entries in price_queue
 
 
 def build_tick_payload(

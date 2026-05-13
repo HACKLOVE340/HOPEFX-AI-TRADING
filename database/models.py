@@ -11,6 +11,7 @@ Complete SQLAlchemy models for all entities
 import enum
 import json
 import logging
+from typing import Any
 import uuid
 from datetime import datetime, timezone
 
@@ -681,7 +682,6 @@ class TickData(Base):
     @classmethod
     def from_gold_tick(cls, tick: "Any") -> "TickData":
         """Construct a TickData row from a data_layer.types.GoldTick."""
-        import time as _time
 
         return cls(
             ts_ns=int(tick.timestamp.timestamp() * 1_000_000_000),
@@ -818,7 +818,9 @@ Index("idx_news_published_at", NewsData.published_at)
 Index("idx_news_source_published", NewsData.source, NewsData.published_at)
 
 # PerformanceMetric uses metric_type + name (not metric_name)
-Index("idx_perf_metric_type_name_ts", PerformanceMetric.metric_type, PerformanceMetric.name, PerformanceMetric.timestamp)
+Index(
+    "idx_perf_metric_type_name_ts", PerformanceMetric.metric_type, PerformanceMetric.name, PerformanceMetric.timestamp
+)
 Index("idx_perf_metric_symbol_ts", PerformanceMetric.symbol, PerformanceMetric.timestamp)
 
 
@@ -1559,9 +1561,9 @@ if SQLALCHEMY_AVAILABLE:
         )
         title = Column(String(200), nullable=True)
         notes = Column(Text, nullable=True)
-        tags = Column(Text, nullable=True)           # JSON array of strings
+        tags = Column(Text, nullable=True)  # JSON array of strings
         emotion = Column(String(50), nullable=True)  # "confident","fearful","neutral"
-        rating = Column(Integer, nullable=True)      # 1-5 self-assessment
+        rating = Column(Integer, nullable=True)  # 1-5 self-assessment
         setup_quality = Column(String(20), nullable=True)  # "A","B","C"
         lessons_learned = Column(Text, nullable=True)
         screenshot_url = Column(String(500), nullable=True)
@@ -1584,8 +1586,9 @@ if SQLALCHEMY_AVAILABLE:
 
         def to_dict(self) -> dict:
             import json as _json
+
             tags_val: list = []
-            try:
+            try:  # noqa: SIM105
                 tags_val = _json.loads(self.tags or "[]")
             except Exception:  # nosec B110
                 pass
@@ -1698,9 +1701,7 @@ if SQLALCHEMY_AVAILABLE:
             nullable=False,
         )
 
-        __table_args__ = (
-            Index("idx_sub_account_members_user", "user_id"),
-        )
+        __table_args__ = (Index("idx_sub_account_members_user", "user_id"),)
 
 else:
 
@@ -1819,13 +1820,14 @@ if SQLALCHEMY_AVAILABLE:
 
         def to_dict(self) -> dict:
             import json as _json
+
             prefs: dict = {}
             instruments: list = []
-            try:
+            try:  # noqa: SIM105
                 prefs = _json.loads(self.notification_prefs or "{}")
             except Exception:  # nosec B110
                 pass
-            try:
+            try:  # noqa: SIM105
                 instruments = _json.loads(self.preferred_instruments or "[]")
             except Exception:  # nosec B110
                 pass

@@ -127,6 +127,7 @@ async def get_nuclear_chart_snapshot():
     """
     try:
         from charting.nuclear_ai_chart_engine import get_chart_engine
+
         engine = get_chart_engine()
         return engine.get_snapshot()
     except Exception:
@@ -151,6 +152,7 @@ async def inject_nuclear_event(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="text is required")
     try:
         from charting.nuclear_ai_chart_engine import get_chart_engine
+
         engine = get_chart_engine()
         result = engine.inject_news_event(
             text,

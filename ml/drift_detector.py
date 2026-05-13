@@ -74,7 +74,9 @@ class ModelDriftTracker:
             self._reference = np.asarray(data, dtype=float)
         logger.info(
             "DriftTracker[%s]: reference set, n=%d mean=%.3f",
-            self.model_name, len(self._reference), float(self._reference.mean()),
+            self.model_name,
+            len(self._reference),
+            float(self._reference.mean()),
         )
 
     def record(self, probability: float) -> bool:
@@ -140,7 +142,7 @@ class ModelDriftTracker:
             # Fallback: simple mean shift test
             ref_mean = float(np.mean(self._reference))
             win_mean = float(np.mean(window_arr))
-            ref_std  = float(np.std(self._reference)) + 1e-9
+            ref_std = float(np.std(self._reference)) + 1e-9
             stat = abs(win_mean - ref_mean) / ref_std
             p_value = 0.01 if stat > 2.0 else 0.5
 
@@ -161,7 +163,9 @@ class ModelDriftTracker:
             self._drift_events = self._drift_events[-100:]  # cap at 100
             logger.warning(
                 "DriftDetector[%s]: drift detected p=%.4f stat=%.4f",
-                self.model_name, p_value, stat,
+                self.model_name,
+                p_value,
+                stat,
             )
 
         return result
@@ -244,7 +248,7 @@ class DriftDetectorService:
         with self._lock:
             tracker_items = list(self._trackers.items())
 
-        for model, tracker in tracker_items:
+        for _model, tracker in tracker_items:
             report = tracker.get_report()
             reports.append(report)
             if report.get("drifted") or report.get("status") == "drift_detected":

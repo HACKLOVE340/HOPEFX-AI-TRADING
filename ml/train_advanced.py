@@ -1269,16 +1269,16 @@ def main():
     logger.info(
         f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}",
     )
-    logger.info("  Walk-forward F1       : %.3f", wf.get('mean_f1', 0))
-    logger.info("  Walk-forward AUC      : %.3f", wf.get('mean_auc', 0))
+    logger.info("  Walk-forward F1       : %.3f", wf.get("mean_f1", 0))
+    logger.info("  Walk-forward AUC      : %.3f", wf.get("mean_auc", 0))
     logger.info(
         f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
         f"{'✓ significant' if wf.get('significant') else '✗ not significant'}",
     )
     logger.info("")
-    logger.info("  Final holdout accuracy: %.3f", final_metrics['accuracy'])
-    logger.info("  Final holdout F1      : %.3f", final_metrics['f1'])
-    logger.info("  Final holdout AUC     : %.3f", final_metrics['auc'])
+    logger.info("  Final holdout accuracy: %.3f", final_metrics["accuracy"])
+    logger.info("  Final holdout F1      : %.3f", final_metrics["f1"])
+    logger.info("  Final holdout AUC     : %.3f", final_metrics["auc"])
 
     if oos_metrics:
         logger.info("")
@@ -1289,17 +1289,17 @@ def main():
         logger.info(
             f"  OOS accuracy          : {oos_metrics['accuracy']:.3f} ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
         )
-        logger.info("  OOS F1                : %.3f", oos_metrics['f1'])
-        logger.info("  OOS AUC               : %.3f", oos_metrics['auc'])
-        logger.info("  OOS p-value (binomial): %.4f  %s", oos_metrics['p_value_binomial'], sig)
+        logger.info("  OOS F1                : %.3f", oos_metrics["f1"])
+        logger.info("  OOS AUC               : %.3f", oos_metrics["auc"])
+        logger.info("  OOS p-value (binomial): %.4f  %s", oos_metrics["p_value_binomial"], sig)
         logger.info("")
         # Sharpe SE gate — always shown when OOS is run
         sg = oos_metrics.get("sharpe_gate", {})
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
         logger.info("  ─── Sharpe SE Gate ────────────────────────────────────────")
-        logger.info("  N=%s OOS trades | SE=%s | Gate: %s", sg.get('n_trades', '?'), sg.get('se', '?'), gate_status)
-        logger.info("  Need N>=%s for SE<=0.10 (credible Sharpe).", sg.get('target_n', 600))
-        logger.info("  N_required for SE<=0.10: %s", sg.get('n_required_for_se_010', '?'))
+        logger.info("  N=%s OOS trades | SE=%s | Gate: %s", sg.get("n_trades", "?"), sg.get("se", "?"), gate_status)
+        logger.info("  Need N>=%s for SE<=0.10 (credible Sharpe).", sg.get("target_n", 600))
+        logger.info("  N_required for SE<=0.10: %s", sg.get("n_required_for_se_010", "?"))
         logger.info("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
         logger.info("  Credible metric: OOS accuracy (binomial p-value above).")
         logger.info("  Do NOT commit live capital until 30+ days paper trading done.")
@@ -1414,6 +1414,7 @@ class AdvancedTrainer:
 
         # 4. Final model on full in-sample data
         import os as _os
+
         _os.makedirs(self.config.model_dir, exist_ok=True)
         final = train_final_model(X_cv, y_cv)
 

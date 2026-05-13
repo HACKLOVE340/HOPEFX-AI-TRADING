@@ -82,6 +82,7 @@ def client():
     # (e.g. e2e tests) don't inherit exhausted windows from this module.
     try:
         from auth.router import reset_rate_limit_state
+
         reset_rate_limit_state()
     except Exception:
         pass

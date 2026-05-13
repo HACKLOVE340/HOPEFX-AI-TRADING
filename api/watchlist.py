@@ -368,8 +368,7 @@ async def reorder_watchlist(
                     )
                     for idx, sym in enumerate(symbols):
                         db.execute(
-                            "INSERT OR IGNORE INTO watchlist (user_id, symbol, position) "
-                            "VALUES (:uid, :sym, :pos)",
+                            "INSERT OR IGNORE INTO watchlist (user_id, symbol, position) VALUES (:uid, :sym, :pos)",
                             {"uid": user.sub, "sym": sym, "pos": idx},
                         )
                     db.commit()

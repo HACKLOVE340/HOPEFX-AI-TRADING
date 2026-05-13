@@ -68,6 +68,7 @@ from .auto_healing import router as _auto_healing_router
 from .diagnostics import router as _diagnostics_router
 from .reliability import router as _reliability_router
 from .health_engine_api import router as _health_engine_router
+
 # Previously unmounted sub-routers — all 11 wired here
 from .alerting import router as _alerting_router
 from .broker_management import router as _broker_management_router

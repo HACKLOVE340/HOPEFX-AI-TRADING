@@ -232,7 +232,7 @@ class TestUpdateSubAccount:
 
 class TestDeleteSubAccount:
     def test_delete_one_of_two_accounts(self, client: TestClient):
-        acc1 = _create_account(client, "Keep")
+        _create_account(client, "Keep")
         acc2 = _create_account(client, "Remove")
         resp = client.delete(f"/api/accounts/sub-accounts/{acc2['account_id']}")
         assert resp.status_code == 204

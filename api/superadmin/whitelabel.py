@@ -22,10 +22,8 @@ GET    /superadmin/whitelabel/tenants/{id}/usage         — tenant usage stats
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-import os
 import secrets
 import uuid
 from typing import Any
@@ -44,6 +42,7 @@ _TENANTS_KEY = "superadmin:whitelabel:tenants"
 def _load_tenants() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_TENANTS_KEY)
@@ -57,6 +56,7 @@ def _load_tenants() -> list[dict]:
 def _save_tenants(tenants: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_TENANTS_KEY, json.dumps(tenants), ex=86400 * 90)
@@ -104,11 +104,14 @@ async def create_tenant(
         "user_count": 0,
         "created_at": _utcnow().isoformat(),
         "monthly_revenue": 0.0,
-        "branding": body.get("branding", {
-            "primary_color": "#3b82f6",
-            "logo_url": "",
-            "company_name": body.get("name", "New Tenant"),
-        }),
+        "branding": body.get(
+            "branding",
+            {
+                "primary_color": "#3b82f6",
+                "logo_url": "",
+                "company_name": body.get("name", "New Tenant"),
+            },
+        ),
         "api_keys": [{"key_id": str(uuid.uuid4()), "key": api_key, "created_at": _utcnow().isoformat()}],
         "created_by": user.sub,
     }

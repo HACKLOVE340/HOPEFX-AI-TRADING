@@ -152,9 +152,7 @@ class FREDFeed:
                 logger.info("FRED fetch_series %s error: %s", series_id, exc)
                 self._warned_series.add(series_id)
             else:
-                logger.debug(
-                    "FRED fetch_series %s error (suppressed): %s", series_id, exc
-                )
+                logger.debug("FRED fetch_series %s error (suppressed): %s", series_id, exc)
             return pd.Series(dtype=float)
 
     async def fetch_all(self, observation_start: str | None = None) -> dict[str, pd.Series]:

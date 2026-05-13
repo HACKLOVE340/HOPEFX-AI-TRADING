@@ -39,10 +39,10 @@ _HEDGE_STATE_KEY = "superadmin:nuclear:hedge"
 def _get_kill_switch():
     """Return the global KillSwitch instance if available."""
     try:
-        from kill_switch import KillSwitch
         # Try to get the singleton from app state
         try:
             from api.admin import app_state
+
             if app_state and hasattr(app_state, "kill_switch"):
                 return app_state.kill_switch
         except Exception:  # nosec B110
@@ -50,6 +50,7 @@ def _get_kill_switch():
         # Fall back to module-level singleton
         try:
             import kill_switch as _ks_mod
+
             if hasattr(_ks_mod, "_instance"):
                 return _ks_mod._instance
         except Exception:  # nosec B110
@@ -62,16 +63,20 @@ def _get_kill_switch():
 def _append_nuclear_log(event: str, detail: dict, actor: str) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_NUCLEAR_LOG_KEY)
             log = json.loads(raw) if raw else []
-            log.insert(0, {
-                "event": event,
-                "detail": detail,
-                "actor": actor,
-                "timestamp": _utcnow().isoformat(),
-            })
+            log.insert(
+                0,
+                {
+                    "event": event,
+                    "detail": detail,
+                    "actor": actor,
+                    "timestamp": _utcnow().isoformat(),
+                },
+            )
             rc.set(_NUCLEAR_LOG_KEY, json.dumps(log[:200]), ex=86400 * 90)
     except Exception:  # nosec B110
         pass
@@ -93,6 +98,7 @@ async def get_nuclear_status(
     hedge_params: dict = {}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_HEDGE_STATE_KEY)
@@ -107,6 +113,7 @@ async def get_nuclear_status(
     risk_override: dict = {}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("superadmin:nuclear:risk_override")
@@ -145,6 +152,7 @@ async def nuclear_halt(
     # Also set via Redis so all pods pick it up
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set("kill_switch:active", "1", ex=86400)
@@ -192,6 +200,7 @@ async def nuclear_resume(
 
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.delete("kill_switch:active")
@@ -230,15 +239,23 @@ async def activate_hedge(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
-            rc.set(_HEDGE_STATE_KEY, json.dumps({"active": True, "params": body, "activated_at": _utcnow().isoformat(), "activated_by": user.sub}), ex=86400)
+            rc.set(
+                _HEDGE_STATE_KEY,
+                json.dumps(
+                    {"active": True, "params": body, "activated_at": _utcnow().isoformat(), "activated_by": user.sub}
+                ),
+                ex=86400,
+            )
     except Exception:  # nosec B110
         pass
 
     # Attempt to place hedge via risk orchestrator
     try:
         from risk.orchestrator import risk_orchestrator
+
         if hasattr(risk_orchestrator, "activate_hedge"):
             await risk_orchestrator.activate_hedge(**body)
     except Exception as exc:
@@ -255,6 +272,7 @@ async def deactivate_hedge(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_HEDGE_STATE_KEY, json.dumps({"active": False}), ex=86400)
@@ -263,6 +281,7 @@ async def deactivate_hedge(
 
     try:
         from risk.orchestrator import risk_orchestrator
+
         if hasattr(risk_orchestrator, "deactivate_hedge"):
             await risk_orchestrator.deactivate_hedge()
     except Exception as exc:
@@ -281,6 +300,7 @@ async def max_risk_override(
     override = {**body, "set_by": user.sub, "set_at": _utcnow().isoformat()}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set("superadmin:nuclear:risk_override", json.dumps(override), ex=3600)
@@ -290,6 +310,7 @@ async def max_risk_override(
     # Apply to live risk manager
     try:
         from risk.manager import RiskManager
+
         if hasattr(RiskManager, "_instance") and RiskManager._instance:
             rm = RiskManager._instance
             for k, v in body.items():
@@ -310,6 +331,7 @@ async def get_nuclear_log(
     log: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_NUCLEAR_LOG_KEY)

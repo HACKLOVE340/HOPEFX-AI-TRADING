@@ -36,6 +36,7 @@ router = APIRouter(prefix="/api/risk", tags=["Risk Calculator"])
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_live_price(symbol: str) -> float | None:
     """Try multiple sources to get a live mid price for the symbol."""
     sym = symbol.upper().replace("-", "_").replace("/", "_")
@@ -43,6 +44,7 @@ def _get_live_price(symbol: str) -> float | None:
     # 1. Try the trading app state (fastest — already in memory)
     try:
         from core.app_state import get_app_state
+
         state = get_app_state()
         if state and hasattr(state, "latest_tick") and state.latest_tick:
             tick = state.latest_tick
@@ -54,6 +56,7 @@ def _get_live_price(symbol: str) -> float | None:
     # 2. Try the data layer orchestrator
     try:
         from data_layer.orchestrator import get_orchestrator
+
         orch = get_orchestrator()
         tick = orch.get_latest_tick(sym)
         if tick and hasattr(tick, "mid"):
@@ -64,6 +67,7 @@ def _get_live_price(symbol: str) -> float | None:
     # 3. Try yfinance as a last resort
     try:
         import yfinance as yf
+
         yf_sym = sym.replace("_", "=X") if "_" in sym else sym + "=X"
         ticker = yf.Ticker(yf_sym)
         info = ticker.fast_info
@@ -83,6 +87,7 @@ def _calc_store_key(user_id: str) -> str:
 def _load_history(user_id: str) -> list[dict]:
     try:
         from api.db_store import db_get
+
         return db_get(_calc_store_key(user_id)) or []
     except Exception:
         return []
@@ -91,6 +96,7 @@ def _load_history(user_id: str) -> list[dict]:
 def _save_history(user_id: str, history: list[dict]) -> None:
     try:
         from api.db_store import db_set
+
         db_set(_calc_store_key(user_id), history[-100:])  # keep last 100
     except Exception:  # nosec B110
         pass
@@ -98,19 +104,21 @@ def _save_history(user_id: str, history: list[dict]) -> None:
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
+
 class SaveCalcRequest(BaseModel):
-    symbol:       str   = Field(..., min_length=3, max_length=20)
-    entry_price:  float = Field(..., gt=0)
-    stop_loss:    float = Field(..., gt=0)
-    take_profit:  float = Field(..., gt=0)
+    symbol: str = Field(..., min_length=3, max_length=20)
+    entry_price: float = Field(..., gt=0)
+    stop_loss: float = Field(..., gt=0)
+    take_profit: float = Field(..., gt=0)
     position_size: float = Field(default=0.01, gt=0)
     account_balance: float = Field(default=10000.0, gt=0)
-    risk_pct:     float = Field(default=1.0, gt=0, le=100)
-    direction:    str   = Field(default="long", pattern="^(long|short)$")
-    notes:        str | None = None
+    risk_pct: float = Field(default=1.0, gt=0, le=100)
+    direction: str = Field(default="long", pattern="^(long|short)$")
+    notes: str | None = None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/live-price/{symbol}", summary="Live mid price for a symbol")
 async def get_live_price(
@@ -128,8 +136,8 @@ async def get_live_price(
             detail=f"Live price unavailable for {symbol}. Enter manually.",
         )
     return {
-        "symbol":    symbol.upper(),
-        "mid":       price,
+        "symbol": symbol.upper(),
+        "mid": price,
         "timestamp": datetime.now(UTC).isoformat(),
     }
 
@@ -149,30 +157,30 @@ async def save_calculation(
     """Persist a risk/reward calculation for later reference."""
     # Compute derived fields
     if body.direction == "long":
-        risk_pts   = body.entry_price - body.stop_loss
+        risk_pts = body.entry_price - body.stop_loss
         reward_pts = body.take_profit - body.entry_price
     else:
-        risk_pts   = body.stop_loss - body.entry_price
+        risk_pts = body.stop_loss - body.entry_price
         reward_pts = body.entry_price - body.take_profit
 
     rr_ratio = round(reward_pts / risk_pts, 2) if risk_pts > 0 else 0
     risk_usd = round(body.account_balance * body.risk_pct / 100, 2)
 
     calc = {
-        "id":              str(uuid.uuid4()),
-        "user_id":         user.sub,
-        "symbol":          body.symbol.upper(),
-        "direction":       body.direction,
-        "entry_price":     body.entry_price,
-        "stop_loss":       body.stop_loss,
-        "take_profit":     body.take_profit,
-        "position_size":   body.position_size,
+        "id": str(uuid.uuid4()),
+        "user_id": user.sub,
+        "symbol": body.symbol.upper(),
+        "direction": body.direction,
+        "entry_price": body.entry_price,
+        "stop_loss": body.stop_loss,
+        "take_profit": body.take_profit,
+        "position_size": body.position_size,
         "account_balance": body.account_balance,
-        "risk_pct":        body.risk_pct,
-        "risk_usd":        risk_usd,
-        "rr_ratio":        rr_ratio,
-        "notes":           body.notes,
-        "created_at":      datetime.now(UTC).isoformat(),
+        "risk_pct": body.risk_pct,
+        "risk_usd": risk_usd,
+        "rr_ratio": rr_ratio,
+        "notes": body.notes,
+        "created_at": datetime.now(UTC).isoformat(),
     }
     history = _load_history(user.sub)
     history.append(calc)

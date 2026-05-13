@@ -71,6 +71,7 @@ router = APIRouter(tags=["WebSocket Live"])
 
 # Tracks last mid price per symbol for change_pct calculation
 import threading as _threading
+
 _last_mid: dict[str, float] = {}
 _last_mid_lock = _threading.Lock()
 
@@ -96,7 +97,7 @@ if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
 
 async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> None:
     """Close a WebSocket, ignoring errors when it is already closed."""
-    try:
+    try:  # noqa: SIM105
         await websocket.close(code=code, reason=reason)
     except RuntimeError:  # nosec B110
         pass  # already closed
@@ -218,6 +219,7 @@ class LiveConnectionManager:
         await self.broadcast("signals", {"type": "signal", "data": signal})
         try:
             from api.social_feed import _social_feed_broadcast as _sf_broadcast
+
             await _sf_broadcast(signal)
         except Exception:  # nosec B110
             pass
@@ -280,18 +282,20 @@ _BROKER_KEY: dict[str, str] = {
 # Reverse map: broker/no-slash symbol → frontend slash format
 _SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
 # Extra aliases that may arrive from various publishers
-_SLASH_SYMBOL.update({
-    "XAUUSD": "XAU/USD",
-    "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD",
-    "USDJPY": "USD/JPY",
-    "BTCUSD": "BTC/USD",
-    "ETHUSD": "ETH/USD",
-    "GC=F":   "XAU/USD",
-    "EURUSD=X": "EUR/USD",
-    "GBPUSD=X": "GBP/USD",
-    "USDJPY=X": "USD/JPY",
-})
+_SLASH_SYMBOL.update(
+    {
+        "XAUUSD": "XAU/USD",
+        "EURUSD": "EUR/USD",
+        "GBPUSD": "GBP/USD",
+        "USDJPY": "USD/JPY",
+        "BTCUSD": "BTC/USD",
+        "ETHUSD": "ETH/USD",
+        "GC=F": "XAU/USD",
+        "EURUSD=X": "EUR/USD",
+        "GBPUSD=X": "GBP/USD",
+        "USDJPY=X": "USD/JPY",
+    }
+)
 
 _open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
@@ -300,6 +304,7 @@ _prices_seeded = False
 def _seed_from_broker() -> None:
     """Seed _SYMBOLS and _open_prices from paper broker on first call."""
     global _prices_seeded
+    _prices_seeded = _prices_seeded  # noqa: PLW0127
     if _prices_seeded:
         return
     try:
@@ -348,9 +353,7 @@ def _get_live_price(symbol: str) -> float | None:
         if pe is not None:
             tick = pe.get_last_price(broker_key)
             if tick is not None:
-                mid = getattr(tick, "mid", None) or (
-                    (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                )
+                mid = getattr(tick, "mid", None) or ((getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2)
                 if mid and mid > 0:
                     return float(mid)
     except Exception as exc:
@@ -495,6 +498,7 @@ async def _eventbus_tick_broadcaster() -> None:
                     # ISO string → ms
                     try:
                         from datetime import datetime as _dt
+
                         ts_ms = int(_dt.fromisoformat(raw_ts.replace("Z", "+00:00")).timestamp() * 1000)
                     except Exception:
                         ts_ms = int(datetime.now(UTC).timestamp() * 1000)
@@ -525,6 +529,7 @@ async def _eventbus_tick_broadcaster() -> None:
                 # Also write tick:{symbol} so ws_public.py Redis fallback chain is populated.
                 try:
                     from cache.redis_client import get_redis as _get_redis
+
                     _rc = await _get_redis()
                     if _rc is not None:
                         await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
@@ -767,6 +772,7 @@ async def _price_broadcaster_live_only() -> None:
     Sends no_live_feed when no live price is available for a symbol.
     """
     global _prices_seeded
+    _prices_seeded = _prices_seeded  # noqa: PLW0127
     _no_feed_warned: set[str] = set()
     while True:
         await asyncio.sleep(1)
@@ -818,6 +824,7 @@ async def _yfinance_price_broadcaster() -> None:
     Sends genuine price_tick messages — no synthetic or mock data.
     """
     import time as _time
+
     _POLL_INTERVAL = 15  # seconds between yfinance fetches
 
     while True:
@@ -826,11 +833,16 @@ async def _yfinance_price_broadcaster() -> None:
             continue
         try:
             import yfinance as _yf
+
             tickers = list(_YF_SYMBOL_MAP.values())
             data = await asyncio.wait_for(
                 asyncio.to_thread(
-                    _yf.download, tickers, period="1d", interval="1m",
-                    progress=False, auto_adjust=True,
+                    _yf.download,
+                    tickers,
+                    period="1d",
+                    interval="1m",
+                    progress=False,
+                    auto_adjust=True,
                 ),
                 timeout=12.0,
             )
@@ -1057,6 +1069,7 @@ async def _chartbot_broadcaster() -> None:
             try:
                 from cache.redis_client import get_sync_redis_client as _get_rc
                 import json as _json
+
                 _rc = _get_rc()
                 if _rc:
                     for _sym in ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"):
@@ -1074,6 +1087,7 @@ async def _chartbot_broadcaster() -> None:
             try:
                 from cache.redis_client import get_sync_redis_client as _get_rc2
                 import json as _json2
+
                 _rc2 = _get_rc2()
                 if _rc2:
                     _praw = _rc2.get("chart_patterns:latest")
@@ -1091,6 +1105,7 @@ async def _chartbot_broadcaster() -> None:
             try:
                 from cache.redis_client import get_sync_redis_client as _get_rc3
                 import json as _json3
+
                 _rc3 = _get_rc3()
                 if _rc3:
                     _lraw = _rc3.get("sr_levels:latest")
@@ -1217,11 +1232,11 @@ def start_broadcasters() -> None:
     loop = asyncio.get_running_loop()
 
     _BROADCASTER_SPECS = [
-        ("price_broadcaster",          _price_broadcaster),
-        ("heartbeat_broadcaster",       _heartbeat_broadcaster),
-        ("signal_broadcaster",          _eventbus_signal_broadcaster),
-        ("chartbot_broadcaster",        _chartbot_broadcaster),
-        ("account_update_broadcaster",  _account_update_broadcaster),
+        ("price_broadcaster", _price_broadcaster),
+        ("heartbeat_broadcaster", _heartbeat_broadcaster),
+        ("signal_broadcaster", _eventbus_signal_broadcaster),
+        ("chartbot_broadcaster", _chartbot_broadcaster),
+        ("account_update_broadcaster", _account_update_broadcaster),
     ]
 
     _broadcaster_tasks = []
@@ -1321,7 +1336,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {
@@ -1372,7 +1387,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         _manager.authenticate(cid, user_id)
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
@@ -1472,6 +1487,7 @@ async def push_signal(signal: dict) -> None:
     # Also forward to /ws/social-feed subscribers
     try:
         from api.social_feed import _social_feed_broadcast as _sf_broadcast
+
         await _sf_broadcast(signal)
     except Exception:  # nosec B110
         pass
@@ -1534,7 +1550,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     try:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         msg = json.loads(raw)
-    except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+    except (TimeoutError, json.JSONDecodeError):
         await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
         return
     except WebSocketDisconnect:
@@ -1560,7 +1576,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     # If the charting engine failed to load at startup, tell the client
     # immediately instead of silently streaming null state every 2 seconds.
     try:
-        from app import app as _app  # noqa: PLC0415
+        from app import app as _app
 
         _nuclear_ok = getattr(_app.state, "nuclear_available", True)
     except Exception:
@@ -1674,7 +1690,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except (TimeoutError, asyncio.TimeoutError):  # nosec B110 — poll timeout is expected; loop continues
+            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
                 pass
             except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
                 break

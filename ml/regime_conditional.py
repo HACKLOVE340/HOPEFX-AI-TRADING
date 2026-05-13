@@ -612,8 +612,7 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         labels = detect_regime_labels(X, self.hurst_col, self.adx_col)
         proba = np.full((len(X), 2), 0.5, dtype=float)  # default neutral
 
-        for regime in [REGIME_MEAN_REVERTING, REGIME_TRENDING, REGIME_MIXED,
-                       REGIME_HIGH_VOL_PARABOLIC]:
+        for regime in [REGIME_MEAN_REVERTING, REGIME_TRENDING, REGIME_MIXED, REGIME_HIGH_VOL_PARABOLIC]:
             mask = (labels == regime).values
             if not mask.any():
                 continue

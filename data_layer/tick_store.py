@@ -72,6 +72,7 @@ Environment variables
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
 import time
@@ -790,7 +791,6 @@ class TickStore:
         df = df.set_index("datetime")[["open", "high", "low", "close", "volume"]]
         return df.sort_index()
 
-
     def batch_insert(self, ticks: list[dict]) -> int:
         """
         Insert multiple ticks in a single operation.
@@ -825,10 +825,10 @@ class TickStore:
     def query_range(
         self,
         symbol: str,
-        start: "datetime",
-        end: "datetime",
+        start: datetime,
+        end: datetime,
         limit: int = 10_000,
-    ) -> "pd.DataFrame":
+    ) -> pd.DataFrame:
         """
         Query ticks between two UTC datetimes.
 
@@ -844,7 +844,7 @@ class TickStore:
         symbol: str,
         timeframes_s: list[int],
         limit: int = 200,
-    ) -> dict[int, "pd.DataFrame"]:
+    ) -> dict[int, pd.DataFrame]:
         """
         Return OHLCV DataFrames for multiple timeframes in one call.
 
@@ -857,7 +857,7 @@ class TickStore:
             Dict mapping timeframe_s → DataFrame with columns
             [open, high, low, close, volume].
         """
-        result: dict[int, "pd.DataFrame"] = {}
+        result: dict[int, pd.DataFrame] = {}
         for tf in timeframes_s:
             try:
                 result[tf] = self.to_ohlcv_df(symbol, timeframe_s=tf, limit=limit)
@@ -869,11 +869,13 @@ class TickStore:
                     exc,
                 )
                 import pandas as _pd
+
                 result[tf] = _pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
         return result
 
 
 # ── TimescaleDB batch insert ──────────────────────────────────────────────────
+
 
 def _patch_timescale_batch_insert() -> None:
     """
@@ -884,7 +886,7 @@ def _patch_timescale_batch_insert() -> None:
     """
     import time as _time
 
-    def batch_insert(self: "_TimescaleBackend", ticks: list[dict]) -> int:
+    def batch_insert(self: _TimescaleBackend, ticks: list[dict]) -> int:
         if not ticks:
             return 0
         if self._conn is None:
@@ -895,19 +897,21 @@ def _patch_timescale_batch_insert() -> None:
         rows = []
         for t in ticks:
             ts_ns = t.get("ts_ns") or int(t.get("timestamp", _time.time()) * 1_000_000_000)
-            rows.append((
-                ts_ns,
-                t.get("symbol", ""),
-                float(t.get("bid", 0.0)),
-                float(t.get("ask", 0.0)),
-                float(t.get("mid", (t.get("bid", 0.0) + t.get("ask", 0.0)) / 2.0)),
-                float(t.get("spread", t.get("ask", 0.0) - t.get("bid", 0.0))),
-                float(t.get("volume", 0.0)),
-                str(t.get("source", "")),
-                str(t.get("quality", "good")),
-                float(t.get("confidence", 1.0)),
-                str(t.get("lineage_id", "")),
-            ))
+            rows.append(
+                (
+                    ts_ns,
+                    t.get("symbol", ""),
+                    float(t.get("bid", 0.0)),
+                    float(t.get("ask", 0.0)),
+                    float(t.get("mid", (t.get("bid", 0.0) + t.get("ask", 0.0)) / 2.0)),
+                    float(t.get("spread", t.get("ask", 0.0) - t.get("bid", 0.0))),
+                    float(t.get("volume", 0.0)),
+                    str(t.get("source", "")),
+                    str(t.get("quality", "good")),
+                    float(t.get("confidence", 1.0)),
+                    str(t.get("lineage_id", "")),
+                )
+            )
 
         try:
             with self._cur() as cur:
@@ -925,7 +929,7 @@ def _patch_timescale_batch_insert() -> None:
             return len(rows)
         except Exception as exc:
             logger.warning("_TimescaleBackend.batch_insert failed: %s", exc)
-            try:
+            try:  # noqa: SIM105
                 self._conn.rollback()
             except Exception:  # nosec B110
                 pass
@@ -938,6 +942,7 @@ _patch_timescale_batch_insert()
 
 
 # ── Async wrapper ─────────────────────────────────────────────────────────────
+
 
 class AsyncTickStore:
     """
@@ -967,25 +972,24 @@ class AsyncTickStore:
 
     def __init__(self, store: TickStore | None = None) -> None:
         self._store = store or get_tick_store()
-        self._executor: "concurrent.futures.ThreadPoolExecutor | None" = None
+        self._executor: concurrent.futures.ThreadPoolExecutor | None = None
 
-    def _get_executor(self) -> "concurrent.futures.ThreadPoolExecutor":
+    def _get_executor(self) -> concurrent.futures.ThreadPoolExecutor:
         if self._executor is None:
             import concurrent.futures
-            self._executor = concurrent.futures.ThreadPoolExecutor(
-                max_workers=4, thread_name_prefix="async-tick-store"
-            )
+
+            self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="async-tick-store")
         return self._executor
 
-    async def _run(self, fn: "Callable", *args: "Any", **kwargs: "Any") -> "Any":
+    async def _run(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:
         import asyncio
+
         loop = asyncio.get_running_loop()
         import functools
-        return await loop.run_in_executor(
-            self._get_executor(), functools.partial(fn, *args, **kwargs)
-        )
 
-    async def insert(self, **kwargs: "Any") -> bool:
+        return await loop.run_in_executor(self._get_executor(), functools.partial(fn, *args, **kwargs))
+
+    async def insert(self, **kwargs: Any) -> bool:
         """Async insert a single tick."""
         return await self._run(self._store.insert, **kwargs)
 
@@ -999,19 +1003,17 @@ class AsyncTickStore:
         since_ns: int = 0,
         until_ns: int = 0,
         limit: int = 1000,
-    ) -> "pd.DataFrame":
+    ) -> pd.DataFrame:
         """Async query ticks."""
-        return await self._run(
-            self._store.query, symbol, since_ns=since_ns, until_ns=until_ns, limit=limit
-        )
+        return await self._run(self._store.query, symbol, since_ns=since_ns, until_ns=until_ns, limit=limit)
 
     async def query_range(
         self,
         symbol: str,
-        start: "datetime",
-        end: "datetime",
+        start: datetime,
+        end: datetime,
         limit: int = 10_000,
-    ) -> "pd.DataFrame":
+    ) -> pd.DataFrame:
         """Async range query by datetime."""
         return await self._run(self._store.query_range, symbol, start, end, limit=limit)
 
@@ -1020,7 +1022,7 @@ class AsyncTickStore:
         symbol: str,
         timeframe_s: int = 3600,
         limit: int = 500,
-    ) -> "pd.DataFrame":
+    ) -> pd.DataFrame:
         """Async OHLCV DataFrame."""
         return await self._run(self._store.ohlcv, symbol, timeframe_s, limit=limit)
 
@@ -1029,7 +1031,7 @@ class AsyncTickStore:
         symbol: str,
         timeframe_s: int = 3600,
         limit: int = 500,
-    ) -> "pd.DataFrame":
+    ) -> pd.DataFrame:
         """Async OHLCV DataFrame (convenience alias)."""
         return await self._run(self._store.to_ohlcv_df, symbol, timeframe_s, limit=limit)
 
@@ -1038,11 +1040,9 @@ class AsyncTickStore:
         symbol: str,
         timeframes_s: list[int],
         limit: int = 200,
-    ) -> "dict[int, pd.DataFrame]":
+    ) -> dict[int, pd.DataFrame]:
         """Async multi-timeframe OHLCV."""
-        return await self._run(
-            self._store.ohlcv_multi_timeframe, symbol, timeframes_s, limit=limit
-        )
+        return await self._run(self._store.ohlcv_multi_timeframe, symbol, timeframes_s, limit=limit)
 
     async def latest(self, symbol: str) -> dict | None:
         """Async latest tick."""

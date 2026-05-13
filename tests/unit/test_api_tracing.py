@@ -30,36 +30,43 @@ from fastapi.testclient import TestClient
 class TestNoOpSpan:
     def test_set_attribute_does_not_raise(self):
         from api.tracing import _NoOpSpan
+
         span = _NoOpSpan()
         span.set_attribute("http.method", "GET")
 
     def test_add_event_does_not_raise(self):
         from api.tracing import _NoOpSpan
+
         span = _NoOpSpan()
         span.add_event("test_event")
 
     def test_record_exception_does_not_raise(self):
         from api.tracing import _NoOpSpan
+
         span = _NoOpSpan()
         span.record_exception(ValueError("test"))
 
     def test_set_status_does_not_raise(self):
         from api.tracing import _NoOpSpan
+
         span = _NoOpSpan()
         span.set_status("OK")
 
     def test_context_manager(self):
         from api.tracing import _NoOpSpan
+
         span = _NoOpSpan()
         with span as s:
             assert s is span
 
     def test_trace_id_is_zeros(self):
         from api.tracing import _NoOpSpan
+
         assert _NoOpSpan.trace_id == "0" * 32
 
     def test_span_id_is_zeros(self):
         from api.tracing import _NoOpSpan
+
         assert _NoOpSpan.span_id == "0" * 16
 
 
@@ -71,12 +78,14 @@ class TestNoOpSpan:
 class TestNoOpTracer:
     def test_start_as_current_span_returns_noop_span(self):
         from api.tracing import _NoOpTracer, _NoOpSpan
+
         tracer = _NoOpTracer()
         span = tracer.start_as_current_span("test.span")
         assert isinstance(span, _NoOpSpan)
 
     def test_start_span_returns_noop_span(self):
         from api.tracing import _NoOpTracer, _NoOpSpan
+
         tracer = _NoOpTracer()
         span = tracer.start_span("test.span")
         assert isinstance(span, _NoOpSpan)
@@ -90,23 +99,27 @@ class TestNoOpTracer:
 class TestIdHelpers:
     def test_hex_trace_id_is_32_chars(self):
         from api.tracing import _hex_trace_id
+
         tid = _hex_trace_id()
         assert len(tid) == 32
         assert all(c in "0123456789abcdef" for c in tid)
 
     def test_hex_trace_id_unique(self):
         from api.tracing import _hex_trace_id
+
         ids = {_hex_trace_id() for _ in range(10)}
         assert len(ids) == 10
 
     def test_hex_span_id_is_16_chars(self):
         from api.tracing import _hex_span_id
+
         sid = _hex_span_id()
         assert len(sid) == 16
         assert all(c in "0123456789abcdef" for c in sid)
 
     def test_current_trace_span_ids_returns_valid_hex(self):
         from api.tracing import _current_trace_span_ids
+
         tid, sid = _current_trace_span_ids()
         assert len(tid) == 32
         assert len(sid) == 16
@@ -115,6 +128,7 @@ class TestIdHelpers:
 
     def test_current_trace_span_ids_returns_tuple(self):
         from api.tracing import _current_trace_span_ids
+
         result = _current_trace_span_ids()
         assert isinstance(result, tuple)
         assert len(result) == 2
@@ -128,16 +142,19 @@ class TestIdHelpers:
 class TestGetTracer:
     def test_returns_tracer_object(self):
         from api.tracing import get_tracer
+
         tracer = get_tracer("test")
         assert tracer is not None
 
     def test_tracer_has_start_as_current_span(self):
         from api.tracing import get_tracer
+
         tracer = get_tracer("test")
         assert hasattr(tracer, "start_as_current_span")
 
     def test_default_name(self):
         from api.tracing import get_tracer
+
         tracer = get_tracer()
         assert tracer is not None
 
@@ -151,6 +168,7 @@ class TestGetTracer:
 def traced_app():
     """Minimal FastAPI app with TracingMiddleware attached."""
     from api.tracing import TracingMiddleware, _SPAN_BUFFER
+
     _SPAN_BUFFER.clear()
 
     app = FastAPI()
@@ -184,6 +202,7 @@ class TestTracingMiddleware:
 
     def test_span_buffered_after_request(self, traced_app):
         from api.tracing import _SPAN_BUFFER
+
         _SPAN_BUFFER.clear()
         client = TestClient(traced_app, raise_server_exceptions=False)
         client.get("/ping")
@@ -195,6 +214,7 @@ class TestTracingMiddleware:
 
     def test_span_buffer_contains_duration(self, traced_app):
         from api.tracing import _SPAN_BUFFER
+
         _SPAN_BUFFER.clear()
         client = TestClient(traced_app, raise_server_exceptions=False)
         client.get("/ping")
@@ -204,6 +224,7 @@ class TestTracingMiddleware:
 
     def test_span_buffer_capped_at_100(self, traced_app):
         from api.tracing import _SPAN_BUFFER
+
         _SPAN_BUFFER.clear()
         client = TestClient(traced_app, raise_server_exceptions=False)
         for _ in range(110):
@@ -217,6 +238,7 @@ class TestTracingMiddleware:
 
     def test_span_buffer_records_span_name(self, traced_app):
         from api.tracing import _SPAN_BUFFER
+
         _SPAN_BUFFER.clear()
         client = TestClient(traced_app, raise_server_exceptions=False)
         client.get("/ping")

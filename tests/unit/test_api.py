@@ -1240,6 +1240,7 @@ class TestLiveConnectionManager:
 
     async def test_broadcast_removes_dead_connection(self):
         """A send_text failure should silently drop the connection."""
+
         class _DeadWS(_MockWS):
             async def send_text(self, text: str):
                 raise RuntimeError("connection closed")
@@ -1292,6 +1293,7 @@ class TestLiveConnectionManager:
 
     def test_ws_live_stats_endpoint(self):
         from api.ws_live import router as ws_router
+
         app = FastAPI()
         app.include_router(ws_router)
         client = TestClient(app)
@@ -1320,9 +1322,7 @@ class TestAccountBroadcasterMarginLevel:
 
     def test_no_positions_yields_sentinel(self):
         """margin_used=0 → 9999.0, not 0.0."""
-        result = self._compute_margin_level(
-            {"balance": 10000.0, "equity": 10000.0, "margin_used": 0.0}
-        )
+        result = self._compute_margin_level({"balance": 10000.0, "equity": 10000.0, "margin_used": 0.0})
         assert result == 9999.0
 
     def test_margin_used_missing_yields_sentinel(self):
@@ -1332,16 +1332,12 @@ class TestAccountBroadcasterMarginLevel:
 
     def test_margin_used_none_yields_sentinel(self):
         """Broker returns None for margin_used → treated as 0 → sentinel."""
-        result = self._compute_margin_level(
-            {"balance": 10000.0, "equity": 10000.0, "margin_used": None}
-        )
+        result = self._compute_margin_level({"balance": 10000.0, "equity": 10000.0, "margin_used": None})
         assert result == 9999.0
 
     def test_open_positions_computes_correctly(self):
         """With margin_used > 0, margin_level = equity / margin_used * 100."""
-        result = self._compute_margin_level(
-            {"balance": 10000.0, "equity": 10500.0, "margin_used": 1000.0}
-        )
+        result = self._compute_margin_level({"balance": 10000.0, "equity": 10500.0, "margin_used": 1000.0})
         assert abs(result - 1050.0) < 0.01
 
     def test_broker_margin_level_field_ignored(self):
@@ -1354,6 +1350,7 @@ class TestAccountBroadcasterMarginLevel:
     def test_paper_broker_always_yields_sentinel(self):
         """PaperTradingBroker always returns margin_used=0.0 → sentinel."""
         from brokers.paper_trading import PaperTradingBroker
+
         broker = PaperTradingBroker(initial_balance=10000.0)
         info = broker.get_account_info()
         margin_used = float(info.get("margin_used", 0.0) or 0.0)

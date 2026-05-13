@@ -55,6 +55,7 @@ try:
         "Number of news events successfully enqueued for poll-mode consumers",
     )
 except Exception:  # pragma: no cover — prometheus_client optional
+
     class _NoopCounter:  # type: ignore[no-redef]
         def inc(self, amount: float = 1) -> None:
             pass
@@ -111,8 +112,7 @@ def validate_startup_environment() -> list[str]:
     # Python version
     if sys.version_info < (3, 10):
         errors.append(
-            f"Python {sys.version_info.major}.{sys.version_info.minor} is not supported; "
-            "Python >= 3.10 is required"
+            f"Python {sys.version_info.major}.{sys.version_info.minor} is not supported; Python >= 3.10 is required"
         )
 
     # JWT secret
@@ -335,7 +335,7 @@ class HopeFXEngine:
                 return_exceptions=True,
             )
             # Log any callback errors so they don't vanish silently.
-            for cb, result in zip(self._news_callbacks, results):
+            for cb, result in zip(self._news_callbacks, results, strict=False):
                 if isinstance(result, BaseException):
                     logger.error(
                         "News callback %s raised: %s",

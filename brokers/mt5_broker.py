@@ -236,6 +236,7 @@ class MT5Broker(BrokerConnector):
 
         status = OrderStatus.FILLED if result.get("success") else OrderStatus.REJECTED
         import uuid as _uuid
+
         return Order(
             id=str(result.get("order", _uuid.uuid4())),
             symbol=symbol,
@@ -705,8 +706,13 @@ class MT5Broker(BrokerConnector):
         if not self._assert_connected("get_market_data") or not _MT5_AVAILABLE:
             return []
         _tf_map = {
-            "1m": 1, "5m": 5, "15m": 15, "30m": 30,
-            "1h": 16385, "4h": 16388, "1d": 16408,
+            "1m": 1,
+            "5m": 5,
+            "15m": 15,
+            "30m": 30,
+            "1h": 16385,
+            "4h": 16388,
+            "1d": 16408,
         }
         tf_const = _tf_map.get(timeframe, 16385)  # default H1
         loop = asyncio.get_running_loop()

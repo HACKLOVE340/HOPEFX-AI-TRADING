@@ -73,7 +73,7 @@ class WMA(Indicator):
         result = []
         for i in range(self.period - 1, len(data)):
             window = data[i - self.period + 1 : i + 1]
-            result.append(sum(w * p for w, p in zip(weights, window)) / denom)
+            result.append(sum(w * p for w, p in zip(weights, window, strict=False)) / denom)
         return result
 
 
@@ -108,7 +108,7 @@ class DEMA(Indicator):
         if not ema2:
             return []
         offset = len(ema1) - len(ema2)
-        return [2 * e1 - e2 for e1, e2 in zip(ema1[offset:], ema2)]
+        return [2 * e1 - e2 for e1, e2 in zip(ema1[offset:], ema2, strict=False)]
 
 
 class TEMA(Indicator):
@@ -129,10 +129,7 @@ class TEMA(Indicator):
             return []
         n1, n2, n3 = len(ema1), len(ema2), len(ema3)
         min_len = min(n1, n2, n3)
-        return [
-            3 * ema1[n1 - min_len + i] - 3 * ema2[n2 - min_len + i] + ema3[i]
-            for i in range(min_len)
-        ]
+        return [3 * ema1[n1 - min_len + i] - 3 * ema2[n2 - min_len + i] + ema3[i] for i in range(min_len)]
 
 
 class RSI(Indicator):
@@ -238,7 +235,7 @@ class CCI(Indicator):
     ) -> list[float]:
         if len(close) < self.period:
             return []
-        tp = [(h + l + c) / 3 for h, l, c in zip(high, low, close)]
+        tp = [(h + l + c) / 3 for h, l, c in zip(high, low, close, strict=False)]
         result = []
         for i in range(self.period - 1, len(tp)):
             window = tp[i - self.period + 1 : i + 1]
@@ -285,16 +282,12 @@ class MFI(Indicator):
     ) -> list[float]:
         if len(close) <= self.period:
             return []
-        tp = [(h + l + c) / 3 for h, l, c in zip(high, low, close)]
-        mf = [t * v for t, v in zip(tp, volume)]
+        tp = [(h + l + c) / 3 for h, l, c in zip(high, low, close, strict=False)]
+        mf = [t * v for t, v in zip(tp, volume, strict=False)]
         result = []
         for i in range(self.period, len(tp)):
-            pos_mf = sum(
-                mf[j] for j in range(i - self.period + 1, i + 1) if tp[j] > tp[j - 1]
-            )
-            neg_mf = sum(
-                mf[j] for j in range(i - self.period + 1, i + 1) if tp[j] < tp[j - 1]
-            )
+            pos_mf = sum(mf[j] for j in range(i - self.period + 1, i + 1) if tp[j] > tp[j - 1])
+            neg_mf = sum(mf[j] for j in range(i - self.period + 1, i + 1) if tp[j] < tp[j - 1])
             if neg_mf == 0:
                 result.append(100.0)
             else:
@@ -329,9 +322,7 @@ class MACD(Indicator):
         macd_line, _, _ = self.calculate_full(data)
         return macd_line
 
-    def calculate_full(
-        self, data: list[float]
-    ) -> tuple[list[float], list[float], list[float]]:
+    def calculate_full(self, data: list[float]) -> tuple[list[float], list[float], list[float]]:
         """Return (macd_line, signal_line, histogram)."""
         ema_fast = EMA(period=self.fast).calculate(data)
         ema_slow = EMA(period=self.slow).calculate(data)
@@ -339,12 +330,12 @@ class MACD(Indicator):
             return [], [], []
         # Align: ema_slow is shorter (seeded later)
         offset = len(ema_fast) - len(ema_slow)
-        macd_line = [f - s for f, s in zip(ema_fast[offset:], ema_slow)]
+        macd_line = [f - s for f, s in zip(ema_fast[offset:], ema_slow, strict=False)]
         signal_line = EMA(period=self.signal_period).calculate(macd_line)
         if not signal_line:
             return macd_line, [], []
         sig_offset = len(macd_line) - len(signal_line)
-        histogram = [m - s for m, s in zip(macd_line[sig_offset:], signal_line)]
+        histogram = [m - s for m, s in zip(macd_line[sig_offset:], signal_line, strict=False)]
         return macd_line, signal_line, histogram
 
 
@@ -394,12 +385,9 @@ class ADX(Indicator):
         pdm_s = _smooth(plus_dm, self.period)
         mdm_s = _smooth(minus_dm, self.period)
 
-        plus_di = [100 * p / a if a else 0.0 for p, a in zip(pdm_s, atr_s)]
-        minus_di = [100 * m / a if a else 0.0 for m, a in zip(mdm_s, atr_s)]
-        dx = [
-            100 * abs(p - m) / (p + m) if (p + m) else 0.0
-            for p, m in zip(plus_di, minus_di)
-        ]
+        plus_di = [100 * p / a if a else 0.0 for p, a in zip(pdm_s, atr_s, strict=False)]
+        minus_di = [100 * m / a if a else 0.0 for m, a in zip(mdm_s, atr_s, strict=False)]
+        dx = [100 * abs(p - m) / (p + m) if (p + m) else 0.0 for p, m in zip(plus_di, minus_di, strict=False)]
         adx = _smooth(dx, self.period)
         # Align all to shortest
         min_len = min(len(adx), len(plus_di), len(minus_di))
@@ -423,9 +411,7 @@ class BollingerBands(Indicator):
         _, mid, _ = self.calculate_full(data)
         return mid
 
-    def calculate_full(
-        self, data: list[float]
-    ) -> tuple[list[float], list[float], list[float]]:
+    def calculate_full(self, data: list[float]) -> tuple[list[float], list[float], list[float]]:
         """Return (upper, middle, lower)."""
         if len(data) < self.period:
             return [], [], []
@@ -511,8 +497,8 @@ class KeltnerChannels(Indicator):
             return [], [], []
         min_len = min(len(ema), len(atr))
         mid = ema[-min_len:]
-        upper = [m + self.multiplier * a for m, a in zip(mid, atr[-min_len:])]
-        lower = [m - self.multiplier * a for m, a in zip(mid, atr[-min_len:])]
+        upper = [m + self.multiplier * a for m, a in zip(mid, atr[-min_len:], strict=False)]
+        lower = [m - self.multiplier * a for m, a in zip(mid, atr[-min_len:], strict=False)]
         return upper, mid, lower
 
 
@@ -557,9 +543,7 @@ class OBV(Indicator):
         """Approximate OBV using close prices only (volume assumed = 1)."""
         return self.calculate_cv(data, [1.0] * len(data))
 
-    def calculate_cv(
-        self, close: list[float], volume: list[float]
-    ) -> list[float]:
+    def calculate_cv(self, close: list[float], volume: list[float]) -> list[float]:
         if not close:
             return []
         obv = [volume[0]]
@@ -598,7 +582,7 @@ class VWAP(Indicator):
         cum_tp_vol = 0.0
         cum_vol = 0.0
         result = []
-        for h, l, c, v in zip(high, low, close, volume):
+        for h, l, c, v in zip(high, low, close, volume, strict=False):
             tp = (h + l + c) / 3
             cum_tp_vol += tp * v
             cum_vol += v
@@ -625,7 +609,7 @@ class CMF(Indicator):
         if len(close) < self.period:
             return []
         mfv = []
-        for h, l, c, v in zip(high, low, close, volume):
+        for h, l, c, v in zip(high, low, close, volume, strict=False):
             rng = h - l
             clv = ((c - l) - (h - c)) / rng if rng else 0.0
             mfv.append(clv * v)
@@ -681,10 +665,7 @@ class Ichimoku(Indicator):
         kijun = self._midpoint(high, low, self.kijun)
         # Senkou A = (Tenkan + Kijun) / 2, aligned
         min_tk = min(len(tenkan), len(kijun))
-        senkou_a = [
-            (t + k) / 2
-            for t, k in zip(tenkan[-min_tk:], kijun[-min_tk:])
-        ]
+        senkou_a = [(t + k) / 2 for t, k in zip(tenkan[-min_tk:], kijun[-min_tk:], strict=False)]
         senkou_b = self._midpoint(high, low, self.senkou_b_period)
         # Chikou = close shifted back kijun periods (represented as current close)
         chikou = list(close)
@@ -743,10 +724,7 @@ class IndicatorLibrary:
     def get_indicator(self, name: str, **params) -> Indicator:
         cls = self.indicators.get(name.upper())
         if cls is None:
-            raise ValueError(
-                f"Unknown indicator: {name!r}. "
-                f"Available: {', '.join(sorted(self.indicators))}"
-            )
+            raise ValueError(f"Unknown indicator: {name!r}. Available: {', '.join(sorted(self.indicators))}")
         period = params.get("period", 14)
         # Pass extra params to constructors that accept them
         try:

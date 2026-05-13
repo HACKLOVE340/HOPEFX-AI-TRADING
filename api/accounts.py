@@ -59,18 +59,22 @@ _MAX_ACCOUNTS_PER_USER = 10
 
 # ── db_store helpers ──────────────────────────────────────────────────────────
 
+
 def _store_get(key: str) -> Any | None:
     from api.db_store import db_get
+
     return db_get(key)
 
 
 def _store_set(key: str, value: Any) -> None:
     from api.db_store import db_set
+
     db_set(key, value)
 
 
 def _store_delete(key: str) -> None:
     from api.db_store import db_delete
+
     db_delete(key)
 
 
@@ -84,10 +88,12 @@ def _account_key(owner_id: str, account_id: str) -> str:
 
 # ── DB-backed sub_accounts helpers ───────────────────────────────────────────
 
+
 def _db_session():
     """Return a synchronous DB session or None."""
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception:
         return None
@@ -100,6 +106,7 @@ def _db_list_sub_accounts(owner_id: str) -> list[dict] | None:
         return None
     try:
         from sqlalchemy import text as _text
+
         rows = db.execute(
             _text("SELECT * FROM sub_accounts WHERE owner_id = :oid AND is_active = true ORDER BY created_at DESC"),
             {"oid": owner_id},
@@ -119,6 +126,7 @@ def _db_create_sub_account(data: dict) -> dict | None:
         return None
     try:
         from sqlalchemy import text as _text
+
         db.execute(
             _text(
                 "INSERT INTO sub_accounts "
@@ -142,8 +150,18 @@ def _db_create_sub_account(data: dict) -> dict | None:
 
 
 _SUB_ACCOUNT_UPDATABLE_COLS: frozenset[str] = frozenset(
-    {"label", "name", "description", "active", "is_active", "max_drawdown_pct",
-     "daily_loss_limit", "broker", "broker_account_id", "updated_at"}
+    {
+        "label",
+        "name",
+        "description",
+        "active",
+        "is_active",
+        "max_drawdown_pct",
+        "daily_loss_limit",
+        "broker",
+        "broker_account_id",
+        "updated_at",
+    }
 )
 
 
@@ -160,6 +178,7 @@ def _db_update_sub_account(account_id: str, owner_id: str, updates: dict) -> dic
         return None
     try:
         from sqlalchemy import text as _text
+
         set_parts = ", ".join(f"{k} = :{k}" for k in safe_updates)
         updates = safe_updates
         updates["account_id"] = account_id
@@ -189,6 +208,7 @@ def _db_get_team_members(team_id: str) -> list[dict] | None:
         return None
     try:
         from sqlalchemy import text as _text
+
         rows = db.execute(
             _text("SELECT * FROM sub_account_members WHERE sub_account_id = :tid ORDER BY joined_at DESC"),
             {"tid": team_id},
@@ -238,7 +258,7 @@ class CreateSubAccountRequest(BaseModel):
     broker_account_id: str | None = None
 
     @model_validator(mode="after")
-    def require_label_or_name(self) -> "CreateSubAccountRequest":
+    def require_label_or_name(self) -> CreateSubAccountRequest:
         if not (self.label or self.name):
             raise ValueError("Either 'label' or 'name' must be provided")
         return self
@@ -432,7 +452,8 @@ async def delete_sub_account(
     if acc.get("active", True) or acc.get("is_active", True):
         ids = _get_index(user.sub)
         active_count = sum(
-            1 for aid in ids
+            1
+            for aid in ids
             if (a := _get_account(user.sub, aid)) and (a.get("active", True) or a.get("is_active", True))
         )
         if active_count <= 1:
@@ -494,7 +515,10 @@ async def transfer_between_sub_accounts(
 
     logger.info(
         "Transfer %.2f from %s to %s by user %s",
-        req.amount, account_id, req.to_account_id, user.sub,
+        req.amount,
+        account_id,
+        req.to_account_id,
+        user.sub,
     )
     return {
         "ok": True,
@@ -508,6 +532,7 @@ async def transfer_between_sub_accounts(
 
 
 # ── Team endpoints ────────────────────────────────────────────────────────────
+
 
 def _team_members_key(team_id: str) -> str:
     return f"team_members:{team_id}"

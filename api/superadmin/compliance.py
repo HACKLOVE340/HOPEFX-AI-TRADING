@@ -29,8 +29,7 @@ import io
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import timezone
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
@@ -44,6 +43,7 @@ UTC = timezone.utc
 
 
 # ── KYC Queue ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/compliance/kyc")
 async def get_kyc_queue(
@@ -63,18 +63,22 @@ async def get_kyc_queue(
                 q = q.filter(User.kyc_status == status)
             rows = q.order_by(User.created_at.desc()).limit(limit).all()
             for u in rows:
-                records.append({
-                    "user_id": str(u.user_id),
-                    "username": u.username,
-                    "email": u.email,
-                    "kyc_status": getattr(u, "kyc_status", "unverified") or "unverified",
-                    "submitted_at": u.kyc_submitted_at.isoformat() if getattr(u, "kyc_submitted_at", None) else None,
-                    "reviewed_at": u.kyc_reviewed_at.isoformat() if getattr(u, "kyc_reviewed_at", None) else None,
-                    "reviewer_id": str(u.kyc_reviewer_id) if getattr(u, "kyc_reviewer_id", None) else None,
-                    "rejection_reason": getattr(u, "kyc_rejection_reason", None),
-                    "country": getattr(u, "country", None),
-                    "document_type": getattr(u, "kyc_document_type", None),
-                })
+                records.append(
+                    {
+                        "user_id": str(u.user_id),
+                        "username": u.username,
+                        "email": u.email,
+                        "kyc_status": getattr(u, "kyc_status", "unverified") or "unverified",
+                        "submitted_at": u.kyc_submitted_at.isoformat()
+                        if getattr(u, "kyc_submitted_at", None)
+                        else None,
+                        "reviewed_at": u.kyc_reviewed_at.isoformat() if getattr(u, "kyc_reviewed_at", None) else None,
+                        "reviewer_id": str(u.kyc_reviewer_id) if getattr(u, "kyc_reviewer_id", None) else None,
+                        "rejection_reason": getattr(u, "kyc_rejection_reason", None),
+                        "country": getattr(u, "country", None),
+                        "document_type": getattr(u, "kyc_document_type", None),
+                    }
+                )
         finally:
             db.close()
     except Exception as exc:
@@ -148,6 +152,7 @@ _AML_ALERTS_KEY = "superadmin:aml:alerts"
 def _load_aml_alerts() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_AML_ALERTS_KEY)
@@ -161,6 +166,7 @@ def _load_aml_alerts() -> list[dict]:
 def _save_aml_alerts(alerts: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_AML_ALERTS_KEY, json.dumps(alerts), ex=86400 * 30)
@@ -195,18 +201,20 @@ async def get_aml_alerts(
                 aid = f"aml_{r.id}"
                 if aid not in existing_ids:
                     meta = json.loads(r.metadata or "{}") if r.metadata else {}
-                    alerts.append({
-                        "alert_id": aid,
-                        "user_id": str(r.user_id) if r.user_id else "unknown",
-                        "username": meta.get("username", "unknown"),
-                        "alert_type": r.event_type,
-                        "severity": meta.get("severity", "medium"),
-                        "amount": float(meta.get("amount", 0)),
-                        "currency": meta.get("currency", "USD"),
-                        "description": r.detail or r.event_type,
-                        "status": "open",
-                        "created_at": r.created_at.isoformat() if r.created_at else _utcnow().isoformat(),
-                    })
+                    alerts.append(
+                        {
+                            "alert_id": aid,
+                            "user_id": str(r.user_id) if r.user_id else "unknown",
+                            "username": meta.get("username", "unknown"),
+                            "alert_type": r.event_type,
+                            "severity": meta.get("severity", "medium"),
+                            "amount": float(meta.get("amount", 0)),
+                            "currency": meta.get("currency", "USD"),
+                            "description": r.detail or r.event_type,
+                            "status": "open",
+                            "created_at": r.created_at.isoformat() if r.created_at else _utcnow().isoformat(),
+                        }
+                    )
         finally:
             db.close()
     except Exception as exc:
@@ -239,13 +247,15 @@ async def update_aml_alert(
             break
     if not updated:
         # Create entry for DB-sourced alerts
-        alerts.append({
-            "alert_id": alert_id,
-            "status": body.get("status", "investigating"),
-            "notes": body.get("notes", ""),
-            "reviewed_by": user.sub,
-            "reviewed_at": _utcnow().isoformat(),
-        })
+        alerts.append(
+            {
+                "alert_id": alert_id,
+                "status": body.get("status", "investigating"),
+                "notes": body.get("notes", ""),
+                "reviewed_by": user.sub,
+                "reviewed_at": _utcnow().isoformat(),
+            }
+        )
     _save_aml_alerts(alerts)
     _log_superadmin_action(user, "aml_alert_update", {"alert_id": alert_id, **body})
     return {"ok": True}
@@ -259,6 +269,7 @@ _SANCTIONS_KEY = "superadmin:sanctions:hits"
 def _load_sanctions() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_SANCTIONS_KEY)
@@ -295,15 +306,17 @@ async def get_sanctions_hits(
                 hid = f"sanc_{r.id}"
                 if hid not in existing_ids:
                     meta = json.loads(r.metadata or "{}") if r.metadata else {}
-                    hits.append({
-                        "hit_id": hid,
-                        "user_id": str(r.user_id) if r.user_id else "unknown",
-                        "username": meta.get("username", "unknown"),
-                        "list_name": meta.get("list_name", "OFAC"),
-                        "match_score": float(meta.get("match_score", 0.9)),
-                        "status": "pending",
-                        "created_at": r.created_at.isoformat() if r.created_at else _utcnow().isoformat(),
-                    })
+                    hits.append(
+                        {
+                            "hit_id": hid,
+                            "user_id": str(r.user_id) if r.user_id else "unknown",
+                            "username": meta.get("username", "unknown"),
+                            "list_name": meta.get("list_name", "OFAC"),
+                            "match_score": float(meta.get("match_score", 0.9)),
+                            "status": "pending",
+                            "created_at": r.created_at.isoformat() if r.created_at else _utcnow().isoformat(),
+                        }
+                    )
         finally:
             db.close()
     except Exception as exc:
@@ -328,6 +341,7 @@ async def clear_sanctions_hit(
             break
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_SANCTIONS_KEY, json.dumps(hits), ex=86400 * 30)
@@ -349,6 +363,7 @@ async def get_regulatory_reports(
     reports: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_REG_REPORTS_KEY)
@@ -380,6 +395,7 @@ async def trigger_regulatory_report(
     }
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_REG_REPORTS_KEY)
@@ -400,6 +416,7 @@ async def trigger_regulatory_report(
 
 
 # ── Immutable Audit Trail ─────────────────────────────────────────────────────
+
 
 @router.get("/compliance/audit-trail")
 async def get_audit_trail(
@@ -424,18 +441,21 @@ async def get_audit_trail(
             prev_hash = "genesis"
             for r in rows:
                 import hashlib
+
                 payload = f"{r.id}:{r.event_type}:{r.user_id}:{r.created_at}:{prev_hash}"
                 entry_hash = hashlib.sha256(payload.encode()).hexdigest()
-                entries.append({
-                    "entry_id": str(r.id),
-                    "event_type": r.event_type,
-                    "user_id": str(r.user_id) if r.user_id else None,
-                    "ip_address": getattr(r, "ip_address", None),
-                    "detail": r.detail,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "hash": entry_hash,
-                    "prev_hash": prev_hash,
-                })
+                entries.append(
+                    {
+                        "entry_id": str(r.id),
+                        "event_type": r.event_type,
+                        "user_id": str(r.user_id) if r.user_id else None,
+                        "ip_address": getattr(r, "ip_address", None),
+                        "detail": r.detail,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                        "hash": entry_hash,
+                        "prev_hash": prev_hash,
+                    }
+                )
                 prev_hash = entry_hash
         finally:
             db.close()
@@ -452,10 +472,17 @@ async def export_audit_trail(
     entries = entries_resp.get("entries", [])
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=["entry_id", "event_type", "user_id", "ip_address", "detail", "created_at", "hash"])
+    writer = csv.DictWriter(
+        output, fieldnames=["entry_id", "event_type", "user_id", "ip_address", "detail", "created_at", "hash"]
+    )
     writer.writeheader()
     for e in entries:
-        writer.writerow({k: e.get(k, "") for k in ["entry_id", "event_type", "user_id", "ip_address", "detail", "created_at", "hash"]})
+        writer.writerow(
+            {
+                k: e.get(k, "")
+                for k in ["entry_id", "event_type", "user_id", "ip_address", "detail", "created_at", "hash"]
+            }
+        )
 
     output.seek(0)
     return StreamingResponse(

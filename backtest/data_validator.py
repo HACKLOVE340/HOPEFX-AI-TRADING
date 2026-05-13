@@ -12,18 +12,18 @@ New code should import directly from backtesting:
 
     from backtesting.data_validator import MultiSourceValidator, fetch_validated_ohlcv
 """
+
 from __future__ import annotations
 
 import warnings
 
 warnings.warn(
-    "backtest.data_validator is a compatibility shim. "
-    "Import from backtesting.data_validator directly.",
+    "backtest.data_validator is a compatibility shim. Import from backtesting.data_validator directly.",
     DeprecationWarning,
     stacklevel=2,
 )
 
-from backtesting.data_validator import (  # noqa: F401, E402
+from backtesting.data_validator import (
     BarValidationResult,
     ValidationReport,
     MultiSourceValidator,

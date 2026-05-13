@@ -67,7 +67,7 @@ class PaginationMeta(BaseModel):
     prev_cursor: str | None = Field(None, description="Opaque cursor for the previous page")
 
     @model_validator(mode="after")
-    def _compute_derived(self) -> "PaginationMeta":
+    def _compute_derived(self) -> PaginationMeta:
         """Compute total_pages, has_next, has_prev from total/page/page_size."""
         if self.page_size > 0:
             self.total_pages = max(1, math.ceil(self.total / self.page_size))
@@ -100,7 +100,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
         page_size: int = 50,
         next_cursor: str | None = None,
         prev_cursor: str | None = None,
-    ) -> "PaginatedResponse[T]":
+    ) -> PaginatedResponse[T]:
         """Convenience constructor that computes all pagination metadata."""
         meta = PaginationMeta(
             total=total,
@@ -183,7 +183,7 @@ class TradeListResponse(BaseModel):
         total: int,
         page: int = 1,
         page_size: int = 50,
-    ) -> "TradeListResponse":
+    ) -> TradeListResponse:
         meta = PaginationMeta(total=total, page=page, page_size=page_size)
         return cls(trades=trades, pagination=meta)
 
@@ -259,7 +259,7 @@ class RegimeHistoryResponse(BaseModel):
         total: int,
         page: int = 1,
         page_size: int = 50,
-    ) -> "RegimeHistoryResponse":
+    ) -> RegimeHistoryResponse:
         meta = PaginationMeta(total=total, page=page, page_size=page_size)
         return cls(history=history, pagination=meta)
 
@@ -328,7 +328,7 @@ class SignalListResponse(BaseModel):
         total: int,
         page: int = 1,
         page_size: int = 50,
-    ) -> "SignalListResponse":
+    ) -> SignalListResponse:
         meta = PaginationMeta(total=total, page=page, page_size=page_size)
         return cls(signals=signals, pagination=meta)
 

@@ -12,18 +12,18 @@ New code should import directly from backtesting:
 
     from backtesting.transaction_costs import TransactionCostModel, get_tc_model
 """
+
 from __future__ import annotations
 
 import warnings
 
 warnings.warn(
-    "backtest.transaction_costs is a compatibility shim. "
-    "Import from backtesting.transaction_costs directly.",
+    "backtest.transaction_costs is a compatibility shim. Import from backtesting.transaction_costs directly.",
     DeprecationWarning,
     stacklevel=2,
 )
 
-from backtesting.transaction_costs import (  # noqa: F401, E402
+from backtesting.transaction_costs import (
     TransactionCostModel,
     OvernightSwapModel,
     get_tc_model,

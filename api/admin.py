@@ -360,9 +360,7 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
 
         def _query():
             with _state.db_session_factory() as session:  # pylint: disable=not-callable
-                rows = session.query(User).filter(
-                    User.kyc_status.in_(["pending", "submitted", "under_review"])
-                ).all()
+                rows = session.query(User).filter(User.kyc_status.in_(["pending", "submitted", "under_review"])).all()
                 return [
                     {
                         "user_id": u.id,
@@ -375,6 +373,7 @@ async def list_pending_kyc(user: TokenPayload = Depends(require_role("admin"))):
                 ]
 
         import asyncio as _aio
+
         users = await _aio.to_thread(_query)
         return {"count": len(users), "users": users}
     except HTTPException:
@@ -898,6 +897,7 @@ def admin_monitoring(user: TokenPayload = Depends(require_role("admin"))):
 
 # ── Missing endpoints required by AdminPanel.tsx ──────────────────────────────
 
+
 @router.get("/overview", summary="Admin overview KPIs")
 def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
@@ -905,7 +905,6 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     Aggregates data from trading engine, subscription manager, and system metrics.
     """
     import time as _time
-    import os as _os2
 
     total_users = 0
     active_users_24h = 0
@@ -923,7 +922,12 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     # Users from subscription manager
     try:
         from monetization.subscription import subscription_manager
-        subs = subscription_manager.get_all_subscriptions() if hasattr(subscription_manager, "get_all_subscriptions") else []
+
+        subs = (
+            subscription_manager.get_all_subscriptions()
+            if hasattr(subscription_manager, "get_all_subscriptions")
+            else []
+        )
         total_users = len(subs)
         active_subscriptions = sum(1 for s in subs if getattr(s, "status", "") in ("active", "trialing"))
     except Exception as exc:
@@ -932,6 +936,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     # Trading stats from engine
     try:
         from core.app_state import app_state as _as
+
         engine = getattr(_as, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -939,6 +944,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
             open_positions = len(open_pos)
             # Today's trades
             from datetime import datetime as _dt2, timezone as _tz2
+
             today = _dt2.now(_tz2.utc).date()
             for f in fills:
                 fa = getattr(f, "filled_at", None)
@@ -950,7 +956,8 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     # Revenue from analytics
     try:
         from monetization.analytics import revenue_analytics
-        from datetime import datetime as _dt3, timezone as _tz3, timedelta as _td
+        from datetime import datetime as _dt3, timezone as _tz3
+
         now = _dt3.now(_tz3.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         mtd_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -964,6 +971,7 @@ def get_admin_overview(user: TokenPayload = Depends(require_role("admin"))) -> d
     # ML accuracy
     try:
         from ml.signal_filter import SignalFilter
+
         sf = SignalFilter()
         stats = sf.get_stats() if hasattr(sf, "get_stats") else {}
         ml_model_accuracy = float(stats.get("accuracy", 0.0))
@@ -1000,59 +1008,70 @@ def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dic
     # Check kill switch
     try:
         from kill_switch import KillSwitch
+
         ks = KillSwitch()
         if ks.is_active():
-            alerts.append({
-                "id": "kill-switch-active",
-                "severity": "critical",
-                "title": "Kill Switch Active",
-                "message": "All trading has been halted by the kill switch.",
-                "created_at": _import_datetime().now(_import_utc()).isoformat(),
-                "resolved": False,
-            })
+            alerts.append(
+                {
+                    "id": "kill-switch-active",
+                    "severity": "critical",
+                    "title": "Kill Switch Active",
+                    "message": "All trading has been halted by the kill switch.",
+                    "created_at": _import_datetime().now(_import_utc()).isoformat(),
+                    "resolved": False,
+                }
+            )
     except Exception:  # nosec B110
         pass
 
     # Check engine health
     try:
         from core.app_state import app_state as _as2
+
         engine = getattr(_as2, "hopefx_engine", None)
         if engine is None:
-            alerts.append({
-                "id": "engine-offline",
-                "severity": "warning",
-                "title": "Trading Engine Offline",
-                "message": "The trading engine is not initialised. Paper trading mode may be active.",
-                "created_at": _import_datetime().now(_import_utc()).isoformat(),
-                "resolved": False,
-            })
+            alerts.append(
+                {
+                    "id": "engine-offline",
+                    "severity": "warning",
+                    "title": "Trading Engine Offline",
+                    "message": "The trading engine is not initialised. Paper trading mode may be active.",
+                    "created_at": _import_datetime().now(_import_utc()).isoformat(),
+                    "resolved": False,
+                }
+            )
     except Exception:  # nosec B110
         pass
 
     # Check DB
     try:
         from api.db_store import db_get
+
         db_get("health_check")
     except Exception:
-        alerts.append({
-            "id": "db-unavailable",
-            "severity": "warning",
-            "title": "Database Unavailable",
-            "message": "Config store is using in-memory fallback. Data will not persist across restarts.",
-            "created_at": _import_datetime().now(_import_utc()).isoformat(),
-            "resolved": False,
-        })
+        alerts.append(
+            {
+                "id": "db-unavailable",
+                "severity": "warning",
+                "title": "Database Unavailable",
+                "message": "Config store is using in-memory fallback. Data will not persist across restarts.",
+                "created_at": _import_datetime().now(_import_utc()).isoformat(),
+                "resolved": False,
+            }
+        )
 
     return {"alerts": alerts, "total": len(alerts)}
 
 
 def _import_datetime():
     from datetime import datetime
+
     return datetime
 
 
 def _import_utc():
     from datetime import timezone
+
     return timezone.utc
 
 
@@ -1093,6 +1112,7 @@ def export_audit_log(
 
 # ── User management endpoints ─────────────────────────────────────────────────
 
+
 @router.get("/users", summary="List all platform users")
 async def list_users(
     page: int = 1,
@@ -1110,20 +1130,33 @@ async def list_users(
     # Try subscription manager first
     try:
         from monetization.subscription import subscription_manager
-        subs = subscription_manager.get_all_subscriptions() if hasattr(subscription_manager, "get_all_subscriptions") else []
+
+        subs = (
+            subscription_manager.get_all_subscriptions()
+            if hasattr(subscription_manager, "get_all_subscriptions")
+            else []
+        )
         for s in subs:
             uid = getattr(s, "user_id", None) or (s.get("user_id") if isinstance(s, dict) else None)
             if not uid:
                 continue
-            all_users.append({
-                "user_id": uid,
-                "email": getattr(s, "email", "") or (s.get("email", "") if isinstance(s, dict) else ""),
-                "role": getattr(s, "role", "trader") or (s.get("role", "trader") if isinstance(s, dict) else "trader"),
-                "status": getattr(s, "status", "active") or (s.get("status", "active") if isinstance(s, dict) else "active"),
-                "plan": getattr(s, "plan", "free") or (s.get("plan", "free") if isinstance(s, dict) else "free"),
-                "created_at": str(getattr(s, "created_at", "") or (s.get("created_at", "") if isinstance(s, dict) else "")),
-                "last_login": str(getattr(s, "last_login", "") or (s.get("last_login", "") if isinstance(s, dict) else "")),
-            })
+            all_users.append(
+                {
+                    "user_id": uid,
+                    "email": getattr(s, "email", "") or (s.get("email", "") if isinstance(s, dict) else ""),
+                    "role": getattr(s, "role", "trader")
+                    or (s.get("role", "trader") if isinstance(s, dict) else "trader"),
+                    "status": getattr(s, "status", "active")
+                    or (s.get("status", "active") if isinstance(s, dict) else "active"),
+                    "plan": getattr(s, "plan", "free") or (s.get("plan", "free") if isinstance(s, dict) else "free"),
+                    "created_at": str(
+                        getattr(s, "created_at", "") or (s.get("created_at", "") if isinstance(s, dict) else "")
+                    ),
+                    "last_login": str(
+                        getattr(s, "last_login", "") or (s.get("last_login", "") if isinstance(s, dict) else "")
+                    ),
+                }
+            )
     except Exception as exc:
         logger.warning("list_users subscription_manager: %s", exc)
 
@@ -1149,7 +1182,7 @@ async def list_users(
 
     total = len(all_users)
     offset = (page - 1) * limit
-    page_data = all_users[offset: offset + limit]
+    page_data = all_users[offset : offset + limit]
 
     return {"users": page_data, "total": total, "page": page, "limit": limit}
 
@@ -1161,6 +1194,7 @@ async def get_user(
 ) -> dict:
     """Return full profile for a single user."""
     from api.db_store import db_get as _db_get2
+
     u = _db_get2(f"user:{user_id}")
     if u and isinstance(u, dict):
         return u
@@ -1168,6 +1202,7 @@ async def get_user(
     # Try subscription manager
     try:
         from monetization.subscription import subscription_manager
+
         sub = subscription_manager.get_subscription(user_id)
         if sub:
             return {
@@ -1192,6 +1227,7 @@ async def update_user(
 ) -> dict:
     """Update role, status, or plan for a user."""
     from api.db_store import db_get as _db_g, db_set as _db_s
+
     u = _db_g(f"user:{user_id}") or {"user_id": user_id}
     _ROLE_HIERARCHY = ("user", "affiliate", "analyst", "admin", "superadmin")
     allowed_fields = {"role", "status", "plan", "email"}
@@ -1221,6 +1257,7 @@ async def ban_user(
 ) -> dict:
     """Set user status to 'banned'."""
     from api.db_store import db_get as _db_g2, db_set as _db_s2
+
     payload = payload or {}
     u = _db_g2(f"user:{user_id}") or {"user_id": user_id}
     u["status"] = "banned"
@@ -1236,6 +1273,7 @@ async def unban_user(
 ) -> dict:
     """Set user status back to 'active'."""
     from api.db_store import db_get as _db_g3, db_set as _db_s3
+
     u = _db_g3(f"user:{user_id}") or {"user_id": user_id}
     u["status"] = "active"
     u.pop("ban_reason", None)
@@ -1252,6 +1290,7 @@ async def reset_user_password(
     try:
         from core.email_service import email_service
         from api.db_store import db_get as _db_g4
+
         u = _db_g4(f"user:{user_id}") or {}
         email = u.get("email", "")
         if email:
@@ -1275,7 +1314,7 @@ async def get_audit_log(
     events: list[dict] = []
     try:
         keys = sorted(db_keys_prefix("audit_event:"), reverse=True)
-        for key in keys[:limit * 10]:  # over-fetch then filter
+        for key in keys[: limit * 10]:  # over-fetch then filter
             ev = _db_g5(key)
             if ev and isinstance(ev, dict):
                 if user_id and ev.get("user_id") != user_id:
@@ -1296,10 +1335,11 @@ async def get_audit_log(
 
     total = len(events)
     offset = (page - 1) * limit
-    return {"events": events[offset: offset + limit], "total": total, "page": page, "limit": limit}
+    return {"events": events[offset : offset + limit], "total": total, "page": page, "limit": limit}
 
 
 # ── System backup trigger ─────────────────────────────────────────────────────
+
 
 @router.post("/backup/trigger", summary="Trigger a system backup")
 async def trigger_backup(
@@ -1307,6 +1347,7 @@ async def trigger_backup(
 ) -> dict:
     """Trigger an immediate system backup (config, DB snapshot, strategy files)."""
     import time as _t
+
     backup_id = f"backup_{int(_t.time())}"
     backed_up: list[str] = []
 
@@ -1314,6 +1355,7 @@ async def trigger_backup(
     try:
         import shutil
         from pathlib import Path as _P
+
         cfg_src = _P(__file__).parent.parent / "config"
         cfg_dst = _P(__file__).parent.parent / "backups" / backup_id / "config"
         cfg_dst.mkdir(parents=True, exist_ok=True)
@@ -1328,6 +1370,7 @@ async def trigger_backup(
         from api.db_store import db_keys_prefix, db_get as _db_g6
         from pathlib import Path as _P2
         import json as _json
+
         keys = db_keys_prefix("")
         snapshot = {k: _db_g6(k) for k in keys}
         dst = _P2(__file__).parent.parent / "backups" / backup_id
@@ -1371,6 +1414,7 @@ _SYSTEM_SETTINGS_KEY = "system_settings:global"
 def _load_system_settings() -> dict:
     try:
         from core.config_store import config_store as _cs
+
         stored = _cs.get(_SYSTEM_SETTINGS_KEY)
         if stored:
             return {**_SYSTEM_SETTINGS_DEFAULTS, **stored}
@@ -1382,6 +1426,7 @@ def _load_system_settings() -> dict:
 def _save_system_settings(data: dict) -> None:
     try:
         from core.config_store import config_store as _cs
+
         _cs.set(_SYSTEM_SETTINGS_KEY, data)
     except Exception:  # nosec B110
         pass
@@ -1419,6 +1464,7 @@ def get_maintenance(user: TokenPayload = Depends(require_role("admin"))) -> dict
     """Return current maintenance mode state."""
     try:
         from core.config_store import config_store as _cs
+
         stored = _cs.get("admin:maintenance")
         if stored:
             return stored
@@ -1439,13 +1485,16 @@ def set_maintenance(
     _maintenance_state.update(state)
     try:
         from core.config_store import config_store as _cs
+
         _cs.set("admin:maintenance", state)
     except Exception:  # nosec B110
         pass
     try:
         import redis as _redis
+
         rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
         import json as _json
+
         rc.set("platform:maintenance", _json.dumps(state))
     except Exception:  # nosec B110
         pass
@@ -1454,6 +1503,7 @@ def set_maintenance(
 
 
 # ── Broadcast message ─────────────────────────────────────────────────────────
+
 
 @router.post("/broadcast", summary="Broadcast a platform-wide message to all users")
 def broadcast_message(
@@ -1465,22 +1515,23 @@ def broadcast_message(
     import uuid as _uuid
     from datetime import datetime, timezone
 
-    title   = str(payload.get("title", ""))
-    body    = str(payload.get("body", ""))
+    title = str(payload.get("title", ""))
+    body = str(payload.get("body", ""))
     msg_type = str(payload.get("type", "info"))
     if not title:
         raise HTTPException(status_code=400, detail="title is required")
 
     msg = {
-        "id":         str(_uuid.uuid4()),
-        "title":      title,
-        "body":       body,
-        "type":       msg_type,
+        "id": str(_uuid.uuid4()),
+        "title": title,
+        "body": body,
+        "type": msg_type,
         "created_by": user.sub,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
         import redis as _redis
+
         rc = _redis.Redis.from_url(_os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
         rc.lpush("platform:broadcasts", _json.dumps(msg))
         rc.ltrim("platform:broadcasts", 0, 49)
@@ -1494,6 +1545,7 @@ def broadcast_message(
 
 # ── Test SMTP ─────────────────────────────────────────────────────────────────
 
+
 @router.post("/settings/test-smtp", summary="Send a test email to verify SMTP configuration")
 async def test_smtp(
     payload: dict,
@@ -1502,6 +1554,7 @@ async def test_smtp(
     """Send a test email to the admin's address to verify SMTP settings."""
     try:
         from core.email_service import get_email_service
+
         svc = get_email_service()
         recipient = payload.get("email") or user.sub
         await svc.send_email(

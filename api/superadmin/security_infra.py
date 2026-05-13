@@ -28,10 +28,10 @@ import os
 import ssl
 import socket
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -40,9 +40,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 UTC = timezone.utc
 
-_WAF_RULES_KEY  = "superadmin:security_infra:waf_rules"
-_API_KEYS_KEY   = "superadmin:security_infra:api_keys"
-_AV_STATUS_KEY  = "superadmin:security_infra:av_status"
+_WAF_RULES_KEY = "superadmin:security_infra:waf_rules"
+_API_KEYS_KEY = "superadmin:security_infra:api_keys"
+_AV_STATUS_KEY = "superadmin:security_infra:av_status"
 
 
 def _check_cert_expiry(hostname: str, port: int = 443) -> dict[str, Any]:
@@ -88,6 +88,7 @@ async def get_self_healer_status(
     }
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("self_healer:status")
@@ -101,6 +102,7 @@ async def get_self_healer_status(
     # Try live auto-healer
     try:
         from resilience.self_healer import SelfHealer
+
         if hasattr(SelfHealer, "_instance") and SelfHealer._instance:
             sh = SelfHealer._instance
             status["status"] = "active"
@@ -118,6 +120,7 @@ async def trigger_self_healer_scan(
     result: dict[str, Any] = {"ok": True, "triggered_at": _utcnow().isoformat()}
     try:
         from resilience.self_healer import SelfHealer
+
         if hasattr(SelfHealer, "_instance") and SelfHealer._instance:
             sh = SelfHealer._instance
             if hasattr(sh, "run_scan"):
@@ -146,6 +149,7 @@ async def get_security_infra_status(
     # Self-healer status from Redis
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("self_healer:status")
@@ -166,6 +170,7 @@ async def get_security_infra_status(
     # WAF rules count
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_WAF_RULES_KEY)
@@ -182,6 +187,7 @@ async def get_security_infra_status(
     # Try to count managed keys
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             key_count = len(list(rc.scan_iter("hsm:key:*")))
@@ -219,6 +225,7 @@ async def get_waf_rules(
     rules: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_WAF_RULES_KEY)
@@ -230,14 +237,50 @@ async def get_waf_rules(
     if not rules:
         # Bootstrap from core/middleware.py known patterns
         rules = [
-            {"rule_id": "waf_sqli",   "name": "SQL Injection",      "pattern": r"(?i)(union|select|insert|drop|delete|update)\s", "action": "block", "enabled": True, "hits": 0},
-            {"rule_id": "waf_xss",    "name": "XSS",                "pattern": r"<script[^>]*>",                                   "action": "block", "enabled": True, "hits": 0},
-            {"rule_id": "waf_path",   "name": "Path Traversal",     "pattern": r"\.\./",                                           "action": "block", "enabled": True, "hits": 0},
-            {"rule_id": "waf_cmd",    "name": "Command Injection",  "pattern": r"[;&|`$]",                                         "action": "log",   "enabled": True, "hits": 0},
-            {"rule_id": "waf_bot",    "name": "Bad Bot UA",         "pattern": r"(?i)(sqlmap|nikto|nmap|masscan)",                 "action": "block", "enabled": True, "hits": 0},
+            {
+                "rule_id": "waf_sqli",
+                "name": "SQL Injection",
+                "pattern": r"(?i)(union|select|insert|drop|delete|update)\s",
+                "action": "block",
+                "enabled": True,
+                "hits": 0,
+            },
+            {
+                "rule_id": "waf_xss",
+                "name": "XSS",
+                "pattern": r"<script[^>]*>",
+                "action": "block",
+                "enabled": True,
+                "hits": 0,
+            },
+            {
+                "rule_id": "waf_path",
+                "name": "Path Traversal",
+                "pattern": r"\.\./",
+                "action": "block",
+                "enabled": True,
+                "hits": 0,
+            },
+            {
+                "rule_id": "waf_cmd",
+                "name": "Command Injection",
+                "pattern": r"[;&|`$]",
+                "action": "log",
+                "enabled": True,
+                "hits": 0,
+            },
+            {
+                "rule_id": "waf_bot",
+                "name": "Bad Bot UA",
+                "pattern": r"(?i)(sqlmap|nikto|nmap|masscan)",
+                "action": "block",
+                "enabled": True,
+                "hits": 0,
+            },
         ]
         try:
             from cache.redis_client import get_sync_redis_client
+
             rc = get_sync_redis_client()
             if rc:
                 rc.set(_WAF_RULES_KEY, json.dumps(rules), ex=86400 * 30)
@@ -265,6 +308,7 @@ async def add_waf_rule(
     }
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_WAF_RULES_KEY)
@@ -284,6 +328,7 @@ async def get_platform_api_keys(
     keys: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_API_KEYS_KEY)
@@ -305,6 +350,7 @@ async def revoke_api_key(
     reason = body.get("reason", "Superadmin revocation")
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_API_KEYS_KEY)
@@ -330,6 +376,7 @@ async def get_hsm_status(
     key_count = 0
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             key_count = len(list(rc.scan_iter("hsm:key:*")))
@@ -359,6 +406,7 @@ async def get_antivirus_status(
     }
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_AV_STATUS_KEY)
@@ -378,27 +426,38 @@ async def get_security_infra_log(
     try:
         from database.connection import SessionLocal
         from database.models import AuditLogEntry
+
         db = SessionLocal()
         try:
             rows = (
                 db.query(AuditLogEntry)
-                .filter(AuditLogEntry.event_type.in_([
-                    "waf_block", "cert_expiry_warning", "hsm_key_rotate",
-                    "av_threat_found", "self_healer_action", "api_key_revoke",
-                    "security_scan",
-                ]))
+                .filter(
+                    AuditLogEntry.event_type.in_(
+                        [
+                            "waf_block",
+                            "cert_expiry_warning",
+                            "hsm_key_rotate",
+                            "av_threat_found",
+                            "self_healer_action",
+                            "api_key_revoke",
+                            "security_scan",
+                        ]
+                    )
+                )
                 .order_by(AuditLogEntry.created_at.desc())
                 .limit(100)
                 .all()
             )
             for r in rows:
-                events.append({
-                    "event_id": str(r.id),
-                    "event_type": r.event_type,
-                    "detail": r.detail or "",
-                    "user_id": str(r.user_id) if r.user_id else None,
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                })
+                events.append(
+                    {
+                        "event_id": str(r.id),
+                        "event_type": r.event_type,
+                        "detail": r.detail or "",
+                        "user_id": str(r.user_id) if r.user_id else None,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                )
         finally:
             db.close()
     except Exception as exc:
@@ -413,9 +472,11 @@ async def rotate_hsm_key(
 ) -> dict:
     """Rotate an HSM-managed key."""
     import secrets
+
     new_key_ref = f"hsm_key_{secrets.token_hex(8)}"
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(f"hsm:key:{key_id}:rotated_at", _utcnow().isoformat(), ex=86400 * 365)
@@ -445,19 +506,25 @@ async def trigger_antivirus_scan(
     try:
         import subprocess
         import time
+
         t0 = time.perf_counter()
         proc = subprocess.run(
             ["clamscan", "--recursive", "--no-summary", "/workspaces/HOPEFX-AI-TRADING/uploads"],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
         )
         duration_ms = round((time.perf_counter() - t0) * 1000)
         threats = proc.stdout.count("FOUND")
-        result.update({
-            "status": "completed",
-            "threats_found": threats,
-            "files_scanned": proc.stdout.count("OK") + threats,
-            "duration_ms": duration_ms,
-        })
+        result.update(
+            {
+                "status": "completed",
+                "threats_found": threats,
+                "files_scanned": proc.stdout.count("OK") + threats,
+                "duration_ms": duration_ms,
+            }
+        )
     except FileNotFoundError:
         result["status"] = "unavailable"
         result["error"] = "ClamAV not installed"
@@ -467,6 +534,7 @@ async def trigger_antivirus_scan(
 
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_AV_STATUS_KEY, json.dumps(result), ex=3600 * 24)

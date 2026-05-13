@@ -53,8 +53,7 @@ def client(db_store: dict[str, Any]) -> TestClient:
     def _db_set(key: str, value: Any, **_kw) -> None:
         db_store[key] = value
 
-    with patch("api.db_store.db_get", side_effect=_db_get), \
-         patch("api.db_store.db_set", side_effect=_db_set):
+    with patch("api.db_store.db_get", side_effect=_db_get), patch("api.db_store.db_set", side_effect=_db_set):
         yield TestClient(app, raise_server_exceptions=True)
 
 

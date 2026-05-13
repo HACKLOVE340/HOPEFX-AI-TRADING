@@ -30,6 +30,7 @@ UTC = timezone.utc
 try:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
     from sqlalchemy.pool import StaticPool
+
     _SA_OK = True
 except ImportError:
     _SA_OK = False
@@ -39,7 +40,7 @@ if not _SA_OK:
 
 try:
     from database.models import Base, Signal, SignalSource, Trade, TradeStatus
-    from database.user_models import User
+
     _MODELS_OK = True
 except Exception as _e:
     _MODELS_OK = False
@@ -50,6 +51,7 @@ if not _MODELS_OK:
 
 try:
     from database.models import Position as _Position
+
     _POSITION_OK = True
 except ImportError:
     _POSITION_OK = False
@@ -57,6 +59,7 @@ except ImportError:
 try:
     from database.repositories.trade_repository import TradeRepository
     from database.repositories.signal_repository import SignalRepository
+
     _REPOS_OK = True
 except Exception as _e:
     _REPOS_OK = False
@@ -86,6 +89,7 @@ def async_engine():
             await conn.run_sync(Base.metadata.create_all)
             try:
                 from database.user_models import Base as UBase
+
                 await conn.run_sync(UBase.metadata.create_all)
             except Exception:
                 pass
@@ -114,12 +118,14 @@ async def session(async_engine) -> AsyncSession:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _uid() -> str:
     return uuid.uuid4().hex[:12].upper()
 
 
-def _make_trade(user_id: str, symbol: str = "XAUUSD", side: str = "buy",
-                entry_price: float = 2340.50, is_open: bool = True) -> Trade:
+def _make_trade(
+    user_id: str, symbol: str = "XAUUSD", side: str = "buy", entry_price: float = 2340.50, is_open: bool = True
+) -> Trade:
     return Trade(
         trade_id=f"T-{_uid()}",
         user_id=user_id,
@@ -135,8 +141,9 @@ def _make_trade(user_id: str, symbol: str = "XAUUSD", side: str = "buy",
     )
 
 
-def _make_signal(symbol: str = "XAUUSD", action: str = "buy",
-                 strategy: str = "nuclear_v3", confidence: float = 0.82) -> Signal:
+def _make_signal(
+    symbol: str = "XAUUSD", action: str = "buy", strategy: str = "nuclear_v3", confidence: float = 0.82
+) -> Signal:
     return Signal(
         signal_id=f"SIG-{_uid()}",
         symbol=symbol,
@@ -152,8 +159,7 @@ def _make_signal(symbol: str = "XAUUSD", action: str = "buy",
     )
 
 
-def _make_position(user_id: str, symbol: str = "XAUUSD", side: str = "long",
-                   entry_price: float = 2340.50) -> "_Position":
+def _make_position(user_id: str, symbol: str = "XAUUSD", side: str = "long", entry_price: float = 2340.50) -> _Position:
     return _Position(
         id=f"P-{_uid()}",
         user_id=user_id,
@@ -176,8 +182,8 @@ def _make_position(user_id: str, symbol: str = "XAUUSD", side: str = "long",
 # TradeRepository tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestTradeRepository:
 
+class TestTradeRepository:
     @pytest.mark.asyncio
     async def test_create_and_get_by_id(self, session: AsyncSession):
         repo = TradeRepository()
@@ -292,7 +298,8 @@ class TestTradeRepository:
     async def test_close_trade_not_found(self, session: AsyncSession):
         repo = TradeRepository()
         result = await repo.close_trade(
-            session, trade_id="GHOST-ID",
+            session,
+            trade_id="GHOST-ID",
             exit_price=2355.00,
             exit_time=datetime.now(UTC),
             realized_pnl=0.0,
@@ -308,8 +315,10 @@ class TestTradeRepository:
         await session.flush()
 
         updated = await repo.update_unrealized_pnl(
-            session, trade_id=trade.trade_id,
-            unrealized_pnl=68.00, current_price=2341.80,
+            session,
+            trade_id=trade.trade_id,
+            unrealized_pnl=68.00,
+            current_price=2341.80,
         )
         assert updated is not None
         assert updated.unrealized_pnl == 68.00
@@ -385,8 +394,8 @@ class TestTradeRepository:
 # SignalRepository tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class TestSignalRepository:
 
+class TestSignalRepository:
     @pytest.mark.asyncio
     async def test_create_and_get_by_id(self, session: AsyncSession):
         repo = SignalRepository()
@@ -448,7 +457,7 @@ class TestSignalRepository:
     async def test_get_by_strategy(self, session: AsyncSession):
         repo = SignalRepository()
         nuke = _make_signal(strategy="nuclear_v3")
-        mom  = _make_signal(strategy="momentum_scalper")
+        mom = _make_signal(strategy="momentum_scalper")
         session.add(nuke)
         session.add(mom)
         await session.flush()
@@ -497,7 +506,8 @@ class TestSignalRepository:
     async def test_mark_executed_not_found(self, session: AsyncSession):
         repo = SignalRepository()
         result = await repo.mark_executed(
-            session, signal_id="GHOST-SIG",
+            session,
+            signal_id="GHOST-SIG",
             trade_id="T-GHOST",
         )
         assert result is None
@@ -539,9 +549,9 @@ class TestSignalRepository:
 # PositionRepository tests
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 @pytest.mark.skipif(not _POSITION_OK, reason="Position model not available")
 class TestPositionRepository:
-
     @pytest.fixture(autouse=True)
     def _skip_if_no_position(self):
         if not _POSITION_OK:
@@ -550,6 +560,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_create_and_get_open_positions(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         pos = _make_position(uid)
@@ -564,6 +575,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_get_open_positions_filtered_by_symbol(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         session.add(_make_position(uid, symbol="XAUUSD"))
@@ -576,6 +588,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_get_by_symbol_and_user(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         pos = _make_position(uid)
@@ -589,6 +602,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_get_by_symbol_and_user_not_found(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         result = await repo.get_by_symbol_and_user(session, "XAUUSD", f"ghost-{_uid()}")
         assert result is None
@@ -596,6 +610,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_update_current_price(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         pos = _make_position(uid)
@@ -603,8 +618,10 @@ class TestPositionRepository:
         await session.flush()
 
         updated = await repo.update_current_price(
-            session, position_id=pos.id,
-            current_price=2355.00, unrealized_pnl=145.00,
+            session,
+            position_id=pos.id,
+            current_price=2355.00,
+            unrealized_pnl=145.00,
         )
         assert updated is not None
         assert updated.current_price == 2355.00
@@ -613,6 +630,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_close_position(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         pos = _make_position(uid)
@@ -620,7 +638,8 @@ class TestPositionRepository:
         await session.flush()
 
         closed = await repo.close_position(
-            session, position_id=pos.id,
+            session,
+            position_id=pos.id,
             realized_pnl=145.00,
             closed_at=datetime.now(UTC),
         )
@@ -632,6 +651,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_close_position_not_found(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         result = await repo.close_position(session, position_id="GHOST-POS", realized_pnl=0.0)
         assert result is None
@@ -639,6 +659,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_get_net_exposure(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         long_pos = _make_position(uid, symbol="XAUUSD", side="long")
@@ -653,6 +674,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_get_portfolio_summary(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         for _ in range(2):
@@ -667,6 +689,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_get_by_instrument(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         session.add(_make_position(uid, symbol="XAUUSD"))
@@ -679,6 +702,7 @@ class TestPositionRepository:
     @pytest.mark.asyncio
     async def test_short_position_stored_correctly(self, session: AsyncSession):
         from database.repositories.position_repository import PositionRepository
+
         repo = PositionRepository()
         uid = f"user-{_uid()}"
         short = _make_position(uid, side="short")

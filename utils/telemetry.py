@@ -233,5 +233,5 @@ class AlertManager:
 
     async def _trigger_emergency_stop(self, alert: dict):
         """Trigger system emergency stop"""
-        logger.info("🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: %s", alert['message'])
+        logger.info("🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: %s", alert["message"])
         # Emit kill switch event

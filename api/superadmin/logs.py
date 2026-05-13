@@ -148,9 +148,7 @@ async def get_log_levels(user: TokenPayload = Depends(_require_superadmin)) -> d
 
 
 @router.patch("/logs/levels")
-async def set_log_level(
-    body: SetLogLevelBody, user: TokenPayload = Depends(_require_superadmin)
-) -> dict:
+async def set_log_level(body: SetLogLevelBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     import logging as _logging
 
     valid = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
@@ -169,12 +167,9 @@ async def export_logs(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> Response:
     """Export filtered log entries as plain text (one line per entry)."""
-    result = await get_logs(
-        level=level, logger_name=logger_name, search=None, limit=1000, user=user
-    )
+    result = await get_logs(level=level, logger_name=logger_name, search=None, limit=1000, user=user)
     lines = [
-        f"{e.get('ts', '')} {e.get('level', '')} {e.get('logger', '')} {e.get('message', '')}"
-        for e in result["logs"]
+        f"{e.get('ts', '')} {e.get('level', '')} {e.get('logger', '')} {e.get('message', '')}" for e in result["logs"]
     ]
     _log_superadmin_action(user, "export_logs")
     return PlainTextResponse("\n".join(lines), media_type="text/plain")

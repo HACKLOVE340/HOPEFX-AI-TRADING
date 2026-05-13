@@ -15,7 +15,6 @@ Covers:
 
 from __future__ import annotations
 
-import asyncio
 import pytest
 from datetime import datetime, timezone
 
@@ -30,6 +29,7 @@ UTC = timezone.utc
 class TestMetric:
     def test_metric_fields(self):
         from utils.telemetry import Metric
+
         m = Metric(name="hopefx_test", value=42.0)
         assert m.name == "hopefx_test"
         assert m.value == pytest.approx(42.0)
@@ -38,11 +38,13 @@ class TestMetric:
 
     def test_metric_with_labels(self):
         from utils.telemetry import Metric
+
         m = Metric(name="hopefx_test", value=1.0, labels={"broker": "oanda"})
         assert m.labels["broker"] == "oanda"
 
     def test_metric_counter_type(self):
         from utils.telemetry import Metric
+
         m = Metric(name="hopefx_fills", value=5.0, metric_type="counter")
         assert m.metric_type == "counter"
 
@@ -56,6 +58,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_record_adds_metric(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector(service_name="test")
         await mc.record("latency_ms", 12.5)
         assert len(mc.metrics) == 1
@@ -64,6 +67,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_record_prefixes_service_name(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector(service_name="hopefx")
         await mc.record("fills_total", 1.0)
         assert mc.metrics[0].name == "hopefx_fills_total"
@@ -71,6 +75,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_record_counter_accumulates(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector()
         await mc.record("orders", 1.0, metric_type="counter")
         await mc.record("orders", 2.0, metric_type="counter")
@@ -79,6 +84,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_record_histogram_appends(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector()
         await mc.record("latency", 10.0, metric_type="histogram")
         await mc.record("latency", 20.0, metric_type="histogram")
@@ -87,6 +93,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_record_caps_metrics_at_10000(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector()
         for i in range(10_005):
             await mc.record("x", float(i))
@@ -97,6 +104,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_get_prometheus_format_contains_counter(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector(service_name="hopefx")
         await mc.record("fills", 5.0, metric_type="counter")
         output = mc.get_prometheus_format()
@@ -106,6 +114,7 @@ class TestMetricsCollector:
     @pytest.mark.asyncio
     async def test_get_statsd_format_returns_list(self):
         from utils.telemetry import MetricsCollector
+
         mc = MetricsCollector(service_name="hopefx")
         await mc.record("latency", 15.0, metric_type="histogram")
         lines = mc.get_statsd_format()

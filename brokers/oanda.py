@@ -155,7 +155,10 @@ def _units(direction: str, quantity: float) -> int:
     if abs(rounded - qty) > 0.01:
         logger.warning(
             "Quantity rounded from %.4f to %d units (%.4f lost) for %s order",
-            qty, rounded, qty - rounded, direction,
+            qty,
+            rounded,
+            qty - rounded,
+            direction,
         )
     return rounded if direction.lower() in ("long", "buy") else -rounded
 
@@ -418,7 +421,7 @@ class OANDABroker:
                             "broker": "oanda",
                         }
 
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 last_error = "timeout"
                 logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
             except Exception:  # pylint: disable=broad-exception-caught

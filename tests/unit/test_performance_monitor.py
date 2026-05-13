@@ -351,10 +351,13 @@ class TestFireRollbackAlert:
         mock_ae.send_alert.side_effect = RuntimeError("alert down")
         mock_app_state_module = MagicMock()
         mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
-        with patch.dict("sys.modules", {
-            "core.outbox": mock_outbox,
-            "core.app_state": mock_app_state_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "core.outbox": mock_outbox,
+                "core.app_state": mock_app_state_module,
+            },
+        ):
             m._fire_rollback_alert("v2", "v1", "reason")  # must not raise
 
     def test_calls_outbox_and_alert(self):
@@ -364,10 +367,13 @@ class TestFireRollbackAlert:
         mock_ae = MagicMock()
         mock_app_state_module = MagicMock()
         mock_app_state_module.app_state = MagicMock(alert_engine=mock_ae)
-        with patch.dict("sys.modules", {
-            "core.outbox": mock_outbox,
-            "core.app_state": mock_app_state_module,
-        }):
+        with patch.dict(
+            "sys.modules",
+            {
+                "core.outbox": mock_outbox,
+                "core.app_state": mock_app_state_module,
+            },
+        ):
             m._fire_rollback_alert("v2", "v1", "reason")
 
         mock_outbox.write_outbox_event_standalone.assert_called_once()

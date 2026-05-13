@@ -583,6 +583,7 @@ class ModelRegistry:
 
         # Promote the target version without gate checks
         from datetime import datetime, timezone
+
         entry = manifest["versions"][name]
         entry["state"] = "production"
         entry["promoted_at"] = datetime.now(timezone.utc).isoformat()

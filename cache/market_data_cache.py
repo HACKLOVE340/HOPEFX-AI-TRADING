@@ -381,9 +381,7 @@ class MarketDataCache:
 
             if _rb.is_open:
                 self._using_fallback = True
-                logger.debug(
-                    "MarketDataCache: Redis circuit breaker OPEN — using in-memory fallback."
-                )
+                logger.debug("MarketDataCache: Redis circuit breaker OPEN — using in-memory fallback.")
                 return None
         except Exception:  # nosec B110 — circuit breaker is non-fatal
             pass
@@ -398,6 +396,7 @@ class MarketDataCache:
                 self._fallback_warned = False
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_success()
                 except Exception:  # nosec B110
                     pass
@@ -407,6 +406,7 @@ class MarketDataCache:
                 self._redis_client = None
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_failure(_exc)
                 except Exception:  # nosec B110
                     pass
@@ -434,6 +434,7 @@ class MarketDataCache:
                     logger.info("MarketDataCache: Redis reconnected after %d attempts", attempt)
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_success()
                 except Exception:  # nosec B110
                     pass
@@ -441,6 +442,7 @@ class MarketDataCache:
             except Exception as exc:
                 try:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
+
                     _rb.record_failure(exc)
                 except Exception:  # nosec B110
                     pass
@@ -455,14 +457,10 @@ class MarketDataCache:
         self._using_fallback = True
         if self.enable_fallback:
             if not self._fallback_warned:
-                logger.warning(
-                    "MarketDataCache: Redis unavailable — using in-memory fallback"
-                )
+                logger.warning("MarketDataCache: Redis unavailable — using in-memory fallback")
                 self._fallback_warned = True
             else:
-                logger.debug(
-                    "MarketDataCache: still using in-memory fallback (suppressed repeat)"
-                )
+                logger.debug("MarketDataCache: still using in-memory fallback (suppressed repeat)")
             return None
         raise ConnectionError(f"Could not connect to Redis at {self.host}:{self.port}")
 
@@ -558,10 +556,7 @@ class MarketDataCache:
             redis_client = self._get_redis()
             cached = None
 
-            if redis_client:
-                cached = redis_client.get(key)
-            else:
-                cached = self._fallback_store.get(key)
+            cached = redis_client.get(key) if redis_client else self._fallback_store.get(key)
 
             # Update statistics
             with self._stats_lock:
@@ -637,10 +632,7 @@ class MarketDataCache:
             redis_client = self._get_redis()
             cached = None
 
-            if redis_client:
-                cached = redis_client.get(key)
-            else:
-                cached = self._fallback_store.get(key)
+            cached = redis_client.get(key) if redis_client else self._fallback_store.get(key)
 
             with self._stats_lock:
                 if cached:
@@ -695,9 +687,7 @@ class MarketDataCache:
                 redis_client.delete(tick_key)
             else:
                 # Fallback store cleanup via SCAN
-                _, keys_to_remove = self._fallback_store.scan(
-                    match=f"market_data:{symbol}:*"
-                )
+                _, keys_to_remove = self._fallback_store.scan(match=f"market_data:{symbol}:*")
                 tick_key = self._build_tick_key(symbol)
                 if self._fallback_store.get(tick_key) is not None:
                     keys_to_remove.append(tick_key)
@@ -816,10 +806,7 @@ class MarketDataCache:
         try:
             redis_client = self._get_redis()
             raw = None
-            if redis_client:
-                raw = redis_client.get(key)
-            else:
-                raw = self._fallback_store.get(key)
+            raw = redis_client.get(key) if redis_client else self._fallback_store.get(key)
             if raw is None:
                 with self._stats_lock:
                     self._stats.total_misses += 1
@@ -849,10 +836,7 @@ class MarketDataCache:
         try:
             redis_client = self._get_redis()
             raw = None
-            if redis_client:
-                raw = redis_client.get(key)
-            else:
-                raw = self._fallback_store.get(key)
+            raw = redis_client.get(key) if redis_client else self._fallback_store.get(key)
             if raw:
                 envelope = json.loads(raw)
                 existing = envelope.get("data", []) if isinstance(envelope, dict) else envelope
@@ -898,10 +882,7 @@ class MarketDataCache:
         try:
             redis_client = self._get_redis()
             deleted = False
-            if redis_client:
-                deleted = bool(redis_client.delete(key))
-            else:
-                deleted = bool(self._fallback_store.delete(key))
+            deleted = bool(redis_client.delete(key)) if redis_client else bool(self._fallback_store.delete(key))
             if deleted:
                 with self._stats_lock:
                     self._stats.total_evictions += 1
@@ -917,10 +898,7 @@ class MarketDataCache:
         try:
             redis_client = self._get_redis()
             deleted = False
-            if redis_client:
-                deleted = bool(redis_client.delete(key))
-            else:
-                deleted = bool(self._fallback_store.delete(key))
+            deleted = bool(redis_client.delete(key)) if redis_client else bool(self._fallback_store.delete(key))
             if deleted:
                 with self._stats_lock:
                     self._stats.total_evictions += 1
@@ -1045,6 +1023,7 @@ CachedTickData = TickData
 
 
 # ── Write-through / read-through cache layer ──────────────────────────────────
+
 
 class WriteThroughCache:
     """
@@ -1172,6 +1151,7 @@ class WriteThroughCache:
 
 # ── Cache warming ─────────────────────────────────────────────────────────────
 
+
 class CacheWarmer:
     """
     Pre-populates the cache with data from a backing store on startup.
@@ -1289,9 +1269,7 @@ class CacheWarmer:
                 except Exception as exc:
                     logger.warning("CacheWarmer refresh error: %s", exc)
 
-        self._refresh_thread = threading.Thread(
-            target=_loop, daemon=True, name="cache-warmer"
-        )
+        self._refresh_thread = threading.Thread(target=_loop, daemon=True, name="cache-warmer")
         self._refresh_thread.start()
         logger.info(
             "CacheWarmer: scheduled refresh every %.0fs for %d symbols",
@@ -1310,7 +1288,5 @@ class CacheWarmer:
         return {
             "total_warmed": self._warm_count,
             "last_warm_at": self._last_warm_at,
-            "refresh_running": bool(
-                self._refresh_thread and self._refresh_thread.is_alive()
-            ),
+            "refresh_running": bool(self._refresh_thread and self._refresh_thread.is_alive()),
         }

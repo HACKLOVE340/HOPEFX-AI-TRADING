@@ -369,9 +369,9 @@ _STARTUP_GATE_ALWAYS_ALLOW: tuple[str, ...] = (
     "/metrics",
     "/static",
     "/favicon.ico",
-    "/ws",              # WebSocket — auth is checked inside the handler
-    "/api/status",      # lightweight status page
-    "/api/billing",     # billing/plans must be readable before startup completes
+    "/ws",  # WebSocket — auth is checked inside the handler
+    "/api/status",  # lightweight status page
+    "/api/billing",  # billing/plans must be readable before startup completes
     "/api/notifications",
     "/api/kyc",
     "/api/profiles",
@@ -430,7 +430,7 @@ def register_all(app: FastAPI) -> None:
     We want:
       startup_gate → CSRF → metrics → security headers → CORS (outermost)
     """
-    setup_startup_gate(app)   # innermost — gate before CSRF so 503 beats 403
+    setup_startup_gate(app)  # innermost — gate before CSRF so 503 beats 403
     setup_csrf_middleware(app)
     setup_metrics_middleware(app)
     setup_security_headers(app)

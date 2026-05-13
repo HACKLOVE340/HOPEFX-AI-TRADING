@@ -413,7 +413,7 @@ def _build_docstring_lines(lines: list[str]) -> set[int]:
         ch = source[pos]
         if in_triple:
             docstring_lines.add(line_of[pos])
-            if source[pos:pos + 3] == fence:
+            if source[pos : pos + 3] == fence:
                 # Closing triple-quote — mark all three chars and exit
                 docstring_lines.add(line_of[pos + 1])
                 docstring_lines.add(line_of[pos + 2])
@@ -424,28 +424,27 @@ def _build_docstring_lines(lines: list[str]) -> set[int]:
                 pos += 2  # skip escaped character
             else:
                 pos += 1
+        # Check for triple-quote opening
+        elif source[pos : pos + 3] in ('"""', "'''"):
+            fence = source[pos : pos + 3]
+            in_triple = True
+            docstring_lines.add(line_of[pos])
+            pos += 3
+        elif ch in ('"', "'"):
+            # Single-quoted string — skip to closing quote
+            quote = ch
+            pos += 1
+            while pos < length and source[pos] != quote:
+                if source[pos] == "\\":
+                    pos += 1  # skip escaped char
+                pos += 1
+            pos += 1  # skip closing quote
+        elif ch == "#":
+            # Comment — skip to end of line
+            while pos < length and source[pos] != "\n":
+                pos += 1
         else:
-            # Check for triple-quote opening
-            if source[pos:pos + 3] in ('"""', "'''"):
-                fence = source[pos:pos + 3]
-                in_triple = True
-                docstring_lines.add(line_of[pos])
-                pos += 3
-            elif ch in ('"', "'"):
-                # Single-quoted string — skip to closing quote
-                quote = ch
-                pos += 1
-                while pos < length and source[pos] != quote:
-                    if source[pos] == "\\":
-                        pos += 1  # skip escaped char
-                    pos += 1
-                pos += 1  # skip closing quote
-            elif ch == "#":
-                # Comment — skip to end of line
-                while pos < length and source[pos] != "\n":
-                    pos += 1
-            else:
-                pos += 1
+            pos += 1
 
     return docstring_lines
 

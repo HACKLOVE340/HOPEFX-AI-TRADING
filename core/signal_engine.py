@@ -93,16 +93,20 @@ def _get_hybrid_predictor() -> Any | None:
         return _hybrid_predictor
     try:
         from ml.advanced_predictor import get_hybrid_predictor
+
         _hybrid_predictor = get_hybrid_predictor()
         status = _hybrid_predictor.component_status
         logger.info(
             "HybridEnsemblePredictor loaded — xgb=%s lstm=%s rl=%s",
-            status.get("xgb_available"), status.get("lstm_available"), status.get("rl_available"),
+            status.get("xgb_available"),
+            status.get("lstm_available"),
+            status.get("rl_available"),
         )
         return _hybrid_predictor
     except Exception as exc:
         logger.debug("HybridEnsemblePredictor unavailable: %s", exc)
         return None
+
 
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
 _anomaly_store: Any | None = None
@@ -838,9 +842,7 @@ def _compute_ml_probability(
                 try:
                     prob = hybrid.predict_proba(ohlcv_df, macro_df=macro_df)
                     if isinstance(prob, (int, float)) and 0.0 <= prob <= 1.0:
-                        logger.debug(
-                            "HybridEnsemble prob=%.4f for %s", prob, symbol
-                        )
+                        logger.debug("HybridEnsemble prob=%.4f for %s", prob, symbol)
                         return float(prob), "hybrid_ensemble_v1"
                 except Exception as _he:
                     logger.debug("HybridEnsemble predict failed (%s) — falling back to AdvancedPredictor", _he)
@@ -1058,6 +1060,7 @@ async def _publish_and_broadcast(
     _signal_broadcast_ok = False
     try:
         from api.ws_live import get_live_manager as _get_live_mgr
+
         await _get_live_mgr().broadcast_signal(symbol, signal_payload)
         _signal_broadcast_ok = True
     except Exception as _live_ws_exc:
@@ -1157,13 +1160,14 @@ def _enrich_with_signal_score(
         signal_payload["signal_strength_score"] = round(score_result.composite, 4)
         signal_payload["signal_grade"] = score_result.grade
         signal_payload["signal_score_dimensions"] = {
-            k: round(v, 4) for k, v in {
-                "ml_confidence":   score_result.dimensions.ml_confidence,
-                "technical":       score_result.dimensions.technical,
+            k: round(v, 4)
+            for k, v in {
+                "ml_confidence": score_result.dimensions.ml_confidence,
+                "technical": score_result.dimensions.technical,
                 "macro_alignment": score_result.dimensions.macro_alignment,
-                "regime":          score_result.dimensions.regime,
-                "mtf_confluence":  score_result.dimensions.mtf_confluence,
-                "volatility":      score_result.dimensions.volatility,
+                "regime": score_result.dimensions.regime,
+                "mtf_confluence": score_result.dimensions.mtf_confluence,
+                "volatility": score_result.dimensions.volatility,
             }.items()
         }
         signal_payload["signal_score_latency_ms"] = round(score_result.latency_ms, 2)
@@ -1386,8 +1390,7 @@ async def _assess_risk_and_size(
     if regime_scalar < 1.0:
         scaled_size = sizing.recommended_size * regime_scalar
         logger.info(
-            "Regime-conditional sizing: %s regime=%s scalar=%.2f "
-            "approved=%.4f → scaled=%.4f",
+            "Regime-conditional sizing: %s regime=%s scalar=%.2f approved=%.4f → scaled=%.4f",
             symbol,
             regime_name,
             regime_scalar,
@@ -1425,7 +1428,10 @@ async def _place_order_and_notify(
     except Exception as broker_exc:
         logger.error(
             "Auto-trade broker call failed — order NOT placed: %s %s qty=%s error=%s",
-            direction, symbol, quantity, broker_exc,
+            direction,
+            symbol,
+            quantity,
+            broker_exc,
         )
         return
 
@@ -1435,7 +1441,11 @@ async def _place_order_and_notify(
         reason = getattr(order, "reason", None) or (order.get("reason") if isinstance(order, dict) else "unknown")
         logger.error(
             "Auto-trade order rejected: %s %s qty=%s status=%s reason=%s",
-            direction, symbol, quantity, order_status, reason,
+            direction,
+            symbol,
+            quantity,
+            order_status,
+            reason,
         )
         return
 
@@ -1498,9 +1508,7 @@ async def _broadcast_fill(
             or signal_payload["entry_price"]
         )
         trade_id = (
-            getattr(order, "id", None)
-            or (order.get("order_id") if isinstance(order, dict) else None)
-            or "unknown"
+            getattr(order, "id", None) or (order.get("order_id") if isinstance(order, dict) else None) or "unknown"
         )
         trade_msg = {
             "type": "trade_fill",
@@ -1515,6 +1523,7 @@ async def _broadcast_fill(
         # Primary: LiveConnectionManager (FastAPI /ws/live — what the frontend uses)
         try:
             from api.ws_live import get_live_manager as _get_live_mgr
+
             await _get_live_mgr().broadcast("trades", trade_msg)
             return
         except Exception as _live_exc:
@@ -1610,7 +1619,10 @@ async def _execute_if_approved(
     if _grade not in ("STRONG", "GOOD") and _score < _min_auto_score:
         logger.info(
             "Auto-trade blocked by signal grade gate: %s grade=%s score=%.3f < %.3f threshold",
-            symbol, _grade, _score, _min_auto_score,
+            symbol,
+            _grade,
+            _score,
+            _min_auto_score,
         )
         return
 
@@ -1880,14 +1892,9 @@ async def _tick(app_state: Any) -> None:
             _broker = getattr(app_state, "broker", None)
             if _broker is not None:
                 _raw_pos = await _broker.get_positions()
-                _pos_map = {
-                    getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0))
-                    for p in (_raw_pos or [])
-                }
+                _pos_map = {getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0)) for p in (_raw_pos or [])}
                 _total_pnl = sum(float(getattr(p, "unrealized_pnl", 0)) for p in (_raw_pos or []))
-                signal_payload = _enrich_signal_with_factors(
-                    signal_payload, _pos_map, _total_pnl, app_state=app_state
-                )
+                signal_payload = _enrich_signal_with_factors(signal_payload, _pos_map, _total_pnl, app_state=app_state)
         except Exception as _fac_exc:
             logger.debug("Factor enrichment skipped (non-fatal): %s", _fac_exc)
 
@@ -1899,14 +1906,9 @@ async def _tick(app_state: Any) -> None:
             _broker = getattr(app_state, "broker", None)
             if _broker is not None:
                 _raw_pos = await _broker.get_positions()
-                _pos_map = {
-                    getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0))
-                    for p in (_raw_pos or [])
-                }
+                _pos_map = {getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0)) for p in (_raw_pos or [])}
                 _total_pnl = sum(float(getattr(p, "unrealized_pnl", 0)) for p in (_raw_pos or []))
-                signal_payload = _enrich_signal_with_factors(
-                    signal_payload, _pos_map, _total_pnl, app_state=app_state
-                )
+                signal_payload = _enrich_signal_with_factors(signal_payload, _pos_map, _total_pnl, app_state=app_state)
         except Exception as _fac_exc:
             logger.debug("Factor enrichment skipped (non-fatal): %s", _fac_exc)
 

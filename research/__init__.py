@@ -742,7 +742,10 @@ def create_research_router(engine: "ResearchNotebookEngine"):
                 "summary": f"Executed {len(results)} cells",
                 "signals": [],
                 "charts": [],
-                "metrics": {"cells_run": len(results), "cells_ok": sum(1 for r in results if r.get("status") == "completed")},
+                "metrics": {
+                    "cells_run": len(results),
+                    "cells_ok": sum(1 for r in results if r.get("status") == "completed"),
+                },
                 "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
             },
             "cells": [

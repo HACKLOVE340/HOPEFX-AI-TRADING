@@ -84,7 +84,6 @@ class RedisCacheManager:
         # Use the shared connection pool when the caller hasn't specified a
         # non-default host/port, otherwise fall back to a dedicated pool so
         # that explicit host/port configs still work (e.g. multi-Redis setups).
-        import os
 
         default_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         uses_defaults = (
@@ -238,6 +237,7 @@ class RedisCacheManager:
 
 # ── Distributed lock ──────────────────────────────────────────────────────────
 
+
 class DistributedLock:
     """
     Redis-backed distributed lock using SET NX PX.
@@ -305,9 +305,7 @@ class DistributedLock:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
-                ok = self._client.set(
-                    self._name, token, nx=True, px=self._ttl_ms
-                )
+                ok = self._client.set(self._name, token, nx=True, px=self._ttl_ms)
                 if ok:
                     self._token = token
                     if self._auto_renew:
@@ -328,9 +326,7 @@ class DistributedLock:
         token = self._token
         self._token = None
         try:
-            result = self._client.eval(
-                self._RELEASE_SCRIPT, 1, self._name, token
-            )
+            result = self._client.eval(self._RELEASE_SCRIPT, 1, self._name, token)
             return bool(result)
         except Exception as exc:
             # Fallback for environments where EVAL is unavailable (e.g. fakeredis):
@@ -357,23 +353,19 @@ class DistributedLock:
                 if self._token is None:
                     break
                 try:
-                    self._client.eval(
-                        self._RENEW_SCRIPT, 1, self._name, self._token, self._ttl_ms
-                    )
+                    self._client.eval(self._RENEW_SCRIPT, 1, self._name, self._token, self._ttl_ms)
                 except Exception as exc:
                     # Fallback: extend TTL without ownership check
-                    try:
+                    try:  # noqa: SIM105
                         self._client.pexpire(self._name, self._ttl_ms)
                     except Exception:  # nosec B110
                         pass
                     logger.debug("DistributedLock renew eval error (used pexpire fallback): %s", exc)
 
-        self._renew_thread = threading.Thread(
-            target=_renew_loop, daemon=True, name=f"lock-renew:{self._name}"
-        )
+        self._renew_thread = threading.Thread(target=_renew_loop, daemon=True, name=f"lock-renew:{self._name}")
         self._renew_thread.start()
 
-    def __enter__(self) -> "DistributedLock":
+    def __enter__(self) -> DistributedLock:
         if not self.acquire():
             raise TimeoutError(f"Could not acquire lock {self._name!r}")
         return self
@@ -388,6 +380,7 @@ class DistributedLock:
 
 
 # ── Pub/Sub manager ───────────────────────────────────────────────────────────
+
 
 class PubSubManager:
     """
@@ -454,9 +447,7 @@ class PubSubManager:
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._listen_loop, daemon=True, name="pubsub-listener"
-        )
+        self._thread = threading.Thread(target=self._listen_loop, daemon=True, name="pubsub-listener")
         self._thread.start()
         logger.info("PubSubManager: listener started")
 
@@ -464,7 +455,7 @@ class PubSubManager:
         """Stop the background listener thread."""
         self._stop_event.set()
         if self._pubsub:
-            try:
+            try:  # noqa: SIM105
                 self._pubsub.close()
             except Exception:  # nosec B110
                 pass
@@ -497,9 +488,7 @@ class PubSubManager:
                             try:
                                 cb(data)
                             except Exception as exc:
-                                logger.warning(
-                                    "PubSubManager callback error on %r: %s", channel, exc
-                                )
+                                logger.warning("PubSubManager callback error on %r: %s", channel, exc)
             except Exception as exc:
                 if not self._stop_event.is_set():
                     logger.warning(
@@ -511,6 +500,7 @@ class PubSubManager:
 
 
 # ── Redis Streams consumer group ──────────────────────────────────────────────
+
 
 class StreamConsumerGroup:
     """
@@ -562,9 +552,7 @@ class StreamConsumerGroup:
     def _ensure_group(self) -> None:
         """Create the consumer group if it does not exist."""
         try:
-            self._client.xgroup_create(
-                self._stream, self._group, id="0", mkstream=True
-            )
+            self._client.xgroup_create(self._stream, self._group, id="0", mkstream=True)
             logger.info(
                 "StreamConsumerGroup: created group %r on stream %r",
                 self._group,
@@ -586,17 +574,13 @@ class StreamConsumerGroup:
         """
         try:
             serialised = {k: json.dumps(v, default=str) for k, v in fields.items()}
-            msg_id = self._client.xadd(
-                self._stream, serialised, maxlen=self._max_len, approximate=True
-            )
+            msg_id = self._client.xadd(self._stream, serialised, maxlen=self._max_len, approximate=True)
             return msg_id.decode() if isinstance(msg_id, bytes) else msg_id
         except Exception as exc:
             logger.warning("StreamConsumerGroup.publish error: %s", exc)
             return None
 
-    def read(
-        self, count: int = 10, block_ms: int = 0
-    ) -> list[tuple[str, dict[str, Any]]]:
+    def read(self, count: int = 10, block_ms: int = 0) -> list[tuple[str, dict[str, Any]]]:
         """
         Read up to ``count`` unacknowledged messages from the group.
 
@@ -651,10 +635,9 @@ class StreamConsumerGroup:
             return int(self._client.xack(self._stream, self._group, *message_ids))
         except Exception as exc:
             if _retry:
-                logger.warning(
-                    "StreamConsumerGroup.ack error (will retry once): %s", exc
-                )
+                logger.warning("StreamConsumerGroup.ack error (will retry once): %s", exc)
                 import time as _time
+
                 _time.sleep(0.1)
                 return self.ack(*message_ids, _retry=False)
             logger.error(
@@ -675,9 +658,7 @@ class StreamConsumerGroup:
         """
         results = []
         try:
-            pending = self._client.xpending_range(
-                self._stream, self._group, min="-", max="+", count=50
-            )
+            pending = self._client.xpending_range(self._stream, self._group, min="-", max="+", count=50)
             for entry in pending:
                 msg_id = entry["message_id"]
                 if isinstance(msg_id, bytes):
@@ -703,9 +684,7 @@ class StreamConsumerGroup:
                             dl_fields[b"_original_id"] = msg_id.encode() if isinstance(msg_id, str) else msg_id
                             dl_fields[b"_delivery_count"] = str(delivery_count).encode()
                             dl_fields[b"_dead_lettered_at"] = str(time.time()).encode()
-                            self._client.xadd(
-                                self._dead_stream, dl_fields, maxlen=10_000, approximate=True
-                            )
+                            self._client.xadd(self._dead_stream, dl_fields, maxlen=10_000, approximate=True)
                             dead_letter_written = True
                     except Exception as exc:
                         logger.error(
@@ -727,8 +706,7 @@ class StreamConsumerGroup:
                             )
                         else:
                             logger.error(
-                                "StreamConsumerGroup: dropped %r after %d retries "
-                                "(dead-letter write failed, acked=%d)",
+                                "StreamConsumerGroup: dropped %r after %d retries (dead-letter write failed, acked=%d)",
                                 msg_id,
                                 delivery_count,
                                 acked,

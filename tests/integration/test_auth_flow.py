@@ -22,7 +22,6 @@ No mocks, stubs, or synthetic data in production code paths.
 from __future__ import annotations
 
 import os
-import time
 import uuid
 
 import pytest
@@ -73,7 +72,8 @@ os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
 # Patch _REQUIRE_EMAIL_VERIFICATION at module level (after import) so that
 # register() always returns a token regardless of APP_ENV defaults.
-import auth.service as _auth_svc_mod  # noqa: E402
+import auth.service as _auth_svc_mod
+
 _auth_svc_mod._REQUIRE_EMAIL_VERIFICATION = True
 
 
@@ -144,6 +144,7 @@ def _ensure_test_env():
     # Raise the rate limit high so normal test traffic never hits 429
     os.environ["AUTH_RATE_LIMIT_REQUESTS"] = "1000"
     from auth.router import reset_rate_limit_state
+
     reset_rate_limit_state()
     yield
     reset_rate_limit_state()
@@ -357,6 +358,7 @@ class TestMe:
         # previous login in this session doesn't satisfy the auth check.
         from fastapi import FastAPI
         from fastapi.testclient import TestClient as _TC
+
         _app = FastAPI()
         _app.include_router(auth_router)
         fresh = _TC(_app, raise_server_exceptions=False)

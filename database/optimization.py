@@ -190,6 +190,7 @@ def analyze_query_performance(query_name: str) -> list[dict]:
 
 # ── Slow-query logger ─────────────────────────────────────────────────────────
 
+
 @dataclass
 class SlowQueryRecord:
     """A single slow-query capture."""
@@ -300,9 +301,7 @@ class SlowQueryLogger:
             return {
                 "total_queries": self._total_queries,
                 "total_slow": self._total_slow,
-                "slow_pct": round(
-                    self._total_slow / max(self._total_queries, 1) * 100, 2
-                ),
+                "slow_pct": round(self._total_slow / max(self._total_queries, 1) * 100, 2),
                 "threshold_ms": self.threshold_ms,
                 "history_size": len(self._history),
             }
@@ -316,6 +315,7 @@ class SlowQueryLogger:
 
 
 # ── Index advisor ─────────────────────────────────────────────────────────────
+
 
 @dataclass
 class IndexRecommendation:
@@ -359,7 +359,8 @@ class IndexAdvisor:
 
             with engine.connect() as conn:
                 # 1. Unused indexes — candidates to drop
-                unused = conn.execute(text("""
+                unused = conn.execute(
+                    text("""
                     SELECT schemaname, relname AS tbl, indexrelname AS idx,
                            idx_scan,
                            pg_size_pretty(pg_relation_size(indexrelid)) AS sz
@@ -369,22 +370,24 @@ class IndexAdvisor:
                       AND indexrelname NOT LIKE '%_unique%'
                     ORDER BY idx_scan ASC, pg_relation_size(indexrelid) DESC
                     LIMIT 30
-                """), {"threshold": cls.UNUSED_INDEX_SCAN_THRESHOLD}).fetchall()
+                """),
+                    {"threshold": cls.UNUSED_INDEX_SCAN_THRESHOLD},
+                ).fetchall()
 
                 for row in unused:
-                    recommendations.append(IndexRecommendation(
-                        table=row.tbl,
-                        recommendation_type="drop_unused",
-                        reason=(
-                            f"Index {row.idx!r} has only {row.idx_scan} scans "
-                            f"(size: {row.sz})"
-                        ),
-                        sql=f"DROP INDEX CONCURRENTLY IF EXISTS {row.schemaname}.{row.idx};",
-                        priority="low" if row.idx_scan > 0 else "medium",
-                    ))
+                    recommendations.append(
+                        IndexRecommendation(
+                            table=row.tbl,
+                            recommendation_type="drop_unused",
+                            reason=(f"Index {row.idx!r} has only {row.idx_scan} scans (size: {row.sz})"),
+                            sql=f"DROP INDEX CONCURRENTLY IF EXISTS {row.schemaname}.{row.idx};",
+                            priority="low" if row.idx_scan > 0 else "medium",
+                        )
+                    )
 
                 # 2. Tables with high sequential scan rates — missing indexes
-                missing = conn.execute(text("""
+                missing = conn.execute(
+                    text("""
                     SELECT schemaname, relname AS tbl,
                            seq_scan, idx_scan, n_live_tup,
                            round(
@@ -396,34 +399,35 @@ class IndexAdvisor:
                       AND n_live_tup > :min_rows
                     ORDER BY seq_scan DESC
                     LIMIT 20
-                """), {
-                    "seq_threshold": cls.SEQ_SCAN_THRESHOLD,
-                    "min_rows": cls.MIN_LIVE_ROWS,
-                }).fetchall()
+                """),
+                    {
+                        "seq_threshold": cls.SEQ_SCAN_THRESHOLD,
+                        "min_rows": cls.MIN_LIVE_ROWS,
+                    },
+                ).fetchall()
 
                 for row in missing:
-                    priority = (
-                        "high"
-                        if (row.seq_pct or 0) > cls.SEQ_SCAN_PCT_THRESHOLD
-                        else "medium"
+                    priority = "high" if (row.seq_pct or 0) > cls.SEQ_SCAN_PCT_THRESHOLD else "medium"
+                    recommendations.append(
+                        IndexRecommendation(
+                            table=row.tbl,
+                            recommendation_type="create_missing",
+                            reason=(
+                                f"Table {row.tbl!r} has {row.seq_scan} sequential scans "
+                                f"({row.seq_pct}% of all scans) on {row.n_live_tup:,} rows"
+                            ),
+                            sql=(
+                                f"-- Identify WHERE-clause columns from slow query log, then:\n"
+                                f"-- CREATE INDEX CONCURRENTLY ON "
+                                f"{row.schemaname}.{row.tbl} (col1, col2);"
+                            ),
+                            priority=priority,
+                        )
                     )
-                    recommendations.append(IndexRecommendation(
-                        table=row.tbl,
-                        recommendation_type="create_missing",
-                        reason=(
-                            f"Table {row.tbl!r} has {row.seq_scan} sequential scans "
-                            f"({row.seq_pct}% of all scans) on {row.n_live_tup:,} rows"
-                        ),
-                        sql=(
-                            f"-- Identify WHERE-clause columns from slow query log, then:\n"
-                            f"-- CREATE INDEX CONCURRENTLY ON "
-                            f"{row.schemaname}.{row.tbl} (col1, col2);"
-                        ),
-                        priority=priority,
-                    ))
 
                 # 3. Tables with high dead-tuple ratio — need VACUUM
-                bloat = conn.execute(text("""
+                bloat = conn.execute(
+                    text("""
                     SELECT relname AS tbl, n_dead_tup, n_live_tup,
                            round(
                                n_dead_tup::numeric /
@@ -435,19 +439,19 @@ class IndexAdvisor:
                           NULLIF(n_live_tup + n_dead_tup, 0) > 0.1
                     ORDER BY n_dead_tup DESC
                     LIMIT 10
-                """)).fetchall()
+                """)
+                ).fetchall()
 
                 for row in bloat:
-                    recommendations.append(IndexRecommendation(
-                        table=row.tbl,
-                        recommendation_type="vacuum",
-                        reason=(
-                            f"Table {row.tbl!r} has {row.dead_pct}% dead tuples "
-                            f"({row.n_dead_tup:,} rows)"
-                        ),
-                        sql=f"VACUUM ANALYZE {row.tbl};",
-                        priority="high" if (row.dead_pct or 0) > 30 else "medium",
-                    ))
+                    recommendations.append(
+                        IndexRecommendation(
+                            table=row.tbl,
+                            recommendation_type="vacuum",
+                            reason=(f"Table {row.tbl!r} has {row.dead_pct}% dead tuples ({row.n_dead_tup:,} rows)"),
+                            sql=f"VACUUM ANALYZE {row.tbl};",
+                            priority="high" if (row.dead_pct or 0) > 30 else "medium",  # noqa: PLR2004
+                        )
+                    )
 
         except Exception as exc:
             logger.warning("IndexAdvisor.recommend failed: %s", exc)

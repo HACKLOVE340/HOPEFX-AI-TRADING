@@ -198,9 +198,9 @@ _CONSENSUS_WINDOW_SECONDS: float = float(os.environ.get("NUCLEAR_CONSENSUS_WINDO
 
 async def _polygon_recv_status(
     ws,
-    expected: "str | tuple[str, ...]",
+    expected: str | tuple[str, ...],
     timeout: float = 10.0,
-) -> "dict | None":
+) -> dict | None:
     """
     Read frames from a Polygon WebSocket until one matches *expected* status.
 
@@ -219,7 +219,7 @@ async def _polygon_recv_status(
             return None
         try:
             raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             return None
         frames = json.loads(raw)
         if not isinstance(frames, list):
@@ -283,6 +283,7 @@ class NuclearStreamer:
         _redis_url = os.getenv("REDIS_URL", "").strip()
         if _redis_url:
             import urllib.parse as _urlparse
+
             _parsed = _urlparse.urlparse(_redis_url)
             self._redis_host: str = _parsed.hostname or "localhost"
             self._redis_port: int = _parsed.port or 6379
@@ -441,8 +442,7 @@ class NuclearStreamer:
         if self._fail_counts[source] >= self.circuit_breaker_threshold:
             self._circuit_open_at[source] = time.monotonic()
             logger.warning(
-                "Circuit breaker OPEN for source '%s' after %d failures — "
-                "will retry in %.0f s",
+                "Circuit breaker OPEN for source '%s' after %d failures — will retry in %.0f s",
                 source,
                 self._fail_counts[source],
                 self.circuit_breaker_cooldown,
@@ -644,11 +644,7 @@ class NuclearStreamer:
 
         # Evict stale source entries outside the consensus window.
         stale_cutoff = now - _CONSENSUS_WINDOW_SECONDS
-        self._source_prices = {
-            s: (p, t)
-            for s, (p, t) in self._source_prices.items()
-            if t >= stale_cutoff
-        }
+        self._source_prices = {s: (p, t) for s, (p, t) in self._source_prices.items() if t >= stale_cutoff}
 
         active_sources = list(self._source_prices.items())
         consensus_price: float | None = None
@@ -660,9 +656,10 @@ class NuclearStreamer:
             # Find the largest group of sources whose prices agree within
             # _CONSENSUS_TOLERANCE_PCT of each other.
             best_group: list[float] = []
-            for ref_src, (ref_price, _) in active_sources:
+            for _ref_src, (ref_price, _) in active_sources:
                 group = [
-                    p for _, (p, _) in active_sources
+                    p
+                    for _, (p, _) in active_sources
                     if ref_price > 0 and abs(p - ref_price) / ref_price * 100 <= _CONSENSUS_TOLERANCE_PCT
                 ]
                 if len(group) > len(best_group):
@@ -797,7 +794,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     # Send a ping to keep the connection alive.
                     await ws.ping()
                     continue
@@ -853,7 +850,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     await ws.ping()
                     continue
 
@@ -934,7 +931,7 @@ class NuclearStreamer:
             while self._running:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=30)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     await ws.ping()
                     continue
 
@@ -1029,8 +1026,7 @@ class NuclearStreamer:
                 "tolerance_pct": _CONSENSUS_TOLERANCE_PCT,
                 "window_seconds": _CONSENSUS_WINDOW_SECONDS,
                 "active_sources": {
-                    src: {"price": p, "age_s": round(time.time() - t, 2)}
-                    for src, (p, t) in self._source_prices.items()
+                    src: {"price": p, "age_s": round(time.time() - t, 2)} for src, (p, t) in self._source_prices.items()
                 },
                 "consensus_reject_count": self._consensus_reject_count,
             },

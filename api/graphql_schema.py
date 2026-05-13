@@ -29,7 +29,6 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 UTC = timezone.utc
 
@@ -167,10 +166,7 @@ async def _batch_load_signals(keys: list[tuple[str, int]]) -> list[list]:
             )
             for s in raw
         ]
-        return [
-            [sig for sig in all_signals if sig.symbol == symbol][:limit]
-            for symbol, limit in keys
-        ]
+        return [[sig for sig in all_signals if sig.symbol == symbol][:limit] for symbol, limit in keys]
     except Exception as exc:
         logger.debug("DataLoader _batch_load_signals: %s", exc)
         return [[] for _ in keys]
@@ -188,6 +184,7 @@ def _make_context_loaders() -> dict:
         "trades_loader": DataLoader(load_fn=_batch_load_trades),
         "signals_loader": DataLoader(load_fn=_batch_load_signals),
     }
+
 
 # Gating is enforced by core/router_registry.py (feature_flags.GRAPHQL_API).
 # The router is always built here so it is ready when the flag is on.
@@ -537,18 +534,14 @@ class Query:
     async def positions(self, info: Info) -> list[Position]:
         user = _require_auth(info)
         user_id = user.get("sub", "default")
-        loader: DataLoader = info.context.get("positions_loader") or DataLoader(
-            load_fn=_batch_load_positions
-        )
+        loader: DataLoader = info.context.get("positions_loader") or DataLoader(load_fn=_batch_load_positions)
         return await loader.load(user_id)
 
     @strawberry.field(description="Recent closed trades")
     async def trades(self, info: Info, limit: int = 20) -> list[Trade]:
         user = _require_auth(info)
         user_id = user.get("sub", "default")
-        loader: DataLoader = info.context.get("trades_loader") or DataLoader(
-            load_fn=_batch_load_trades
-        )
+        loader: DataLoader = info.context.get("trades_loader") or DataLoader(load_fn=_batch_load_trades)
         return await loader.load((user_id, limit))
 
         # DB fallback: read closed trades from the Trade table
@@ -1106,6 +1099,7 @@ schema = strawberry.Schema(
 # require a JWT but schema introspection does not.  Set APP_ENV=development
 # (the default) to re-enable it locally.
 _graphql_ide = None if os.getenv("APP_ENV", "development").lower() == "production" else "graphiql"
+
 
 async def _get_context() -> dict:
     """

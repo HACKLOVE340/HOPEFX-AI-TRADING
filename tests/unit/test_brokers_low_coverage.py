@@ -133,6 +133,7 @@ class TestMT5BrokerAccount:
         result = asyncio.run(broker.get_account_info())
         # Production returns a zero-filled AccountInfo (safe default), not None
         from brokers.base import AccountInfo
+
         assert isinstance(result, AccountInfo)
         assert result.balance == 0.0
 

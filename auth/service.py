@@ -138,7 +138,9 @@ def is_access_token_revoked(jti: str) -> bool:
 def _access_token_expire_minutes() -> int:
     """Delegate to auth.jwt for the single source of truth on token lifetime."""
     from auth.jwt import _get_access_token_expire_minutes as _jwt_expire
+
     return _jwt_expire()
+
 
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
 MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
@@ -444,6 +446,7 @@ class AuthService:
             _rc = None
             try:
                 import redis as _redis_sync
+
                 _rc = _redis_sync.from_url(
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     decode_responses=True,
@@ -467,7 +470,7 @@ class AuthService:
                 session.query(LoginAttempt)
                 .filter(
                     LoginAttempt.user_id == user.id,
-                    LoginAttempt.success == False,  # noqa: E712
+                    LoginAttempt.success == False,
                     LoginAttempt.attempted_at >= cutoff,
                 )
                 .count()
@@ -544,6 +547,7 @@ class AuthService:
             try:
                 if _rc is None:
                     import redis as _redis_sync
+
                     _rc = _redis_sync.from_url(
                         os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                         decode_responses=True,

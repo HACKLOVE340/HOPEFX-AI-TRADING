@@ -663,7 +663,7 @@ class NotificationManager:
 
                 self._notification_queue.task_done()
 
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break

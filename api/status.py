@@ -502,7 +502,7 @@ async def _run_checks() -> dict[str, Any]:
             # Overwrite any response_time_ms the probe itself set — use wall time
             result["response_time_ms"] = ms
             return name, result
-        except asyncio.TimeoutError:
+        except TimeoutError:
             ms = round((_time.monotonic() - t0) * 1000, 1)
             return name, {"status": "degraded", "message": "Probe timed out (3s)", "response_time_ms": ms}
         except Exception as exc:
@@ -518,11 +518,13 @@ async def _run_checks() -> dict[str, Any]:
     async def _check_database() -> dict:
         import os as _os
         import asyncio as _asyncio
+
         db_url = _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
 
         def _sync_check():
             from sqlalchemy import create_engine, text as _text
             from sqlalchemy.pool import NullPool as _NullPool
+
             # Normalise async driver prefixes to their sync equivalents so
             # create_engine (sync) can open the connection without aiosqlite/asyncpg.
             sync_url = db_url
@@ -548,8 +550,10 @@ async def _run_checks() -> dict[str, Any]:
 
     async def _check_cache() -> dict:
         import os as _os
+
         try:
             import redis as _redis
+
             url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
             r = _redis.from_url(url, socket_connect_timeout=1, socket_timeout=1)
             info = r.info("server")
@@ -561,6 +565,7 @@ async def _run_checks() -> dict[str, Any]:
     async def _check_broker() -> dict:
         try:
             from core.app_state import app_state as _as
+
             broker = getattr(_as, "broker", None)
             if broker is None:
                 return {"status": "degraded", "message": "Paper broker (no live connection)"}
@@ -572,6 +577,7 @@ async def _run_checks() -> dict[str, Any]:
     async def _check_price_feed() -> dict:
         try:
             from core.app_state import app_state as _as
+
             pe = getattr(_as, "price_engine", None)
             if pe is None:
                 return {"status": "degraded", "message": "Price engine not started"}
@@ -583,6 +589,7 @@ async def _run_checks() -> dict[str, Any]:
     async def _check_brain() -> dict:
         try:
             from core.app_state import app_state as _as
+
             brain = getattr(_as, "brain", None) or getattr(_as, "strategy_brain", None)
             if brain is None:
                 return {"status": "degraded", "message": "Brain not initialised (paper mode)"}
@@ -594,6 +601,7 @@ async def _run_checks() -> dict[str, Any]:
     async def _check_kill_switch() -> dict:
         try:
             from app import kill_switch as _ks
+
             active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
             if callable(active):
                 active = active()
@@ -606,6 +614,7 @@ async def _run_checks() -> dict[str, Any]:
     async def _check_websocket() -> dict:
         try:
             from core.event_bus import bus as _bus
+
             connected = getattr(_bus, "_connected", None)
             if connected is False:
                 return {"status": "degraded", "message": "EventBus disconnected"}
@@ -635,14 +644,14 @@ async def _run_checks() -> dict[str, Any]:
             return {"status": "unknown", "message": "psutil unavailable"}
 
     probes = [
-        ("api",              _check_api),
-        ("database",         _check_database),
-        ("cache",            _check_cache),
-        ("broker",           _check_broker),
-        ("price_feed",       _check_price_feed),
-        ("brain",            _check_brain),
-        ("kill_switch",      _check_kill_switch),
-        ("websocket",        _check_websocket),
+        ("api", _check_api),
+        ("database", _check_database),
+        ("cache", _check_cache),
+        ("broker", _check_broker),
+        ("price_feed", _check_price_feed),
+        ("brain", _check_brain),
+        ("kill_switch", _check_kill_switch),
+        ("websocket", _check_websocket),
         ("system_resources", _check_system_resources),
     ]
 
@@ -652,7 +661,7 @@ async def _run_checks() -> dict[str, Any]:
             timeout=_STATUS_CHECK_TIMEOUT_SEC,
         )
         return dict(results)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("Status checks timed out after %.1fs", _STATUS_CHECK_TIMEOUT_SEC)
         return {
             "api": {

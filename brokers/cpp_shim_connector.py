@@ -335,6 +335,7 @@ class CPPShimConnector(BrokerConnector):
     def _normalise_symbol(symbol: str) -> str:
         """Normalise to MT5 form (no separator) via the shared utils.symbol module."""
         from utils.symbol import to_mt5
+
         return to_mt5(symbol)
 
     # ── Metrics ───────────────────────────────────────────────────────────────

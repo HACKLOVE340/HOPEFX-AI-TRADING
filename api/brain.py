@@ -36,6 +36,7 @@ _RSI_EPSILON = 1e-9
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _detect_llm_backend() -> tuple[str | None, str | None]:
     """
     Auto-detect the configured LLM backend from environment variables.
@@ -130,8 +131,7 @@ async def generate_strategy(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "LLM backend not configured. "
-                "Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable AI strategy generation."
+                "LLM backend not configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable AI strategy generation."
             ),
         )
 
@@ -170,17 +170,20 @@ async def generate_strategy(
             try:
                 import uuid as _uuid
                 from datetime import datetime as _dt, timezone as _tz
+
                 strategies = _load_strategies(user.sub)
-                strategies.append({
-                    "strategy_id": f"ai_{_uuid.uuid4().hex[:8]}",
-                    "strategy_name": result.strategy_name,
-                    "symbol": req.symbol,
-                    "timeframe": req.timeframe,
-                    "created_at": _dt.now(_tz.utc).isoformat(),
-                    "status": "draft",
-                    "backtest": bt.model_dump() if bt else None,
-                    "strategy_code": result.strategy_code,
-                })
+                strategies.append(
+                    {
+                        "strategy_id": f"ai_{_uuid.uuid4().hex[:8]}",
+                        "strategy_name": result.strategy_name,
+                        "symbol": req.symbol,
+                        "timeframe": req.timeframe,
+                        "created_at": _dt.now(_tz.utc).isoformat(),
+                        "status": "draft",
+                        "backtest": bt.model_dump() if bt else None,
+                        "strategy_code": result.strategy_code,
+                    }
+                )
                 _save_strategies(user.sub, strategies[-50:])  # keep last 50
             except Exception as _save_exc:
                 logger.debug("strategy history save: %s", _save_exc)
@@ -249,10 +252,7 @@ async def chat(
     if not backend:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "LLM backend not configured. "
-                "Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable AI chat."
-            ),
+            detail=("LLM backend not configured. Set ANTHROPIC_API_KEY or OPENAI_API_KEY to enable AI chat."),
         )
 
     try:
@@ -285,6 +285,7 @@ _STRAT_KEY = "brain:strategies:{uid}"
 
 def _load_strategies(user_id: str) -> list[dict]:
     from api.db_store import db_get
+
     stored = db_get(_STRAT_KEY.format(uid=user_id))
     if stored and isinstance(stored, list):
         return stored
@@ -293,6 +294,7 @@ def _load_strategies(user_id: str) -> list[dict]:
 
 def _save_strategies(user_id: str, strategies: list[dict]) -> None:
     from api.db_store import db_set
+
     db_set(_STRAT_KEY.format(uid=user_id), strategies)
 
 
@@ -393,14 +395,16 @@ async def brain_health(
 
     if backend == "openai":
         try:
-            import openai  # noqa: PLC0415
+            import openai
+
             openai.models.list()  # lightweight probe
         except Exception as exc:
             available = False
             detail = str(exc)
     elif backend == "ollama":
         try:
-            import httpx  # noqa: PLC0415
+            import httpx
+
             r = httpx.get(
                 f"{os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')}/api/tags",
                 timeout=3,
@@ -445,7 +449,8 @@ async def brain_complete(
 
     if backend == "openai":
         try:
-            import openai  # noqa: PLC0415
+            import openai
+
             messages = []
             if body.system:
                 messages.append({"role": "system", "content": body.system})
@@ -468,7 +473,8 @@ async def brain_complete(
 
     if backend == "ollama":
         try:
-            import httpx  # noqa: PLC0415
+            import httpx
+
             base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             payload: dict = {"model": model, "prompt": body.prompt, "stream": False}
             if body.system:
@@ -512,7 +518,8 @@ async def brain_embed(
 
     if backend == "openai":
         try:
-            import openai  # noqa: PLC0415
+            import openai
+
             embed_model = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
             resp = openai.embeddings.create(model=embed_model, input=texts)
             vectors = [item.embedding for item in resp.data]
@@ -527,7 +534,8 @@ async def brain_embed(
 
     if backend == "ollama":
         try:
-            import httpx  # noqa: PLC0415
+            import httpx
+
             base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
             embed_model = os.getenv("OLLAMA_EMBED_MODEL", model or "nomic-embed-text")
             vectors = []
@@ -601,6 +609,7 @@ async def analyze_market(
     lows: list[float] = []
     try:
         from core.app_state import app_state
+
         nuclear = getattr(app_state, "nuclear_streamer", None)
         if nuclear and hasattr(nuclear, "get_ohlcv"):
             candles = nuclear.get_ohlcv(req.symbol, req.timeframe, req.candle_count)
@@ -729,43 +738,43 @@ async def get_insights(
 
     if strategies:
         recent = strategies[-10:]
-        winning = [
-            s for s in recent
-            if s.get("backtest") and s["backtest"].get("total_return_pct", 0) > 0
-        ]
+        winning = [s for s in recent if s.get("backtest") and s["backtest"].get("total_return_pct", 0) > 0]
         win_rate = len(winning) / len(recent) if recent else 0
 
         if win_rate >= 0.6:
-            insights.append({
-                "type": "performance",
-                "severity": "positive",
-                "title": "Strong Strategy Win Rate",
-                "message": f"{round(win_rate * 100)}% of your recent strategies are profitable.",
-                "action": "Consider deploying your best-performing strategy.",
-            })
+            insights.append(
+                {
+                    "type": "performance",
+                    "severity": "positive",
+                    "title": "Strong Strategy Win Rate",
+                    "message": f"{round(win_rate * 100)}% of your recent strategies are profitable.",
+                    "action": "Consider deploying your best-performing strategy.",
+                }
+            )
         elif win_rate < 0.4:
-            insights.append({
-                "type": "performance",
-                "severity": "warning",
-                "title": "Low Strategy Win Rate",
-                "message": f"Only {round(win_rate * 100)}% of recent strategies are profitable.",
-                "action": "Review your prompts — try adding risk management constraints.",
-            })
+            insights.append(
+                {
+                    "type": "performance",
+                    "severity": "warning",
+                    "title": "Low Strategy Win Rate",
+                    "message": f"Only {round(win_rate * 100)}% of recent strategies are profitable.",
+                    "action": "Review your prompts — try adding risk management constraints.",
+                }
+            )
 
-        dd_vals = [
-            abs(s["backtest"].get("max_drawdown_pct", 0))
-            for s in recent if s.get("backtest")
-        ]
+        dd_vals = [abs(s["backtest"].get("max_drawdown_pct", 0)) for s in recent if s.get("backtest")]
         if dd_vals:
             avg_dd = sum(dd_vals) / len(dd_vals)
             if avg_dd > 15:
-                insights.append({
-                    "type": "risk",
-                    "severity": "warning",
-                    "title": "High Average Drawdown",
-                    "message": f"Average max drawdown across recent strategies: {round(avg_dd, 1)}%.",
-                    "action": "Add 'max_drawdown < 10%' constraints to your strategy prompts.",
-                })
+                insights.append(
+                    {
+                        "type": "risk",
+                        "severity": "warning",
+                        "title": "High Average Drawdown",
+                        "message": f"Average max drawdown across recent strategies: {round(avg_dd, 1)}%.",
+                        "action": "Add 'max_drawdown < 10%' constraints to your strategy prompts.",
+                    }
+                )
 
     try:
         analysis = await get_market_analysis(user=user)
@@ -773,25 +782,29 @@ async def get_insights(
         trend = analysis.get("trend", "unknown")
         rsi = analysis.get("indicators", {}).get("rsi_14")
         if signal != "NEUTRAL":
-            insights.append({
-                "type": "market",
-                "severity": "info",
-                "title": f"XAU/USD Market Signal: {signal}",
-                "message": f"Current trend is {trend.replace('_', ' ')}."
-                + (f" RSI at {round(rsi, 1)}." if rsi else ""),
-                "action": f"Consider generating a {signal.lower()} strategy for XAU/USD H1.",
-            })
+            insights.append(
+                {
+                    "type": "market",
+                    "severity": "info",
+                    "title": f"XAU/USD Market Signal: {signal}",
+                    "message": f"Current trend is {trend.replace('_', ' ')}."
+                    + (f" RSI at {round(rsi, 1)}." if rsi else ""),
+                    "action": f"Consider generating a {signal.lower()} strategy for XAU/USD H1.",
+                }
+            )
     except Exception as exc:
         logger.debug("insights market analysis: %s", exc)
 
     if not insights:
-        insights.append({
-            "type": "onboarding",
-            "severity": "info",
-            "title": "Get Started",
-            "message": "Generate your first AI strategy using the strategy generator.",
-            "action": "Click 'Generate Strategy' and describe your trading idea.",
-        })
+        insights.append(
+            {
+                "type": "onboarding",
+                "severity": "info",
+                "title": "Get Started",
+                "message": "Generate your first AI strategy using the strategy generator.",
+                "action": "Click 'Generate Strategy' and describe your trading idea.",
+            }
+        )
 
     result = {
         "insights": insights,

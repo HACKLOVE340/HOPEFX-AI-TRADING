@@ -71,6 +71,7 @@ def _redis_lock(name: str, timeout: int = 3600):
     """
     try:
         import redis as _redis_mod  # type: ignore[import-untyped]
+
         _r = _redis_mod.from_url(os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1"), socket_timeout=5)
         acquired = _r.set(f"celery_lock:{name}", "1", nx=True, ex=timeout)
         if not acquired:
@@ -82,6 +83,7 @@ def _redis_lock(name: str, timeout: int = 3600):
                 _r.delete(f"celery_lock:{name}")
     except ImportError:
         yield  # Redis unavailable in test/dev — proceed without locking
+
 
 # ── Celery import guard ───────────────────────────────────────────────────────
 
@@ -125,11 +127,9 @@ if _CELERY_AVAILABLE:
         # Workers must have the same setting to decompress results.
         task_compression="gzip",
         result_compression="gzip",
-
         # ── Timezone ──────────────────────────────────────────────────────────
         timezone="UTC",
         enable_utc=True,
-
         # ── Reliability ───────────────────────────────────────────────────────
         # task_acks_late: acknowledge only after the task completes so a
         #   worker crash re-queues the task rather than losing it.
@@ -140,15 +140,11 @@ if _CELERY_AVAILABLE:
         task_acks_late=True,
         task_reject_on_worker_lost=True,
         worker_prefetch_multiplier=1,
-
         # worker_max_tasks_per_child: recycle the worker subprocess after N
         #   tasks to reclaim memory leaked by ML libraries (numpy, torch).
         #   Set via CELERY_MAX_TASKS_PER_CHILD; default 200 is conservative
         #   enough to prevent OOM on 2 GB workers without excessive fork cost.
-        worker_max_tasks_per_child=int(
-            os.getenv("CELERY_MAX_TASKS_PER_CHILD", "200")
-        ),
-
+        worker_max_tasks_per_child=int(os.getenv("CELERY_MAX_TASKS_PER_CHILD", "200")),
         # ── Broker transport options ───────────────────────────────────────────
         # visibility_timeout: how long (seconds) a task can run before the
         #   broker re-queues it as "lost".  Must be longer than the slowest
@@ -157,25 +153,20 @@ if _CELERY_AVAILABLE:
         # interval_start / interval_step / interval_max: exponential backoff
         #   for broker reconnects (0 s → 0.2 s → 0.4 s … → 2 s max).
         broker_transport_options={
-            "visibility_timeout": int(
-                os.getenv("CELERY_VISIBILITY_TIMEOUT", str(3600))
-            ),
+            "visibility_timeout": int(os.getenv("CELERY_VISIBILITY_TIMEOUT", str(3600))),
             "max_retries": 5,
             "interval_start": 0,
             "interval_step": 0.2,
             "interval_max": 2.0,
         },
-
         # ── Result backend ────────────────────────────────────────────────────
         result_expires=timedelta(hours=24),
-
         # result_chord_join_timeout: seconds to wait for all chord subtasks
         #   before the chord callback fires.  Prevents chord callbacks from
         #   hanging indefinitely when a subtask is slow or lost.
         result_chord_join_timeout=int(
             os.getenv("CELERY_CHORD_JOIN_TIMEOUT", "300")  # 5 min
         ),
-
         # ── Queue routing ─────────────────────────────────────────────────────
         # Each task family gets its own queue so workers can be scaled
         # independently (e.g. more ML workers, fewer infra workers).
@@ -188,7 +179,6 @@ if _CELERY_AVAILABLE:
             "celery_app.database_backup": {"queue": "infra"},
             "celery_app.self_healer_scan": {"queue": "infra"},
         },
-
         # ── Test mode ─────────────────────────────────────────────────────────
         # task_always_eager=True makes tasks run synchronously in the calling
         # process — no broker required.  Set CELERY_TASK_ALWAYS_EAGER=true
@@ -324,7 +314,6 @@ else:
 
         def send_task(self, name: str, *args, **kwargs) -> None:
             logger.debug("Celery not installed — send_task(%s) is a no-op", name)
-            return None
 
         def signature(self, *args, **kwargs):
             return None
@@ -345,7 +334,9 @@ def _task(**kwargs):
 # ── ML tasks ─────────────────────────────────────────────────────────────────
 
 
-@_task(name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360)  # lock timeout must be <= time_limit
+@_task(
+    name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360
+)  # lock timeout must be <= time_limit
 def ml_hourly_online_update(self=None):
     """
     Incremental online-learning update for all configured symbols.

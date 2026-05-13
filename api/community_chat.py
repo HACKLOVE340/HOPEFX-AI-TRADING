@@ -64,8 +64,8 @@ def _redis():
     try:
         import redis as _r
         import os
-        c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-                        socket_connect_timeout=1, socket_timeout=1)
+
+        c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=1, socket_timeout=1)
         c.ping()
         return c
     except Exception:
@@ -154,14 +154,46 @@ def _seed_default_rooms() -> None:
         return
     now = datetime.now(UTC).isoformat()
     defaults = [
-        {"id": "general", "name": "General", "description": "General trading discussion",
-         "type": "public", "member_count": 0, "pinned": True, "created_at": now, "last_message_at": now},
-        {"id": "signals", "name": "Signals", "description": "AI signal alerts and discussion",
-         "type": "public", "member_count": 0, "pinned": True, "created_at": now, "last_message_at": now},
-        {"id": "gold-xauusd", "name": "Gold / XAUUSD", "description": "Gold trading strategies",
-         "type": "public", "member_count": 0, "pinned": False, "created_at": now, "last_message_at": now},
-        {"id": "support", "name": "Support", "description": "Platform support and help",
-         "type": "public", "member_count": 0, "pinned": False, "created_at": now, "last_message_at": now},
+        {
+            "id": "general",
+            "name": "General",
+            "description": "General trading discussion",
+            "type": "public",
+            "member_count": 0,
+            "pinned": True,
+            "created_at": now,
+            "last_message_at": now,
+        },
+        {
+            "id": "signals",
+            "name": "Signals",
+            "description": "AI signal alerts and discussion",
+            "type": "public",
+            "member_count": 0,
+            "pinned": True,
+            "created_at": now,
+            "last_message_at": now,
+        },
+        {
+            "id": "gold-xauusd",
+            "name": "Gold / XAUUSD",
+            "description": "Gold trading strategies",
+            "type": "public",
+            "member_count": 0,
+            "pinned": False,
+            "created_at": now,
+            "last_message_at": now,
+        },
+        {
+            "id": "support",
+            "name": "Support",
+            "description": "Platform support and help",
+            "type": "public",
+            "member_count": 0,
+            "pinned": False,
+            "created_at": now,
+            "last_message_at": now,
+        },
     ]
     for d in defaults:
         _save_room(d)
@@ -224,7 +256,7 @@ class CreateRoomBody(BaseModel):
 
 class SendMessageBody(BaseModel):
     content: str | None = None  # canonical field name
-    text: str | None = None     # legacy alias — kept for backward compat
+    text: str | None = None  # legacy alias — kept for backward compat
     attachments: list[str] | None = None
 
     @property
@@ -237,6 +269,7 @@ class SendMessageBody(BaseModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/rooms")
 async def list_rooms(user: TokenPayload = Depends(get_current_user)) -> dict:
@@ -310,6 +343,7 @@ async def send_message(
     # Push to WebSocket subscribers in this room (non-blocking)
     try:
         import asyncio
+
         asyncio.ensure_future(_ws_broadcast(room_id, {"type": "message", "message": msg}))
     except Exception:  # nosec B110
         pass
@@ -418,6 +452,7 @@ async def send_dm(
 @router.get("/online")
 async def online_users(user: TokenPayload = Depends(get_current_user)) -> dict:
     import time as _time
+
     now = _time.time()
     r = _redis()
     if r:
@@ -455,6 +490,7 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
     if token_param:
         try:
             from api.auth import decode_access_token
+
             decode_access_token(token_param)
         except Exception:  # nosec B110
             pass  # allow unauthenticated reads; writes gated via REST
@@ -479,7 +515,7 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
                         await websocket.send_json({"type": "pong"})
                 except Exception:  # nosec B110
                     pass
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 # Send heartbeat to keep connection alive
                 try:
                     await websocket.send_json({"type": "heartbeat"})

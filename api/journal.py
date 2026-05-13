@@ -47,10 +47,12 @@ def _get_db():
     """Return a synchronous DB session for legacy sync paths (journal uses sync ORM)."""
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception as exc:
         logger.warning("journal: DB unavailable: %s", exc)
         return None
+
 
 EMOTION_TAGS = [
     "patient",
@@ -234,7 +236,7 @@ async def create_entry(
     except Exception as exc:
         db.rollback()
         logger.error("create_entry error: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to create journal entry")
+        raise HTTPException(status_code=500, detail="Failed to create journal entry") from exc
     finally:
         db.close()
 
@@ -305,7 +307,7 @@ async def update_entry(
     except Exception as exc:
         db.rollback()
         logger.error("update_entry error: %s", exc)
-        raise HTTPException(status_code=500, detail="Failed to update journal entry")
+        raise HTTPException(status_code=500, detail="Failed to update journal entry") from exc
     finally:
         db.close()
 
@@ -314,7 +316,16 @@ async def update_entry(
 async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalStats:
     db = _get_db()
     if db is None:
-        return JournalStats(total_trades=0, win_rate=0, avg_pnl=0, best_trade_pnl=0, worst_trade_pnl=0, by_tag=[], by_emotion=[], rule_deviation_count=0)
+        return JournalStats(
+            total_trades=0,
+            win_rate=0,
+            avg_pnl=0,
+            best_trade_pnl=0,
+            worst_trade_pnl=0,
+            by_tag=[],
+            by_emotion=[],
+            rule_deviation_count=0,
+        )
     try:
         # Join trade_journal with trades to get PnL
         rows = db.execute(
@@ -329,7 +340,16 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
         entries = [_row_to_dict(r) for r in rows]
         closed = [e for e in entries if e.get("realized_pnl") is not None]
         if not closed:
-            return JournalStats(total_trades=0, win_rate=0, avg_pnl=0, best_trade_pnl=0, worst_trade_pnl=0, by_tag=[], by_emotion=[], rule_deviation_count=0)
+            return JournalStats(
+                total_trades=0,
+                win_rate=0,
+                avg_pnl=0,
+                best_trade_pnl=0,
+                worst_trade_pnl=0,
+                by_tag=[],
+                by_emotion=[],
+                rule_deviation_count=0,
+            )
         pnls = [float(e["realized_pnl"]) for e in closed]
         wins = [p for p in pnls if p > 0]
         all_tags = {t for e in closed for t in (e.get("tags") or [])}
@@ -338,17 +358,34 @@ async def get_stats(user: TokenPayload = Depends(get_current_user)) -> JournalSt
             tagged = [e for e in closed if tag in (e.get("tags") or [])]
             tag_pnls = [float(e["realized_pnl"]) for e in tagged]
             tag_wins = [p for p in tag_pnls if p > 0]
-            tag_stats.append(TagStats(tag=tag, count=len(tagged), win_rate=round(len(tag_wins)/len(tagged)*100,1) if tagged else 0, avg_pnl=round(sum(tag_pnls)/len(tag_pnls),2) if tag_pnls else 0))
+            tag_stats.append(
+                TagStats(
+                    tag=tag,
+                    count=len(tagged),
+                    win_rate=round(len(tag_wins) / len(tagged) * 100, 1) if tagged else 0,
+                    avg_pnl=round(sum(tag_pnls) / len(tag_pnls), 2) if tag_pnls else 0,
+                )
+            )
         all_emotions = {e.get("emotion") for e in closed if e.get("emotion")}
         emotion_stats = []
         for em in all_emotions:
             em_entries = [e for e in closed if e.get("emotion") == em]
             em_pnls = [float(e["realized_pnl"]) for e in em_entries]
             em_wins = [p for p in em_pnls if p > 0]
-            emotion_stats.append(TagStats(tag=em, count=len(em_entries), win_rate=round(len(em_wins)/len(em_entries)*100,1) if em_entries else 0, avg_pnl=round(sum(em_pnls)/len(em_pnls),2) if em_pnls else 0))
+            emotion_stats.append(
+                TagStats(
+                    tag=em,
+                    count=len(em_entries),
+                    win_rate=round(len(em_wins) / len(em_entries) * 100, 1) if em_entries else 0,
+                    avg_pnl=round(sum(em_pnls) / len(em_pnls), 2) if em_pnls else 0,
+                )
+            )
         return JournalStats(
-            total_trades=len(closed), win_rate=round(len(wins)/len(closed)*100,1),
-            avg_pnl=round(sum(pnls)/len(pnls),2), best_trade_pnl=max(pnls), worst_trade_pnl=min(pnls),
+            total_trades=len(closed),
+            win_rate=round(len(wins) / len(closed) * 100, 1),
+            avg_pnl=round(sum(pnls) / len(pnls), 2),
+            best_trade_pnl=max(pnls),
+            worst_trade_pnl=min(pnls),
             by_tag=sorted(tag_stats, key=lambda x: x.count, reverse=True),
             by_emotion=sorted(emotion_stats, key=lambda x: x.count, reverse=True),
             rule_deviation_count=sum(1 for e in entries if e.get("lessons_learned")),
@@ -365,7 +402,9 @@ async def get_mistakes(user: TokenPayload = Depends(get_current_user)) -> list[J
         raise HTTPException(status_code=503, detail="Database unavailable")
     try:
         rows = db.execute(
-            _text("SELECT * FROM trade_journal WHERE user_id = :uid AND lessons_learned IS NOT NULL ORDER BY created_at DESC"),
+            _text(
+                "SELECT * FROM trade_journal WHERE user_id = :uid AND lessons_learned IS NOT NULL ORDER BY created_at DESC"
+            ),
             {"uid": user.sub},
         ).fetchall()
         return [JournalEntry(**_row_to_dict(r)) for r in rows]
@@ -431,13 +470,15 @@ async def get_emotion_stats(
         stats = []
         for emotion, pnls in emotion_map.items():
             wins = [p for p in pnls if p > 0]
-            stats.append({
-                "emotion": emotion,
-                "count": len(pnls),
-                "win_rate": round(len(wins) / len(pnls) * 100, 1) if pnls else 0,
-                "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
-                "total_pnl": round(sum(pnls), 2),
-            })
+            stats.append(
+                {
+                    "emotion": emotion,
+                    "count": len(pnls),
+                    "win_rate": round(len(wins) / len(pnls) * 100, 1) if pnls else 0,
+                    "avg_pnl": round(sum(pnls) / len(pnls), 2) if pnls else 0,
+                    "total_pnl": round(sum(pnls), 2),
+                }
+            )
         stats.sort(key=lambda x: x["count"], reverse=True)
         return {"emotion_stats": stats, "total_emotions": len(stats)}
     finally:
@@ -449,7 +490,7 @@ async def get_weekly_report(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict:
     """Return a summary of trades closed in the current calendar week."""
-    from datetime import date, timedelta  # noqa: PLC0415
+    from datetime import date, timedelta
 
     today = date.today()
     week_start = today - timedelta(days=today.weekday())  # Monday
@@ -503,6 +544,7 @@ async def get_weekly_report(
 
 # ── Export ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/export", summary="Export journal entries as CSV or JSON")
 async def export_journal(
     format: str = Query("csv", pattern="^(csv|json)$"),
@@ -523,6 +565,7 @@ async def export_journal(
 
     if format == "json":
         import json as _j
+
         content = _j.dumps(entries, indent=2, default=str)
         return StreamingResponse(
             io.BytesIO(content.encode()),
@@ -536,9 +579,19 @@ async def export_journal(
     else:
         buf = io.StringIO()
         fieldnames = [
-            "id", "trade_id", "title", "notes", "tags", "emotion",
-            "rating", "pnl", "setup_quality", "lessons_learned",
-            "screenshot_url", "created_at", "updated_at",
+            "id",
+            "trade_id",
+            "title",
+            "notes",
+            "tags",
+            "emotion",
+            "rating",
+            "pnl",
+            "setup_quality",
+            "lessons_learned",
+            "screenshot_url",
+            "created_at",
+            "updated_at",
         ]
         writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
@@ -557,6 +610,7 @@ async def export_journal(
 
 
 # ── Screenshot upload ─────────────────────────────────────────────────────────
+
 
 @router.post("/trades/{trade_id}/screenshot", summary="Attach a screenshot to a journal entry")
 async def upload_screenshot(
@@ -611,8 +665,7 @@ async def upload_screenshot(
     db2 = _get_db()
     try:
         db2.execute(
-            "UPDATE journal SET screenshot_url = :url, updated_at = :now "
-            "WHERE id = :tid AND user_id = :uid",
+            "UPDATE journal SET screenshot_url = :url, updated_at = :now WHERE id = :tid AND user_id = :uid",
             {
                 "url": url,
                 "now": datetime.now(UTC).isoformat(),

@@ -34,7 +34,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import text as _sa_text
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow
@@ -157,10 +156,7 @@ async def _probe_ml_engine() -> dict[str, Any]:
                 engine = getattr(app_state, attr, None)
                 if engine is not None:
                     ready = getattr(engine, "is_ready", None)
-                    if callable(ready):
-                        ready = ready()
-                    else:
-                        ready = getattr(engine, "_ready", True)
+                    ready = ready() if callable(ready) else getattr(engine, "_ready", True)
                     return {
                         "status": "ok" if ready else "warning",
                         "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
@@ -675,7 +671,7 @@ async def get_reliability_status(
     for name, task in tasks.items():
         try:
             results_raw[name] = await asyncio.wait_for(task, timeout=10.0)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             results_raw[name] = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
         except Exception as exc:
             results_raw[name] = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -748,7 +744,7 @@ async def run_probe(
         }
     try:
         result = await asyncio.wait_for(fn(), timeout=10.0)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         result = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
     except Exception as exc:
         result = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -942,7 +938,7 @@ async def run_self_test(
                 "detail": result.get("detail", ""),
                 "duration_ms": round((time.perf_counter() - t) * 1000, 2),
             }
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             return {"test": name, "passed": False, "status": "error", "detail": "Timeout", "duration_ms": 10000}
         except Exception as exc:
             return {

@@ -478,17 +478,17 @@ def main(argv: list[str] | None = None) -> int:
         logger.info("\n%s  %s", status, symbol)
         if known_sharpe:
             logger.info("  Known Sharpe:          %s", known_sharpe)
-        logger.info("  Sharpe upper bound:    %s", result['sharpe_upper_bound'])
-        logger.info("  PSI:                   %s (%s)", result['psi'], result['psi_verdict'])
-        logger.info("  KS p-value:            %s (%s)", result['ks_p_value'], result['ks_verdict'])
-        logger.info("  Mean drift (sigma):    %s", result['mean_drift_sigma'])
+        logger.info("  Sharpe upper bound:    %s", result["sharpe_upper_bound"])
+        logger.info("  PSI:                   %s (%s)", result["psi"], result["psi_verdict"])
+        logger.info("  KS p-value:            %s (%s)", result["ks_p_value"], result["ks_verdict"])
+        logger.info("  Mean drift (sigma):    %s", result["mean_drift_sigma"])
         la = result.get("lookahead_checks", {})
         if isinstance(la, dict):
-            logger.info("  Autocorr lag-1:        %s", la.get('autocorr_lag1', 'N/A'))
-            logger.info("  Sign predictability:   %s", la.get('sign_predictability', 'N/A'))
-            logger.info("  Rolling Sharpe min:    %s", la.get('rolling_sharpe_min', 'N/A'))
+            logger.info("  Autocorr lag-1:        %s", la.get("autocorr_lag1", "N/A"))
+            logger.info("  Sign predictability:   %s", la.get("sign_predictability", "N/A"))
+            logger.info("  Rolling Sharpe min:    %s", la.get("rolling_sharpe_min", "N/A"))
         if result["flags"]:
-            logger.info("  Flags:                 %s", ', '.join(result['flags']))
+            logger.info("  Flags:                 %s", ", ".join(result["flags"]))
 
         if not result["passed"]:
             any_failed = True
@@ -515,8 +515,8 @@ def main(argv: list[str] | None = None) -> int:
     report_path = output_dir / f"sharpe_audit_{date_str}.json"
     report_path.write_text(json.dumps(report, indent=2, default=str))
 
-    logger.info("\n%s", '=' * 60)
-    logger.info("Audit complete: %s/%s passed", report['summary']['passed'], report['summary']['total'])
+    logger.info("\n%s", "=" * 60)
+    logger.info("Audit complete: %s/%s passed", report["summary"]["passed"], report["summary"]["total"])
     logger.info("Report saved:   %s", report_path)
 
     if any_failed:

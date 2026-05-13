@@ -39,16 +39,19 @@ def _eq(ts_offset: int, value: float) -> tuple[float, float]:
 class TestComputeDrawdownSeries:
     def test_empty_series_returns_empty(self):
         from api.pnl_dashboard import _compute_drawdown_series
+
         assert _compute_drawdown_series([]) == []
 
     def test_flat_equity_zero_drawdown(self):
         from api.pnl_dashboard import _compute_drawdown_series
+
         series = [_eq(i, 10_000.0) for i in range(5)]
         result = _compute_drawdown_series(series)
         assert all(dd == pytest.approx(0.0) for _, dd in result)
 
     def test_drawdown_after_drop(self):
         from api.pnl_dashboard import _compute_drawdown_series
+
         series = [_eq(0, 10_000.0), _eq(1, 9_000.0)]
         result = _compute_drawdown_series(series)
         # After drop from 10k to 9k: drawdown = 10%
@@ -56,6 +59,7 @@ class TestComputeDrawdownSeries:
 
     def test_drawdown_recovers_to_zero_at_new_peak(self):
         from api.pnl_dashboard import _compute_drawdown_series
+
         series = [_eq(0, 10_000.0), _eq(1, 9_000.0), _eq(2, 11_000.0)]
         result = _compute_drawdown_series(series)
         # At new peak, drawdown = 0
@@ -63,12 +67,14 @@ class TestComputeDrawdownSeries:
 
     def test_length_matches_input(self):
         from api.pnl_dashboard import _compute_drawdown_series
+
         series = [_eq(i, 10_000.0 + i * 100) for i in range(10)]
         result = _compute_drawdown_series(series)
         assert len(result) == 10
 
     def test_drawdown_never_negative(self):
         from api.pnl_dashboard import _compute_drawdown_series
+
         series = [_eq(i, 10_000.0 + i * 50) for i in range(20)]
         result = _compute_drawdown_series(series)
         assert all(dd >= 0.0 for _, dd in result)
@@ -82,21 +88,25 @@ class TestComputeDrawdownSeries:
 class TestComputeMaxDrawdown:
     def test_empty_series_returns_zero(self):
         from api.pnl_dashboard import _compute_max_drawdown
+
         assert _compute_max_drawdown([]) == pytest.approx(0.0)
 
     def test_flat_equity_zero_max_drawdown(self):
         from api.pnl_dashboard import _compute_max_drawdown
+
         series = [_eq(i, 10_000.0) for i in range(5)]
         assert _compute_max_drawdown(series) == pytest.approx(0.0)
 
     def test_single_drop_max_drawdown(self):
         from api.pnl_dashboard import _compute_max_drawdown
+
         series = [_eq(0, 10_000.0), _eq(1, 8_000.0)]
         # 20% drawdown
         assert _compute_max_drawdown(series) == pytest.approx(20.0)
 
     def test_max_drawdown_is_worst_case(self):
         from api.pnl_dashboard import _compute_max_drawdown
+
         # Peak 10k, drops to 9k (10%), recovers to 10.5k, drops to 7k (33%)
         series = [
             _eq(0, 10_000.0),
@@ -110,6 +120,7 @@ class TestComputeMaxDrawdown:
 
     def test_always_rising_zero_drawdown(self):
         from api.pnl_dashboard import _compute_max_drawdown
+
         series = [_eq(i, 10_000.0 + i * 100) for i in range(20)]
         assert _compute_max_drawdown(series) == pytest.approx(0.0)
 
@@ -122,15 +133,18 @@ class TestComputeMaxDrawdown:
 class TestComputeCurrentDrawdown:
     def test_empty_series_returns_zero(self):
         from api.pnl_dashboard import _compute_current_drawdown
+
         assert _compute_current_drawdown([]) == pytest.approx(0.0)
 
     def test_at_peak_zero_drawdown(self):
         from api.pnl_dashboard import _compute_current_drawdown
+
         series = [_eq(0, 10_000.0), _eq(1, 11_000.0)]
         assert _compute_current_drawdown(series) == pytest.approx(0.0)
 
     def test_below_peak_positive_drawdown(self):
         from api.pnl_dashboard import _compute_current_drawdown
+
         series = [_eq(0, 10_000.0), _eq(1, 11_000.0), _eq(2, 9_900.0)]
         # Current 9900, peak 11000 → (11000-9900)/11000 * 100 ≈ 10%
         dd = _compute_current_drawdown(series)
@@ -138,6 +152,7 @@ class TestComputeCurrentDrawdown:
 
     def test_single_point_zero_drawdown(self):
         from api.pnl_dashboard import _compute_current_drawdown
+
         series = [_eq(0, 10_000.0)]
         assert _compute_current_drawdown(series) == pytest.approx(0.0)
 
@@ -150,11 +165,13 @@ class TestComputeCurrentDrawdown:
 class TestComputeSharpe:
     def test_returns_none_below_min_fills(self):
         from api.pnl_dashboard import _compute_sharpe, _MIN_FILLS_FOR_SHARPE
+
         series = [_eq(i, 10_000.0 + i * 10) for i in range(_MIN_FILLS_FOR_SHARPE - 1)]
         assert _compute_sharpe(series) is None
 
     def test_returns_float_with_enough_data(self):
         from api.pnl_dashboard import _compute_sharpe, _MIN_FILLS_FOR_SHARPE
+
         # Steadily rising equity → positive Sharpe
         series = [_eq(i, 10_000.0 + i * 10) for i in range(_MIN_FILLS_FOR_SHARPE + 10)]
         result = _compute_sharpe(series)
@@ -163,6 +180,7 @@ class TestComputeSharpe:
 
     def test_positive_sharpe_for_rising_equity(self):
         from api.pnl_dashboard import _compute_sharpe, _MIN_FILLS_FOR_SHARPE
+
         series = [_eq(i, 10_000.0 + i * 50) for i in range(_MIN_FILLS_FOR_SHARPE + 20)]
         sharpe = _compute_sharpe(series)
         assert sharpe is not None
@@ -170,6 +188,7 @@ class TestComputeSharpe:
 
     def test_returns_none_for_flat_equity(self):
         from api.pnl_dashboard import _compute_sharpe, _MIN_FILLS_FOR_SHARPE
+
         # Flat equity → std_r = 0 → Sharpe undefined
         series = [_eq(i, 10_000.0) for i in range(_MIN_FILLS_FOR_SHARPE + 10)]
         result = _compute_sharpe(series)
@@ -178,6 +197,7 @@ class TestComputeSharpe:
     def test_sharpe_is_finite(self):
         from api.pnl_dashboard import _compute_sharpe, _MIN_FILLS_FOR_SHARPE
         import random
+
         rng = random.Random(42)
         equity = 10_000.0
         series = []

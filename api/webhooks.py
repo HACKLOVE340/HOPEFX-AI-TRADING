@@ -55,6 +55,7 @@ UTC = timezone.utc
 
 # ── Request / response models ─────────────────────────────────────────────────
 
+
 class TradingViewAlert(BaseModel):
     """Parsed TradingView alert payload."""
 
@@ -76,6 +77,7 @@ class WebhookResponse(BaseModel):
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _get_secret() -> str | None:
     """Return the configured webhook secret, or None if unset."""
@@ -103,6 +105,7 @@ def _action_to_direction(action: str) -> str:
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/tradingview",
@@ -141,12 +144,13 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
     # Parse JSON payload
     try:
         import json
+
         payload: dict[str, Any] = json.loads(body)
-    except Exception:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Request body must be valid JSON.",
-        )
+        ) from exc
 
     # Fallback: body-level secret field (legacy TradingView pattern)
     if not sig_valid:
@@ -171,7 +175,7 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid alert payload: {exc}",
-        )
+        ) from exc
 
     direction = _action_to_direction(alert.action)
     entry = alert.price or 0.0
@@ -195,6 +199,7 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
     signal_id: str | None = None
     try:
         from api.signals import _get_signal_service
+
         svc = _get_signal_service()
         signal = svc.ingest_engine_signal(signal_payload)
         if signal:

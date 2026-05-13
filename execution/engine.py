@@ -24,7 +24,6 @@ Design invariants:
 from __future__ import annotations
 
 import asyncio
-import collections
 import logging
 import os
 import time

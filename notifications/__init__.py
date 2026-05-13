@@ -86,7 +86,7 @@ class NotificationManager:
             try:
                 notification = await asyncio.wait_for(self.queue.get(), timeout=1.0)
                 await self._dispatch(notification)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 continue
             except Exception as e:
                 logger.error("Notification processing error: %s", e)
@@ -116,12 +116,18 @@ class NotificationManager:
                 if attempt == len(delays):
                     logger.error(
                         "Notification channel %s failed after %d attempts: %s",
-                        channel, attempt, exc,
+                        channel,
+                        attempt,
+                        exc,
                     )
                 else:
                     logger.warning(
                         "Notification channel %s attempt %d/%d failed (%s) — retrying in %.0fs",
-                        channel, attempt, len(delays), exc, delay,
+                        channel,
+                        attempt,
+                        len(delays),
+                        exc,
+                        delay,
                     )
                     await asyncio.sleep(delay)
 
@@ -235,9 +241,7 @@ class NotificationManager:
         async with aiohttp.ClientSession() as session, session.post(url, json=payload) as resp:
             if resp.status != 200:
                 body = await resp.text()
-                raise RuntimeError(
-                    f"Telegram sendMessage returned HTTP {resp.status}: {body[:200]}"
-                )
+                raise RuntimeError(f"Telegram sendMessage returned HTTP {resp.status}: {body[:200]}")
 
     async def _send_webhook(self, notification: Notification):
         """Send to custom webhook"""

@@ -598,7 +598,6 @@ async def _check_master_control() -> ComponentStatus:
     t0 = time.perf_counter()
     try:
         # MasterControlCore is the actual class name (MasterControlCentre is an alias)
-        from core.mcc.master_control import MasterControlCore  # type: ignore[import]
         from core.app_state import app_state as _app_state  # type: ignore[import]
 
         mcc = getattr(_app_state, "mcc", None)
@@ -606,8 +605,9 @@ async def _check_master_control() -> ComponentStatus:
             # Try the module-level singleton
             try:
                 from core.mcc import master_control as _mc_mod  # type: ignore[import]
+
                 mcc = getattr(_mc_mod, "_mcc_instance", None)
-            except Exception:  # noqa: BLE001 — MCC import is optional
+            except Exception:
                 pass
 
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
@@ -659,10 +659,7 @@ async def _check_db_pool() -> ComponentStatus:
 
         # Verify the pool can actually open a session.
         pool_healthy = getattr(_default_pool, "is_healthy", None)
-        if callable(pool_healthy):
-            healthy = pool_healthy()
-        else:
-            healthy = True  # pool exists; assume healthy if no probe method
+        healthy = pool_healthy() if callable(pool_healthy) else True
 
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         return ComponentStatus(
@@ -704,8 +701,16 @@ async def _run_all_checks() -> list[ComponentStatus]:
     )
     statuses: list[ComponentStatus] = []
     names = [
-        "redis", "database", "kill_switch", "ml_model", "orchestrator",
-        "broker", "db_migrations", "price_engine", "brain", "master_control",
+        "redis",
+        "database",
+        "kill_switch",
+        "ml_model",
+        "orchestrator",
+        "broker",
+        "db_migrations",
+        "price_engine",
+        "brain",
+        "master_control",
         "db_pool",
     ]
     for i, result in enumerate(results):

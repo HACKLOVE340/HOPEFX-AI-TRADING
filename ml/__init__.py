@@ -766,6 +766,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         """ML health — reports live signal-engine ML availability and model status."""
         try:
             from core.signal_engine import get_signal_engine_status
+
             engine_status = get_signal_engine_status()
             ml_available = engine_status.get("ml_available", False)
             model_version = engine_status.get("model_version", "none")
@@ -803,7 +804,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Trigger an async ML model retrain.  Returns immediately with a job id;
         training runs in a background thread so the HTTP response is not blocked.
         """
-        import asyncio
+        import asyncio  # noqa: F401
         import threading
         import uuid
 
@@ -813,7 +814,8 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
             try:
                 import subprocess
                 import sys
-                subprocess.run(
+
+                subprocess.run(  # noqa: PLW1510
                     [sys.executable, "ml/train_advanced.py", "--years", "3", "--oos-years", "1"],
                     capture_output=True,
                     text=True,
@@ -836,8 +838,12 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
             "detector": "KolmogorovSmirnov",
             "config": {
                 "window_size": DriftDetector.__init__.__defaults__[0] if DriftDetector.__init__.__defaults__ else 50,
-                "check_every": DriftDetector.__init__.__defaults__[1] if DriftDetector.__init__.__defaults__ and len(DriftDetector.__init__.__defaults__) > 1 else 10,
-                "p_threshold": DriftDetector.__init__.__defaults__[2] if DriftDetector.__init__.__defaults__ and len(DriftDetector.__init__.__defaults__) > 2 else 0.05,
+                "check_every": DriftDetector.__init__.__defaults__[1]
+                if DriftDetector.__init__.__defaults__ and len(DriftDetector.__init__.__defaults__) > 1
+                else 10,
+                "p_threshold": DriftDetector.__init__.__defaults__[2]
+                if DriftDetector.__init__.__defaults__ and len(DriftDetector.__init__.__defaults__) > 2
+                else 0.05,
             },
             "note": "Drift detector is instantiated per model; no persistent state between requests.",
         }
@@ -846,6 +852,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     async def get_signal_filter_stats():
         """Return signal filter pass/block statistics."""
         from ml.signal_filter import get_signal_filter
+
         sf = get_signal_filter()
         return sf.get_stats()
 
@@ -853,6 +860,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     async def get_sharpe_cb_status():
         """Return current Sharpe circuit breaker state for all tracked model versions."""
         from ml.sharpe_circuit_breaker import get_sharpe_cb
+
         cb = get_sharpe_cb()
         return cb.get_status()
 
@@ -860,7 +868,8 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     async def get_rl_status():
         """Return RL agent training and deployment status."""
         try:
-            from ml.rl_agent import RLAgent
+            from ml.rl_agent import RLAgent  # noqa: F401
+
             model_dir = _Path(__file__).parent / "rl_models"
             models = []
             if model_dir.exists():
@@ -891,6 +900,7 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         def _run_rl_train():
             try:
                 from ml.rl_agent import RLAgentTrainer
+
                 trainer = RLAgentTrainer()
                 asyncio.run(
                     trainer.train(

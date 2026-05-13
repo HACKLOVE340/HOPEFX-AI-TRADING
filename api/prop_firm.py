@@ -22,8 +22,7 @@ GET  /api/risk/prop-firm/accounts                        — prop firm accounts
 from __future__ import annotations
 
 import logging
-import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -149,6 +148,7 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
 
 # ── Extended models ───────────────────────────────────────────────────────────
 
+
 class ChallengeRecord(BaseModel):
     challenge_id: str
     account_size: float
@@ -189,6 +189,7 @@ class PropFirmAccount(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _get_challenges(user_id: str) -> list[dict]:
     key = _CHALLENGES_KEY.format(uid=user_id)
     stored = db_get(key)
@@ -198,6 +199,7 @@ def _get_challenges(user_id: str) -> list[dict]:
     challenges = []
     try:
         from core.app_state import app_state
+
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -206,16 +208,18 @@ def _get_challenges(user_id: str) -> list[dict]:
             for f in fills:
                 current += float(getattr(f, "pnl", 0.0) or 0.0)
             profit_pct = (current - starting) / starting * 100 if starting > 0 else 0.0
-            challenges.append({
-                "challenge_id": "active-001",
-                "account_size": starting,
-                "phase": "phase_1",
-                "result": "active",
-                "started_at": datetime.now(UTC).replace(day=1).isoformat(),
-                "ended_at": None,
-                "profit_pct": round(profit_pct, 4),
-                "max_drawdown_pct": 0.0,
-            })
+            challenges.append(
+                {
+                    "challenge_id": "active-001",
+                    "account_size": starting,
+                    "phase": "phase_1",
+                    "result": "active",
+                    "started_at": datetime.now(UTC).replace(day=1).isoformat(),
+                    "ended_at": None,
+                    "profit_pct": round(profit_pct, 4),
+                    "max_drawdown_pct": 0.0,
+                }
+            )
     except Exception as exc:
         logger.debug("prop firm challenges from engine: %s", exc)
     return challenges
@@ -238,6 +242,7 @@ def _get_daily_stats(user_id: str, days: int = 30) -> list[dict]:
     stats: dict[str, dict] = {}
     try:
         from core.app_state import app_state
+
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             fills = list(getattr(engine, "_fill_history", []))
@@ -255,6 +260,7 @@ def _get_daily_stats(user_id: str, days: int = 30) -> list[dict]:
 
 
 # ── Extended endpoints ────────────────────────────────────────────────────────
+
 
 @router.get("/prop-firm/history", summary="Prop firm challenge history")
 async def prop_firm_history(
@@ -313,6 +319,7 @@ async def prop_firm_accounts(user: TokenPayload = Depends(get_current_user)) -> 
     accounts = []
     try:
         from core.app_state import app_state
+
         engine = getattr(app_state, "hopefx_engine", None)
         if engine is not None:
             starting = float(getattr(engine, "_starting_equity", 100_000.0))
@@ -320,16 +327,18 @@ async def prop_firm_accounts(user: TokenPayload = Depends(get_current_user)) -> 
             current = starting
             for f in fills:
                 current += float(getattr(f, "pnl", 0.0) or 0.0)
-            accounts.append({
-                "account_id": "main-001",
-                "label": "Main Challenge Account",
-                "account_size": starting,
-                "current_equity": round(current, 2),
-                "phase": "phase_1",
-                "status": "active",
-                "broker": getattr(getattr(engine, "broker", None), "name", "paper"),
-                "started_at": datetime.now(UTC).replace(day=1).isoformat(),
-            })
+            accounts.append(
+                {
+                    "account_id": "main-001",
+                    "label": "Main Challenge Account",
+                    "account_size": starting,
+                    "current_equity": round(current, 2),
+                    "phase": "phase_1",
+                    "status": "active",
+                    "broker": getattr(getattr(engine, "broker", None), "name", "paper"),
+                    "started_at": datetime.now(UTC).replace(day=1).isoformat(),
+                }
+            )
     except Exception as exc:
         logger.debug("prop firm accounts: %s", exc)
     return {"accounts": accounts, "total": len(accounts)}
