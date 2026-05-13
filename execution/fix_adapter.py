@@ -927,7 +927,7 @@ class FIXAdapter:
 
             return await asyncio.wait_for(future, timeout=30.0)
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             with self._pending_lock:
                 self._pending.pop(order.cl_ord_id, None)
             raise TimeoutError(

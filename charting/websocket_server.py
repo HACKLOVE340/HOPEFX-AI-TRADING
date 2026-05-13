@@ -218,7 +218,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
                     raw = await asyncio.wait_for(ws.receive_text(), timeout=60.0)
                     msg = json.loads(raw)
                     await _handle_client_message(ws, msg, chart_engine)
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     # Client silent for 60s — send ping
                     await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
                 except WebSocketDisconnect:

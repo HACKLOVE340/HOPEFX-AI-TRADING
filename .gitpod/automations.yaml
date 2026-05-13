@@ -34,6 +34,7 @@ services:
         export REDIS_FORCE_TLS=false
         export REDIS_PASSWORD=
         export IS_FORCE_TLS=false
+        export STANDBY_ROLE=primary
         python3 run.py --mode api
       ready: curl -sf http://localhost:8000/api/health
 

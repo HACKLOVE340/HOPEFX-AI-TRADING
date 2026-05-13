@@ -803,7 +803,7 @@ async def _start_data_layer_orchestrator(state) -> None:
         await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
         state.data_layer_orchestrator = orchestrator
         logger.info("Data layer orchestrator started")
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         logger.warning(
             "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
             "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "

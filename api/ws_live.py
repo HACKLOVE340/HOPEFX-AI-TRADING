@@ -1394,7 +1394,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             await _manager.send(
                 cid,
                 {
@@ -1445,7 +1445,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         _manager.authenticate(cid, user_id)
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
@@ -1763,7 +1763,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
+            except (TimeoutError, asyncio.TimeoutError):  # nosec B110 — poll timeout is expected; loop continues
                 pass
             except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
                 break

@@ -992,7 +992,7 @@ async def ws_social_feed(websocket: WebSocket) -> None:
             try:
                 await _asyncio.wait_for(websocket.receive_text(), timeout=30.0)
                 # ignore content — just a keep-alive ping
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 try:
                     await websocket.send_text(_json.dumps({"type": "heartbeat"}))
                 except Exception:

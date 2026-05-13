@@ -399,7 +399,7 @@ class DiagnosticsEngine:
                     if proc.returncode == 0:
                         return pkg, True, ""
                     return pkg, False, stderr.decode(errors="replace").strip()[:300]
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     proc.kill()
                     return pkg, False, "import timed out"
             except Exception as exc:
@@ -850,7 +850,7 @@ class DiagnosticsEngine:
                         for key in collected:
                             ttl = await asyncio.wait_for(client.ttl(key), timeout=2)
                             (found_feeds if ttl != 0 else stale_feeds).append(key)
-                    except TimeoutError:  # nosec B110 — Redis TTL check timed out; skip key
+                    except (TimeoutError, asyncio.TimeoutError):  # nosec B110 — Redis TTL check timed out; skip key
                         pass
                 dur = (time.monotonic() - t0) * 1000
                 if stale_feeds:
@@ -1033,7 +1033,7 @@ class DiagnosticsEngine:
                         action["success"] = proc.returncode == 0
                         if not action["success"]:
                             action["error"] = stderr.decode(errors="replace")[:300]
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         proc.kill()
                         action["action"] = "npm run build (timed out)"
             elif check == "import_chain":

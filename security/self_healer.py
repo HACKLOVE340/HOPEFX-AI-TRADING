@@ -1859,7 +1859,7 @@ Return the complete fixed file:"""
                     proc.communicate(),
                     timeout=float(self._global_test_timeout_sec),
                 )
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 with contextlib.suppress(Exception):
                     proc.kill()
                 self._log(

@@ -671,7 +671,7 @@ async def get_reliability_status(
     for name, task in tasks.items():
         try:
             results_raw[name] = await asyncio.wait_for(task, timeout=10.0)
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             results_raw[name] = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
         except Exception as exc:
             results_raw[name] = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -744,7 +744,7 @@ async def run_probe(
         }
     try:
         result = await asyncio.wait_for(fn(), timeout=10.0)
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         result = {"status": "error", "latency_ms": 10000, "detail": "Probe timed out"}
     except Exception as exc:
         result = {"status": "error", "latency_ms": 0, "detail": str(exc)}
@@ -938,7 +938,7 @@ async def run_self_test(
                 "detail": result.get("detail", ""),
                 "duration_ms": round((time.perf_counter() - t) * 1000, 2),
             }
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             return {"test": name, "passed": False, "status": "error", "detail": "Timeout", "duration_ms": 10000}
         except Exception as exc:
             return {

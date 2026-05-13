@@ -229,7 +229,7 @@ class RedisTickWriter:
         if self._worker_task is not None and not self._worker_task.done():
             try:
                 await asyncio.wait_for(self._write_queue.join(), timeout=5.0)
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 logger.warning(
                     "RedisTickWriter: queue did not drain within 5 s — %d ticks may be lost",
                     self._write_queue.qsize(),
@@ -320,7 +320,7 @@ class RedisTickWriter:
                 else:
                     try:
                         payload = await asyncio.wait_for(self._write_queue.get(), timeout=0.5)
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         continue
 
                 await self._flush_one(payload)

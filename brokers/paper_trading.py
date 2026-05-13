@@ -742,7 +742,7 @@ class PaperTradingBroker(BrokerConnector):
             positions.append(position)
         return positions
 
-    def get_positions(self) -> list[Position]:
+    async def get_positions(self) -> list[Position]:
         """Get all open positions."""
         return self._get_positions_sync()
 
@@ -904,7 +904,7 @@ class PaperTradingBroker(BrokerConnector):
             timestamp=datetime.now(UTC),
         )
 
-    def get_account_info(self) -> "AccountInfo":
+    async def get_account_info(self) -> "AccountInfo":
         """Get account information."""
         info = self._get_account_info_sync()
         # Record a throttled equity snapshot (at most once per 60 seconds)
@@ -913,6 +913,10 @@ class PaperTradingBroker(BrokerConnector):
         if time.time() - last_ts >= 60.0:
             self._equity_history.append((time.time(), float(info.equity)))
         return info
+
+    async def get_account(self) -> "AccountInfo":
+        """Alias for get_account_info — satisfies callers that use get_account()."""
+        return await self.get_account_info()
 
     def set_price_feed(self, price_engine) -> None:
         """Attach a price feed / engine for live price updates."""

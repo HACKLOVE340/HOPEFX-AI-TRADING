@@ -502,7 +502,7 @@ async def _run_checks() -> dict[str, Any]:
             # Overwrite any response_time_ms the probe itself set — use wall time
             result["response_time_ms"] = ms
             return name, result
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             ms = round((_time.monotonic() - t0) * 1000, 1)
             return name, {"status": "degraded", "message": "Probe timed out (3s)", "response_time_ms": ms}
         except Exception as exc:
@@ -661,7 +661,7 @@ async def _run_checks() -> dict[str, Any]:
             timeout=_STATUS_CHECK_TIMEOUT_SEC,
         )
         return dict(results)
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         logger.warning("Status checks timed out after %.1fs", _STATUS_CHECK_TIMEOUT_SEC)
         return {
             "api": {

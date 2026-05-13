@@ -59,6 +59,7 @@ Usage
         bridge.send_order(...)
 """
 
+import asyncio
 from __future__ import annotations
 
 import json
@@ -375,7 +376,7 @@ class MT5ZmqBridge:
             self._stats.latency_ms = latency
             self._stats.last_heartbeat = datetime.now(UTC)
             return latency
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             return -1.0
 
     def publish_signal(self, symbol: str, direction: str, confidence: float) -> None:

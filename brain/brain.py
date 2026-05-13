@@ -314,8 +314,15 @@ class HOPEFXBrain:
                 except Exception as e:
                     await self._handle_cycle_error(e)
 
-                # Adaptive cycle timing
-                await self._maintain_cycle_timing(cycle_start)
+                # Adaptive cycle timing — TimeoutError here is the normal poll
+                # expiry from asyncio.wait_for inside _maintain_cycle_timing.
+                # On Python <=3.10 asyncio.TimeoutError is NOT a subclass of
+                # the builtin TimeoutError, so we catch both explicitly to
+                # prevent it from reaching the outer emergency-stop handler.
+                try:
+                    await self._maintain_cycle_timing(cycle_start)
+                except (TimeoutError, asyncio.TimeoutError):  # nosec B110
+                    pass
 
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")
@@ -400,7 +407,7 @@ class HOPEFXBrain:
                 await asyncio.wait_for(self._shutdown_event.wait(), timeout=sleep_time)
             except asyncio.CancelledError:
                 raise
-            except TimeoutError:  # nosec B110
+            except (TimeoutError, asyncio.TimeoutError):  # nosec B110
                 pass
 
     @staticmethod
@@ -444,7 +451,7 @@ class HOPEFXBrain:
                             self.state.equity = eq
                             self.state.margin_used = mu
                             self.state.free_margin = fm
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         logger.warning("Broker timeout getting account info")
                         raise
                     except Exception as e:
@@ -470,7 +477,7 @@ class HOPEFXBrain:
                             for p in (positions or [])
                         }
                         self.state.open_trades_count = len(positions or [])
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         logger.warning("Broker timeout getting positions")
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
@@ -494,7 +501,7 @@ class HOPEFXBrain:
                             }
                             for o in (orders or [])
                         ]
-                    except TimeoutError:
+                    except (TimeoutError, asyncio.TimeoutError):
                         logger.warning("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
@@ -868,7 +875,7 @@ class HOPEFXBrain:
             # Limit to max 5 signals per cycle
             await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             global _decision_timeout_last_logged
             now = time.monotonic()
             if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
@@ -991,7 +998,7 @@ class HOPEFXBrain:
                         if success:
                             logger.info("Closed position %s", position_id)
 
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 logger.error("Signal execution timeout: %s", signal.get("symbol"))
 
             except Exception as e:

@@ -1238,7 +1238,7 @@ async def modify_position(
             ),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_position failed: %s", exc)
@@ -1288,7 +1288,7 @@ async def partial_close_position(
             else partial_fn(position_id, req.quantity),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("partial_close_position failed: %s", exc)
@@ -1383,7 +1383,7 @@ async def cancel_order(
             else cancel_fn(order_id),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("cancel_order failed: %s", exc)
@@ -1426,7 +1426,7 @@ async def modify_order(
             else modify_fn(order_id, **kwargs),
             timeout=10.0,
         )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_order failed: %s", exc)
@@ -2304,7 +2304,7 @@ async def get_ohlcv(
                         }
                         for d in data
                     ]
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
         except Exception as exc:
             logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)
@@ -3200,7 +3200,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
             ]
 
         ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
     except Exception as exc:
         logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
@@ -3420,7 +3420,7 @@ async def get_regime_status(
             )
 
         closes, highs, lows = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         logger.warning("regime: yfinance fetch timed out for %s", symbol_norm)
     except Exception as exc:
         logger.warning("regime: yfinance fetch failed for %s: %s", symbol_norm, exc)
