@@ -5,16 +5,20 @@ services:
     commands:
       # No password in dev — REDIS_URL in backend uses redis://127.0.0.1:6379/0 (no auth).
       # maxmemory 256mb prevents OOM on dev machines; allkeys-lru matches production policy.
-      start: >
-        redis-server
-        --daemonize no
-        --loglevel warning
-        --bind 127.0.0.1
-        --maxmemory 256mb
-        --maxmemory-policy allkeys-lru
-        --tcp-keepalive 60
-        --timeout 300
-        --save ""
+      start: |
+        which redis-server || (apt-get update -qq && apt-get install -y redis-server -qq)
+        # Stop any existing instance so we own the process
+        redis-cli shutdown nosave 2>/dev/null || true
+        sleep 1
+        redis-server \
+          --daemonize no \
+          --loglevel warning \
+          --bind 127.0.0.1 \
+          --maxmemory 256mb \
+          --maxmemory-policy allkeys-lru \
+          --tcp-keepalive 60 \
+          --timeout 300 \
+          --save ""
       ready: redis-cli -h 127.0.0.1 ping
 
   backend:

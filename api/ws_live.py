@@ -1785,3 +1785,244 @@ async def broadcast_system_event(event: dict) -> None:
         event: dict payload to broadcast — should include a ``type`` key.
     """
     await _manager.broadcast("system", event)
+
+
+# ─── /ws/notifications ────────────────────────────────────────────────────────
+
+@router.websocket("/ws/notifications")
+async def ws_notifications(websocket: WebSocket) -> None:
+    """
+    Real-time notification push channel.
+
+    Auth: JWT token passed as query param ?token=<jwt> or as
+    { type: 'auth', token: 'Bearer <jwt>' } message after connect.
+
+    Outbound message types:
+      connected      — initial handshake
+      auth_ok        — auth accepted
+      notification   — new notification payload
+      heartbeat      — 30s keepalive
+      error          — auth failure
+    """
+    await websocket.accept()
+    await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+    # Support token as query param (simpler for some clients)
+    token_param = websocket.query_params.get("token", "")
+    payload = _validate_ws_token(token_param) if token_param else None
+
+    if not payload:
+        # Fall back to auth message handshake
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
+            msg = json.loads(raw)
+        except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+            await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
+            return
+        except WebSocketDisconnect:
+            return
+
+        if msg.get("type") != "auth":
+            await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+        payload = _validate_ws_token(msg.get("token", ""))
+        if not payload:
+            await websocket.send_text(
+                json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            )
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+    user_id = str(payload.get("sub", "unknown"))
+    await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
+
+    # Subscribe to Redis pub/sub channel for this user's notifications
+    _NOTIF_CHANNEL = f"hopefx:notif:push:{user_id}"
+    last_heartbeat = asyncio.get_running_loop().time()
+
+    try:
+        import redis.asyncio as aioredis
+        import os
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        # Strip password from dev URL if empty
+        r = aioredis.from_url(redis_url, decode_responses=True)
+        pubsub = r.pubsub()
+        await pubsub.subscribe(_NOTIF_CHANNEL)
+
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+
+                # Heartbeat
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+
+                # Poll Redis for new notifications
+                try:
+                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
+                    if message and message.get("type") == "message":
+                        try:
+                            data = json.loads(message["data"])
+                            await websocket.send_text(json.dumps({"type": "notification", "data": data}))
+                        except Exception:
+                            pass
+                except (asyncio.TimeoutError, TimeoutError):
+                    pass
+                except WebSocketDisconnect:
+                    break
+
+        finally:
+            await pubsub.unsubscribe(_NOTIF_CHANNEL)
+            await r.aclose()
+
+    except Exception:
+        # Redis unavailable — fall back to heartbeat-only loop
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                except (asyncio.TimeoutError, TimeoutError):
+                    pass
+                except WebSocketDisconnect:
+                    break
+        except WebSocketDisconnect:
+            pass
+    finally:
+        logger.debug("ws_notifications: disconnected user=%s", user_id)
+
+
+# ─── /ws/audit-events ─────────────────────────────────────────────────────────
+
+@router.websocket("/ws/audit-events")
+async def ws_audit_events(websocket: WebSocket) -> None:
+    """
+    Real-time audit event stream (admin/superadmin only).
+
+    Auth: JWT token passed as query param ?token=<jwt> or as
+    { type: 'auth', token: 'Bearer <jwt>' } message after connect.
+
+    Outbound message types:
+      connected    — initial handshake
+      auth_ok      — auth accepted
+      audit_event  — new audit log entry
+      heartbeat    — 30s keepalive
+      error        — auth failure or insufficient role
+    """
+    await websocket.accept()
+    await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+    # Support token as query param
+    token_param = websocket.query_params.get("token", "")
+    payload = _validate_ws_token(token_param) if token_param else None
+
+    if not payload:
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
+            msg = json.loads(raw)
+        except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+            await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
+            return
+        except WebSocketDisconnect:
+            return
+
+        if msg.get("type") != "auth":
+            await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+        payload = _validate_ws_token(msg.get("token", ""))
+        if not payload:
+            await websocket.send_text(
+                json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            )
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+    user_id = str(payload.get("sub", "unknown"))
+    role = str(payload.get("role", ""))
+
+    # Restrict to admin and superadmin roles
+    if role not in ("admin", "superadmin"):
+        await websocket.send_text(
+            json.dumps({"type": "error", "code": "FORBIDDEN", "message": "Admin role required"})
+        )
+        await _safe_ws_close(websocket, code=4003)
+        return
+
+    await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id, "role": role}))
+
+    _AUDIT_CHANNEL = "hopefx:audit:events"
+    last_heartbeat = asyncio.get_running_loop().time()
+
+    try:
+        import redis.asyncio as aioredis
+        import os
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = aioredis.from_url(redis_url, decode_responses=True)
+        pubsub = r.pubsub()
+        await pubsub.subscribe(_AUDIT_CHANNEL)
+
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+
+                try:
+                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
+                    if message and message.get("type") == "message":
+                        try:
+                            data = json.loads(message["data"])
+                            await websocket.send_text(json.dumps({"type": "audit_event", "data": data}))
+                        except Exception:
+                            pass
+                except (asyncio.TimeoutError, TimeoutError):
+                    pass
+                except WebSocketDisconnect:
+                    break
+
+        finally:
+            await pubsub.unsubscribe(_AUDIT_CHANNEL)
+            await r.aclose()
+
+    except Exception:
+        # Redis unavailable — heartbeat-only loop
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                except (asyncio.TimeoutError, TimeoutError):
+                    pass
+                except WebSocketDisconnect:
+                    break
+        except WebSocketDisconnect:
+            pass
+    finally:
+        logger.debug("ws_audit_events: disconnected user=%s", user_id)
