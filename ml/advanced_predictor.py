@@ -855,7 +855,7 @@ class HybridEnsemblePredictor:
             import pickle
 
             with open(meta_path, "rb") as f:
-                state = pickle.load(f)
+                state = pickle.load(f)  # nosec B301 — path-confined local model file
             self._meta = state.get("meta")
             self._meta_scaler = state.get("scaler")
             if self._meta is not None:

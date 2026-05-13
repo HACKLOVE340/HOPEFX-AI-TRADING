@@ -420,7 +420,7 @@ async def get_model_explainability(
         model_path = Path("ml/saved_models") / f"{model}.pkl"
         if model_path.exists():
             with open(model_path, "rb") as f:
-                clf = pickle.load(f)
+                clf = pickle.load(f)  # nosec B301 — path-confined local model file
             if hasattr(clf, "feature_importances_"):
                 features = getattr(clf, "feature_names_in_", [f"f{i}" for i in range(len(clf.feature_importances_))])
                 importance = [

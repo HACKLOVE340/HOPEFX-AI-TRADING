@@ -642,15 +642,14 @@ class SubscriptionManager:
         conn.commit()
         conn.close()
 
-        # Generate license key
-        license_key = self.licenses.generate_license_key(user_id, strategy_id, subscription_id, end_date)
+        # Generate and store license key (return value not used — side effect is the store)
+        self.licenses.generate_license_key(user_id, strategy_id, subscription_id, end_date)
 
         # Update strategy subscriber count
         strategy.subscriber_count += 1
         self.db.save_strategy(strategy)
 
         logger.info("Subscription created: %s", subscription_id)
-        logger.info("License key: %s", license_key.key)
 
         return subscription
 

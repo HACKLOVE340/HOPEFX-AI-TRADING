@@ -53,7 +53,7 @@ def _ensure_db_tables() -> None:
         from database.models import Base  # user_models also uses this Base
 
         # Import user_models to register User/Session/LoginAttempt with Base
-        import database.user_models  # noqa: F401  # pylint: disable=unused-import
+        import database.user_models  # pylint: disable=unused-import
 
         # Use a unique in-memory DB per test module to avoid cross-module pollution
         mem_engine = create_engine(

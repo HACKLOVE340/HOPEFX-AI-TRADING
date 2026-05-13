@@ -102,7 +102,7 @@ def _load_model(model_name: str) -> Any | None:
                 import pickle
 
                 with open(pkl_path, "rb") as f:
-                    obj = pickle.load(f)
+                    obj = pickle.load(f)  # nosec B301 — path-confined local model file
             break
         except Exception as exc:
             logger.debug("explainability._load_model(%s) via %s: %s", model_name, loader_name, exc)

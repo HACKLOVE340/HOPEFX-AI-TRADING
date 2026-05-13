@@ -82,7 +82,7 @@ def _xml_text(el: ET.Element | None) -> str:
 def _parse_rss_feed(xml_bytes: bytes, source_name: str) -> list[dict]:
     """Parse RSS 2.0 or Atom feed XML bytes into a list of entry dicts."""
     try:
-        root = ET.fromstring(xml_bytes)  # noqa: S314
+        root = ET.fromstring(xml_bytes)  # noqa: S314  # nosec B314 — defusedxml used when available (see import block above)
     except ET.ParseError:
         return []
 
