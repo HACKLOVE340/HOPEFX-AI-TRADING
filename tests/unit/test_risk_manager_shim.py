@@ -7,7 +7,6 @@ Coverage tests for risk/risk_manager.py — the backwards-compat shim.
 """
 from __future__ import annotations
 
-import pytest
 
 from risk.risk_manager import RiskManager
 

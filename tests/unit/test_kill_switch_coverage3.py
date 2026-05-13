@@ -18,11 +18,7 @@ Targeted coverage for kill_switch.py uncovered branches:
 from __future__ import annotations
 
 import asyncio
-import os
-import tempfile
-from pathlib import Path
 
-import pytest
 
 
 def _fresh_ks(**kwargs):
@@ -261,7 +257,8 @@ class TestCheckBrokerCod:
             name = "OANDABroker"
 
         async def _run():
-            import sys, types
+            import sys
+            import types
             mod = types.ModuleType("execution.engine")
             mod.get_active_broker = lambda: FakeBroker()
             sys.modules["execution.engine"] = mod
@@ -292,7 +289,8 @@ class TestBrokerCancelAll:
                 FakeBroker.called = True
                 return True
 
-        import sys, types
+        import sys
+        import types
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod
@@ -308,7 +306,8 @@ class TestBrokerCancelAll:
         class FakeBroker:
             name = "NoCancelBroker"
 
-        import sys, types
+        import sys
+        import types
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod
@@ -332,7 +331,8 @@ class TestCheckBrokerCodFallbacks:
             broker = FakeBroker()
 
         async def _run():
-            import sys, types
+            import sys
+            import types
             # engine raises, router succeeds
             eng = types.ModuleType("execution.engine")
             eng.get_active_broker = lambda: (_ for _ in ()).throw(ImportError("no engine"))
@@ -358,7 +358,8 @@ class TestCheckBrokerCodFallbacks:
                 raise RuntimeError("cod error")
 
         async def _run():
-            import sys, types
+            import sys
+            import types
             eng = types.ModuleType("execution.engine")
             eng.get_active_broker = lambda: FakeBroker()
             sys.modules["execution.engine"] = eng
@@ -386,7 +387,8 @@ class TestBrokerCancelAllAsync:
             def cancel_all_orders(self):
                 return _async_cancel()
 
-        import sys, types
+        import sys
+        import types
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod
@@ -405,7 +407,8 @@ class TestBrokerCancelAllAsync:
             def cancel_all_orders(self):
                 raise RuntimeError("cancel failed")
 
-        import sys, types
+        import sys
+        import types
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod

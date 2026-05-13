@@ -276,7 +276,7 @@ class TestBacktestBarGuard:
     def test_get_past_bar_ok(self):
         df = _make_df(5)
         guard = BacktestBarGuard(df)
-        bars = list(guard)
+        list(guard)
         # After full iteration, current_index == 4; get(0) is past
         bar = guard.get(0)
         assert bar["close"] == df.iloc[0]["close"]

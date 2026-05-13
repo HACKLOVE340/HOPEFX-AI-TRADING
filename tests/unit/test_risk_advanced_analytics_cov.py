@@ -284,7 +284,7 @@ class TestVarEwma:
 
     def test_sqrt_fallback_insufficient(self, analytics):
         short = _returns(8)
-        with warnings.catch_warnings(record=True) as w:
+        with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             r = analytics.calculate_var_ewma(short, time_horizon=10)
         assert r.var_value >= 0
