@@ -483,6 +483,7 @@ class TestBinanceConnector:
                 "type": "MARKET",
                 "origQty": "0.001",
                 "executedQty": "0.001",
+                "cummulativeQuoteQty": "50.0",
                 "status": "FILLED",
                 "price": "50000",
                 "transactTime": 1704067200000,
@@ -784,7 +785,7 @@ class TestOANDAConnector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "EUR/USD"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     @patch("brokers.oanda.requests.Session")
     def test_get_account_info(self, mock_session_cls):
@@ -1003,7 +1004,7 @@ class TestMT5Connector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "XAUUSD"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     def test_get_positions_not_connected(self):
         broker = MT5Connector(MT5_CONFIG)
@@ -1190,7 +1191,7 @@ class TestInteractiveBrokersConnector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "AAPL"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     def test_get_positions_not_connected(self):
         broker = self._make_broker()
