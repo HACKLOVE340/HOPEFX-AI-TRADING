@@ -30,6 +30,7 @@ const ApiKeysSection           = lazy(() => import('./settings/ApiKeysSection'))
 const BillingSection           = lazy(() => import('./settings/BillingSection'));
 const IntegrationsSection      = lazy(() => import('./settings/IntegrationsSection'));
 const SystemSection            = lazy(() => import('./settings/SystemSection'));
+const PerformanceSection       = lazy(() => import('./settings/PerformanceSection'));
 const PrivacySection           = lazy(() => import('./settings/PrivacySection'));
 const AccessibilitySection     = lazy(() => import('./settings/AccessibilitySection'));
 const AdminSettingsSection     = lazy(() => import('./settings/AdminSettingsSection'));
@@ -109,6 +110,7 @@ const TAB_GROUPS: TabGroup[] = [
     label: 'Administration',
     tabs: [
       { id: 'system',        label: 'System',         icon: '⚙️',  adminOnly: true },
+      { id: 'performance',   label: 'Performance',    icon: '📊',  adminOnly: true },
       { id: 'admin',         label: 'Admin Settings', icon: '🔧',  adminOnly: true },
     ],
   },
@@ -252,6 +254,7 @@ const Settings: React.FC = () => {
       case 'privacy':           return <PrivacySection />;
       // Administration
       case 'system':            return admin      ? <SystemSection />          : null;
+      case 'performance':       return admin      ? <PerformanceSection />     : null;
       case 'admin':             return admin      ? <AdminSettingsSection />   : null;
       // SA — Overview
       case 'sa-overview':       return superAdmin ? <SAOverviewSection />      : null;

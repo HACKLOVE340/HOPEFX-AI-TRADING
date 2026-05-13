@@ -280,6 +280,7 @@ def get_live_manager() -> LiveConnectionManager:
 # Keys use the slash format the frontend expects (XAU/USD etc.).
 _SYMBOLS: dict[str, dict[str, float]] = {
     "XAU/USD": {"price": 3300.0, "vol": 0.012, "spread": 0.30},
+    "XAG/USD": {"price": 33.0,   "vol": 0.018, "spread": 0.03},
     "EUR/USD": {"price": 1.0820, "vol": 0.006, "spread": 0.0001},
     "GBP/USD": {"price": 1.2940, "vol": 0.007, "spread": 0.0002},
     "USD/JPY": {"price": 149.50, "vol": 0.006, "spread": 0.02},
@@ -289,6 +290,7 @@ _SYMBOLS: dict[str, dict[str, float]] = {
 # Slash → no-slash lookup for broker.market_prices keys
 _BROKER_KEY: dict[str, str] = {
     "XAU/USD": "XAUUSD",
+    "XAG/USD": "XAGUSD",
     "EUR/USD": "EURUSD",
     "GBP/USD": "GBPUSD",
     "USD/JPY": "USDJPY",
@@ -301,6 +303,8 @@ _SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
 _SLASH_SYMBOL.update(
     {
         "XAUUSD": "XAU/USD",
+        "XAGUSD": "XAG/USD",
+        "SI=F":   "XAG/USD",
         "EURUSD": "EUR/USD",
         "GBPUSD": "GBP/USD",
         "USDJPY": "USD/JPY",

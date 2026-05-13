@@ -75,7 +75,7 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highli
 
 // ─── Price ticker ─────────────────────────────────────────────────────────────
 // Symbol keys must match the WebSocket price_tick format (slash separator).
-const WATCHED_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+const WATCHED_SYMBOLS = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 
 const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
   const tick = useStore((st) => st.prices[sym]);
@@ -84,7 +84,8 @@ const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
   const decimals =
     sym.includes('JPY') ? 3 :
     sym.includes('BTC') ? 0 :
-    sym.includes('XAU') ? 2 : 5;
+    sym.includes('XAU') ? 2 :
+    sym.includes('XAG') ? 3 : 5;
 
   return (
     <Link
