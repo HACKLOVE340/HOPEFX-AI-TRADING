@@ -871,7 +871,27 @@ class TestMT5Connector:
     """Tests for MT5Connector (uses MetaTrader5 stub)."""
 
     def setup_method(self):
-        """Reset MT5 stub state before each test."""
+        """Reset MT5 stub state before each test.
+
+        Also reloads brokers.mt5 to re-bind its module-level ``mt5`` reference
+        to ``_mt5_stub``.  Other test files (e.g. test_brokers_low_coverage.py)
+        call importlib.reload(brokers.mt5) inside a patch.dict context, which
+        leaves brokers.mt5.mt5 pointing at a different MagicMock after the
+        context exits.  Reloading here ensures this class always uses _mt5_stub.
+        """
+        import importlib
+
+        # Ensure sys.modules["MetaTrader5"] is our stub before reloading
+        sys.modules["MetaTrader5"] = _mt5_stub
+
+        import brokers.mt5 as _mt5_mod
+
+        importlib.reload(_mt5_mod)
+
+        # Re-import MT5Connector from the freshly reloaded module
+        global MT5Connector
+        MT5Connector = _mt5_mod.MT5Connector
+
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True
         _mt5_stub.account_info.return_value = MagicMock(

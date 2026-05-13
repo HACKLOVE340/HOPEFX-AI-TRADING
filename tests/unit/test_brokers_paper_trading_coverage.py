@@ -330,13 +330,12 @@ class TestPlaceMarketOrder:
         assert order.average_price is not None
         assert order.average_price > 0.0
 
-    def test_market_order_unknown_symbol_uses_default_price(self):
-        from brokers.base import OrderStatus
+    def test_market_order_unknown_symbol_raises_stale_price(self):
+        from brokers.paper_trading import StalePriceError
 
         broker = _make_broker()
-        order = _buy(broker, symbol="UNKNOWN_SYM")
-        assert order.status == OrderStatus.FILLED
-        assert order.average_price == pytest.approx(1000.0)
+        with pytest.raises(StalePriceError):
+            _buy(broker, symbol="UNKNOWN_SYM")
 
     def test_not_connected_raises(self):
         broker = _make_broker()
@@ -450,7 +449,7 @@ class TestGetPositions:
         broker = _make_broker()
         _buy(broker)
         pos = broker.get_positions()[0]
-        assert pos.side == "LONG"
+        assert pos.side_str == "LONG"
 
     def test_position_unrealized_pnl_computed(self):
         broker = _make_broker()
@@ -742,7 +741,7 @@ class TestUpdatePosition:
         broker = _make_broker()
         broker.place_order("EURUSD", OrderSide.SELL, OrderType.MARKET, 1.0)
         pos = broker.positions["EURUSD"]
-        assert pos.side == "SHORT"
+        assert pos.side_str == "SHORT"
 
 
 # ---------------------------------------------------------------------------

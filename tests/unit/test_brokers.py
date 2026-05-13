@@ -247,5 +247,5 @@ class TestPaperTradingBroker:
         assert isinstance(price, int | float)
 
         # Test with unknown symbol - should return 0.0
-        price = paper_broker.get_market_price("EUR_USD")
+        price = paper_broker.get_market_price("UNKNOWN_SYMBOL_XYZ")
         assert price == 0.0
