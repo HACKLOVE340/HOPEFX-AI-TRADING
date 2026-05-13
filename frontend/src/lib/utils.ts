@@ -199,8 +199,8 @@ export function computeDrawdown(equity: number[]): number[] {
  */
 export function extractApiError(err: unknown, fallback = 'An error occurred'): string {
   if (err == null) return fallback;
-  const data = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-    ?.response?.data;
+  const response = (err as { response?: { status?: number; data?: { detail?: unknown; message?: unknown } } })?.response;
+  const data = response?.data;
   const raw = data?.detail ?? data?.message;
   if (typeof raw === 'string' && raw.length > 0) return raw;
   if (raw && typeof raw === 'object') {
@@ -209,6 +209,9 @@ export function extractApiError(err: unknown, fallback = 'An error occurred'): s
     if (typeof s === 'string' && s.length > 0) return s;
     return JSON.stringify(raw);
   }
+  // For 404 with no body, return the fallback rather than the raw Axios message
+  // ("Request failed with status code 404") which is not user-friendly.
+  if (response?.status === 404) return fallback;
   const msg = (err as { message?: unknown })?.message;
   if (typeof msg === 'string' && msg.length > 0) return msg;
   return fallback;
