@@ -463,7 +463,14 @@ async def _eventbus_tick_broadcaster() -> None:
 
     Reconnects automatically with exponential backoff so a Redis blip does
     not leave the feed permanently dead until the process is restarted.
+
+    If no tick arrives within _EVENTBUS_STALE_TIMEOUT_S seconds the broadcaster
+    raises RuntimeError so _price_broadcaster falls through to the yfinance
+    fallback — preventing a silent dead feed when the multi-source feed is not
+    publishing to Redis.
     """
+    _EVENTBUS_STALE_TIMEOUT_S = 30  # seconds without a tick before giving up
+
     _retry_delays = [5, 10, 20, 30, 60]
     attempt = 0
     while True:
@@ -473,7 +480,12 @@ async def _eventbus_tick_broadcaster() -> None:
             await bus.connect()
             logger.info("WS live: connected to EventBus — streaming real ticks.")
             attempt = 0  # successful connect resets backoff counter
+
+            # Wrap each message receive with a timeout so we detect a silent
+            # dead channel (connected but no publishers) within 30 s.
+            _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
             async for msg in bus.subscribe(CH_TICK):
+                _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
                 if _manager.connection_count == 0:
                     continue
                 # Normalise to frontend PriceTick schema:
@@ -859,6 +871,7 @@ async def _price_broadcaster_live_only() -> None:
 
 _YF_SYMBOL_MAP: dict[str, str] = {
     "XAU/USD": "GC=F",
+    "XAG/USD": "SI=F",
     "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X",
     "USD/JPY": "USDJPY=X",
@@ -951,26 +964,21 @@ async def _price_broadcaster() -> None:
     """
     Broadcast price ticks.
 
-    Priority:
-    1. EventBus (hopefx:tick) — real ticks from connected broker
-    2. Direct broker poll     — paper broker market_prices
-    3. yfinance real prices   — when no broker is connected (dev/API-only mode)
-    4. no_live_feed status    — when yfinance also fails
+    Runs three concurrent tasks:
+    1. EventBus (hopefx:tick) — forwards real ticks from the multi-source feed
+       when Redis pub/sub is active.  Silently idle when no publisher is present.
+    2. yfinance poller        — fetches real market prices every 15 s and
+       broadcasts ticks for all symbols.  Ensures the dashboard always has live
+       prices even when the EventBus feed is silent (no API keys configured).
+    3. Direct broker poll     — polls paper broker market_prices every second
+       and broadcasts ticks; sends no_live_feed per-symbol only when both the
+       broker AND yfinance have no price.
+
+    All three run concurrently so yfinance prices are always flowing regardless
+    of EventBus state.
     """
-    try:
-        # If EventBus connects successfully it takes over; on failure we fall
-        # through to the direct-poll path below.
-        await _eventbus_tick_broadcaster()
-    except Exception as exc:
-        logger.warning(
-            "_price_broadcaster: EventBus tick broadcaster failed, falling back to direct poll: %s",
-            exc,
-        )
-    # EventBus unavailable — poll broker directly (real prices only, no GBM)
-    # Run both the live-only broadcaster and the yfinance broadcaster concurrently.
-    # The live-only broadcaster sends no_live_feed per-symbol when broker prices
-    # are absent; the yfinance broadcaster fills those gaps with real market data.
     await asyncio.gather(
+        _eventbus_tick_broadcaster(),
         _price_broadcaster_live_only(),
         _yfinance_price_broadcaster(),
         return_exceptions=True,
