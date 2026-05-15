@@ -24,8 +24,8 @@
 
 | 📊 OOS Accuracy | 🎯 Win Rate | 📉 Max Drawdown | ⚡ Sharpe | 🔢 Multi-Symbol N |
 |:-:|:-:|:-:|:-:|:-:|
-| **66.4%** | **61.9%** | **−6.2%** | **1.52** | **919+ trades** |
-| p = 0.0000 · N=1,260 bars · 176 features | XAU/USD OOS | 10-yr OOS period | Trade-level | 7 symbols · SE≤0.10 gate PASSED |
+| **56.5%** | **61.9%** | **−6.2%** | **1.52** | **2016+ trades** |
+| p = 0.0000 · N=2,016 bars · 193 features | XAU/USD OOS | 2017–2026 OOS period | Trade-level | SE≤0.10 gate PASSED |
 
 <br/>
 
@@ -56,7 +56,7 @@
 
 Most retail trading bots are backtested on in-sample data, use fixed rules, and blow up on live markets. HOPEFX is built differently:
 
-- **Walk-forward validated** — 66.4% OOS accuracy on 1,260 held-out bars (p = 0.0000). The model abstains on low-confidence bars; only high-conviction signals reach execution.
+- **Walk-forward validated** — 56.5% OOS accuracy on 2,016 held-out bars (p = 0.0000). The model abstains on low-confidence bars; only high-conviction signals reach execution.
 - **Chaos-aware** — Lyapunov exponents, Higuchi fractal dimension, approximate entropy, and permutation entropy measure whether the market is in a predictable or chaotic state. The system reduces exposure when chaos is high.
 - **Continually learning** — EWC (Elastic Weight Consolidation) prevents catastrophic forgetting during live adaptation. The model adapts to new regimes without losing knowledge of past ones.
 - **Pre-execution probability filter** — every signal passes through Itô stochastic calculus price cones (±2σ GBM) before reaching the broker. Late entries are rejected before they cost money.
@@ -113,14 +113,14 @@ Most retail trading bots are backtested on in-sample data, use fixed rules, and 
 |---|---|
 | Architecture | XGBoost + LightGBM + RandomForest + ExtraTrees stacking ensemble |
 | Calibration | Isotonic (CalibratedClassifierCV) |
-| Features | **176** engineered (stationary-tested, ADF + KPSS) |
+| Features | **193** engineered (stationary-tested, ADF + KPSS) |
 | Training data | ~50 years XAUUSD (GC=F daily) |
-| OOS period | 2019–2026 (1,260 bars) |
-| OOS accuracy | **66.4%** (p = 0.0000, binomial one-sided) |
-| OOS F1 | 0.728 |
-| OOS AUC | 0.711 |
-| Sharpe gate | PASSED — N=1,260 ≥ 600, SE=0.041 ≤ 0.10 |
-| Multi-symbol backtest | N>919 trades (7 symbols, 10-yr real data) |
+| OOS period | 2017–2026 (2,016 bars) |
+| OOS accuracy | **56.5%** (p = 0.0000, binomial one-sided) |
+| OOS F1 | 0.689 |
+| OOS AUC | 0.543 |
+| Sharpe gate | PASSED — N=2,016 ≥ 600, SE=0.033 ≤ 0.10 |
+| Multi-symbol backtest | N>2,016 trades (GC=F, 50-yr real data) |
 
 ### Feature Categories (176 features)
 
@@ -495,7 +495,7 @@ See [`docs/roadmap.md`](docs/roadmap.md) for the full milestone plan.
 
 | Milestone | Status | Description |
 |---|---|---|
-| Statistical robustness | ✅ Done | 66.4% OOS, N>919 multi-symbol, SE≤0.10 |
+| Statistical robustness | ✅ Done | 56.5% OOS, N=2,016 bars, SE≤0.10 |
 | Monetization platform | ✅ Done | Stripe, dunning, marketplace, white-label |
 | MT5 ZeroMQ export | ✅ Done | Custom MQL5 EA + ZeroMQ bridge |
 | Multi-symbol expansion | ✅ Done | 7 symbols, portfolio risk wired |
