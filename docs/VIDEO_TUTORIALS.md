@@ -135,7 +135,7 @@ SUBSCRIBE for weekly trading automation tutorials.
 **Duration:** 15 min | **Level:** Beginner | **Plan:** Public (no subscription required)
 
 ### Thumbnail
-Dark background, gold candlestick chart, text: "HOPEFX AI Trading — 66.4% OOS Accuracy"
+Dark background, gold candlestick chart, text: "HOPEFX AI Trading — 56.5% OOS Accuracy"
 Accent colour: `#26a69a` (teal). Include the HOPEFX logo top-left.
 
 ### Chapter Markers
@@ -157,7 +157,7 @@ Accent colour: `#26a69a` (teal). Include the HOPEFX logo top-left.
 
 **[0:00–1:00] Hook**
 "Most trading bots are backtested on in-sample data and blow up on live markets.
-HOPEFX is different — it's walk-forward validated with 66.4% out-of-sample accuracy
+HOPEFX is different — it's walk-forward validated with 56.5% out-of-sample accuracy
 on 1,260 held-out bars. Let me show you what that means and how to use it."
 
 **[1:00–4:00] What is HOPEFX?**
@@ -622,7 +622,7 @@ Show how SMC signals feed into the Strategy Brain alongside ML probability.
 
 ### Thumbnail
 Neural network diagram overlaid on a gold price chart.
-Text: "66.4% OOS Accuracy — How It Works". Dark background, teal accent.
+Text: "56.5% OOS Accuracy — How It Works". Dark background, teal accent.
 
 ### Chapter Markers
 ```
@@ -644,7 +644,7 @@ Text: "66.4% OOS Accuracy — How It Works". Dark background, teal accent.
 - Traditional indicators are lagging
 - ML can combine 176 features simultaneously
 - Walk-forward validation prevents overfitting
-- The 66.4% OOS accuracy: what it means and what it doesn't
+- The 56.5% OOS accuracy: what it means and what it doesn't
 
 **[8:00–18:00] The production model**
 ```bash

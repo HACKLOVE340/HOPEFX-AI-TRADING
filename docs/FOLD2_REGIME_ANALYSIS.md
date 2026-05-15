@@ -177,7 +177,7 @@ the confidence gate applies a +0.10 threshold tightening (secondary protection).
 | Parabolic bars blocked | 0% | ~100% of tagged bars |
 | Normal-regime impact | None | None |
 | Walk-forward mean accuracy (excl. fold 2) | 57.6% | ≥57.6% (no change) |
-| OOS accuracy (current model) | 59.9% | ≥59.9% (parabolic bars excluded) |
+| OOS accuracy (current model) | 56.5% | ≥56.5% (parabolic bars excluded) |
 
 Blocking signals in the parabolic regime does not reduce profitability in
 normal regimes; it eliminates a regime where the model has **negative edge**

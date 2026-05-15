@@ -126,7 +126,7 @@ with before/after ratings and specific changes.
 - `bfill()` removed; only `ffill()` used; pre-history bars remain NaN
 - `_compute_fold_sharpe()` implemented; annualised Sharpe = mean/std × sqrt(252)
 - 176 stationary features: returns, volatility, trend, MA distances, COT proxies, macro cross-asset, z-scores
-- OOS accuracy: **66.4%** (p=0.0000, N=1,260 bars, 7-year held-out period)
+- OOS accuracy: **56.5%** (p=0.0000, N=2,016 bars, 8-year held-out period)
 - Macro features wired to live inference via `MacroStore.align_to_hourly()`
 - Fallback model retrained with 65 stationary features (no `close_lag_N`)
 - Fallback fires: CRITICAL log + Sentry fatal alert + Discord critical alert

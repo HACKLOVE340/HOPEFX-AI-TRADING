@@ -31,7 +31,7 @@ real broker credentials (OANDA/IBKR FIX) are configured.
 - `research/pipeline/` (models_ensemble, regime_models, online_learning,
   anomaly) migrated from `pickle.load` to `joblib.load` with pickle fallback.
 - Verification: `joblib.load('ml/saved_models/advanced_oos.pkl')` returns
-  `Pipeline | predict_proba: True | OOS accuracy: 66.35%`
+  `Pipeline | predict_proba: True | OOS accuracy: 56.5%`
 - Commit: `fix(ml): re-save all pkl models with joblib`
 
 #### P1.3 FIX adapter has no live broker credentials path ✅ FIXED
