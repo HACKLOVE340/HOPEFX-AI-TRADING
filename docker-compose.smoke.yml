@@ -1,0 +1,135 @@
+# HOPEFX-AI-TRADING
+# Copyright (c) 2025-2026
+# Licensed under GNU Affero General Public License v3.0 (AGPL-3.0)
+# All modifications must be shared under the same license.
+# No commercial use without explicit permission.
+#
+# docker-compose.smoke.yml
+# ========================
+# CI smoke-test override.  Used exclusively by .github/workflows/docker-smoke.yml.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.smoke.yml up --wait
+#
+# What this override does
+# -----------------------
+# 1. Disables services that cannot reach healthy in a CI environment:
+#      - nginx      — requires /etc/letsencrypt TLS certs (not present in CI)
+#      - trading    — requires a fully initialised app + ML models
+#      - celery-worker / celery-beat — require a running Celery broker queue
+#      - prometheus / alertmanager / grafana — monitoring stack, not under test
+#
+# 2. Overrides Redis to use plain TCP (no TLS) so the app can connect without
+#    a certificate chain.  IS_FORCE_TLS and REDIS_FORCE_TLS are set to false
+#    for all services.
+#
+# 3. Injects minimal safe values for all :?required vars so docker compose
+#    does not abort with "must be set in .env" before containers start.
+#
+# 4. Reduces start_period / retries on healthchecks so the job completes
+#    within the 15-minute CI timeout.
+#
+# Services verified healthy by this smoke test
+# ---------------------------------------------
+#   postgres   — pg_isready passes
+#   redis      — redis-cli ping returns PONG
+#   app        — GET /api/health/live returns HTTP 200 with body containing "alive"
+#
+# This is the minimum set needed to assert:
+#   - The Docker image builds successfully
+#   - Database migrations apply cleanly (alembic upgrade head runs in entrypoint)
+#   - The FastAPI app starts and its health endpoint responds
+#   - Redis pub/sub backbone is reachable from the app container
+
+services:
+
+  # ── Override Redis: plain TCP, no TLS, no password required ─────────────────
+  redis:
+    command: >
+      redis-server
+      --save ""
+      --loglevel warning
+      --maxmemory 128mb
+      --maxmemory-policy allkeys-lru
+    environment:
+      # No password in CI — simplifies connection strings across all services
+      REDIS_PASSWORD: ""
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ── Override app: disable TLS, inject minimal required env vars ──────────────
+  app:
+    environment:
+      # Disable Redis TLS so the app connects to the plain-TCP CI Redis
+      IS_FORCE_TLS: "false"
+      REDIS_FORCE_TLS: "false"
+      REDIS_URL: "redis://redis:6379/0"
+      # Minimal required secrets — safe placeholder values for CI only
+      POSTGRES_PASSWORD: "ci_smoke_password"
+      REDIS_PASSWORD: ""
+      SECURITY_JWT_SECRET: "ci-smoke-test-jwt-secret-minimum-32-chars!!"
+      CONFIG_ENCRYPTION_KEY: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      CONFIG_SALT: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      HOPEFX_KILL_SWITCH_TOKEN: "ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!"
+      BOOTSTRAP_SUPERADMIN_PASSWORD: "ci-smoke-superadmin-pw"
+      BOOTSTRAP_ADMIN_PASSWORD: "ci-smoke-admin-pw"
+      BOOTSTRAP_TRADER_PASSWORD: "ci-smoke-trader-pw"
+      # Paper trading — no live broker credentials needed
+      BROKER_TYPE: "paper"
+      PAPER_TRADING: "true"
+      APP_ENV: "production"
+      # Disable startup gate so health endpoint responds before full init
+      STARTUP_GATE: "false"
+      # Disable CORS strict check — no real domain in CI
+      ALLOWED_ORIGINS: "http://localhost,http://127.0.0.1"
+      APP_BASE_URL: "http://localhost"
+      HOPEFX_DOMAIN: "localhost"
+      # Disable optional integrations that require external credentials
+      BRAIN_SEMANTIC_ENCODER: "false"
+      CME_ENABLED: "false"
+      CPP_SHIM_ENABLED: "false"
+      # Suppress Sentry noise in CI
+      SENTRY_DSN: ""
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ── Override postgres: inject password matching app override above ───────────
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: "ci_smoke_password"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hopefx} -d ${POSTGRES_DB:-hopefx}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # ── Disable services that cannot reach healthy in CI ─────────────────────────
+  trading:
+    profiles: ["disabled"]
+
+  celery-worker:
+    profiles: ["disabled"]
+
+  celery-beat:
+    profiles: ["disabled"]
+
+  prometheus:
+    profiles: ["disabled"]
+
+  alertmanager:
+    profiles: ["disabled"]
+
+  grafana:
+    profiles: ["disabled"]
+
+  nginx:
+    profiles: ["disabled"]

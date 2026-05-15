@@ -1,0 +1,222 @@
+name: Docker Compose Smoke Test
+
+# Verify that the full stack (postgres + redis + app) reaches healthy state
+# from a clean build.  Catches:
+#   - Image build failures (missing deps, broken Dockerfile)
+#   - Migration failures (alembic upgrade head)
+#   - App startup failures (bad env var defaults, import errors)
+#   - Redis connectivity issues (TLS default misconfiguration)
+#   - Health endpoint regressions (/api/health/live)
+#
+# This job runs on every push to main/develop and on every PR targeting main.
+# It is intentionally separate from the unit/integration test job so a Docker
+# build failure does not block coverage reporting.
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - "frontend/**"
+      - "dashboard/**"
+      - "mobile/**"
+      - "mobile-app/**"
+      - "helm/**"
+      - "k8s/**"
+      - "docs/**"
+      - "*.md"
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - "frontend/**"
+      - "dashboard/**"
+      - "mobile/**"
+      - "mobile-app/**"
+      - "helm/**"
+      - "k8s/**"
+      - "docs/**"
+      - "*.md"
+
+concurrency:
+  group: docker-smoke-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Stack smoke test (postgres + redis + app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      # ── Build layer cache ──────────────────────────────────────────────────
+      # Cache the Docker build context so repeated pushes don't rebuild from
+      # scratch.  The cache key includes the Dockerfile and requirements files
+      # so it is invalidated when dependencies change.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+
+      - name: Cache Docker layers
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('Dockerfile', 'requirements.txt', 'requirements-ci.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      # ── Generate minimal .env from .env.example ────────────────────────────
+      # docker-compose.smoke.yml injects all required overrides via the
+      # environment: block, but docker compose still needs a .env file present
+      # (for the env_file: .env directive on the app service) so it does not
+      # abort with "file not found".  We generate a minimal .env that satisfies
+      # the :?required variable checks not covered by the smoke override.
+      - name: Generate minimal CI .env from .env.example
+        run: |
+          # Strip comments and blank lines; replace CHANGE_ME placeholders with
+          # safe CI values.  The smoke override (docker-compose.smoke.yml) will
+          # override the security-sensitive vars at container start time.
+          grep -v '^#' .env.example \
+            | grep -v '^$' \
+            | sed 's/=CHANGE_ME.*/=ci-placeholder/' \
+            | sed 's/=YOUR_DOMAIN/=localhost/' \
+            > .env
+
+          # Ensure the vars that docker-compose.yml marks as :?required are set
+          # (they will be overridden by docker-compose.smoke.yml at runtime).
+          cat >> .env <<'ENVEOF'
+          POSTGRES_PASSWORD=ci_smoke_password
+          REDIS_PASSWORD=
+          SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!
+          HOPEFX_DOMAIN=localhost
+          BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw
+          BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw
+          BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw
+          ENVEOF
+
+      # ── Start the minimal stack ────────────────────────────────────────────
+      # --wait: block until all non-disabled services report healthy, or until
+      # the timeout is reached (docker compose exits non-zero on timeout).
+      # --wait-timeout: 300 s gives the app container time to run alembic
+      # migrations and complete its startup sequence.
+      - name: Start stack (postgres + redis + app)
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.smoke.yml \
+            up \
+            --build \
+            --wait \
+            --wait-timeout 300 \
+            --remove-orphans
+        env:
+          DOCKER_BUILDKIT: "1"
+          COMPOSE_DOCKER_CLI_BUILD: "1"
+          # Pass build cache through BuildKit
+          BUILDX_CACHE_FROM: "type=local,src=/tmp/.buildx-cache"
+          BUILDX_CACHE_TO: "type=local,dest=/tmp/.buildx-cache-new,mode=max"
+
+      # ── Assert service health ──────────────────────────────────────────────
+      - name: Assert postgres is healthy
+        run: |
+          STATUS=$(docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.smoke.yml \
+            ps --format json postgres \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
+          echo "postgres health: $STATUS"
+          [ "$STATUS" = "healthy" ] || (echo "ERROR: postgres did not reach healthy state" && exit 1)
+
+      - name: Assert redis is healthy
+        run: |
+          STATUS=$(docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.smoke.yml \
+            ps --format json redis \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
+          echo "redis health: $STATUS"
+          [ "$STATUS" = "healthy" ] || (echo "ERROR: redis did not reach healthy state" && exit 1)
+
+      - name: Assert app is healthy
+        run: |
+          STATUS=$(docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.smoke.yml \
+            ps --format json app \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0].get('Health','') if isinstance(d,list) else d.get('Health',''))" 2>/dev/null || echo "unknown")
+          echo "app health: $STATUS"
+          [ "$STATUS" = "healthy" ] || (echo "ERROR: app did not reach healthy state" && exit 1)
+
+      # ── Functional health probe ────────────────────────────────────────────
+      # Hit the health endpoint directly from the runner to confirm the app
+      # is serving real HTTP responses (not just that the process is alive).
+      - name: Probe /api/health/live from runner
+        run: |
+          # Get the mapped port for the app service (8000 inside, mapped to host)
+          APP_PORT=$(docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.smoke.yml \
+            port app 8000 | cut -d: -f2)
+          echo "App mapped to host port: $APP_PORT"
+
+          # Retry up to 10 times with 3s delay in case the port mapping takes
+          # a moment to become reachable from the runner network.
+          for i in $(seq 1 10); do
+            RESPONSE=$(curl -sf "http://localhost:${APP_PORT}/api/health/live" 2>/dev/null) && break
+            echo "Attempt $i failed, retrying in 3s..."
+            sleep 3
+          done
+
+          echo "Health response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          try:
+              data = json.load(sys.stdin)
+          except Exception:
+              print('ERROR: response is not valid JSON')
+              sys.exit(1)
+          status = data.get('status', '')
+          if status not in ('alive', 'ok', 'healthy'):
+              print(f'ERROR: unexpected status field: {status!r}')
+              sys.exit(1)
+          print(f'Health check passed: status={status!r}')
+          "
+
+      # ── Collect logs on failure ────────────────────────────────────────────
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          echo "=== postgres logs ==="
+          docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs postgres --tail=50 || true
+          echo "=== redis logs ==="
+          docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs redis --tail=50 || true
+          echo "=== app logs ==="
+          docker compose -f docker-compose.yml -f docker-compose.smoke.yml logs app --tail=100 || true
+
+      # ── Tear down ─────────────────────────────────────────────────────────
+      - name: Tear down stack
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.smoke.yml \
+            down \
+            --volumes \
+            --remove-orphans
+
+      # ── Update build cache ─────────────────────────────────────────────────
+      # Move the new cache into place so the next run benefits from it.
+      # The rename prevents cache corruption if the build step was skipped.
+      - name: Update Docker layer cache
+        if: always()
+        run: |
+          if [ -d /tmp/.buildx-cache-new ]; then
+            rm -rf /tmp/.buildx-cache
+            mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+          fi
