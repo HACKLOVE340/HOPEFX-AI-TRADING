@@ -192,6 +192,9 @@ fakeredis>=2.20.0
 # pylint: W1300 (bad-format-string) catches %-format mismatches that ruff/mypy
 # do not detect.  Pinned to a minor range to avoid unexpected rule changes.
 pylint>=3.2.0,<4.0.0
+# ruff: fast linter used by test_bug_fixes_session3.py::test_ruff_clean_on_all_fixed_files
+# and other lint-gate tests.  Must be present in CI so `python3 -m ruff` works.
+ruff>=0.9.0
 # flake8-bugbear: detects likely bugs and design problems not caught by ruff.
 # B-series checks (B001–B950) cover mutable defaults, assert in non-test code,
 # bare except, loop variable capture, and other common pitfalls.
