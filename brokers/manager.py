@@ -421,29 +421,36 @@ class BrokerManager:
 
         Handles both sync and async broker implementations: if the underlying
         broker's get_positions() returns a coroutine (async broker), it is
-        resolved via the running event loop or a new one if none is active.
+        resolved in a dedicated thread so it never blocks the caller's event
+        loop.
         """
         import asyncio
         import inspect
+        import threading
 
         broker = self._require_connected_broker()
         try:
             result = broker.get_positions()
             if inspect.isawaitable(result):
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # We're inside an async context — cannot block.
-                        # Return empty list; callers in async context should
-                        # use the broker directly with await.
-                        import concurrent.futures
+                # Run the coroutine in a dedicated thread with its own event
+                # loop.  This avoids deadlocking the caller's running loop
+                # (run_coroutine_threadsafe would block waiting for the same
+                # loop that is already blocked waiting for us).
+                positions_holder: list = []
+                exc_holder: list = []
 
-                        future = asyncio.run_coroutine_threadsafe(result, loop)
-                        positions = future.result(timeout=10)
-                    else:
-                        positions = loop.run_until_complete(result)
-                except RuntimeError:
-                    positions = asyncio.run(result)
+                def _run():
+                    try:
+                        positions_holder.extend(asyncio.run(result))
+                    except Exception as _e:  # nosec B110
+                        exc_holder.append(_e)
+
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=10)
+                if exc_holder:
+                    raise exc_holder[0]
+                positions = positions_holder
             else:
                 positions = result
             self._reset_failures()
@@ -468,6 +475,7 @@ class BrokerManager:
         """Close all open positions. Returns {symbol: success}."""
         import asyncio
         import inspect
+        import threading
 
         self._check_kill_switch("close_all_positions")
         broker = self._require_connected_broker()
@@ -475,17 +483,21 @@ class BrokerManager:
         try:
             raw = broker.get_positions()
             if inspect.isawaitable(raw):
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        import concurrent.futures
+                positions_holder: list = []
+                exc_holder: list = []
 
-                        future = asyncio.run_coroutine_threadsafe(raw, loop)
-                        positions = future.result(timeout=10)
-                    else:
-                        positions = loop.run_until_complete(raw)
-                except RuntimeError:
-                    positions = asyncio.run(raw)
+                def _run():
+                    try:
+                        positions_holder.extend(asyncio.run(raw))
+                    except Exception as _e:  # nosec B110
+                        exc_holder.append(_e)
+
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=10)
+                if exc_holder:
+                    raise exc_holder[0]
+                positions = positions_holder
             else:
                 positions = raw
         except Exception as exc:
@@ -519,22 +531,27 @@ class BrokerManager:
         """
         import asyncio
         import inspect
+        import threading
 
         broker = self._require_connected_broker()
         try:
             result = broker.get_account_info()
             if inspect.isawaitable(result):
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        import concurrent.futures
+                result_holder: list = []
+                exc_holder: list = []
 
-                        future = asyncio.run_coroutine_threadsafe(result, loop)
-                        info = future.result(timeout=10)
-                    else:
-                        info = loop.run_until_complete(result)
-                except RuntimeError:
-                    info = asyncio.run(result)
+                def _run():
+                    try:
+                        result_holder.append(asyncio.run(result))
+                    except Exception as _e:  # nosec B110
+                        exc_holder.append(_e)
+
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=10)
+                if exc_holder:
+                    raise exc_holder[0]
+                info = result_holder[0]
             else:
                 info = result
             self._reset_failures()

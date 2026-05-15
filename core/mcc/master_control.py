@@ -512,25 +512,21 @@ class MasterControlCore:
             if broker_mgr is None:
                 return
 
-            # Resolve positions — broker.get_positions() may be async
-            broker = getattr(broker_mgr, "_active_broker", None) or getattr(
-                broker_mgr, "_brokers", {}
-            ).get(getattr(broker_mgr, "_active_name", ""), None)
-
-            if broker is not None:
-                raw = broker.get_positions()
-            else:
-                raw = broker_mgr.get_positions()
+            # Always call through broker_mgr first — it is the canonical interface.
+            # If the result is a coroutine (async broker), schedule it on the
+            # running event loop; otherwise close positions synchronously.
+            raw = broker_mgr.get_positions()
 
             if inspect.isawaitable(raw):
                 # Running inside an async context — schedule as a task so the
-                # event loop can drive the coroutine to completion.
+                # event loop can drive the coroutine to completion without
+                # blocking the caller.
                 try:
                     loop = asyncio.get_running_loop()
-                    loop.create_task(self._async_close_all(broker, raw))
+                    loop.create_task(self._async_close_all_via_mgr(broker_mgr, raw))
                     return
                 except RuntimeError:
-                    # No running loop — run synchronously
+                    # No running loop — resolve synchronously
                     positions = asyncio.run(raw)
             else:
                 positions = raw
@@ -540,8 +536,8 @@ class MasterControlCore:
         except Exception as _ks_exc:  # pylint: disable=broad-exception-caught
             logger.error("Kill switch: could not close positions via broker: %s", _ks_exc)
 
-    async def _async_close_all(self, broker, positions_coro) -> None:
-        """Async helper: await positions then close each one."""
+    async def _async_close_all_via_mgr(self, broker_mgr, positions_coro) -> None:
+        """Async helper: await positions coroutine then close each via broker_mgr."""
         import inspect
 
         try:
@@ -551,14 +547,14 @@ class MasterControlCore:
                 if not symbol:
                     continue
                 try:
-                    result = broker.close_position(symbol)
+                    result = broker_mgr.close_position(symbol)
                     if inspect.isawaitable(result):
                         await result
                     logger.info("Kill switch: closed position for %s", symbol)
                 except Exception as _exc:  # pylint: disable=broad-exception-caught
                     logger.error("Kill switch: failed to close %s: %s", symbol, _exc)
         except Exception as _exc:  # pylint: disable=broad-exception-caught
-            logger.error("Kill switch: _async_close_all failed: %s", _exc)
+            logger.error("Kill switch: _async_close_all_via_mgr failed: %s", _exc)
 
     def _sync_close_positions(self, broker_mgr, positions) -> None:
         """Sync helper: close each position via broker_mgr."""

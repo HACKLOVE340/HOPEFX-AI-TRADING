@@ -272,13 +272,15 @@ class TestFIXRouter:
             "order_id": "test_id",
             "timestamp": datetime.now(UTC).isoformat(),
         }
-        # Patch the fallback's send method as an AsyncMock
-        with patch.object(router._fallback, "send", new=AsyncMock(return_value=fill_response)) as mock_send:
-            with patch("execution.fix_router.bus") as mock_bus:
-                mock_bus.publish = AsyncMock()
-                mock_bus.publish_order = AsyncMock()
-                await router._route({"symbol": "XAUUSD", "direction": "BUY", "units": 1000})
-            mock_send.assert_called_once()
+        # Patch _PAPER_MODE=False so the FIX/fallback path is exercised regardless
+        # of whether a prior test set PAPER_TRADING=true at module level.
+        with patch("execution.fix_router._PAPER_MODE", False):
+            with patch.object(router._fallback, "send", new=AsyncMock(return_value=fill_response)) as mock_send:
+                with patch("execution.fix_router.bus") as mock_bus:
+                    mock_bus.publish = AsyncMock()
+                    mock_bus.publish_order = AsyncMock()
+                    await router._route({"symbol": "XAUUSD", "direction": "BUY", "units": 1000})
+                mock_send.assert_called_once()
 
     def test_counters_initial_zero(self):
         from execution.fix_router import FIXRouter

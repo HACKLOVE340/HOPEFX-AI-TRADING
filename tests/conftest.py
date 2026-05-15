@@ -78,6 +78,8 @@ def _restore_critical_env_vars():
         "JWT_SECRET",
         "APP_ENV",
         "BROKER",
+        "PAPER_TRADING",
+        "BROKER_TYPE",
     )
     snapshot = {k: os.environ.get(k) for k in _KEYS}
     # Ensure canonical JWT secret is always set going into each test

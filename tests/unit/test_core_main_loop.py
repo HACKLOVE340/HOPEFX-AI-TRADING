@@ -55,6 +55,9 @@ def _patch_all_subsystems():
 def test_validate_startup_env_exits_when_oanda_missing(monkeypatch):
     monkeypatch.delenv("OANDA_API_KEY", raising=False)
     monkeypatch.delenv("OANDA_ACCOUNT_ID", raising=False)
+    # Ensure paper mode is off so OANDA credentials are required
+    monkeypatch.delenv("PAPER_TRADING", raising=False)
+    monkeypatch.setenv("BROKER_TYPE", "oanda")
     with pytest.raises(SystemExit):
         _validate_startup_env()
 
@@ -373,6 +376,8 @@ def test_verify_model_registry_active_version_integrity_ok(monkeypatch):
 
 def test_verify_model_registry_integrity_fail_exits_in_production(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
+    # Ensure paper mode is off — PAPER_TRADING=true suppresses the fatal exit
+    monkeypatch.delenv("PAPER_TRADING", raising=False)
 
     mock_reg = MagicMock()
     mock_reg._load.return_value = {"versions": {"v1": {}}, "active_version": "v1"}
