@@ -78,7 +78,7 @@ DEAD_MARKERS: list[re.Pattern] = [
     re.compile(r"TODO:\s*Either\s+wire\b", re.IGNORECASE),
 ]
 
-# Files explicitly exempted from this check.
+# Files explicitly exempted from the dead-marker check.
 # Each entry must include a justification and a target resolution date.
 # Format: {"filename": "reason — resolve by YYYY-MM-DD"}
 DEAD_FILE_EXEMPTIONS: dict[str, str] = {
@@ -87,20 +87,98 @@ DEAD_FILE_EXEMPTIONS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
+# Root file count gate
+#
+# Root-level .py files are a code smell in a mature project.  Production code
+# belongs in packages (api/, core/, execution/, etc.), not the root.
+#
+# ROOT_FILE_COUNT_CEILING — maximum allowed root .py file count.
+# Set to the count at the time this gate was introduced.  Increment only with
+# a justification comment when a file genuinely belongs at the root.
+# ---------------------------------------------------------------------------
+ROOT_FILE_COUNT_CEILING: int = 30  # established 2026-05-15; 30 files at gate introduction
+
+# Exhaustive list of every .py file that is permitted to exist in the root.
+# Adding a new root-level file requires adding it here with a justification.
+# This is the canonical record of "intentional root files" for the project.
+ROOT_KNOWN_FILES: frozenset[str] = frozenset(
+    {
+        # ── Package / project infrastructure ──────────────────────────────────
+        "__init__.py",          # makes the root a namespace package
+        "setup.py",             # legacy setuptools entry point (pyproject.toml preferred)
+        "conftest.py",          # pytest root conftest — must be at root for test discovery
+        "validation.py",        # pydantic/marshmallow schema validation helpers (shared)
+
+        # ── Application entry points ───────────────────────────────────────────
+        "app.py",               # FastAPI application factory — imported by uvicorn
+        "run.py",               # CLI entry point: python run.py
+        "cli.py",               # Click CLI: hopefx <command>
+        "quickstart.py",        # Interactive quickstart wizard for new operators
+        "celery_app.py",        # Celery application instance — imported by workers
+
+        # ── Trading engine entry points ────────────────────────────────────────
+        "hopefx_engine.py",     # Legacy engine entry point (superseded by core/main_loop.py)
+        "trader_full.py",       # Full trader bootstrap (used by docker CMD)
+        "kill_switch.py",       # Kill switch singleton — imported by app.py and trading engine
+        "forward_test.py",      # Walk-forward test runner (run manually, not in CI)
+        "real_data_backtest.py",# Real-data backtest runner (run manually)
+
+        # ── ML / model management ─────────────────────────────────────────────
+        "ml_model_trainer.py",  # Model training entry point (run by retrain CI job)
+        "enhanced_ml_predictor.py",  # Enhanced predictor (used by ml_model_trainer)
+        "enhanced_backtest_engine.py",  # Enhanced backtest (used by real_data_backtest)
+
+        # ── Infrastructure / deployment ────────────────────────────────────────
+        "deploy.py",            # Deployment automation script
+        "database_init.py",     # One-time DB initialisation (run by entrypoint.sh)
+        "update_artifacts.py",  # CI artifact update script
+
+        # ── Monitoring / health ────────────────────────────────────────────────
+        "health_check_service.py",   # Health check service (imported by app.py)
+        "heartbeat_monitor.py",      # Heartbeat monitor (run as sidecar)
+        "prometheus_monitoring.py",  # Prometheus metrics exporter
+
+        # ── Integrations ──────────────────────────────────────────────────────
+        "connect_to_life.py",        # Live data connection bootstrap
+        "news_filter_integration.py",# News filter integration (wired into data pipeline)
+        "rate_limiting_configuration.py",  # Rate limiting config (imported by app.py)
+        "security_service.py",       # Security service (imported by app.py)
+
+        # ── Documentation / tooling ───────────────────────────────────────────
+        "api_documentation_generator.py",  # Generates OpenAPI docs
+        "comprehensive_test_framework.py", # Test framework utilities
+        "deployment_guide.py",             # Interactive deployment guide
+    }
+)
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
+def _root_python_files() -> list[Path]:
+    """Return all non-dotfile *.py files directly in REPO_ROOT (non-recursive).
+
+    Dotfiles (e.g. .greptile.py) are excluded — they are tooling configs,
+    not production code, and should not be subject to the dead-file or
+    root-count gates.
+    """
+    return sorted(
+        f for f in REPO_ROOT.glob("*.py")
+        if not f.name.startswith(".")
+    )
+
+
 def _scan_root_python_files() -> list[tuple[Path, list[tuple[str, int]]]]:
     """
-    Scan all *.py files directly in REPO_ROOT (non-recursive).
+    Scan all non-dotfile *.py files directly in REPO_ROOT (non-recursive).
 
     Returns a list of (path, [(marker_text, line_number), ...]) for every
     file that contains at least one dead marker.
     """
     results: list[tuple[Path, list[tuple[str, int]]]] = []
 
-    for py_file in sorted(REPO_ROOT.glob("*.py")):
+    for py_file in _root_python_files():
         if py_file.name in DEAD_FILE_EXEMPTIONS:
             continue
 
@@ -173,6 +251,85 @@ def test_exemptions_are_still_present() -> None:
             f"\n{len(stale)} DEAD_FILE_EXEMPTIONS entry/entries refer to files that "
             "no longer exist.\nRemove them from DEAD_FILE_EXEMPTIONS:\n"
             + "\n".join(f"  {f}" for f in stale)
+        )
+
+
+def test_root_python_file_count_has_not_grown() -> None:
+    """
+    The number of Python files in the project root must not exceed the
+    established baseline.
+
+    Root-level Python files are a code smell in a mature project — production
+    code belongs in packages (api/, core/, execution/, etc.), not the root.
+    Every new root-level .py file must be a deliberate decision, not an
+    accidental drop.
+
+    Dotfiles (e.g. .greptile.py) are excluded — they are tooling configs.
+
+    When this test fails it means a new .py file was added to the root.
+    You must do ONE of:
+
+      A. Move it into the appropriate package directory.
+      B. If it genuinely belongs at the root (e.g. conftest.py, setup.py),
+         increment ROOT_FILE_COUNT_CEILING below with a justification comment.
+
+    Baseline
+    --------
+    The ceiling is set to the count at the time this gate was introduced
+    (30 files).  It is a ceiling, not an exact count — deletions are fine.
+    """
+    py_files = _root_python_files()
+    count = len(py_files)
+
+    print(
+        f"\n[root-file-count] current={count}  ceiling={ROOT_FILE_COUNT_CEILING}\n"
+        "Root .py files: " + ", ".join(f.name for f in py_files)
+    )
+
+    assert count <= ROOT_FILE_COUNT_CEILING, (
+        f"Root Python file count ({count}) exceeds ceiling ({ROOT_FILE_COUNT_CEILING}).\n"
+        f"{count - ROOT_FILE_COUNT_CEILING} new file(s) were added to the project root.\n"
+        "Move them into the appropriate package directory, or if they genuinely\n"
+        "belong at the root, increment ROOT_FILE_COUNT_CEILING in\n"
+        "tests/test_dead_file_detection.py with a justification comment.\n\n"
+        "Current root .py files:\n"
+        + "\n".join(f"  {f.name}" for f in py_files)
+    )
+
+
+def test_root_python_files_are_known() -> None:
+    """
+    Every Python file in the project root must be in ROOT_KNOWN_FILES.
+
+    This is a stricter companion to test_root_python_file_count_has_not_grown:
+    it catches file renames and new additions by name, not just count.
+
+    Dotfiles (e.g. .greptile.py) are excluded — they are tooling configs.
+
+    When this test fails it means an unknown file appeared in the root.
+    Either add it to ROOT_KNOWN_FILES with a justification, or move it into
+    a package directory.
+    """
+    py_files = {f.name for f in _root_python_files()}
+    unknown = py_files - ROOT_KNOWN_FILES
+
+    if unknown:
+        pytest.fail(
+            f"\n{len(unknown)} unknown Python file(s) found in project root.\n"
+            "Either move them into a package directory or add them to\n"
+            "ROOT_KNOWN_FILES in tests/test_dead_file_detection.py with a\n"
+            "justification comment explaining why they belong at the root.\n\n"
+            "Unknown files:\n"
+            + "\n".join(f"  {f}" for f in sorted(unknown))
+        )
+
+    # Also report files in ROOT_KNOWN_FILES that no longer exist (stale entries)
+    stale = ROOT_KNOWN_FILES - py_files
+    if stale:
+        print(
+            f"\n[INFO] {len(stale)} ROOT_KNOWN_FILES entry/entries no longer exist "
+            "(file was deleted or moved — remove from ROOT_KNOWN_FILES):\n"
+            + "\n".join(f"  {f}" for f in sorted(stale))
         )
 
 
