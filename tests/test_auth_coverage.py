@@ -64,12 +64,14 @@ os.environ.setdefault("CSRF_PROTECTION", "false")
 import pytest
 
 # ---------------------------------------------------------------------------
-# Lazy app import — skip the whole module if the app cannot be imported in
-# this environment (e.g. missing optional C-extensions in a minimal CI image).
+# Lazy auth-dep import — skip the whole module if api.auth cannot be imported
+# (e.g. missing optional C-extensions in a minimal CI image).
+# The FastAPI app itself is injected via the session-scoped ``app`` fixture
+# defined in tests/conftest.py, which also handles the skip-on-import-error
+# logic so each test gets a clean skip rather than an import-time failure.
 # ---------------------------------------------------------------------------
 try:
-    from app import app as _app
-    from api.auth import get_current_user, require_role
+    from api.auth import get_current_user, require_kyc, require_role
 
     _import_error: Exception | None = None
 except Exception as _exc:  # noqa: BLE001
@@ -77,9 +79,31 @@ except Exception as _exc:  # noqa: BLE001
 
 if _import_error is not None:
     pytest.skip(
-        f"test_auth_coverage: app import failed — {_import_error}",
+        f"test_auth_coverage: api.auth import failed — {_import_error}",
         allow_module_level=True,
     )
+
+# ---------------------------------------------------------------------------
+# Module-level app reference — populated lazily from the session fixture.
+# Tests that use the fixture directly receive the app via their parameter.
+# This reference is used by helper functions (_collect_auth_deps, etc.) that
+# are called from both fixture-based and standalone tests.
+# ---------------------------------------------------------------------------
+_app = None  # set by the autouse _bind_app fixture below
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _bind_app(app):  # noqa: F811  — 'app' is the conftest session fixture
+    """Bind the session-scoped app fixture to the module-level _app reference.
+
+    This lets helper functions reference _app without receiving it as a
+    parameter, while still using the canonical pytest fixture injection path
+    that the spec requires.
+    """
+    global _app
+    _app = app
+    yield
+    _app = None
 
 # ---------------------------------------------------------------------------
 # WHITELIST — mutating routes that are intentionally public.
@@ -255,10 +279,24 @@ def _is_auth_dep(dep) -> bool:
     """
     Return True if *dep* is any recognised authentication/authorisation
     dependency used across the HOPEFX codebase.
+
+    Recognised dependencies
+    -----------------------
+    - ``get_current_user``   — any authenticated user (user role or higher)
+    - ``require_role(...)``  — minimum-role gate (returns a closure)
+    - ``require_kyc``        — KYC-verified user gate (wraps get_current_user)
+
+    The function also recognises:
+    - Closures returned by ``require_role`` and ``require_plan`` factories
+    - Named auth helpers in known auth modules (api.auth, auth.router, etc.)
+    - The kill-switch admin gate
     """
+    # Identity checks — fastest path, covers the common case
     if dep is get_current_user:
         return True
     if dep is require_role:
+        return True
+    if dep is require_kyc:
         return True
 
     qualname: str = getattr(dep, "__qualname__", "") or ""
@@ -270,6 +308,9 @@ def _is_auth_dep(dep) -> bool:
         "require_role.<locals>._check",
         "require_plan.<locals>._dependency",
         "create_kill_switch_router.<locals>._require_admin",
+        # require_kyc is a plain function, not a factory, but include its
+        # qualname so it is recognised even when imported under an alias
+        "require_kyc",
     }
     if qualname in _AUTH_QUALNAMES:
         return True
@@ -288,7 +329,7 @@ def _is_auth_dep(dep) -> bool:
     if module in _AUTH_MODULES and any(kw in name.lower() for kw in _AUTH_KEYWORDS):
         return True
 
-    if "require_role" in qualname or "require_plan" in qualname:
+    if "require_role" in qualname or "require_plan" in qualname or "require_kyc" in qualname:
         return True
 
     return False
@@ -328,10 +369,15 @@ def _ws_endpoint_has_auth(route) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def test_all_mutating_routes_require_auth() -> None:
+def test_all_mutating_routes_require_auth(app) -> None:  # noqa: F811
     """
     Every POST/PUT/PATCH/DELETE route must have an auth dependency unless
     explicitly whitelisted.
+
+    The ``app`` parameter is the session-scoped FastAPI fixture from
+    tests/conftest.py — this is the canonical fixture pattern required by
+    the spec so the gate is wired through pytest's dependency injection
+    rather than a module-level import.
 
     Failure means a mutating endpoint was registered without authentication.
     Fix: add ``Depends(get_current_user)`` or ``Depends(require_role(...))``
@@ -342,7 +388,7 @@ def test_all_mutating_routes_require_auth() -> None:
     MUTATING_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
     violations: list[str] = []
 
-    for route in _app.routes:
+    for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
         methods = route.methods or set()
@@ -372,7 +418,7 @@ def test_all_mutating_routes_require_auth() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_privileged_get_routes_require_auth() -> None:
+def test_privileged_get_routes_require_auth(app) -> None:  # noqa: F811
     """
     GET routes in PRIVILEGED_GET_PATHS must carry an auth dependency.
 
@@ -388,7 +434,7 @@ def test_privileged_get_routes_require_auth() -> None:
 
     registered = {
         route.path: route
-        for route in _app.routes
+        for route in app.routes
         if isinstance(route, APIRoute) and "GET" in (route.methods or set())
     }
 
@@ -427,7 +473,7 @@ def test_privileged_get_routes_require_auth() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_websocket_endpoints_implement_auth() -> None:
+def test_websocket_endpoints_implement_auth(app) -> None:  # noqa: F811
     """
     Every WebSocket endpoint must implement in-band JWT authentication unless
     it is explicitly listed in WS_PUBLIC_WHITELIST.
@@ -440,7 +486,7 @@ def test_websocket_endpoints_implement_auth() -> None:
 
     violations: list[str] = []
 
-    for route in _app.routes:
+    for route in app.routes:
         if not isinstance(route, APIWebSocketRoute):
             continue
         if route.path in WS_PUBLIC_WHITELIST:
@@ -500,11 +546,11 @@ def test_ws_auth_required_false_blocked_in_production() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_whitelist_entries_are_registered() -> None:
+def test_whitelist_entries_are_registered(app) -> None:  # noqa: F811
     """Every path in WHITELIST must correspond to at least one registered route."""
     from fastapi.routing import APIRoute
 
-    registered_paths = {route.path for route in _app.routes if isinstance(route, APIRoute)}
+    registered_paths = {route.path for route in app.routes if isinstance(route, APIRoute)}
     stale = [p for p in WHITELIST if p not in registered_paths]
 
     if stale:
@@ -515,12 +561,12 @@ def test_whitelist_entries_are_registered() -> None:
         )
 
 
-def test_auth_endpoints_are_whitelisted() -> None:
+def test_auth_endpoints_are_whitelisted(app) -> None:  # noqa: F811
     """Core auth endpoints that must be public are in both WHITELIST and the app."""
     from fastapi.routing import APIRoute
 
     MUST_BE_PUBLIC = {"/api/auth/login", "/api/auth/register"}
-    registered_paths = {route.path for route in _app.routes if isinstance(route, APIRoute)}
+    registered_paths = {route.path for route in app.routes if isinstance(route, APIRoute)}
 
     for path in MUST_BE_PUBLIC:
         assert path in WHITELIST, f"{path} must be in WHITELIST — it is intentionally unauthenticated"
@@ -535,7 +581,7 @@ _ROUTE_COUNT_BASELINE = 2200    # minimum total APIRoute count
 _MUTATING_COUNT_BASELINE = 900  # minimum POST/PUT/PATCH/DELETE count
 
 
-def test_route_count_has_not_regressed() -> None:
+def test_route_count_has_not_regressed(app) -> None:  # noqa: F811
     """
     Total route count must not drop below the baseline.
 
@@ -545,9 +591,9 @@ def test_route_count_has_not_regressed() -> None:
     """
     from fastapi.routing import APIRoute
 
-    total = sum(1 for r in _app.routes if isinstance(r, APIRoute))
+    total = sum(1 for r in app.routes if isinstance(r, APIRoute))
     mutating = sum(
-        1 for r in _app.routes
+        1 for r in app.routes
         if isinstance(r, APIRoute) and (r.methods or set()) & {"POST", "PUT", "PATCH", "DELETE"}
     )
 
@@ -573,12 +619,12 @@ def test_route_count_has_not_regressed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_csrf_token_endpoint_is_registered() -> None:
+def test_csrf_token_endpoint_is_registered(app) -> None:  # noqa: F811
     """The CSRF token issuance endpoint must be registered in the app."""
     from fastapi.routing import APIRoute
 
     csrf_paths = {"/api/auth/csrf-token", "/api/csrf-token", "/csrf-token"}
-    registered = {r.path for r in _app.routes if isinstance(r, APIRoute)}
+    registered = {r.path for r in app.routes if isinstance(r, APIRoute)}
     found = csrf_paths & registered
 
     assert found, (
@@ -589,13 +635,13 @@ def test_csrf_token_endpoint_is_registered() -> None:
     )
 
 
-def test_health_endpoints_are_public() -> None:
+def test_health_endpoints_are_public(app) -> None:  # noqa: F811
     """Health probe endpoints must NOT require authentication."""
     from fastapi.routing import APIRoute
 
     HEALTH_PATHS = {"/api/health/live", "/api/health/ready"}
 
-    for route in _app.routes:
+    for route in app.routes:
         if not isinstance(route, APIRoute):
             continue
         if route.path not in HEALTH_PATHS:
