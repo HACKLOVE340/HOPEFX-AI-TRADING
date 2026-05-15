@@ -130,6 +130,10 @@ services:
 
   grafana:
     profiles: ["disabled"]
+    environment:
+      # Placeholder satisfies the :?required check in the base file.
+      # Grafana is disabled in CI — this value is never used.
+      GRAFANA_ADMIN_PASSWORD: "ci-smoke-grafana-placeholder"
 
   nginx:
     profiles: ["disabled"]
