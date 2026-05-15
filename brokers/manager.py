@@ -417,10 +417,35 @@ class BrokerManager:
     # ------------------------------------------------------------------
 
     def get_positions(self) -> list[Position]:
-        """Return all open positions from the active broker."""
+        """Return all open positions from the active broker.
+
+        Handles both sync and async broker implementations: if the underlying
+        broker's get_positions() returns a coroutine (async broker), it is
+        resolved via the running event loop or a new one if none is active.
+        """
+        import asyncio
+        import inspect
+
         broker = self._require_connected_broker()
         try:
-            positions = broker.get_positions()
+            result = broker.get_positions()
+            if inspect.isawaitable(result):
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # We're inside an async context — cannot block.
+                        # Return empty list; callers in async context should
+                        # use the broker directly with await.
+                        import concurrent.futures
+
+                        future = asyncio.run_coroutine_threadsafe(result, loop)
+                        positions = future.result(timeout=10)
+                    else:
+                        positions = loop.run_until_complete(result)
+                except RuntimeError:
+                    positions = asyncio.run(result)
+            else:
+                positions = result
             self._reset_failures()
             return positions
         except Exception as exc:
@@ -441,11 +466,28 @@ class BrokerManager:
 
     def close_all_positions(self) -> dict[str, bool]:
         """Close all open positions. Returns {symbol: success}."""
+        import asyncio
+        import inspect
+
         self._check_kill_switch("close_all_positions")
         broker = self._require_connected_broker()
         results: dict[str, bool] = {}
         try:
-            positions = broker.get_positions()
+            raw = broker.get_positions()
+            if inspect.isawaitable(raw):
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        import concurrent.futures
+
+                        future = asyncio.run_coroutine_threadsafe(raw, loop)
+                        positions = future.result(timeout=10)
+                    else:
+                        positions = loop.run_until_complete(raw)
+                except RuntimeError:
+                    positions = asyncio.run(raw)
+            else:
+                positions = raw
         except Exception as exc:
             logger.error("BrokerManager.close_all_positions: get_positions failed: %s", exc)
             self._capture_sentry(exc)
@@ -471,10 +513,30 @@ class BrokerManager:
     # ------------------------------------------------------------------
 
     def get_account_info(self) -> AccountInfo:
-        """Return account info from the active broker."""
+        """Return account info from the active broker.
+
+        Handles both sync and async broker implementations.
+        """
+        import asyncio
+        import inspect
+
         broker = self._require_connected_broker()
         try:
-            info = broker.get_account_info()
+            result = broker.get_account_info()
+            if inspect.isawaitable(result):
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        import concurrent.futures
+
+                        future = asyncio.run_coroutine_threadsafe(result, loop)
+                        info = future.result(timeout=10)
+                    else:
+                        info = loop.run_until_complete(result)
+                except RuntimeError:
+                    info = asyncio.run(result)
+            else:
+                info = result
             self._reset_failures()
             return info
         except Exception as exc:

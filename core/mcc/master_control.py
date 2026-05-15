@@ -494,33 +494,86 @@ class MasterControlCore:
     def trigger_kill_switch(self, reason: str):
         """Emergency stop all trading — deactivates all strategies and closes
         all open broker positions."""
+        import asyncio
+        import inspect
+
         logger.critical("KILL SWITCH TRIGGERED: %s", reason)
         self.kill_switch_triggered = True
 
         for name in list(self.active_strategies):
             self.deactivate_strategy(name, "kill switch")
 
-        # Close all open positions via the broker layer
+        # Close all open positions via the broker layer.
+        # Supports both sync and async broker implementations.
         try:
             from core.startup_factories import get_broker_manager  # lazy import
 
             broker_mgr = get_broker_manager()
-            if broker_mgr is not None:
-                positions = broker_mgr.get_positions()
-                for pos in positions:
-                    try:
-                        symbol = getattr(pos, "symbol", None)
-                        if symbol:
-                            broker_mgr.close_position(symbol)
-                            logger.info("Kill switch: closed position for %s", symbol)
-                    except Exception as _pos_exc:  # pylint: disable=broad-exception-caught
-                        logger.error(
-                            "Kill switch: failed to close position for %s: %s",
-                            getattr(pos, "symbol", "?"),
-                            _pos_exc,
-                        )
+            if broker_mgr is None:
+                return
+
+            # Resolve positions — broker.get_positions() may be async
+            broker = getattr(broker_mgr, "_active_broker", None) or getattr(
+                broker_mgr, "_brokers", {}
+            ).get(getattr(broker_mgr, "_active_name", ""), None)
+
+            if broker is not None:
+                raw = broker.get_positions()
+            else:
+                raw = broker_mgr.get_positions()
+
+            if inspect.isawaitable(raw):
+                # Running inside an async context — schedule as a task so the
+                # event loop can drive the coroutine to completion.
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._async_close_all(broker, raw))
+                    return
+                except RuntimeError:
+                    # No running loop — run synchronously
+                    positions = asyncio.run(raw)
+            else:
+                positions = raw
+
+            self._sync_close_positions(broker_mgr, positions)
+
         except Exception as _ks_exc:  # pylint: disable=broad-exception-caught
             logger.error("Kill switch: could not close positions via broker: %s", _ks_exc)
+
+    async def _async_close_all(self, broker, positions_coro) -> None:
+        """Async helper: await positions then close each one."""
+        import inspect
+
+        try:
+            positions = await positions_coro
+            for pos in positions:
+                symbol = getattr(pos, "symbol", None)
+                if not symbol:
+                    continue
+                try:
+                    result = broker.close_position(symbol)
+                    if inspect.isawaitable(result):
+                        await result
+                    logger.info("Kill switch: closed position for %s", symbol)
+                except Exception as _exc:  # pylint: disable=broad-exception-caught
+                    logger.error("Kill switch: failed to close %s: %s", symbol, _exc)
+        except Exception as _exc:  # pylint: disable=broad-exception-caught
+            logger.error("Kill switch: _async_close_all failed: %s", _exc)
+
+    def _sync_close_positions(self, broker_mgr, positions) -> None:
+        """Sync helper: close each position via broker_mgr."""
+        for pos in positions:
+            try:
+                symbol = getattr(pos, "symbol", None)
+                if symbol:
+                    broker_mgr.close_position(symbol)
+                    logger.info("Kill switch: closed position for %s", symbol)
+            except Exception as _pos_exc:  # pylint: disable=broad-exception-caught
+                logger.error(
+                    "Kill switch: failed to close position for %s: %s",
+                    getattr(pos, "symbol", "?"),
+                    _pos_exc,
+                )
 
     def get_heatmap_data(self) -> dict:
         """

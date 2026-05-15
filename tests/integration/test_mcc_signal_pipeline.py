@@ -124,7 +124,7 @@ class TestMCCBrokerWiring:
             mcc._execute_signal({"action": "BUY", "confidence": 0.80, "strength": 0.75})
 
         # Paper broker should now have one open order / position
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) >= 1, "Expected at least one open position after BUY signal"
         await broker.disconnect()
 
@@ -144,7 +144,7 @@ class TestMCCBrokerWiring:
         with _patch_get_broker_manager(mgr):
             mcc._execute_signal({"action": "SELL", "confidence": 0.75, "strength": 0.70})
 
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) >= 1
         # Position side must be SELL / SHORT
         sides = {getattr(p, "side", None) for p in positions}
@@ -169,7 +169,7 @@ class TestMCCBrokerWiring:
         with _patch_get_broker_manager(mgr):
             mcc._execute_signal({"action": "HOLD", "confidence": 0.5, "strength": 0.0})
 
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) == 0, "HOLD signal must not open any position"
         await broker.disconnect()
 
@@ -205,14 +205,18 @@ class TestMCCKillSwitch:
             order_type=OrderType.MARKET,
             quantity=1.0,
         )
-        assert len(broker.get_positions()) == 1
+        assert len(await broker.get_positions()) == 1
 
         mcc = _make_mcc()
         with _patch_get_broker_manager(mgr):
             mcc.trigger_kill_switch("test_kill")
+            # Yield to the event loop so the async close task can complete
+            import asyncio
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
 
         assert mcc.kill_switch_triggered is True
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) == 0, "Kill switch must close all positions"
         await broker.disconnect()
 
@@ -238,7 +242,7 @@ class TestMCCKillSwitch:
                 StrategySignal(action="BUY", strength=1.0, confidence=1.0),
             )
 
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) == 0, "Kill switch must block subsequent signal execution"
         await broker.disconnect()
 
