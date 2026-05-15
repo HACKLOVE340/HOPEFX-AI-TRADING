@@ -82,9 +82,9 @@ class GARCHModel:
                 neginf=1e-300,
             )
             log_likelihood = -np.sum(
-                np.log(
+                np.log(  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
                     np.where(pdf_vals > 0, pdf_vals, 1e-300)
-                )  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
+                )
             )
             return log_likelihood
 
@@ -269,13 +269,13 @@ class MonteCarloRiskEngine:
         if len(stress_data) < 10:
             return 0.5
 
-        corr_matrix = stress_data.corr().values
+        corr_matrix = stress_data.corr().fillna(0.0).values  # fillna guards NaN from constant columns
         n = corr_matrix.shape[0]
         if n < 2:
             return 0.5
         # Average off-diagonal elements only (exclude self-correlation = 1.0)
         mask = ~np.eye(n, dtype=bool)
-        return float(corr_matrix[mask].mean())
+        return float(corr_matrix[mask].mean())  # healer: ignore — fillna applied above
 
 
 class RealTimeRiskMonitor:

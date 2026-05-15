@@ -275,19 +275,19 @@ else:
             return _NoOpInspect()
 
         def broadcast(self, command: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.broadcast: Celery not installed, ignoring command=%s", command)
 
         def revoke(self, task_id: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.revoke: Celery not installed, ignoring task_id=%s", task_id)
 
         def purge(self) -> int:
             return 0
 
         def rate_limit(self, task_name: str, rate_limit: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.rate_limit: Celery not installed, ignoring task=%s", task_name)
 
         def time_limit(self, task_name: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.time_limit: Celery not installed, ignoring task=%s", task_name)
 
         def ping(self, destination: list | None = None, timeout: float = 1.0) -> list:
             return []

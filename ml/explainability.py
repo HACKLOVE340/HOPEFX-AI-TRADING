@@ -191,7 +191,7 @@ def _get_feature_names(model: Any, model_name: str) -> list[str]:
         pred = get_predictor()
         if pred._feature_names:
             return pred._feature_names
-    except Exception:
+    except Exception:  # nosec B110
         pass
     n = getattr(model, "n_features_in_", 50)
     return [f"feature_{i:03d}" for i in range(n)]

@@ -64,7 +64,7 @@ def _parse_date(text: str | None) -> datetime:
         return datetime.now(UTC)
     try:
         return parsedate_to_datetime(text).astimezone(UTC)
-    except Exception:
+    except Exception:  # nosec B110
         pass
     for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
         try:

@@ -595,7 +595,7 @@ class PerformanceAnalytics:
             return 0.0
 
         daily_rf = self.risk_free_rate / 252.0
-        ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / std_return)
+        ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / std_return)  # healer: ignore — isfinite guard below
 
         # Guard against any residual NaN/inf from extreme inputs
         if not np.isfinite(ratio):
@@ -631,12 +631,12 @@ class PerformanceAnalytics:
             # JSON serialisation and DB writes don't break.
             return 0.0
 
-        downside_std = float(np.std(negative_returns, ddof=0))
+        downside_std = float(np.std(negative_returns, ddof=0))  # healer: ignore — isfinite guard below
 
         if downside_std < 1e-12:
             return 0.0
 
-        ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / downside_std)
+        ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / downside_std)  # healer: ignore — isfinite guard below
 
         if not np.isfinite(ratio):
             return 0.0

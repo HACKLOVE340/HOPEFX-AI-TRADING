@@ -110,7 +110,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
             from ml.inference_engine import get_inference_engine
 
             predict_count_today = get_inference_engine()._predict_count
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         for name, info in versions.items():

@@ -286,7 +286,7 @@ class ABTestManager:
                         "metrics": test.get_metrics(),
                     },
                 )
-                db.merge(row)
+                db.merge(row)  # healer: ignore — SQLAlchemy merge, not pandas merge
                 db.commit()
         except Exception as exc:
             logger.debug("ABTestManager._persist_test: %s", exc)

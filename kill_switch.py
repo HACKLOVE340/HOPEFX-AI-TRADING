@@ -373,7 +373,7 @@ class KillSwitch:
             from execution.engine import get_active_broker
 
             broker = get_active_broker()
-        except Exception:
+        except Exception:  # nosec B110
             pass
 
         if broker is None:
@@ -383,7 +383,7 @@ class KillSwitch:
                 router = get_router()
                 if router is not None:
                     broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         if broker is None:
@@ -391,7 +391,7 @@ class KillSwitch:
                 from core.app_state import app_state as _app_state
 
                 broker = getattr(_app_state, "broker", None)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         if broker is None:

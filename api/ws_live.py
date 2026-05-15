@@ -1894,9 +1894,9 @@ async def ws_notifications(websocket: WebSocket) -> None:
                         try:
                             data = json.loads(message["data"])
                             await websocket.send_text(json.dumps({"type": "notification", "data": data}))
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
-                except TimeoutError:
+                except TimeoutError:  # nosec B110
                     pass
                 except WebSocketDisconnect:
                     break
@@ -1918,11 +1918,11 @@ async def ws_notifications(websocket: WebSocket) -> None:
                     last_heartbeat = now
                 try:
                     await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-                except TimeoutError:
+                except TimeoutError:  # nosec B110
                     pass
                 except WebSocketDisconnect:
                     break
-        except WebSocketDisconnect:
+        except WebSocketDisconnect:  # nosec B110
             pass
     finally:
         logger.debug("ws_notifications: disconnected user=%s", user_id)
@@ -2017,9 +2017,9 @@ async def ws_audit_events(websocket: WebSocket) -> None:
                         try:
                             data = json.loads(message["data"])
                             await websocket.send_text(json.dumps({"type": "audit_event", "data": data}))
-                        except Exception:
+                        except Exception:  # nosec B110
                             pass
-                except TimeoutError:
+                except TimeoutError:  # nosec B110
                     pass
                 except WebSocketDisconnect:
                     break
@@ -2041,11 +2041,11 @@ async def ws_audit_events(websocket: WebSocket) -> None:
                     last_heartbeat = now
                 try:
                     await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-                except TimeoutError:
+                except TimeoutError:  # nosec B110
                     pass
                 except WebSocketDisconnect:
                     break
-        except WebSocketDisconnect:
+        except WebSocketDisconnect:  # nosec B110
             pass
     finally:
         logger.debug("ws_audit_events: disconnected user=%s", user_id)

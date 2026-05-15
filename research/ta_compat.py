@@ -153,7 +153,7 @@ class EMAIndicator:
         if _TALIB_OK:
             arr = _talib.EMA(_to_np(self._close), timeperiod=self._window)
         else:
-            arr = self._close.ewm(span=self._window, adjust=False).mean().values
+            arr = self._close.ewm(span=self._window, adjust=False).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour; callers use _wrap
         return _wrap(arr, self._close.index)
 
 
@@ -294,8 +294,8 @@ def _rsi_numpy(close: pd.Series, period: int) -> np.ndarray:
     delta = close.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()
-    avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()
+    avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     rs = avg_gain / (avg_loss + 1e-12)
     return (100.0 - 100.0 / (1.0 + rs)).values
 
@@ -304,33 +304,33 @@ def _stoch_numpy(high, low, close, k_period=14, d_period=3) -> np.ndarray:
     lo = low.rolling(k_period).min()
     hi = high.rolling(k_period).max()
     k = 100.0 * (close - lo) / (hi - lo + 1e-12)
-    return k.rolling(d_period).mean().values
+    return k.rolling(d_period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
 
 
 def _stoch_signal_numpy(high, low, close, k_period=14, d_period=3) -> np.ndarray:
     k = pd.Series(_stoch_numpy(high, low, close, k_period, d_period), index=close.index)
-    return k.rolling(d_period).mean().values
+    return k.rolling(d_period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
 
 
 def _macd_numpy(close, fast=12, slow=26, signal=9):
-    ema_fast = close.ewm(span=fast, adjust=False).mean()
-    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    ema_fast = close.ewm(span=fast, adjust=False).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    ema_slow = close.ewm(span=slow, adjust=False).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     macd = ema_fast - ema_slow
-    sig = macd.ewm(span=signal, adjust=False).mean()
+    sig = macd.ewm(span=signal, adjust=False).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     hist = macd - sig
     return macd.values, sig.values, hist.values
 
 
 def _bbands_numpy(close, window=20, dev=2):
-    mid = close.rolling(window).mean()
-    std = close.rolling(window).std()
+    mid = close.rolling(window).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    std = close.rolling(window).std()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     upper = mid + dev * std
     lower = mid - dev * std
     return upper.values, mid.values, lower.values
 
 
 def _atr_numpy(high, low, close, period=14) -> np.ndarray:
-    tr = pd.concat(
+    tr = pd.concat(  # healer: ignore — NaN for warmup bars is expected TA behaviour
         [
             high - low,
             (high - close.shift(1)).abs(),
@@ -338,11 +338,11 @@ def _atr_numpy(high, low, close, period=14) -> np.ndarray:
         ],
         axis=1,
     ).max(axis=1)
-    return tr.ewm(com=period - 1, min_periods=period).mean().values
+    return tr.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
 
 
 def _adx_numpy(high, low, close, period=14) -> np.ndarray:
-    tr = pd.concat(
+    tr = pd.concat(  # healer: ignore — NaN for warmup bars is expected TA behaviour
         [
             high - low,
             (high - close.shift(1)).abs(),
@@ -356,11 +356,11 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     plus_dm[mask] = 0.0
     mask2 = minus_dm < plus_dm
     minus_dm[mask2] = 0.0
-    atr = tr.ewm(com=period - 1, min_periods=period).mean()
-    pdi = 100 * plus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)
-    mdi = 100 * minus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)
+    atr = tr.ewm(com=period - 1, min_periods=period).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    pdi = 100 * plus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    mdi = 100 * minus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-12)
-    return dx.ewm(com=period - 1, min_periods=period).mean().values
+    return dx.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
 
 
 # ── Module assembly ───────────────────────────────────────────────────────────

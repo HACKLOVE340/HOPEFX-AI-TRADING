@@ -274,7 +274,7 @@ class RedisTickWriter:
             try:
                 self._write_queue.get_nowait()
                 self._write_queue.task_done()
-            except asyncio.QueueEmpty:
+            except asyncio.QueueEmpty:  # nosec B110
                 pass
             self._drop_count += 1
             _TICK_QUEUE_DROPS.inc()

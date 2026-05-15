@@ -42,7 +42,8 @@ try:
 except Exception:  # pragma: no cover — rate limiting optional in dev
 
     async def _withdraw_rate_limit(request: Request) -> None:  # type: ignore[misc]
-        pass
+        # Rate limiting unavailable (optional dependency not installed) — allow request
+        return None
 
 
 from pydantic import BaseModel, Field

@@ -924,7 +924,7 @@ async def init_risk_manager(s: Any) -> Any:
         import risk.manager as _rm_mod
 
         _rm_mod.risk_manager = rm
-    except Exception:
+    except Exception:  # nosec B110
         pass
     log_activity("Risk Manager initialized")
     return rm

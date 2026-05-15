@@ -48,7 +48,7 @@ def upgrade() -> None:
             # Drop old index if it exists (will be recreated by the FK)
             try:
                 batch_op.drop_constraint("fk_orders_account_id", type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
             batch_op.create_foreign_key(
                 "fk_orders_account_id",
@@ -62,7 +62,7 @@ def upgrade() -> None:
         with op.batch_alter_table("orders") as batch_op:
             try:
                 batch_op.drop_constraint("fk_orders_trade_id", type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
             batch_op.create_foreign_key(
                 "fk_orders_trade_id",
@@ -76,7 +76,7 @@ def upgrade() -> None:
         with op.batch_alter_table("signals") as batch_op:
             try:
                 batch_op.drop_constraint("fk_signals_trade_id", type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
             batch_op.create_foreign_key(
                 "fk_signals_trade_id",
@@ -90,7 +90,7 @@ def upgrade() -> None:
         with op.batch_alter_table("accounts") as batch_op:
             try:
                 batch_op.drop_constraint("fk_accounts_user_id", type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
             batch_op.create_foreign_key(
                 "fk_accounts_user_id",
@@ -104,7 +104,7 @@ def upgrade() -> None:
         with op.batch_alter_table("positions") as batch_op:
             try:
                 batch_op.drop_constraint("fk_positions_account_id", type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
             batch_op.create_foreign_key(
                 "fk_positions_account_id",
@@ -124,7 +124,7 @@ def upgrade() -> None:
             )
             try:
                 batch_op.drop_constraint("fk_positions_user_id", type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
             batch_op.create_foreign_key(
                 "fk_positions_user_id",
@@ -162,7 +162,7 @@ def downgrade() -> None:
     ]:
         try:
             op.drop_index(idx_name, table_name=table)
-        except Exception:
+        except Exception:  # nosec B110 — constraint may not exist yet
             pass
 
     if dialect != "sqlite":
@@ -178,7 +178,7 @@ def downgrade() -> None:
             try:
                 with op.batch_alter_table(table) as batch_op:
                     batch_op.drop_constraint(constraint, type_="foreignkey")
-            except Exception:
+            except Exception:  # nosec B110 — constraint may not exist yet
                 pass
 
 

@@ -595,7 +595,7 @@ class AdvancedPredictor:
                             logger.debug("MTF: dropped %d cols not in model feature set", dropped)
                         mtf_cols = valid_mtf_cols
                     if mtf_cols:
-                        X = pd.concat([X, mtf_last[mtf_cols]], axis=1)
+                        X = pd.concat([X, mtf_last[mtf_cols]], axis=1)  # healer: ignore — fillna(0.0) applied after _align_features
             except Exception as exc:
                 logger.debug("MTF append failed (non-fatal): %s", exc)
 

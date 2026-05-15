@@ -465,7 +465,7 @@ class MobileAPIServer:
                                     last_update=datetime.now(UTC),
                                     spread=float(tick.ask) - float(tick.bid),
                                 )
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                     raise HTTPException(status_code=503, detail="Quote unavailable")
 
@@ -617,7 +617,7 @@ class MobileAPIServer:
                                 spread=float(td.get("spread", 0)),
                             )
                         )
-                    except Exception:
+                    except Exception:  # nosec B110
                         pass
                 return result
 

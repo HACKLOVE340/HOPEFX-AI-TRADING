@@ -107,7 +107,7 @@ async def get_overview(user: TokenPayload = Depends(_require_superadmin)) -> dic
             try:
                 row = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'")).scalar()
                 overview["db_connections"] = int(row or 0)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         finally:

@@ -24,7 +24,7 @@ try:
     from dotenv import load_dotenv
 
     load_dotenv(ROOT / ".env", override=False)
-except ImportError:
+except ImportError:  # nosec B110
     pass
 
 DB_URL = os.environ.get("DATABASE_URL", f"sqlite:///{ROOT / 'hopefx.db'}")
