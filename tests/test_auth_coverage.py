@@ -162,6 +162,14 @@ WHITELIST: frozenset[str] = frozenset(
         "/api/v1/auth/resend-verification",
         "/api/v1/auth/activate-free-tier",
         "/api/v1/auth/2fa/setup",
+        # ── GraphQL (Strawberry) — in-band JWT auth via resolver context ──────
+        # Strawberry GraphQL cannot use FastAPI Depends() at the route level.
+        # Auth is enforced in-band: every resolver that returns user-scoped or
+        # mutating data calls _require_auth(info) which validates the Bearer
+        # token from the request context.  Unauthenticated requests receive a
+        # structured UNAUTHORIZED error response, not a 401 HTTP status.
+        # See api/graphql_schema.py: _require_auth(), _get_current_user().
+        "/graphql",
     }
 )
 
@@ -241,6 +249,14 @@ WS_PUBLIC_WHITELIST: frozenset[str] = frozenset(
     {
         "/ws/public",                # public market-data feed — no user data, read-only
         "/api/stream/{symbol}/ws",   # public tick stream — rate-limited by IP, no user data
+        # Strawberry GraphQL WebSocket (subscriptions) — in-band auth via
+        # subscription context.  The _get_current_user(info) helper validates
+        # the Bearer token from ws.headers on every subscription resolver.
+        # Source inspection cannot detect this because Strawberry wraps the
+        # handler in generated code; auth is enforced at the resolver level.
+        # See api/graphql_schema.py: _require_auth() called in all subscription
+        # resolvers (price_tick_stream, signal_stream, account_updates).
+        "/graphql",
     }
 )
 
