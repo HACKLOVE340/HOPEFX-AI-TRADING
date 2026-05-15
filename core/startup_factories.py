@@ -1704,7 +1704,7 @@ async def init_macro_store(s: Any) -> Any:
             fred_loaded,
             9,
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning(
             "MacroStoreBridge: timed out after %.0fs — falling back to CSV bootstrap",
             _bridge_timeout,
@@ -1749,7 +1749,7 @@ async def init_macro_store(s: Any) -> Any:
             wgc_injected,
             wgc_status.get("series_fetched", []),
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning(
             "WGC startup download timed out after %.0fs — gold demand series unavailable",
             _wgc_timeout,

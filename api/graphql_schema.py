@@ -461,17 +461,43 @@ def _live_account() -> AccountInfo:
     state = _get_broker_state()
     if state and hasattr(state, "broker"):
         try:
-            info = state.broker.get_account_info()
+            import asyncio as _asyncio
+            import inspect as _inspect
+            broker = state.broker
+            # Use sync helper when available (PaperTradingBroker exposes one)
+            if hasattr(broker, "_get_account_info_sync"):
+                info = broker._get_account_info_sync()
+            elif _inspect.iscoroutinefunction(broker.get_account_info):
+                try:
+                    loop = _asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Cannot block inside a running loop — return defaults
+                        info = None
+                    else:
+                        info = loop.run_until_complete(broker.get_account_info())
+                except RuntimeError:
+                    info = None
+            else:
+                info = broker.get_account_info()
+            if info is None:
+                raise AttributeError("no account info")
+            def _get(key, default=0.0):
+                if hasattr(info, key):
+                    return getattr(info, key) or default
+                if isinstance(info, dict):
+                    return info.get(key, default) or default
+                return default
+
             return AccountInfo(
-                balance=float(info.get("balance", 0.0)),
-                equity=float(info.get("equity", 0.0)),
-                margin=float(info.get("margin", 0.0)),
-                free_margin=float(info.get("free_margin", 0.0)),
-                margin_level=float(info.get("margin_level", 0.0)),
-                unrealized_pnl=float(info.get("unrealized_pnl", 0.0)),
-                realized_pnl_today=float(info.get("realized_pnl_today", 0.0)),
-                open_positions=int(info.get("open_positions", 0)),
-                currency=str(info.get("currency", "USD")),
+                balance=float(_get("balance", 0.0)),
+                equity=float(_get("equity", 0.0)),
+                margin=float(_get("margin", _get("margin_used", 0.0))),
+                free_margin=float(_get("free_margin", _get("margin_available", 0.0))),
+                margin_level=float(_get("margin_level", 0.0)),
+                unrealized_pnl=float(_get("unrealized_pnl", 0.0)),
+                realized_pnl_today=float(_get("realized_pnl_today", 0.0)),
+                open_positions=int(_get("open_positions", _get("positions_count", 0))),
+                currency=str(_get("currency", "USD")),
                 broker_connected=True,
             )
         except (RuntimeError, ValueError, OSError, AttributeError) as exc:

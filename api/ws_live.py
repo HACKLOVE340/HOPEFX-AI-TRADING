@@ -1114,7 +1114,8 @@ async def _chartbot_broadcaster() -> None:
 
                 broker = getattr(_app_state, "broker", None) if _app_state else None
                 if broker is not None:
-                    acct = broker.get_account_info()
+                    _acct_coro = broker.get_account_info()
+                    acct = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
                     if acct:
                         await _manager.broadcast(
                             "equity",
@@ -1212,23 +1213,32 @@ async def _account_update_broadcaster() -> None:
             if broker is None:
                 continue
 
-            acct_raw = broker.get_account_info()
+            _acct_coro = broker.get_account_info()
+            acct_raw = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
             if not acct_raw:
                 continue
 
-            # Normalise to the AccountMetrics shape the frontend store expects
-            balance = float(acct_raw.get("balance", 0.0) or 0.0)
-            equity = float(acct_raw.get("equity", balance) or balance)
-            margin_used = float(acct_raw.get("margin_used", 0.0) or 0.0)
-            margin_free = float(acct_raw.get("margin_free", equity - margin_used) or 0.0)
+            # Normalise to the AccountMetrics shape the frontend store expects.
+            # acct_raw may be an AccountInfo dataclass or a dict — handle both.
+            def _acct_get(key: str, default=0.0):
+                if hasattr(acct_raw, key):
+                    return getattr(acct_raw, key) or default
+                if isinstance(acct_raw, dict):
+                    return acct_raw.get(key, default) or default
+                return default
+
+            balance = float(_acct_get("balance", 0.0))
+            equity = float(_acct_get("equity", balance))
+            margin_used = float(_acct_get("margin_used", 0.0))
+            margin_free = float(_acct_get("margin_free", equity - margin_used))
             # When margin_used == 0 there are no open positions, so margin level
             # is effectively infinite (no risk). Use 9999.0 as a sentinel so the
             # frontend RiskDashboard does not interpret 0.0 as a margin call.
             # This is the canonical fix for the original bug report (margin_level=0.0).
             margin_level = (equity / margin_used * 100) if margin_used > 0 else 9999.0
-            daily_pnl = float(acct_raw.get("daily_pnl", acct_raw.get("unrealized_pnl", 0.0)))
+            daily_pnl = float(_acct_get("daily_pnl", _acct_get("unrealized_pnl", 0.0)))
             daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
-            total_pnl = float(acct_raw.get("total_pnl", acct_raw.get("realized_pnl", 0.0)))
+            total_pnl = float(_acct_get("total_pnl", _acct_get("realized_pnl", 0.0)))
 
             # Risk manager stats (optional)
             rm = getattr(_app_state, "risk_manager", None) if _app_state else None
@@ -1237,8 +1247,9 @@ async def _account_update_broadcaster() -> None:
             max_dd = float(getattr(rm, "max_drawdown_pct", 0.0) or 0.0)
 
             # Open trade count from positions
-            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
-            open_trades = len(positions) if positions else int(acct_raw.get("open_trades", 0))
+            _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
+            positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
+            open_trades = len(positions) if positions else int(_acct_get("open_trades", 0))
 
             account_msg = {
                 "type": "account_update",
@@ -1406,7 +1417,7 @@ async def ws_live(websocket: WebSocket) -> None:
                     "role": payload.get("role", "trader"),
                 },
             )
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             await _manager.send(
                 cid,
                 {
@@ -1457,7 +1468,7 @@ async def _ws_auth_gate(cid: str, websocket: Any) -> bool:
         _manager.authenticate(cid, user_id)
         await _manager.send(cid, {"type": "auth_ok", "user_id": user_id, "role": payload.get("role", "trader")})
         return True
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         await _manager.send(
             cid, {"type": "error", "code": "AUTH_TIMEOUT", "message": f"Auth required within {AUTH_TIMEOUT_SECONDS}s"}
         )
@@ -1775,7 +1786,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
                 inbound = json.loads(raw)
                 if inbound.get("type") == "ping":
                     await _send({"type": "pong"})
-            except (TimeoutError, asyncio.TimeoutError):  # nosec B110 — poll timeout is expected; loop continues
+            except TimeoutError:  # nosec B110 — poll timeout is expected; loop continues
                 pass
             except (WebSocketDisconnect, json.JSONDecodeError):  # nosec B110 — client disconnect ends loop
                 break
@@ -1828,7 +1839,7 @@ async def ws_notifications(websocket: WebSocket) -> None:
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
             msg = json.loads(raw)
-        except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+        except (TimeoutError, json.JSONDecodeError):
             await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
             return
         except WebSocketDisconnect:
@@ -1885,7 +1896,7 @@ async def ws_notifications(websocket: WebSocket) -> None:
                             await websocket.send_text(json.dumps({"type": "notification", "data": data}))
                         except Exception:
                             pass
-                except (asyncio.TimeoutError, TimeoutError):
+                except TimeoutError:
                     pass
                 except WebSocketDisconnect:
                     break
@@ -1907,7 +1918,7 @@ async def ws_notifications(websocket: WebSocket) -> None:
                     last_heartbeat = now
                 try:
                     await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-                except (asyncio.TimeoutError, TimeoutError):
+                except TimeoutError:
                     pass
                 except WebSocketDisconnect:
                     break
@@ -1945,7 +1956,7 @@ async def ws_audit_events(websocket: WebSocket) -> None:
         try:
             raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
             msg = json.loads(raw)
-        except (TimeoutError, asyncio.TimeoutError, json.JSONDecodeError):
+        except (TimeoutError, json.JSONDecodeError):
             await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
             return
         except WebSocketDisconnect:
@@ -2008,7 +2019,7 @@ async def ws_audit_events(websocket: WebSocket) -> None:
                             await websocket.send_text(json.dumps({"type": "audit_event", "data": data}))
                         except Exception:
                             pass
-                except (asyncio.TimeoutError, TimeoutError):
+                except TimeoutError:
                     pass
                 except WebSocketDisconnect:
                     break
@@ -2030,7 +2041,7 @@ async def ws_audit_events(websocket: WebSocket) -> None:
                     last_heartbeat = now
                 try:
                     await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
-                except (asyncio.TimeoutError, TimeoutError):
+                except TimeoutError:
                     pass
                 except WebSocketDisconnect:
                     break

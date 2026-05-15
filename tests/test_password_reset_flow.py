@@ -289,10 +289,17 @@ class TestPasswordResetRouter:
 
     def test_reset_password_success_200(self):
         self._mock_svc.reset_password.return_value = (True, "Password reset successfully.")
+        # Build a properly signed token so the router's signature check passes.
+        from auth.router import _make_signed_token, _SALT_PASSWORD_RESET, _PASSWORD_RESET_TTL
+        signed = _make_signed_token(
+            {"tok": "rawtoken123", "email": "user@example.com"},
+            salt=_SALT_PASSWORD_RESET,
+            max_age_seconds=_PASSWORD_RESET_TTL,
+        )
         client = self._client()
         r = client.post(
             "/api/auth/reset-password",
-            json={"token": "goodtoken", "new_password": "Secure123!"},
+            json={"token": signed, "new_password": "Secure123!"},
             headers={"X-CSRF-Token": "skip"},
         )
         assert r.status_code == 200

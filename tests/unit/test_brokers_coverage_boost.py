@@ -123,9 +123,10 @@ class TestPaperTradingBrokerInit:
         assert result is True
         assert b.connected is False
 
-    def test_get_account_info_keys(self):
+    @pytest.mark.asyncio
+    async def test_get_account_info_keys(self):
         b = self._broker()
-        info = b.get_account_info()
+        info = await b.get_account_info()
         # Returns AccountInfo dataclass or dict
         if hasattr(info, "balance"):
             assert info.balance >= 0
@@ -219,11 +220,12 @@ class TestPaperTradingBrokerInit:
         result = b.cancel_order("nonexistent")
         assert result is False
 
-    def test_get_positions_returns_list(self):
+    @pytest.mark.asyncio
+    async def test_get_positions_returns_list(self):
         from brokers.paper_trading import PaperTradingBroker
 
         b = PaperTradingBroker({})
-        positions = b.get_positions()
+        positions = await b.get_positions()
         assert isinstance(positions, list)
 
     def test_is_connected_false(self):

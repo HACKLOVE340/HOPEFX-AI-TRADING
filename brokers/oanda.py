@@ -440,7 +440,7 @@ class OANDABroker:
                             "broker": "oanda",
                         }
 
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 last_error = "timeout"
                 logger.warning("OANDABroker: order timeout (attempt %d/%d)", attempt, _MAX_RETRIES)
             except Exception:  # pylint: disable=broad-exception-caught

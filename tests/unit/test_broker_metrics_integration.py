@@ -42,7 +42,7 @@ class TestBrokerRiskIntegration:
         connected = await broker.connect()
         assert connected is True
 
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info is not None
         assert info.balance == pytest.approx(50_000.0, rel=1e-3)
 
@@ -64,7 +64,7 @@ class TestBrokerRiskIntegration:
         )
         assert order is not None
 
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) >= 1
         symbols = [p.symbol for p in positions]
         assert "XAUUSD" in symbols
@@ -114,7 +114,7 @@ class TestBrokerRiskIntegration:
             quantity=0.1,
         )
 
-        positions_before = broker.get_positions()
+        positions_before = await broker.get_positions()
         assert len(positions_before) >= 1
 
         broker.update_market_price("EURUSD", 1.0860)

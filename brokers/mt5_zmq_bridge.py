@@ -59,9 +59,9 @@ Usage
         bridge.send_order(...)
 """
 
-import asyncio
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os

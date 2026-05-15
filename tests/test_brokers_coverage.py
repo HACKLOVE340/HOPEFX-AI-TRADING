@@ -166,17 +166,19 @@ class TestPaperTradingBrokerOrders:
 
 
 class TestPaperTradingBrokerPositions:
-    def test_buy_creates_long_position(self, broker):
+    @pytest.mark.asyncio
+    async def test_buy_creates_long_position(self, broker):
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 2.0)
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) == 1
         # Position.side is an OrderSide enum; BUY represents a long position
         assert positions[0].side == OrderSide.BUY
         assert positions[0].quantity == 2.0
 
-    def test_sell_creates_short_position(self, broker):
+    @pytest.mark.asyncio
+    async def test_sell_creates_short_position(self, broker):
         broker.place_order("EURUSD", OrderSide.SELL, OrderType.MARKET, 1.0)
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert any(p.symbol == "EURUSD" for p in positions)
 
     def test_close_position_removes_it(self, broker):
@@ -197,16 +199,18 @@ class TestPaperTradingBrokerPositions:
         # With zero slippage, P&L = (2100-2000)*1 = 100
         assert broker.balance > initial_balance
 
-    def test_averaging_into_position(self, broker):
+    @pytest.mark.asyncio
+    async def test_averaging_into_position(self, broker):
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert positions[0].quantity == 2.0
 
-    def test_close_all_positions(self, broker):
+    @pytest.mark.asyncio
+    async def test_close_all_positions(self, broker):
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-        closed = asyncio.run(broker.close_all_positions())
+        closed = await broker.close_all_positions()
         assert isinstance(closed, list)
         assert len(closed) == 2
         assert set(closed) == {"XAUUSD", "EURUSD"}
@@ -214,17 +218,19 @@ class TestPaperTradingBrokerPositions:
 
 
 class TestPaperTradingBrokerAccount:
-    def test_get_account_info_returns_dataclass(self, broker):
-        info = broker.get_account_info()
+    @pytest.mark.asyncio
+    async def test_get_account_info_returns_dataclass(self, broker):
+        info = await broker.get_account_info()
         assert isinstance(info, AccountInfo)
         assert info.balance == 10_000.0
         assert info.equity >= 0
 
-    def test_equity_reflects_unrealized_pnl(self, broker):
+    @pytest.mark.asyncio
+    async def test_equity_reflects_unrealized_pnl(self, broker):
         broker.update_market_price("XAUUSD", 2000.0)
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.update_market_price("XAUUSD", 2200.0)
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info.equity > info.balance  # unrealized gain
 
     def test_equity_history_has_initial_point(self, broker):
@@ -428,10 +434,11 @@ class TestInitPaperBroker:
         assert result is True
         assert b.connected is False
 
-    def test_get_account_info_balance(self):
+    @pytest.mark.asyncio
+    async def test_get_account_info_balance(self):
         b = PaperTradingBroker(config={"initial_balance": 10000.0, "slippage_model": "zero"}, seed=0)
         b.connected = True
-        info = b.get_account_info()
+        info = await b.get_account_info()
         assert info.balance == 10000.0
 
     def test_set_market_price(self):

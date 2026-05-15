@@ -1238,7 +1238,7 @@ async def modify_position(
             ),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_position failed: %s", exc)
@@ -1288,7 +1288,7 @@ async def partial_close_position(
             else partial_fn(position_id, req.quantity),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("partial_close_position failed: %s", exc)
@@ -1383,7 +1383,7 @@ async def cancel_order(
             else cancel_fn(order_id),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("cancel_order failed: %s", exc)
@@ -1426,7 +1426,7 @@ async def modify_order(
             else modify_fn(order_id, **kwargs),
             timeout=10.0,
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_order failed: %s", exc)
@@ -2304,7 +2304,7 @@ async def get_ohlcv(
                         }
                         for d in data
                     ]
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.warning("Price engine OHLCV timed out for %s — falling back to yfinance", symbol)
         except Exception as exc:
             logger.debug("Price engine OHLCV failed for %s: %s — falling back to yfinance", symbol, exc)
@@ -2939,8 +2939,19 @@ def _register_risk_performance_routes(r: Any) -> None:
             broker = getattr(app_state, "broker", None)
             if broker is None:
                 raise AttributeError("no broker")
-            account = broker.get_account_info()
-            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+            # Use sync helper when available (PaperTradingBroker), otherwise
+            # fall back to asyncio.run for async-only brokers.
+            if hasattr(broker, "_get_account_info_sync"):
+                account = broker._get_account_info_sync()
+            else:
+                account = asyncio.run(broker.get_account_info()) if asyncio.iscoroutinefunction(broker.get_account_info) else broker.get_account_info()
+            if hasattr(broker, "_get_positions_sync"):
+                positions = broker._get_positions_sync()
+            elif hasattr(broker, "get_positions"):
+                _pos = broker.get_positions()
+                positions = asyncio.run(_pos) if asyncio.iscoroutine(_pos) else _pos
+            else:
+                positions = []
 
             # Daily PnL: sum unrealised PnL across open positions
             daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
@@ -3069,7 +3080,8 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
             raise AttributeError("no broker")
 
         # Use account info (always fast — in-memory for paper broker)
-        account = broker.get_account_info()
+        _acct_coro = broker.get_account_info()
+        account = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
         balance = float(getattr(account, "balance", 100_000.0) or 100_000.0)
         equity = float(getattr(account, "equity", balance) or balance)
         margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
@@ -3090,7 +3102,8 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
         except Exception:  # nosec B110
             pass
 
-        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+        _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
+        positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
         open_count = len(positions)
         kill_switch = False
         try:
@@ -3200,7 +3213,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
             ]
 
         ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
     except Exception as exc:
         logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
@@ -3420,7 +3433,7 @@ async def get_regime_status(
             )
 
         closes, highs, lows = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         logger.warning("regime: yfinance fetch timed out for %s", symbol_norm)
     except Exception as exc:
         logger.warning("regime: yfinance fetch failed for %s: %s", symbol_norm, exc)

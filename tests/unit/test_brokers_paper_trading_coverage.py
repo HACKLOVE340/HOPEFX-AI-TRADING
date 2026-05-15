@@ -434,41 +434,47 @@ class TestGetOrder:
 
 @pytest.mark.unit
 class TestGetPositions:
-    def test_no_positions_initially(self):
+    @pytest.mark.asyncio
+    async def test_no_positions_initially(self):
         broker = _make_broker()
-        assert broker.get_positions() == []
+        assert await broker.get_positions() == []
 
-    def test_position_created_after_buy(self):
+    @pytest.mark.asyncio
+    async def test_position_created_after_buy(self):
         broker = _make_broker()
         _buy(broker)
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) == 1
         assert positions[0].symbol == "EURUSD"
 
-    def test_position_side_long_after_buy(self):
+    @pytest.mark.asyncio
+    async def test_position_side_long_after_buy(self):
         broker = _make_broker()
         _buy(broker)
-        pos = broker.get_positions()[0]
+        pos = (await broker.get_positions())[0]
         assert pos.side_str == "LONG"
 
-    def test_position_unrealized_pnl_computed(self):
+    @pytest.mark.asyncio
+    async def test_position_unrealized_pnl_computed(self):
         broker = _make_broker()
         _buy(broker)
         broker.update_market_price("EURUSD", 1.0900)
-        pos = broker.get_positions()[0]
+        pos = (await broker.get_positions())[0]
         assert pos.unrealized_pnl != 0.0
 
-    def test_position_id_set(self):
+    @pytest.mark.asyncio
+    async def test_position_id_set(self):
         broker = _make_broker()
         _buy(broker)
-        pos = broker.get_positions()[0]
+        pos = (await broker.get_positions())[0]
         assert pos.id  # non-empty
 
-    def test_multiple_symbols(self):
+    @pytest.mark.asyncio
+    async def test_multiple_symbols(self):
         broker = _make_broker()
         _buy(broker, "EURUSD")
         _buy(broker, "XAUUSD")
-        assert len(broker.get_positions()) == 2
+        assert len(await broker.get_positions()) == 2
 
 
 # ---------------------------------------------------------------------------
@@ -515,10 +521,11 @@ class TestClosePosition:
         broker.close_position("EURUSD")
         assert broker.balance > initial_balance
 
-    def test_close_by_position_id(self):
+    @pytest.mark.asyncio
+    async def test_close_by_position_id(self):
         broker = _make_broker()
         _buy(broker)
-        pos = broker.get_positions()[0]
+        pos = (await broker.get_positions())[0]
         result = broker.close_position(pos.id)
         assert result is True
 
@@ -543,45 +550,51 @@ class TestClosePosition:
 
 @pytest.mark.unit
 class TestGetAccountInfo:
-    def test_returns_account_info(self):
+    @pytest.mark.asyncio
+    async def test_returns_account_info(self):
         from brokers.base import AccountInfo
 
         broker = _make_broker()
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert isinstance(info, AccountInfo)
 
-    def test_balance_matches(self):
+    @pytest.mark.asyncio
+    async def test_balance_matches(self):
         broker = _make_broker()
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info.balance == pytest.approx(broker.balance)
 
-    def test_equity_includes_unrealized(self):
+    @pytest.mark.asyncio
+    async def test_equity_includes_unrealized(self):
         broker = _make_broker()
         _buy(broker)
         broker.update_market_price("EURUSD", 1.1000)
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info.equity > info.balance  # unrealized profit
 
-    def test_positions_count(self):
+    @pytest.mark.asyncio
+    async def test_positions_count(self):
         broker = _make_broker()
         _buy(broker, "EURUSD")
         _buy(broker, "XAUUSD")
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info.positions_count == 2
 
-    def test_equity_history_grows_after_60s(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_equity_history_grows_after_60s(self, monkeypatch):
         broker = _make_broker()
         # Force last snapshot to be old
         broker._equity_history[-1] = (time.time() - 61, broker.initial_balance)
         initial_len = len(broker._equity_history)
-        broker.get_account_info()
+        await broker.get_account_info()
         assert len(broker._equity_history) > initial_len
 
-    def test_equity_history_not_duplicated_within_60s(self):
+    @pytest.mark.asyncio
+    async def test_equity_history_not_duplicated_within_60s(self):
         broker = _make_broker()
         len_before = len(broker._equity_history)
-        broker.get_account_info()
-        broker.get_account_info()
+        await broker.get_account_info()
+        await broker.get_account_info()
         # Should not add more than one point within 60s
         assert len(broker._equity_history) <= len_before + 1
 
@@ -653,11 +666,12 @@ class TestMarketPrice:
         broker = _make_broker()
         assert broker.get_market_price("NOSYM") == 0.0
 
-    def test_update_affects_position_pnl(self):
+    @pytest.mark.asyncio
+    async def test_update_affects_position_pnl(self):
         broker = _make_broker()
         _buy(broker)
         broker.update_market_price("EURUSD", 1.2000)
-        pos = broker.get_positions()[0]
+        pos = (await broker.get_positions())[0]
         assert pos.unrealized_pnl > 0.0
 
 
