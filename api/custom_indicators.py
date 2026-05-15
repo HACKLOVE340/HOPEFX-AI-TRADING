@@ -173,7 +173,7 @@ async def list_builtin_indicators() -> dict:
 
 
 @router.post("/calculate", summary="Calculate a built-in indicator on provided data")
-async def calculate_indicator(body: CalculateRequest) -> dict:
+async def calculate_indicator(body: CalculateRequest, _user: TokenPayload = Depends(get_current_user)) -> dict:
     """Apply a built-in indicator to a data series and return the result."""
     try:
         from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, CCI, WilliamsR

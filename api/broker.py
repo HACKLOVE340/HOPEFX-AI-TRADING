@@ -25,7 +25,8 @@ from datetime import timezone
 UTC = timezone.utc
 from http import HTTPStatus
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from api.auth import get_current_user
 from pydantic import BaseModel
 
 _HTTP_OK = HTTPStatus.OK.value
@@ -37,7 +38,7 @@ _MIN_BROKER_NAME_LEN = 4
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/broker", tags=["Broker"])
+router = APIRouter(prefix="/api/broker", tags=["Broker"], dependencies=[Depends(get_current_user)])
 
 
 class BrokerTestRequest(BaseModel):

@@ -40,12 +40,17 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from api.auth import require_role
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
+router = APIRouter(
+    prefix="/api/security/fixes",
+    tags=["security-fixes"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────

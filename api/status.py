@@ -24,7 +24,8 @@ from datetime import datetime, timedelta, timezone
 UTC = timezone.utc
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from api.auth import TokenPayload, get_current_user
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -904,7 +905,7 @@ async def sharpe_progress():
     summary="Record a confirmed OANDA fill into the phase gate",
     tags=["Status"],
 )
-async def paper_trading_gate_record_fill(pnl: float = 0.0):
+async def paper_trading_gate_record_fill(pnl: float = 0.0, _user: TokenPayload = Depends(get_current_user)):
     """
     Record a confirmed OANDA fill into the PaperTradingGate.
 

@@ -601,7 +601,10 @@ def create_replay_router():
         from backtesting.replay_connector import create_replay_router
         app.include_router(create_replay_router())
     """
-    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"])
+    from fastapi import Depends
+    from api.auth import get_current_user
+
+    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"], dependencies=[Depends(get_current_user)])
     _jobs: dict[str, Any] = {}
 
     # ── Session-based bar-by-bar replay ──────────────────────────────────────

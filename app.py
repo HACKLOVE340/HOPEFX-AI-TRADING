@@ -303,7 +303,14 @@ try:
             low: float
             volume: float = 0.0
 
-        _decision_deferred = _APIRouter(prefix="/api/decision", tags=["Decision Engine"])
+        from fastapi import Depends as _Depends
+        from api.auth import require_role as _require_role
+
+        _decision_deferred = _APIRouter(
+            prefix="/api/decision",
+            tags=["Decision Engine"],
+            dependencies=[_Depends(_require_role("admin"))],
+        )
 
         @_decision_deferred.get("/status", summary="Decision engine health and metrics")
         async def _decision_status():

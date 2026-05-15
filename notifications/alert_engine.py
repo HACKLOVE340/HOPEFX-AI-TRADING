@@ -920,10 +920,11 @@ def create_alert_router(alert_engine: AlertEngine):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
+    router = APIRouter(prefix="/api/alerts", tags=["Alerts"], dependencies=[Depends(get_current_user)])
 
     class CreateAlertRequest(BaseModel):
         name: str

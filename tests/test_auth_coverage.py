@@ -66,15 +66,16 @@ if _import_error is not None:
 WHITELIST: frozenset[str] = frozenset(
     {
         # ── Authentication (unauthenticated by design) ──────────────────────
-        "/api/auth/login",           # issues the token — cannot require one
-        "/api/auth/register",        # new-user registration
-        "/api/auth/refresh",         # token refresh (uses refresh token, not access)
-        "/api/auth/logout",          # stateless logout — token may already be expired
-        "/api/auth/password-reset",  # initiate reset — user has no token yet
-        "/api/auth/password-reset/confirm",  # confirm reset with emailed code
-        "/api/auth/verify-email",    # email verification link
-        "/api/auth/2fa/verify",      # 2FA challenge — mid-login, no access token yet
-        "/api/auth/2fa/setup",       # 2FA setup — some flows allow pre-auth setup
+        "/api/auth/login",               # issues the token — cannot require one
+        "/api/auth/register",            # new-user registration
+        "/api/auth/refresh",             # token refresh (uses refresh token, not access)
+        "/api/auth/logout",              # stateless logout — token may already be expired
+        "/api/auth/verify-email",        # email verification link
+        "/api/auth/2fa/setup",           # 2FA setup — some flows allow pre-auth setup
+        "/api/auth/forgot-password",     # user has no token (forgot it)
+        "/api/auth/reset-password",      # uses emailed reset token, not JWT
+        "/api/auth/resend-verification", # user may not be logged in yet
+        "/api/auth/activate-free-tier",  # called immediately after registration
         # ── Health / readiness probes (called by load-balancers, no auth) ───
         "/api/health",
         "/api/health/",
@@ -82,15 +83,40 @@ WHITELIST: frozenset[str] = frozenset(
         "/api/health/ready",
         "/api/health/startup",
         # ── Kill switch (uses its own HOPEFX_KILL_SWITCH_TOKEN header) ───────
-        "/api/kill",
-        "/api/kill/",
-        # ── Webhook receivers (use HMAC signature verification instead) ──────
-        "/api/webhooks/stripe",
-        "/api/webhooks/oanda",
-        "/api/webhooks/tradingview",
-        # ── Public landing / marketing pages (read-only POST forms) ──────────
-        "/api/landing/contact",
-        "/api/landing/waitlist",
+        "/api/kill-switch/activate",     # uses HOPEFX_KILL_SWITCH_TOKEN header
+        "/api/kill-switch/deactivate",   # uses HOPEFX_KILL_SWITCH_TOKEN header
+        # ── Webhook receivers (use HMAC/ECDSA signature verification) ────────
+        "/api/webhooks/tradingview",         # TradingView HMAC-verified webhook
+        "/api/v1/webhooks/tradingview",      # v1 alias — same HMAC verification
+        "/api/billing/webhook/stripe",       # Stripe HMAC-verified webhook
+        "/api/v1/billing/webhook/stripe",    # v1 alias
+        "/api/monetization/webhook/stripe",  # Stripe HMAC-verified webhook
+        "/api/v1/monetization/webhook/stripe",  # v1 alias
+        "/api/payments/webhook",             # crypto payment provider webhook
+        "/api/v1/payments/webhook",          # v1 alias
+        "/kyc/webhooks/sumsub",              # Sumsub HMAC-verified webhook
+        "/kyc/webhooks/onfido",              # Onfido HMAC-verified webhook
+        "/api/email/webhook",                # SendGrid ECDSA-verified webhook
+        # ── Public pricing calculator (landing page, no session needed) ──────
+        "/api/pricing/estimate",
+        "/api/v1/pricing/estimate",
+        # ── Billing: free-tier activation (called right after registration) ──
+        "/api/billing/auth/activate-free-tier",
+        "/api/v1/billing/auth/activate-free-tier",
+        # ── Mobile auth (own JWT stack, public by design) ─────────────────────
+        "/mobile/api/v2/auth/register",
+        "/mobile/api/v2/auth/login",
+        "/mobile/api/v2/auth/refresh",
+        # ── v1 auth aliases (same public flows as /api/auth/*) ───────────────
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
+        "/api/v1/auth/resend-verification",
+        "/api/v1/auth/activate-free-tier",
+        "/api/v1/auth/2fa/setup",
     }
 )
 
@@ -132,24 +158,59 @@ def _collect_auth_deps(route) -> list:
 
 def _is_auth_dep(dep) -> bool:
     """
-    Return True if *dep* is ``get_current_user``, ``require_role``, or a
-    callable returned by ``require_role(...)`` (i.e. a role-checking closure
-    whose ``__qualname__`` starts with ``require_role``).
+    Return True if *dep* is any recognised authentication/authorisation
+    dependency used across the HOPEFX codebase.
+
+    Recognised patterns
+    -------------------
+    * ``get_current_user`` / ``require_role`` from api.auth
+    * ``require_role.<locals>._check`` — closure returned by require_role(...)
+    * ``require_plan.<locals>._dependency`` — closure returned by require_plan(...)
+    * ``_get_current_user_id`` from auth.router (session-based auth)
+    * ``_heal_require_admin`` from security.self_healer
+    * ``_av_require_admin`` from security.antivirus
+    * ``require_kyc`` from api.auth
+    * ``MobileAPIServer._verify_token`` from mobile.api_v2
+    * ``_require_auth`` from api.tracing
+    * ``create_kill_switch_router.<locals>._require_admin`` from kill_switch
+    * Any callable from api.auth / auth.router whose name implies auth
     """
     if dep is get_current_user:
         return True
     if dep is require_role:
         return True
-    # require_role("trader") returns a _check closure; detect by qualname
-    qualname = getattr(dep, "__qualname__", "") or ""
-    if "require_role" in qualname:
+
+    qualname: str = getattr(dep, "__qualname__", "") or ""
+    module: str = getattr(dep, "__module__", "") or ""
+    name: str = getattr(dep, "__name__", "") or ""
+
+    # Closures returned by factory functions
+    _AUTH_QUALNAMES = {
+        "require_role.<locals>._check",
+        "require_plan.<locals>._dependency",
+        "create_kill_switch_router.<locals>._require_admin",
+    }
+    if qualname in _AUTH_QUALNAMES:
         return True
-    # Also accept any callable whose module is api.auth and whose name
-    # suggests an auth check (future-proof for new auth helpers).
-    module = getattr(dep, "__module__", "") or ""
-    name = getattr(dep, "__name__", "") or ""
-    if module == "api.auth" and ("user" in name.lower() or "role" in name.lower() or "auth" in name.lower()):
+
+    # Named auth helpers in known auth modules
+    _AUTH_MODULES = {
+        "api.auth",
+        "auth.router",
+        "security.self_healer",
+        "security.antivirus",
+        "mobile.api_v2",
+        "kill_switch",
+        "api.tracing",
+    }
+    _AUTH_KEYWORDS = {"user", "role", "auth", "admin", "require", "token", "verify", "kyc"}
+    if module in _AUTH_MODULES and any(kw in name.lower() for kw in _AUTH_KEYWORDS):
         return True
+
+    # Catch-all: any qualname that contains "require_role" or "require_plan"
+    if "require_role" in qualname or "require_plan" in qualname:
+        return True
+
     return False
 
 

@@ -715,10 +715,11 @@ class CrossValidationResult:
 
 def create_hyperopt_router():
     """FastAPI router for hyperopt endpoints."""
-    from fastapi import APIRouter, BackgroundTasks, HTTPException
+    from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import require_role
 
-    router = APIRouter(prefix="/hyperopt", tags=["Hyperopt"])
+    router = APIRouter(prefix="/hyperopt", tags=["Hyperopt"], dependencies=[Depends(require_role("professional"))])
     _jobs: dict[str, Any] = {}
 
     class HyperoptRequest(BaseModel):

@@ -756,6 +756,7 @@ def register_routers(
                     tags=list(route.tags) if route.tags else [],
                     summary=route.summary,
                     description=route.description,
+                    dependencies=list(route.dependencies) if route.dependencies else [],
                     include_in_schema=False,  # hide from OpenAPI to avoid duplicate docs
                 )
 

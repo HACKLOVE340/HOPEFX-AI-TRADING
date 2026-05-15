@@ -577,7 +577,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     from api.auth import TokenPayload, require_role
 
-    router = APIRouter(prefix="/api/research", tags=["Research"])
+    router = APIRouter(prefix="/api/research", tags=["Research"], dependencies=[Depends(require_role("trader"))])
 
     class CreateNotebookRequest(BaseModel):
         title: str
