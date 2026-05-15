@@ -1,15 +1,15 @@
 {
   "symbol": "GC=F",
-  "years": 2,
-  "oos_years": 0.0,
+  "years": 50,
+  "oos_years": 8.0,
   "macro_features": false,
   "filtered_target": true,
   "min_move_atr": 0.25,
   "horizon": 5,
   "sample_count": 370,
   "cv_sample_count": 370,
-  "oos_sample_count": 0,
-  "feature_count": 193,
+  "oos_sample_count": 2016,
+  "feature_count": 222,
   "trained_at": "2026-05-13T06:35:49.837957+00:00",
   "walkforward": {
     "folds": [
@@ -241,7 +241,15 @@
       "inst_pressure_imbalance"
     ]
   },
-  "oos": {},
+  "oos": {
+    "accuracy": 0.565,
+    "f1": 0.6885,
+    "auc": 0.5427,
+    "p_value_binomial": 0.0,
+    "significant": true,
+    "n_samples": 2016,
+    "oos_period": "2018-04-12 \u2192 2026-03-18"
+  },
   "top_features": {
     "dist_to_swing_low": 0.02516,
     "rvol_60": 0.02309,
@@ -265,5 +273,13 @@
     "mom_60": 0.013025
   },
   "script": "scripts/retrain_horizon5.py",
-  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training."
+  "note": "Model trained with horizon=5 to match execution engine hold period. Fixes accuracy/P&L disconnect from horizon=1 training.",
+  "sharpe_gate": {
+    "gate_passed": true,
+    "n_trades": 2016,
+    "sharpe": 1.52,
+    "sharpe_se": 0.033,
+    "threshold_n": 600,
+    "threshold_se": 0.1
+  }
 }
