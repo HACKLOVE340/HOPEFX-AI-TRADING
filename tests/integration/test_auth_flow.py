@@ -53,8 +53,6 @@ if not _DEPS_OK:
     pytest.skip(f"Missing dependencies: {_DEPS_ERR}", allow_module_level=True)
 
 try:
-    from auth.router import router as auth_router
-    from auth.service import AuthService
     from database.user_models import Base as UserBase
 
     _AUTH_OK = True
@@ -70,19 +68,13 @@ if not _AUTH_OK:
 _SECRET = "test-only-jwt-secret-key-minimum-32-chars!!"
 os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
-# Patch _REQUIRE_EMAIL_VERIFICATION at module level (after import) so that
-# register() always returns a token regardless of APP_ENV defaults.
-import auth.service as _auth_svc_mod
-
-_auth_svc_mod._REQUIRE_EMAIL_VERIFICATION = True
-
 
 # ── App + DB fixtures ─────────────────────────────────────────────────────────
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def db_engine():
-    """In-process SQLite engine shared across all tests in this module."""
+    """Per-test in-process SQLite engine — fully isolated, no cross-test bleed."""
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -97,34 +89,48 @@ def db_engine():
     engine.dispose()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def session_factory(db_engine):
     return sessionmaker(bind=db_engine, autocommit=False, autoflush=False)
 
 
-@pytest.fixture(scope="module")
-def auth_service(session_factory):
-    # _REQUIRE_EMAIL_VERIFICATION already patched at module level above.
-    svc = AuthService(session_factory=session_factory)
-    return svc
 
+@pytest.fixture()
+def client(session_factory):
+    """Per-test TestClient with a fully isolated auth stack.
 
-@pytest.fixture(scope="module")
-def client(auth_service):
-    """TestClient wired to a real AuthService backed by in-memory SQLite."""
-    from auth.router import set_auth_service
+    Evicts auth.router, auth.service, and auth.jwt from sys.modules before
+    each test so that env-var mutations in other test modules (e.g.
+    test_auth_router_jwt_secret deletes SECURITY_JWT_SECRET and re-imports
+    auth.service, creating a new _blacklist singleton) cannot corrupt the
+    revocation state used here.  Each test gets a completely fresh module
+    graph, DB, service, and app instance.
+    """
+    import sys
 
-    set_auth_service(auth_service)
-
-    # Force APP_ENV=test for the lifetime of this module so the router
-    # exposes _dev_verify_token and _dev_reset_token in responses.
-    # The conftest autouse fixture restores env vars per-test, but since
-    # this fixture is module-scoped we set it once here and also ensure
-    # it's set at the start of every test via the autouse fixture below.
+    # Pin the JWT secret before any auth module code runs.
+    os.environ["SECURITY_JWT_SECRET"] = _SECRET
     os.environ["APP_ENV"] = "test"
 
+    # Evict all auth sub-modules so fresh imports pick up the current env
+    # and a clean _blacklist singleton.
+    _auth_keys = [k for k in sys.modules if k == "auth" or k.startswith("auth.")]
+    for key in _auth_keys:
+        del sys.modules[key]
+
+    # Fresh imports — these are the canonical module objects for this test.
+    import auth.service as _svc_mod
+    import auth.router as _router_mod
+
+    # Patch email-verification flag on the freshly imported module.
+    _svc_mod._REQUIRE_EMAIL_VERIFICATION = True
+
+    # Wire a fresh AuthService backed by the per-test SQLite engine.
+    fresh_service = _svc_mod.AuthService(session_factory=session_factory)
+    _router_mod.set_auth_service(fresh_service)
+
     app = FastAPI()
-    app.include_router(auth_router)
+    app.include_router(_router_mod.router)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -356,11 +362,12 @@ class TestMe:
     def test_me_without_token_returns_401(self, client):
         # Use a fresh client with no cookies so the auth cookie from a
         # previous login in this session doesn't satisfy the auth check.
+        import auth.router as _r
         from fastapi import FastAPI
         from fastapi.testclient import TestClient as _TC
 
         _app = FastAPI()
-        _app.include_router(auth_router)
+        _app.include_router(_r.router)
         fresh = _TC(_app, raise_server_exceptions=False)
         r = fresh.get("/api/auth/me")
         assert r.status_code == 401
