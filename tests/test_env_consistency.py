@@ -658,3 +658,220 @@ def test_docker_compose_references_env_file() -> None:
         "Add 'env_file: .env' to each service so credentials are forwarded\n"
         "automatically without duplicating them in environment: blocks."
     )
+
+
+# ---------------------------------------------------------------------------
+# Gate B9 — BROKER alias consistency
+#
+# The codebase uses three overlapping env vars to select the active broker:
+#
+#   BROKER       — brokers/factory.py  (bare name: "paper", "mt5", "oanda")
+#   BROKER_TYPE  — api/trading.py      (same values, different var name)
+#   PAPER_TRADING — core/main_loop.py, execution/fix_router.py  (bool flag)
+#
+# All three must be declared in .env.example.  The note in .env.example that
+# says "set BOTH PAPER_TRADING and BROKER_TYPE" must be present so operators
+# know to keep them in sync.  The smoke override must set all three
+# consistently (BROKER=paper, BROKER_TYPE=paper, PAPER_TRADING=true).
+#
+# This is the exact split-brain class of bug the spec calls out:
+#   fix_router.py and main_loop.py gate paper-trading on PAPER_TRADING=true.
+#   api/trading.py gates it on BROKER_TYPE=paper.
+#   brokers/factory.py gates it on BROKER=paper.
+#   Setting only one of these leaves the others in an inconsistent state.
+# ---------------------------------------------------------------------------
+
+
+def test_broker_alias_vars_all_declared_in_env_example() -> None:
+    """
+    BROKER, BROKER_TYPE, and PAPER_TRADING must all be declared in .env.example.
+
+    These three variables control the same logical switch (paper vs live
+    trading) via different code paths.  All three must be documented so
+    operators know to set them consistently.
+    """
+    content = ENV_EXAMPLE.read_text(encoding="utf-8")
+    missing = [v for v in ("BROKER", "BROKER_TYPE", "PAPER_TRADING") if v not in content]
+    assert not missing, (
+        f"Broker alias variable(s) missing from .env.example: {missing}\n"
+        "All three broker-selection variables must be documented:\n"
+        "  BROKER        — brokers/factory.py (bare name: paper, mt5, oanda)\n"
+        "  BROKER_TYPE   — api/trading.py (same values, different var name)\n"
+        "  PAPER_TRADING — core/main_loop.py, execution/fix_router.py (bool)\n"
+        "Add the missing variable(s) with a note to keep them in sync."
+    )
+
+
+def test_env_example_documents_broker_sync_requirement() -> None:
+    """
+    .env.example must contain a note instructing operators to set both
+    PAPER_TRADING and BROKER_TYPE together.
+
+    The split-brain bug occurs when an operator sets PAPER_TRADING=true but
+    leaves BROKER_TYPE=live (or vice versa), causing the two code paths to
+    disagree on whether paper trading is active.  The note in .env.example
+    is the primary defence against this at the operator level.
+    """
+    content = ENV_EXAMPLE.read_text(encoding="utf-8")
+    # The note must mention both vars in proximity — check for the canonical
+    # phrasing added when the split-brain bug was fixed.
+    has_sync_note = (
+        ("PAPER_TRADING" in content and "BROKER_TYPE" in content)
+        and (
+            "set BOTH" in content
+            or "set both" in content
+            or "keep them in sync" in content
+            or "same purpose" in content
+            or "api/trading.py uses BROKER_TYPE" in content
+        )
+    )
+    assert has_sync_note, (
+        ".env.example does not document the PAPER_TRADING / BROKER_TYPE sync requirement.\n"
+        "Add a comment near PAPER_TRADING explaining that BROKER_TYPE must be set\n"
+        "to the same value, e.g.:\n"
+        "  # NOTE: api/trading.py uses BROKER_TYPE=paper for the same purpose — set BOTH\n"
+        "  PAPER_TRADING=false\n"
+        "  BROKER_TYPE=paper"
+    )
+
+
+def test_broker_alias_vars_forwarded_in_compose() -> None:
+    """
+    BROKER_TYPE and PAPER_TRADING must reach the trading service container.
+
+    Acceptable forwarding mechanisms (either is sufficient):
+      1. Explicit entry in the service's environment: block
+         e.g.  BROKER_TYPE: ${BROKER_TYPE:-paper}
+      2. env_file: .env on the service — forwards every variable in .env,
+         including BROKER_TYPE and PAPER_TRADING, without listing them
+         individually.
+
+    If neither mechanism is present the container uses the code default
+    (paper) regardless of what .env says, creating a silent split-brain
+    between the API and the trading engine.
+    """
+    import yaml
+
+    content = DOCKER_COMPOSE.read_text(encoding="utf-8")
+
+    with DOCKER_COMPOSE.open(encoding="utf-8") as fh:
+        compose = yaml.safe_load(fh) or {}
+
+    trading_svc = compose.get("services", {}).get("trading", {})
+
+    # env_file: .env forwards ALL variables — no need to list them individually
+    env_file = trading_svc.get("env_file", "")
+    if isinstance(env_file, list):
+        env_file_str = " ".join(str(e) for e in env_file)
+    else:
+        env_file_str = str(env_file)
+
+    if ".env" in env_file_str:
+        # env_file covers everything — pass
+        return
+
+    # Fall back to checking explicit environment: block entries
+    missing = [v for v in ("BROKER_TYPE", "PAPER_TRADING") if v not in content]
+    assert not missing, (
+        f"Broker alias variable(s) not forwarded to the trading service: {missing}\n"
+        "Either add 'env_file: .env' to the trading service (recommended) or\n"
+        "add explicit environment entries:\n"
+        "  BROKER_TYPE: ${BROKER_TYPE:-paper}\n"
+        "  PAPER_TRADING: ${PAPER_TRADING:-false}"
+    )
+
+
+def test_smoke_override_broker_vars_consistent() -> None:
+    """
+    docker-compose.smoke.yml must set BROKER_TYPE=paper and PAPER_TRADING=true
+    for the app service, and they must agree with each other.
+
+    A smoke override that sets BROKER_TYPE=paper but PAPER_TRADING=false (or
+    vice versa) would pass the smoke test while hiding a split-brain that
+    would manifest in production.
+    """
+    import yaml
+
+    smoke_path = REPO_ROOT / "docker-compose.smoke.yml"
+    if not smoke_path.exists():
+        pytest.skip("docker-compose.smoke.yml not found")
+
+    with smoke_path.open(encoding="utf-8") as fh:
+        smoke = yaml.safe_load(fh) or {}
+
+    app_env = smoke.get("services", {}).get("app", {}).get("environment", {})
+    if isinstance(app_env, list):
+        app_env = dict(item.split("=", 1) for item in app_env if "=" in item)
+
+    broker_type = str(app_env.get("BROKER_TYPE", "")).lower()
+    paper_trading = str(app_env.get("PAPER_TRADING", "")).lower()
+
+    # Both must be set
+    assert broker_type, (
+        "docker-compose.smoke.yml app.BROKER_TYPE is not set.\n"
+        "Set BROKER_TYPE=paper to prevent live broker connections in CI."
+    )
+    assert paper_trading, (
+        "docker-compose.smoke.yml app.PAPER_TRADING is not set.\n"
+        "Set PAPER_TRADING=true to prevent live broker connections in CI."
+    )
+
+    # They must agree: paper mode iff BROKER_TYPE=paper AND PAPER_TRADING=true
+    broker_is_paper = broker_type == "paper"
+    trading_is_paper = paper_trading in ("true", "1", "yes")
+
+    assert broker_is_paper == trading_is_paper, (
+        f"Broker alias split-brain in docker-compose.smoke.yml:\n"
+        f"  BROKER_TYPE={broker_type!r}  (paper={broker_is_paper})\n"
+        f"  PAPER_TRADING={paper_trading!r}  (paper={trading_is_paper})\n"
+        "Both must agree.  Set BROKER_TYPE=paper and PAPER_TRADING=true for CI."
+    )
+
+
+def test_fix_router_and_trading_use_consistent_paper_gate() -> None:
+    """
+    fix_router.py must gate paper mode on PAPER_TRADING and api/trading.py
+    must gate it on BROKER_TYPE.  Both files must be present and readable.
+
+    This test does not assert the values — it asserts that each file uses
+    its canonical variable so the split-brain is at least predictable and
+    documented rather than accidental.
+    """
+    fix_router = REPO_ROOT / "execution" / "fix_router.py"
+    trading = REPO_ROOT / "api" / "trading.py"
+
+    assert fix_router.exists(), "execution/fix_router.py not found"
+    assert trading.exists(), "api/trading.py not found"
+
+    fix_text = fix_router.read_text(encoding="utf-8")
+    trading_text = trading.read_text(encoding="utf-8")
+
+    assert "PAPER_TRADING" in fix_text, (
+        "execution/fix_router.py no longer reads PAPER_TRADING.\n"
+        "If the paper-trading gate was moved to a different variable, update\n"
+        "this test and the .env.example sync note."
+    )
+    assert "BROKER_TYPE" in trading_text, (
+        "api/trading.py no longer reads BROKER_TYPE.\n"
+        "If the paper-trading gate was moved to a different variable, update\n"
+        "this test and the .env.example sync note."
+    )
+
+
+def test_main_loop_uses_paper_trading_var() -> None:
+    """
+    core/main_loop.py must gate paper mode on PAPER_TRADING (not BROKER_TYPE).
+
+    main_loop.py is the trading engine orchestrator.  It must use the same
+    variable as fix_router.py (PAPER_TRADING) so the engine and the router
+    agree on paper mode without requiring BROKER_TYPE to be set.
+    """
+    main_loop = REPO_ROOT / "core" / "main_loop.py"
+    assert main_loop.exists(), "core/main_loop.py not found"
+
+    text = main_loop.read_text(encoding="utf-8")
+    assert "PAPER_TRADING" in text, (
+        "core/main_loop.py no longer reads PAPER_TRADING.\n"
+        "The trading engine orchestrator must gate paper mode on PAPER_TRADING\n"
+        "to stay consistent with execution/fix_router.py."
+    )
