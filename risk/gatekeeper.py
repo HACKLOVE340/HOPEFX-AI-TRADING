@@ -129,10 +129,12 @@ class _EquityTracker:
         self._peak = initial
         self._current = initial
         self._day_open = initial
-        self._day = datetime.now(UTC).day
+        _now = datetime.now(UTC)
+        self._day: tuple = (_now.year, _now.month, _now.day)
 
     def update(self, equity: float) -> None:
-        today = datetime.now(UTC).day
+        _utc = datetime.now(UTC)
+        today = (_utc.year, _utc.month, _utc.day)
         if today != self._day:
             self._day_open = equity
             self._day = today

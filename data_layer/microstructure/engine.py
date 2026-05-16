@@ -135,7 +135,7 @@ class MicrostructureEngine:
         self._vwap_den: float = 0.0  # Σ(volume)
         self._session_open: float = 0.0
         self._last_mid: float = 0.0
-        self._last_session_day: int = -1
+        self._last_session_day: tuple | int = -1
 
         # Kyle's lambda accumulators — rolling window (last _KYLE_WINDOW ticks)
         self._kyles_num: float = 0.0  # Σ|Δprice|
@@ -681,9 +681,10 @@ class MicrostructureEngine:
         # deadlock: _process_tick is already called under self._lock, and the
         # public reset_session() also acquires self._lock.
         now_utc = datetime.now(UTC)
-        if now_utc.day != self._last_session_day and self._last_session_day >= 0:
+        now_date = (now_utc.year, now_utc.month, now_utc.day)
+        if now_date != self._last_session_day and self._last_session_day != -1:
             self._reset_session_unlocked()
-        self._last_session_day = now_utc.day
+        self._last_session_day = now_date
 
         snap = self._build_snapshot()
 

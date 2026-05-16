@@ -301,7 +301,7 @@ async def _check_disk() -> ComponentStatus:
         usage = shutil.disk_usage(_DISK_PATH)
         free_gb = usage.free / (1024 ** 3)
         total_gb = usage.total / (1024 ** 3)
-        used_pct = (usage.used / usage.total) * 100
+        used_pct = (usage.used / usage.total) * 100 if usage.total > 0 else 0.0
         latency = (time.monotonic() - t0) * 1000
         detail = f"{free_gb:.1f} GB free / {total_gb:.1f} GB total ({used_pct:.1f}% used)"
         if free_gb < _DISK_WARN_GB:

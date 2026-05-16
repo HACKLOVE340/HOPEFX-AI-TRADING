@@ -128,7 +128,8 @@ class DrawdownTracker:
 
         # Daily anchor — resets at midnight UTC
         self._daily_open: float = initial_balance
-        self._day: int = datetime.now(UTC).day
+        _now = datetime.now(UTC)
+        self._day: tuple = (_now.year, _now.month, _now.day)
 
         # Cumulative realised PnL from partial fills today
         self._daily_realised_pnl: float = 0.0
@@ -160,7 +161,8 @@ class DrawdownTracker:
             self._last_balance = balance
 
             # ── Day rollover ──────────────────────────────────────────────────
-            today = datetime.now(UTC).day
+            _utc = datetime.now(UTC)
+            today = (_utc.year, _utc.month, _utc.day)
             if today != self._day:
                 # New day: anchor is the equity/balance at the start of the new day
                 anchor_new = balance if self.drawdown_mode == "balance" else equity

@@ -799,7 +799,8 @@ class AlertEngine:
         limit: int = 50,
     ) -> list[AlertTrigger]:
         """Get trigger history."""
-        history = self._trigger_history.copy()
+        with self._lock:
+            history = self._trigger_history.copy()
 
         if symbol:
             history = [t for t in history if t.symbol == symbol]

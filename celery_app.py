@@ -63,8 +63,8 @@ def _redis_lock(name: str, timeout: int = 3600):
     locking when Redis is unavailable (dev/test environments).
     """
     try:
-        import redis as _redis_mod  # type: ignore[import-untyped]
-        _r = _redis_mod.from_url(os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1"), socket_timeout=5)
+        from cache.redis_pool import get_sync_client as _get_sync_client
+        _r = _get_sync_client()
         acquired = _r.set(f"celery_lock:{name}", "1", nx=True, ex=timeout)
         if not acquired:
             raise RuntimeError(f"celery_lock:{name} already held — skipping concurrent task")
