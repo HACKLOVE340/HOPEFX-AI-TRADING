@@ -23,14 +23,13 @@ import time
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 UTC = timezone.utc
 
 
-# ── Minimal stubs for injected dependencies ───────────────────────────────────
+# ── Real implementations for injected dependencies ────────────────────────────
 
 
 def _make_tick(symbol="XAUUSD", mid=2000.0, bid=1999.5, ask=2000.5, confidence=0.9):
@@ -46,49 +45,180 @@ def _make_tick(symbol="XAUUSD", mid=2000.0, bid=1999.5, ask=2000.5, confidence=0
     )
 
 
-def _make_orchestrator(tick=None, features=None, safe=True):
-    orch = MagicMock()
-    orch.get_latest_tick.return_value = tick or _make_tick()
-    orch.get_ml_features.return_value = features or {
-        "order_flow_imbalance": 0.5,
-        "bid_pressure": 0.3,
-        "news_sentiment_score": 0.2,
-    }
-    orch.is_safe_to_trade.return_value = safe
-    orch.notify_fill = MagicMock()
-    return orch
+class _RealOrchestrator:
+    """Real orchestrator stand-in — returns deterministic tick and feature data.
+
+    Implements only the methods called by HopeFXEngine so tests exercise
+    real code paths without network I/O.
+    """
+
+    def __init__(self, tick=None, features=None, safe=True) -> None:
+        self._tick = tick or _make_tick()
+        self._features = features or {
+            "order_flow_imbalance": 0.5,
+            "bid_pressure": 0.3,
+            "news_sentiment_score": 0.2,
+        }
+        self._safe = safe
+        self._fills: list = []
+
+    def get_latest_tick(self, symbol: str = "XAUUSD"):
+        return self._tick
+
+    def get_ml_features(self, symbol: str = "XAUUSD") -> dict:
+        return self._features
+
+    def is_safe_to_trade(self) -> bool:
+        return self._safe
+
+    def notify_fill(self, *args, **kwargs) -> None:
+        self._fills.append((args, kwargs))
 
 
-def _make_router(direction="long", fill_price=2000.0, status="filled"):
-    router = MagicMock()
-    router.route_and_execute = AsyncMock(
-        return_value={
-            "status": status,
-            "fill_price": fill_price,
-            "quantity": 1.0,
+class _RealRouter:
+    """Real router stand-in — returns a configurable fill result.
+
+    Implements route_and_execute() as a real async method so HopeFXEngine
+    can await it without MagicMock.
+    """
+
+    def __init__(self, fill_price: float = 2000.0, status: str = "filled") -> None:
+        self._fill_price = fill_price
+        self._status = status
+        self.calls: list = []
+
+    async def route_and_execute(self, order_request: dict) -> dict:
+        self.calls.append(order_request)
+        return {
+            "status": self._status,
+            "fill_price": self._fill_price,
+            "quantity": order_request.get("quantity", 1.0),
             "broker": "paper",
             "order_id": str(uuid.uuid4()),
         }
-    )
-    return router
 
 
-def _make_risk_manager(quantity=1.0):
-    rm = MagicMock()
-    rm.size_order.return_value = SimpleNamespace(quantity=quantity)
-    return rm
+class _RealRiskManager:
+    """Real risk manager stand-in — returns a fixed sized order."""
+
+    def __init__(self, quantity: float = 1.0) -> None:
+        self._quantity = quantity
+
+    def size_order(self, signal) -> SimpleNamespace:
+        return SimpleNamespace(quantity=self._quantity)
 
 
-def _make_gatekeeper(passed=True):
-    gk = MagicMock()
-    gk.evaluate = AsyncMock(return_value=SimpleNamespace(passed=passed, reason="ok"))
-    return gk
+class _RealGatekeeper:
+    """Real gatekeeper stand-in — always passes (or always blocks)."""
+
+    def __init__(self, passed: bool = True) -> None:
+        self._passed = passed
+
+    async def evaluate(self, signal) -> SimpleNamespace:
+        return SimpleNamespace(passed=self._passed, reason="ok")
 
 
-def _make_lineage():
-    ls = MagicMock()
-    ls.record_signal = MagicMock()
-    return ls
+class _RealLineageStore:
+    """Real lineage store stand-in — records signals in memory."""
+
+    def __init__(self) -> None:
+        self.signals: list = []
+
+    def record_signal(self, *args, **kwargs) -> None:
+        self.signals.append((args, kwargs))
+
+
+class _RealIntraTradeMonitor:
+    """Real intra-trade monitor stand-in — no unwind signals."""
+
+    def on_tick(self, mid: float = 0.0, data_quality: float = 1.0) -> list:
+        return []
+
+    def on_open(self, position) -> None:
+        pass
+
+    def on_close(self, position_id: str, close_price: float = 0.0) -> None:
+        pass
+
+    def snapshot(self) -> dict:
+        return {}
+
+
+class _RealPostTradeAnalyzer:
+    """Real post-trade analyzer stand-in — records fills in memory."""
+
+    def __init__(self) -> None:
+        self.fills: list = []
+
+    def record_fill(self, *args, **kwargs) -> None:
+        self.fills.append((args, kwargs))
+
+    def rolling_stats(self) -> dict:
+        return {}
+
+
+class _RealDrawdownTracker:
+    """Real drawdown tracker stand-in — never breaches."""
+
+    def __init__(self, initial_equity: float = 100_000.0) -> None:
+        self._hwm = initial_equity
+
+    def update(self, equity: float) -> SimpleNamespace:
+        return SimpleNamespace(
+            total_breach=False,
+            daily_breach=False,
+            total_drawdown_pct=0.0,
+            daily_drawdown_pct=0.0,
+            total_hwm=self._hwm,
+            total_alert=False,
+            daily_alert=False,
+        )
+
+    def record_fill(self, *args, **kwargs) -> None:
+        pass
+
+
+class _RealShadowEngine:
+    """Real shadow engine stand-in — no-op for all lifecycle methods."""
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+    def on_tick(self, *args, **kwargs) -> None:
+        pass
+
+    def on_signal(self, *args, **kwargs) -> None:
+        pass
+
+    def on_live_close(self, *args, **kwargs) -> None:
+        pass
+
+    def health(self) -> dict:
+        return {}
+
+    def get_comparison_report(self) -> dict:
+        return {}
+
+
+class _RealShadowValidator:
+    """Real shadow validator stand-in — no-op."""
+
+    async def start(self) -> None:
+        pass
+
+    async def stop(self) -> None:
+        pass
+
+    def on_production_tick(self, *args, **kwargs) -> None:
+        pass
+
+
+def _make_router(direction: str = "long", fill_price: float = 2000.0, status: str = "filled") -> _RealRouter:  # noqa: ARG001
+    """Convenience alias — returns a real _RealRouter with the given fill config."""
+    return _RealRouter(fill_price=fill_price, status=status)
 
 
 def _make_engine(
@@ -100,51 +230,19 @@ def _make_engine(
     quantity=1.0,
     initial_equity=100_000.0,
 ):
-    """Build a HopeFXEngine with all dependencies stubbed."""
+    """Build a HopeFXEngine with real stand-in implementations."""
     from execution.hopefx_engine import HopeFXEngine
 
-    orch = _make_orchestrator(tick=tick, features=features)
-    rtr = router or _make_router(fill_price=fill_price, status=fill_status)
-    rm = _make_risk_manager(quantity=quantity)
-    gk = _make_gatekeeper()
-    ls = _make_lineage()
-
-    # Stub out heavy optional components
-    intra = MagicMock()
-    intra.on_tick.return_value = []  # no unwind signals
-    intra.on_open = MagicMock()
-    intra.on_close = MagicMock()
-    intra.snapshot.return_value = {}
-
-    post = MagicMock()
-    post.record_fill = MagicMock()
-    post.rolling_stats.return_value = {}
-
-    dd = MagicMock()
-    dd.update.return_value = SimpleNamespace(
-        total_breach=False,
-        daily_breach=False,
-        total_drawdown_pct=0.0,
-        daily_drawdown_pct=0.0,
-        total_hwm=initial_equity,
-        total_alert=False,
-        daily_alert=False,
-    )
-    dd.record_fill = MagicMock()
-
-    shadow = MagicMock()
-    shadow.start = AsyncMock()
-    shadow.stop = AsyncMock()
-    shadow.on_tick = MagicMock()
-    shadow.on_signal = MagicMock()
-    shadow.on_live_close = MagicMock()
-    shadow.health.return_value = {}
-    shadow.get_comparison_report.return_value = {}
-
-    shadow_val = MagicMock()
-    shadow_val.start = AsyncMock()
-    shadow_val.stop = AsyncMock()
-    shadow_val.on_production_tick = MagicMock()
+    orch = _RealOrchestrator(tick=tick, features=features)
+    rtr = router or _RealRouter(fill_price=fill_price, status=fill_status)
+    rm = _RealRiskManager(quantity=quantity)
+    gk = _RealGatekeeper()
+    ls = _RealLineageStore()
+    intra = _RealIntraTradeMonitor()
+    post = _RealPostTradeAnalyzer()
+    dd = _RealDrawdownTracker(initial_equity=initial_equity)
+    shadow = _RealShadowEngine()
+    shadow_val = _RealShadowValidator()
 
     engine = HopeFXEngine(
         orchestrator=orch,

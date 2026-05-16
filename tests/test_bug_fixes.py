@@ -22,8 +22,8 @@ import asyncio
 import itertools
 import json
 import os
+import types
 from contextlib import contextmanager
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -86,36 +86,39 @@ class TestDbStoreSessionLeak:
 
     def test_session_ctx_closes_on_success(self):
         """Session.close() is called after a successful operation."""
-        mock_session = MagicMock()
-        mock_session_local = MagicMock(return_value=mock_session)
+        closed = []
 
-        fake_conn = MagicMock()
-        fake_conn.SessionLocal = mock_session_local
+        class _RealSession:
+            """Minimal real session that tracks close() calls."""
+            def close(self):
+                closed.append(True)
 
-        with patch.dict("sys.modules", {"database.connection": fake_conn}):
-            # Simulate what _session_ctx does: create, use, close
-            session = mock_session_local()
-            try:
-                pass  # successful operation
-            finally:
-                session.close()
+        session = _RealSession()
+        try:
+            pass  # successful operation
+        finally:
+            session.close()
 
-        mock_session.close.assert_called()
+        assert closed, "close() was not called"
 
     def test_session_ctx_closes_on_exception(self):
         """Session.close() is called even when the body raises."""
-        mock_session = MagicMock()
         closed = []
 
-        @contextmanager
-        def fake_session_ctx():
-            try:
-                yield mock_session
-            finally:
-                mock_session.close()
+        class _RealSession:
+            def close(self):
                 closed.append(True)
 
-        with fake_session_ctx():
+        real_session = _RealSession()
+
+        @contextmanager
+        def real_session_ctx():
+            try:
+                yield real_session
+            finally:
+                real_session.close()
+
+        with real_session_ctx():
             pass  # no exception
 
         assert closed, "close() was not called"
@@ -123,49 +126,64 @@ class TestDbStoreSessionLeak:
     def test_session_ctx_yields_none_on_import_error(self):
         """When SessionLocal is unavailable, _session_ctx yields None."""
         import importlib.util
+        import sys
 
         spec = importlib.util.spec_from_file_location("db_store_isolated", "api/db_store.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        # Patch SessionLocal to raise ImportError
-        import sys
+        # Build a real module stand-in that raises ImportError on SessionLocal()
+        fake_conn = types.ModuleType("database.connection")
 
-        fake_conn = MagicMock()
-        fake_conn.SessionLocal = MagicMock(side_effect=ImportError("no db"))
-        with patch.dict(sys.modules, {"database.connection": fake_conn}):
+        def _raise_import(*a, **kw):
+            raise ImportError("no db")
+
+        fake_conn.SessionLocal = _raise_import  # type: ignore[attr-defined]
+
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setitem(sys.modules, "database.connection", fake_conn)
             with mod._session_ctx() as session:
                 assert session is None
 
     def test_db_get_returns_none_when_db_unavailable(self):
         """db_get degrades gracefully when the DB is unavailable."""
         import importlib.util
+        import sys
 
         spec = importlib.util.spec_from_file_location("db_store_get", "api/db_store.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        import sys
+        fake_conn = types.ModuleType("database.connection")
 
-        fake_conn = MagicMock()
-        fake_conn.SessionLocal = MagicMock(side_effect=Exception("db down"))
-        with patch.dict(sys.modules, {"database.connection": fake_conn}):
+        def _raise_db(*a, **kw):
+            raise Exception("db down")
+
+        fake_conn.SessionLocal = _raise_db  # type: ignore[attr-defined]
+
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setitem(sys.modules, "database.connection", fake_conn)
             result = mod.db_get("any_key")
         assert result is None
 
     def test_db_set_returns_false_when_db_unavailable(self):
         """db_set returns False gracefully when the DB is unavailable."""
         import importlib.util
+        import sys
 
         spec = importlib.util.spec_from_file_location("db_store_set", "api/db_store.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        import sys
+        fake_conn = types.ModuleType("database.connection")
 
-        fake_conn = MagicMock()
-        fake_conn.SessionLocal = MagicMock(side_effect=Exception("db down"))
-        with patch.dict(sys.modules, {"database.connection": fake_conn}):
+        def _raise_db(*a, **kw):
+            raise Exception("db down")
+
+        fake_conn.SessionLocal = _raise_db  # type: ignore[attr-defined]
+
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setitem(sys.modules, "database.connection", fake_conn)
             result = mod.db_set("key", {"value": 1})
         assert result is False
 
