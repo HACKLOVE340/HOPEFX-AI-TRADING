@@ -53,7 +53,8 @@ class PaperBroker:
         """
         try:
             from data_layer.orchestrator import orchestrator
-            tick = orchestrator.get_latest_tick(symbol.replace("XAUUSD", "XAU_USD"))
+            from utils.symbol import to_oanda
+            tick = orchestrator.get_latest_tick(to_oanda(symbol))
             if tick is None:
                 raise RuntimeError(
                     f"No live tick available for {symbol}. "
@@ -299,7 +300,7 @@ class XAUUSDBot:
 
         results_file = Path('results/xauusd_paper_results.json')
         results_file.parent.mkdir(exist_ok=True)
-        with Path(results_file).open('w') as f:
+        with Path(results_file).open('w', encoding='utf-8') as f:
             json.dump(results, f, indent=2, default=str)
         logger.info("Results saved to: %s", results_file)
 

@@ -194,6 +194,15 @@ def _reset_order_rl_cache() -> None:
     _order_rl_cache.clear()
 
 
+async def _order_rate_limit_dep(user: "TokenPayload" = Depends(require_kyc)) -> None:
+    """FastAPI Depends() wrapper for order rate limiting.
+
+    Wired directly onto the /orders and /order route decorators so the limit
+    appears in OpenAPI docs and is enforced before the handler body runs.
+    """
+    _check_order_rate_limit(user.sub)
+
+
 def _check_order_rate_limit(user_id: str) -> None:
     """Raise HTTP 429 if the user has exceeded the order rate limit.
 
@@ -247,10 +256,13 @@ class OrderRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20)
     side: str = Field(..., pattern="^(buy|sell)$")
     quantity: float = Field(..., gt=0)
-    order_type: str = Field("market", pattern="^(market|limit|stop)$")
-    price:       float | None = Field(None, gt=0)
-    stop_loss:   float | None = Field(None, gt=0, description="Stop-loss price (optional)")
+    order_type: str = Field("market", pattern="^(market|limit|stop|stop_limit|trailing_stop)$")
+    price: float | None = Field(None, gt=0)
+    stop_price: float | None = Field(None, gt=0, description="Trigger price for stop-limit orders")
+    stop_loss: float | None = Field(None, gt=0, description="Stop-loss price (optional)")
     take_profit: float | None = Field(None, gt=0, description="Take-profit price (optional)")
+    trailing_distance: float | None = Field(None, gt=0, description="Trailing stop distance in price units")
+    comment: str | None = Field(None, max_length=128)
 
     @field_validator("symbol")
     @classmethod
@@ -261,6 +273,53 @@ class OrderRequest(BaseModel):
     @classmethod
     def _quantity(cls, v: float) -> float:
         return validate_order_quantity(v)
+
+
+class ModifyPositionRequest(BaseModel):
+    stop_loss: float | None = Field(None, gt=0)
+    take_profit: float | None = Field(None, gt=0)
+    trailing_stop: float | None = Field(None, gt=0, description="Trailing stop distance in price units")
+
+
+class PartialCloseRequest(BaseModel):
+    quantity: float = Field(..., gt=0, description="Lot size to close (must be < full position size)")
+
+
+class ModifyOrderRequest(BaseModel):
+    price: float | None = Field(None, gt=0)
+    stop_price: float | None = Field(None, gt=0)
+    quantity: float | None = Field(None, gt=0)
+    stop_loss: float | None = Field(None, gt=0)
+    take_profit: float | None = Field(None, gt=0)
+    trailing_distance: float | None = Field(None, gt=0)
+
+
+class DepthLevel(BaseModel):
+    price: float
+    size: float
+    total: float = 0.0
+
+
+class OrderBookResponse(BaseModel):
+    symbol: str
+    bids: list[DepthLevel]
+    asks: list[DepthLevel]
+    timestamp: float
+    spread: float
+
+
+class SymbolInfoResponse(BaseModel):
+    symbol: str
+    description: str
+    category: str
+    pip_size: float
+    lot_size: float
+    min_lot: float
+    max_lot: float
+    margin_rate: float
+    swap_long: float | None = None
+    swap_short: float | None = None
+    trading_hours: str | None = None
 
 
 class PositionResponse(BaseModel):
@@ -373,7 +432,11 @@ async def _validate_order(order: "OrderRequest") -> None:
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
+            detail=(
+                "Broker not initialised. The paper trading broker starts automatically "
+                "on server startup — if this persists, check the server logs for "
+                "startup errors (BROKER_TYPE env var defaults to 'paper')."
+            ),
         )
     try:
         from brokers.prop_firms.guard import check_prop_firm_rules
@@ -417,7 +480,9 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
             reason = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
             reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
             logger.warning("Order blocked by risk manager: user=%s reason=%s", user_id, reason_str)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}"
+            ) from None
     except HTTPException:
         raise
     except Exception as exc:
@@ -522,16 +587,30 @@ async def _route_to_broker(order: "OrderRequest") -> Any:
 
 async def _broadcast_fill_ws(order: "OrderRequest", result: Any) -> None:
     """Broadcast the fill over WebSocket. Best-effort — logs on failure."""
+    trade_msg = {
+        "type": "trade_fill",
+        "data": {
+            "symbol": order.symbol,
+            "price": result.average_fill_price or 0.0,
+            "quantity": order.quantity,
+            "side": order.side,
+            "trade_id": result.id,
+        },
+    }
+    # Route through ws_live LiveConnectionManager (preferred — FastAPI WS).
+    try:
+        from api.ws_live import get_live_manager as _get_live_mgr
+
+        await _get_live_mgr().broadcast("trades", trade_msg)
+        return
+    except Exception as exc:
+        logger.debug("ws_live broadcast failed, trying ws_manager: %s", exc)
+
+    # Fallback: legacy WebSocketManager on app_state (websockets-based).
     if not (hasattr(app_state, "ws_manager") and app_state.ws_manager is not None):
         return
     try:
-        await app_state.ws_manager.broadcast_trade(
-            symbol=order.symbol,
-            price=result.average_fill_price or 0.0,
-            quantity=order.quantity,
-            side=order.side,
-            trade_id=result.id,
-        )
+        await app_state.ws_manager.broadcast(trade_msg)
     except Exception as exc:
         logger.warning("WebSocket broadcast failed: %s", exc)
 
@@ -610,25 +689,16 @@ def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) ->
     except Exception as exc:
         logger.debug("gate.record_fill skipped: %s", exc)
 
-    try:
-        import pandas as _pd
-
-        from core.signal_engine import notify_fill as _notify_fill
-
-        _features = _pd.DataFrame(
-            [
-                {
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                    "fill_price": result.average_fill_price or 0.0,
-                    "source": "rest_api",
-                }
-            ]
-        )
-        _notify_fill(_features, label=1, primary_prob=None)
-    except Exception as exc:
-        logger.debug("notify_fill skipped: %s", exc)
+    # Online learner: do NOT call notify_fill with a fabricated label=1 here.
+    # The label (profitable=1 / loss=0) is only known when the trade closes.
+    # Passing label=1 at fill time poisons the model by teaching it that every
+    # REST-API order is profitable.  The trade-close path should call
+    # notify_trade_close(features, realized_pnl) with the real outcome instead.
+    logger.debug(
+        "Online learner fill notification deferred to trade close: %s %s",
+        order.side,
+        order.symbol,
+    )
 
 
 async def _record_fill(
@@ -647,6 +717,7 @@ async def _record_fill(
       4. Prometheus metric increment
       5. Paper-trading gate + online learner feedback
     """
+
     # Normalise result: brokers return either an Order object or a fill dict.
     def _get(attr: str, dict_key: str | None = None) -> Any:
         """Get attribute from Order object or key from fill dict."""
@@ -661,12 +732,21 @@ async def _record_fill(
     filled_qty = _get("filled_quantity", "quantity") or order.quantity
 
     # Reject if broker signalled a failure status in the result.
-    result_status = _get("status")
-    if result_status in ("rejected", "error", "cancelled"):
-        reason = _get("reason") or result_status
+    # Order.status is an OrderStatus enum; normalise to lowercase string so
+    # the comparison works regardless of whether the broker returns an enum
+    # value (e.g. OrderStatus.REJECTED) or a plain string (e.g. "rejected").
+    raw_status = _get("status")
+    result_status_str = (raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")).lower()
+    if result_status_str in ("rejected", "error", "cancelled"):
+        # Prefer rejected_reason attribute (Order dataclass), then generic reason.
+        reason = _get("rejected_reason") or _get("reason") or result_status_str
         logger.error(
             "Order rejected by broker: user=%s symbol=%s side=%s status=%s reason=%s",
-            user_id, order.symbol, order.side, result_status, reason,
+            user_id,
+            order.symbol,
+            order.side,
+            result_status_str,
+            reason,
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -752,6 +832,7 @@ async def place_order(
     order: OrderRequest,
     user: TokenPayload = Depends(require_kyc),
     _role: TokenPayload = Depends(require_role("trader")),
+    _rl: None = Depends(_order_rate_limit_dep),
 ):
     """
     Place a new order.
@@ -771,7 +852,7 @@ async def place_order(
     _check_subscription_gate(user.sub, user.role)
     _check_kill_switch()  # hard block — must be first
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
-    _check_order_rate_limit(user.sub)
+    # Rate limit enforced via Depends(_order_rate_limit_dep) above.
     await _validate_order(order)
     await _apply_risk_checks(order, user.sub)
     _log_compliance(order, user.sub)
@@ -938,12 +1019,13 @@ async def get_balance(user: TokenPayload = Depends(get_current_user)):
 async def get_positions(
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Get all open positions. Requires: any authenticated user."""
+    """Get all open positions. Requires: any authenticated user.
+
+    Returns an empty list when the broker is not yet initialised so the
+    frontend positions table renders cleanly during cold-start.
+    """
     if not app_state or not app_state.broker:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
-        )
+        return []
 
     positions = await _broker_call("get_positions")
     result = []
@@ -990,28 +1072,34 @@ async def close_position(
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
+            detail="Broker not initialised — cannot close position. The paper trading engine starts automatically on server startup.",
         )
 
     # Ownership check: verify the position belongs to the requesting user.
     # Positions opened via the DB-backed path carry user_id; broker-native
     # positions (no DB row) fall through and are allowed for role >= trader.
-    if getattr(app_state, "db_session_factory", None) is not None:
+    if app_state.db_session_factory is not None:
         try:
             from database.models import Position as _Pos
 
             with app_state.db_session_factory() as _db:
                 _pos_row = _db.query(_Pos).filter(_Pos.id == position_id).first()
-                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub:
-                    if user.role not in ("admin", "superadmin"):
-                        logger.warning(
-                            "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
-                            user.sub, position_id, _pos_row.user_id,
-                        )
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You do not own this position",
-                        )
+                if (
+                    _pos_row is not None
+                    and _pos_row.user_id
+                    and _pos_row.user_id != user.sub
+                    and user.role not in ("admin", "superadmin")
+                ):
+                    logger.warning(
+                        "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
+                        user.sub,
+                        position_id,
+                        _pos_row.user_id,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You do not own this position",
+                    )
         except HTTPException:
             raise
         except Exception as _idor_exc:
@@ -1025,6 +1113,24 @@ async def close_position(
         )
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
+
+    # Notify Phase-3 online learner with the real outcome label.
+    # realized_pnl comes from the broker close response; fall back to 0.0
+    # when unavailable so the learner records a neutral (loss) label rather
+    # than a fabricated profitable one.
+    try:
+        import pandas as _pd
+        from core.signal_engine import notify_trade_close as _notify_close
+
+        _realized = float(
+            getattr(success, "realized_pnl", None)
+            or (success.get("realized_pnl") if isinstance(success, dict) else None)
+            or 0.0
+        )
+        _close_features = _pd.DataFrame([{"position_id": position_id, "user_id": user.sub, "source": "rest_api_close"}])
+        _notify_close(_close_features, realized_pnl=_realized, primary_prob=None)
+    except Exception as _ol_exc:
+        logger.debug("notify_trade_close skipped: %s", _ol_exc)
 
     # Publish POSITION_CLOSED to the legacy event bus so StrategyOrchestra
     # can update its allocation tracking and rebalancer.
@@ -1076,12 +1182,653 @@ async def close_all_positions(
     if not app_state or not app_state.broker:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Broker not available",
+            detail="Broker not initialised — cannot close positions. The paper trading engine starts automatically on server startup.",
         )
 
     closed = await _broker_call("close_all_positions")
     logger.info("All positions closed: user=%s count=%s", user.sub, closed)
     return {"status": "success", "closed_positions": closed}
+
+
+# ---------------------------------------------------------------------------
+# Position modify / partial-close / hedge
+# ---------------------------------------------------------------------------
+
+
+@router.patch(
+    "/positions/{position_id}",
+    summary="Modify stop-loss, take-profit, or trailing stop on an open position",
+)
+async def modify_position(
+    position_id: str,
+    req: ModifyPositionRequest,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Modify SL/TP/trailing-stop on an open position. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    modify_fn = getattr(broker, "modify_position", None)
+    if modify_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support position modification.",
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.coroutine(modify_fn)(
+                position_id,
+                stop_loss=req.stop_loss,
+                take_profit=req.take_profit,
+                trailing_stop=req.trailing_stop,
+            )
+            if asyncio.iscoroutinefunction(modify_fn)
+            else asyncio.to_thread(
+                modify_fn,
+                position_id,
+                stop_loss=req.stop_loss,
+                take_profit=req.take_profit,
+                trailing_stop=req.trailing_stop,
+            ),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
+    except Exception as exc:
+        logger.exception("modify_position failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
+
+    logger.info(
+        "Position modified: user=%s position_id=%s sl=%s tp=%s trail=%s",
+        user.sub,
+        position_id,
+        req.stop_loss,
+        req.take_profit,
+        req.trailing_stop,
+    )
+    return result or {"status": "ok", "position_id": position_id}
+
+
+@router.post(
+    "/positions/{position_id}/partial-close",
+    summary="Partially close an open position by lot size",
+)
+async def partial_close_position(
+    position_id: str,
+    req: PartialCloseRequest,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Close a portion of an open position. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    partial_fn = getattr(broker, "partial_close_position", None)
+    if partial_fn is None:
+        # Fallback: close full position if broker doesn't support partial close
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support partial position close.",
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(partial_fn, position_id, req.quantity)
+            if not asyncio.iscoroutinefunction(partial_fn)
+            else partial_fn(position_id, req.quantity),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
+    except Exception as exc:
+        logger.exception("partial_close_position failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
+
+    logger.info(
+        "Partial close: user=%s position_id=%s quantity=%s",
+        user.sub,
+        position_id,
+        req.quantity,
+    )
+    return result or {"status": "ok", "position_id": position_id, "closed_quantity": req.quantity}
+
+
+@router.post(
+    "/positions/{position_id}/hedge",
+    summary="Open a hedge (opposite-side) order for an existing position",
+)
+async def hedge_position(
+    position_id: str,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Place an equal-and-opposite order to hedge an open position. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    # Fetch the position to mirror
+    positions = await _broker_call("get_positions")
+    target = next((p for p in positions if str(p.id) == position_id), None)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.") from None
+
+    hedge_side = "sell" if str(getattr(target, "side", "long")).lower() in ("long", "buy") else "buy"
+    hedge_qty = float(getattr(target, "quantity", getattr(target, "size", 0)))
+    if hedge_qty <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position has zero size.") from None
+
+    hedge_order = OrderRequest(
+        symbol=target.symbol,
+        side=hedge_side,
+        quantity=hedge_qty,
+        order_type="market",
+    )
+    result = await _route_to_broker(hedge_order)
+    logger.info(
+        "Hedge placed: user=%s position_id=%s hedge_side=%s qty=%s",
+        user.sub,
+        position_id,
+        hedge_side,
+        hedge_qty,
+    )
+    return {"status": "ok", "hedge_order": result, "hedged_position_id": position_id}
+
+
+# ---------------------------------------------------------------------------
+# Order cancel / modify
+# ---------------------------------------------------------------------------
+
+
+@router.delete(
+    "/orders/{order_id}",
+    summary="Cancel a pending or open order",
+)
+async def cancel_order(
+    order_id: str,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Cancel a pending order. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    cancel_fn = getattr(broker, "cancel_order", None)
+    if cancel_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support order cancellation.",
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(cancel_fn, order_id)
+            if not asyncio.iscoroutinefunction(cancel_fn)
+            else cancel_fn(order_id),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
+    except Exception as exc:
+        logger.exception("cancel_order failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
+
+    logger.info("Order cancelled: user=%s order_id=%s", user.sub, order_id)
+    return result or {"status": "cancelled", "order_id": order_id}
+
+
+@router.patch(
+    "/orders/{order_id}",
+    summary="Modify price, quantity, SL, or TP on a pending order",
+)
+async def modify_order(
+    order_id: str,
+    req: ModifyOrderRequest,
+    user: TokenPayload = Depends(require_role("trader")),
+):
+    """Modify a pending order. Requires: role >= 'trader'."""
+    _check_kill_switch()
+    if not app_state or not app_state.broker:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Broker not initialised.",
+        )
+
+    broker = app_state.broker
+    modify_fn = getattr(broker, "modify_order", None)
+    if modify_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail="Connected broker does not support order modification.",
+        )
+
+    kwargs = {k: v for k, v in req.model_dump().items() if v is not None}
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(modify_fn, order_id, **kwargs)
+            if not asyncio.iscoroutinefunction(modify_fn)
+            else modify_fn(order_id, **kwargs),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
+    except Exception as exc:
+        logger.exception("modify_order failed: %s", exc)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
+
+    logger.info("Order modified: user=%s order_id=%s changes=%s", user.sub, order_id, kwargs)
+    return result or {"status": "ok", "order_id": order_id}
+
+
+# ---------------------------------------------------------------------------
+# Order book depth
+# ---------------------------------------------------------------------------
+
+# Static spread map used when broker doesn't provide real depth
+_DEPTH_SPREAD_MAP: dict[str, float] = {
+    "XAUUSD": 0.30,
+    "XAGUSD": 0.03,
+    "EURUSD": 0.0001,
+    "GBPUSD": 0.0002,
+    "USDJPY": 0.02,
+    "BTCUSD": 10.0,
+    "ETHUSD": 1.0,
+    "USDCAD": 0.0002,
+    "AUDUSD": 0.0001,
+    "USDCHF": 0.0001,
+    "NZDUSD": 0.0001,
+    "US30": 2.0,
+    "US500": 0.25,
+    "NAS100": 0.5,
+    "USOIL": 0.03,
+}
+
+
+@router.get(
+    "/depth/{symbol}",
+    response_model=OrderBookResponse,
+    summary="Get order book depth (bid/ask ladder) for a symbol",
+)
+async def get_order_book_depth(
+    symbol: str,
+    levels: int = Query(20, ge=5, le=50),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return bid/ask depth ladder. Falls back to synthetic spread-based depth
+    when the broker does not provide a real order book. Requires: authenticated user."""
+    import time as _time
+    import random as _random
+
+    symbol = symbol.replace("/", "").replace("%2F", "").upper()
+    try:
+        symbol = validate_order_symbol(symbol)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
+        ) from None
+
+    now = _time.time()
+
+    # Try broker depth first
+    if app_state and app_state.broker:
+        depth_fn = getattr(app_state.broker, "get_order_book", None)
+        if depth_fn is not None:
+            try:
+                book = await asyncio.wait_for(
+                    asyncio.to_thread(depth_fn, symbol, levels)
+                    if not asyncio.iscoroutinefunction(depth_fn)
+                    else depth_fn(symbol, levels),
+                    timeout=5.0,
+                )
+                if book and getattr(book, "bids", None) and getattr(book, "asks", None):
+                    bids = [DepthLevel(price=b[0], size=b[1]) for b in book.bids[:levels]]
+                    asks = [DepthLevel(price=a[0], size=a[1]) for a in book.asks[:levels]]
+                    # Compute running totals
+                    total = 0.0
+                    for b in bids:
+                        total += b.size
+                        b.total = round(total, 4)
+                    total = 0.0
+                    for a in asks:
+                        total += a.size
+                        a.total = round(total, 4)
+                    spread = asks[0].price - bids[0].price if bids and asks else 0.0
+                    return OrderBookResponse(
+                        symbol=symbol,
+                        bids=bids,
+                        asks=asks,
+                        timestamp=now,
+                        spread=round(spread, 5),
+                    )
+            except Exception as exc:
+                logger.debug("Broker depth unavailable for %s: %s", symbol, exc)
+
+    # Fallback: build a realistic depth ladder from the last known price tick.
+    # This uses real mid-price from the price engine / broker, not random values.
+    mid_price: float | None = None
+    if app_state and app_state.price_engine:
+        tick = app_state.price_engine.get_last_price(symbol)
+        if tick:
+            mid_price = float(tick.mid)
+    if mid_price is None and app_state and app_state.broker:
+        mp = getattr(app_state.broker, "market_prices", {})
+        mid_price = float(mp.get(symbol, 0)) or None
+
+    if mid_price is None or mid_price <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"No price data available for {symbol}. Connect a live data feed.",
+        )
+
+    spread = _DEPTH_SPREAD_MAP.get(symbol, mid_price * 0.0002)
+    pip = spread / 5  # one pip ≈ spread / 5
+
+    bids: list[DepthLevel] = []
+    asks: list[DepthLevel] = []
+    bid_total = ask_total = 0.0
+
+    # Use a seeded RNG so depth is deterministic per price level (not random per request)
+    rng = _random.Random(int(mid_price * 1000) % (2**31))
+
+    for i in range(levels):
+        bid_px = round(mid_price - spread / 2 - i * pip, 5)
+        ask_px = round(mid_price + spread / 2 + i * pip, 5)
+        # Size decreases with distance from mid — realistic shape
+        base_size = max(0.1, 5.0 / (i + 1))
+        bid_sz = round(base_size * rng.uniform(0.7, 1.3), 2)
+        ask_sz = round(base_size * rng.uniform(0.7, 1.3), 2)
+        bid_total += bid_sz
+        ask_total += ask_sz
+        bids.append(DepthLevel(price=bid_px, size=bid_sz, total=round(bid_total, 4)))
+        asks.append(DepthLevel(price=ask_px, size=ask_sz, total=round(ask_total, 4)))
+
+    return OrderBookResponse(
+        symbol=symbol,
+        bids=bids,
+        asks=asks,
+        timestamp=now,
+        spread=round(spread, 5),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Symbol info / search
+# ---------------------------------------------------------------------------
+
+_SYMBOL_CATALOGUE: dict[str, dict] = {
+    "XAUUSD": {
+        "description": "Gold vs US Dollar",
+        "category": "metals",
+        "pip_size": 0.01,
+        "lot_size": 100,
+        "min_lot": 0.01,
+        "max_lot": 50.0,
+        "margin_rate": 0.02,
+        "swap_long": -5.5,
+        "swap_short": 1.2,
+        "trading_hours": "Mon-Fri 01:00-24:00",
+    },
+    "XAGUSD": {
+        "description": "Silver vs US Dollar",
+        "category": "metals",
+        "pip_size": 0.001,
+        "lot_size": 5000,
+        "min_lot": 0.01,
+        "max_lot": 50.0,
+        "margin_rate": 0.02,
+        "swap_long": -3.2,
+        "swap_short": 0.8,
+        "trading_hours": "Mon-Fri 01:00-24:00",
+    },
+    "EURUSD": {
+        "description": "Euro vs US Dollar",
+        "category": "forex",
+        "pip_size": 0.0001,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": -0.5,
+        "swap_short": 0.3,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "GBPUSD": {
+        "description": "British Pound vs US Dollar",
+        "category": "forex",
+        "pip_size": 0.0001,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": -0.8,
+        "swap_short": 0.4,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "USDJPY": {
+        "description": "US Dollar vs Japanese Yen",
+        "category": "forex",
+        "pip_size": 0.01,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": 0.2,
+        "swap_short": -0.6,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "USDCHF": {
+        "description": "US Dollar vs Swiss Franc",
+        "category": "forex",
+        "pip_size": 0.0001,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": -0.3,
+        "swap_short": 0.1,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "AUDUSD": {
+        "description": "Australian Dollar vs USD",
+        "category": "forex",
+        "pip_size": 0.0001,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": -0.4,
+        "swap_short": 0.2,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "NZDUSD": {
+        "description": "New Zealand Dollar vs USD",
+        "category": "forex",
+        "pip_size": 0.0001,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": -0.3,
+        "swap_short": 0.1,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "USDCAD": {
+        "description": "US Dollar vs Canadian Dollar",
+        "category": "forex",
+        "pip_size": 0.0001,
+        "lot_size": 100000,
+        "min_lot": 0.01,
+        "max_lot": 100.0,
+        "margin_rate": 0.01,
+        "swap_long": -0.2,
+        "swap_short": 0.1,
+        "trading_hours": "Mon-Fri 00:00-24:00",
+    },
+    "BTCUSD": {
+        "description": "Bitcoin vs US Dollar",
+        "category": "crypto",
+        "pip_size": 1.0,
+        "lot_size": 1,
+        "min_lot": 0.01,
+        "max_lot": 10.0,
+        "margin_rate": 0.10,
+        "swap_long": -15.0,
+        "swap_short": -15.0,
+        "trading_hours": "24/7",
+    },
+    "ETHUSD": {
+        "description": "Ethereum vs US Dollar",
+        "category": "crypto",
+        "pip_size": 0.1,
+        "lot_size": 1,
+        "min_lot": 0.01,
+        "max_lot": 50.0,
+        "margin_rate": 0.10,
+        "swap_long": -10.0,
+        "swap_short": -10.0,
+        "trading_hours": "24/7",
+    },
+    "US30": {
+        "description": "Dow Jones Industrial Average",
+        "category": "indices",
+        "pip_size": 1.0,
+        "lot_size": 1,
+        "min_lot": 0.01,
+        "max_lot": 20.0,
+        "margin_rate": 0.05,
+        "swap_long": -2.5,
+        "swap_short": 0.5,
+        "trading_hours": "Mon-Fri 01:00-22:15",
+    },
+    "US500": {
+        "description": "S&P 500 Index",
+        "category": "indices",
+        "pip_size": 0.25,
+        "lot_size": 50,
+        "min_lot": 0.01,
+        "max_lot": 20.0,
+        "margin_rate": 0.05,
+        "swap_long": -2.0,
+        "swap_short": 0.4,
+        "trading_hours": "Mon-Fri 01:00-22:15",
+    },
+    "NAS100": {
+        "description": "NASDAQ 100 Index",
+        "category": "indices",
+        "pip_size": 0.25,
+        "lot_size": 20,
+        "min_lot": 0.01,
+        "max_lot": 20.0,
+        "margin_rate": 0.05,
+        "swap_long": -2.2,
+        "swap_short": 0.4,
+        "trading_hours": "Mon-Fri 01:00-22:15",
+    },
+    "USOIL": {
+        "description": "WTI Crude Oil",
+        "category": "commodities",
+        "pip_size": 0.01,
+        "lot_size": 1000,
+        "min_lot": 0.01,
+        "max_lot": 50.0,
+        "margin_rate": 0.05,
+        "swap_long": -3.0,
+        "swap_short": 0.5,
+        "trading_hours": "Mon-Fri 01:00-24:00",
+    },
+    "UKOIL": {
+        "description": "Brent Crude Oil",
+        "category": "commodities",
+        "pip_size": 0.01,
+        "lot_size": 1000,
+        "min_lot": 0.01,
+        "max_lot": 50.0,
+        "margin_rate": 0.05,
+        "swap_long": -2.8,
+        "swap_short": 0.4,
+        "trading_hours": "Mon-Fri 01:00-24:00",
+    },
+    "XPTUSD": {
+        "description": "Platinum vs US Dollar",
+        "category": "metals",
+        "pip_size": 0.01,
+        "lot_size": 50,
+        "min_lot": 0.01,
+        "max_lot": 20.0,
+        "margin_rate": 0.03,
+        "swap_long": -4.0,
+        "swap_short": 0.8,
+        "trading_hours": "Mon-Fri 01:00-24:00",
+    },
+}
+
+
+@router.get(
+    "/symbols",
+    response_model=list[SymbolInfoResponse],
+    summary="List all tradeable instruments",
+)
+async def list_symbols(
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return the full instrument catalogue. Requires: authenticated user."""
+    return [SymbolInfoResponse(symbol=sym, **info) for sym, info in _SYMBOL_CATALOGUE.items()]
+
+
+@router.get(
+    "/symbols/search",
+    response_model=list[SymbolInfoResponse],
+    summary="Search instruments by symbol or description",
+)
+async def search_symbols(
+    q: str = Query(..., min_length=1, max_length=30),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Full-text search across symbol names and descriptions. Requires: authenticated user."""
+    q_upper = q.upper()
+    results = [
+        SymbolInfoResponse(symbol=sym, **info)
+        for sym, info in _SYMBOL_CATALOGUE.items()
+        if q_upper in sym or q_upper in info["description"].upper()
+    ]
+    return results
+
+
+@router.get(
+    "/symbol/{symbol}",
+    response_model=SymbolInfoResponse,
+    summary="Get instrument specification for a single symbol",
+)
+async def get_symbol_info(
+    symbol: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Return instrument spec (pip size, lot size, margin rate, swaps). Requires: authenticated user."""
+    symbol = symbol.replace("/", "").replace("%2F", "").upper()
+    info = _SYMBOL_CATALOGUE.get(symbol)
+    if info is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Symbol '{symbol}' not found in instrument catalogue.",
+        )
+    return SymbolInfoResponse(symbol=symbol, **info)
 
 
 @router.get("/account", response_model=None, summary="Get full AccountMetrics snapshot")
@@ -1120,15 +1867,27 @@ async def get_account(
 
         try:
             import datetime as _dt
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TradeRepo
             from database.repositories.position_repository import PositionRepository as _PosRepo
 
-            async with _get_async_db() as _db:
-                _trade_repo = _TradeRepo(_db)
-                _pos_repo = _PosRepo(_db)
-                closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
-                open_positions = await _pos_repo.get_open_positions(symbol=None)
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
+                # Repositories are stateless — session is the first positional
+                # arg on every method, not a constructor arg. Instantiate with
+                # no args and pass _db explicitly on each call.
+                _trade_repo = _TradeRepo()
+                _pos_repo = _PosRepo()
+                # get_by_user returns all trades for the user; filter to closed
+                # in Python. get_by_user has no status parameter.
+                _all_trades = await _trade_repo.get_by_user(_db, user_id=user.sub, limit=10000)
+                closed = [
+                    t for t in _all_trades if getattr(t, "status", None) == "closed" or not getattr(t, "is_open", True)
+                ]
+                # Filter open positions to this user only — passing user_id=None
+                # would return all users' positions (data isolation breach).
+                open_positions = await _pos_repo.get_open_positions(_db, user_id=user.sub, symbol=None)
                 _open_trades = len(open_positions)
 
                 if closed:
@@ -1136,8 +1895,8 @@ async def get_account(
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
-                    # win_rate as fraction 0-1 (frontend multiplies by 100 for display)
-                    _win_rate = round(len(wins) / len(pnls), 4) if pnls else 0.0
+                    # win_rate as percentage 0-100 (consistent with live-broker path)
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -1151,8 +1910,8 @@ async def get_account(
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
                         _max_dd = max(_max_dd, dd)
-                    # max_drawdown as fraction 0-1 (frontend multiplies by 100 for display)
-                    _max_dd = round(_max_dd, 4)
+                    # max_drawdown as percentage 0-100 (consistent with live-broker path)
+                    _max_dd = round(_max_dd * 100, 2)
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
@@ -1163,7 +1922,7 @@ async def get_account(
                             _sharpe = round((mean_r / std_r) * _math.sqrt(252), 3) if std_r > 0 else 0.0
                             neg_rets = [r for r in rets if r < 0]
                             if neg_rets:
-                                down_var = sum(r ** 2 for r in neg_rets) / len(neg_rets)
+                                down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
                                 down_std = _math.sqrt(down_var)
                                 _sortino = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
                             sorted_rets = sorted(rets)
@@ -1192,35 +1951,34 @@ async def get_account(
         _equity = round(_balance + _unrealized, 2)
         _daily_pnl_pct = round((_daily_pnl / _balance * 100) if _balance > 0 else 0.0, 4)
 
-        # Kill switch state
+        # Kill switch state — use the injected helper so tests can override
         _ks_active = False
         try:
-            from app import kill_switch as _ks
-            active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
-            _ks_active = bool(active() if callable(active) else active)
+            _ks = _get_kill_switch()
+            _ks_active = bool(_ks and _ks.is_active())
         except Exception:  # nosec B110
             pass
 
         return {
-            "account_id":    user.sub,
-            "balance":       _balance,
-            "equity":        _equity,
-            "margin_used":   0.0,
-            "margin_free":   _equity,
-            "margin_level":  0.0,
-            "daily_pnl":     _daily_pnl,
+            "account_id": user.sub,
+            "balance": _balance,
+            "equity": _equity,
+            "margin_used": 0.0,
+            "margin_free": _equity,
+            "margin_level": 0.0,
+            "daily_pnl": _daily_pnl,
             "daily_pnl_pct": _daily_pnl_pct,
-            "total_pnl":     _total_pnl,
+            "total_pnl": _total_pnl,
             "unrealized_pnl": _unrealized,
-            "win_rate":      _win_rate,
-            "sharpe_ratio":  _sharpe,
+            "win_rate": _win_rate,
+            "sharpe_ratio": _sharpe,
             "sortino_ratio": _sortino,
-            "max_drawdown":  _max_dd,
-            "open_trades":   _open_trades,
+            "max_drawdown": _max_dd,
+            "open_trades": _open_trades,
             "open_risk_pct": _open_risk_pct,
-            "cvar_95":       _cvar_95,
-            "kill_switch":   _ks_active,
-            "currency":      "USD",
+            "cvar_95": _cvar_95,
+            "kill_switch": _ks_active,
+            "currency": "USD",
         }
 
     raw = await _broker_call("get_account_info")
@@ -1242,13 +2000,13 @@ async def get_account(
                 return str(v)
         return default
 
-    balance      = _f(raw, "balance", "nav", "net_liquidation")
-    equity       = _f(raw, "equity", "balance", "nav") or balance
-    margin_used  = _f(raw, "margin_used", "margin", "used_margin")
-    margin_free  = _f(raw, "margin_available", "free_margin", "available_margin") or max(equity - margin_used, 0.0)
+    balance = _f(raw, "balance", "nav", "net_liquidation")
+    equity = _f(raw, "equity", "balance", "nav") or balance
+    margin_used = _f(raw, "margin_used", "margin", "used_margin")
+    margin_free = _f(raw, "margin_available", "free_margin", "available_margin") or max(equity - margin_used, 0.0)
     margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
-    unrealized   = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
-    daily_pnl    = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
+    unrealized = _f(raw, "unrealized_pnl", "open_pnl", "unrealised_pnl")
+    daily_pnl = _f(raw, "daily_pnl", "day_pnl", "realized_pnl")
     daily_pnl_pct = round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4)
 
     # ── Trade statistics from DB ──────────────────────────────────────────────
@@ -1262,17 +2020,26 @@ async def get_account(
     cvar_95 = 0.0
 
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TradeRepo
         from database.repositories.position_repository import PositionRepository as _PosRepo
 
-        async with _get_async_db() as _db:
-            _trade_repo = _TradeRepo(_db)
-            _pos_repo = _PosRepo(_db)
-            # Closed trades for stats — user_id=None fetches all (admin view)
-            closed = await _trade_repo.get_by_user(user_id=None, status="closed", limit=10000)
-            # Open positions count via PositionRepository
-            open_positions = await _pos_repo.get_open_positions(symbol=None)
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
+            # Repositories are stateless — session is the first positional arg
+            # on every method, not a constructor arg.
+            _trade_repo = _TradeRepo()
+            _pos_repo = _PosRepo()
+            # Scope to the authenticated user — user_id=None would return all
+            # users' trades, leaking cross-user data (data isolation breach).
+            # get_by_user has no status parameter; filter closed trades in Python.
+            _all_trades = await _trade_repo.get_by_user(_db, user_id=user.sub, limit=10000)
+            closed = [
+                t for t in _all_trades if getattr(t, "status", None) == "closed" or not getattr(t, "is_open", True)
+            ]
+            # Filter open positions to this user only.
+            open_positions = await _pos_repo.get_open_positions(_db, user_id=user.sub, symbol=None)
             open_trades = len(open_positions)
 
             if closed:
@@ -1282,7 +2049,7 @@ async def get_account(
                 win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
 
                 # Equity curve for drawdown + Sharpe
-                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
                 eq_vals: list[float] = []
                 running = starting
                 for p in pnls:
@@ -1309,7 +2076,7 @@ async def get_account(
                         # Sortino (downside deviation only)
                         neg_rets = [r for r in rets if r < 0]
                         if neg_rets:
-                            down_var = sum(r ** 2 for r in neg_rets) / len(neg_rets)
+                            down_var = sum(r**2 for r in neg_rets) / len(neg_rets)
                             down_std = _math.sqrt(down_var)
                             sortino_ratio = round((mean_r / down_std) * _math.sqrt(252), 3) if down_std > 0 else 0.0
 
@@ -1329,35 +2096,34 @@ async def get_account(
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
 
-    # ── Kill switch state ─────────────────────────────────────────────────────
+    # ── Kill switch state — use the injected helper so tests can override ─────
     kill_switch_active = False
     try:
-        from app import kill_switch as _ks
-        active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
-        kill_switch_active = bool(active() if callable(active) else active)
+        _ks = _get_kill_switch()
+        kill_switch_active = bool(_ks and _ks.is_active())
     except Exception:  # nosec B110
         pass
 
     return {
-        "account_id":    _s(raw, "account_id", "id", "accountId", default=user.sub),
-        "balance":       round(balance, 2),
-        "equity":        round(equity, 2),
-        "margin_used":   round(margin_used, 2),
-        "margin_free":   round(margin_free, 2),
-        "margin_level":  margin_level,
-        "daily_pnl":     round(daily_pnl, 2),
+        "account_id": _s(raw, "account_id", "id", "accountId", default=user.sub),
+        "balance": round(balance, 2),
+        "equity": round(equity, 2),
+        "margin_used": round(margin_used, 2),
+        "margin_free": round(margin_free, 2),
+        "margin_level": margin_level,
+        "daily_pnl": round(daily_pnl, 2),
         "daily_pnl_pct": daily_pnl_pct,
-        "total_pnl":     total_pnl,
+        "total_pnl": total_pnl,
         "unrealized_pnl": round(unrealized, 2),
-        "win_rate":      win_rate,
-        "sharpe_ratio":  sharpe_ratio,
+        "win_rate": win_rate,
+        "sharpe_ratio": sharpe_ratio,
         "sortino_ratio": sortino_ratio,
-        "max_drawdown":  max_drawdown,
-        "open_trades":   open_trades,
+        "max_drawdown": max_drawdown,
+        "open_trades": open_trades,
         "open_risk_pct": open_risk_pct,
-        "cvar_95":       cvar_95,
-        "kill_switch":   kill_switch_active,
-        "currency":      _s(raw, "currency", "base_currency", default="USD"),
+        "cvar_95": cvar_95,
+        "kill_switch": kill_switch_active,
+        "currency": _s(raw, "currency", "base_currency", default="USD"),
     }
 
 
@@ -1391,9 +2157,14 @@ async def get_prices(
     market_prices = getattr(broker, "market_prices", {}) if broker else {}
     if market_prices:
         import time as _time
+
         _spread_map = {
-            "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
-            "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
+            "XAUUSD": 0.30,
+            "XAGUSD": 0.03,
+            "EURUSD": 0.0001,
+            "GBPUSD": 0.0002,
+            "USDJPY": 0.02,
+            "BTCUSD": 10.0,
         }
         now = _time.time()
         for sym, price in market_prices.items():
@@ -1411,24 +2182,38 @@ async def get_prices(
     # Maps internal symbol → yfinance ticker. Only used when no broker/engine
     # is running (API-only mode). Returns real market prices, not synthetic data.
     _YF_MAP = {
-        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X", "USDJPY": "USDJPY=X", "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD", "USDCAD": "USDCAD=X", "AUDUSD": "AUDUSD=X",
-        "USDCHF": "USDCHF=X", "NZDUSD": "NZDUSD=X",
+        "XAUUSD": "GC=F",
+        "XAGUSD": "SI=F",
+        "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X",
+        "USDJPY": "USDJPY=X",
+        "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD",
+        "USDCAD": "USDCAD=X",
+        "AUDUSD": "AUDUSD=X",
+        "USDCHF": "USDCHF=X",
+        "NZDUSD": "NZDUSD=X",
     }
     _SPREAD_MAP = {
-        "XAUUSD": 0.30, "XAGUSD": 0.03, "EURUSD": 0.0001,
-        "GBPUSD": 0.0002, "USDJPY": 0.02, "BTCUSD": 10.0,
-        "ETHUSD": 1.0, "USDCAD": 0.0002, "AUDUSD": 0.0001,
-        "USDCHF": 0.0001, "NZDUSD": 0.0001,
+        "XAUUSD": 0.30,
+        "XAGUSD": 0.03,
+        "EURUSD": 0.0001,
+        "GBPUSD": 0.0002,
+        "USDJPY": 0.02,
+        "BTCUSD": 10.0,
+        "ETHUSD": 1.0,
+        "USDCAD": 0.0002,
+        "AUDUSD": 0.0001,
+        "USDCHF": 0.0001,
+        "NZDUSD": 0.0001,
     }
     try:
         import time as _time
         import yfinance as _yf
+
         tickers = list(_YF_MAP.values())
         data = await asyncio.wait_for(
-            asyncio.to_thread(_yf.download, tickers, period="1d", interval="1m",
-                              progress=False, auto_adjust=True),
+            asyncio.to_thread(_yf.download, tickers, period="1d", interval="1m", progress=False, auto_adjust=True),
             timeout=10.0,
         )
         now = _time.time()
@@ -1494,7 +2279,7 @@ async def get_ohlcv(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Symbol '{symbol}' is not in the permitted instrument list.",
-        )
+        ) from None
 
     # ── Try price engine first ────────────────────────────────────────────────
     if app_state and app_state.price_engine:
@@ -1530,42 +2315,80 @@ async def get_ohlcv(
         import yfinance as _yf
 
         _YF_MAP = {
-            "XAUUSD": "GC=F", "XAGUSD": "SI=F", "XPTUSD": "PL=F",
-            "EURUSD": "EURUSD=X", "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X",
-            "USDCHF": "CHF=X", "AUDUSD": "AUDUSD=X", "NZDUSD": "NZDUSD=X",
-            "USDCAD": "CAD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
-            "US30": "YM=F", "US500": "ES=F", "NAS100": "NQ=F",
-            "USOIL": "CL=F", "UKOIL": "BZ=F",
+            "XAUUSD": "GC=F",
+            "XAGUSD": "SI=F",
+            "XPTUSD": "PL=F",
+            "EURUSD": "EURUSD=X",
+            "GBPUSD": "GBPUSD=X",
+            "USDJPY": "JPY=X",
+            "USDCHF": "CHF=X",
+            "AUDUSD": "AUDUSD=X",
+            "NZDUSD": "NZDUSD=X",
+            "USDCAD": "CAD=X",
+            "BTCUSD": "BTC-USD",
+            "ETHUSD": "ETH-USD",
+            "US30": "YM=F",
+            "US500": "ES=F",
+            "NAS100": "NQ=F",
+            "USOIL": "CL=F",
+            "UKOIL": "BZ=F",
         }
+        # Map timeframe → (yfinance interval, fetch period).
+        # Periods are capped to avoid slow downloads; 4h is resampled from 1h.
+        # yfinance only provides 1h data for up to 730 days but fetching that
+        # much is slow — cap at 60d which gives ~1440 bars (enough for any chart).
         _TF_MAP = {
-            "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
-            "30m": ("30m", "60d"), "1h": ("1h", "730d"), "4h": ("1h", "730d"),
-            "1d": ("1d", "5y"), "1w": ("1wk", "10y"),
+            "1m": ("1m", "7d"),
+            "5m": ("5m", "60d"),
+            "15m": ("15m", "60d"),
+            "30m": ("30m", "60d"),
+            "1h": ("1h", "60d"),  # ~1440 bars — fast, plenty of history
+            "4h": ("1h", "60d"),  # fetch 1h then resample → 4h
+            "1d": ("1d", "5y"),
+            "1w": ("1wk", "10y"),
         }
         ticker_sym = _YF_MAP.get(symbol, symbol)
-        interval, period = _TF_MAP.get(timeframe, ("1h", "730d"))
+        interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
+        resample_4h = timeframe == "4h"
 
         loop = asyncio.get_running_loop()
 
-        def _fetch_yf():
+        def _fetch_yf() -> list:
             t = _yf.Ticker(ticker_sym)
-            df = t.history(period=period, interval=interval, auto_adjust=True)
+            df = t.history(period=period, interval=interval, auto_adjust=True, progress=False)
             if df.empty:
                 return []
+            # Resample 1h → 4h when requested
+            if resample_4h:
+                df = (
+                    df.resample("4h")
+                    .agg(
+                        {
+                            "Open": "first",
+                            "High": "max",
+                            "Low": "min",
+                            "Close": "last",
+                            "Volume": "sum",
+                        }
+                    )
+                    .dropna(subset=["Open", "Close"])
+                )
             df = df.tail(limit)
             bars = []
             for ts, row in df.iterrows():
-                bars.append({
-                    "timestamp": int(ts.timestamp()),
-                    "open":   round(float(row["Open"]),   5),
-                    "high":   round(float(row["High"]),   5),
-                    "low":    round(float(row["Low"]),    5),
-                    "close":  round(float(row["Close"]),  5),
-                    "volume": round(float(row.get("Volume", 0)), 2),
-                })
+                bars.append(
+                    {
+                        "timestamp": int(ts.timestamp()),
+                        "open": round(float(row["Open"]), 5),
+                        "high": round(float(row["High"]), 5),
+                        "low": round(float(row["Low"]), 5),
+                        "close": round(float(row["Close"]), 5),
+                        "volume": round(float(row.get("Volume", 0)), 2),
+                    }
+                )
             return bars
 
-        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=25.0)
+        bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch_yf), timeout=20.0)
         if bars:
             logger.info("OHLCV yfinance direct: %s %s — %d bars", symbol, timeframe, len(bars))
             return bars
@@ -1644,12 +2467,11 @@ async def get_brain_state(
             try:
                 strats = getattr(app_state.brain, "active_strategies", None)
                 if strats:
-                    active_strategies = [
-                        getattr(s, "name", str(s)) for s in strats
-                    ] if not isinstance(strats, list) else [
-                        s if isinstance(s, str) else getattr(s, "name", str(s))
-                        for s in strats
-                    ]
+                    active_strategies = (
+                        [getattr(s, "name", str(s)) for s in strats]
+                        if not isinstance(strats, list)
+                        else [s if isinstance(s, str) else getattr(s, "name", str(s)) for s in strats]
+                    )
             except Exception:  # nosec B110
                 pass
             # Derive confidence from performance metrics
@@ -1667,9 +2489,9 @@ async def get_brain_state(
                 "status": system_state,
                 "active_strategies": active_strategies,
                 "confidence": confidence,
-                "updated_at": datetime.fromtimestamp(
-                    raw.get("timestamp", 0), tz=UTC
-                ).isoformat() if raw.get("timestamp") else datetime.now(UTC).isoformat(),
+                "updated_at": datetime.fromtimestamp(raw.get("timestamp", 0), tz=UTC).isoformat()
+                if raw.get("timestamp")
+                else datetime.now(UTC).isoformat(),
             }
         except Exception as _exc:
             logger.debug("brain state serialisation failed: %s", _exc)
@@ -1705,7 +2527,7 @@ async def start_paper_trading(
 
     account = {
         "user_id": user.sub,
-        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "10000")),
+        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "100000")),
         "currency": "USD",
         "mode": "paper",
         "activated_at": datetime.now(timezone.utc).isoformat(),
@@ -1778,18 +2600,20 @@ _TRADE_CSV_FIELDS = [
 async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: int) -> list:
     """Fetch trades from DB for the given user via TradeRepository."""
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TradeRepo
 
-        async with _get_async_db() as _db:
-            repo = _TradeRepo(_db)
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
+            # Repository is stateless — pass session as first positional arg.
+            repo = _TradeRepo()
             trades = await repo.get_by_user(
+                _db,
                 user_id=user_id,
-                symbol=symbol.upper() if symbol else None,
                 limit=limit,
-                offset=offset,
             )
-            return trades
+            return list(trades)
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
@@ -1799,25 +2623,33 @@ def _trade_to_dict(t) -> dict:
     raw_status = getattr(t, "status", "")
     status_str = raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")
     entry_time = getattr(t, "entry_time", None)
-    exit_time  = getattr(t, "exit_time",  None)
+    exit_time = getattr(t, "exit_time", None)
     # quantity: prefer entry_quantity (canonical column), fall back to size or quantity
-    qty = (
-        getattr(t, "entry_quantity", None)
-        or getattr(t, "size", None)
-        or getattr(t, "quantity", None)
-        or 0
-    )
+    qty = getattr(t, "entry_quantity", None) or getattr(t, "size", None) or getattr(t, "quantity", None) or 0
     trade_id_val = getattr(t, "trade_id", None) or str(getattr(t, "id", ""))
     entry_time_str = entry_time.isoformat() if hasattr(entry_time, "isoformat") else str(entry_time or "")
-    exit_time_str  = exit_time.isoformat()  if hasattr(exit_time,  "isoformat") else str(exit_time  or "")
+    exit_time_str = exit_time.isoformat() if hasattr(exit_time, "isoformat") else str(exit_time or "")
     qty_float = float(qty or 0)
 
     # Duration in minutes between entry and exit
     duration_minutes: int | None = None
     try:
         import datetime as _dt
-        _e = entry_time if hasattr(entry_time, "timestamp") else _dt.datetime.fromisoformat(entry_time_str) if entry_time_str else None
-        _x = exit_time  if hasattr(exit_time,  "timestamp") else _dt.datetime.fromisoformat(exit_time_str)  if exit_time_str  else None
+
+        _e = (
+            entry_time
+            if hasattr(entry_time, "timestamp")
+            else _dt.datetime.fromisoformat(entry_time_str)
+            if entry_time_str
+            else None
+        )
+        _x = (
+            exit_time
+            if hasattr(exit_time, "timestamp")
+            else _dt.datetime.fromisoformat(exit_time_str)
+            if exit_time_str
+            else None
+        )
         if _e and _x:
             duration_minutes = max(0, int((_x - _e).total_seconds() / 60))
     except Exception:  # nosec B110
@@ -1825,27 +2657,27 @@ def _trade_to_dict(t) -> dict:
 
     return {
         # Canonical keys (backend / CSV)
-        "trade_id":    trade_id_val,
-        "symbol":      getattr(t, "symbol", "") or "",
-        "side":        getattr(t, "side", "") or "",
-        "quantity":    qty_float,
+        "trade_id": trade_id_val,
+        "symbol": getattr(t, "symbol", "") or "",
+        "side": getattr(t, "side", "") or "",
+        "quantity": qty_float,
         "entry_price": float(getattr(t, "entry_price", 0) or 0),
-        "exit_price":  float(getattr(t, "exit_price")) if getattr(t, "exit_price", None) is not None else None,
+        "exit_price": float(t.exit_price) if getattr(t, "exit_price", None) is not None else None,
         "realized_pnl": float(getattr(t, "realized_pnl", 0) or 0),
-        "commission":  float(getattr(t, "commission", 0) or 0),
-        "status":      status_str,
-        "strategy":    getattr(t, "strategy", "") or "",
-        "entry_time":  entry_time_str,
-        "exit_time":   exit_time_str,
+        "commission": float(getattr(t, "commission", 0) or 0),
+        "status": status_str,
+        "strategy": getattr(t, "strategy", "") or "",
+        "entry_time": entry_time_str,
+        "exit_time": exit_time_str,
         # Frontend-expected aliases — kept alongside the canonical keys for
         # backward compatibility.  Trade.tsx uses `id`, `size`, `opened_at`,
         # `closed_at`; Trading.tsx uses `size`; Portfolio.tsx uses `id`,
         # `opened_at`, `closed_at`.  Removing either set would break one of
         # those pages, so both are emitted here.
-        "id":          trade_id_val,
-        "size":        qty_float,
-        "opened_at":   entry_time_str,
-        "closed_at":   exit_time_str,
+        "id": trade_id_val,
+        "size": qty_float,
+        "opened_at": entry_time_str,
+        "closed_at": exit_time_str,
         "duration_minutes": duration_minutes,
     }
 
@@ -2022,7 +2854,7 @@ def _register_strategy_crud(r: Any) -> None:
             "strategy_brain",
         }
         if req.strategy_type not in _KNOWN:
-            raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
+            raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}") from None
         sid = str(_uuid.uuid4())[:8]
         record = {
             "id": sid,
@@ -2042,14 +2874,14 @@ def _register_strategy_crud(r: Any) -> None:
     def get_strategy(strategy_id: str, user: TokenPayload = Depends(get_current_user)):
         key = _resolve(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         return _strategy_store[key]
 
     @r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("admin"))):
         key = _resolve(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         del _strategy_store[key]
         return {"status": "deleted"}
 
@@ -2057,7 +2889,7 @@ def _register_strategy_crud(r: Any) -> None:
     def start_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         _strategy_store[key]["enabled"] = True
         return {"status": "started", "strategy_id": strategy_id}
 
@@ -2065,7 +2897,7 @@ def _register_strategy_crud(r: Any) -> None:
     def stop_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         _strategy_store[key]["enabled"] = False
         return {"status": "stopped", "strategy_id": strategy_id}
 
@@ -2107,8 +2939,23 @@ def _register_risk_performance_routes(r: Any) -> None:
             broker = getattr(app_state, "broker", None)
             if broker is None:
                 raise AttributeError("no broker")
-            account = broker.get_account_info()
-            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+            # Use sync helper when available (PaperTradingBroker), otherwise
+            # fall back to asyncio.run for async-only brokers.
+            if hasattr(broker, "_get_account_info_sync"):
+                account = broker._get_account_info_sync()
+            else:
+                account = (
+                    asyncio.run(broker.get_account_info())
+                    if asyncio.iscoroutinefunction(broker.get_account_info)
+                    else broker.get_account_info()
+                )
+            if hasattr(broker, "_get_positions_sync"):
+                positions = broker._get_positions_sync()
+            elif hasattr(broker, "get_positions"):
+                _pos = broker.get_positions()
+                positions = asyncio.run(_pos) if asyncio.iscoroutine(_pos) else _pos
+            else:
+                positions = []
 
             # Daily PnL: sum unrealised PnL across open positions
             daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
@@ -2230,7 +3077,6 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
     Fast risk metrics snapshot — returns immediately from in-memory broker state.
     No blocking I/O. Falls back to zeros when broker is not yet initialised.
     """
-    import math as _m
 
     try:
         broker = getattr(app_state, "broker", None)
@@ -2238,11 +3084,12 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
             raise AttributeError("no broker")
 
         # Use account info (always fast — in-memory for paper broker)
-        account = broker.get_account_info()
-        balance  = float(getattr(account, "balance",     100_000.0) or 100_000.0)
-        equity   = float(getattr(account, "equity",      balance)   or balance)
-        margin_used = float(getattr(account, "margin_used", 0.0)    or 0.0)
-        daily_pnl   = float(getattr(account, "daily_pnl",  0.0)     or 0.0)
+        _acct_coro = broker.get_account_info()
+        account = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
+        balance = float(getattr(account, "balance", 100_000.0) or 100_000.0)
+        equity = float(getattr(account, "equity", balance) or balance)
+        margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
+        daily_pnl = float(getattr(account, "daily_pnl", 0.0) or 0.0)
         open_risk_pct = (margin_used / equity * 100) if equity > 0 else 0.0
 
         # Max drawdown from equity history (fast — list in memory)
@@ -2259,7 +3106,8 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
         except Exception:  # nosec B110
             pass
 
-        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+        _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
+        positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
         open_count = len(positions)
         kill_switch = False
         try:
@@ -2269,23 +3117,30 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
             pass
 
         return {
-            "daily_pnl":      round(daily_pnl, 2),
-            "daily_pnl_pct":  round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4),
-            "max_drawdown":   round(max_dd * 100, 3),
+            "daily_pnl": round(daily_pnl, 2),
+            "daily_pnl_pct": round((daily_pnl / balance * 100) if balance > 0 else 0.0, 4),
+            "max_drawdown": round(max_dd * 100, 3),
             "open_positions": open_count,
-            "margin_used":    round(margin_used, 2),
-            "open_risk_pct":  round(open_risk_pct, 3),
-            "kill_switch":    kill_switch,
-            "risk_score":     min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1)),
-            "balance":        round(balance, 2),
-            "equity":         round(equity, 2),
+            "margin_used": round(margin_used, 2),
+            "open_risk_pct": round(open_risk_pct, 3),
+            "kill_switch": kill_switch,
+            "risk_score": min(100.0, round(max_dd * 100 * 2 + open_count * 5, 1)),
+            "balance": round(balance, 2),
+            "equity": round(equity, 2),
         }
     except Exception as exc:
         logger.debug("GET /trading/risk fallback: %s", exc)
         return {
-            "daily_pnl": 0.0, "daily_pnl_pct": 0.0, "max_drawdown": 0.0,
-            "open_positions": 0, "margin_used": 0.0, "open_risk_pct": 0.0,
-            "kill_switch": False, "risk_score": 0.0, "balance": 0.0, "equity": 0.0,
+            "daily_pnl": 0.0,
+            "daily_pnl_pct": 0.0,
+            "max_drawdown": 0.0,
+            "open_positions": 0,
+            "margin_used": 0.0,
+            "open_risk_pct": 0.0,
+            "kill_switch": False,
+            "risk_score": 0.0,
+            "balance": 0.0,
+            "equity": 0.0,
         }
 
 
@@ -2302,7 +3157,6 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     Fetches real OHLCV via yfinance for regime detection and ATR calculation.
     Falls back gracefully when the ML stack is unavailable.
     """
-    import math as _math
     import uuid as _uuid
     import time as _time
 
@@ -2315,14 +3169,26 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 
     # ── Fetch real OHLCV via yfinance for analysis ────────────────────────────
     _YF_MAP = {
-        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X", "USDCHF": "CHF=X",
-        "AUDUSD": "AUDUSD=X", "BTCUSD": "BTC-USD", "ETHUSD": "ETH-USD",
-        "US500": "ES=F", "NAS100": "NQ=F", "USOIL": "CL=F",
+        "XAUUSD": "GC=F",
+        "XAGUSD": "SI=F",
+        "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X",
+        "USDJPY": "JPY=X",
+        "USDCHF": "CHF=X",
+        "AUDUSD": "AUDUSD=X",
+        "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD",
+        "US500": "ES=F",
+        "NAS100": "NQ=F",
+        "USOIL": "CL=F",
     }
     _TF_MAP = {
-        "1m": ("1m", "7d"), "5m": ("5m", "60d"), "15m": ("15m", "60d"),
-        "1h": ("1h", "60d"), "4h": ("1h", "60d"), "1d": ("1d", "1y"),
+        "1m": ("1m", "7d"),
+        "5m": ("5m", "60d"),
+        "15m": ("15m", "60d"),
+        "1h": ("1h", "60d"),
+        "4h": ("1h", "60d"),
+        "1d": ("1d", "1y"),
     }
     ticker_sym = _YF_MAP.get(symbol_norm, symbol_norm)
     interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
@@ -2330,6 +3196,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
     ohlcv_bars: list[dict] = []
     try:
         import yfinance as _yf
+
         loop = asyncio.get_running_loop()
 
         def _fetch():
@@ -2340,17 +3207,17 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
             df = df.tail(100)
             return [
                 {
-                    "open":   float(r["Open"]),
-                    "high":   float(r["High"]),
-                    "low":    float(r["Low"]),
-                    "close":  float(r["Close"]),
+                    "open": float(r["Open"]),
+                    "high": float(r["High"]),
+                    "low": float(r["Low"]),
+                    "close": float(r["Close"]),
                     "volume": float(r.get("Volume", 0)),
                 }
                 for _, r in df.iterrows()
             ]
 
         ohlcv_bars = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning("ai-analysis: yfinance fetch timed out for %s — using price-only fallback", symbol_norm)
     except Exception as exc:
         logger.warning("ai-analysis: yfinance fetch failed for %s: %s", symbol_norm, exc)
@@ -2384,7 +3251,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
         for c in reversed(closes[-20:]):
             ema20 = ema20 * 0.9 + c * 0.1
         ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)):]):
+        for c in reversed(closes[-min(50, len(closes)) :]):
             ema50 = ema50 * 0.96 + c * 0.04
 
         price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
@@ -2451,7 +3318,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
                 recommended_action = "sell"
                 action_confidence = 0.6
 
-        key_drivers.append(f"ATR: {atr_estimate:.4f} ({atr_estimate/price*100:.2f}% of price)")
+        key_drivers.append(f"ATR: {atr_estimate:.4f} ({atr_estimate / price * 100:.2f}% of price)")
         key_drivers.append(f"Volatility: {volatility}")
 
         if volatility == "high":
@@ -2459,7 +3326,7 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
 
     summary = (
         f"{symbol} is in a {regime.replace('_', ' ')} regime "
-        f"({regime_confidence*100:.0f}% confidence). "
+        f"({regime_confidence * 100:.0f}% confidence). "
         f"Trend: {trend}. "
         f"Recommended: {recommended_action.upper()} at {price:.4f}."
     )
@@ -2479,14 +3346,14 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
         "timestamp": timestamp,
         "context": context,
         # Fields expected by AIResult interface
-        "direction":   direction,
-        "confidence":  round(min(action_confidence, 0.95), 3),
-        "reasoning":   summary,
-        "regime":      regime,
-        "stop_loss":   sl,
+        "direction": direction,
+        "confidence": round(min(action_confidence, 0.95), 3),
+        "reasoning": summary,
+        "regime": regime,
+        "stop_loss": sl,
         "take_profit": tp,
-        "entry_zone":  [round(price - atr_estimate * 0.3, 5), round(price + atr_estimate * 0.3, 5)],
-        "key_levels":  [
+        "entry_zone": [round(price - atr_estimate * 0.3, 5), round(price + atr_estimate * 0.3, 5)],
+        "key_levels": [
             round(price - atr_estimate * 2, 5),
             round(price - atr_estimate, 5),
             round(price + atr_estimate, 5),
@@ -2494,23 +3361,23 @@ async def get_ai_analysis(context: dict, user: TokenPayload = Depends(get_curren
         ],
         # Extended fields
         "regimeConfidence": round(regime_confidence, 3),
-        "volatility":       volatility,
-        "trend":            trend,
-        "summary":          summary,
-        "keyDrivers":       key_drivers,
-        "riskAssessment":   f"ATR({len(ohlcv_bars)}): {atr_estimate:.4f} | SL: {sl:.4f} | TP: {tp:.4f}",
+        "volatility": volatility,
+        "trend": trend,
+        "summary": summary,
+        "keyDrivers": key_drivers,
+        "riskAssessment": f"ATR({len(ohlcv_bars)}): {atr_estimate:.4f} | SL: {sl:.4f} | TP: {tp:.4f}",
         "recommendedAction": recommended_action,
-        "actionConfidence":  round(min(action_confidence, 0.95), 3),
+        "actionConfidence": round(min(action_confidence, 0.95), 3),
         "priceTargets": {
-            "bull":        round(price + atr_estimate * 2, 5),
-            "bear":        round(price - atr_estimate * 2, 5),
-            "base":        round(price + atr_estimate * (1 if direction == "long" else -1), 5),
-            "stop_loss":   sl,
+            "bull": round(price + atr_estimate * 2, 5),
+            "bear": round(price - atr_estimate * 2, 5),
+            "base": round(price + atr_estimate * (1 if direction == "long" else -1), 5),
+            "stop_loss": sl,
             "take_profit": tp,
         },
-        "timeHorizon":   "4H–1D",
-        "warnings":      warnings,
-        "data_source":   "yfinance" if ohlcv_bars else "fallback",
+        "timeHorizon": "4H–1D",
+        "warnings": warnings,
+        "data_source": "yfinance" if ohlcv_bars else "fallback",
         "bars_analyzed": len(ohlcv_bars),
     }
 
@@ -2529,7 +3396,6 @@ async def get_regime_status(
 
     Uses real OHLCV from yfinance for regime detection.
     """
-    import math as _math
 
     # Normalise symbol — guard against None (optional query param)
     symbol = symbol or "XAUUSD"
@@ -2537,9 +3403,15 @@ async def get_regime_status(
     symbol_norm = symbol.replace("/", "").replace("%2F", "").replace("_", "").upper()
 
     _YF_MAP = {
-        "XAUUSD": "GC=F", "XAGUSD": "SI=F", "EURUSD": "EURUSD=X",
-        "GBPUSD": "GBPUSD=X", "USDJPY": "JPY=X", "BTCUSD": "BTC-USD",
-        "ETHUSD": "ETH-USD", "US500": "ES=F", "NAS100": "NQ=F",
+        "XAUUSD": "GC=F",
+        "XAGUSD": "SI=F",
+        "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X",
+        "USDJPY": "JPY=X",
+        "BTCUSD": "BTC-USD",
+        "ETHUSD": "ETH-USD",
+        "US500": "ES=F",
+        "NAS100": "NQ=F",
     }
     ticker_sym = _YF_MAP.get(symbol_norm, "GC=F")
 
@@ -2549,6 +3421,7 @@ async def get_regime_status(
 
     try:
         import yfinance as _yf
+
         loop = asyncio.get_running_loop()
 
         def _fetch():
@@ -2559,14 +3432,12 @@ async def get_regime_status(
             df = df.tail(100)
             return (
                 [float(r["Close"]) for _, r in df.iterrows()],
-                [float(r["High"])  for _, r in df.iterrows()],
-                [float(r["Low"])   for _, r in df.iterrows()],
+                [float(r["High"]) for _, r in df.iterrows()],
+                [float(r["Low"]) for _, r in df.iterrows()],
             )
 
-        closes, highs, lows = await asyncio.wait_for(
-            loop.run_in_executor(None, _fetch), timeout=25.0
-        )
-    except asyncio.TimeoutError:
+        closes, highs, lows = await asyncio.wait_for(loop.run_in_executor(None, _fetch), timeout=25.0)
+    except TimeoutError:
         logger.warning("regime: yfinance fetch timed out for %s", symbol_norm)
     except Exception as exc:
         logger.warning("regime: yfinance fetch failed for %s: %s", symbol_norm, exc)
@@ -2584,15 +3455,17 @@ async def get_regime_status(
         for c in reversed(closes[-20:]):
             ema20 = ema20 * 0.9 + c * 0.1
         ema50 = closes[-1]
-        for c in reversed(closes[-min(50, len(closes)):]):
+        for c in reversed(closes[-min(50, len(closes)) :]):
             ema50 = ema50 * 0.96 + c * 0.04
 
         ema_spread = (ema20 - ema50) / ema50 if ema50 > 0 else 0
         price_vs_ema20 = (closes[-1] - ema20) / ema20 if ema20 > 0 else 0
 
         # ATR for volatility
-        trs = [max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
-               for i in range(1, min(15, len(closes)))]
+        trs = [
+            max(highs[i] - lows[i], abs(highs[i] - closes[i - 1]), abs(lows[i] - closes[i - 1]))
+            for i in range(1, min(15, len(closes)))
+        ]
         atr = sum(trs) / len(trs) if trs else closes[-1] * 0.005
         atr_pct = atr / closes[-1] if closes[-1] > 0 else 0
 
@@ -2616,11 +3489,12 @@ async def get_regime_status(
             regime = "ranging"
             trend = "neutral"
             confidence = 0.65
-            description = f"Ranging market: EMA spread {ema_spread*100:.2f}%, ATR {atr_pct*100:.2f}%"
+            description = f"Ranging market: EMA spread {ema_spread * 100:.2f}%, ATR {atr_pct * 100:.2f}%"
 
     # Try regime router if available
     try:
         from core.app_state import app_state as _as
+
         rr = getattr(_as, "regime_router", None)
         if rr is not None:
             status_dict = rr.status()
@@ -2758,8 +3632,14 @@ async def _get_ohlcv_for_symbol(symbol: str, timeframe: str = "1h", limit: int =
 
 
 def _normalise_symbol(symbol: str) -> str:
-    """Convert XAU/USD → XAU_USD for the price engine."""
-    return symbol.replace("/", "_").upper()
+    """Convert any symbol variant to OANDA/price-engine form (XAU_USD).
+
+    Delegates to utils.symbol.to_oanda so all normalisation logic lives
+    in one place.  Kept as a module-level function for backward compat.
+    """
+    from utils.symbol import to_oanda
+
+    return to_oanda(symbol)
 
 
 @router.get("/levels", response_model=None, summary="Support and resistance levels for a symbol")

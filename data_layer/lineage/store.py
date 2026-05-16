@@ -91,6 +91,12 @@ CREATE TABLE IF NOT EXISTS lineage_records (
     payload        TEXT NOT NULL,
     created_at     TEXT NOT NULL
 );
+"""
+
+# Indexes are applied separately — after _migrate_schema() has ensured all
+# columns exist — so that CREATE INDEX on parent_id never runs against a
+# schema that pre-dates the column.
+_CREATE_INDEXES_SQL = """
 CREATE INDEX IF NOT EXISTS idx_lineage_timestamp  ON lineage_records(timestamp);
 CREATE INDEX IF NOT EXISTS idx_lineage_type       ON lineage_records(record_type);
 CREATE INDEX IF NOT EXISTS idx_lineage_source     ON lineage_records(source);
@@ -136,6 +142,72 @@ class DataLineageStore:
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
 
+    def _migrate_schema(self) -> None:
+        """Apply incremental schema migrations to an existing database.
+
+        CREATE TABLE IF NOT EXISTS only adds the table when it is absent; it
+        does not add columns that were introduced after the initial schema was
+        created.  This method detects and applies those missing columns so
+        existing databases are upgraded in-place without data loss.
+        """
+        cursor = self._conn.execute("PRAGMA table_info(lineage_records)")
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        migrations: list[str] = []
+
+        # parent_id was added after the initial schema — add it when absent.
+        if "parent_id" not in existing_columns:
+            migrations.append("ALTER TABLE lineage_records ADD COLUMN parent_id TEXT")
+            migrations.append("CREATE INDEX IF NOT EXISTS idx_lineage_parent_id ON lineage_records(parent_id)")
+
+        # schema_version defaulted to TEXT in some early builds — ensure INTEGER.
+        # SQLite does not support ALTER COLUMN, so we only add the index if the
+        # column already exists (it always does from the original schema).
+        if "schema_version" in existing_columns:
+            migrations.append(
+                "CREATE INDEX IF NOT EXISTS idx_lineage_schema_version ON lineage_records(schema_version)"
+            )
+
+        for sql in migrations:
+            try:
+                self._conn.execute(sql)
+                logger.info("DataLineageStore migration applied: %s", sql[:60])
+            except sqlite3.OperationalError as exc:
+                # "duplicate column name" or "index already exists" are safe to ignore.
+                if "already exists" in str(exc) or "duplicate column" in str(exc):
+                    logger.debug("DataLineageStore migration skipped (already applied): %s", exc)
+                else:
+                    raise
+
+        if migrations:
+            self._conn.commit()
+
+    def _create_indexes(self) -> None:
+        """Create all indexes individually via execute() (not executescript).
+
+        executescript() issues an implicit COMMIT before running, which can
+        leave the schema cache stale after an ALTER TABLE in the same session.
+        Running each statement via execute() avoids that implicit commit and
+        ensures the index creation sees the fully-migrated schema.
+        """
+        index_stmts = [
+            "CREATE INDEX IF NOT EXISTS idx_lineage_timestamp  ON lineage_records(timestamp)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_type       ON lineage_records(record_type)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_source     ON lineage_records(source)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_symbol     ON lineage_records(symbol)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_created_at ON lineage_records(created_at)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_parent_id  ON lineage_records(parent_id)",
+            "CREATE INDEX IF NOT EXISTS idx_lineage_schema_version ON lineage_records(schema_version)",
+        ]
+        for stmt in index_stmts:
+            try:
+                self._conn.execute(stmt)
+            except sqlite3.OperationalError as exc:
+                if "already exists" in str(exc):
+                    logger.debug("DataLineageStore index already exists: %s", exc)
+                else:
+                    raise
+
     def start(self) -> None:
         """Initialise DB and start background writer + pruner threads."""
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -144,11 +216,32 @@ class DataLineageStore:
             check_same_thread=False,
             timeout=30.0,
         )
-        # WAL mode: allows concurrent reads while writer is active
+        # WAL mode: allows concurrent reads while writer is active.
+        # These PRAGMAs must run outside a transaction.
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.execute("PRAGMA synchronous=NORMAL")
         self._conn.execute("PRAGMA cache_size=-32000")  # 32MB cache
-        self._conn.executescript(_CREATE_TABLE_SQL)
+
+        # Create the table using execute() not executescript().
+        # executescript() issues an implicit COMMIT before running, which
+        # ends any open transaction and can cause the schema cache to be
+        # stale for subsequent ALTER TABLE / CREATE INDEX statements in the
+        # same connection.  Using execute() keeps everything in one
+        # explicit transaction so _migrate_schema() and _create_indexes()
+        # all see the same committed schema state.
+        self._conn.execute(_CREATE_TABLE_SQL)
+        self._conn.commit()
+
+        # Migrate schema (adds missing columns like parent_id).
+        # Must run after the table exists and before indexes are created,
+        # because CREATE INDEX ON lineage_records(parent_id) will fail if
+        # the column doesn't exist yet.
+        self._migrate_schema()
+
+        # Create indexes individually via execute() for the same reason —
+        # executescript() would issue an implicit COMMIT that could race
+        # with the just-committed ALTER TABLE on some SQLite versions.
+        self._create_indexes()
         self._conn.commit()
 
         self._running = True
@@ -739,26 +832,25 @@ class DataLineageStore:
         except Exception as exc:
             logger.warning("DataLineageStore prune error: %s", exc)
 
-
     # ── Async write API ───────────────────────────────────────────────────────
 
     async def record_tick_async(self, tick: GoldTick, parent_id: str | None = None) -> None:
         """
         Async-safe tick recording. Enqueues without blocking the event loop.
 
-        Uses asyncio.get_event_loop().run_in_executor to offload the
-        queue.put_nowait call (which is CPU-bound but very fast).
+        Uses asyncio.get_running_loop().run_in_executor to offload the
+        synchronous record_tick call without blocking the event loop.
         """
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: self.record_tick(tick))
 
     async def record_news_async(self, article: NewsArticle, parent_id: str | None = None) -> None:
         """Async-safe news article recording."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, lambda: self.record_news(article))
 
     async def record_signal_async(
@@ -775,7 +867,7 @@ class DataLineageStore:
         """Async-safe signal recording."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: self.record_signal(
@@ -793,7 +885,7 @@ class DataLineageStore:
         """Async-safe flush. Runs the synchronous flush in a thread executor."""
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self.flush)
 
     # ── Lineage graph traversal ───────────────────────────────────────────────
@@ -895,10 +987,16 @@ class DataLineageStore:
             )
             return [
                 {
-                    "id": r[0], "record_type": r[1], "schema_version": r[2],
-                    "lineage_id": r[3], "parent_id": r[4], "source": r[5],
-                    "symbol": r[6], "timestamp": r[7],
-                    "payload": json.loads(r[8]), "created_at": r[9],
+                    "id": r[0],
+                    "record_type": r[1],
+                    "schema_version": r[2],
+                    "lineage_id": r[3],
+                    "parent_id": r[4],
+                    "source": r[5],
+                    "symbol": r[6],
+                    "timestamp": r[7],
+                    "payload": json.loads(r[8]),
+                    "created_at": r[9],
                 }
                 for r in cursor.fetchall()
             ]
@@ -956,12 +1054,14 @@ class DataLineageStore:
         for r in chain:
             payload = r.get("payload", {})
             op = payload.get("operation", r["record_type"].lower())
-            transformations.append({
-                "operation": op,
-                "source": r.get("source"),
-                "timestamp": r.get("timestamp"),
-                "record_type": r["record_type"],
-            })
+            transformations.append(
+                {
+                    "operation": op,
+                    "source": r.get("source"),
+                    "timestamp": r.get("timestamp"),
+                    "record_type": r["record_type"],
+                }
+            )
 
         root = chain[-1] if chain else {}
 
@@ -992,6 +1092,7 @@ class DataLineageStore:
             return {}
         since = datetime.now(UTC).replace(microsecond=0)
         from datetime import timedelta
+
         since = since - timedelta(hours=hours)
 
         try:

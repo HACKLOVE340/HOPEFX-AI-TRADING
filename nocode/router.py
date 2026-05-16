@@ -20,10 +20,9 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
     """
     from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    from api.auth import TokenPayload, require_role
-
-    router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
+    router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"], dependencies=[Depends(get_current_user)])
 
     class CreateStrategyRequest(BaseModel):
         name: str
@@ -42,7 +41,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         timeframe: str = "1h"
 
     @router.get("/strategies")
-    async def list_strategies(user: TokenPayload = Depends(require_role("trader"))):
+    async def list_strategies():
         """List all no-code strategies."""
         return [
             {
@@ -59,7 +58,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         ]
 
     @router.post("/strategies")
-    async def create_strategy(req: CreateStrategyRequest, user: TokenPayload = Depends(require_role("trader"))):
+    async def create_strategy(req: CreateStrategyRequest):
         """Create a new empty no-code strategy."""
         strategy = builder.create_strategy(
             name=req.name,
@@ -75,7 +74,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         }
 
     @router.get("/strategies/{strategy_id}")
-    async def get_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
+    async def get_strategy(strategy_id: str):
         """Return a single strategy by ID with all rules."""
         strategy = builder.strategies.get(strategy_id)
         if strategy is None:
@@ -83,7 +82,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         return strategy.to_dict()
 
     @router.patch("/strategies/{strategy_id}")
-    async def update_strategy(strategy_id: str, req: CreateStrategyRequest, user: TokenPayload = Depends(require_role("trader"))):
+    async def update_strategy(strategy_id: str, req: CreateStrategyRequest):
         """Update strategy metadata (name, description, symbol, timeframe)."""
         strategy = builder.strategies.get(strategy_id)
         if strategy is None:
@@ -99,14 +98,14 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         return strategy.to_dict()
 
     @router.delete("/strategies/{strategy_id}", status_code=204)
-    async def delete_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
+    async def delete_strategy(strategy_id: str):
         """Delete a strategy."""
         if strategy_id not in builder.strategies:
             raise HTTPException(status_code=404, detail=f"Strategy {strategy_id} not found")
         del builder.strategies[strategy_id]
 
     @router.post("/strategies/{strategy_id}/compile")
-    async def compile_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
+    async def compile_strategy(strategy_id: str):
         """Compile a strategy to Python and validate it."""
         code = builder.export_to_python(strategy_id)
         if not code:
@@ -120,7 +119,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         }
 
     @router.post("/strategies/{strategy_id}/backtest")
-    async def backtest_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
+    async def backtest_strategy(strategy_id: str):
         """Queue a backtest for a no-code strategy."""
         strategy = builder.strategies.get(strategy_id)
         if strategy is None:
@@ -145,7 +144,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
             }
 
     @router.get("/blocks")
-    async def list_blocks(user: TokenPayload = Depends(require_role("trader"))):
+    async def list_blocks():
         """Return available building blocks (indicators, conditions, actions)."""
         return {
             "indicators": builder.get_available_indicators(),
@@ -166,7 +165,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         }
 
     @router.get("/strategies/{strategy_id}/export")
-    async def export_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
+    async def export_strategy(strategy_id: str):
         """Export a no-code strategy as Python code."""
         code = builder.export_to_python(strategy_id)
         if code is None:
@@ -174,7 +173,7 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         return {"strategy_id": strategy_id, "python_code": code}
 
     @router.post("/strategies/parse")
-    async def parse_plain_english(req: PlainEnglishRequest, user: TokenPayload = Depends(require_role("trader"))):
+    async def parse_plain_english(req: PlainEnglishRequest):
         """Parse a plain-English strategy description into a structured strategy."""
         strategy = builder.parse_plain_english(req.description, req.symbol, req.timeframe)
         if strategy is None:
@@ -191,17 +190,17 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
         }
 
     @router.get("/indicators")
-    async def get_indicators(user: TokenPayload = Depends(require_role("trader"))):
+    async def get_indicators():
         """Get list of available indicators for building conditions."""
         return builder.get_available_indicators()
 
     @router.get("/templates")
-    async def get_templates(user: TokenPayload = Depends(require_role("trader"))):
+    async def get_templates():
         """Get list of built-in strategy templates."""
         return builder.get_templates()
 
     @router.post("/strategies/from-template/{template_id}")
-    async def create_from_template(template_id: str, req: FromTemplateRequest, user: TokenPayload = Depends(require_role("trader"))):
+    async def create_from_template(template_id: str, req: FromTemplateRequest):
         """Create a strategy from a built-in template."""
         strategy = builder.create_from_template(template_id, req.name, req.symbol, req.timeframe)
         if strategy is None:

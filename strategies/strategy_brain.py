@@ -20,6 +20,7 @@ Features:
 """
 
 import logging
+from collections import deque
 from datetime import datetime, timezone
 
 UTC = timezone.utc
@@ -69,9 +70,13 @@ class StrategyBrain:
         self.strategy_performance: dict[str, dict[str, float]] = {}
         self.strategy_weights: dict[str, float] = {}
 
-        # Signal history
-        self.signal_history: list[dict[str, Any]] = []
-        self.consensus_signals: list[Signal] = []
+        # Signal history — bounded deques prevent unbounded memory growth.
+        # Defaults: 1000 signal entries and 500 consensus signals.
+        # Override via config keys "max_signal_history" / "max_consensus_signals".
+        _max_sig = int(self.config.get("max_signal_history", 1000))
+        _max_con = int(self.config.get("max_consensus_signals", 500))
+        self.signal_history: deque[dict[str, Any]] = deque(maxlen=_max_sig)
+        self.consensus_signals: deque[Signal] = deque(maxlen=_max_con)
 
         # Statistics
         self.stats = {
@@ -495,7 +500,6 @@ class StrategyBrain:
         and converts consensus Signal objects into the action-dict format that
         _execute_signal expects (keys: action, symbol, size, confidence, …).
         """
-        import asyncio
         import inspect
 
         if not self.strategies:
@@ -516,7 +520,7 @@ class StrategyBrain:
                         ohlcv = raw or []
                         if ohlcv:
                             current_price = float(ohlcv[-1].close)
-                    except Exception:  # noqa: BLE001 — OHLCV fetch is best-effort
+                    except Exception:  # nosec B110
                         pass
 
                     if current_price == 0.0:
@@ -524,7 +528,7 @@ class StrategyBrain:
                             tick = price_engine.get_last_price(symbol)
                             if tick is not None:
                                 current_price = (tick.bid + tick.ask) / 2.0
-                        except Exception:  # noqa: BLE001 — tick fetch is best-effort
+                        except Exception:  # nosec B110
                             pass
 
                 if current_price == 0.0:
@@ -543,19 +547,25 @@ class StrategyBrain:
 
                 if consensus.get("consensus_reached") and consensus.get("consensus_signal"):
                     sig = consensus["consensus_signal"]
-                    action = "buy" if sig.signal_type == __import__("strategies.base", fromlist=["SignalType"]).SignalType.BUY else "sell"
+                    action = (
+                        "buy"
+                        if sig.signal_type == __import__("strategies.base", fromlist=["SignalType"]).SignalType.BUY
+                        else "sell"
+                    )
                     meta = sig.metadata or {}
                     agreeing = meta.get("agreeing_strategies") or ["strategy_brain"]
-                    result_signals.append({
-                        "action": action,
-                        "symbol": symbol,
-                        "size": float(meta.get("size", 0.01)),
-                        "confidence": float(sig.confidence),
-                        "price": float(sig.price),
-                        "entry_price": float(sig.price),
-                        "strategy": agreeing[0] if agreeing else "strategy_brain",
-                        "regime": regime_str,
-                    })
+                    result_signals.append(
+                        {
+                            "action": action,
+                            "symbol": symbol,
+                            "size": float(meta.get("size", 0.01)),
+                            "confidence": float(sig.confidence),
+                            "price": float(sig.price),
+                            "entry_price": float(sig.price),
+                            "strategy": agreeing[0] if agreeing else "strategy_brain",
+                            "regime": regime_str,
+                        }
+                    )
 
             except Exception as e:
                 logger.error("generate_signals error for %s: %s", symbol, e)

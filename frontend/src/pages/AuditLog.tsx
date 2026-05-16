@@ -11,7 +11,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { adminApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase } from '../lib/utils';
+import { getWsBase, extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { DataTable, type Column } from '../components/DataTable';
 import { Badge, type BadgeVariant } from '../components/Badge';
@@ -22,12 +22,12 @@ import { EmptyState } from '../components/EmptyState';
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuditEvent {
-  event_id: string;
-  user_id: string;
-  event_type: string;
-  detail: string;
-  ip_address: string;
-  created_at: string;
+  event_id:   string;
+  user_id:    string | null;
+  event_type: string | null;
+  detail:     string | null;
+  ip_address: string | null;
+  created_at: string | null;
 }
 
 interface AuditResponse {
@@ -52,7 +52,8 @@ const EVENT_CATEGORIES: Record<string, BadgeVariant> = {
   'signal.copied': 'info',
 };
 
-function eventVariant(type: string): BadgeVariant {
+function eventVariant(type: string | null | undefined): BadgeVariant {
+  if (!type) return 'neutral';
   for (const [key, variant] of Object.entries(EVENT_CATEGORIES)) {
     if (type.includes(key)) return variant;
   }
@@ -81,7 +82,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortable: true,
     render: (row) => (
       <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>
-        {fmtDate(row.created_at)}
+        {row.created_at ? fmtDate(row.created_at) : '—'}
       </span>
     ),
   },
@@ -93,7 +94,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortable: true,
     render: (row) => (
       <span style={{ color: '#60a5fa', fontFamily: 'monospace', fontSize: 12 }}>
-        {row.user_id}
+        {row.user_id || '—'}
       </span>
     ),
   },
@@ -105,7 +106,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     sortable: true,
     render: (row) => (
       <Badge variant={eventVariant(row.event_type)}>
-        {row.event_type}
+        {row.event_type || 'unknown'}
       </Badge>
     ),
   },
@@ -113,7 +114,7 @@ const COLUMNS: Column<AuditEvent>[] = [
     key: 'detail',
     header: 'Detail',
     render: (row) => (
-      <span style={{ color: '#cbd5e1', fontSize: 13 }}>{row.detail}</span>
+      <span style={{ color: '#cbd5e1', fontSize: 13 }}>{row.detail || '—'}</span>
     ),
   },
   {
@@ -170,7 +171,7 @@ const AuditLog: React.FC = () => {
       setPages(d.pages ?? 1);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      const msg = e instanceof Error ? e.message : 'Failed to load audit log';
+      const msg = extractApiError(e, 'Failed to load audit log');
       setError(msg);
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -228,7 +229,7 @@ const AuditLog: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <PageHeader
         title="Audit Log"
         subtitle={`${total.toLocaleString()} events total${liveCount > 0 ? ` · ${liveCount} live` : ''}`}

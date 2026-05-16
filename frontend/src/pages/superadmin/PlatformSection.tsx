@@ -6,6 +6,7 @@ import {
   SectionCard, ActionBtn, Input, Select, Toggle,
   ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 interface PlatformConfig {
   platform_name: string;
@@ -65,7 +66,7 @@ const PlatformSection: React.FC = () => {
       }
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load config');
+      setError(extractApiError(e, 'Failed to load config'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -79,7 +80,7 @@ const PlatformSection: React.FC = () => {
       await superadminApi.updatePlatformConfig(cfg);
       setMsg('Configuration saved');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed');
+      setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
 
@@ -90,7 +91,7 @@ const PlatformSection: React.FC = () => {
       await superadminApi.savePlatformConfigFull(cfg);
       setMsg('Full configuration saved and applied');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Full save failed');
+      setMsg(extractApiError(e, 'Full save failed'));
     } finally { setSaving(false); }
   };
 
@@ -105,7 +106,7 @@ const PlatformSection: React.FC = () => {
         setMsg('⚠️ Validation errors: ' + (d.errors?.join('; ') ?? 'Unknown errors'));
       }
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Validation failed');
+      setMsg(extractApiError(e, 'Validation failed'));
     } finally { setValidating(false); }
   };
 
@@ -115,7 +116,7 @@ const PlatformSection: React.FC = () => {
       await superadminApi.testSmtpConfig(smtpTest);
       setMsg('✅ SMTP connection successful');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'SMTP test failed');
+      setMsg(extractApiError(e, 'SMTP test failed'));
     } finally { setTestingSmtp(false); }
   };
 
@@ -127,7 +128,7 @@ const PlatformSection: React.FC = () => {
       setCfg(c => c ? { ...c, maintenance_mode: !c.maintenance_mode } : c);
       setMsg(`Maintenance mode ${!cfg.maintenance_mode ? 'enabled' : 'disabled'}`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed');
+      setMsg(extractApiError(e, 'Failed'));
     } finally { setSaving(false); setConfirm(null); }
   };
 
@@ -138,7 +139,7 @@ const PlatformSection: React.FC = () => {
       setMsg('Broadcast sent to all active users');
       setBroadcast({ title: '', body: '', type: 'info' });
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Broadcast failed');
+      setMsg(extractApiError(e, 'Broadcast failed'));
     } finally { setSaving(false); }
   };
 

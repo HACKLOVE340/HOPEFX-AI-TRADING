@@ -476,7 +476,7 @@ async def get_affiliate_referrals(
 @router.get("/affiliate/{user_id}")
 async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_user)):
     """
-    Get affiliate account for a user.
+    Get affiliate account for a user, including metrics and monthly breakdown.
     """
     affiliate = affiliate_manager.get_user_affiliate(user_id)
     if not affiliate:
@@ -484,9 +484,21 @@ async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_u
 
     metrics = affiliate_manager.get_affiliate_metrics(affiliate.affiliate_id)
 
+    # Monthly breakdown for the chart (last 12 months)
+    try:
+        monthly_breakdown = affiliate_manager.get_monthly_breakdown(affiliate.affiliate_id, months=12)
+    except Exception:
+        monthly_breakdown = []
+
+    # Build affiliate dict and inject payout_email from payment_details
+    aff_dict = affiliate.to_dict()
+    aff_dict.setdefault(
+        "payout_email", affiliate.payment_details.get("payout_email") or affiliate.payment_details.get("email")
+    )
+
     return {
         "has_affiliate_account": True,
-        "affiliate": affiliate.to_dict(),
+        "affiliate": aff_dict,
         "metrics": {
             "total_referrals": metrics.total_referrals if metrics else 0,
             "converted_referrals": metrics.converted_referrals if metrics else 0,
@@ -494,6 +506,7 @@ async def get_affiliate(user_id: str, user: TokenPayload = Depends(get_current_u
             "total_commissions": float(metrics.total_commissions) if metrics else 0,
             "pending_commissions": float(metrics.pending_commissions) if metrics else 0,
             "conversion_rate": metrics.conversion_rate if metrics else 0,
+            "monthly_breakdown": monthly_breakdown,
         },
     }
 
@@ -763,6 +776,50 @@ async def get_marketplace_stats(user: TokenPayload = Depends(get_current_user)):
     Get marketplace statistics.
     """
     return strategy_marketplace.get_marketplace_stats()
+
+
+@router.get("/marketplace/subscriptions", summary="User's marketplace subscriptions")
+async def get_marketplace_subscriptions(user: TokenPayload = Depends(get_current_user)):
+    """
+    Return the calling user's active marketplace strategy subscriptions.
+    """
+    try:
+        from database.simple_store import db_get
+
+        purchases = db_get(f"marketplace:purchases:{user.sub}") or []
+        return {"subscriptions": purchases if isinstance(purchases, list) else []}
+    except Exception:
+        logger.exception("Failed to load marketplace subscriptions for user %s", user.sub)
+        return {"subscriptions": []}
+
+
+@router.delete(
+    "/marketplace/subscriptions/{strategy_id}",
+    summary="Cancel a marketplace strategy subscription",
+    status_code=200,
+)
+async def cancel_marketplace_subscription(
+    strategy_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Cancel the calling user's subscription to a marketplace strategy.
+    Removes the purchase record from the user's subscription list.
+    """
+    try:
+        from database.simple_store import db_get, db_set
+
+        purchases: list = db_get(f"marketplace:purchases:{user.sub}") or []
+        updated = [p for p in purchases if p.get("strategy_id") != strategy_id]
+        if len(updated) == len(purchases):
+            raise HTTPException(status_code=404, detail="Subscription not found")
+        db_set(f"marketplace:purchases:{user.sub}", updated)
+        return {"cancelled": True, "strategy_id": strategy_id}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Failed to cancel marketplace subscription for user %s: %s", user.sub, exc)
+        raise HTTPException(status_code=500, detail="Failed to cancel subscription") from exc
 
 
 # ==========================
@@ -1188,6 +1245,7 @@ async def get_platform_revenue(user: TokenPayload = Depends(require_role("admin"
 
 # ── Affiliate extended endpoints ──────────────────────────────────────────────
 
+
 @router.get("/affiliate/{affiliate_id}/commissions")
 async def get_affiliate_commissions(
     affiliate_id: str,
@@ -1202,7 +1260,7 @@ async def get_affiliate_commissions(
     except Exception as exc:
         logger.debug("get_affiliate_commissions: %s", exc)
         items = []
-    page = items[offset: offset + limit]
+    page = items[offset : offset + limit]
     return {"commissions": page, "total": len(items)}
 
 
@@ -1226,7 +1284,7 @@ async def withdraw_affiliate_commission(
         }
     except Exception as exc:
         logger.warning("withdraw_affiliate_commission: %s", exc)
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+        raise HTTPException(status_code=400, detail="Payment processing error.") from None
 
 
 @router.patch("/affiliate/{affiliate_id}/payment-method")

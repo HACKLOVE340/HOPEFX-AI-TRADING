@@ -45,6 +45,34 @@ export * from './hooks/useChartData';
 
 // Services
 export { orchestratorWS }               from './services/orchestrator-ws';
+export {
+  queryKeys,
+  fetchOHLCV,
+  fetchSignals,
+  fetchSentiment,
+  fetchNews,
+  fetchRiskMetrics,
+  fetchLevels,
+  fetchTrendlines,
+  fetchPatterns,
+  fetchEquityCurve,
+  fetchMicrostructure,
+  requestAIAnalysis,
+  placeOrder,
+  closePosition,
+  fetchGeopoliticalSignal,
+  fetchGeopoliticalEvents,
+  fetchGeopoliticalAssessment,
+  fetchNewsSentiment,
+  fetchWorldMonitorViews,
+} from './services/chart-api';
+export type {
+  OHLCVParams,
+  GeopoliticalSignal,
+  GeopoliticalEvent,
+  GeopoliticalAssessment,
+  WorldMonitorViews,
+} from './services/chart-api';
 
 // Types
 export type * from './types';

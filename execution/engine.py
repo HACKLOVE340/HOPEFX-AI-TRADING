@@ -24,12 +24,12 @@ Design invariants:
 from __future__ import annotations
 
 import asyncio
-import collections
 import logging
 import os
 import time
 import traceback
 import uuid
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -326,10 +326,13 @@ class ExecutionEngine:
         self._total_fills = 0
         self._total_blocks = 0
         self._total_errors = 0
-        self._latencies_ms: collections.deque = collections.deque(maxlen=100)  # rolling 100
+        self._latencies_ms: deque[float] = deque(maxlen=100)  # rolling 100, O(1) append/evict
 
         self._running = False
         self._lock = asyncio.Lock()
+        # Dedicated counter lock — keeps metric mutations off the general _lock
+        # so lifecycle operations (start/stop) never contend with hot-path counters.
+        self._counter_lock = asyncio.Lock()
 
         # Tick feed integration — last validated tick per symbol
         # Updated by TickFeedManager bridge via update_last_tick()
@@ -354,6 +357,32 @@ class ExecutionEngine:
                 "live broker orders will be BLOCKED. "
                 "Set LIVE_MODE_CONFIRMED=true to enable live trading."
             )
+
+    # ------------------------------------------------------------------
+    # Thread-safe counter helpers
+    # All mutations go through _counter_lock so reads in get_metrics_async()
+    # see a consistent snapshot and never race with concurrent increments.
+    # ------------------------------------------------------------------
+
+    async def _inc_orders(self) -> None:
+        async with self._counter_lock:
+            self._total_orders += 1
+
+    async def _inc_fills(self) -> None:
+        async with self._counter_lock:
+            self._total_fills += 1
+
+    async def _inc_blocks(self) -> None:
+        async with self._counter_lock:
+            self._total_blocks += 1
+
+    async def _inc_errors(self) -> None:
+        async with self._counter_lock:
+            self._total_errors += 1
+
+    async def _append_latency(self, latency_ms: float) -> None:
+        async with self._counter_lock:
+            self._latencies_ms.append(latency_ms)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -492,9 +521,9 @@ class ExecutionEngine:
                 logger.debug("OTel span error in %s: %s", __name__, _span_exc)
 
             t0 = time.monotonic()
-            self._total_orders += 1
+            await self._inc_orders()
 
-            _enriched = self._enrich_price_from_data_layer(request, t0)
+            _enriched = await self._enrich_price_from_data_layer(request, t0)
             if isinstance(_enriched, ExecutionReport):
                 try:
                     _root_span.add_event("data_layer.blocked", {"reason": _enriched.message})
@@ -505,7 +534,7 @@ class ExecutionEngine:
 
             request = self._enrich_price_from_tick_feed(request)
 
-            block = self._check_pre_submission_guards(request, t0)
+            block = await self._check_pre_submission_guards(request, t0)
             if block is not None:
                 try:
                     is_ks = "[KILL_SWITCH]" in block.message
@@ -554,7 +583,7 @@ class ExecutionEngine:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return algo_report
 
-            block = self._check_sharpe_circuit_breaker(request, t0)
+            block = await self._check_sharpe_circuit_breaker(request, t0)
             if block is not None:
                 try:
                     _root_span.add_event("sharpe_circuit_breaker.open", {"reason": block.message})
@@ -610,7 +639,9 @@ class ExecutionEngine:
     # execute() sub-steps — each ≤ 30 lines, independently testable
     # ------------------------------------------------------------------
 
-    def _enrich_price_from_data_layer(self, request: ExecutionRequest, t0: float) -> ExecutionRequest | ExecutionReport:
+    async def _enrich_price_from_data_layer(
+        self, request: ExecutionRequest, t0: float
+    ) -> ExecutionRequest | ExecutionReport:
         """
         Check data-layer safety and inject the current mid-price when absent.
 
@@ -622,7 +653,7 @@ class ExecutionEngine:
             from data_layer.orchestrator import orchestrator
 
             if orchestrator._started and not orchestrator.is_safe_to_trade():
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(request, "[DATA_LAYER] Unsafe trading conditions (blackout/no feed)", t0)
 
             if request.price is None and request.order_type == "MARKET":
@@ -685,25 +716,25 @@ class ExecutionEngine:
             metadata={**request.metadata, **extra_meta},
         )
 
-    def _check_pre_submission_guards(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+    async def _check_pre_submission_guards(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
-        Check kill-switch, engine-stopped, and LIVE_MODE_CONFIRMED state synchronously.
+        Check kill-switch, engine-stopped, and LIVE_MODE_CONFIRMED state.
 
         The circuit-breaker check (async) is handled in _check_pre_trade_gate().
         Returns a blocked ExecutionReport on the first failed guard, or None.
         """
         if self._kill_switch and self._kill_switch.is_active():
             reason = getattr(self._kill_switch, "_reason", "kill switch active")
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, f"[KILL_SWITCH] {reason}", t0)
 
         if not self._running:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, "[ENGINE_STOPPED]", t0)
 
         # ── LIVE_MODE_CONFIRMED safety gate ───────────────────────────────────
         if not self._live_mode_confirmed and self._is_live_broker():
-            self._total_blocks += 1
+            await self._inc_blocks()
             msg = (
                 "[LIVE_MODE_NOT_CONFIRMED] Live broker detected but LIVE_MODE_CONFIRMED "
                 "is not set. Set LIVE_MODE_CONFIRMED=true in the environment to allow "
@@ -713,7 +744,7 @@ class ExecutionEngine:
             return self._blocked_report(request, msg, t0)
 
         # ── Spread spike guard ────────────────────────────────────────────────
-        spread_block = self._check_spread_spike(request, t0)
+        spread_block = await self._check_spread_spike(request, t0)
         if spread_block is not None:
             return spread_block
 
@@ -731,7 +762,7 @@ class ExecutionEngine:
         broker_name = type(broker).__name__.lower()
         return not ("paper" in broker_name or "mock" in broker_name or "fake" in broker_name)
 
-    def _check_spread_spike(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+    async def _check_spread_spike(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Block the order if the current spread for the symbol is abnormally wide.
 
@@ -753,7 +784,7 @@ class ExecutionEngine:
                     f"order blocked to prevent adverse execution"
                 )
                 logger.warning(msg)
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(request, msg, t0)
         except (ImportError, AttributeError, RuntimeError) as exc:
             logger.debug("Spread spike check failed (non-fatal): %s", exc)
@@ -769,25 +800,25 @@ class ExecutionEngine:
         try:
             await self._circuit_breaker.check()
         except RuntimeError as exc:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, f"[CIRCUIT_BREAKER] {exc}", t0)
 
         try:
             gate_reason = await self._run_pre_trade_gate(request)
         except (TimeoutError, RuntimeError) as exc:
-            self._total_blocks += 1
+            await self._inc_blocks()
             logger.error("ExecutionEngine: pre-trade gate error for %s: %s", request.request_id, exc)
             self._capture_sentry(exc)
             return self._blocked_report(request, f"[GATE_ERROR] {exc}", t0)
 
         if gate_reason is not None:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, gate_reason, t0)
 
         # ── Self-trade prevention ─────────────────────────────────────────────
         stp_reason = self._check_self_trade(request)
         if stp_reason is not None:
-            self._total_blocks += 1
+            await self._inc_blocks()
             return self._blocked_report(request, stp_reason, t0)
 
         # ── Margin check ──────────────────────────────────────────────────────
@@ -850,7 +881,10 @@ class ExecutionEngine:
 
         Blocks the order if free margin would be insufficient (margin_available /
         margin_used < MIN_MARGIN_BUFFER after the notional of this order).
-        Non-fatal on broker API failure — logs warning and proceeds.
+
+        Fail-closed: any unexpected exception from the broker API blocks the
+        trade rather than allowing it through. A broken margin check must never
+        silently permit an order that could blow the account.
         """
         if self._broker is None:
             return None
@@ -858,7 +892,11 @@ class ExecutionEngine:
             loop = asyncio.get_running_loop()
             account = await loop.run_in_executor(None, self._broker.get_account_info)
             if account is None:
-                return None
+                # Broker returned no account data — cannot verify margin; block.
+                msg = "[MARGIN_CHECK_FAILED] Broker returned no account info — blocking order (fail-closed)"
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
 
             margin_available = float(getattr(account, "margin_available", 0) or 0)
             margin_used = float(getattr(account, "margin_used", 0) or 0)
@@ -888,10 +926,20 @@ class ExecutionEngine:
                         f"order_notional={notional:.2f})"
                     )
                     logger.warning(msg)
-                    self._total_blocks += 1
+                    await self._inc_blocks()
                     return self._blocked_report(request, msg, t0)
-        except (AttributeError, TypeError, RuntimeError, OSError) as exc:
-            logger.warning("ExecutionEngine: margin check failed (non-fatal): %s", exc)
+        except (AttributeError, TypeError) as exc:
+            # Data-shape errors from a malformed account object — block (fail-closed).
+            msg = f"[MARGIN_CHECK_FAILED] Malformed account data: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
+        except (RuntimeError, OSError) as exc:
+            # Broker connectivity error — cannot verify margin; block (fail-closed).
+            msg = f"[MARGIN_CHECK_FAILED] Broker unreachable: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
         return None
 
     async def _check_leverage(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
@@ -900,7 +948,9 @@ class ExecutionEngine:
 
         Leverage = order_notional / account_equity.
         Blocks if leverage > MAX_LEVERAGE_RATIO.
-        Non-fatal on broker API failure — logs warning and proceeds.
+
+        Fail-closed: any unexpected exception from the broker API blocks the
+        trade rather than allowing it through.
         """
         if self._broker is None:
             return None
@@ -912,10 +962,19 @@ class ExecutionEngine:
             loop = asyncio.get_running_loop()
             account = await loop.run_in_executor(None, self._broker.get_account_info)
             if account is None:
-                return None
+                msg = "[LEVERAGE_CHECK_FAILED] Broker returned no account info — blocking order (fail-closed)"
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
             equity = float(getattr(account, "equity", getattr(account, "balance", 0)) or 0)
             if equity <= 0:
-                return None
+                msg = (
+                    f"[LEVERAGE_CHECK_FAILED] Account equity is zero or negative ({equity}) "
+                    "— blocking order (fail-closed)"
+                )
+                logger.error(msg)
+                await self._inc_blocks()
+                return self._blocked_report(request, msg, t0)
             leverage = notional / equity
             if leverage > _MAX_LEVERAGE_RATIO:
                 msg = (
@@ -923,10 +982,18 @@ class ExecutionEngine:
                     f"(notional={notional:.2f} equity={equity:.2f})"
                 )
                 logger.warning(msg)
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(request, msg, t0)
-        except (AttributeError, TypeError, RuntimeError, OSError) as exc:
-            logger.warning("ExecutionEngine: leverage check failed (non-fatal): %s", exc)
+        except (AttributeError, TypeError) as exc:
+            msg = f"[LEVERAGE_CHECK_FAILED] Malformed account data: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
+        except (RuntimeError, OSError) as exc:
+            msg = f"[LEVERAGE_CHECK_FAILED] Broker unreachable: {exc} — blocking order (fail-closed)"
+            logger.error(msg)
+            await self._inc_blocks()
+            return self._blocked_report(request, msg, t0)
         return None
 
     async def _try_algo_routing(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
@@ -983,7 +1050,7 @@ class ExecutionEngine:
 
         return _broker_fn
 
-    def _check_sharpe_circuit_breaker(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+    async def _check_sharpe_circuit_breaker(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Gate the model out when its rolling live Sharpe is below threshold.
 
@@ -997,7 +1064,7 @@ class ExecutionEngine:
             from ml.sharpe_circuit_breaker import get_sharpe_cb
 
             if get_sharpe_cb().is_open(model_version):
-                self._total_blocks += 1
+                await self._inc_blocks()
                 return self._blocked_report(
                     request,
                     f"[SHARPE_CIRCUIT_OPEN] Model '{model_version}' gated — rolling Sharpe below threshold",
@@ -1051,7 +1118,7 @@ class ExecutionEngine:
             )
             self._capture_sentry(exc)
             await self._circuit_breaker.record_failure()
-            self._total_errors += 1
+            await self._inc_errors()
             return ExecutionReport(
                 request_id=request.request_id,
                 status=ExecutionStatus.ERROR,
@@ -1063,7 +1130,7 @@ class ExecutionEngine:
             await self._handle_fill_success(request, report)
         else:
             await self._circuit_breaker.record_failure()
-            self._total_errors += 1
+            await self._inc_errors()
 
         return report
 
@@ -1076,8 +1143,8 @@ class ExecutionEngine:
         to the caller. Circuit-breaker success and metrics are always recorded.
         """
         await self._circuit_breaker.record_success()
-        self._total_fills += 1
-        self._record_latency(report.latency_ms)
+        await self._inc_fills()
+        await self._record_latency(report.latency_ms)
 
         for coro, label in [
             (self._persist_to_redis(request, report), "redis"),
@@ -1332,8 +1399,8 @@ class ExecutionEngine:
                 None,
                 lambda: self._redis.setex(key, 604800, payload),
             )
-        except (ConnectionError, OSError, RuntimeError) as exc:
-            # Redis failure must not block execution
+        except (OSError, RuntimeError) as exc:
+            # Redis failure must not block execution (ConnectionError is a subclass of OSError)
             logger.error("ExecutionEngine: Redis persist failed: %s", exc)
             self._capture_sentry(exc)
 
@@ -1442,8 +1509,8 @@ class ExecutionEngine:
             message=reason,
         )
 
-    def _record_latency(self, latency_ms: float) -> None:
-        self._latencies_ms.append(latency_ms)  # deque(maxlen=100) auto-evicts oldest
+    async def _record_latency(self, latency_ms: float) -> None:
+        await self._append_latency(latency_ms)  # lock-protected deque append
         # Emit to Prometheus histogram for real-time SLA alerting.
         # Lazy-import so prometheus_client is optional (degrades gracefully).
         try:
@@ -1454,18 +1521,47 @@ class ExecutionEngine:
             logger.debug("Prometheus histogram observe failed: %s", _prom_exc)
 
     def get_metrics(self) -> dict[str, Any]:
-        """Return execution metrics snapshot."""
-        import numpy as _np
+        """Return execution metrics snapshot (best-effort sync read).
 
-        lat_arr = list(self._latencies_ms)
-        avg_latency = sum(lat_arr) / len(lat_arr) if lat_arr else 0.0
-        p99_latency = float(_np.percentile(lat_arr, 99)) if lat_arr else 0.0
+        Counter reads are individually atomic in CPython (GIL), so this is
+        safe for monitoring/health endpoints that cannot await.  For a
+        fully consistent snapshot use get_metrics_async().
+        """
+        # Take a local copy of the deque to avoid mutation during iteration
+        latencies = list(self._latencies_ms)
+        n = len(latencies)
+        avg_latency = sum(latencies) / n if n else 0.0
+        p99_latency = sorted(latencies)[int(n * 0.99)] if n >= 2 else 0.0
+        total_orders = self._total_orders
+        total_fills = self._total_fills
         return {
-            "total_orders": self._total_orders,
-            "total_fills": self._total_fills,
+            "total_orders": total_orders,
+            "total_fills": total_fills,
             "total_blocks": self._total_blocks,
             "total_errors": self._total_errors,
-            "fill_rate": self._total_fills / max(self._total_orders, 1),
+            "fill_rate": total_fills / max(total_orders, 1),
+            "avg_latency_ms": avg_latency,
+            "p99_latency_ms": p99_latency,
+            "circuit_breaker_open": self._circuit_breaker.is_open,
+        }
+
+    async def get_metrics_async(self) -> dict[str, Any]:
+        """Return a fully consistent metrics snapshot under the counter lock."""
+        async with self._counter_lock:
+            latencies = list(self._latencies_ms)
+            total_orders = self._total_orders
+            total_fills = self._total_fills
+            total_blocks = self._total_blocks
+            total_errors = self._total_errors
+        n = len(latencies)
+        avg_latency = sum(latencies) / n if n else 0.0
+        p99_latency = sorted(latencies)[int(n * 0.99)] if n >= 2 else 0.0
+        return {
+            "total_orders": total_orders,
+            "total_fills": total_fills,
+            "total_blocks": total_blocks,
+            "total_errors": total_errors,
+            "fill_rate": total_fills / max(total_orders, 1),
             "avg_latency_ms": avg_latency,
             "p99_latency_ms": p99_latency,
             "circuit_breaker_open": self._circuit_breaker.is_open,

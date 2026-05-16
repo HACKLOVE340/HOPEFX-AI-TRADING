@@ -4,6 +4,15 @@ const config: Config = {
   darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
+    // Override default screens to add xs breakpoint for very small phones
+    screens: {
+      xs:  '375px',
+      sm:  '640px',
+      md:  '768px',
+      lg:  '1024px',
+      xl:  '1280px',
+      '2xl': '1536px',
+    },
     extend: {
       colors: {
         // Terminal palette
@@ -88,6 +97,32 @@ const config: Config = {
       },
       backgroundSize: {
         'grid-terminal': '32px 32px',
+      },
+      spacing: {
+        // Safe-area aware spacing tokens
+        'safe-top':    'env(safe-area-inset-top,    0px)',
+        'safe-right':  'env(safe-area-inset-right,  0px)',
+        'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+        'safe-left':   'env(safe-area-inset-left,   0px)',
+        // Sidebar widths
+        'sidebar':           '224px',
+        'sidebar-collapsed': '60px',
+        // Mobile top bar
+        'topbar': '56px',
+      },
+      minHeight: {
+        'touch': '44px',
+      },
+      minWidth: {
+        'touch': '44px',
+      },
+      zIndex: {
+        'sidebar':  '20',
+        'backdrop': '30',
+        'topbar':   '40',
+        'modal':    '50',
+        'toast':    '60',
+        'tooltip':  '70',
       },
     },
   },

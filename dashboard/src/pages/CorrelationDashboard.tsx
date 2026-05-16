@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { Link2, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 const SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD', 'DXY']
 
@@ -41,8 +41,8 @@ export default function CorrelationDashboard() {
     setError(null)
     try {
       const [cm, cd] = await Promise.all([
-        axios.get(`/api/analysis/correlation?window=${window}`),
-        axios.get('/api/analysis/cot'),
+        api.get(`/api/analysis/correlation?window=${window}`),
+        api.get('/api/analysis/cot'),
       ])
       setMatrix(cm.data.matrix ?? cm.data ?? {})
       setCot(cd.data ?? null)

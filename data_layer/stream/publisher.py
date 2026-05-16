@@ -60,6 +60,7 @@ logger = logging.getLogger(__name__)
 # ── Optional async Redis ───────────────────────────────────────────────────────
 try:
     import redis.asyncio as aioredis  # type: ignore[import]
+
     _REDIS_AVAILABLE = True
 except ImportError:
     aioredis = None  # type: ignore[assignment]
@@ -81,18 +82,15 @@ _DEFAULT_MAX_DELIVERIES: int = int(os.environ.get("TICK_STREAM_MAX_DELIVERIES", 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class StreamConfig:
     """Configuration for TickPublisher and TickConsumer."""
 
-    redis_url: str = field(
-        default_factory=lambda: os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    )
+    redis_url: str = field(default_factory=lambda: os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
     stream_prefix: str = _DEFAULT_STREAM_PREFIX
     group_name: str = _DEFAULT_GROUP
-    consumer_name: str = field(
-        default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}"
-    )
+    consumer_name: str = field(default_factory=lambda: f"{socket.gethostname()}-{os.getpid()}")
     fanout_stream: str = _DEFAULT_FANOUT_STREAM
     dlq_stream: str = _DEFAULT_DLQ_STREAM
     maxlen: int = _DEFAULT_MAXLEN
@@ -106,6 +104,7 @@ class StreamConfig:
 
 
 # ── Publisher ─────────────────────────────────────────────────────────────────
+
 
 class TickPublisher:
     """
@@ -166,7 +165,7 @@ class TickPublisher:
             self._connected = False
             logger.info("TickPublisher closed")
 
-    async def __aenter__(self) -> "TickPublisher":
+    async def __aenter__(self) -> TickPublisher:
         await self.connect()
         return self
 
@@ -184,7 +183,7 @@ class TickPublisher:
         """
         fields: dict[str, str] = {"symbol": symbol}
         for k, v in tick.items():
-            if isinstance(v, (dict, list)):
+            if isinstance(v, dict | list):
                 fields[k] = json.dumps(v)
             elif v is None:
                 fields[k] = ""
@@ -343,6 +342,7 @@ class TickPublisher:
 
 # ── Consumer ──────────────────────────────────────────────────────────────────
 
+
 class TickConsumer:
     """
     Reads ticks from a Redis Stream consumer group.
@@ -413,7 +413,7 @@ class TickConsumer:
         if self._redis:
             await self._redis.aclose()
 
-    async def __aenter__(self) -> "TickConsumer":
+    async def __aenter__(self) -> TickConsumer:
         await self.connect()
         return self
 
@@ -427,9 +427,7 @@ class TickConsumer:
         if self.use_fanout:
             keys.append(self.config.fanout_stream)
         else:
-            keys.extend(
-                f"{self.config.stream_prefix}{sym}" for sym in self.symbols
-            )
+            keys.extend(f"{self.config.stream_prefix}{sym}" for sym in self.symbols)
         return keys
 
     def register_handler(
@@ -474,7 +472,7 @@ class TickConsumer:
 
         # Build the streams dict for XREADGROUP: {stream_key: ">"} means
         # "deliver new messages not yet delivered to any consumer".
-        streams_arg = {k: ">" for k in stream_keys}
+        streams_arg = dict.fromkeys(stream_keys, ">")
 
         logger.info(
             "TickConsumer starting: consumer=%s streams=%s",
@@ -527,15 +525,11 @@ class TickConsumer:
                         await handler(symbol, tick, msg_id)
                     except Exception as exc:
                         self.error_count += 1
-                        logger.error(
-                            "Handler error for msg_id=%s: %s", msg_id, exc
-                        )
+                        logger.error("Handler error for msg_id=%s: %s", msg_id, exc)
 
                 # Acknowledge the message.
                 try:
-                    await self._redis.xack(
-                        stream_key, self.config.group_name, msg_id
-                    )
+                    await self._redis.xack(stream_key, self.config.group_name, msg_id)
                     self.ack_count += 1
                 except Exception as exc:
                     logger.error("XACK error for msg_id=%s: %s", msg_id, exc)
@@ -647,9 +641,7 @@ class TickConsumer:
             )
             await self._redis.xack(source_stream, self.config.group_name, msg_id)
             self.dlq_count += 1
-            logger.warning(
-                "Message %s moved to DLQ from stream %s", msg_id, source_stream
-            )
+            logger.warning("Message %s moved to DLQ from stream %s", msg_id, source_stream)
         except Exception as exc:
             logger.error("_send_to_dlq error: %s", exc)
 

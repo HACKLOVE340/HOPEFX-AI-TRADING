@@ -2,11 +2,13 @@
 // Immutable hash-chained audit trail (ImmutableAuditLog) — SEC/CFTC compliant
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
+import { EmptyState } from '../../components/EmptyState';
 
 import {
   SectionCard, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
@@ -82,12 +84,13 @@ const AuditTrailSection: React.FC = () => {
       if (categoryFilter) params.category = categoryFilter;
       const res = await superadminApi.immutableAuditLog(params);
       if (!mountedRef.current) return;
-      setRecords(res.data.records ?? res.data.events ?? res.data);
+      const raw = res.data.records ?? res.data.events ?? res.data.entries ?? res.data;
+      setRecords(Array.isArray(raw) ? raw : []);
       setTotal(res.data.total ?? 0);
       setPage(p);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load audit trail');
+      setError(extractApiError(e, 'Failed to load audit trail'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [categoryFilter]);
 
@@ -103,7 +106,7 @@ const AuditTrailSection: React.FC = () => {
       URL.revokeObjectURL(url);
       setMsg('Audit trail exported');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+      setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(false); }
   };
 
@@ -114,7 +117,8 @@ const AuditTrailSection: React.FC = () => {
       if (sysSearch) params.search = sysSearch;
       const res = await superadminApi.auditLog(params);
       if (!mountedRef.current) return;
-      setSysEntries(res.data.entries ?? res.data ?? []);
+      const sysRaw = res.data.entries ?? res.data.events ?? res.data;
+      setSysEntries(Array.isArray(sysRaw) ? sysRaw : []);
       setSysTotal(res.data.total ?? 0);
       setSysPage(p);
     } catch {
@@ -137,7 +141,7 @@ const AuditTrailSection: React.FC = () => {
       URL.revokeObjectURL(url);
       setMsg('System audit exported');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+      setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(false); }
   };
 
@@ -339,7 +343,7 @@ const AuditTrailSection: React.FC = () => {
             {sysLoading ? (
               <LoadingRows rows={6} />
             ) : sysEntries.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>No system audit entries found.</div>
+              <EmptyState compact icon="📋" title="No audit entries found" description="System audit events will appear here as platform actions are recorded." links={[{ label: 'Audit Log', href: '/audit', icon: '🔍' }]} />
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>

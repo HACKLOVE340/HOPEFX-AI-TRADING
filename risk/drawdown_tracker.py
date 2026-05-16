@@ -121,6 +121,7 @@ class DrawdownTracker:
 
         # Lock protects all mutable state against concurrent update() / record_fill() calls
         import threading as _threading
+
         self._lock = _threading.Lock()
 
         # All-time trailing HWM — never decreases
@@ -128,8 +129,7 @@ class DrawdownTracker:
 
         # Daily anchor — resets at midnight UTC
         self._daily_open: float = initial_balance
-        _now = datetime.now(UTC)
-        self._day: tuple = (_now.year, _now.month, _now.day)
+        self._day: int = datetime.now(UTC).day
 
         # Cumulative realised PnL from partial fills today
         self._daily_realised_pnl: float = 0.0
@@ -161,8 +161,7 @@ class DrawdownTracker:
             self._last_balance = balance
 
             # ── Day rollover ──────────────────────────────────────────────────
-            _utc = datetime.now(UTC)
-            today = (_utc.year, _utc.month, _utc.day)
+            today = datetime.now(UTC).day
             if today != self._day:
                 # New day: anchor is the equity/balance at the start of the new day
                 anchor_new = balance if self.drawdown_mode == "balance" else equity
@@ -373,15 +372,38 @@ class DrawdownTracker:
         return min(1.0, max(0.0, (anchor - measure) / anchor))
 
     def status(self) -> dict:
+        # Take a consistent snapshot under the lock so all fields reflect the
+        # same instant.  Without the lock, a concurrent update() call could
+        # change _total_hwm between the first and second reads, producing an
+        # internally inconsistent status dict (e.g. drawdown_pct computed from
+        # a stale HWM while last_equity already reflects the new value).
+        with self._lock:
+            total_hwm = self._total_hwm
+            daily_open = self._daily_open
+            daily_realised_pnl = self._daily_realised_pnl
+            last_equity = self._last_equity
+            last_balance = self._last_balance
+            drawdown_mode = self.drawdown_mode
+
+        total_dd = 0.0
+        if total_hwm > 0:
+            total_dd = min(1.0, max(0.0, (total_hwm - last_equity) / total_hwm))
+
+        anchor = daily_open
+        measure = last_balance if drawdown_mode == "balance" else last_equity
+        daily_dd = 0.0
+        if anchor > 0:
+            daily_dd = min(1.0, max(0.0, (anchor - measure) / anchor))
+
         return {
-            "total_hwm": self._total_hwm,
-            "total_drawdown_pct": round(self.current_total_dd * 100, 4),
+            "total_hwm": total_hwm,
+            "total_drawdown_pct": round(total_dd * 100, 4),
             "max_total_dd_pct": round(self.max_total_dd_pct * 100, 4),
-            "daily_open": self._daily_open,
-            "daily_drawdown_pct": round(self.current_daily_dd * 100, 4),
+            "daily_open": daily_open,
+            "daily_drawdown_pct": round(daily_dd * 100, 4),
             "max_daily_dd_pct": round(self.max_daily_dd_pct * 100, 4),
-            "daily_realised_pnl": round(self._daily_realised_pnl, 4),
-            "drawdown_mode": self.drawdown_mode,
-            "last_equity": self._last_equity,
-            "last_balance": self._last_balance,
+            "daily_realised_pnl": round(daily_realised_pnl, 4),
+            "drawdown_mode": drawdown_mode,
+            "last_equity": last_equity,
+            "last_balance": last_balance,
         }

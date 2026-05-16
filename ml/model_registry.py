@@ -169,7 +169,7 @@ class ModelRegistry:
         """Atomically write the manifest via a temp-file rename."""
         tmp_fd, tmp_path = tempfile.mkstemp(dir=self._path.parent, prefix=".registry_tmp_", suffix=".json")
         try:
-            with os.fdopen(tmp_fd, "w") as fh:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 json.dump(manifest, fh, indent=2)
             Path(tmp_path).replace(self._path)
         except Exception:  # nosec B110 — cleanup temp file before re-raise
@@ -493,6 +493,52 @@ class ModelRegistry:
         """Return a single version entry by name, or None."""
         return self._load()["versions"].get(name)
 
+    def refresh_digest(self, name: str) -> str:
+        """Recompute and persist the SHA-256 digest for *name* after the artifact changes.
+
+        Call this immediately after retraining overwrites a model file so the
+        manifest digest stays in sync with the artifact on disk. Without this,
+        verify() will report a mismatch for every request after a retrain.
+
+        Parameters
+        ----------
+        name : Version name whose artifact has been updated.
+
+        Returns
+        -------
+        The new hex digest string.
+
+        Raises
+        ------
+        KeyError          : If *name* is not in the registry.
+        FileNotFoundError : If the artifact file no longer exists.
+        """
+        manifest = self._load()
+        if name not in manifest["versions"]:
+            raise KeyError(f"Version '{name}' not found in registry")
+
+        entry = manifest["versions"][name]
+        artifact = Path(entry["file"])
+        if not artifact.exists():
+            raise FileNotFoundError(f"Artifact missing: {artifact}")
+
+        old_digest = entry.get("sha256", "")
+        new_digest = sha256_file(artifact)
+
+        if new_digest == old_digest:
+            logger.debug("ModelRegistry: digest unchanged for '%s' (%s…)", name, new_digest[:12])
+            return new_digest
+
+        entry["sha256"] = new_digest
+        self._save(manifest)
+        logger.info(
+            "ModelRegistry: digest refreshed for '%s'  old=%s… new=%s…",
+            name,
+            old_digest[:12],
+            new_digest[:12],
+        )
+        return new_digest
+
     def retire(self, name: str) -> None:
         """Mark *name* as retired without changing the active version."""
         manifest = self._load()
@@ -501,6 +547,61 @@ class ModelRegistry:
         manifest["versions"][name]["state"] = "retired"
         self._save(manifest)
         logger.info("ModelRegistry: retired '%s'", name)
+
+    def rollback(self, name: str) -> dict[str, Any]:
+        """
+        Force-promote *name* to production, bypassing quality gates.
+
+        Used exclusively for emergency rollbacks where a previously-validated
+        model must be restored immediately without re-running the Sharpe/PnL
+        gates. The caller (superadmin endpoint) is responsible for ensuring
+        the target version was previously in production or staging.
+
+        Parameters
+        ----------
+        name : Version name to roll back to.
+
+        Returns
+        -------
+        The updated version entry.
+
+        Raises
+        ------
+        KeyError : If *name* is not in the registry.
+        """
+        manifest = self._load()
+        if name not in manifest["versions"]:
+            raise KeyError(f"Version '{name}' not found in registry")
+
+        # Retire the current active version
+        prev_active = manifest.get("active_version")
+        if prev_active and prev_active != name:
+            prev = manifest["versions"].get(prev_active)
+            if prev:
+                prev["state"] = "retired"
+                logger.info("ModelRegistry.rollback: retired previous active '%s'", prev_active)
+
+        # Promote the target version without gate checks
+        from datetime import datetime, timezone
+
+        entry = manifest["versions"][name]
+        entry["state"] = "production"
+        entry["promoted_at"] = datetime.now(timezone.utc).isoformat()
+        manifest["active_version"] = name
+        self._save(manifest)
+
+        # Update symlink if artifact exists
+        artifact = entry.get("artifact_path")
+        if artifact:
+            artifact_path = Path(artifact)
+            if artifact_path.exists():
+                try:
+                    self._update_symlink(artifact_path)
+                except Exception as exc:
+                    logger.warning("ModelRegistry.rollback: symlink update failed: %s", exc)
+
+        logger.info("ModelRegistry.rollback: rolled back to '%s' (gates bypassed)", name)
+        return entry
 
     # ── Bootstrap from existing meta ──────────────────────────────────────────
 

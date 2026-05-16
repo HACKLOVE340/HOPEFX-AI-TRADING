@@ -205,6 +205,7 @@ class AlertTrigger:
     message: str
     priority: str
     notify_channels: list[str]
+    user_id: str | None = None  # owner of the alert that fired
 
     def to_dict(self) -> dict:
         return {
@@ -218,6 +219,7 @@ class AlertTrigger:
             "message": self.message,
             "priority": self.priority,
             "notify_channels": self.notify_channels,
+            "user_id": self.user_id,
         }
 
 
@@ -520,9 +522,13 @@ class AlertEngine:
 
             return alerts
 
-    def get_active_alerts(self, symbol: str | None = None) -> list[Alert]:
-        """Get all active alerts."""
-        return [a for a in self.get_alerts(symbol=symbol) if a.is_active()]
+    def get_active_alerts(
+        self,
+        symbol: str | None = None,
+        user_id: str | None = None,
+    ) -> list[Alert]:
+        """Get all active alerts, optionally scoped to a user."""
+        return [a for a in self.get_alerts(symbol=symbol, user_id=user_id) if a.is_active()]
 
     # ================================================================
     # ALERT CHECKING
@@ -737,6 +743,7 @@ class AlertEngine:
             message=message,
             priority=alert.priority.value,
             notify_channels=alert.notify_channels,
+            user_id=alert.user_id,
         )
 
         # Store in history (deque auto-evicts oldest at maxlen)
@@ -797,17 +804,23 @@ class AlertEngine:
         symbol: str | None = None,
         alert_id: str | None = None,
         limit: int = 50,
+        user_id: str | None = None,
     ) -> list[AlertTrigger]:
-        """Get trigger history."""
-        with self._lock:
-            history = self._trigger_history.copy()
+        """Get trigger history, optionally scoped to a user."""
+        # Convert deque to list immediately — deque does not support slice
+        # notation (deque[-limit:] raises TypeError), so we must have a list
+        # before applying the limit.  Filters also produce lists, but the
+        # unfiltered path previously returned a deque.copy() and then sliced it.
+        history: list[AlertTrigger] = list(self._trigger_history)
 
         if symbol:
             history = [t for t in history if t.symbol == symbol]
         if alert_id:
             history = [t for t in history if t.alert_id == alert_id]
+        if user_id:
+            history = [t for t in history if t.user_id == user_id]
 
-        return list(history)[-limit:]
+        return history[-limit:]
 
     def get_stats(self) -> dict:
         """Get alert engine statistics."""
@@ -907,10 +920,11 @@ def create_alert_router(alert_engine: AlertEngine):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
+    router = APIRouter(prefix="/api/alerts", tags=["Alerts"], dependencies=[Depends(get_current_user)])
 
     class CreateAlertRequest(BaseModel):
         name: str

@@ -90,6 +90,16 @@ class Order:
             OrderStatus.REJECTED,
         )
 
+    @property
+    def average_price(self) -> float:
+        """Alias for average_fill_price (brokers/base.py canonical name)."""
+        return self.average_fill_price
+
+    @property
+    def filled_price(self) -> float:
+        """Alias for average_fill_price (cme_comex / cpp_shim legacy name)."""
+        return self.average_fill_price
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,

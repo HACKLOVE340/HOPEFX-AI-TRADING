@@ -73,14 +73,14 @@ async def test_full_buy_sell_cycle(broker):
     order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
     assert order is not None
 
-    positions = broker.get_positions()
+    positions = await broker.get_positions()
     assert any(p.symbol == "XAUUSD" for p in positions)
 
     broker.update_market_price("XAUUSD", 2020.0)
     closed = broker.close_position("XAUUSD")
     assert closed is True
 
-    positions_after = broker.get_positions()
+    positions_after = await broker.get_positions()
     assert not any(p.symbol == "XAUUSD" for p in positions_after)
 
     await broker.disconnect()
@@ -96,7 +96,7 @@ async def test_multi_symbol_positions_independent(broker):
     broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
     broker.place_order("XAUUSD", OrderSide.SELL, OrderType.MARKET, 0.1)
 
-    symbols = {p.symbol for p in broker.get_positions()}
+    symbols = {p.symbol for p in await broker.get_positions()}
     assert "EURUSD" in symbols
     assert "XAUUSD" in symbols
 
@@ -108,13 +108,13 @@ async def test_account_equity_decreases_on_loss(broker):
     """A losing trade reduces account equity."""
     await broker.connect()
     broker.update_market_price("XAUUSD", 2000.0)
-    initial_balance = broker.get_account_info().balance
+    initial_balance = (await broker.get_account_info()).balance
 
     broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
     broker.update_market_price("XAUUSD", 1980.0)  # price drops
     broker.close_position("XAUUSD")
 
-    final_balance = broker.get_account_info().balance
+    final_balance = (await broker.get_account_info()).balance
     assert final_balance < initial_balance
 
     await broker.disconnect()
@@ -125,13 +125,13 @@ async def test_account_equity_increases_on_profit(broker):
     """A winning trade increases account equity."""
     await broker.connect()
     broker.update_market_price("XAUUSD", 2000.0)
-    initial_balance = broker.get_account_info().balance
+    initial_balance = (await broker.get_account_info()).balance
 
     broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
     broker.update_market_price("XAUUSD", 2050.0)  # price rises
     broker.close_position("XAUUSD")
 
-    final_balance = broker.get_account_info().balance
+    final_balance = (await broker.get_account_info()).balance
     assert final_balance > initial_balance
 
     await broker.disconnect()
@@ -392,7 +392,7 @@ class TestBrokerRiskIntegration:
         broker = self._make_broker(50_000.0)
         connected = await broker.connect()
         assert connected is True
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info is not None
         assert info.balance == pytest.approx(50_000.0, rel=1e-3)
         await broker.disconnect()
@@ -410,7 +410,7 @@ class TestBrokerRiskIntegration:
             quantity=0.1,
         )
         assert order is not None
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) >= 1
         assert "XAUUSD" in [p.symbol for p in positions]
         await broker.disconnect()
@@ -453,7 +453,7 @@ class TestBrokerRiskIntegration:
             order_type=OrderType.MARKET,
             quantity=0.1,
         )
-        assert len(broker.get_positions()) >= 1
+        assert len(await broker.get_positions()) >= 1
         broker.update_market_price("EURUSD", 1.0860)
         closed = broker.close_position("EURUSD")
         assert closed is True

@@ -67,7 +67,7 @@ def _load_report(path: Path) -> dict:
     if not path.exists():
         return {}
     try:
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (json.JSONDecodeError, OSError):
         return {}
@@ -282,7 +282,7 @@ def generate_cover(output_path: Path) -> None:
     # ------------------------------------------------------------------
     output_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(str(output_path), "PNG", optimize=True)
-    logger.info(f"Cover written to {output_path}  ({output_path.stat().st_size // 1024} KB)")
+    logger.info("Cover written to %s  (%s KB)", output_path, output_path.stat().st_size // 1024)
 
 
 def main() -> None:

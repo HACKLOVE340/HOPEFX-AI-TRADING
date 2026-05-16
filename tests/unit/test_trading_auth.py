@@ -176,6 +176,7 @@ def app(mock_broker, mock_brain, tmp_path, monkeypatch):
     os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
     import types
+
     state = types.SimpleNamespace(
         broker=mock_broker,
         brain=mock_brain,
@@ -477,3 +478,110 @@ class TestAuthHelpers:
 
     def test_validate_order_quantity_accepts_valid(self):
         assert validate_order_quantity(5.0) == 5.0
+
+
+# ---------------------------------------------------------------------------
+# Broker rejection regression tests
+# Bug: _record_fill compared Order.status (an enum) against plain strings,
+# so rejected orders were silently treated as successful fills.
+# ---------------------------------------------------------------------------
+
+
+class TestBrokerRejectionHandling:
+    """_record_fill must return HTTP 400 when the broker signals rejection,
+    regardless of whether the status is an enum value or a plain string."""
+
+    def test_enum_rejected_status_returns_400(self, client, monkeypatch):
+        """OrderStatus.REJECTED enum must trigger HTTP 400, not 200."""
+        from brokers import Order, OrderStatus, OrderSide, OrderType
+
+        rejected_order = Order(
+            id="ord-rej-1",
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            type=OrderType.MARKET,
+            quantity=1.0,
+            status=OrderStatus.REJECTED,
+            rejected_reason="Insufficient margin",
+        )
+
+        async def _fake_place(*args, **kwargs):
+            return rejected_order
+
+        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+
+        resp = client.post(
+            "/api/trading/order",
+            json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
+            headers=_auth("trader"),
+        )
+        assert resp.status_code == 400
+        assert "rejected" in resp.json()["detail"].lower()
+
+    def test_string_rejected_status_returns_400(self, client, monkeypatch):
+        """Plain string 'rejected' status must also trigger HTTP 400."""
+
+        async def _fake_place(*args, **kwargs):
+            return {"order_id": "ord-str-rej", "status": "rejected", "reason": "Risk limit"}
+
+        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+
+        resp = client.post(
+            "/api/trading/order",
+            json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
+            headers=_auth("trader"),
+        )
+        assert resp.status_code == 400
+
+    def test_enum_error_status_returns_400(self, client, monkeypatch):
+        """OrderStatus.ERROR enum must trigger HTTP 400."""
+        from brokers import Order, OrderStatus, OrderSide, OrderType
+
+        error_order = Order(
+            id="ord-err-1",
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            type=OrderType.MARKET,
+            quantity=1.0,
+            status=OrderStatus.ERROR,
+        )
+
+        async def _fake_place(*args, **kwargs):
+            return error_order
+
+        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+
+        resp = client.post(
+            "/api/trading/order",
+            json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
+            headers=_auth("trader"),
+        )
+        assert resp.status_code == 400
+
+    def test_filled_order_returns_201(self, client, monkeypatch):
+        """A filled order must still return HTTP 201 (regression guard)."""
+        from brokers import Order, OrderStatus, OrderSide, OrderType
+
+        filled_order = Order(
+            id="ord-fill-1",
+            symbol="XAUUSD",
+            side=OrderSide.BUY,
+            type=OrderType.MARKET,
+            quantity=1.0,
+            status=OrderStatus.FILLED,
+            average_fill_price=1950.0,
+            filled_quantity=1.0,
+        )
+
+        async def _fake_place(*args, **kwargs):
+            return filled_order
+
+        monkeypatch.setattr(trading_module, "_broker_call", _fake_place)
+
+        resp = client.post(
+            "/api/trading/order",
+            json={"symbol": "XAUUSD", "side": "buy", "quantity": 1.0},
+            headers=_auth("trader"),
+        )
+        assert resp.status_code == 201
+        assert resp.json()["status"] == "success"

@@ -93,16 +93,20 @@ def _get_hybrid_predictor() -> Any | None:
         return _hybrid_predictor
     try:
         from ml.advanced_predictor import get_hybrid_predictor
+
         _hybrid_predictor = get_hybrid_predictor()
         status = _hybrid_predictor.component_status
         logger.info(
             "HybridEnsemblePredictor loaded — xgb=%s lstm=%s rl=%s",
-            status.get("xgb_available"), status.get("lstm_available"), status.get("rl_available"),
+            status.get("xgb_available"),
+            status.get("lstm_available"),
+            status.get("rl_available"),
         )
         return _hybrid_predictor
     except Exception as exc:
         logger.debug("HybridEnsemblePredictor unavailable: %s", exc)
         return None
+
 
 # ── Anomaly weight store (Phase 2 — down-weight signals on anomalous bars) ────
 _anomaly_store: Any | None = None
@@ -837,10 +841,8 @@ def _compute_ml_probability(
                 macro_df = _fetch_macro_df(ohlcv_df, symbol)
                 try:
                     prob = hybrid.predict_proba(ohlcv_df, macro_df=macro_df)
-                    if isinstance(prob, (int, float)) and 0.0 <= prob <= 1.0:
-                        logger.debug(
-                            "HybridEnsemble prob=%.4f for %s", prob, symbol
-                        )
+                    if isinstance(prob, int | float) and 0.0 <= prob <= 1.0:
+                        logger.debug("HybridEnsemble prob=%.4f for %s", prob, symbol)
                         return float(prob), "hybrid_ensemble_v1"
                 except Exception as _he:
                     logger.debug("HybridEnsemble predict failed (%s) — falling back to AdvancedPredictor", _he)
@@ -890,6 +892,30 @@ def notify_fill(
         store.on_fill(features, label, primary_prob=primary_prob)
     except Exception as exc:
         logger.debug("notify_fill failed (non-fatal): %s", exc)
+
+
+def notify_trade_close(
+    features: "pd.DataFrame",
+    realized_pnl: float,
+    primary_prob: float | None = None,
+) -> None:
+    """
+    Notify the online learner when a trade closes with a known outcome (Phase 3).
+
+    This is the correct call site for the online learner — the label is derived
+    from the actual realized P&L so the model learns from real outcomes rather
+    than fabricated fill-time labels.
+
+    Parameters
+    ----------
+    features      : Feature DataFrame captured at signal/fill time.
+    realized_pnl  : Actual realized P&L for the closed trade.
+    primary_prob  : Primary model probability at signal time.
+
+    Safe to call when FEATURE_ONLINE_LEARNING=false — no-op in that case.
+    """
+    label = 1 if realized_pnl > 0 else 0
+    notify_fill(features, label=label, primary_prob=primary_prob)
 
 
 # ── Factor model integration ──────────────────────────────────────────────────
@@ -1052,13 +1078,21 @@ async def _publish_and_broadcast(
         model_ver,
     )
 
-    # WebSocket broadcast
+    # WebSocket broadcast — check app_state.ws_manager first (injected in tests
+    # and non-FastAPI deployments), then fall back to LiveConnectionManager.
     ws = getattr(app_state, "ws_manager", None)
     if ws is not None:
         try:
             await ws.broadcast_signal(symbol, signal_payload)
         except Exception as ws_exc:
-            logger.warning("Signal broadcast failed: %s", ws_exc)
+            logger.warning("Signal broadcast (ws_manager) failed: %s", ws_exc)
+    else:
+        try:
+            from api.ws_live import get_live_manager as _get_live_mgr
+
+            await _get_live_mgr().broadcast_signal(symbol, signal_payload)
+        except Exception as _live_ws_exc:
+            logger.debug("LiveConnectionManager signal broadcast failed: %s", _live_ws_exc)
 
     # Ingest into RealTimeSignalService ring buffer so /api/signals/latest
     # reflects engine-generated signals (not just manually-submitted ones).
@@ -1145,13 +1179,14 @@ def _enrich_with_signal_score(
         signal_payload["signal_strength_score"] = round(score_result.composite, 4)
         signal_payload["signal_grade"] = score_result.grade
         signal_payload["signal_score_dimensions"] = {
-            k: round(v, 4) for k, v in {
-                "ml_confidence":   score_result.dimensions.ml_confidence,
-                "technical":       score_result.dimensions.technical,
+            k: round(v, 4)
+            for k, v in {
+                "ml_confidence": score_result.dimensions.ml_confidence,
+                "technical": score_result.dimensions.technical,
                 "macro_alignment": score_result.dimensions.macro_alignment,
-                "regime":          score_result.dimensions.regime,
-                "mtf_confluence":  score_result.dimensions.mtf_confluence,
-                "volatility":      score_result.dimensions.volatility,
+                "regime": score_result.dimensions.regime,
+                "mtf_confluence": score_result.dimensions.mtf_confluence,
+                "volatility": score_result.dimensions.volatility,
             }.items()
         }
         signal_payload["signal_score_latency_ms"] = round(score_result.latency_ms, 2)
@@ -1374,8 +1409,7 @@ async def _assess_risk_and_size(
     if regime_scalar < 1.0:
         scaled_size = sizing.recommended_size * regime_scalar
         logger.info(
-            "Regime-conditional sizing: %s regime=%s scalar=%.2f "
-            "approved=%.4f → scaled=%.4f",
+            "Regime-conditional sizing: %s regime=%s scalar=%.2f approved=%.4f → scaled=%.4f",
             symbol,
             regime_name,
             regime_scalar,
@@ -1404,18 +1438,11 @@ async def _place_order_and_notify(
       - Paper trading gate fill counter
       - Online learner Phase-3 feedback
     """
-    try:
-        order = await broker.place_market_order(
-            symbol=symbol,
-            side=direction.lower(),
-            quantity=quantity,
-        )
-    except Exception as broker_exc:
-        logger.error(
-            "Auto-trade broker call failed — order NOT placed: %s %s qty=%s error=%s",
-            direction, symbol, quantity, broker_exc,
-        )
-        return
+    order = await broker.place_market_order(
+        symbol=symbol,
+        side=direction.lower(),
+        quantity=quantity,
+    )
 
     # Validate the order result before recording the fill.
     order_status = getattr(order, "status", None) or (order.get("status") if isinstance(order, dict) else None)
@@ -1423,7 +1450,11 @@ async def _place_order_and_notify(
         reason = getattr(order, "reason", None) or (order.get("reason") if isinstance(order, dict) else "unknown")
         logger.error(
             "Auto-trade order rejected: %s %s qty=%s status=%s reason=%s",
-            direction, symbol, quantity, order_status, reason,
+            direction,
+            symbol,
+            quantity,
+            order_status,
+            reason,
         )
         return
 
@@ -1478,27 +1509,55 @@ async def _broadcast_fill(
     signal_payload: dict[str, Any],
 ) -> None:
     """Broadcast the fill over WebSocket — best-effort."""
-    ws = getattr(app_state, "ws_manager", None)
-    if ws is None:
-        return
     try:
-        fill_price = (
-            getattr(order, "average_fill_price", None)
-            or (order.get("fill_price") if isinstance(order, dict) else None)
-            or signal_payload["entry_price"]
+
+        def _real_price(val: Any) -> float | None:
+            """Return val as float only if it is a genuine numeric type (int/float).
+            Rejects None, MagicMock, and other non-numeric objects."""
+            import math
+
+            if val is None:
+                return None
+            if not isinstance(val, int | float):
+                return None
+            try:
+                f = float(val)
+                return f if not math.isnan(f) and f > 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        fill_price: float = (
+            _real_price(getattr(order, "average_fill_price", None))
+            or _real_price(getattr(order, "average_price", None))
+            or (_real_price(order.get("fill_price")) if isinstance(order, dict) else None)
+            or float(signal_payload["entry_price"])
         )
         trade_id = (
-            getattr(order, "id", None)
-            or (order.get("order_id") if isinstance(order, dict) else None)
-            or "unknown"
+            getattr(order, "id", None) or (order.get("order_id") if isinstance(order, dict) else None) or "unknown"
         )
-        await ws.broadcast_trade(
-            symbol=symbol,
-            price=fill_price,
-            quantity=quantity,
-            side=direction.lower(),
-            trade_id=trade_id,
-        )
+        trade_msg = {
+            "type": "trade_fill",
+            "data": {
+                "symbol": symbol,
+                "price": fill_price,
+                "quantity": quantity,
+                "side": direction.lower(),
+                "trade_id": trade_id,
+            },
+        }
+        # Primary: app_state.ws_manager (injected in tests and production startup)
+        ws = getattr(app_state, "ws_manager", None)
+        if ws is not None:
+            await ws.broadcast_trade(**trade_msg["data"])
+            return
+
+        # Fallback: LiveConnectionManager (FastAPI /ws/live)
+        try:
+            from api.ws_live import get_live_manager as _get_live_mgr
+
+            await _get_live_mgr().broadcast("trades", trade_msg)
+        except Exception as _live_exc:
+            logger.debug("LiveConnectionManager fill broadcast failed: %s", _live_exc)
     except Exception as exc:
         logger.debug("WebSocket fill broadcast failed: %s", exc)
 
@@ -1520,7 +1579,18 @@ def _notify_online_learner(
     order: Any,
     signal_payload: dict[str, Any],
 ) -> None:
-    """Notify Phase-3 online learner of a confirmed fill — best-effort."""
+    """Store fill features for Phase-3 online learner — best-effort.
+
+    The online learner requires a ground-truth label (profitable=1 / loss=0)
+    which is only known when the trade closes.  Calling notify_fill here with
+    a fabricated label=1 would poison the model by teaching it that every
+    auto-trade is profitable regardless of outcome.
+
+    Instead, we store the fill features on the signal_payload so the trade
+    close path can call notify_trade_close(features, realized_pnl) with the
+    real outcome.  If the close path is unavailable the features are discarded
+    — this is preferable to corrupting the online model with false labels.
+    """
     try:
         fill_price = (
             getattr(order, "average_fill_price", None)
@@ -1539,9 +1609,16 @@ def _notify_online_learner(
                 }
             ]
         )
-        notify_fill(features, label=1, primary_prob=signal_payload.get("probability"))
+        # Attach features to the payload so the trade-close path can call
+        # notify_trade_close(features, realized_pnl) with the real outcome.
+        signal_payload["_online_learner_features"] = features
+        logger.debug(
+            "Online learner fill features stored for %s %s — label deferred to trade close",
+            direction,
+            symbol,
+        )
     except Exception as exc:
-        logger.debug("notify_fill skipped after auto-trade: %s", exc)
+        logger.debug("_notify_online_learner skipped: %s", exc)
 
 
 async def _execute_if_approved(
@@ -1585,7 +1662,10 @@ async def _execute_if_approved(
     if _grade not in ("STRONG", "GOOD") and _score < _min_auto_score:
         logger.info(
             "Auto-trade blocked by signal grade gate: %s grade=%s score=%.3f < %.3f threshold",
-            symbol, _grade, _score, _min_auto_score,
+            symbol,
+            _grade,
+            _score,
+            _min_auto_score,
         )
         return
 
@@ -1855,14 +1935,23 @@ async def _tick(app_state: Any) -> None:
             _broker = getattr(app_state, "broker", None)
             if _broker is not None:
                 _raw_pos = await _broker.get_positions()
-                _pos_map = {
-                    getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0))
-                    for p in (_raw_pos or [])
-                }
+                _pos_map = {getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0)) for p in (_raw_pos or [])}
                 _total_pnl = sum(float(getattr(p, "unrealized_pnl", 0)) for p in (_raw_pos or []))
-                signal_payload = _enrich_signal_with_factors(
-                    signal_payload, _pos_map, _total_pnl, app_state=app_state
-                )
+                signal_payload = _enrich_signal_with_factors(signal_payload, _pos_map, _total_pnl, app_state=app_state)
+        except Exception as _fac_exc:
+            logger.debug("Factor enrichment skipped (non-fatal): %s", _fac_exc)
+
+        # ── Factor Attribution ────────────────────────────────────────────────
+        # Append live portfolio factor attribution (market/size/value betas and
+        # residual alpha) to the payload so subscribers can see factor P&L.
+        # Best-effort: fetches live positions from broker, falls back gracefully.
+        try:
+            _broker = getattr(app_state, "broker", None)
+            if _broker is not None:
+                _raw_pos = await _broker.get_positions()
+                _pos_map = {getattr(p, "symbol", "UNK"): float(getattr(p, "quantity", 0)) for p in (_raw_pos or [])}
+                _total_pnl = sum(float(getattr(p, "unrealized_pnl", 0)) for p in (_raw_pos or []))
+                signal_payload = _enrich_signal_with_factors(signal_payload, _pos_map, _total_pnl, app_state=app_state)
         except Exception as _fac_exc:
             logger.debug("Factor enrichment skipped (non-fatal): %s", _fac_exc)
 

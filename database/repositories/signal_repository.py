@@ -29,9 +29,7 @@ class SignalRepository(AsyncRepository[Signal]):
 
     model = Signal
 
-    async def get_by_signal_id(
-        self, session: AsyncSession, signal_id: str
-    ) -> Signal | None:
+    async def get_by_signal_id(self, session: AsyncSession, signal_id: str) -> Signal | None:
         """Return a signal by its unique signal_id."""
         stmt = select(Signal).where(Signal.signal_id == signal_id)
         result = await session.execute(stmt)
@@ -44,15 +42,10 @@ class SignalRepository(AsyncRepository[Signal]):
         limit: int = 50,
     ) -> Sequence[Signal]:
         """Return unexecuted signals, optionally filtered by symbol."""
-        conditions = [Signal.executed == False]  # noqa: E712
+        conditions = [Signal.executed == False]
         if symbol:
             conditions.append(Signal.symbol == symbol)
-        stmt = (
-            select(Signal)
-            .where(and_(*conditions))
-            .order_by(desc(Signal.generated_at))
-            .limit(limit)
-        )
+        stmt = select(Signal).where(and_(*conditions)).order_by(desc(Signal.generated_at)).limit(limit)
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -67,12 +60,7 @@ class SignalRepository(AsyncRepository[Signal]):
         conditions = [Signal.strategy == strategy]
         if since:
             conditions.append(Signal.generated_at >= since)
-        stmt = (
-            select(Signal)
-            .where(and_(*conditions))
-            .order_by(desc(Signal.generated_at))
-            .limit(limit)
-        )
+        stmt = select(Signal).where(and_(*conditions)).order_by(desc(Signal.generated_at)).limit(limit)
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -83,12 +71,7 @@ class SignalRepository(AsyncRepository[Signal]):
         limit: int = 100,
     ) -> Sequence[Signal]:
         """Return signals from a specific source."""
-        stmt = (
-            select(Signal)
-            .where(Signal.source == source)
-            .order_by(desc(Signal.generated_at))
-            .limit(limit)
-        )
+        stmt = select(Signal).where(Signal.source == source).order_by(desc(Signal.generated_at)).limit(limit)
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -100,8 +83,14 @@ class SignalRepository(AsyncRepository[Signal]):
         executed: bool | None = None,
         limit: int = 100,
     ) -> Sequence[Signal]:
-        """Return signals associated with a user via their trades."""
-        from sqlalchemy import join
+        """Return signals associated with a user via their trades.
+
+        Uses an INNER JOIN so only signals that are linked to a trade owned
+        by the user are returned.  The previous LEFT OUTER JOIN put the
+        Trade.user_id filter in the WHERE clause which turned the outer join
+        into an implicit inner join while also excluding unlinked signals —
+        the worst of both worlds.
+        """
         from database.models import Trade
 
         conditions = [Trade.user_id == user_id]
@@ -112,7 +101,7 @@ class SignalRepository(AsyncRepository[Signal]):
 
         stmt = (
             select(Signal)
-            .join(Trade, Signal.trade_id == Trade.trade_id, isouter=True)
+            .join(Trade, Signal.trade_id == Trade.trade_id)
             .where(and_(*conditions))
             .order_by(desc(Signal.generated_at))
             .limit(limit)
@@ -136,7 +125,7 @@ class SignalRepository(AsyncRepository[Signal]):
         from sqlalchemy import case, func as sa_func
         from database.models import Trade
 
-        conditions = [Signal.executed == True, Signal.trade_id.isnot(None)]  # noqa: E712
+        conditions = [Signal.executed == True, Signal.trade_id.isnot(None)]
         if strategy:
             conditions.append(Signal.strategy == strategy)
         if symbol:
@@ -147,9 +136,7 @@ class SignalRepository(AsyncRepository[Signal]):
         stmt = (
             select(
                 sa_func.count(Signal.id).label("total"),
-                sa_func.sum(
-                    case((Trade.realized_pnl > 0, 1), else_=0)
-                ).label("winning"),
+                sa_func.sum(case((Trade.realized_pnl > 0, 1), else_=0)).label("winning"),
                 sa_func.avg(Trade.realized_pnl).label("avg_pnl"),
                 sa_func.sum(Trade.realized_pnl).label("total_pnl"),
                 sa_func.avg(Signal.confidence).label("avg_confidence"),
@@ -182,6 +169,7 @@ class SignalRepository(AsyncRepository[Signal]):
     ) -> Signal | None:
         """Mark a signal as executed, link it to a trade, and record execution time."""
         from datetime import timezone
+
         signal = await self.get_by_signal_id(session, signal_id)
         if signal is None:
             logger.warning("mark_executed: signal_id=%s not found", signal_id)
@@ -201,11 +189,6 @@ class SignalRepository(AsyncRepository[Signal]):
         limit: int = 20,
     ) -> Sequence[Signal]:
         """Return the most recent signals for a symbol."""
-        stmt = (
-            select(Signal)
-            .where(Signal.symbol == symbol)
-            .order_by(desc(Signal.generated_at))
-            .limit(limit)
-        )
+        stmt = select(Signal).where(Signal.symbol == symbol).order_by(desc(Signal.generated_at)).limit(limit)
         result = await session.execute(stmt)
         return result.scalars().all()

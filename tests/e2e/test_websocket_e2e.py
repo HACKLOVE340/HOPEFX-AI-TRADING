@@ -40,6 +40,7 @@ from starlette.testclient import TestClient
 @pytest.fixture(scope="module")
 def app():
     from app import app as _app
+
     return _app
 
 
@@ -90,9 +91,7 @@ class TestWebSocketHandshake:
             raw = ws.receive_text()
             msg = json.loads(raw)
             is_auth_required = (
-                msg.get("type") == "auth_required"
-                or msg.get("auth_required") is True
-                or msg.get("type") == "connected"
+                msg.get("type") == "auth_required" or msg.get("auth_required") is True or msg.get("type") == "connected"
             )
             assert is_auth_required
 

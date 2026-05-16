@@ -589,7 +589,7 @@ class SubscriptionManager:
         """Create new subscription"""
         strategy = self.db.get_strategy(strategy_id)
         if not strategy:
-            logger.warning("%s", f"❌ Strategy {strategy_id} not found")
+            logger.warning("Strategy %s not found", strategy_id)
             return None
 
         # Calculate price
@@ -642,15 +642,14 @@ class SubscriptionManager:
         conn.commit()
         conn.close()
 
-        # Generate license key
-        license_key = self.licenses.generate_license_key(user_id, strategy_id, subscription_id, end_date)
+        # Generate and store license key (return value not used — side effect is the store)
+        self.licenses.generate_license_key(user_id, strategy_id, subscription_id, end_date)
 
         # Update strategy subscriber count
         strategy.subscriber_count += 1
         self.db.save_strategy(strategy)
 
-        logger.info("%s", f"✅ Subscription created: {subscription_id}")
-        logger.info("%s", f"   License key: {license_key.key}")
+        logger.info("Subscription created: %s", subscription_id)
 
         return subscription
 
@@ -681,7 +680,7 @@ class SubscriptionManager:
         conn.commit()
         conn.close()
 
-        logger.info("%s", f"✅ Subscription {subscription_id} cancelled")
+        logger.info("Subscription %s cancelled", subscription_id)
         return True
 
     def check_access(self, user_id: str, strategy_id: str) -> bool:
@@ -741,7 +740,7 @@ class MarketplaceAPI:
         )
 
         self.db.save_strategy(strategy)
-        logger.info("%s", f"✅ Strategy listed: {name} (ID: {strategy_id})")
+        logger.info("Strategy listed: %s (ID: %s)", name, strategy_id)
 
         return strategy
 
@@ -752,7 +751,7 @@ class MarketplaceAPI:
             strategy.status = StrategyStatus.ACTIVE
             strategy.updated_at = datetime.now(UTC)
             self.db.save_strategy(strategy)
-            logger.info("%s", f"✅ Strategy {strategy_id} approved")
+            logger.info("Strategy %s approved", strategy_id)
             return True
         return False
 

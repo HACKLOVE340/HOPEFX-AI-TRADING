@@ -223,6 +223,7 @@ class HOPEFXBrain:
         self._last_cycle_time = time.time()
         # In development use a 5s cycle to avoid hammering yfinance/thread pool.
         import os as _brain_os
+
         _dev = _brain_os.getenv("APP_ENV", "development").lower() in ("development", "dev")
         self._target_cycle_time = float(_brain_os.getenv("BRAIN_CYCLE_SEC", "5.0" if _dev else "1.0"))
 
@@ -264,8 +265,7 @@ class HOPEFXBrain:
             )
         else:
             logger.info(
-                "HOPEFXBrain: all critical components injected "
-                "(broker=%s price_engine=%s strategy_manager=%s)",
+                "HOPEFXBrain: all critical components injected (broker=%s price_engine=%s strategy_manager=%s)",
                 type(self.broker).__name__,
                 type(self.price_engine).__name__,
                 type(self.strategy_manager).__name__ if self.strategy_manager else "None",
@@ -314,8 +314,15 @@ class HOPEFXBrain:
                 except Exception as e:
                     await self._handle_cycle_error(e)
 
-                # Adaptive cycle timing
-                await self._maintain_cycle_timing(cycle_start)
+                # Adaptive cycle timing — TimeoutError here is the normal poll
+                # expiry from asyncio.wait_for inside _maintain_cycle_timing.
+                # On Python <=3.10 asyncio.TimeoutError is NOT a subclass of
+                # the builtin TimeoutError, so we catch both explicitly to
+                # prevent it from reaching the outer emergency-stop handler.
+                try:
+                    await self._maintain_cycle_timing(cycle_start)
+                except (TimeoutError, asyncio.TimeoutError):  # nosec B110
+                    pass
 
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")
@@ -437,9 +444,7 @@ class HOPEFXBrain:
                 if self.broker:
                     try:
                         raw = self.broker.get_account_info()
-                        account = await asyncio.wait_for(
-                            self._await_or_return(raw), timeout=5.0
-                        )
+                        account = await asyncio.wait_for(self._await_or_return(raw), timeout=5.0)
                         if account is not None:
                             bal, eq, mu, fm = self._extract_account_fields(account)
                             self.state.account_balance = bal
@@ -447,23 +452,23 @@ class HOPEFXBrain:
                             self.state.margin_used = mu
                             self.state.free_margin = fm
                     except (TimeoutError, asyncio.TimeoutError):
-                        logger.error("Broker timeout getting account info")
+                        logger.warning("Broker timeout getting account info")
                         raise
                     except Exception as e:
-                        logger.error("Error getting account info: %s", e)
+                        logger.warning("Error getting account info: %s", e)
 
                 # Get positions (with timeout)
                 if self.broker:
                     try:
                         raw = self.broker.get_positions()
-                        positions = await asyncio.wait_for(
-                            self._await_or_return(raw), timeout=5.0
-                        )
+                        positions = await asyncio.wait_for(self._await_or_return(raw), timeout=5.0)
                         self.state.active_positions = {
                             p.id: {
                                 "id": p.id,
                                 "symbol": p.symbol,
-                                "side": p.side.value,
+                                # Position.side is a plain str ("LONG"/"SHORT"),
+                                # not an Enum — use getattr to handle both forms.
+                                "side": p.side.value if hasattr(p.side, "value") else p.side,
                                 "quantity": p.quantity,
                                 "entry_price": p.entry_price,
                                 "current_price": p.current_price,
@@ -472,21 +477,19 @@ class HOPEFXBrain:
                             for p in (positions or [])
                         }
                         self.state.open_trades_count = len(positions or [])
-                    except TimeoutError:
-                        logger.error("Broker timeout getting positions")
+                    except (TimeoutError, asyncio.TimeoutError):
+                        logger.warning("Broker timeout getting positions")
                         self.state.active_positions = {}
                         self.state.open_trades_count = 0
                     except Exception as e:
-                        logger.error("Error getting positions: %s", e)
+                        logger.warning("Error getting positions: %s", e)
                         self.state.active_positions = {}
 
                 # Get pending orders (with timeout; broker may not support this)
                 if self.broker and hasattr(self.broker, "get_pending_orders"):
                     try:
                         raw = self.broker.get_pending_orders()
-                        orders = await asyncio.wait_for(
-                            self._await_or_return(raw), timeout=5.0
-                        )
+                        orders = await asyncio.wait_for(self._await_or_return(raw), timeout=5.0)
                         self.state.pending_orders = [
                             {
                                 "id": o.id,
@@ -498,11 +501,11 @@ class HOPEFXBrain:
                             }
                             for o in (orders or [])
                         ]
-                    except TimeoutError:
-                        logger.error("Broker timeout getting orders")
+                    except (TimeoutError, asyncio.TimeoutError):
+                        logger.warning("Broker timeout getting orders")
                         self.state.pending_orders = []
                     except Exception as e:
-                        logger.error("Error getting orders: %s", e)
+                        logger.warning("Error getting orders: %s", e)
                         self.state.pending_orders = []
 
             except Exception as e:
@@ -840,8 +843,10 @@ class HOPEFXBrain:
     async def _make_strategy_decisions(self):
         """Execute strategy logic - WITH TIMEOUTS AND CONCURRENCY CONTROL"""
         if not self.strategy_manager:
-            logger.warning("HOPEFXBrain: strategy_manager is None — no signals will be generated. "
-                           "Check that init_strategy_brain completed successfully at startup.")
+            logger.warning(
+                "HOPEFXBrain: strategy_manager is None — no signals will be generated. "
+                "Check that init_strategy_brain completed successfully at startup."
+            )
             return
 
         try:
@@ -870,11 +875,14 @@ class HOPEFXBrain:
             # Limit to max 5 signals per cycle
             await asyncio.gather(*[execute_with_limit(s) for s in signals[:5]], return_exceptions=True)
 
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             global _decision_timeout_last_logged
             now = time.monotonic()
             if now - _decision_timeout_last_logged >= _DECISION_TIMEOUT_LOG_INTERVAL:
-                logger.warning(
+                # Log at INFO — timeouts are expected when data feeds or broker
+                # are not connected (dev/offline mode). The brain continues
+                # running and will retry on the next cycle.
+                logger.info(
                     "Strategy decision timeout (further timeouts suppressed for %.0f s)",
                     _DECISION_TIMEOUT_LOG_INTERVAL,
                 )
@@ -990,7 +998,7 @@ class HOPEFXBrain:
                         if success:
                             logger.info("Closed position %s", position_id)
 
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 logger.error("Signal execution timeout: %s", signal.get("symbol"))
 
             except Exception as e:

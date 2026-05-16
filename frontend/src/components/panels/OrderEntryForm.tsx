@@ -16,7 +16,7 @@ import { useStore, selectIsBlackout } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
 import { Panel } from '../ui/Panel';
 import { withPanelGuard } from '../ui/withPanelGuard';
-import { fmtPrice, cn } from '../../lib/utils';
+import { fmtPrice, cn, extractApiError } from '../../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -159,9 +159,10 @@ function RiskPreview({
 
 interface OrderEntryFormProps {
   symbol?:       string;
-  defaultSide?:  Side;
-  defaultSl?:    string;
-  defaultTp?:    string;
+  defaultSide?:     Side;
+  defaultLimitPx?:  string;
+  defaultSl?:       string;
+  defaultTp?:       string;
   onOrderPlaced?: () => void;
 }
 
@@ -173,7 +174,7 @@ const ORDER_TYPES: { value: OrderType; label: string }[] = [
   { value: 'stop',   label: 'Stop'   },
 ];
 
-function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defaultTp, onOrderPlaced }: OrderEntryFormProps) {
+function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultLimitPx, defaultSl, defaultTp, onOrderPlaced }: OrderEntryFormProps) {
   const uid        = useId();
   const prices     = useStore((s) => s.prices);
   const account    = useStore((s) => s.account);
@@ -190,7 +191,7 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defau
   const [side,      setSide]      = useState<Side>(defaultSide ?? 'buy');
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [qty,       setQty]       = useState('0.01');
-  const [limitPx,   setLimitPx]   = useState('');
+  const [limitPx,   setLimitPx]   = useState(defaultLimitPx ?? '');
   const [sl,        setSl]        = useState(defaultSl ?? '');
   const [tp,        setTp]        = useState(defaultTp ?? '');
   const [submitting, setSubmitting] = useState(false);
@@ -198,14 +199,28 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defau
   const resultTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Auto-clear the result banner after 4 seconds so it doesn't linger.
+  // The cleanup also fires on unmount, preventing setState-after-unmount.
   useEffect(() => {
     if (!result) return;
     if (resultTimer.current) clearTimeout(resultTimer.current);
     resultTimer.current = setTimeout(() => setResult(null), 4_000);
     return () => {
-      if (resultTimer.current) clearTimeout(resultTimer.current);
+      if (resultTimer.current) {
+        clearTimeout(resultTimer.current);
+        resultTimer.current = null;
+      }
     };
   }, [result]);
+
+  // Clear the timer on unmount regardless of result state.
+  useEffect(() => {
+    return () => {
+      if (resultTimer.current) {
+        clearTimeout(resultTimer.current);
+        resultTimer.current = null;
+      }
+    };
+  }, []);
 
   const tick       = prices[symbol];
   const entryPrice = orderType === 'market'
@@ -270,17 +285,28 @@ function OrderEntryFormInner({ symbol: symbolProp, defaultSide, defaultSl, defau
       setTp('');
       setLimitPx('');
       qc.invalidateQueries({ queryKey: ['positions'] });
+      qc.invalidateQueries({ queryKey: ['account'] });
       onOrderPlaced?.();
     } catch (e: unknown) {
-      const detail =
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (e as { message?: string })?.message ??
-        'Order failed';
+      const httpStatus = (e as { response?: { status?: number } })?.response?.status;
+      let detail: string;
+      if (httpStatus === 503) {
+        detail = 'Broker not ready — the paper trading engine is still starting up. Try again in a moment.';
+      } else if (httpStatus === 403) {
+        detail = extractApiError(e, 'Order rejected — check KYC status or subscription plan.');
+      } else {
+        detail = extractApiError(e, 'Order failed');
+      }
       setResult({ ok: false, msg: detail });
     } finally {
       setSubmitting(false);
     }
-  }, [symbol, side, orderType, qty, limitPx, sl, tp, qc, onOrderPlaced]);
+  // entryPrice is derived from tick (live price) and limitPx. It must be in
+  // the deps array so handleSubmit always validates SL/TP against the current
+  // price rather than the price at the time the callback was last created.
+  // Omitting it caused stale-closure bugs where SL/TP validation used an
+  // outdated entry price after a price tick updated tick?.ask / tick?.bid.
+  }, [symbol, side, orderType, qty, limitPx, sl, tp, entryPrice, qc, onOrderPlaced]);
 
   return (
     <Panel title="Order Entry">

@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, prefetchCsrfToken, resetCsrfCache } from '../../hooks/useApi';
 import { useStore } from '../../store';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { useToast } from '../../components/Toast';
 
 async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
   try { return await fn(); }
@@ -14,10 +16,13 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 import { Card, SectionHeader, Button, Divider } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DangerSection: React.FC = () => {
   const navigate = useNavigate();
   const clearAuth = useStore((s) => s.clearAuth);
+  const confirm   = useConfirm();
+  const toast     = useToast();
 
   const [exportLoading, setExportLoading] = useState(false);
   const [emergencyLoading, setEmergencyLoading] = useState(false);
@@ -36,7 +41,9 @@ const DangerSection: React.FC = () => {
       a.download = `hopefx-data-export-${new Date().toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+      toast.success('Data export downloaded.');
     } catch (err: unknown) {
+      toast.error('Export failed. Try again.');
       console.warn('[Settings/Danger] export:', err);
     } finally {
       setExportLoading(false);
@@ -44,12 +51,20 @@ const DangerSection: React.FC = () => {
   };
 
   const handleEmergencyStop = async () => {
-    if (!window.confirm('Activate emergency stop? This will halt all automated trading and close all open positions immediately.')) return;
+    const ok = await confirm({
+      title: 'Activate emergency stop?',
+      description: 'This will immediately halt all automated trading and close all open positions. This action cannot be undone.',
+      confirmLabel: 'Halt trading',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setEmergencyLoading(true);
     try {
       await withCsrfRetry(() => api.post('/trading/emergency-stop'));
       setEmergencyDone(true);
+      toast.success('Emergency stop activated — all trading halted.');
     } catch (err: unknown) {
+      toast.error('Emergency stop failed. Contact support immediately.');
       console.warn('[Settings/Danger] emergency stop:', err);
     } finally {
       setEmergencyLoading(false);
@@ -68,8 +83,7 @@ const DangerSection: React.FC = () => {
       clearAuth();
       navigate('/');
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setDeleteError(detail ?? 'Failed to delete account. Contact support.');
+      setDeleteError(extractApiError(err, 'Failed to delete account. Contact support.'));
     } finally {
       setDeleteLoading(false);
     }
@@ -123,7 +137,13 @@ const DangerSection: React.FC = () => {
           <Button
             variant="danger"
             onClick={async () => {
-              if (!window.confirm('Sign out of all devices?')) return;
+              const ok = await confirm({
+                title: 'Sign out of all devices?',
+                description: 'All active sessions will be revoked. You will be redirected to login.',
+                confirmLabel: 'Sign out all',
+                variant: 'danger',
+              });
+              if (!ok) return;
               await api.delete('/auth/sessions').catch(() => {});
               clearAuth();
               navigate('/login');

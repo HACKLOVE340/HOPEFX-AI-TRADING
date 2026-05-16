@@ -149,13 +149,31 @@ def _resolve_env(value: Any) -> str:
 
 
 def _units(direction: str, quantity: float) -> int:
-    """OANDA uses signed units: positive = buy, negative = sell."""
+    """Return signed integer units for the OANDA v20 API.
+
+    OANDA requires units as a signed integer string: positive = buy,
+    negative = sell.  Fractional quantities are rounded to the nearest
+    integer.
+
+    Raises ValueError when rounding would produce 0 units (e.g. quantity=0.3),
+    which OANDA rejects with UNITS_INVALID.  Callers must validate that
+    quantity >= 1 before calling this function, or catch ValueError and
+    reject the order upstream.
+    """
     qty = abs(quantity)
     rounded = round(qty)
+    if rounded == 0:
+        raise ValueError(
+            f"Quantity {quantity} rounds to 0 units — OANDA requires at least 1 unit. "
+            "Minimum order size is 1 unit of the base currency."
+        )
     if abs(rounded - qty) > 0.01:
         logger.warning(
             "Quantity rounded from %.4f to %d units (%.4f lost) for %s order",
-            qty, rounded, qty - rounded, direction,
+            qty,
+            rounded,
+            abs(qty - rounded),
+            direction,
         )
     return rounded if direction.lower() in ("long", "buy") else -rounded
 
@@ -196,7 +214,6 @@ class OANDABroker:
         self.connected: bool = False
         self._total_orders: int = 0
         self._total_fills: int = 0
-        self._count_lock = asyncio.Lock()
         # Optional injected API object (used by tests to bypass HTTP calls)
         self.api = None
         # Optional injected risk manager (used by tests)
@@ -319,7 +336,11 @@ class OANDABroker:
         if quantity <= 0:
             return {"status": "rejected", "reason": "zero_quantity", "broker": "oanda"}
 
-        units = _units(direction, quantity)
+        try:
+            units = _units(direction, quantity)
+        except ValueError as exc:
+            logger.error("OANDABroker.place_order: %s", exc)
+            return {"status": "rejected", "reason": "quantity_rounds_to_zero", "broker": "oanda"}
 
         # Build OANDA order body
         order_body: dict[str, Any] = {
@@ -355,14 +376,12 @@ class OANDABroker:
 
         payload = {"order": order_body}
 
-        async with self._count_lock:
-            self._total_orders += 1
+        self._total_orders += 1
         result = await self._post_order_with_retry(payload, client_ref)
         result["latency_ms"] = round((time.monotonic() - t0) * 1000, 2)
 
         if result.get("status") == "filled":
-            async with self._count_lock:
-                self._total_fills += 1
+            self._total_fills += 1
 
         return result
 
@@ -734,15 +753,22 @@ class OANDAConnector:
         """Place a market or limit order. Returns None when not connected."""
         if not self.connected or not self.session:
             return None
-        units = str(int(quantity)) if side == _OrderSide.BUY else str(-int(quantity))
+        try:
+            # Use _units() for consistent rounding, zero-guard, and sign logic.
+            # OANDAConnector.place_order() previously used int(quantity) which
+            # truncates (not rounds) and silently sends 0 units for fractional
+            # quantities like 0.9, causing OANDA to reject with UNITS_INVALID.
+            raw_units = _units(side.value if hasattr(side, "value") else str(side), quantity)
+        except ValueError as exc:
+            logger.error("OANDAConnector.place_order: %s", exc)
+            return None
+        units = str(raw_units)
         body: dict[str, Any] = {"order": {"units": units, "instrument": symbol, "timeInForce": "FOK"}}
         if order_type == _OrderType.MARKET:
             body["order"]["type"] = "MARKET"
         else:
             body["order"]["type"] = "LIMIT"
-            if not price or price <= 0:
-                raise ValueError(f"LIMIT order requires a valid price, got {price!r}")
-            body["order"]["price"] = str(price)
+            body["order"]["price"] = str(price or 0)
             body["order"]["timeInForce"] = "GTC"
         try:
             url = f"{self.base_url}/v3/accounts/{self._account_id}/orders"
@@ -751,19 +777,15 @@ class OANDAConnector:
             data = resp.json()
             if "orderFillTransaction" in data:
                 txn = data["orderFillTransaction"]
-                fill_price_raw = txn.get("price")
-                fill_price = float(fill_price_raw) if fill_price_raw else None
-                if fill_price is None or fill_price <= 0:
-                    logger.error("OANDAConnector: orderFillTransaction missing valid price: %s", txn)
                 return _Order(
                     id=txn.get("id", str(uuid.uuid4())),
                     symbol=symbol,
                     side=side,
                     type=order_type,
                     quantity=abs(float(txn.get("units", quantity))),
-                    price=fill_price,
+                    price=float(txn.get("price", price or 0)),
                     status=_OrderStatus.FILLED,
-                    average_price=fill_price,
+                    average_price=float(txn.get("price", price or 0)),
                     timestamp=datetime.now(UTC),
                 )
             if "orderCreateTransaction" in data:
@@ -774,7 +796,7 @@ class OANDAConnector:
                     side=side,
                     type=order_type,
                     quantity=abs(float(txn.get("units", quantity))),
-                    price=price,
+                    price=float(txn.get("price", price or 0)),
                     status=_OrderStatus.OPEN,
                     timestamp=datetime.now(UTC),
                 )

@@ -22,10 +22,8 @@ GET    /superadmin/whitelabel/tenants/{id}/usage         — tenant usage stats
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
-import os
 import secrets
 import uuid
 from typing import Any
@@ -44,6 +42,7 @@ _TENANTS_KEY = "superadmin:whitelabel:tenants"
 def _load_tenants() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_TENANTS_KEY)
@@ -57,6 +56,7 @@ def _load_tenants() -> list[dict]:
 def _save_tenants(tenants: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_TENANTS_KEY, json.dumps(tenants), ex=86400 * 90)
@@ -104,18 +104,21 @@ async def create_tenant(
         "user_count": 0,
         "created_at": _utcnow().isoformat(),
         "monthly_revenue": 0.0,
-        "branding": body.get("branding", {
-            "primary_color": "#3b82f6",
-            "logo_url": "",
-            "company_name": body.get("name", "New Tenant"),
-        }),
+        "branding": body.get(
+            "branding",
+            {
+                "primary_color": "#3b82f6",
+                "logo_url": "",
+                "company_name": body.get("name", "New Tenant"),
+            },
+        ),
         "api_keys": [{"key_id": str(uuid.uuid4()), "key": api_key, "created_at": _utcnow().isoformat()}],
         "created_by": user.sub,
     }
     tenants = _load_tenants()
     tenants.insert(0, tenant)
     _save_tenants(tenants)
-    await _log_superadmin_action(user.sub, "tenant_create", {"tenant_id": tenant_id, "name": tenant["name"]})
+    _log_superadmin_action(user, "tenant_create", {"tenant_id": tenant_id, "name": tenant["name"]})
     return {"ok": True, "tenant": tenant}
 
 
@@ -133,7 +136,7 @@ async def update_tenant(
                     t[k] = v
             t["updated_at"] = _utcnow().isoformat()
             _save_tenants(tenants)
-            await _log_superadmin_action(user.sub, "tenant_update", {"tenant_id": tenant_id})
+            _log_superadmin_action(user, "tenant_update", {"tenant_id": tenant_id})
             return {"ok": True, "tenant": t}
     raise HTTPException(status_code=404, detail="Tenant not found")
 
@@ -149,7 +152,7 @@ async def suspend_tenant(
             t["status"] = "suspended"
             t["suspended_at"] = _utcnow().isoformat()
             _save_tenants(tenants)
-            await _log_superadmin_action(user.sub, "tenant_suspend", {"tenant_id": tenant_id})
+            _log_superadmin_action(user, "tenant_suspend", {"tenant_id": tenant_id})
             return {"ok": True}
     raise HTTPException(status_code=404, detail="Tenant not found")
 
@@ -165,7 +168,7 @@ async def activate_tenant(
             t["status"] = "active"
             t["activated_at"] = _utcnow().isoformat()
             _save_tenants(tenants)
-            await _log_superadmin_action(user.sub, "tenant_activate", {"tenant_id": tenant_id})
+            _log_superadmin_action(user, "tenant_activate", {"tenant_id": tenant_id})
             return {"ok": True}
     raise HTTPException(status_code=404, detail="Tenant not found")
 
@@ -181,7 +184,7 @@ async def delete_tenant(
     if len(tenants) == before:
         raise HTTPException(status_code=404, detail="Tenant not found")
     _save_tenants(tenants)
-    await _log_superadmin_action(user.sub, "tenant_delete", {"tenant_id": tenant_id})
+    _log_superadmin_action(user, "tenant_delete", {"tenant_id": tenant_id})
     return {"ok": True}
 
 
@@ -211,7 +214,7 @@ async def rotate_tenant_api_key(
             new_key = f"wl_{secrets.token_urlsafe(32)}"
             t["api_keys"] = [{"key_id": str(uuid.uuid4()), "key": new_key, "created_at": _utcnow().isoformat()}]
             _save_tenants(tenants)
-            await _log_superadmin_action(user.sub, "tenant_key_rotate", {"tenant_id": tenant_id})
+            _log_superadmin_action(user, "tenant_key_rotate", {"tenant_id": tenant_id})
             return {"ok": True, "new_key": new_key}
     raise HTTPException(status_code=404, detail="Tenant not found")
 

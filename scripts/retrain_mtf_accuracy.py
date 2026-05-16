@@ -739,22 +739,22 @@ def main() -> int:
     logger.info("\n" + "=" * 65)
     logger.info("MTF RETRAIN SUMMARY")
     logger.info("=" * 65)
-    logger.info(f"  Data:              58Y XAUUSD ({len(df):,} bars)")
-    logger.info(f"  Features:          {len(selected_features)} (selected from {len(feature_cols)})")
-    logger.info(f"  Horizon:           {HORIZON} bars")
+    logger.info("  Data:              58Y XAUUSD (%s bars)", f"{len(df):,}")
+    logger.info("  Features:          %s (selected from %s)", len(selected_features), len(feature_cols))
+    logger.info("  Horizon:           %s bars", HORIZON)
     logger.info("  Ensemble:          XGB + RF + LGB + meta-LR")
     logger.info("")
-    logger.info(f"  Walk-forward acc:  {cv_acc_mean:.3f} ± {cv_acc_std:.3f}")
-    logger.info(f"  Walk-forward AUC:  {np.mean(cv_aucs):.3f}")
+    logger.info("  Walk-forward acc:  %.3f ± %.3f", cv_acc_mean, cv_acc_std)
+    logger.info("  Walk-forward AUC:  %.3f", np.mean(cv_aucs))
     logger.info("")
-    logger.info(f"  OOS accuracy:      {oos_metrics['accuracy']:.3f}  (all predictions)")
-    logger.info(f"  OOS acc confident: {oos_metrics['accuracy_confident']:.3f}  (conf > {ABSTAIN_THRESHOLD})")
-    logger.info(f"  OOS AUC:           {oos_metrics['auc']:.3f}")
-    logger.info(f"  OOS F1:            {oos_metrics['f1']:.3f}")
+    logger.info("  OOS accuracy:      %.3f  (all predictions)", oos_metrics["accuracy"])
+    logger.info("  OOS acc confident: %.3f  (conf > %s)", oos_metrics["accuracy_confident"], ABSTAIN_THRESHOLD)
+    logger.info("  OOS AUC:           %.3f", oos_metrics["auc"])
+    logger.info("  OOS F1:            %.3f", oos_metrics["f1"])
     logger.info(
         f"  OOS p-value:       {oos_metrics['p_value']:.4f}  {'✓ significant' if oos_metrics['significant'] else '✗ not significant'}"
     )
-    logger.info(f"  Abstain rate:      {oos_metrics['abstain_rate'] * 100:.1f}%")
+    logger.info("  Abstain rate:      %.1f%%", oos_metrics["abstain_rate"] * 100)
     logger.info("")
 
     target_met = oos_metrics["accuracy_confident"] >= 0.68
@@ -762,8 +762,8 @@ def main() -> int:
         f"  Target (68%+):     {'✓ MET' if target_met else '✗ NOT MET'} — {oos_metrics['accuracy_confident'] * 100:.1f}%"
     )
     logger.info("")
-    logger.info(f"  Saved: {ensemble_path}")
-    logger.info(f"  Meta:  {meta_path}")
+    logger.info("  Saved: %s", ensemble_path)
+    logger.info("  Meta:  %s", meta_path)
     logger.info("=" * 65)
 
     return 0 if oos_metrics["significant"] else 1

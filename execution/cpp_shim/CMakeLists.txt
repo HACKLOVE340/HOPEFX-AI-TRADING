@@ -4,12 +4,19 @@ project(hopefx_shim CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Release build: maximum optimisation, native CPU instructions
+# Release build: maximum optimisation.
+# -march=native is only applied when no explicit march flag is passed in via
+# CMAKE_CXX_FLAGS (e.g. CI passes -march=x86-64 for portability).
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -mtune=native -DNDEBUG")
+if(CMAKE_CXX_FLAGS MATCHES "-march=")
+  # Caller supplied an explicit -march — use it; don't override with native.
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+else()
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -mtune=native -DNDEBUG")
+endif()
 
 # Link-time optimisation
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)

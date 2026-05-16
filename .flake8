@@ -1,0 +1,35 @@
+[flake8]
+# Run only flake8-bugbear (B-series) checks.
+# E/W/F codes are handled by ruff; enabling them here would duplicate noise.
+# B9xx (opinionated bugbear) are opt-in — excluded until the backlog is cleared.
+select = B,B9
+extend-ignore =
+    # B008: do not perform function calls in default arguments — FastAPI Depends()
+    #       is the canonical pattern; suppressing globally is intentional.
+    B008,
+    # B904: raise ... from exc — Celery retry idiom intentionally breaks the chain.
+    #       Suppressed project-wide; individual sites are annotated with # noqa: B904.
+    B904,
+    # B907: use !r conversion flag — opinionated style, not a bug.
+    #       Excluded to keep the gate focused on correctness issues.
+    B907,
+    # B950: line too long (opinionated) — line length is enforced by ruff instead.
+    B950
+
+# Directories that contain no production code
+exclude =
+    .git,
+    __pycache__,
+    node_modules,
+    venv,
+    .venv,
+    alembic/versions,
+    frontend,
+    dashboard,
+    mobile,
+    mobile-app,
+    docs,
+    scripts,
+    tests
+
+max-line-length = 120

@@ -2,6 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, prefetchCsrfToken, resetCsrfCache } from '../../hooks/useApi';
+import { useConfirm } from '../../components/ConfirmDialog';
+import { useToast } from '../../components/Toast';
 import type { SessionInfo } from './types';
 
 /** Retry once after a 403 by refreshing the CSRF token. */
@@ -18,9 +20,12 @@ async function withCsrfRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 import { Card, SectionHeader, Button, StatusBadge, Divider, Input, Field } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const SecuritySection: React.FC = () => {
   const navigate = useNavigate();
+  const confirm  = useConfirm();
+  const toast    = useToast();
 
   // Password change
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
@@ -67,8 +72,7 @@ const SecuritySection: React.FC = () => {
       setPwMsg({ type: 'ok', text: 'Password updated successfully.' });
       setPwForm({ current: '', next: '', confirm: '' });
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setPwMsg({ type: 'err', text: detail ?? 'Failed to update password.' });
+      setPwMsg({ type: 'err', text: extractApiError(err, 'Failed to update password.') });
     } finally {
       setPwSaving(false);
     }
@@ -87,11 +91,19 @@ const SecuritySection: React.FC = () => {
   };
 
   const revokeAllSessions = async () => {
-    if (!window.confirm('Revoke all other sessions? You will remain logged in on this device.')) return;
+    const ok = await confirm({
+      title: 'Revoke all other sessions?',
+      description: 'All sessions except this device will be signed out immediately.',
+      confirmLabel: 'Revoke all',
+      variant: 'warning',
+    });
+    if (!ok) return;
     try {
       await withCsrfRetry(() => api.delete('/auth/sessions'));
       setSessions((prev) => prev.filter((s) => s.current));
+      toast.success('All other sessions revoked.');
     } catch (err: unknown) {
+      toast.error('Failed to revoke sessions.');
       console.warn('[Settings/Security] revoke all sessions:', err);
     }
   };

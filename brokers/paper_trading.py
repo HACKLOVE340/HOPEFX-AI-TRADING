@@ -33,6 +33,20 @@ UTC = timezone.utc
 
 logger = logging.getLogger(__name__)
 
+
+class StalePriceError(RuntimeError):
+    """Raised when the paper broker's price feed is stale and PAPER_RAISE_ON_STALE=true.
+
+    In live-adjacent paper trading (e.g. shadow mode alongside a live account)
+    filling orders at a stale price produces misleading P&L. Set
+    PAPER_RAISE_ON_STALE=true to block fills instead of silently using
+    an outdated price.
+
+    Set PAPER_RAISE_ON_STALE=false (default) to retain the legacy warn-and-fill
+    behaviour for offline demo / backtesting scenarios.
+    """
+
+
 # ── Per-symbol spread table (bid-ask half-spread in price units) ──────────────
 # Sources: typical retail broker spreads during liquid hours.
 # Used as the base spread; actual slippage adds a random component on top.
@@ -253,6 +267,9 @@ class PaperTradingBroker(BrokerConnector):
         # Symbols absent from this dict are using hardcoded fallback prices.
         self._price_timestamps: dict[str, float] = {}
         self._price_stale_secs = float(os.getenv("PAPER_PRICE_STALE_SECONDS", "120"))
+        # When True, raise StalePriceError instead of filling at a stale/fallback price.
+        # Default False to preserve offline demo / backtest behaviour.
+        self._raise_on_stale: bool = os.getenv("PAPER_RAISE_ON_STALE", "false").lower() in ("1", "true", "yes")
 
         # Optional price feed / engine — set via set_price_feed().
         # Queried in place_order() to refresh prices before filling.
@@ -262,25 +279,40 @@ class PaperTradingBroker(BrokerConnector):
         # Last updated: 2025-Q2. These are fallback prices used only when
         # no live feed is available. Update periodically or wire a live feed.
         self.market_prices = {
-            # Precious Metals
-            "XAUUSD": 3300.0,  # Gold (~Mar 2025)
+            # Precious Metals — both compact (MT4/MT5) and underscore (OANDA) formats
+            "XAUUSD": 3300.0,  # Gold (~May 2026)
+            "XAU_USD": 3300.0,  # Gold — OANDA format
             "XAGUSD": 33.50,  # Silver
+            "XAG_USD": 33.50,  # Silver — OANDA format
             "XPTUSD": 980.0,  # Platinum
-            # Major Forex Pairs
+            "XPT_USD": 980.0,  # Platinum — OANDA format
+            # Major Forex Pairs — compact and underscore formats
             "EURUSD": 1.0820,
+            "EUR_USD": 1.0820,
             "GBPUSD": 1.2940,
+            "GBP_USD": 1.2940,
             "USDJPY": 149.50,
+            "USD_JPY": 149.50,
             "USDCHF": 0.8820,
+            "USD_CHF": 0.8820,
             "AUDUSD": 0.6290,
+            "AUD_USD": 0.6290,
             "USDCAD": 1.3850,
+            "USD_CAD": 1.3850,
             "NZDUSD": 0.5720,
+            "NZD_USD": 0.5720,
             # Cross Pairs
             "EURGBP": 0.8360,
+            "EUR_GBP": 0.8360,
             "EURJPY": 161.80,
+            "EUR_JPY": 161.80,
             "GBPJPY": 193.60,
+            "GBP_JPY": 193.60,
             # Crypto
             "BTC/USD": 85000.0,
+            "BTCUSD": 85000.0,
             "ETH/USD": 1900.0,
+            "ETHUSD": 1900.0,
             "SOL/USD": 130.0,
             "XRP/USD": 2.10,
             # US Stocks/ETFs (for reference)
@@ -312,7 +344,16 @@ class PaperTradingBroker(BrokerConnector):
 
             from execution.redis_state import RedisStateStore
 
-            redis_url = _os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            redis_url = _os.getenv("REDIS_URL", "").strip()
+            # Track whether the operator explicitly configured Redis so we can
+            # choose the right log level on failure.
+            _explicitly_configured = bool(redis_url)
+
+            if not redis_url:
+                # No REDIS_URL set — use the dev default but don't warn;
+                # Redis being absent in dev is expected and non-actionable.
+                redis_url = "redis://localhost:6379/0"
+
             password = _os.getenv("REDIS_PASSWORD", "") or None
 
             # Inject REDIS_PASSWORD when not already embedded in the URL.
@@ -331,11 +372,22 @@ class PaperTradingBroker(BrokerConnector):
             logger.info("PaperTradingBroker: Redis state persistence connected")
         except Exception as exc:
             self._redis_state = None
-            logger.warning(
-                "PaperTradingBroker: Redis unavailable (%s) — position/order state will NOT "
-                "survive process restarts. Set REDIS_URL to enable persistence.",
-                exc,
-            )
+            import os as _os
+
+            _explicitly_configured = bool(_os.getenv("REDIS_URL", "").strip())
+            if _explicitly_configured:
+                # REDIS_URL was set but Redis is unreachable — operator needs to know.
+                logger.warning(
+                    "PaperTradingBroker: Redis unavailable (%s) — position/order state will NOT "
+                    "survive process restarts. Check REDIS_URL and ensure Redis is running.",
+                    exc,
+                )
+            else:
+                # No REDIS_URL configured — in-memory only mode, expected in dev.
+                logger.info(
+                    "PaperTradingBroker: Redis not configured — position/order state is "
+                    "in-memory only and will not survive restarts. Set REDIS_URL to enable persistence."
+                )
 
     async def connect(self) -> bool:
         """Connect to paper trading broker and restore persisted state."""
@@ -438,8 +490,9 @@ class PaperTradingBroker(BrokerConnector):
         # Generate order ID
         order_id = str(uuid.uuid4())
 
-        # Get current market price — try price feed first for freshest data
-        # Normalize symbol case to avoid case-sensitive lookup misses
+        # Get current market price — try price feed first for freshest data.
+        # When the feed provides real bid/ask we store them so the fill can
+        # use the correct side of the spread (buy at ask, sell at bid).
         _sym_upper = symbol.upper()
         current_price = (
             self.market_prices.get(symbol)
@@ -447,48 +500,66 @@ class PaperTradingBroker(BrokerConnector):
             or self.market_prices.get(symbol.lower())
             or 0.0
         )
+        # Real bid/ask from the live feed — None means use SlippageModel spread table.
+        _live_bid: float | None = None
+        _live_ask: float | None = None
+
         if self._price_feed is not None:
             try:
                 broker_sym = symbol.replace("/", "")
-                tick = (
-                    self._price_feed.get_last_price(broker_sym)
-                    or self._price_feed.get_last_price(symbol)
-                )
+                tick = self._price_feed.get_last_price(broker_sym) or self._price_feed.get_last_price(symbol)
                 if tick is not None:
-                    mid = getattr(tick, "mid", None) or (
-                        (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                    )
-                    if mid and mid > 0:
-                        self.update_market_price(symbol, float(mid))
-                        current_price = float(mid)
+                    tick_bid = float(getattr(tick, "bid", 0) or 0)
+                    tick_ask = float(getattr(tick, "ask", 0) or 0)
+                    tick_mid = getattr(tick, "mid", None)
+                    if tick_mid is None and tick_bid > 0 and tick_ask > 0:
+                        tick_mid = (tick_bid + tick_ask) / 2.0
+                    tick_mid = float(tick_mid or 0)
+                    if tick_mid > 0:
+                        self.update_market_price(symbol, tick_mid)
+                        current_price = tick_mid
+                    # Preserve real bid/ask for directional fill pricing
+                    if tick_bid > 0 and tick_ask > 0:
+                        _live_bid = tick_bid
+                        _live_ask = tick_ask
             except Exception as _exc:
                 logger.debug("price_feed lookup failed for %s: %s", symbol, _exc)
 
         if current_price == 0.0:
-            logger.warning("Unknown symbol %s, using default price 1000.0", symbol)
-            current_price = 1000.0
+            # No price available from feed or market_prices table — cannot fill.
+            # Raise unconditionally: filling at an invented price produces
+            # meaningless P&L regardless of PAPER_RAISE_ON_STALE setting.
+            raise StalePriceError(
+                f"No price available for {symbol}: live feed not connected and "
+                "symbol not in market_prices table. Connect a price feed or add "
+                "the symbol to the market_prices dict before placing orders."
+            )
 
-        # Staleness guard: warn but never block — paper trading must stay
-        # operational even when the live feed is temporarily disconnected.
+        # Staleness guard — check whether the price came from a live feed tick.
         last_update = self._price_timestamps.get(symbol)
         if last_update is not None:
             age = time.time() - last_update
             if self._price_stale_secs > 0 and age > self._price_stale_secs:
-                logger.warning(
-                    "Price feed stale for %s: last update %.0fs ago (threshold=%.0fs). "
-                    "Filling at last known price %.5f — reconnect feed for accurate fills.",
-                    symbol,
-                    age,
-                    self._price_stale_secs,
-                    current_price,
+                msg = (
+                    f"Price feed stale for {symbol}: last live update {age:.0f}s ago "
+                    f"(threshold={self._price_stale_secs:.0f}s). "
+                    f"Last known price={current_price:.5f}."
                 )
+                if self._raise_on_stale:
+                    raise StalePriceError(msg + " Set PAPER_RAISE_ON_STALE=false to warn-and-fill instead.")
+                logger.warning("%s Filling at stale price — reconnect feed for accurate fills.", msg)
         else:
-            logger.warning(
-                "ORDER on %s using hardcoded fallback price %.5f — no live feed has connected. "
-                "Set PAPER_PRICE_STALE_SECONDS=0 to suppress this warning in offline demo mode.",
-                symbol,
-                current_price,
+            # Price came from the hardcoded market_prices table, not a live feed.
+            msg = (
+                f"ORDER on {symbol} using hardcoded fallback price {current_price:.5f} "
+                "— no live feed tick received for this symbol."
             )
+            if self._raise_on_stale:
+                raise StalePriceError(
+                    msg + " Connect a live price feed or set PAPER_RAISE_ON_STALE=false "
+                    "to allow fills at hardcoded prices (offline/demo mode only)."
+                )
+            logger.warning("%s Set PAPER_PRICE_STALE_SECONDS=0 to suppress in offline demo mode.", msg)
 
         # Create order
         order = Order(
@@ -505,13 +576,55 @@ class PaperTradingBroker(BrokerConnector):
 
         # Process order
         if order_type == OrderType.MARKET:
-            # Apply slippage model — fills at a realistic price, not mid
-            fill_price = self._slippage.fill_price(
-                symbol=symbol,
-                mid_price=current_price,
-                side=side,
-                quantity=quantity,
-            )
+            # Directional fill pricing:
+            #   BUY  → start from ask (buyer crosses the spread)
+            #   SELL → start from bid (seller crosses the spread)
+            # When real bid/ask are available from the live feed, use them
+            # directly as the reference price so the spread is not double-counted
+            # (SlippageModel would otherwise add a synthetic spread on top of mid).
+            # When only mid is available, fall back to SlippageModel which adds
+            # the spread from its internal table.
+            _is_buy = str(side).upper() in ("BUY", "ORDERSIDE.BUY", "LONG")
+            if _live_bid is not None and _live_ask is not None:
+                # Use real spread: buy fills at ask + impact + noise,
+                # sell fills at bid - impact - noise.
+                _ref_price = _live_ask if _is_buy else _live_bid
+                fill_price = self._slippage.fill_price(
+                    symbol=symbol,
+                    mid_price=_ref_price,  # reference is already the correct side
+                    side=side,
+                    quantity=quantity,
+                )
+                # Override the spread component: SlippageModel will add its
+                # table spread on top of _ref_price, which double-counts.
+                # Suppress the spread by temporarily zeroing the override,
+                # then restore it.  We achieve this by using the "zero" model
+                # path only for the spread component — instead, compute impact
+                # + noise directly without the spread term.
+                # Simpler: use the slippage model with the real-side price as
+                # mid and set the symbol's spread override to 0 for this call.
+                _saved = self._slippage._spread_overrides.get(symbol)
+                self._slippage._spread_overrides[symbol] = 0.0  # spread already in ref price
+                fill_price = self._slippage.fill_price(
+                    symbol=symbol,
+                    mid_price=_ref_price,
+                    side=side,
+                    quantity=quantity,
+                )
+                # Restore spread override
+                if _saved is None:
+                    self._slippage._spread_overrides.pop(symbol, None)
+                else:
+                    self._slippage._spread_overrides[symbol] = _saved
+            else:
+                # No live bid/ask — use mid + SlippageModel spread table
+                fill_price = self._slippage.fill_price(
+                    symbol=symbol,
+                    mid_price=current_price,
+                    side=side,
+                    quantity=quantity,
+                )
+
             order.status = OrderStatus.FILLED
             order.filled_quantity = quantity
             order.average_price = fill_price
@@ -520,18 +633,23 @@ class PaperTradingBroker(BrokerConnector):
             commission = self._deduct_commission(quantity)
 
             # Update position at the slippage-adjusted fill price
-            self._update_position(symbol, side, quantity, fill_price,
-                                  stop_loss=stop_loss, take_profit=take_profit)
+            self._update_position(symbol, side, quantity, fill_price, stop_loss=stop_loss, take_profit=take_profit)
 
             # Record equity snapshot after every fill
             self._snapshot_equity()
 
+            _ref_price: float = (
+                (_live_ask if _live_ask is not None else current_price)
+                if _is_buy
+                else (_live_bid if _live_bid is not None else current_price)
+            )
             logger.info(
-                "Market order filled: %s %s %s mid=%.5f fill=%.5f slip=%.5f commission=%.4f",
+                "Market order filled: %s %s %s mid=%.5f ref=%.5f fill=%.5f slip=%.5f commission=%.4f",
                 side.value,
                 quantity,
                 symbol,
                 current_price,
+                _ref_price,
                 fill_price,
                 fill_price - current_price,
                 commission,
@@ -624,7 +742,7 @@ class PaperTradingBroker(BrokerConnector):
             positions.append(position)
         return positions
 
-    def get_positions(self) -> list[Position]:
+    async def get_positions(self) -> list[Position]:
         """Get all open positions."""
         return self._get_positions_sync()
 
@@ -646,14 +764,48 @@ class PaperTradingBroker(BrokerConnector):
         position = self.positions[symbol]
         mid_price = self.market_prices.get(symbol, position.entry_price)
 
-        # Closing a LONG = selling; closing a SHORT = buying
+        # Closing a LONG = selling (fills at bid); closing a SHORT = buying (fills at ask).
         close_side = OrderSide.SELL if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY") else OrderSide.BUY
-        exit_price = self._slippage.fill_price(
-            symbol=symbol,
-            mid_price=mid_price,
-            side=close_side,
-            quantity=position.quantity,
-        )
+        _is_close_buy = close_side == OrderSide.BUY
+
+        # Fetch real bid/ask from price feed if available
+        _close_bid: float | None = None
+        _close_ask: float | None = None
+        if self._price_feed is not None:
+            try:
+                broker_sym = symbol.replace("/", "")
+                tick = self._price_feed.get_last_price(broker_sym) or self._price_feed.get_last_price(symbol)
+                if tick is not None:
+                    tb = float(getattr(tick, "bid", 0) or 0)
+                    ta = float(getattr(tick, "ask", 0) or 0)
+                    if tb > 0 and ta > 0:
+                        _close_bid, _close_ask = tb, ta
+                        mid_price = (tb + ta) / 2.0
+            except Exception as _exc:
+                logger.debug("close_position price_feed lookup failed for %s: %s", symbol, _exc)
+
+        if _close_bid is not None and _close_ask is not None:
+            # Use real spread: close-buy fills at ask, close-sell fills at bid
+            _ref_price = _close_ask if _is_close_buy else _close_bid
+            _saved = self._slippage._spread_overrides.get(symbol)
+            self._slippage._spread_overrides[symbol] = 0.0  # spread already in ref price
+            exit_price = self._slippage.fill_price(
+                symbol=symbol,
+                mid_price=_ref_price,
+                side=close_side,
+                quantity=position.quantity,
+            )
+            if _saved is None:
+                self._slippage._spread_overrides.pop(symbol, None)
+            else:
+                self._slippage._spread_overrides[symbol] = _saved
+        else:
+            exit_price = self._slippage.fill_price(
+                symbol=symbol,
+                mid_price=mid_price,
+                side=close_side,
+                quantity=position.quantity,
+            )
 
         # Calculate gross P&L at slippage-adjusted exit price
         if str(position.side).upper() in ("LONG", "ORDERSIDE.BUY", "BUY"):
@@ -752,7 +904,7 @@ class PaperTradingBroker(BrokerConnector):
             timestamp=datetime.now(UTC),
         )
 
-    def get_account_info(self) -> "AccountInfo":
+    async def get_account_info(self) -> "AccountInfo":
         """Get account information."""
         info = self._get_account_info_sync()
         # Record a throttled equity snapshot (at most once per 60 seconds)
@@ -761,6 +913,10 @@ class PaperTradingBroker(BrokerConnector):
         if time.time() - last_ts >= 60.0:
             self._equity_history.append((time.time(), float(info.equity)))
         return info
+
+    async def get_account(self) -> "AccountInfo":
+        """Alias for get_account_info — satisfies callers that use get_account()."""
+        return await self.get_account_info()
 
     def set_price_feed(self, price_engine) -> None:
         """Attach a price feed / engine for live price updates."""

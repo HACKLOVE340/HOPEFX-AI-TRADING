@@ -35,7 +35,7 @@ from typing import Any
 
 import aiohttp
 
-from brokers.base import BrokerConnector, Order, OrderSide, OrderType, Position, AccountInfo
+from brokers.base import BrokerConnector, Order, OrderSide, OrderType
 
 logger = logging.getLogger(__name__)
 
@@ -762,7 +762,9 @@ class OandaBroker(BrokerConnector):
                 data = await resp.json()
                 logger.warning(
                     "OandaBroker.close_position: %s failed (%s): %s",
-                    instrument, resp.status, data.get("errorMessage", ""),
+                    instrument,
+                    resp.status,
+                    data.get("errorMessage", ""),
                 )
                 return False
         except aiohttp.ClientError as exc:
@@ -777,8 +779,15 @@ class OandaBroker(BrokerConnector):
     ) -> list[dict[str, Any]]:
         """Return OHLCV bars from OANDA instruments endpoint."""
         _tf_map = {
-            "1m": "M1", "5m": "M5", "15m": "M15", "30m": "M30",
-            "1h": "H1", "4h": "H4", "1d": "D", "1w": "W", "1M": "M",
+            "1m": "M1",
+            "5m": "M5",
+            "15m": "M15",
+            "30m": "M30",
+            "1h": "H1",
+            "4h": "H4",
+            "1d": "D",
+            "1w": "W",
+            "1M": "M",
         }
         granularity = _tf_map.get(timeframe, "H1")
         instrument = symbol.replace("/", "_").upper()

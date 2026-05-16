@@ -26,9 +26,10 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import secrets as _secrets_mod
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +215,14 @@ class _ConfigDatabaseDefaults:
     max_overflow: int = 10
 
     def get_connection_string(self) -> str:
-        return os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+        url = os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+        # Normalise async driver prefixes so callers that pass this URL to
+        # sync create_engine don't get a QueuePool/driver mismatch error.
+        if url.startswith("sqlite+aiosqlite://"):
+            url = url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+        elif url.startswith("postgresql+asyncpg://"):
+            url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        return url
 
 
 class _ConfigNamespace:
@@ -267,6 +275,14 @@ async def init_database(s: Any) -> Any:
 
     conn_str = s.config.database.get_connection_string()
 
+    # Normalise async driver prefixes — create_engine (sync) cannot use
+    # aiosqlite or asyncpg.  _ConfigDatabaseDefaults.get_connection_string()
+    # already normalises, but other config implementations may not.
+    if conn_str.startswith("sqlite+aiosqlite://"):
+        conn_str = conn_str.replace("sqlite+aiosqlite://", "sqlite://", 1)
+    elif conn_str.startswith("postgresql+asyncpg://"):
+        conn_str = conn_str.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+
     # Block SQLite in multi-worker deployments — concurrent OS-process writes
     # corrupt the database.  PostgreSQL is required for any production setup.
     is_sqlite = conn_str.startswith("sqlite")
@@ -292,30 +308,33 @@ async def init_database(s: Any) -> Any:
     if not is_sqlite:
         try:
             from config.settings import get_settings as _get_settings
+
             _db_cfg = _get_settings().db
-            _pool_size    = int(os.getenv("DB_POOL_SIZE",    str(_db_cfg.pool_size)))
+            _pool_size = int(os.getenv("DB_POOL_SIZE", str(_db_cfg.pool_size)))
             _max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", str(_db_cfg.max_overflow)))
-            _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT",  str(_db_cfg.pool_timeout)))
-            _pool_recycle = int(os.getenv("DB_POOL_RECYCLE",   str(_db_cfg.pool_recycle)))
+            _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT", str(_db_cfg.pool_timeout)))
+            _pool_recycle = int(os.getenv("DB_POOL_RECYCLE", str(_db_cfg.pool_recycle)))
             _pool_pre_ping = _db_cfg.pool_pre_ping
         except Exception as _cfg_err:
-            logger.warning(
-                "Could not load DatabaseSettings — using legacy env-var defaults: %s", _cfg_err
-            )
-            _pool_size    = int(os.getenv("DB_POOL_SIZE", "20"))
+            logger.warning("Could not load DatabaseSettings — using legacy env-var defaults: %s", _cfg_err)
+            _pool_size = int(os.getenv("DB_POOL_SIZE", "20"))
             _max_overflow = int(os.getenv("DB_POOL_MAX_OVERFLOW", "10"))
             _pool_timeout = float(os.getenv("DB_POOL_TIMEOUT", "30"))
             _pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "1800"))
             _pool_pre_ping = True
 
-        engine_kwargs["pool_size"]     = _pool_size
-        engine_kwargs["max_overflow"]  = _max_overflow
-        engine_kwargs["pool_timeout"]  = _pool_timeout
-        engine_kwargs["pool_recycle"]  = _pool_recycle
+        engine_kwargs["pool_size"] = _pool_size
+        engine_kwargs["max_overflow"] = _max_overflow
+        engine_kwargs["pool_timeout"] = _pool_timeout
+        engine_kwargs["pool_recycle"] = _pool_recycle
         engine_kwargs["pool_pre_ping"] = _pool_pre_ping
         logger.info(
             "DB pool: size=%d overflow=%d timeout=%.0fs recycle=%ds pre_ping=%s",
-            _pool_size, _max_overflow, _pool_timeout, _pool_recycle, _pool_pre_ping,
+            _pool_size,
+            _max_overflow,
+            _pool_timeout,
+            _pool_recycle,
+            _pool_pre_ping,
         )
 
     # ── connect_args ──────────────────────────────────────────────────────────
@@ -343,11 +362,16 @@ async def init_database(s: Any) -> Any:
             # psycopg2 / psycopg3 driver — use options string
             engine_kwargs["connect_args"] = {
                 "connect_timeout": connect_timeout,
-                "options": (
-                    f"-c statement_timeout={stmt_timeout_ms} "
-                    f"-c application_name={app_name}"
-                ),
+                "options": (f"-c statement_timeout={stmt_timeout_ms} -c application_name={app_name}"),
             }
+
+    # SQLite: use NullPool so each call gets a fresh connection and no idle
+    # connection holds the file lock while alembic runs in a thread executor.
+    if is_sqlite:
+        from sqlalchemy.pool import NullPool as _NullPool
+
+        engine_kwargs["poolclass"] = _NullPool
+        engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 
     engine = create_engine(conn_str, **engine_kwargs)
     try:
@@ -360,16 +384,32 @@ async def init_database(s: Any) -> Any:
         alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
 
         # Determine current revision before attempting upgrade so we can
-        # distinguish "already at head" (no-op) from a genuine failure.
+        # skip the upgrade entirely when already at head (avoids a SQLite
+        # write-lock deadlock when database.connection already holds a conn).
         with engine.connect() as _conn:
             _mctx = MigrationContext.configure(_conn)
             _current_rev = _mctx.get_current_revision()
 
-        alembic_command.upgrade(alembic_cfg, "head")
-        logger.info(
-            "Database migrations applied (alembic upgrade head, was=%s)",
-            _current_rev or "none",
-        )
+        # Resolve the head revision without touching the DB.
+        from alembic.script import ScriptDirectory as _ScriptDir
+
+        _script = _ScriptDir.from_config(alembic_cfg)
+        _head_rev = _script.get_current_head()
+
+        if _current_rev == _head_rev:
+            logger.info(
+                "Database already at alembic head (%s) — skipping upgrade",
+                _current_rev,
+            )
+        else:
+            # Run alembic upgrade in a thread executor so it doesn't block the
+            # async event loop during startup (alembic is synchronous I/O).
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: alembic_command.upgrade(alembic_cfg, "head"))
+            logger.info(
+                "Database migrations applied (alembic upgrade head, was=%s)",
+                _current_rev or "none",
+            )
     except ImportError:
         # Alembic not installed — first-run path for minimal/dev installs.
         # create_all is safe here because there is no existing schema to drift from.
@@ -379,7 +419,7 @@ async def init_database(s: Any) -> Any:
             logger.info("Database schema ensured via create_all (checkfirst=True)")
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
-    except Exception as exc:
+    except (AlembicCommandError, Exception) as exc:
         # Alembic is installed but upgrade failed. Most common cause on dev
         # machines: the DB was created via create_all before Alembic was
         # introduced, so alembic_version table is missing.
@@ -452,8 +492,12 @@ def _enforce_redis_maxmemory(host: str, port: int, password: str | None = None) 
         else:
             logger.debug("Redis maxmemory OK: %d bytes", maxmemory)
     except Exception as exc:
-        logger.warning(
-            "Could not check Redis maxmemory at startup (%s) — ensure Redis is reachable and maxmemory is configured.",
+        # Redis being unreachable at startup is expected in dev/offline mode.
+        # The automations.yaml Redis service sets maxmemory on start, so this
+        # check is a belt-and-suspenders guard for production deployments.
+        logger.info(
+            "Could not check Redis maxmemory at startup (%s) — "
+            "ensure Redis is running and maxmemory is configured in production.",
             exc,
         )
 
@@ -491,6 +535,7 @@ async def init_cache(s: Any) -> Any:
     _ssl_context = None
     try:
         from config.settings import get_settings as _get_settings
+
         _redis_cfg = _get_settings().redis
         _ssl_context = _redis_cfg.build_ssl_context()
         if _ssl_context is not None:
@@ -770,9 +815,7 @@ async def init_auth(s: Any) -> Any:
                     now = _dt.now(_tz.utc)
                     deleted = (
                         _db.query(UserSession)
-                        .filter(
-                            (UserSession.expires_at < now) | (UserSession.is_revoked.is_(True))
-                        )
+                        .filter((UserSession.expires_at < now) | (UserSession.is_revoked.is_(True)))
                         .delete(synchronize_session=False)
                     )
                     _db.commit()
@@ -831,6 +874,7 @@ def _ensure_bootstrap_users(session_factory) -> None:
                     logger.info("Bootstrap user role corrected: %s -> %s", email, role)
                 # Sync password — if .env was regenerated the hash will be stale
                 from auth.service import verify_password as _vp
+
                 if not _vp(password, existing.hashed_password):
                     existing.hashed_password = hash_password(password)
                     existing.status = UserStatus.ACTIVE.value
@@ -880,7 +924,7 @@ async def init_risk_manager(s: Any) -> Any:
         import risk.manager as _rm_mod
 
         _rm_mod.risk_manager = rm
-    except Exception:  # noqa: BLE001 — module-level alias is best-effort
+    except Exception:  # nosec B110
         pass
     log_activity("Risk Manager initialized")
     return rm
@@ -925,9 +969,7 @@ async def init_broker(s: Any) -> Any:
                 "Configured broker 'mt5' is unavailable and FALLBACK_TO_PAPER is not set. "
                 "Fix broker credentials or set FALLBACK_TO_PAPER=true to start in paper mode."
             )
-        log_activity(
-            "MT5 broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)"
-        )
+        log_activity("MT5 broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)")
 
     if broker_type == "oanda":
         if not oanda_token or not oanda_account:
@@ -1476,7 +1518,10 @@ async def init_position_manager(s: Any) -> Any:
     """
     from execution.position_manager import position_manager as _pm
 
-    # Wire a Redis async client if available
+    # Wire a Redis async client if available.
+    # Only warn when REDIS_URL is explicitly configured but unreachable —
+    # absence of REDIS_URL in dev is expected and non-actionable.
+    _redis_url_explicit = bool(os.getenv("REDIS_URL", "").strip())
     try:
         import redis.asyncio as aioredis  # pylint: disable=no-name-in-module
 
@@ -1489,13 +1534,20 @@ async def init_position_manager(s: Any) -> Any:
         _pm._redis_store = AsyncRedisStateStore(redis_client)
         logger.info("PositionManager: Redis client wired (%s)", redis_url)
     except Exception as exc:
-        logger.warning(
-            "PositionManager: could not wire Redis client (%s) — "
-            "positions will not survive restarts. Set REDIS_URL to enable persistence.",
-            exc,
-        )
+        if _redis_url_explicit:
+            logger.warning(
+                "PositionManager: could not wire Redis client (%s) — "
+                "positions will not survive restarts. Check REDIS_URL.",
+                exc,
+            )
+        else:
+            logger.info(
+                "PositionManager: Redis not configured — position state is in-memory only "
+                "(will not survive restarts). Set REDIS_URL to enable persistence."
+            )
 
-    # Restore open positions from the previous session
+    # Restore open positions from the previous session.
+    # A Timeout/ConnectionError here means Redis is not running — expected in dev.
     try:
         restored = await _pm.restore_from_redis()
         if restored:
@@ -1503,11 +1555,17 @@ async def init_position_manager(s: Any) -> Any:
         else:
             logger.info("PositionManager: no open positions to restore from Redis")
     except Exception as exc:
-        logger.warning(
-            "PositionManager: restore_from_redis() failed at startup (%s) — "
-            "starting with empty position state. Reconcile open positions manually.",
-            exc,
-        )
+        if _redis_url_explicit:
+            logger.warning(
+                "PositionManager: restore_from_redis() failed at startup (%s) — "
+                "starting with empty position state. Reconcile open positions manually.",
+                exc,
+            )
+        else:
+            logger.info(
+                "PositionManager: restore_from_redis() skipped (Redis not configured) — "
+                "starting with empty position state."
+            )
 
     return _pm
 
@@ -1646,7 +1704,7 @@ async def init_macro_store(s: Any) -> Any:
             fred_loaded,
             9,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "MacroStoreBridge: timed out after %.0fs — falling back to CSV bootstrap",
             _bridge_timeout,
@@ -1691,7 +1749,7 @@ async def init_macro_store(s: Any) -> Any:
             wgc_injected,
             wgc_status.get("series_fetched", []),
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(
             "WGC startup download timed out after %.0fs — gold demand series unavailable",
             _wgc_timeout,
@@ -1761,12 +1819,14 @@ async def init_inference_engine(s: Any) -> Any:
 
             _rc = await _get_redis()
             if _rc is not None:
-                _payload = _json.dumps({
-                    "model_available": health.get("model_available", False),
-                    "model_version": health.get("model_version", "none"),
-                    "calibrator": health.get("calibrator_available", False),
-                    "online_learning": health.get("online_learning_enabled", False),
-                })
+                _payload = _json.dumps(
+                    {
+                        "model_available": health.get("model_available", False),
+                        "model_version": health.get("model_version", "none"),
+                        "calibrator": health.get("calibrator_available", False),
+                        "online_learning": health.get("online_learning_enabled", False),
+                    }
+                )
                 await _rc.set("ml:model:status", _payload, ex=3600)
                 logger.debug("ml:model:status published to Redis")
         except Exception as _ml_redis_exc:
@@ -1975,7 +2035,7 @@ async def init_deep_ensemble_store(s: Any) -> Any:
 
 async def init_signal_engine(s: Any) -> Any:
     from api.admin import log_activity
-    from core.signal_engine import run_signal_engine, _ML_AVAILABLE  # noqa: PLC0415
+    from core.signal_engine import run_signal_engine, _ML_AVAILABLE
 
     # Pre-flight: warn loudly if ML package is missing so operators see it in
     # startup logs rather than discovering degraded signals silently at runtime.
@@ -2691,7 +2751,6 @@ async def init_mcc(s: Any) -> Any | None:
     """
     try:
         from core.mcc.master_control import MasterControlCore, MCCConfig
-        from cache.market_data_cache import MarketDataCache
 
         cfg = MCCConfig(
             max_strategies_active=int(os.getenv("MCC_MAX_STRATEGIES", "5")),
@@ -2704,10 +2763,8 @@ async def init_mcc(s: Any) -> Any | None:
         cache = getattr(s, "cache", None)
         db_session = None
         if s.db_session_factory is not None:
-            try:
+            with contextlib.suppress(Exception):
                 db_session = s.db_session_factory()
-            except Exception:  # noqa: BLE001 — DB session creation is best-effort
-                pass
 
         if config_mgr is not None or cache is not None:
             mcc.initialize(
@@ -2721,6 +2778,7 @@ async def init_mcc(s: Any) -> Any | None:
         if broker is not None:
             market_prices = getattr(broker, "market_prices", {})
             from decimal import Decimal as _D
+
             for sym, price in market_prices.items():
                 if price and price > 0:
                     mcc.current_prices[sym] = _D(str(price))
@@ -3040,6 +3098,7 @@ async def init_multi_source_feed(s: Any) -> Any:
     try:
         from api.admin import log_activity
     except Exception:
+
         def log_activity(msg: str) -> None:
             logger.info(msg)
 
@@ -3077,11 +3136,14 @@ async def init_multi_source_feed(s: Any) -> Any:
                 if price_engine_ref is not None and hasattr(price_engine_ref, "on_new_price"):
                     try:
                         import inspect as _inspect
+
                         _sig = _inspect.signature(price_engine_ref.on_new_price)
                         _nparams = sum(
-                            1 for p in _sig.parameters.values()
+                            1
+                            for p in _sig.parameters.values()
                             if p.default is _inspect.Parameter.empty
-                            and p.kind not in (
+                            and p.kind
+                            not in (
                                 _inspect.Parameter.VAR_POSITIONAL,
                                 _inspect.Parameter.VAR_KEYWORD,
                             )

@@ -160,7 +160,7 @@ class ServiceCircuitBreaker:
                     timeout=self.config.call_timeout_seconds,
                 )
             else:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
                     loop.run_in_executor(None, lambda: func(*args, **kwargs)),
                     timeout=self.config.call_timeout_seconds,
@@ -196,9 +196,13 @@ class ServiceCircuitBreaker:
                 self._success_count += 1
                 if self._success_count >= self.config.success_threshold:
                     await self._set_state(CircuitState.CLOSED)
+                    # Reset all counters on full close so the next failure
+                    # window starts clean.
                     self._success_count = 0
-            elif self._state == CircuitState.CLOSED:
-                self._success_count += 1
+                    self._half_open_calls = 0
+            # In CLOSED state, success_count is not tracked — it has no
+            # meaning outside of the HALF_OPEN probe sequence and would
+            # grow unboundedly if incremented here.
 
     async def _on_failure(self, exc: Exception) -> None:
         async with self._lock:
@@ -208,7 +212,9 @@ class ServiceCircuitBreaker:
             self._success_count = 0
 
             if self._state == CircuitState.HALF_OPEN:
-                # Any failure in half-open → back to open
+                # Probe failed — back to OPEN; reset half_open_calls so the
+                # next probe window starts with a fresh call budget.
+                self._half_open_calls = 0
                 await self._set_state(CircuitState.OPEN)
             elif self._state == CircuitState.CLOSED and self._failure_count >= self.config.failure_threshold:
                 await self._set_state(CircuitState.OPEN)
@@ -227,6 +233,12 @@ class ServiceCircuitBreaker:
             return
         self._state = new_state
         self._last_state_change = time.time()
+        # Reset failure counter when entering HALF_OPEN so probe-window
+        # failures are counted from zero, not accumulated from the previous
+        # CLOSED window that triggered the OPEN transition.
+        if new_state == CircuitState.HALF_OPEN:
+            self._failure_count = 0
+            self._success_count = 0
         self._state_history.append(
             {
                 "from": old_state.value,

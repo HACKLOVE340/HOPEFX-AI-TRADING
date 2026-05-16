@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { AdminSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: AdminSettings = {
   allow_new_registrations: true,
@@ -51,8 +52,7 @@ const AdminSettingsSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save admin settings.');
+      setError(extractApiError(err, 'Failed to save admin settings.'));
     } finally { setSaving(false); }
   };
 

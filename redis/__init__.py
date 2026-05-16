@@ -27,9 +27,7 @@ for _sp in sys.path:
         break
 
 if _SITE_REDIS is None:
-    raise ImportError(
-        "redis-py is not installed. Run: pip install 'redis[asyncio]>=5.0.0'"
-    )
+    raise ImportError("redis-py is not installed. Run: pip install 'redis[asyncio]>=5.0.0'")
 
 # Load the real package under the canonical name so sub-imports resolve.
 _spec = importlib.util.spec_from_file_location(

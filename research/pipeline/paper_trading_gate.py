@@ -287,21 +287,21 @@ class PaperTradingGate:
         logger.info("=" * 60)
         logger.info("OANDA Paper Trading Gate Status")
         logger.info("=" * 60)
-        logger.info(f"  Run start (UTC) : {s['run_start_utc'] or 'NOT SET'}")
-        logger.info(f"  Elapsed days    : {s['elapsed_days']}")
-        logger.info(f"  Fill count      : {s['fill_count']}")
+        logger.info("  Run start (UTC) : %s", s["run_start_utc"] or "NOT SET")
+        logger.info("  Elapsed days    : %s", s["elapsed_days"])
+        logger.info("  Fill count      : %s", s["fill_count"])
         if s["sharpe_before"] is not None:
             drop = s["sharpe_before"] - s["sharpe_after"]
-            logger.info(f"  Sharpe before   : {s['sharpe_before']:.3f}")
-            logger.info(f"  Sharpe after    : {s['sharpe_after']:.3f}")
-            logger.info(f"  Sharpe drop     : {drop:.3f}")
+            logger.info("  Sharpe before   : %.3f", s["sharpe_before"])
+            logger.info("  Sharpe after    : %.3f", s["sharpe_after"])
+            logger.info("  Sharpe drop     : %.3f", drop)
         logger.info("")
         p2 = "✅ READY" if s["phase2_ready"] else "❌ NOT READY"
         p3 = "✅ READY" if s["phase3_ready"] else "❌ NOT READY"
-        logger.info(f"  Phase 2 (Anomaly)  : {p2}")
-        logger.info(f"    {s['phase2_reason']}")
-        logger.info(f"  Phase 3 (Online)   : {p3}")
-        logger.info(f"    {s['phase3_reason']}")
+        logger.info("  Phase 2 (Anomaly)  : %s", p2)
+        logger.info("    %s", s["phase2_reason"])
+        logger.info("  Phase 3 (Online)   : %s", p3)
+        logger.info("    %s", s["phase3_reason"])
         logger.info("=" * 60)
 
 
@@ -366,15 +366,15 @@ def _cli() -> None:
 
     if args.set_start:
         gate.set_run_start()
-        logger.info(f"Run start set to {gate.run_start.isoformat()}")
+        logger.info("Run start set to %s", gate.run_start.isoformat())
 
     if args.record_fill is not None:
         count = gate.record_fill(pnl=args.record_fill)
-        logger.info(f"Fill recorded. Total fills: {count}")
+        logger.info("Fill recorded. Total fills: %s", count)
 
     if args.record_sharpe:
         gate.record_sharpe(before=args.record_sharpe[0], after=args.record_sharpe[1])
-        logger.info(f"Sharpe recorded: {args.record_sharpe[0]:.3f} → {args.record_sharpe[1]:.3f}")
+        logger.info("Sharpe recorded: %.3f → %.3f", args.record_sharpe[0], args.record_sharpe[1])
 
     if args.status or not any([args.set_start, args.record_fill is not None, args.record_sharpe]):
         gate.print_status()

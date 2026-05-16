@@ -23,7 +23,7 @@ import {
   LayoutDashboard, ArrowLeft, ToggleLeft, ToggleRight,
   Zap, Eye, Settings2, FileText, Wrench,
 } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 import AdminPanel from './AdminPanel'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -122,9 +122,9 @@ export default function SuperAdminDashboard() {
     setError(null)
     try {
       const [sysRes, overviewRes, tenantsRes] = await Promise.allSettled([
-        axios.get('/api/admin/stats'),
-        axios.get('/api/superadmin/overview'),
-        axios.get('/api/whitelabel/tenants'),
+        api.get('/api/admin/stats'),
+        api.get('/api/superadmin/overview'),
+        api.get('/api/whitelabel/tenants'),
       ])
 
       if (sysRes.status === 'fulfilled') {

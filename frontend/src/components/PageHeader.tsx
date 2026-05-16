@@ -1,63 +1,149 @@
 /**
- * PageHeader — consistent page title + optional subtitle + action slot.
- * Used at the top of every authenticated page.
+ * PageHeader — consistent page title, subtitle, breadcrumb trail,
+ * status badge, right-aligned actions, and optional tab navigation.
+ *
+ * Mobile-first: on xs/sm the actions stack below the title row,
+ * tabs scroll horizontally, breadcrumbs wrap gracefully.
  */
 
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
+
+export interface PageTab {
+  key: string;
+  label: string;
+  icon?: string;
+  badge?: string | number;
+  href?: string;
+}
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
-  /** Right-aligned action buttons / controls */
+  breadcrumbs?: BreadcrumbItem[];
+  badge?: React.ReactNode;
   actions?: React.ReactNode;
+  tabs?: PageTab[];
+  activeTab?: string;
+  onTabChange?: (key: string) => void;
+  icon?: string;
+  className?: string;
   style?: React.CSSProperties;
 }
 
 export const PageHeader: React.FC<PageHeaderProps> = ({
   title,
   subtitle,
+  breadcrumbs,
+  badge,
   actions,
+  tabs,
+  activeTab,
+  onTabChange,
+  icon,
+  className = '',
   style,
 }) => (
   <div
-    style={{
-      alignItems: 'flex-start',
-      borderBottom: '1px solid var(--border, #334155)',
-      display: 'flex',
-      gap: 12,
-      justifyContent: 'space-between',
-      marginBottom: 24,
-      paddingBottom: 16,
-      ...style,
-    }}
+    className={`border-b border-terminal-border ${tabs ? 'mb-0 pb-0' : 'mb-6 pb-4'} ${className}`}
+    style={style}
   >
-    <div>
-      <h1
-        style={{
-          color: 'var(--text, #f1f5f9)',
-          fontSize: 20,
-          fontWeight: 700,
-          letterSpacing: -0.3,
-          margin: 0,
-        }}
-      >
-        {title}
-      </h1>
-      {subtitle && (
-        <p
-          style={{
-            color: 'var(--text-muted, #64748b)',
-            fontSize: 13,
-            margin: '4px 0 0',
-          }}
-        >
-          {subtitle}
-        </p>
+    {breadcrumbs && breadcrumbs.length > 0 && (
+      <Breadcrumb items={breadcrumbs} />
+    )}
+
+    {/* Title row — stacks on mobile, side-by-side on sm+ */}
+    <div className={`flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between ${tabs ? 'pb-3' : ''}`}>
+      {/* Left: icon + title + subtitle */}
+      <div className="flex items-start gap-3 min-w-0">
+        {icon && (
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-lg flex-shrink-0 mt-0.5">
+            {icon}
+          </div>
+        )}
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-slate-100 text-lg sm:text-xl font-bold tracking-tight m-0 leading-tight">
+              {title}
+            </h1>
+            {badge && badge}
+          </div>
+          {subtitle && (
+            <p className="text-slate-500 text-xs sm:text-sm mt-1 leading-relaxed m-0">
+              {subtitle}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Right: actions — full-width on mobile, auto on sm+ */}
+      {actions && (
+        <div className="flex items-center gap-2 flex-wrap sm:flex-shrink-0">
+          {actions}
+        </div>
       )}
     </div>
-    {actions && (
-      <div style={{ alignItems: 'center', display: 'flex', flexShrink: 0, gap: 8 }}>
-        {actions}
+
+    {/* Tabs — horizontal scroll on mobile */}
+    {tabs && tabs.length > 0 && (
+      <div
+        className="flex gap-0 overflow-x-auto border-t border-terminal-border mt-1"
+        style={{ scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+      >
+        {tabs.map((tab) => {
+          const isActive = tab.key === activeTab;
+
+          const content = (
+            <>
+              {tab.icon && <span className="text-xs">{tab.icon}</span>}
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && (
+                <span
+                  className={`text-2xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
+                    isActive
+                      ? 'bg-blue-500/25 text-blue-400'
+                      : 'bg-terminal-raised text-slate-500'
+                  }`}
+                >
+                  {tab.badge}
+                </span>
+              )}
+            </>
+          );
+
+          const sharedStyle: React.CSSProperties = {
+            borderBottom: isActive ? '2px solid #3b82f6' : '2px solid transparent',
+          };
+
+          const sharedClass = `flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium whitespace-nowrap cursor-pointer transition-colors outline-none bg-transparent border-0 ${
+            isActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'
+          }`;
+
+          if (tab.href) {
+            return (
+              <Link
+                key={tab.key}
+                to={tab.href}
+                className={`${sharedClass} no-underline`}
+                style={sharedStyle}
+              >
+                {content}
+              </Link>
+            );
+          }
+
+          return (
+            <button
+              key={tab.key}
+              onClick={() => onTabChange?.(tab.key)}
+              className={sharedClass}
+              style={sharedStyle}
+            >
+              {content}
+            </button>
+          );
+        })}
       </div>
     )}
   </div>

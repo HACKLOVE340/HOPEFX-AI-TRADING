@@ -438,15 +438,15 @@ if __name__ == "__main__":
 
     order = Order(symbol="XAUUSD", side="buy", qty=0.01, stop_loss=1950.0)
     result = validator.validate_order(order, current_price=2000.0, account_balance=10000.0)
-    logger.info(f"\nValid order test: {result.valid} (risk: {result.risk_pct:.2%})")
+    logger.info("\nValid order test: %s (risk: %s)", result.valid, f"{result.risk_pct:.2%}")
 
     big_order = Order(symbol="XAUUSD", side="buy", qty=1.0)
     result = validator.validate_order(big_order, current_price=2000.0, account_balance=10000.0)
-    logger.info(f"Oversized order test: {result.valid} - {result.reason}")
+    logger.info("Oversized order test: %s - %s", result.valid, result.reason)
 
     bad_order = Order(symbol="INVALID", side="buy", qty=0.01)
     result = validator.validate_order(bad_order, current_price=100.0, account_balance=10000.0)
-    logger.info(f"Invalid symbol test: {result.valid} - {result.reason}")
+    logger.info("Invalid symbol test: %s - %s", result.valid, result.reason)
 
     logger.info("\n" + "=" * 60)
     logger.info("Prop Firm Validation")
@@ -454,8 +454,8 @@ if __name__ == "__main__":
 
     prop = PropFirmValidator(firm="ftmo", initial_balance=100000.0)
     valid, msg = prop.check_limits(current_equity=100000.0)
-    logger.info(f"Initial check: {valid} - {msg}")
+    logger.info("Initial check: %s - %s", valid, msg)
 
     prop.record_pnl(-3000)
     valid, msg = prop.check_limits(current_equity=97000.0)
-    logger.info(f"After $3k loss: {valid} - {msg}")
+    logger.info("After $3k loss: %s - %s", valid, msg)

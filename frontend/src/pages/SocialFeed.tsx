@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { socialApi } from '../hooks/useApi';
 import { useStore } from '../store';
-import { getWsBase } from '../lib/utils';
+import { getWsBase, extractApiError } from '../lib/utils';
 
 interface FeedItem {
   signal_id: string; symbol: string; direction: 'BUY'|'SELL'; confidence: number;
@@ -18,10 +18,6 @@ interface FeedItem {
 interface Comment { comment_id: string; username: string; text: string; created_at: string; }
 
 const PAGE_SIZE = 20;
-function extractErr(err: unknown, fb: string): string {
-  const d = (err as {response?:{data?:{detail?:string}}})?.response?.data?.detail;
-  return d ?? (err instanceof Error ? err.message : fb);
-}
 
 const SocialFeed: React.FC = () => {
   const navigate = useNavigate();
@@ -65,7 +61,7 @@ const SocialFeed: React.FC = () => {
     } catch (err) {
       if (!mountedRef.current) return;
       if ((err as {name?:string}).name === 'CanceledError') return;
-      setError(extractErr(err, 'Failed to load signal feed.'));
+      setError(extractApiError(err, 'Failed to load signal feed.'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -168,7 +164,7 @@ const SocialFeed: React.FC = () => {
   });
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Community Signal Feed</h1>

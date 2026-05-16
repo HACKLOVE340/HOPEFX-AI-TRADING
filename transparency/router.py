@@ -22,10 +22,11 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter
+    from fastapi import APIRouter, Depends
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/transparency", tags=["Transparency"])
+    router = APIRouter(prefix="/api/transparency", tags=["Transparency"], dependencies=[Depends(get_current_user)])
 
     class RecordExecutionRequest(BaseModel):
         order_id: str
@@ -142,6 +143,7 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         records = engine.get_execution_audit_trail(order_id=order_id, limit=1)
         if not records:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail=f"No execution found for order {order_id}")
         return records[0]
 
@@ -184,12 +186,14 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
         result = []
         for name, stats in venues.items():
             n = stats["executions"] or 1
-            result.append({
-                "venue": name,
-                "executions": stats["executions"],
-                "avg_slippage": stats["total_slippage"] / n,
-                "avg_latency_ms": stats["total_latency"] / n,
-            })
+            result.append(
+                {
+                    "venue": name,
+                    "executions": stats["executions"],
+                    "avg_slippage": stats["total_slippage"] / n,
+                    "avg_latency_ms": stats["total_latency"] / n,
+                }
+            )
         return result
 
     return router
@@ -209,3 +213,133 @@ def _get_transparency_engine():
 
 
 router = create_transparency_router(_get_transparency_engine())
+
+
+# ── Frontend-expected aliases ──────────────────────────────────────────────────
+# TCADashboard.tsx calls /transparency/best-execution, /slippage, /summary, /venues.
+# All delegate to the real ExecutionTransparencyEngine methods:
+#   generate_report()         → best-execution, summary
+#   get_slippage_distribution() → slippage
+#   broker_comparison field   → venues
+
+import logging as _logging
+
+_alias_logger = _logging.getLogger(__name__)
+
+# Map ExecutionQuality enum values to a 0-100 score for the frontend.
+_QUALITY_SCORE: dict[str, int] = {
+    "excellent": 95,
+    "good": 80,
+    "average": 60,
+    "poor": 40,
+    "very_poor": 20,
+}
+
+
+def _broker_comparison_to_venues(broker_comparison: dict) -> list:
+    """Convert broker_comparison mapping to a frontend-friendly venue list."""
+    return [
+        {
+            "name": broker,
+            "avg_slippage": round(float(stats.get("avg_slippage", 0)), 4),
+            "avg_latency_ms": round(float(stats.get("avg_latency_ms", 0)), 2),
+            "avg_fill_ratio": round(float(stats.get("avg_fill_ratio", 100)), 2),
+            "total_executions": int(stats.get("total_executions", 0)),
+        }
+        for broker, stats in (broker_comparison or {}).items()
+    ]
+
+
+@router.get("/best-execution", summary="Best-execution report (alias)")
+async def get_best_execution(days: int = 30):
+    """
+    Best-execution report in the shape expected by TCADashboard.tsx.
+    Calls engine.generate_report() for the last *days* days.
+    """
+    from datetime import datetime, timedelta
+
+    engine = _get_transparency_engine()
+    try:
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        report = engine.generate_report(start, end)
+        quality_name = report.execution_quality.value if report.execution_quality else "average"
+        return {
+            "best_execution_score": _QUALITY_SCORE.get(quality_name, 60),
+            "avg_slippage_bps": round(report.avg_slippage, 4),
+            "fill_rate": round(report.avg_fill_ratio / 100.0, 4),
+            "venues": _broker_comparison_to_venues(report.broker_comparison),
+            "executions": report.total_executions,
+        }
+    except Exception as exc:
+        _alias_logger.warning("best-execution alias failed: %s", exc)
+        return {"best_execution_score": 0, "avg_slippage_bps": 0, "fill_rate": 1.0, "venues": [], "executions": 0}
+
+
+@router.get("/slippage", summary="Slippage distribution (alias)")
+async def get_slippage_alias(days: int = 30):
+    """
+    Slippage distribution — alias for /slippage/distribution.
+    Accepts the same ``days`` query param and forwards correct datetime bounds.
+    """
+    from datetime import datetime, timedelta
+
+    engine = _get_transparency_engine()
+    try:
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        return engine.get_slippage_distribution(start, end)
+    except Exception as exc:
+        _alias_logger.warning("slippage alias failed: %s", exc)
+        return {"buckets": [], "counts": [], "total": 0, "mean": 0, "median": 0, "std_dev": 0}
+
+
+@router.get("/summary", summary="Execution transparency summary")
+async def get_transparency_summary(days: int = 30):
+    """
+    High-level transparency summary derived from engine.generate_report().
+    Calls generate_report() so real execution data is always returned.
+    """
+    from datetime import datetime, timedelta
+
+    engine = _get_transparency_engine()
+    try:
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        report = engine.generate_report(start, end)
+        quality_name = report.execution_quality.value if report.execution_quality else "average"
+        return {
+            "total_executions": report.total_executions,
+            "avg_slippage_bps": round(report.avg_slippage, 4),
+            "best_execution_score": _QUALITY_SCORE.get(quality_name, 60),
+            "fill_rate": round(report.avg_fill_ratio / 100.0, 4),
+            "period_days": days,
+        }
+    except Exception as exc:
+        _alias_logger.warning("transparency summary failed: %s", exc)
+        return {
+            "total_executions": 0,
+            "avg_slippage_bps": 0,
+            "best_execution_score": 0,
+            "fill_rate": 1.0,
+            "period_days": days,
+        }
+
+
+@router.get("/venues", summary="Trading venue performance")
+async def get_venues(days: int = 30):
+    """
+    Per-venue execution quality metrics derived from broker_comparison
+    in engine.generate_report().
+    """
+    from datetime import datetime, timedelta
+
+    engine = _get_transparency_engine()
+    try:
+        end = datetime.now(UTC)
+        start = end - timedelta(days=days)
+        report = engine.generate_report(start, end)
+        return {"venues": _broker_comparison_to_venues(report.broker_comparison)}
+    except Exception as exc:
+        _alias_logger.warning("venues failed: %s", exc)
+        return {"venues": []}

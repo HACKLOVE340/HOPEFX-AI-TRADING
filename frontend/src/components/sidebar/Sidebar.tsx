@@ -192,9 +192,11 @@ const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** Called after any nav-link click — used by mobile drawer to close itself */
+  onNavigate?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) => {
   const location  = useLocation();
   const navigate  = useNavigate();
   const isAuth    = useStore(selectIsAuth);
@@ -254,13 +256,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       borderRight: '1px solid var(--border, #334155)',
       display: 'flex', flexDirection: 'column', flexShrink: 0,
       transition: 'width 0.2s ease', overflow: 'hidden',
-      height: '100vh',
+      height: '100%',
+      /* When used as a mobile drawer the parent sets position:fixed and height */
     }}>
-      {/* Logo */}
+      {/* Logo / header */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '18px 14px 14px', borderBottom: '1px solid var(--border, #334155)',
-        minHeight: 60,
+        padding: '0 14px', borderBottom: '1px solid var(--border, #334155)',
+        minHeight: 56, flexShrink: 0,
+        paddingTop: 'env(safe-area-inset-top, 0px)',
       }}>
         {collapsed
           ? (
@@ -270,7 +274,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             </div>
           )
           : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
               <span style={{ fontSize: 18, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5, flexShrink: 0 }}>
                 HOPE<span style={{ color: '#3b82f6' }}>FX</span>
               </span>
@@ -278,13 +282,17 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             </div>
           )
         }
+        {/* Toggle / close button — 44×44 touch target */}
         <button
           onClick={onToggle}
-          title={collapsed ? 'Expand' : 'Collapse'}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           style={{
             background: 'transparent', border: 'none', color: '#64748b',
-            fontSize: 18, cursor: 'pointer', padding: '2px 4px', lineHeight: 1,
-            flexShrink: 0,
+            fontSize: 18, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            minWidth: 44, minHeight: 44, flexShrink: 0,
+            borderRadius: 6,
           }}
         >
           {collapsed ? '›' : '‹'}
@@ -325,10 +333,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                   <NavLink
                     key={item.path}
                     to={item.path}
-                    onClick={() => setSearch('')}
+                    onClick={() => { setSearch(''); onNavigate?.(); }}
                     style={{
                       display: 'flex', alignItems: 'center',
-                      gap: 10, padding: '9px 14px',
+                      gap: 10, padding: '10px 14px',
+                      minHeight: 44,
                       textDecoration: 'none', fontSize: 13, fontWeight: 500,
                       transition: 'background 0.15s, color 0.15s',
                       borderRadius: '0 6px 6px 0', marginRight: 8,
@@ -374,11 +383,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                   return (
                     <NavLink
                       key={item.path}
-                      to={item.path}
-                      title={collapsed ? item.label : undefined}
+                      to={locked ? '/upgrade' : item.path}
+                      title={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
+                      onClick={onNavigate}
                       style={{
                         display: 'flex', alignItems: 'center',
-                        gap: 10, padding: '9px 14px',
+                        gap: 10, padding: '10px 14px',
+                        minHeight: 44,
                         textDecoration: 'none', fontSize: 13, fontWeight: 500,
                         transition: 'background 0.15s, color 0.15s',
                         borderRadius: '0 6px 6px 0', marginRight: 8,
@@ -388,6 +399,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
                         justifyContent: collapsed ? 'center' : 'flex-start',
                         opacity: locked ? 0.6 : 1,
                         position: 'relative',
+                        cursor: locked ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
@@ -512,15 +524,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
             )}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                <a href="/" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
+                <NavLink to="/" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }}>
                   ← Landing
-                </a>
-                <a href="/docs" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
+                </NavLink>
+                <NavLink to="/docs" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="Documentation">
                   Docs
-                </a>
-                <a href="/status" style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
+                </NavLink>
+                <NavLink to="/system-status" onClick={onNavigate} style={{ fontSize: 12, color: '#475569', textDecoration: 'none' }} title="System status">
                   Status
-                </a>
+                </NavLink>
               </div>
               <ThemeToggle />
             </div>

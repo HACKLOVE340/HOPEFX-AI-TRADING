@@ -40,7 +40,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import httpx
 import numpy as np
@@ -230,7 +230,7 @@ class HOPEFXBrain:
         Routes that return non-2xx are flagged in Redis for alerting.
         """
         redis = await _get_redis()
-        flagged: ClassVar[list[str]] = []
+        flagged: list[str] = []
 
         for route in self.app.routes:
             path: str = getattr(route, "path", "")
@@ -413,7 +413,7 @@ class HOPEFXBrain:
         redis = await _get_redis()
 
         # Drain up to 10 vulnerability entries per cycle
-        raw_entries: ClassVar[list[str]] = []
+        raw_entries: list[str] = []
         if redis:
             raw_entries = await redis.lrange("scan:vuln_queue", 0, 9)
             if raw_entries:
@@ -537,7 +537,14 @@ class HOPEFXBrain:
 
 def _build_router(brain: HOPEFXBrain) -> APIRouter:
     """Return a router exposing brain state to the React dashboard."""
-    router = APIRouter(prefix="/api/security", tags=["Security"])
+    from fastapi import Depends
+    from api.auth import require_role
+
+    router = APIRouter(
+        prefix="/api/security",
+        tags=["Security"],
+        dependencies=[Depends(require_role("admin"))],
+    )
 
     @router.get("/attacks")
     async def get_attacks():
@@ -821,9 +828,14 @@ def _build_eager_router() -> APIRouter:
     with proper authentication and richer data sources. This router only exposes
     the /fixes endpoints that are unique to the HOPEFXBrain.
     """
-    from fastapi import APIRouter as _APIRouter
+    from fastapi import APIRouter as _APIRouter, Depends as _Depends
+    from api.auth import require_role as _require_role
 
-    r = _APIRouter(prefix="/api/security", tags=["Security"])
+    r = _APIRouter(
+        prefix="/api/security",
+        tags=["Security"],
+        dependencies=[_Depends(_require_role("admin"))],
+    )
 
     @r.get("/fixes")
     async def _fixes():

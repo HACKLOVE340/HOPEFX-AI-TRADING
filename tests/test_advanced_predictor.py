@@ -49,11 +49,15 @@ def _make_mock_sklearn_model(prob=0.75, n_features=10):
 
 
 def _make_features(n_rows=1, n_cols=10):
+    # Use at least 5 rows so std(axis=0) is non-zero and the variance check
+    # in AdvancedPredictor.predict() does not fire before predict_proba.
+    actual_rows = max(n_rows, 5)
+    rng = np.random.default_rng(0)
     X = pd.DataFrame(
-        np.random.randn(n_rows, n_cols),
+        rng.standard_normal((actual_rows, n_cols)),
         columns=[f"f{i}" for i in range(n_cols)],
     )
-    y = pd.Series(np.random.randint(0, 2, n_rows))
+    y = pd.Series(rng.integers(0, 2, actual_rows))
     return X, y
 
 

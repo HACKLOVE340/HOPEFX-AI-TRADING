@@ -116,7 +116,8 @@ describe('PricingPage', () => {
     const PricingPage = (await import('../pages/PricingPage')).default;
     render(wrap(<PricingPage />));
     await waitFor(() => {
-      expect(screen.getByText(/simple.*transparent.*pricing/i)).toBeInTheDocument();
+      // Multiple elements may contain the pricing heading text (title + subtitle)
+      expect(screen.getAllByText(/simple.*transparent.*pricing/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -269,7 +270,8 @@ describe('ReplayPage', () => {
     const ReplayPage = (await import('../pages/ReplayPage')).default;
     render(wrap(<ReplayPage />));
     await waitFor(() => {
-      expect(screen.getByText(/market replay/i)).toBeInTheDocument();
+      // Multiple elements may contain "Market Replay" (breadcrumb + page title)
+      expect(screen.getAllByText(/market replay/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -320,8 +322,9 @@ describe('ReplayPage', () => {
     await waitFor(() => screen.getByText(/XAUUSD/));
     fireEvent.click(screen.getByText(/XAUUSD/));
     await waitFor(() => {
+      // Button labels: "⏭ Step" and "▶ Play" (or "⏸ Pause" when playing)
       expect(screen.getByText(/⏭ step/i)).toBeInTheDocument();
-      expect(screen.getByText(/▶ auto/i)).toBeInTheDocument();
+      expect(screen.getByText(/▶ play|⏸ pause/i)).toBeInTheDocument();
     });
   });
 });

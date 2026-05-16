@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { BrokerSettings } from './types';
 import { Card, SectionHeader, Field, Input, Select, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: BrokerSettings = {
   type: 'paper', api_key: '', account_id: '', practice: true, connected: false,
@@ -59,8 +60,7 @@ const BrokerSection: React.FC = () => {
       }
     } catch (err: unknown) {
       setTestStatus('fail');
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setTestMsg(detail ?? 'Connection test failed');
+      setTestMsg(extractApiError(err, 'Connection test failed'));
     }
     setTimeout(() => setTestStatus('idle'), 6000);
   };
@@ -78,8 +78,7 @@ const BrokerSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setSaveError(detail ?? 'Failed to save broker settings.');
+      setSaveError(extractApiError(err, 'Failed to save broker settings.'));
     } finally {
       setSaving(false);
     }

@@ -49,7 +49,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import timezone
 
 UTC = timezone.utc
@@ -72,6 +72,7 @@ _FEATURE_DIM = 32
 
 try:
     import gymnasium as _gym
+
     _GymEnvBase = _gym.Env
 except ImportError:
     _GymEnvBase = object  # type: ignore[assignment,misc]
@@ -368,6 +369,7 @@ class RLAgent:
         # Only enable tensorboard logging when tensorboard package is available
         try:
             import tensorboard as _tb  # noqa: F401
+
             tb_log: str | None = str(Path(_MODEL_DIR) / "tb_logs")
         except ImportError:
             tb_log = None

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { IntegrationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, StatusBadge, Divider, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: IntegrationSettings = {
   tradingview_enabled: false, tradingview_webhook_secret: '',
@@ -41,8 +42,7 @@ const IntegrationsSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save integrations.');
+      setError(extractApiError(err, 'Failed to save integrations.'));
     } finally { setSaving(false); }
   };
 

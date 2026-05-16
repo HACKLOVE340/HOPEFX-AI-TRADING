@@ -515,10 +515,43 @@ class SelfHealer:
         self._healing_cooldown_sec: int = 300
         self._log_level: str = "standard"  # minimal|standard|verbose|debug
         self._protected_paths: list[str] = [
+            # Core live-trading execution files — must never be auto-patched
             "live_trading.py",
+            "hopefx_engine.py",
+            "execution/engine.py",
+            "execution/order_gateway.py",
+            "execution/trade_executor.py",
+            "execution/paper_runner.py",
+            "execution/broker_circuit_breaker.py",
+            "execution/position_tracker.py",
+            "execution/fill_processor.py",
+            # Risk and kill-switch — safety-critical
             "risk_manager.py",
+            "risk/manager.py",
+            "risk/pre_trade_gate.py",
+            "risk/gatekeeper.py",
+            "risk/circuit_breakers.py",
+            "risk/position_sizer.py",
+            "kill_switch.py",
+            # Resilience — circuit breakers protect live order flow
+            "resilience/service_circuit_breakers.py",
+            "core/live_trading_gate.py",
+            # Auth — credential and session security
+            "auth/jwt.py",
+            "auth/service.py",
+            "auth/dependencies.py",
+            # ML model artifacts and config secrets
             "ml/models/",
             "config/secrets/",
+            # Broker connectors — live order routing
+            "brokers/paper_trading.py",
+            "brokers/oanda_broker.py",
+            "brokers/mt5_broker.py",
+            "brokers/ibkr_connector.py",
+            "brokers/base_broker.py",
+            # Data feed — price integrity
+            "data_feed/engine.py",
+            "data_feed/mt5_backup.py",
         ]
         self._tests_enabled: bool = True
         self._test_categories: dict[str, bool] = {
@@ -830,11 +863,7 @@ class SelfHealer:
         if not redis:
             return
         try:
-            critical_events = [
-                e for e in drift
-                if e.get("protected")
-                or e.get("type") in ("deleted", "new_file")
-            ]
+            critical_events = [e for e in drift if e.get("protected") or e.get("type") in ("deleted", "new_file")]
             for event in critical_events:
                 await redis.rpush(
                     "alerts:critical",
@@ -1502,6 +1531,7 @@ Return the complete fixed file:"""
         superadmin dashboard.
         """
         import os as _os
+
         # Skip diagnostics in development — they make blocking HTTP calls to
         # localhost which starve the single-worker event loop.
         if _os.getenv("APP_ENV", "development").lower() in ("development", "dev", "test"):
@@ -1829,7 +1859,7 @@ Return the complete fixed file:"""
                     proc.communicate(),
                     timeout=float(self._global_test_timeout_sec),
                 )
-            except TimeoutError:
+            except (TimeoutError, asyncio.TimeoutError):
                 with contextlib.suppress(Exception):
                     proc.kill()
                 self._log(
@@ -2230,9 +2260,7 @@ def _build_eager_heal_router() -> APIRouter:
             "returned": len(issues),
             "issues": issues,
             "log_file": str(_LOG_FILE),
-            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat()
-            if h._last_log_scan_ts
-            else None,
+            "last_scan": datetime.fromtimestamp(h._last_log_scan_ts, UTC).isoformat() if h._last_log_scan_ts else None,
         }
 
     @r.get("/claude-queue", summary="Get pending Claude fix queue")

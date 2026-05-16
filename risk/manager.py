@@ -54,7 +54,9 @@ UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
 # ── risk config (all env-overridable) ─────────────────────────────────────────
-_ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY", "1000000"))
+# RISK_ACCOUNT_EQUITY takes precedence; fall back to INITIAL_BALANCE so dev
+# environments that only set INITIAL_BALANCE don't start with a 90% drawdown.
+_ACCOUNT_EQUITY = float(os.getenv("RISK_ACCOUNT_EQUITY") or os.getenv("INITIAL_BALANCE") or "100000")
 _MAX_POSITION_PCT = float(os.getenv("RISK_MAX_POSITION_PCT", "0.05"))
 _MIN_POSITION_PCT = float(os.getenv("RISK_MIN_POSITION_PCT", "0.001"))
 _KELLY_FRACTION = float(os.getenv("RISK_KELLY_FRACTION", "0.25"))
@@ -149,7 +151,10 @@ class PositionSizingResult:
 
     # Internal field for injecting a halt reason into the result.
     # Set by size_order() when trading is halted.
-    _halt_reason_override: str = field(default="", repr=False, compare=False)
+    # init=False: excluded from __init__ so callers cannot accidentally pass it
+    # as a positional argument, and so dataclass-generated __init__ signatures
+    # remain stable across refactors.
+    _halt_reason_override: str = field(default="", repr=False, compare=False, init=False)
 
 
 @dataclass
@@ -845,8 +850,12 @@ class RiskManager:
         """
         if self._halt or self._trading_halted:
             return PositionSizingResult(
-                symbol=sizing.symbol, direction=sizing.direction, quantity=0.0,
-                notional_usd=0.0, approved=False, reason="halted",
+                symbol=sizing.symbol,
+                direction=sizing.direction,
+                quantity=0.0,
+                notional_usd=0.0,
+                approved=False,
+                reason="halted",
             )
 
         _FACTOR_VAR_LIMIT = float(os.getenv("RISK_FACTOR_VAR_LIMIT", "0.40"))
@@ -1030,7 +1039,8 @@ class RiskManager:
                 result.notional_usd = max_notional
                 logger.debug(
                     "calculate_position_size: clamped to %.4f qty (equity cap %.0f)",
-                    result.quantity, max_notional,
+                    result.quantity,
+                    max_notional,
                 )
 
         # Patch stop/take-profit if supplied
@@ -2052,9 +2062,7 @@ class RiskManager:
     def close_position(self, position_id: str, pnl: float = 0.0) -> None:
         """Remove a position by id and record its P&L."""
         with self._state_lock:
-            self._open_positions_list = [
-                p for p in self._open_positions_list if p.get("id") != position_id
-            ]
+            self._open_positions_list = [p for p in self._open_positions_list if p.get("id") != position_id]
             self._state.open_positions = len(self._open_positions_list)
             self._state.daily_pnl += pnl
             self._state.total_pnl += pnl

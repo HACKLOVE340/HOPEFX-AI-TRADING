@@ -14,6 +14,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ const PriceAlerts: React.FC = () => {
       setForm({ name: '', symbol: 'XAUUSD', condition_type: 'price_above', threshold: '', channels: ['discord'], priority: 'high' });
       await fetchAlerts();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Failed to create alert');
+      setError(extractApiError(e, 'Failed to create alert'));
     }
     setSaving(false);
   };

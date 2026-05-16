@@ -8,6 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { KYCRecord, AMLAlert, SanctionsHit } from './types';
+import { extractApiError } from '../../lib/utils';
 
 interface RegulatoryReport {
   report_id: string;
@@ -109,7 +110,7 @@ const ComplianceSection: React.FC = () => {
       setConfirm(null); setRejectReason('');
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? `KYC ${action} failed`);
+      setMsg(extractApiError(e, `KYC ${action} failed`));
     } finally { setBusy(null); }
   };
 
@@ -120,7 +121,7 @@ const ComplianceSection: React.FC = () => {
       setMsg(`AML alert ${alertId} marked as ${status}`);
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'AML update failed');
+      setMsg(extractApiError(e, 'AML update failed'));
     } finally { setBusy(null); }
   };
 
@@ -131,7 +132,7 @@ const ComplianceSection: React.FC = () => {
       setMsg(`Sanctions hit ${hitId} marked as ${status}`);
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Sanctions update failed');
+      setMsg(extractApiError(e, 'Sanctions update failed'));
     } finally { setBusy(null); }
   };
 

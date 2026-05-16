@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, KpiTile,
   ErrorState, LoadingRows, ConfirmDialog,
@@ -11,6 +12,7 @@ import type {
   CircuitBreakerState, VaRMetrics, StressTestResult,
   PropBreach, DrawdownStats,
 } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtMoney = (n: number, cur = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(n);
@@ -74,7 +76,7 @@ const RiskManagementSection: React.FC = () => {
       setDrawdown(ddRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load risk data');
+      setError(extractApiError(e, 'Failed to load risk data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -89,7 +91,7 @@ const RiskManagementSection: React.FC = () => {
       setMsg(`Circuit breaker "${name}" reset to CLOSED`);
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Reset failed');
+      setMsg(extractApiError(e, 'Reset failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -100,7 +102,7 @@ const RiskManagementSection: React.FC = () => {
       setMsg(`Circuit breaker "${name}" force-opened`);
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Force-open failed');
+      setMsg(extractApiError(e, 'Force-open failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -111,7 +113,7 @@ const RiskManagementSection: React.FC = () => {
       setMsg(`Stress test "${scenario}" queued — results will appear shortly`);
       setTimeout(load, 3000);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Stress test failed');
+      setMsg(extractApiError(e, 'Stress test failed'));
     } finally { setBusy(null); }
   };
 
@@ -298,9 +300,7 @@ const RiskManagementSection: React.FC = () => {
             </div>
           )}
           {stressTests.length === 0 && (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>
-              No stress test results yet. Run a scenario above.
-            </div>
+            <EmptyState compact icon="🧪" title="No stress test results yet" description="Run a scenario above to simulate portfolio stress conditions." />
           )}
         </SectionCard>
       )}
@@ -334,9 +334,7 @@ const RiskManagementSection: React.FC = () => {
           </div>
 
           {filteredBreaches.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 32 }}>
-              No prop firm breaches found.
-            </div>
+            <EmptyState compact icon="✅" title="No prop firm breaches found" description="Breach events will appear here when traders exceed their risk thresholds." />
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

@@ -53,15 +53,14 @@ import json
 import logging
 import os
 import time
-from typing import Any, ClassVar
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 # ── Optional FastAPI / WebSockets ─────────────────────────────────────────────
 try:
-    from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+    from fastapi import FastAPI, WebSocket, WebSocketDisconnect
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import JSONResponse
 
     _FASTAPI_AVAILABLE = True
 except ImportError:
@@ -74,6 +73,23 @@ from charting.nuclear_ai_chart_engine import NuclearAIChartEngine, get_chart_eng
 NUCLEAR_WS_PORT: int = int(os.environ.get("NUCLEAR_WS_PORT", "8001"))
 HEARTBEAT_INTERVAL_S: int = 30
 NUCLEAR_ALERT_SEVERITY: int = 7
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JWT token validation helper (mirrors api/ws_live.py:_validate_ws_token)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _validate_ws_token(token: str) -> "dict | None":
+    """Validate a Bearer token from a WS auth message. Returns payload or None."""
+    token = token.removeprefix("Bearer ")
+    try:
+        from auth.jwt import decode_access_token
+
+        return decode_access_token(token)
+    except Exception as exc:  # nosec B110
+        logger.debug("Nuclear WS token validation failed: %s", exc)
+        return None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -207,6 +223,48 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
         if not allowed:
             return
 
+        await ws.accept()
+        await ws.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+        # ── In-band JWT auth handshake ─────────────────────────────────────────
+        # Client must send { "type": "auth", "token": "Bearer <jwt>" } within
+        # 10 seconds of connecting, matching the same pattern as /ws/live and
+        # /ws/nuclear in api/ws_live.py.
+        try:
+            raw = await asyncio.wait_for(ws.receive_text(), timeout=10.0)
+            auth_msg = json.loads(raw)
+        except (TimeoutError, asyncio.TimeoutError):
+            await ws.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+        except WebSocketDisconnect:
+            await limiter.release(client_ip)
+            return
+        except json.JSONDecodeError:
+            await ws.send_text(json.dumps({"type": "error", "code": "INVALID_JSON"}))
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+
+        if auth_msg.get("type") != "auth":
+            await ws.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+
+        payload = _validate_ws_token(auth_msg.get("token", ""))
+        if not payload:
+            await ws.send_text(
+                json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            )
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+
+        user_id = str(payload.get("sub", "unknown"))
+        await ws.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
+
         await _manager.connect(ws)
         # Send immediate snapshot on connect
         snapshot = chart_engine.get_snapshot()
@@ -219,7 +277,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
                     raw = await asyncio.wait_for(ws.receive_text(), timeout=60.0)
                     msg = json.loads(raw)
                     await _handle_client_message(ws, msg, chart_engine)
-                except TimeoutError:
+                except (TimeoutError, asyncio.TimeoutError):
                     # Client silent for 60s — send ping
                     await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
                 except WebSocketDisconnect:
@@ -326,9 +384,11 @@ def create_standalone_app() -> Any:
         raise RuntimeError("FastAPI is required for standalone mode")
 
     app = FastAPI(title="HOPEFX Nuclear Dashboard WS", version="1.0.0")
-    _ws_origins = [o.strip() for o in os.getenv(
-        "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
-    ).split(",") if o.strip()]
+    _ws_origins = [
+        o.strip()
+        for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+        if o.strip()
+    ]
     app.add_middleware(
         CORSMiddleware,
         allow_origins=_ws_origins,

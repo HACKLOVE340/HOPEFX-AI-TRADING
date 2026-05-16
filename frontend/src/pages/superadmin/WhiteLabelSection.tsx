@@ -3,11 +3,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, Input, Select,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { Tenant } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtMoney = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
@@ -71,7 +73,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       setMsg('Tenant updated');
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save failed');
+      setMsg(extractApiError(e, 'Save failed'));
     } finally { setSaving(false); }
   };
 
@@ -82,7 +84,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       setMsg('Tenant activated');
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Activate failed');
+      setMsg(extractApiError(e, 'Activate failed'));
     } finally { setBusy(null); }
   };
 
@@ -94,7 +96,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       setSuspendConfirm(false);
       onRefresh();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Suspend failed');
+      setMsg(extractApiError(e, 'Suspend failed'));
     } finally { setBusy(null); }
   };
 
@@ -106,7 +108,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
       onRefresh();
       setTimeout(onClose, 600);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+      setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(false); }
   };
 
@@ -122,7 +124,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
         .catch(() => {})
         .finally(() => setKeysLoading(false));
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Key rotation failed');
+      setMsg(extractApiError(e, 'Key rotation failed'));
     } finally { setBusy(null); }
   };
 
@@ -231,7 +233,7 @@ const TenantDrawer: React.FC<TenantDrawerProps> = ({ tenant: initial, onClose, o
             {keysLoading ? (
               <div style={{ color: '#475569', fontSize: 13, padding: 24 }}>Loading keys…</div>
             ) : keys.length === 0 ? (
-              <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No API keys found.</div>
+              <EmptyState compact icon="🔑" title="No API keys found" description="Tenant API keys will appear here once generated." />
             ) : (
               keys.map(k => (
                 <div key={k.key_id} style={{ background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px', marginBottom: 8 }}>
@@ -302,7 +304,7 @@ const CreateTenantForm: React.FC<CreateTenantFormProps> = ({ onClose, onCreated 
       onCreated();
       onClose();
     } catch (e: unknown) {
-      setErr((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Create failed');
+      setErr(extractApiError(e, 'Create failed'));
     } finally { setSaving(false); }
   };
 
@@ -360,7 +362,7 @@ const WhiteLabelSection: React.FC = () => {
       setTenants(res.data.tenants ?? res.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load tenants');
+      setError(extractApiError(e, 'Failed to load tenants'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [search]);
 
@@ -428,7 +430,7 @@ const WhiteLabelSection: React.FC = () => {
               </div>
             </div>
           ))}
-          {tenants.length === 0 && <div style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>No tenants found.</div>}
+          {tenants.length === 0 && <EmptyState compact icon="🏷️" title="No tenants found" description="Create a whitelabel tenant to deploy a branded instance." links={[{ label: 'Whitelabel Admin', href: '/whitelabel', icon: '🏷️' }]} />}
         </div>
       </SectionCard>
     </div>

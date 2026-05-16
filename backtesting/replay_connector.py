@@ -601,7 +601,10 @@ def create_replay_router():
         from backtesting.replay_connector import create_replay_router
         app.include_router(create_replay_router())
     """
-    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"])
+    from fastapi import Depends
+    from api.auth import get_current_user
+
+    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"], dependencies=[Depends(get_current_user)])
     _jobs: dict[str, Any] = {}
 
     # ── Session-based bar-by-bar replay ──────────────────────────────────────
@@ -615,8 +618,10 @@ def create_replay_router():
         try:
             import redis as _r
             import os
-            c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-                            socket_connect_timeout=1, socket_timeout=1)
+
+            c = _r.from_url(
+                os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=1, socket_timeout=1
+            )
             c.ping()
             return c
         except Exception:
@@ -626,10 +631,10 @@ def create_replay_router():
         _SESSIONS[sess["session_id"]] = sess
         rc = _redis_client()
         if rc:
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 rc.setex(f"hopefx:replay:{sess['session_id']}", 86400, _json.dumps(sess))
-            except Exception:  # nosec B110
-                pass
 
     def _load_session(sid: str) -> dict | None:
         if sid in _SESSIONS:
@@ -665,25 +670,27 @@ def create_replay_router():
         _SESSIONS.pop(sid, None)
         rc = _redis_client()
         if rc:
-            try:
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 rc.delete(f"hopefx:replay:{sid}")
-            except Exception:  # nosec B110
-                pass
 
     def _build_bars(symbol: str, timeframe: str, start_date: str, end_date: str) -> list[dict]:
         """Load OHLCV bars from the data layer or generate synthetic bars."""
-        import math
         import random
         from datetime import datetime, timedelta
 
         try:
             from brokers.ohlcv_store import OHLCVStore
+
             store = OHLCVStore()
             bars_raw = store.get_bars(symbol, timeframe, start_date, end_date)
             if bars_raw:
                 return [
                     {
-                        "time": int(b["timestamp"].timestamp()) if hasattr(b.get("timestamp", 0), "timestamp") else int(b.get("time", 0)),
+                        "time": int(b["timestamp"].timestamp())
+                        if hasattr(b.get("timestamp", 0), "timestamp")
+                        else int(b.get("time", 0)),
                         "open": float(b["open"]),
                         "high": float(b["high"]),
                         "low": float(b["low"]),
@@ -697,8 +704,13 @@ def create_replay_router():
 
         # Synthetic fallback — realistic random walk
         SEED_PRICES = {
-            "XAUUSD": 2000.0, "EURUSD": 1.08, "GBPUSD": 1.27,
-            "USDJPY": 150.0, "BTCUSD": 45000.0, "US30": 38000.0, "NAS100": 17000.0,
+            "XAUUSD": 2000.0,
+            "EURUSD": 1.08,
+            "GBPUSD": 1.27,
+            "USDJPY": 150.0,
+            "BTCUSD": 45000.0,
+            "US30": 38000.0,
+            "NAS100": 17000.0,
         }
         TF_MINUTES = {"M1": 1, "M5": 5, "M15": 15, "M30": 30, "H1": 60, "H4": 240, "D1": 1440}
         price = SEED_PRICES.get(symbol, 1.0)
@@ -720,14 +732,16 @@ def create_replay_router():
             c = max(o + change, o * 0.001)
             h = max(o, c) + abs(rng.gauss(0, vol * 0.5))
             l = min(o, c) - abs(rng.gauss(0, vol * 0.5))
-            bars.append({
-                "time": int(dt.timestamp()),
-                "open": round(o, 5),
-                "high": round(h, 5),
-                "low": round(l, 5),
-                "close": round(c, 5),
-                "volume": round(abs(rng.gauss(1000, 300)), 0),
-            })
+            bars.append(
+                {
+                    "time": int(dt.timestamp()),
+                    "open": round(o, 5),
+                    "high": round(h, 5),
+                    "low": round(l, 5),
+                    "close": round(c, 5),
+                    "volume": round(abs(rng.gauss(1000, 300)), 0),
+                }
+            )
             price = c
             dt += timedelta(minutes=tf_min)
             if len(bars) >= 2000:
@@ -814,7 +828,6 @@ def create_replay_router():
     @router.delete("/sessions/{session_id}", status_code=204, summary="Delete a replay session")
     async def delete_replay_session(session_id: str):
         _delete_session(session_id)
-        return None
 
     # Use module-level models (ReplayRunRequest, StressRunRequest, ReplayJobStatus)
     # so Pydantic v2 can resolve forward references when building the OpenAPI schema.

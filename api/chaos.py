@@ -18,8 +18,6 @@ GET  /api/chaos/status           — combined chaos + mutation status
 All write endpoints require admin role.
 """
 
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timezone
 

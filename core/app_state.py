@@ -84,3 +84,17 @@ class AppState:
 
 # Module-level singleton — imported by app.py and all API modules
 app_state = AppState()
+
+
+def get_app_state() -> AppState:
+    """Return the module-level AppState singleton.
+
+    Provides a callable accessor so callers can do:
+        from core.app_state import get_app_state
+        state = get_app_state()
+
+    This is equivalent to importing app_state directly but is preferred in
+    lazy-import contexts (e.g. inside functions) because it avoids holding a
+    stale reference if the singleton is ever replaced in tests.
+    """
+    return app_state

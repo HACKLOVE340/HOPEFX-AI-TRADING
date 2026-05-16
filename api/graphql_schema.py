@@ -29,7 +29,6 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 UTC = timezone.utc
 
@@ -167,10 +166,7 @@ async def _batch_load_signals(keys: list[tuple[str, int]]) -> list[list]:
             )
             for s in raw
         ]
-        return [
-            [sig for sig in all_signals if sig.symbol == symbol][:limit]
-            for symbol, limit in keys
-        ]
+        return [[sig for sig in all_signals if sig.symbol == symbol][:limit] for symbol, limit in keys]
     except Exception as exc:
         logger.debug("DataLoader _batch_load_signals: %s", exc)
         return [[] for _ in keys]
@@ -188,6 +184,7 @@ def _make_context_loaders() -> dict:
         "trades_loader": DataLoader(load_fn=_batch_load_trades),
         "signals_loader": DataLoader(load_fn=_batch_load_signals),
     }
+
 
 # Gating is enforced by core/router_registry.py (feature_flags.GRAPHQL_API).
 # The router is always built here so it is ready when the flag is on.
@@ -464,17 +461,42 @@ def _live_account() -> AccountInfo:
     state = _get_broker_state()
     if state and hasattr(state, "broker"):
         try:
-            info = state.broker.get_account_info()
+            import asyncio as _asyncio
+            import inspect as _inspect
+
+            broker = state.broker
+            # Use sync helper when available (PaperTradingBroker exposes one)
+            if hasattr(broker, "_get_account_info_sync"):
+                info = broker._get_account_info_sync()
+            elif _inspect.iscoroutinefunction(broker.get_account_info):
+                try:
+                    loop = _asyncio.get_event_loop()
+                    # Cannot block inside a running loop — return defaults
+                    info = None if loop.is_running() else loop.run_until_complete(broker.get_account_info())
+                except RuntimeError:
+                    info = None
+            else:
+                info = broker.get_account_info()
+            if info is None:
+                raise AttributeError("no account info")
+
+            def _get(key, default=0.0):
+                if hasattr(info, key):
+                    return getattr(info, key) or default
+                if isinstance(info, dict):
+                    return info.get(key, default) or default
+                return default
+
             return AccountInfo(
-                balance=float(info.get("balance", 0.0)),
-                equity=float(info.get("equity", 0.0)),
-                margin=float(info.get("margin", 0.0)),
-                free_margin=float(info.get("free_margin", 0.0)),
-                margin_level=float(info.get("margin_level", 0.0)),
-                unrealized_pnl=float(info.get("unrealized_pnl", 0.0)),
-                realized_pnl_today=float(info.get("realized_pnl_today", 0.0)),
-                open_positions=int(info.get("open_positions", 0)),
-                currency=str(info.get("currency", "USD")),
+                balance=float(_get("balance", 0.0)),
+                equity=float(_get("equity", 0.0)),
+                margin=float(_get("margin", _get("margin_used", 0.0))),
+                free_margin=float(_get("free_margin", _get("margin_available", 0.0))),
+                margin_level=float(_get("margin_level", 0.0)),
+                unrealized_pnl=float(_get("unrealized_pnl", 0.0)),
+                realized_pnl_today=float(_get("realized_pnl_today", 0.0)),
+                open_positions=int(_get("open_positions", _get("positions_count", 0))),
+                currency=str(_get("currency", "USD")),
                 broker_connected=True,
             )
         except (RuntimeError, ValueError, OSError, AttributeError) as exc:
@@ -537,18 +559,14 @@ class Query:
     async def positions(self, info: Info) -> list[Position]:
         user = _require_auth(info)
         user_id = user.get("sub", "default")
-        loader: DataLoader = info.context.get("positions_loader") or DataLoader(
-            load_fn=_batch_load_positions
-        )
+        loader: DataLoader = info.context.get("positions_loader") or DataLoader(load_fn=_batch_load_positions)
         return await loader.load(user_id)
 
     @strawberry.field(description="Recent closed trades")
     async def trades(self, info: Info, limit: int = 20) -> list[Trade]:
         user = _require_auth(info)
         user_id = user.get("sub", "default")
-        loader: DataLoader = info.context.get("trades_loader") or DataLoader(
-            load_fn=_batch_load_trades
-        )
+        loader: DataLoader = info.context.get("trades_loader") or DataLoader(load_fn=_batch_load_trades)
         return await loader.load((user_id, limit))
 
         # DB fallback: read closed trades from the Trade table
@@ -1106,6 +1124,7 @@ schema = strawberry.Schema(
 # require a JWT but schema introspection does not.  Set APP_ENV=development
 # (the default) to re-enable it locally.
 _graphql_ide = None if os.getenv("APP_ENV", "development").lower() == "production" else "graphiql"
+
 
 async def _get_context() -> dict:
     """

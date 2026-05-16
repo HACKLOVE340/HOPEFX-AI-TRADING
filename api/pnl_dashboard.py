@@ -215,14 +215,20 @@ def _compute_current_drawdown(equity_series: list[tuple[float, float]]) -> float
 
 
 def _get_db_session():
-    """Return (session, session_factory) from app_state, or (None, None)."""
+    """Return (session, session_factory) from app_state or SessionLocal fallback."""
     try:
         from core.app_state import app_state as _app_state_pnl
 
         sf = getattr(_app_state_pnl, "db_session_factory", None)
         if sf is not None:
             return sf(), sf
-    except Exception:  # nosec B110 — app_state may not be initialised yet; caller handles None
+    except Exception:  # nosec B110
+        pass
+    try:
+        from database.connection import SessionLocal
+
+        return SessionLocal(), SessionLocal
+    except Exception:  # nosec B110
         pass
     return None, None
 
@@ -234,27 +240,47 @@ async def _pnl_summary_from_db() -> PnLSummary:
     """
     _empty_note = "Engine not started and DB unavailable."
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TR
 
-        async with _get_async_db() as _db:
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
             repo = _TR(_db)
             trades = await repo.get_by_user(user_id=None, status="closed", limit=50000)
     except Exception as exc:
-        logger.debug("_pnl_summary_from_db DB fetch failed: %s", exc)
+        logger.warning("_pnl_summary_from_db DB fetch failed: %s", exc)
         return PnLSummary(
-            equity=0.0, starting_equity=0.0, total_return_pct=0.0, total_fills=0,
-            open_positions=0, win_rate=None, sharpe_ratio=None, max_drawdown_pct=0.0,
-            current_drawdown_pct=0.0, avg_slippage_bps=0.0, avg_latency_ms=0.0,
-            last_fill_at=None, note=_empty_note,
+            equity=0.0,
+            starting_equity=0.0,
+            total_return_pct=0.0,
+            total_fills=0,
+            open_positions=0,
+            win_rate=None,
+            sharpe_ratio=None,
+            max_drawdown_pct=0.0,
+            current_drawdown_pct=0.0,
+            avg_slippage_bps=0.0,
+            avg_latency_ms=0.0,
+            last_fill_at=None,
+            note=_empty_note,
         )
 
     if not trades:
         return PnLSummary(
-            equity=0.0, starting_equity=0.0, total_return_pct=0.0, total_fills=0,
-            open_positions=0, win_rate=None, sharpe_ratio=None, max_drawdown_pct=0.0,
-            current_drawdown_pct=0.0, avg_slippage_bps=0.0, avg_latency_ms=0.0,
-            last_fill_at=None, note="Engine not started. No closed trades in DB yet.",
+            equity=0.0,
+            starting_equity=0.0,
+            total_return_pct=0.0,
+            total_fills=0,
+            open_positions=0,
+            win_rate=None,
+            sharpe_ratio=None,
+            max_drawdown_pct=0.0,
+            current_drawdown_pct=0.0,
+            avg_slippage_bps=0.0,
+            avg_latency_ms=0.0,
+            last_fill_at=None,
+            note="Engine not started. No closed trades in DB yet.",
         )
 
     # Sort by exit_time ascending for equity curve
@@ -308,10 +334,12 @@ async def _trade_log_from_db(
     Maps Trade rows to FillEntry — uses trade_id as fill_id.
     """
     try:
-        from database.async_connection import get_async_db as _get_async_db
+        from database.async_connection import _default_pool as _async_pool
         from database.repositories.trade_repository import TradeRepository as _TR
 
-        async with _get_async_db() as _db:
+        if _async_pool is None:
+            raise RuntimeError("Async DB pool not initialised")
+        async with _async_pool.session() as _db:
             repo = _TR(_db)
             trades = await repo.get_by_user(
                 user_id=None,
@@ -327,7 +355,8 @@ async def _trade_log_from_db(
             exit_time = getattr(t, "exit_time", None)
             entry_time = getattr(t, "entry_time", None)
             exit_ts = (
-                exit_time.isoformat() if exit_time and hasattr(exit_time, "isoformat")
+                exit_time.isoformat()
+                if exit_time and hasattr(exit_time, "isoformat")
                 else (entry_time.isoformat() if entry_time and hasattr(entry_time, "isoformat") else "")
             )
             result.append(
@@ -337,7 +366,9 @@ async def _trade_log_from_db(
                     signal_id="",
                     symbol=getattr(t, "symbol", "") or "",
                     direction=str(getattr(t, "side", "") or ""),
-                    quantity=float(getattr(t, "entry_quantity", None) or getattr(t, "size", None) or getattr(t, "quantity", 0) or 0),
+                    quantity=float(
+                        getattr(t, "entry_quantity", None) or getattr(t, "size", None) or getattr(t, "quantity", 0) or 0
+                    ),
                     fill_price=float(getattr(t, "exit_price", None) or getattr(t, "entry_price", 0) or 0),
                     expected_price=float(getattr(t, "entry_price", 0) or 0),
                     slippage_bps=0.0,
@@ -349,7 +380,7 @@ async def _trade_log_from_db(
             )
         return result
     except Exception as exc:
-        logger.debug("_trade_log_from_db failed: %s", exc)
+        logger.warning("_trade_log_from_db failed: %s", exc)
         return []
 
 
@@ -371,7 +402,6 @@ async def pnl_summary(
     Sharpe ratio is only shown after _MIN_FILLS_FOR_SHARPE fills to prevent
     misleading statistics from small samples.
     """
-    import asyncio as _asyncio
     engine = _get_engine()
     if engine is None:
         # DB fallback: compute summary from closed Trade rows
@@ -487,8 +517,6 @@ async def trade_log(
     The fill_id and lineage_id fields link each fill to the lineage store
     for full audit trail (signal → fill → outcome).
     """
-    import asyncio as _asyncio
-    import functools as _functools
     engine = _get_engine()
     if engine is None:
         # DB fallback: serve closed trades from the Trade table
@@ -642,24 +670,37 @@ async def export_pnl(
         return JSONResponse(content={"fills": data, "total": len(data)})
 
     output = io.StringIO()
-    fieldnames = ["fill_id", "symbol", "direction", "quantity", "fill_price",
-                  "expected_price", "slippage_bps", "pnl", "broker", "latency_ms", "filled_at"]
+    fieldnames = [
+        "fill_id",
+        "symbol",
+        "direction",
+        "quantity",
+        "fill_price",
+        "expected_price",
+        "slippage_bps",
+        "pnl",
+        "broker",
+        "latency_ms",
+        "filled_at",
+    ]
     writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     for i, f in enumerate(fills):
-        writer.writerow({
-            "fill_id": getattr(f, "fill_id", str(i)),
-            "symbol": getattr(f, "symbol", ""),
-            "direction": getattr(f, "direction", ""),
-            "quantity": float(getattr(f, "quantity", 0.0)),
-            "fill_price": float(getattr(f, "fill_price", 0.0)),
-            "expected_price": float(getattr(f, "expected_price", 0.0)),
-            "slippage_bps": float(getattr(f, "slippage_bps", 0.0)),
-            "pnl": float(getattr(f, "pnl", 0.0) or 0.0),
-            "broker": getattr(f, "broker", ""),
-            "latency_ms": float(getattr(f, "latency_ms", 0.0)),
-            "filled_at": str(getattr(f, "filled_at", "")),
-        })
+        writer.writerow(
+            {
+                "fill_id": getattr(f, "fill_id", str(i)),
+                "symbol": getattr(f, "symbol", ""),
+                "direction": getattr(f, "direction", ""),
+                "quantity": float(getattr(f, "quantity", 0.0)),
+                "fill_price": float(getattr(f, "fill_price", 0.0)),
+                "expected_price": float(getattr(f, "expected_price", 0.0)),
+                "slippage_bps": float(getattr(f, "slippage_bps", 0.0)),
+                "pnl": float(getattr(f, "pnl", 0.0) or 0.0),
+                "broker": getattr(f, "broker", ""),
+                "latency_ms": float(getattr(f, "latency_ms", 0.0)),
+                "filled_at": str(getattr(f, "filled_at", "")),
+            }
+        )
     output.seek(0)
     return StreamingResponse(
         iter([output.getvalue()]),

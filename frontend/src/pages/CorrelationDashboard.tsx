@@ -5,6 +5,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 interface CorrelationData {
   symbols: string[];
@@ -61,10 +62,7 @@ const CorrelationDashboard: React.FC = () => {
     setCorr(corrOk ? corrRes.value.data : null);
     setCot(cotOk  ? cotRes.value.data  : null);
     if (!corrOk && !cotOk) {
-      const msg = (corrRes as PromiseRejectedResult).reason instanceof Error
-        ? (corrRes as PromiseRejectedResult).reason.message
-        : 'Failed to load correlation data';
-      setLoadErr(msg);
+      setLoadErr(extractApiError((corrRes as PromiseRejectedResult).reason, 'Failed to load correlation data'));
     }
     setLoading(false);
   }, [window]);
@@ -72,7 +70,7 @@ const CorrelationDashboard: React.FC = () => {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Correlation & Sentiment</h1>

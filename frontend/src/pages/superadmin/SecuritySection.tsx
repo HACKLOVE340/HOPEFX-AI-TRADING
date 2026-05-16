@@ -2,11 +2,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, SeverityBadge, ActionBtn, Input, Select,
   ErrorState, LoadingRows, ConfirmDialog, KpiTile,
 } from './ui';
 import type { SecurityEvent } from './types';
+import { extractApiError } from '../../lib/utils';
 
 interface BlockedIP { ip: string; reason: string; blocked_at: string; blocked_by: string }
 interface Session   { session_id: string; user_id: string; username: string; ip: string; device: string; created_at: string; last_active: string }
@@ -56,7 +58,7 @@ const SecuritySection: React.FC = () => {
       setSessions(seRes.data.sessions ?? seRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load security data');
+      setError(extractApiError(e, 'Failed to load security data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [sevFilter]);
 
@@ -73,7 +75,7 @@ const SecuritySection: React.FC = () => {
       setNewIP(''); setNewIPReason('');
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Block failed');
+      setMsg(extractApiError(e, 'Block failed'));
     } finally { setBusy(null); }
   };
 
@@ -84,7 +86,7 @@ const SecuritySection: React.FC = () => {
       setMsg(`IP ${ip} unblocked`);
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Unblock failed');
+      setMsg(extractApiError(e, 'Unblock failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -95,7 +97,7 @@ const SecuritySection: React.FC = () => {
       setMsg('Session revoked');
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Revoke failed');
+      setMsg(extractApiError(e, 'Revoke failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -106,7 +108,7 @@ const SecuritySection: React.FC = () => {
       setMsg('All sessions revoked for user');
       load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Revoke failed');
+      setMsg(extractApiError(e, 'Revoke failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -189,7 +191,7 @@ const SecuritySection: React.FC = () => {
             </tbody>
           </table>
           {events.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No security events found.</div>
+            <EmptyState compact icon="🛡️" title="No security events found" description="Security events will appear here when threats are detected." links={[{ label: 'Security Dashboard', href: '/security', icon: '🔍' }]} />
           )}
         </div>
       </SectionCard>

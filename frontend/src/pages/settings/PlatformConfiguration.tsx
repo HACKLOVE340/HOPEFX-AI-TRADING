@@ -7,6 +7,7 @@ import {
   Card, SectionHeader, Field, Input, Select, Toggle, Button,
   StatusBadge, Divider, SaveBar,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1936,7 +1937,7 @@ const SmtpTab: React.FC<{ cfg: PlatformConfig; set: (p: Partial<PlatformConfig>)
       setTestResult('ok'); setTestMsg('SMTP connection successful');
     } catch (e: unknown) {
       setTestResult('fail');
-      setTestMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'SMTP test failed');
+      setTestMsg(extractApiError(e, 'SMTP test failed'));
     } finally { setTesting(false); }
   };
 
@@ -2391,8 +2392,7 @@ const PlatformConfiguration: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setSaveError(detail ?? 'Save failed');
+      setSaveError(extractApiError(e, 'Save failed'));
     } finally {
       setSaving(false);
     }
@@ -2406,8 +2406,7 @@ const PlatformConfiguration: React.FC = () => {
       setSavedHealer(true);
       setTimeout(() => setSavedHealer(false), 3000);
     } catch (e: unknown) {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setHealerSaveError(detail ?? 'Save failed');
+      setHealerSaveError(extractApiError(e, 'Save failed'));
     } finally {
       setSavingHealer(false);
     }

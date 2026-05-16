@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 # Yield between every component start so the event loop can process pending
 # I/O and HTTP requests during the startup sequence.
 # Override with STARTUP_TASK_DELAY_MS env var (default 200 ms).
-_INTER_COMPONENT_DELAY: float = float(os.getenv("STARTUP_TASK_DELAY_MS", "200")) / 1000.0
+_INTER_COMPONENT_DELAY: float = float(os.getenv("STARTUP_TASK_DELAY_MS", "50")) / 1000.0
 
 # CPU-heavy components get an extra pause after they start so their background
 # loops can settle before the next component launches.

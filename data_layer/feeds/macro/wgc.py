@@ -417,7 +417,11 @@ async def _etf_proxy_yfinance(loop: Any | None = None) -> dict[str, pd.Series]:
             return {}
 
         aum_proxy = (close * volume).rename("aum_proxy")
-        aum_proxy.index = pd.DatetimeIndex(aum_proxy.index).tz_localize("UTC") if aum_proxy.index.tz is None else pd.DatetimeIndex(aum_proxy.index).tz_convert("UTC")
+        aum_proxy.index = (
+            pd.DatetimeIndex(aum_proxy.index).tz_localize("UTC")
+            if aum_proxy.index.tz is None
+            else pd.DatetimeIndex(aum_proxy.index).tz_convert("UTC")
+        )
 
         # Resample to monthly, compute MoM change as flow proxy
         monthly = aum_proxy.resample("MS").sum()
@@ -456,10 +460,7 @@ async def _cb_proxy_world_bank(loop: Any | None = None) -> dict[str, pd.Series]:
     import json
 
     # Aggregate world total: country code "WLD"
-    url = (
-        f"{_WB_API_BASE}/country/WLD/indicator/{_WB_CB_INDICATOR}"
-        "?format=json&per_page=100&mrv=30"
-    )
+    url = f"{_WB_API_BASE}/country/WLD/indicator/{_WB_CB_INDICATOR}?format=json&per_page=100&mrv=30"
 
     try:
         _loop = loop or asyncio.get_running_loop()
@@ -678,9 +679,7 @@ class WGCFeed:
         """
         # ── 1. WGC JSON API ───────────────────────────────────────────────────
         try:
-            json_series = await _fetch_wgc_json_api(
-                _WGC_JSON_DEMAND_SLUG, _DEMAND_COL_VARIANTS, self._fetch_url
-            )
+            json_series = await _fetch_wgc_json_api(_WGC_JSON_DEMAND_SLUG, _DEMAND_COL_VARIANTS, self._fetch_url)
             if json_series:
                 logger.debug("WGC demand: resolved via JSON API")
                 return json_series
@@ -700,14 +699,14 @@ class WGCFeed:
                 logger.debug("WGC demand: resolved via CSV download")
                 return _csv_to_series(text, _DEMAND_COL_VARIANTS)
             if not self._warned_demand_offline:
-                logger.warning(
+                logger.info(
                     "WGC demand URL returned HTML — www.gold.org may require a browser session. "
                     "Place a manually downloaded CSV at %s",
                     self._cache_path(_DEMAND_CACHE_FILE),
                 )
                 self._warned_demand_offline = True
         elif not self._warned_demand_offline:
-            logger.warning(
+            logger.info(
                 "WGC demand CSV fetch returned no usable data — www.gold.org unreachable. "
                 "Place a manually downloaded CSV at %s",
                 self._cache_path(_DEMAND_CACHE_FILE),
@@ -737,9 +736,7 @@ class WGCFeed:
         """
         # ── 1. WGC JSON API ───────────────────────────────────────────────────
         try:
-            json_series = await _fetch_wgc_json_api(
-                _WGC_JSON_ETF_SLUG, _ETF_COL_VARIANTS, self._fetch_url
-            )
+            json_series = await _fetch_wgc_json_api(_WGC_JSON_ETF_SLUG, _ETF_COL_VARIANTS, self._fetch_url)
             if json_series:
                 logger.debug("WGC ETF flow: resolved via JSON API")
                 return json_series
@@ -754,14 +751,14 @@ class WGCFeed:
                 logger.debug("WGC ETF flow: resolved via CSV download")
                 return _csv_to_series(text, _ETF_COL_VARIANTS)
             if not self._warned_etf_offline:
-                logger.warning(
+                logger.info(
                     "WGC ETF flow URL returned HTML — www.gold.org may require a browser session. "
                     "Place a manually downloaded CSV at %s",
                     self._cache_path(_ETF_CACHE_FILE),
                 )
                 self._warned_etf_offline = True
         elif not self._warned_etf_offline:
-            logger.warning(
+            logger.info(
                 "WGC ETF flow CSV fetch returned no usable data — www.gold.org unreachable. "
                 "Place a manually downloaded CSV at %s",
                 self._cache_path(_ETF_CACHE_FILE),

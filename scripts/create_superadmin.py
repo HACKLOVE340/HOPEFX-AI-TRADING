@@ -167,11 +167,12 @@ def _create_or_update(email: str, username: str, password: str, reset: bool) -> 
 
 def _generate_token(user_id: str) -> str:
     """Generate a short-lived (15 min) JWT for immediate login verification."""
+    from auth.jwt import _get_access_token_expire_minutes
     from datetime import timedelta
 
     return create_access_token(
         data={"sub": user_id, "role": "superadmin", "type": "access"},
-        expires_delta=timedelta(minutes=15),
+        expires_delta=timedelta(minutes=_get_access_token_expire_minutes()),
     )
 
 
@@ -204,7 +205,7 @@ def main():
     result = _create_or_update(args.email, args.username, password, args.reset)
 
     if result["action"] == "exists":
-        logger.info(f"\n[INFO] Superadmin '{result['username']}' already exists (role={result['role']}).")
+        logger.info("\n[INFO] Superadmin '%s' already exists (role=%s).", result["username"], result["role"])
         logger.info("       Use --reset to update the password.\n")
         return
 

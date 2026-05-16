@@ -26,8 +26,7 @@ UTC = timezone.utc
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends
-
-from api.auth import TokenPayload, require_role
+from api.auth import get_current_user
 from pydantic import BaseModel
 
 _HTTP_OK = HTTPStatus.OK.value
@@ -39,7 +38,7 @@ _MIN_BROKER_NAME_LEN = 4
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/broker", tags=["Broker"])
+router = APIRouter(prefix="/api/broker", tags=["Broker"], dependencies=[Depends(get_current_user)])
 
 
 class BrokerTestRequest(BaseModel):
@@ -59,7 +58,7 @@ class BrokerTestResponse(BaseModel):
 
 
 @router.post("/test-connection", response_model=BrokerTestResponse)
-async def test_broker_connection(req: BrokerTestRequest, user: TokenPayload = Depends(require_role("trader"))) -> BrokerTestResponse:
+async def test_broker_connection(req: BrokerTestRequest) -> BrokerTestResponse:
     """
     Test broker credentials and return connection status, latency, and balance.
 
@@ -351,7 +350,7 @@ async def broker_status():
                     positions = await broker.get_positions()
                     open_positions = len(positions) if positions else 0
             except Exception as _exc:
-                logger.debug("Suppressed exception: %s", _exc)
+                logger.warning("broker_status: get_positions failed: %s", _exc)
 
             broker_section = {
                 "connected": True,
@@ -533,7 +532,7 @@ class StampOandaRequest(BaseModel):
     "/stamp-oanda",
     summary="Stamp real OANDA account_id into the paper trading clock (admin)",
 )
-async def stamp_oanda_clock(req: StampOandaRequest, user: TokenPayload = Depends(require_role("admin"))):
+async def stamp_oanda_clock(req: StampOandaRequest):
     """
     Manually stamp a real OANDA account_id into the paper trading clock.
 

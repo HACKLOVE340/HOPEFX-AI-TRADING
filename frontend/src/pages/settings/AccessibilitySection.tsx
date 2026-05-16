@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { AccessibilitySettings } from './types';
 import { Card, SectionHeader, Field, Select, Toggle, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: AccessibilitySettings = {
   reduce_motion: false,
@@ -51,8 +52,7 @@ const AccessibilitySection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setError(detail ?? 'Failed to save accessibility settings.');
+      setError(extractApiError(err, 'Failed to save accessibility settings.'));
     } finally { setSaving(false); }
   };
 

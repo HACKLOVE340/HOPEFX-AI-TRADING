@@ -653,10 +653,22 @@ class TestOutboxRelayExtended:
         write_outbox_event(session, "TEST_EVENT", "hopefx:test", {"key": "val"})
 
     def test_write_outbox_event_standalone_no_db(self):
-        from core.outbox import write_outbox_event_standalone
+        """write_outbox_event_standalone returns False when no DB session factory is available.
 
-        result = write_outbox_event_standalone("TEST", "hopefx:test", {"x": 1})
-        assert result is False  # no DB in test env
+        Explicitly nulls app_state.db_session_factory for the duration of this
+        test to guarantee isolation from prior tests that may have wired a real
+        session factory into app_state (e.g. via the db_engine fixture).
+        """
+        from core.outbox import write_outbox_event_standalone
+        from core.app_state import app_state
+
+        _saved = app_state.db_session_factory
+        app_state.db_session_factory = None
+        try:
+            result = write_outbox_event_standalone("TEST", "hopefx:test", {"x": 1})
+            assert result is False  # no DB session factory → must return False
+        finally:
+            app_state.db_session_factory = _saved
 
     @pytest.mark.asyncio
     async def test_outbox_relay_run_stops_cleanly(self):

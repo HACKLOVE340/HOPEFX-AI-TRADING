@@ -1259,47 +1259,47 @@ def main():
     logger.info("\n" + "=" * 65)
     logger.info("ADVANCED TRAINING SUMMARY")
     logger.info("=" * 65)
-    logger.info(f"  Symbol          : {args.symbol}  ({args.years} years)")
-    logger.info(f"  Samples (total) : {len(X)}  (after filtered-target)")
-    logger.info(f"  CV samples      : {len(X_cv)}")
-    logger.info(f"  OOS samples     : {oos_n}  ({args.oos_years:.1f} years held out)")
-    logger.info(f"  Features        : {X.shape[1]}")
-    logger.info(f"  Macro features  : {macro_df is not None}")
+    logger.info("  Symbol          : %s  (%s years)", args.symbol, args.years)
+    logger.info("  Samples (total) : %s  (after filtered-target)", len(X))
+    logger.info("  CV samples      : %s", len(X_cv))
+    logger.info("  OOS samples     : %s  (%.1f years held out)", oos_n, args.oos_years)
+    logger.info("  Features        : %s", X.shape[1])
+    logger.info("  Macro features  : %s", macro_df is not None)
     logger.info("")
     logger.info(
         f"  Walk-forward accuracy : {wf.get('mean_accuracy', 0):.3f} ± {wf.get('std_accuracy', 0):.3f}",
     )
-    logger.info(f"  Walk-forward F1       : {wf.get('mean_f1', 0):.3f}")
-    logger.info(f"  Walk-forward AUC      : {wf.get('mean_auc', 0):.3f}")
+    logger.info("  Walk-forward F1       : %.3f", wf.get("mean_f1", 0))
+    logger.info("  Walk-forward AUC      : %.3f", wf.get("mean_auc", 0))
     logger.info(
         f"  p-value (vs random)   : {wf.get('p_value', 1):.4f}  "
         f"{'✓ significant' if wf.get('significant') else '✗ not significant'}",
     )
     logger.info("")
-    logger.info(f"  Final holdout accuracy: {final_metrics['accuracy']:.3f}")
-    logger.info(f"  Final holdout F1      : {final_metrics['f1']:.3f}")
-    logger.info(f"  Final holdout AUC     : {final_metrics['auc']:.3f}")
+    logger.info("  Final holdout accuracy: %.3f", final_metrics["accuracy"])
+    logger.info("  Final holdout F1      : %.3f", final_metrics["f1"])
+    logger.info("  Final holdout AUC     : %.3f", final_metrics["auc"])
 
     if oos_metrics:
         logger.info("")
         sig = "✓ significant" if oos_metrics.get("significant") else "✗ not significant"
         oos_period = oos_metrics.get("oos_period", "n/a")
         acc_se = oos_metrics.get("accuracy_se", 0)
-        logger.info(f"  OOS period            : {oos_period}")
+        logger.info("  OOS period            : %s", oos_period)
         logger.info(
             f"  OOS accuracy          : {oos_metrics['accuracy']:.3f} ± {acc_se:.3f}  (n={oos_metrics['oos_size']})",
         )
-        logger.info(f"  OOS F1                : {oos_metrics['f1']:.3f}")
-        logger.info(f"  OOS AUC               : {oos_metrics['auc']:.3f}")
-        logger.info(f"  OOS p-value (binomial): {oos_metrics['p_value_binomial']:.4f}  {sig}")
+        logger.info("  OOS F1                : %.3f", oos_metrics["f1"])
+        logger.info("  OOS AUC               : %.3f", oos_metrics["auc"])
+        logger.info("  OOS p-value (binomial): %.4f  %s", oos_metrics["p_value_binomial"], sig)
         logger.info("")
         # Sharpe SE gate — always shown when OOS is run
         sg = oos_metrics.get("sharpe_gate", {})
         gate_status = "PASSED ✓" if sg.get("gate_passed") else "BLOCKED ✗"
         logger.info("  ─── Sharpe SE Gate ────────────────────────────────────────")
-        logger.info(f"  N={sg.get('n_trades', '?')} OOS trades | SE={sg.get('se', '?')} | Gate: {gate_status}")
-        logger.info(f"  Need N>={sg.get('target_n', 600)} for SE<=0.10 (credible Sharpe).")
-        logger.info(f"  N_required for SE<=0.10: {sg.get('n_required_for_se_010', '?')}")
+        logger.info("  N=%s OOS trades | SE=%s | Gate: %s", sg.get("n_trades", "?"), sg.get("se", "?"), gate_status)
+        logger.info("  Need N>=%s for SE<=0.10 (credible Sharpe).", sg.get("target_n", 600))
+        logger.info("  N_required for SE<=0.10: %s", sg.get("n_required_for_se_010", "?"))
         logger.info("  Run multi-symbol backtest (XAU+BTC+ETH) targeting N=600.")
         logger.info("  Credible metric: OOS accuracy (binomial p-value above).")
         logger.info("  Do NOT commit live capital until 30+ days paper trading done.")
@@ -1310,11 +1310,11 @@ def main():
     oos_acc = oos_metrics.get("accuracy", 0) if oos_metrics else 0
     final_acc = final_metrics["accuracy"]
     if oos_acc >= 0.68:
-        logger.info(f"  ✓ OOS TARGET MET: {oos_acc:.1%} >= 68.0% (validated production threshold)")
+        logger.info("  ✓ OOS TARGET MET: %s >= 68.0%% (validated production threshold)", f"{oos_acc:.1%}")
     elif oos_acc >= 0.55:
-        logger.warning(f"  ⚠ OOS above chance ({oos_acc:.1%}) but below 68% production threshold")
+        logger.warning("  ⚠ OOS above chance (%s) but below 68%% production threshold", f"{oos_acc:.1%}")
     elif oos_acc > 0:
-        logger.info(f"  ✗ OOS below target ({oos_acc:.1%}) — check feature quality and data volume")
+        logger.info("  ✗ OOS below target (%s) — check feature quality and data volume", f"{oos_acc:.1%}")
     elif final_acc >= 0.85:
         logger.info("  ✓ In-sample target met (no OOS run — use --oos-years 8 for validation)")
     elif final_acc >= 0.70:
@@ -1414,6 +1414,7 @@ class AdvancedTrainer:
 
         # 4. Final model on full in-sample data
         import os as _os
+
         _os.makedirs(self.config.model_dir, exist_ok=True)
         final = train_final_model(X_cv, y_cv)
 

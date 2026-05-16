@@ -41,7 +41,7 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user, require_role
@@ -204,6 +204,72 @@ async def get_lockdown_status(
         "lockdown_active": bool(_lockdown_state.get("active", False)),
         "reason": _lockdown_state.get("reason"),
         "activated_at": _lockdown_state.get("activated_at"),
+    }
+
+
+class LockdownRequest(BaseModel):
+    enable: bool = True
+    reason: str = "Manual lockdown by admin"
+
+
+@router.post("/lockdown", response_model=None, summary="Toggle platform lockdown (admin)")
+async def activate_lockdown(
+    req: LockdownRequest,
+    user: TokenPayload = Depends(require_role("admin")),
+):
+    """
+    Toggle the platform-wide lockdown.
+
+    The frontend sends ``{ enable: true }`` to activate and ``{ enable: false }``
+    to deactivate, matching the ``adminApi.lockdown(enable)`` call shape.
+
+    - ``enable=true``  → activate lockdown (halt trading, block new sessions)
+    - ``enable=false`` → clear/deactivate lockdown (delegates to clear logic)
+    """
+    global _lockdown_state
+
+    # ── Disable path ─────────────────────────────────────────────────────────
+    if not req.enable:
+        try:
+            from security.lockdown import get_lockdown_manager
+
+            mgr = get_lockdown_manager()
+            mgr.clear(cleared_by=user.sub)
+            logger.warning("Lockdown DISABLED by admin: user=%s", user.sub)
+            return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
+        except Exception as _exc:
+            logger.debug("Lockdown manager unavailable (disable path), using in-memory: %s", _exc)
+
+        _lockdown_state = {"active": False, "reason": None, "activated_at": None}
+        logger.warning("Lockdown DISABLED (in-memory): user=%s", user.sub)
+        return {"status": "cleared", "lockdown_active": False, "cleared_by": user.sub}
+
+    # ── Enable path ──────────────────────────────────────────────────────────
+    activated_at = datetime.now(UTC).isoformat()
+    try:
+        from security.lockdown import get_lockdown_manager
+
+        mgr = get_lockdown_manager()
+        mgr.activate(reason=req.reason, activated_by=user.sub)
+        logger.warning("Lockdown ACTIVATED by admin: user=%s reason=%s", user.sub, req.reason)
+        return {
+            "status": "active",
+            "lockdown_active": True,
+            "reason": req.reason,
+            "activated_by": user.sub,
+            "activated_at": activated_at,
+        }
+    except Exception as _exc:
+        logger.debug("Lockdown manager unavailable (enable path), using in-memory: %s", _exc)
+
+    _lockdown_state = {"active": True, "reason": req.reason, "activated_at": activated_at}
+    logger.warning("Lockdown ACTIVATED (in-memory): user=%s reason=%s", user.sub, req.reason)
+    return {
+        "status": "active",
+        "lockdown_active": True,
+        "reason": req.reason,
+        "activated_by": user.sub,
+        "activated_at": activated_at,
     }
 
 
@@ -461,7 +527,12 @@ async def get_av_threats(
 async def trigger_av_scan(
     user: TokenPayload = Depends(require_role("admin")),
 ):
-    """Kick off a full antivirus scan of the deployment directory."""
+    """
+    Kick off a full antivirus scan of the deployment directory.
+
+    Returns status=triggered when the AV engine runs synchronously, or
+    status=queued when the engine is unavailable (always HTTP 200 — never 500).
+    """
     triggered_at = datetime.now(UTC).isoformat()
     try:
         from security.antivirus import get_av_engine
@@ -470,13 +541,15 @@ async def trigger_av_scan(
         result = engine.scan_all()
         logger.info("AV scan triggered: user=%s", user.sub)
         return {"status": "triggered", "triggered_at": triggered_at, **result}
+    except ImportError:
+        logger.warning("AV engine module unavailable — scan queued: user=%s", user.sub)
     except Exception as exc:
-        logger.info("AV scan (fallback): user=%s err=%s", user.sub, exc)
+        logger.warning("AV scan engine error — scan queued: user=%s err=%s", user.sub, exc)
 
     return {
         "status": "queued",
         "triggered_at": triggered_at,
-        "message": "AV scan queued.  Results will appear in /api/security/av/threats.",
+        "message": "AV scan queued. Results will appear in /api/security/av/threats once the engine initialises.",
     }
 
 
@@ -528,12 +601,14 @@ async def quarantine_threat(
 
 # ── Security status summary ───────────────────────────────────────────────────
 
+
 @router.get("/status", response_model=None, summary="Security system status summary")
 async def get_security_status(user: TokenPayload = Depends(require_role("admin"))):
     """Consolidated security status for the SecurityDashboard page."""
     lockdown_active = False
     try:
         from api.db_store import db_get
+
         ld = db_get("lockdown_status") or {}
         lockdown_active = bool(ld.get("active", False))
     except Exception:  # nosec B110
@@ -544,6 +619,7 @@ async def get_security_status(user: TokenPayload = Depends(require_role("admin")
     pending_fixes = 0
     try:
         from api.security.fixes import _fix_store
+
         pending_fixes = sum(1 for f in _fix_store.values() if f.get("status") == "pending")
     except Exception:  # nosec B110
         pass
@@ -571,6 +647,7 @@ async def unblock_ip_address(
         _blocked_ips.remove(ip)
     try:
         from api.db_store import db_get, db_set
+
         blocked = db_get("blocked_ips") or []
         blocked = [b for b in blocked if b.get("ip") != ip]
         db_set("blocked_ips", blocked, changed_by=user.sub)
@@ -594,17 +671,19 @@ async def block_ip_address(
         _blocked_ips.append(ip)
     try:
         from api.db_store import db_get, db_set
+
         blocked = db_get("blocked_ips") or []
         if not any(b.get("ip") == ip for b in blocked):
-            blocked.append({
-                "ip": ip,
-                "reason": reason,
-                "blocked_by": user.sub,
-                "blocked_at": datetime.now(UTC).isoformat(),
-            })
+            blocked.append(
+                {
+                    "ip": ip,
+                    "reason": reason,
+                    "blocked_by": user.sub,
+                    "blocked_at": datetime.now(UTC).isoformat(),
+                }
+            )
         db_set("blocked_ips", blocked, changed_by=user.sub)
     except Exception:  # nosec B110
         pass
     logger.warning("IP blocked: %s reason=%s by %s", ip, reason, user.sub)
     return {"success": True, "ip": ip, "reason": reason, "action": "blocked"}
-

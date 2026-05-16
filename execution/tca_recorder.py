@@ -439,7 +439,7 @@ class TCARecorder:
                     "timestamp": datetime.now(UTC).isoformat(),
                 },
             )
-        except (RuntimeError, ConnectionError, OSError, ValueError) as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             logger.debug("TCA alert outbox write failed: %s", exc)
 
     def _persist(self, record: TCARecord) -> None:
@@ -487,7 +487,7 @@ class TCARecorder:
                 channel="hopefx:tca",
                 payload=record.to_dict(),
             )
-        except (RuntimeError, ConnectionError, OSError, ValueError) as exc:
+        except (RuntimeError, OSError, ValueError) as exc:
             logger.debug("TCA DB persist failed: %s", exc)
 
     @staticmethod

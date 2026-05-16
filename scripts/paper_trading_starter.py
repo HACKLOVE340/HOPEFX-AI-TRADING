@@ -37,6 +37,7 @@ OANDA_INSTRUMENTS      — Comma-separated instruments (default XAU_USD,EUR_USD)
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import json
 import logging
@@ -384,7 +385,8 @@ class PaperTradingRunner:
 
     # ── main loop ─────────────────────────────────────────────────────────────
 
-    def run(self) -> None:
+    async def run_async(self) -> None:
+        """Async entry point — uses asyncio.sleep so the event loop stays live."""
         self._bootstrap()
         logger.info(
             "Starting %s-day paper session | Kill at %.0f%% DD",
@@ -407,7 +409,13 @@ class PaperTradingRunner:
                 self._send_daily_summary(dd)
                 last_daily_alert = time.time()
 
-            time.sleep(self.poll_interval)
+            await asyncio.sleep(self.poll_interval)
+
+    def run(self) -> None:
+        """Sync wrapper — runs the async loop to completion."""
+        import asyncio as _asyncio
+
+        _asyncio.run(self.run_async())
 
         # Session complete
         elapsed_days = (time.time() - self.start_time) / 86400

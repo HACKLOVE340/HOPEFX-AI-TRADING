@@ -12,6 +12,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { watchlistApi } from '../hooks/useApi';
 import { useStore } from '../store';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -171,13 +172,13 @@ const WatchlistPage: React.FC = () => {
       await watchlistApi.remove(symbol);
       setItems((prev) => prev.filter((i) => i.symbol !== symbol));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : `Failed to remove ${symbol}.`;
+      const msg = extractApiError(err, `Failed to remove ${symbol}.`);
       setError(msg);
     }
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={{ ...s.header, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h1 style={s.title}>Watchlist</h1>

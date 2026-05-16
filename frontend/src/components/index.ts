@@ -5,7 +5,14 @@
  *   import { Badge, Spinner, Modal, DataTable, ThemeToggle } from '../components';
  */
 
+// ── Global infrastructure ─────────────────────────────────────────────────────
+export { ToastProvider, ToastContainer, useToast, type ToastItem, type ToastVariant } from './Toast';
+export { ConfirmDialogProvider, useConfirm, type ConfirmOptions } from './ConfirmDialog';
+export { CommandPalette, useCommandActions, useCommandPalette, type CommandItem } from './CommandPalette';
+
+// ── Core UI ───────────────────────────────────────────────────────────────────
 export { AuthGuard } from './AuthGuard';
+export { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
 export { Badge, type BadgeVariant } from './Badge';
 export { Spinner } from './Spinner';
 export { Modal } from './Modal';
@@ -16,10 +23,12 @@ export { CandleChart } from './CandleChart';
 export { LineChart } from './LineChart';
 export { MetricCard } from './MetricCard';
 export { EmptyState } from './EmptyState';
+export { CrossLinkBar, type CrossLink } from './CrossLinkBar';
 export { ErrorBanner } from './ErrorBanner';
-export { PageHeader } from './PageHeader';
+export { PageHeader, type PageTab } from './PageHeader';
 export { GlobalAttackMap, type AttackLog, type AttackRecord, type AttackGeo } from './GlobalAttackMap';
 export { FixApprovalQueue, type FixRecord } from './FixApprovalQueue';
+export { default as TrialBanner } from './TrialBanner';
 
 // ── UI primitives ─────────────────────────────────────────────────────────────
 export { Panel } from './ui/Panel';
@@ -37,13 +46,14 @@ export { AccountBar } from './terminal/AccountBar';
 
 // ── Chart components ──────────────────────────────────────────────────────────
 export { EquityCurveChart } from './charts/EquityCurveChart';
+export { AIChart } from './charts/AIChart';
 
 // ── Auth / access guards ──────────────────────────────────────────────────────
 export { default as AdminGuard } from './AdminGuard';
 export { default as SuperAdminGuard } from './SuperAdminGuard';
 export { default as SubscriptionGate } from './SubscriptionGate';
 
-// ── Guarded panel exports ─────────────────────────────────────────────────────
+// ── Panel components (raw + guarded) ─────────────────────────────────────────
 export { LivePriceTicker, LivePriceTickerGuarded } from './panels/LivePriceTicker';
 export { LiveSignalFeed, LiveSignalFeedGuarded } from './panels/LiveSignalFeed';
 export { MacroCalendar, MacroCalendarGuarded } from './panels/MacroCalendar';
@@ -55,4 +65,4 @@ export { PositionsTable, PositionsTableGuarded, PositionsTableSkeleton } from '.
 export { OrderEntryForm, OrderEntryFormGuarded } from './panels/OrderEntryForm';
 export { MLModelPanel, MLModelPanelGuarded } from './panels/MLModelPanel';
 export { OrchestratorHealthGrid, OrchestratorHealthGridGuarded } from './panels/OrchestratorHealthGrid';
-export { default as TrialBanner } from './TrialBanner';
+export { NewsTicker } from './panels/NewsTicker';

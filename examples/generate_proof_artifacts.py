@@ -176,12 +176,12 @@ except Exception as exc:
         UserWarning,
         stacklevel=1,
     )
-    logger.error(f"  ⚠ yfinance failed ({exc}) — using SYNTHETIC fallback")
+    logger.error("  ⚠ yfinance failed (%s) — using SYNTHETIC fallback", exc)
     df = generate_xauusd_synthetic(n_days=10080)  # ~40 years
     _USING_REAL_DATA = False
     csv_path = DATA_DIR / "XAUUSD_40Y_synthetic.csv"
     df.to_csv(csv_path)
-    logger.info(f"  Synthetic data: {len(df)} bars → {csv_path}")
+    logger.info("  Synthetic data: %s bars → %s", len(df), csv_path)
 
 
 # ── 2. Feature engineering (stationary — no raw price lags) ──────────────────
@@ -414,14 +414,14 @@ try:
                 close.index = pd.to_datetime(close.index).tz_localize(None)
                 _frames[name] = close.rename(name)
         except Exception as _exc:
-            logger.error(f"  Macro series fetch failed: {_exc} — skipping")
+            logger.error("  Macro series fetch failed: %s — skipping", _exc)
     if _frames:
         macro_df = pd.concat(_frames.values(), axis=1).ffill().fillna(0.0)
-        logger.info(f"  Macro data: {len(macro_df)} bars, {len(macro_df.columns)} series")
+        logger.info("  Macro data: %s bars, %s series", len(macro_df), len(macro_df.columns))
     else:
         logger.info("  No macro data fetched — proceeding without")
 except Exception as _me:
-    logger.error(f"  Macro fetch failed ({_me}) — proceeding without")
+    logger.error("  Macro fetch failed (%s) — proceeding without", _me)
 
 
 logger.info("Engineering features …")
@@ -440,7 +440,7 @@ dff = dff.dropna(subset=["target"])
 
 X = dff[FEATURE_COLS].values
 y = dff["target"].values
-logger.info(f"  {len(X)} samples, {len(FEATURE_COLS)} features, class balance: {y.mean():.2%} up-days")
+logger.info("  %s samples, %s features, class balance: %s up-days", len(X), len(FEATURE_COLS), f"{y.mean():.2%}")
 
 
 # ── 3. Train RandomForest ─────────────────────────────────────────────────────
@@ -471,13 +471,13 @@ y_pred = clf.predict(X_test_s)
 y_prob = clf.predict_proba(X_test_s)[:, 1]
 
 report = classification_report(y_test, y_pred, target_names=["Down", "Up"], output_dict=True)
-logger.info(f"  Test accuracy: {report['accuracy']:.3f}")
-logger.info(f"  Up precision:  {report['Up']['precision']:.3f}  recall: {report['Up']['recall']:.3f}")
+logger.info("  Test accuracy: %.3f", report['accuracy'])
+logger.info("  Up precision:  %.3f  recall: %.3f", report['Up']['precision'], report['Up']['recall'])
 
 # Save model + scaler
 model_path = MODEL_DIR / "rf_xauusd.pkl"
 joblib.dump({"model": clf, "scaler": scaler, "features": FEATURE_COLS}, model_path)
-logger.info(f"  Saved model → {model_path}")
+logger.info("  Saved model → %s", model_path)
 
 
 # ── 4. Backtest ───────────────────────────────────────────────────────────────
@@ -680,14 +680,14 @@ perf = {
 }
 
 perf_path = RESULTS_DIR / "performance.json"
-with open(perf_path, "w") as f:
+with open(perf_path, "w", encoding="utf-8") as f:
     json.dump(perf, f, indent=2)
-logger.info(f"  Saved performance → {perf_path}")
+logger.info("  Saved performance → %s", perf_path)
 
 trades_path = RESULTS_DIR / "trades.csv"
 if n_trades > 0:
     trades_df.to_csv(trades_path, index=False)
-    logger.info(f"  Saved {n_trades} trades → {trades_path}")
+    logger.info("  Saved %s trades → %s", n_trades, trades_path)
 
 # ── 6. Equity curve plot ──────────────────────────────────────────────────────
 
@@ -804,7 +804,7 @@ plt.tight_layout()
 chart_path = RESULTS_DIR / "equity_curve.png"
 plt.savefig(chart_path, dpi=150, bbox_inches="tight")
 plt.close()
-logger.info(f"  Saved equity curve → {chart_path}")
+logger.info("  Saved equity curve → %s", chart_path)
 
 # ── 7. Print summary ──────────────────────────────────────────────────────────
 
@@ -812,6 +812,6 @@ logger.info("\n" + "=" * 55)
 logger.info("  BACKTEST SUMMARY")
 logger.info("=" * 55)
 for k, v in perf.items():
-    logger.info(f"  {k:<28} {v}")
+    logger.info("  %s %s", f"{k:<28}", v)
 logger.info("=" * 55)
 logger.info("\nAll artifacts saved. Ready to commit.")

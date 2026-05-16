@@ -214,7 +214,13 @@ class TestFallbackChain:
 
     @pytest.mark.asyncio
     async def test_stale_cache_served_when_all_fail(self):
-        """Stale cache is returned when all live sources fail."""
+        """When all live sources fail, static fallback events are returned.
+
+        The provider now returns a curated set of static fallback events
+        (source='static_fallback') instead of stale cache when all live
+        sources are unreachable, so the frontend always shows meaningful
+        geopolitical context.
+        """
         cached_event = _make_event(source="worldmonitor")
         provider = _make_provider()
         provider._cache["events"] = [cached_event]
@@ -228,20 +234,20 @@ class TestFallbackChain:
         ):
             result = await provider._fetch_events_from_source()
 
-        assert len(result) == 1
+        # Static fallback events are returned when all live sources fail
+        assert len(result) >= 1
+        assert all(e.source == "static_fallback" for e in result)
 
     @pytest.mark.asyncio
     async def test_production_logs_critical_when_all_fail_and_cache_empty(self):
-        """In production, CRITICAL is logged and [] is returned when all sources fail.
+        """When all sources fail and cache is empty, static fallback events are returned.
 
-        RuntimeError is no longer raised — doing so in an async poll task silently
-        kills the task. The system logs at CRITICAL level and returns [] so callers
-        can continue operating.
+        The provider returns curated static fallback events (source='static_fallback')
+        rather than an empty list, so the frontend always has geopolitical context.
+        A WARNING is logged about unavailable sources.
         """
         provider = _make_provider()
         provider._cache = {}
-
-        import logging
 
         with (
             patch.object(provider, "_fetch_from_worldmonitor", new=AsyncMock(return_value=[])),
@@ -249,13 +255,12 @@ class TestFallbackChain:
             patch.object(provider, "_fetch_events_from_acled", new=AsyncMock(return_value=[])),
             patch.object(provider, "_fetch_events_from_reliefweb", new=AsyncMock(return_value=[])),
             patch.dict("os.environ", {"APP_ENV": "production"}, clear=False),
-            patch.object(logging.getLogger("news.geopolitical_risk"), "critical") as mock_critical,
         ):
             result = await provider._fetch_events_from_source()
 
-        assert result == [], "Expected empty list when all sources fail in production"
-        mock_critical.assert_called_once()
-        assert "unavailable" in mock_critical.call_args[0][0].lower()
+        # Static fallback events are returned — never an empty list
+        assert len(result) >= 1
+        assert all(e.source == "static_fallback" for e in result)
 
 
 # ---------------------------------------------------------------------------

@@ -2,11 +2,13 @@
 
 Called by start.bat. Exits with code 1 and a clear message on failure.
 """
+
 import re
 import sys
 
 try:
     from dotenv import dotenv_values
+
     env = dotenv_values(".env")
 except Exception:
     # dotenv not installed yet — skip validation, server will catch it

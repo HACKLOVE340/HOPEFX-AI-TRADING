@@ -64,6 +64,7 @@ const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> 
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
+  const rafRef       = useRef<number>(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -88,15 +89,25 @@ const EquityChart: React.FC<{ folds: FoldResult[]; visibleFolds: Set<number> }> 
     });
 
     chart.timeScale().fitContent();
+    chart.timeScale().scrollToRealTime();
 
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
     });
     ro.observe(containerRef.current);
 
-    // Disconnect observer before removing chart so a chart.remove() error
-    // cannot prevent the observer from being cleaned up (memory leak).
-    return () => { ro.disconnect(); chart.remove(); };
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartRef.current = null;
+    };
   }, [folds, visibleFolds]);
 
   return <div ref={containerRef} style={{ width: '100%', height: 300 }} />;
@@ -190,7 +201,7 @@ const WalkForward: React.FC = () => {
 
   if (apiError || !data) {
     return (
-      <div style={s.page}>
+      <div className="page-content">
         <h1 style={s.title}>Walk-Forward Analysis</h1>
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '24px', color: '#94a3b8', textAlign: 'center' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
@@ -215,7 +226,7 @@ const WalkForward: React.FC = () => {
   if (!data)   return <div style={s.loading}>No walk-forward data available.</div>;
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Walk-Forward Validation</h1>

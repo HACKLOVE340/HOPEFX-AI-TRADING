@@ -64,6 +64,7 @@ except ImportError:
 
 # ── Enumerations ──────────────────────────────────────────────────────────────
 
+
 class TradeSide(str, Enum):
     BUY = "buy"
     SELL = "sell"
@@ -71,6 +72,7 @@ class TradeSide(str, Enum):
 
 
 # ── Core data structures ──────────────────────────────────────────────────────
+
 
 @dataclass
 class Tick:
@@ -85,10 +87,10 @@ class Tick:
     last_price: float
     last_size: float
     exchange: str
-    is_trade: bool = False                      # True if trade, False if quote
-    trade_side: TradeSide = TradeSide.UNKNOWN   # Lee-Ready classification
-    sequence: int | None = None                 # exchange sequence number
-    raw: dict | None = None                     # original frame (not repr'd)
+    is_trade: bool = False  # True if trade, False if quote
+    trade_side: TradeSide = TradeSide.UNKNOWN  # Lee-Ready classification
+    sequence: int | None = None  # exchange sequence number
+    raw: dict | None = None  # original frame (not repr'd)
 
     @property
     def mid(self) -> float:
@@ -108,6 +110,7 @@ class Tick:
 @dataclass
 class L2Level:
     """A single price level in an L2 order book."""
+
     price: float
     size: float
     order_count: int = 0
@@ -122,6 +125,7 @@ class L2OrderBook:
     Asks are stored ascending (best ask first).
     Updates are incremental: size=0 removes the level.
     """
+
     symbol: str
     exchange: str = ""
     sequence: int = 0
@@ -199,6 +203,7 @@ class L2OrderBook:
 
 # ── Trade classifier ─────────────────────────────────────────────────────────
 
+
 class TradeClassifier:
     """
     Lee-Ready (1991) trade direction classifier with tick-test fallback.
@@ -261,6 +266,7 @@ class TradeClassifier:
 
 # ── Tick normalization pipeline ───────────────────────────────────────────────
 
+
 class TickNormalizationPipeline:
     """
     Multi-stage tick normalization pipeline.
@@ -313,7 +319,9 @@ class TickNormalizationPipeline:
             self.rejection_counts["spread_clamp"] += 1
             logger.debug(
                 "NORM REJECT spread_clamp [%s]: %.1f bps > %.1f bps",
-                tick.symbol, tick.spread_bps, self.max_spread_bps,
+                tick.symbol,
+                tick.spread_bps,
+                self.max_spread_bps,
             )
             return None
 
@@ -330,7 +338,9 @@ class TickNormalizationPipeline:
         if age > self.max_age_seconds:
             self.rejection_counts["stale"] += 1
             logger.debug(
-                "NORM REJECT stale [%s]: age=%.1f s", tick.symbol, age,
+                "NORM REJECT stale [%s]: age=%.1f s",
+                tick.symbol,
+                age,
             )
             return None
 
@@ -341,14 +351,16 @@ class TickNormalizationPipeline:
             if len(window) >= 10:
                 mean = sum(window) / len(window)
                 variance = sum((p - mean) ** 2 for p in window) / len(window)
-                std = variance ** 0.5
+                std = variance**0.5
                 if std > 0:
                     z = abs(price - mean) / std
                     if z > self.outlier_z_threshold:
                         self.rejection_counts["outlier"] += 1
                         logger.debug(
                             "NORM REJECT outlier [%s]: z=%.2f > %.2f",
-                            tick.symbol, z, self.outlier_z_threshold,
+                            tick.symbol,
+                            z,
+                            self.outlier_z_threshold,
                         )
                         return None
             window.append(price)
@@ -367,6 +379,7 @@ class TickNormalizationPipeline:
 
 
 # ── L2 book aggregator ────────────────────────────────────────────────────────
+
 
 class L2BookAggregator:
     """
@@ -458,6 +471,7 @@ class L2BookAggregator:
 
 # ── Feed handler ──────────────────────────────────────────────────────────────
 
+
 class FeedHandler:
     """
     Normalizes feeds from multiple exchanges into a unified tick stream.
@@ -496,7 +510,7 @@ class FeedHandler:
         self.classifier = TradeClassifier()
         self.l2_aggregator = L2BookAggregator()
 
-    def add_exchange(self, name: str, feed: "ExchangeFeed"):
+    def add_exchange(self, name: str, feed: ExchangeFeed):
         """Add exchange feed"""
         self.exchanges[name] = feed
         feed.set_callback(self._on_exchange_tick)
@@ -535,9 +549,7 @@ class FeedHandler:
 
         # Latency tracking (EMA)
         latency_ns = time.monotonic_ns() - start_ns
-        self.stats["latency_ns"] = int(
-            0.9 * self.stats["latency_ns"] + 0.1 * latency_ns
-        )
+        self.stats["latency_ns"] = int(0.9 * self.stats["latency_ns"] + 0.1 * latency_ns)
 
         # Distribute to callbacks
         for callback in self.normalized_callbacks:
@@ -752,29 +764,42 @@ class ExchangeFeed:
         _t = asyncio.create_task(self._receive_loop())
         _t.add_done_callback(lambda _: None)
 
+    async def disconnect(self):
+        """Close WebSocket and underlying HTTP session."""
+        self.connected = False
+        if hasattr(self, "ws") and self.ws and not self.ws.closed:
+            await self.ws.close()
+            self.ws = None
+        if hasattr(self, "session") and self.session and not self.session.closed:
+            await self.session.close()
+            self.session = None
+
     async def _send_subscription(self):
         """Send subscription message"""
         # Override in subclass
 
     async def _receive_loop(self):
         """Receive and process messages"""
+        import aiohttp as _aiohttp
+
         while self.connected:
             try:
                 msg = await self.ws.receive()
 
-                if msg.type == aiohttp.WSMsgType.TEXT:
+                if msg.type == _aiohttp.WSMsgType.TEXT:
                     data = json.loads(msg.data)
                     if self.callback:
                         self.callback(data, self.name)
 
-                elif msg.type == aiohttp.WSMsgType.CLOSED:
+                elif msg.type == _aiohttp.WSMsgType.CLOSED:
                     break
 
             except Exception as e:
-                logger.error(f"Feed error: {e}")
+                logger.error("Feed error: %s", e)
                 await asyncio.sleep(1)
 
-        # Reconnect
-        self.connected = False
-        await asyncio.sleep(5)
-        await self.connect()
+        # Reconnect only if still supposed to be connected
+        if self.connected:
+            self.connected = False
+            await asyncio.sleep(5)
+            await self.connect()

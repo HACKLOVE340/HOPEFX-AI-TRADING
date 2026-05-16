@@ -1,18 +1,14 @@
 /**
  * Leaderboard — top traders ranked by return, Sharpe, win rate, followers.
  *
- * Wires to: GET /api/leaderboard?period={monthly|quarterly|all}
+ * Wires to: GET /api/leaderboard?period={monthly|quarterly|all}&sort={return|sharpe|win_rate|followers}
  */
 
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
 import { api } from '../hooks/useApi';
-
-function extractApiError(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: string } } })
-    ?.response?.data?.detail;
-  return detail ?? fallback;
-}
+import { extractApiError } from '../lib/utils';
 
 interface Trader {
   rank: number;
@@ -26,24 +22,72 @@ interface Trader {
   followers: number;
   prize: string;
   verified?: boolean;
+  country?: string;
+  strategy_tag?: string;
 }
 
-const MEDAL_COLORS = ['#eab308', '#94a3b8', '#b45309'];
+const MEDAL: Record<number, string> = { 1: '🥇', 2: '🥈', 3: '🥉' };
+const MEDAL_COLORS: Record<number, string> = { 1: '#eab308', 2: '#94a3b8', 3: '#b45309' };
+
+// ── Podium card ───────────────────────────────────────────────────────────────
+
+const PodiumCard: React.FC<{ trader: Trader; tall?: boolean }> = ({ trader, tall }) => {
+  const color = MEDAL_COLORS[trader.rank] ?? '#334155';
+  const copyTo = trader.user_id
+    ? `/copy-trading?trader=${trader.user_id}`
+    : '/copy-trading';
+  return (
+    <div className={`flex-1 rounded-xl p-5 flex flex-col items-center gap-2 border transition-all hover:scale-[1.02] ${tall ? 'mt-0' : 'mt-6'}`}
+      style={{ background: '#1e293b', borderColor: color + '55' }}>
+      <div className="w-9 h-9 rounded-full flex items-center justify-center font-black text-sm"
+        style={{ background: color, color: '#0f172a' }}>
+        {trader.rank}
+      </div>
+      <div className="text-base font-bold text-slate-100 text-center">{trader.name}</div>
+      {trader.country && <div className="text-xs text-slate-500">{trader.country}</div>}
+      <div className="text-2xl font-black text-green-400">+{trader.return.toFixed(1)}%</div>
+      <div className="text-xs text-slate-500 text-center">
+        Sharpe {trader.sharpe.toFixed(2)} · {trader.followers.toLocaleString()} followers
+      </div>
+      {trader.strategy_tag && (
+        <span className="text-2xs px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-400 bg-violet-500/10">
+          {trader.strategy_tag}
+        </span>
+      )}
+      <div className="flex gap-2 w-full mt-1">
+        <Link to={copyTo}
+          className="flex-1 text-center py-1.5 rounded-lg font-bold text-xs no-underline transition-colors"
+          style={{ background: color, color: '#0f172a' }}>
+          🔁 Copy
+        </Link>
+        {trader.user_id && (
+          <Link to={`/trader/${trader.user_id}`}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold no-underline border border-terminal-border text-slate-400 hover:border-slate-500 transition-colors">
+            Profile
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 const Leaderboard: React.FC = () => {
-  const navigate = useNavigate();
   const [period, setPeriod]   = useState<'monthly' | 'quarterly' | 'all'>('monthly');
   const [traders, setTraders] = useState<Trader[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState('');
   const [sortBy, setSortBy]   = useState<'return' | 'sharpe' | 'win_rate' | 'followers'>('return');
+  const [search, setSearch]   = useState('');
+  const [stratFilter, setStratFilter] = useState('');
 
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setLoadErr('');
     api.get<Trader[]>(`/leaderboard?period=${period}`, { signal: controller.signal })
-      .then((r) => { setTraders(Array.isArray(r.data) ? r.data : []); })
+      .then((r) => setTraders(Array.isArray(r.data) ? r.data : []))
       .catch((err: unknown) => {
         if ((err as { name?: string }).name === 'CanceledError') return;
         setLoadErr(extractApiError(err, 'Failed to load leaderboard.'));
@@ -53,182 +97,207 @@ const Leaderboard: React.FC = () => {
     return () => controller.abort();
   }, [period]);
 
-  const sorted = [...traders].sort((a, b) => {
-    if (sortBy === 'return')    return b.return - a.return;
-    if (sortBy === 'sharpe')    return b.sharpe - a.sharpe;
-    if (sortBy === 'win_rate')  return (b.win_rate ?? 0) - (a.win_rate ?? 0);
-    if (sortBy === 'followers') return b.followers - a.followers;
-    return 0;
-  });
+  const stratTags = useMemo(() =>
+    Array.from(new Set(traders.map(t => t.strategy_tag).filter(Boolean))) as string[],
+    [traders]);
+
+  const sorted = useMemo(() => {
+    let list = [...traders];
+    if (search) list = list.filter(t => t.name.toLowerCase().includes(search.toLowerCase()));
+    if (stratFilter) list = list.filter(t => t.strategy_tag === stratFilter);
+    list.sort((a, b) => {
+      if (sortBy === 'return')    return b.return - a.return;
+      if (sortBy === 'sharpe')    return b.sharpe - a.sharpe;
+      if (sortBy === 'win_rate')  return (b.win_rate ?? 0) - (a.win_rate ?? 0);
+      if (sortBy === 'followers') return b.followers - a.followers;
+      return 0;
+    });
+    return list;
+  }, [traders, search, stratFilter, sortBy]);
 
   const top3 = sorted.slice(0, 3);
 
   return (
-    <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Global Leaderboard</h1>
-          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>
-            Top traders ranked by performance. Click a trader to copy their strategy.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {(['monthly', 'quarterly', 'all'] as const).map((p) => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ ...s.periodBtn, ...(period === p ? s.periodBtnActive : {}) }}>
-              {p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {loading ? (
-        <p style={{ color: '#64748b', padding: '40px 0' }}>Loading leaderboard…</p>
-      ) : loadErr ? (
-        <p style={{ color: '#f87171', padding: '40px 0' }}>⚠️ {loadErr}</p>
-      ) : traders.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>🏆</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No traders ranked yet</div>
-          <div style={{ fontSize: 13, color: '#64748b', maxWidth: 380, margin: '0 auto', lineHeight: 1.6 }}>
-            The leaderboard populates once traders have closed positions.
-            Start trading on the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to appear here.
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Podium — top 3 */}
-          <div style={s.podium}>
-            {[top3[1], top3[0], top3[2]].map((trader, i) => (
-              trader
-                ? <PodiumCard key={trader.rank} trader={trader} medalColor={MEDAL_COLORS[i === 1 ? 0 : i === 0 ? 1 : 2]} tall={i === 1} onCopy={() => navigate('/copy-trading')} />
-                : <div key={i} style={{ flex: 1 }} />
-            ))}
-          </div>
-
-          {/* Sort controls */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 12, color: '#64748b', alignSelf: 'center' }}>Sort by:</span>
-            {(['return', 'sharpe', 'win_rate', 'followers'] as const).map((col) => (
-              <button key={col} onClick={() => setSortBy(col)}
-                style={{ ...s.periodBtn, ...(sortBy === col ? s.periodBtnActive : {}), fontSize: 11, padding: '5px 10px' }}>
-                {col === 'win_rate' ? 'Win Rate' : col.charAt(0).toUpperCase() + col.slice(1)}
+    <div className="page-content">
+      <PageHeader
+        title="Global Leaderboard"
+        icon="🥇"
+        subtitle="Top traders ranked by performance. Click a trader to copy their strategy."
+        breadcrumbs={[
+          { label: 'Dashboard',    href: '/dashboard' },
+          { label: 'Community',    href: '/copy-trading' },
+          { label: 'Leaderboard' },
+        ]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            {(['monthly', 'quarterly', 'all'] as const).map((p) => (
+              <button key={p} onClick={() => setPeriod(p)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border cursor-pointer transition-all ${
+                  period === p
+                    ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                    : 'bg-transparent border-terminal-border text-slate-500 hover:border-slate-400'
+                }`}>
+                {p === 'all' ? 'All Time' : p.charAt(0).toUpperCase() + p.slice(1)}
               </button>
             ))}
+            <div className="w-px h-5 bg-terminal-border" />
+            <Link to="/copy-trading" className="px-3 py-1.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-xs font-semibold no-underline hover:bg-green-500/20 transition-colors">🔁 Copy Trading</Link>
+            <Link to="/signals"      className="px-3 py-1.5 bg-violet-500/10 border border-violet-500/30 rounded-lg text-violet-400 text-xs font-semibold no-underline hover:bg-violet-500/20 transition-colors">📡 Signals</Link>
+          </div>
+        }
+      />
+
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-14 rounded-xl bg-terminal-surface border border-terminal-border animate-pulse" />
+          ))}
+        </div>
+      ) : loadErr ? (
+        <div className="bg-red-950/40 border border-red-800 rounded-xl p-4 text-red-400 text-sm">⚠️ {loadErr}</div>
+      ) : traders.length === 0 ? (
+        <EmptyState
+          icon="🏆"
+          title="No traders ranked yet"
+          description="The leaderboard populates once traders have closed positions. Start trading to appear here."
+          action={
+            <div className="flex gap-2">
+              <Link to="/trade"        className="px-4 py-2 bg-blue-600 rounded-lg text-white text-sm font-semibold no-underline hover:bg-blue-500 transition-colors">⚡ Start Trading</Link>
+              <Link to="/copy-trading" className="px-4 py-2 bg-transparent border border-terminal-border rounded-lg text-slate-400 text-sm no-underline hover:border-slate-500 transition-colors">🔁 Copy Trading</Link>
+            </div>
+          }
+          links={[
+            { label: '📡 Signals',    href: '/signals' },
+            { label: '🛒 Marketplace',href: '/marketplace' },
+          ]}
+        />
+      ) : (
+        <>
+          {/* Podium — horizontal scroll on xs, flex on sm+ */}
+          <div className="flex gap-3 sm:gap-4 mb-6 sm:mb-8 items-end overflow-x-auto pb-1"
+            style={{ scrollbarWidth: 'none' } as React.CSSProperties}>
+            {[top3[1], top3[0], top3[2]].map((trader, i) =>
+              trader
+                ? <PodiumCard key={trader.rank} trader={trader} tall={i === 1} />
+                : <div key={i} className="flex-1 min-w-[100px]" />
+            )}
           </div>
 
-          {/* Full table */}
-          <div style={s.tableCard}>
-            <table style={s.table}>
+          {/* Filters row — stacks on mobile */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4">
+            <div className="flex gap-2 flex-1">
+              <input
+                type="text"
+                placeholder="Search trader…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="flex-1 min-w-0 bg-terminal-raised border border-terminal-border rounded-lg text-slate-100 px-3 py-2 text-sm outline-none focus:border-blue-500 transition-colors"
+              />
+              {stratTags.length > 0 && (
+                <select value={stratFilter} onChange={e => setStratFilter(e.target.value)}
+                  className="bg-terminal-raised border border-terminal-border rounded-lg text-slate-100 px-3 py-2 text-sm outline-none focus:border-blue-500 cursor-pointer flex-shrink-0">
+                  <option value="">All strategies</option>
+                  {stratTags.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-slate-600">{sorted.length} traders · Sort:</span>
+              {(['return', 'sharpe', 'win_rate', 'followers'] as const).map((col) => (
+                <button key={col} onClick={() => setSortBy(col)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold border cursor-pointer transition-all whitespace-nowrap ${
+                    sortBy === col
+                      ? 'bg-blue-500/20 border-blue-500 text-blue-400'
+                      : 'bg-transparent border-terminal-border text-slate-500 hover:border-slate-400'
+                  }`}>
+                  {col === 'win_rate' ? 'Win%' : col.charAt(0).toUpperCase() + col.slice(1)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Table — horizontal scroll on mobile */}
+          <div className="bg-terminal-surface border border-terminal-border rounded-xl overflow-hidden">
+            <div className="overflow-x-auto" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+            <table className="w-full border-collapse" style={{ minWidth: 640 }}>
               <thead>
-                <tr>
-                  {['Rank', 'Trader', 'Return', 'Sharpe', 'Win Rate', 'Max DD', 'Trades', 'Followers', 'Prize', ''].map((h) => (
-                    <th key={h} style={s.th}>{h}</th>
+                <tr className="bg-terminal-bg">
+                  {['Rank', 'Trader', 'Return', 'Sharpe', 'Win%', 'Max DD', 'Trades', 'Followers', 'Prize', ''].map((h) => (
+                    <th key={h} className="text-left text-slate-500 text-2xs font-semibold uppercase tracking-wider px-3 sm:px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {sorted.map((trader) => (
-                  <tr key={trader.rank} style={s.tr}>
-                    <td style={s.td}>
-                      {trader.rank <= 3
-                        ? <span style={{ color: MEDAL_COLORS[trader.rank - 1], fontSize: 18 }}>🏅</span>
-                        : <span style={{ color: '#475569' }}>#{trader.rank}</span>}
-                    </td>
-                    <td style={{ ...s.td, fontWeight: 600, color: '#f1f5f9' }}>
-                      {trader.name}
-                      {trader.verified && <span style={{ marginLeft: 6, fontSize: 11, color: '#3b82f6' }}>✓</span>}
-                    </td>
-                    <td style={{ ...s.td, color: trader.return >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-                      {trader.return >= 0 ? '+' : ''}{trader.return.toFixed(1)}%
-                    </td>
-                    <td style={s.td}>{trader.sharpe.toFixed(2)}</td>
-                    <td style={{ ...s.td, color: (trader.win_rate ?? 0) >= 60 ? '#4ade80' : '#94a3b8' }}>
-                      {trader.win_rate != null ? `${trader.win_rate.toFixed(1)}%` : '—'}
-                    </td>
-                    <td style={{ ...s.td, color: '#f87171' }}>
-                      {trader.max_drawdown != null ? `${trader.max_drawdown.toFixed(1)}%` : '—'}
-                    </td>
-                    <td style={s.td}>{trader.total_trades?.toLocaleString() ?? '—'}</td>
-                    <td style={s.td}>{trader.followers.toLocaleString()}</td>
-                    <td style={{ ...s.td, color: '#fbbf24', fontWeight: 600 }}>{trader.prize}</td>
-                    <td style={s.td}>
-                      <button
-                        onClick={() => navigate('/copy-trading')}
-                        style={{
-                          background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.4)',
-                          borderRadius: 6, color: '#fbbf24', fontSize: 11, cursor: 'pointer',
-                          padding: '5px 12px', fontWeight: 700, whiteSpace: 'nowrap',
-                        }}
-                      >
-                        🔁 Copy
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {sorted.map((trader) => {
+                  const copyTo = trader.user_id ? `/copy-trading?trader=${trader.user_id}` : '/copy-trading';
+                  const profileTo = trader.user_id ? `/trader/${trader.user_id}` : null;
+                  return (
+                    <tr key={trader.rank} className="border-t border-terminal-border/60 hover:bg-terminal-raised/40 transition-colors">
+                      <td className="px-3 sm:px-4 py-3">
+                        <div className="flex items-center gap-1">
+                          {trader.rank <= 3
+                            ? <span className="text-base sm:text-lg">{MEDAL[trader.rank]}</span>
+                            : <span className="text-slate-500 text-sm">#{trader.rank}</span>}
+                          {trader.rank <= 5 && <span className="text-2xs text-green-400 font-bold">▲</span>}
+                          {trader.rank > 10 && trader.rank <= 15 && <span className="text-2xs text-red-400 font-bold">▼</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 sm:px-4 py-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-slate-100 text-sm whitespace-nowrap">{trader.name}</span>
+                          {trader.verified && <span className="text-blue-400 text-xs">✓</span>}
+                          {trader.rank === 1 && <span className="text-2xs px-1.5 py-0.5 bg-amber-500/15 border border-amber-500/40 rounded text-amber-400 font-bold">TOP</span>}
+                          {trader.strategy_tag && <span className="text-2xs px-1.5 py-0.5 bg-violet-500/10 border border-violet-500/30 rounded text-violet-400 hidden sm:inline">{trader.strategy_tag}</span>}
+                        </div>
+                        {trader.country && <div className="text-2xs text-slate-600 mt-0.5">{trader.country}</div>}
+                      </td>
+                      <td className={`px-3 sm:px-4 py-3 font-semibold text-sm tabular-nums whitespace-nowrap ${trader.return >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {trader.return >= 0 ? '+' : ''}{trader.return.toFixed(1)}%
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-300 text-sm tabular-nums">{trader.sharpe.toFixed(2)}</td>
+                      <td className={`px-3 sm:px-4 py-3 text-sm tabular-nums ${(trader.win_rate ?? 0) >= 60 ? 'text-green-400' : 'text-slate-400'}`}>
+                        {trader.win_rate != null ? `${trader.win_rate.toFixed(1)}%` : '—'}
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 text-red-400 text-sm tabular-nums">
+                        {trader.max_drawdown != null ? `${trader.max_drawdown.toFixed(1)}%` : '—'}
+                      </td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-400 text-sm tabular-nums">{trader.total_trades?.toLocaleString() ?? '—'}</td>
+                      <td className="px-3 sm:px-4 py-3 text-slate-400 text-sm tabular-nums">{trader.followers.toLocaleString()}</td>
+                      <td className="px-3 sm:px-4 py-3 text-amber-400 font-semibold text-sm whitespace-nowrap">{trader.prize}</td>
+                      <td className="px-3 sm:px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <Link to={copyTo}
+                            className="bg-amber-500/12 border border-amber-500/40 rounded-md text-amber-400 text-xs font-bold px-2 sm:px-2.5 py-1 no-underline hover:bg-amber-500/20 transition-colors whitespace-nowrap">
+                            🔁 Copy
+                          </Link>
+                          {profileTo && (
+                            <Link to={profileTo}
+                              className="bg-transparent border border-terminal-border rounded-md text-slate-500 text-xs px-2 py-1 no-underline hover:border-slate-400 hover:text-slate-300 transition-colors hidden sm:inline-block">
+                              Profile
+                            </Link>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}
+
+      <CrossLinkBar title="Related" className="mt-6" links={[
+        { label: '🔁 Copy Trading', href: '/copy-trading', color: '#34d399' },
+        { label: '📡 Signal Feed',  href: '/signals',      color: '#a78bfa' },
+        { label: '🛒 Marketplace',  href: '/marketplace',  color: '#60a5fa' },
+        { label: '🤝 Affiliate',    href: '/affiliate',    color: '#4ade80' },
+        { label: '💬 Chat',         href: '/chat',         color: '#fbbf24' },
+        { label: '📊 Performance',  href: '/performance',  color: '#f97316' },
+      ]}/>
     </div>
   );
-};
-
-// ── Podium card ───────────────────────────────────────────────────────────────
-
-const PodiumCard: React.FC<{
-  trader: Trader;
-  medalColor: string;
-  tall?: boolean;
-  onCopy: () => void;
-}> = ({ trader, medalColor, tall, onCopy }) => (
-  <div style={{
-    ...s.podiumCard,
-    border: `1px solid ${medalColor}55`,
-    marginTop: tall ? 0 : 24,
-    flex: 1,
-  }}>
-    <div style={{
-      width: 32, height: 32, borderRadius: '50%', background: medalColor,
-      color: '#0f172a', fontWeight: 800, fontSize: 14,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      margin: '0 auto 12px',
-    }}>
-      {trader.rank}
-    </div>
-    <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', textAlign: 'center' }}>{trader.name}</div>
-    <div style={{ fontSize: 26, fontWeight: 800, color: '#4ade80', textAlign: 'center', margin: '6px 0' }}>
-      +{trader.return.toFixed(1)}%
-    </div>
-    <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginBottom: 12 }}>
-      Sharpe {trader.sharpe.toFixed(2)} · {trader.followers.toLocaleString()} followers
-    </div>
-    <button onClick={onCopy} style={{
-      width: '100%', background: medalColor, color: '#0f172a', border: 'none',
-      borderRadius: 6, padding: '8px 0', fontWeight: 700, fontSize: 12, cursor: 'pointer',
-    }}>
-      Copy Trader
-    </button>
-  </div>
-);
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const s: Record<string, React.CSSProperties> = {
-  page:            { padding: 24, maxWidth: 1100, margin: '0 auto' },
-  header:          { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 },
-  title:           { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: 0 },
-  periodBtn:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, color: '#64748b', cursor: 'pointer', fontSize: 13, padding: '7px 14px' },
-  periodBtnActive: { background: '#1e3a5f', border: '1px solid #3b82f6', color: '#60a5fa' },
-  podium:          { display: 'flex', gap: 16, marginBottom: 32, alignItems: 'flex-end' },
-  podiumCard:      { background: '#1e293b', borderRadius: 12, padding: '24px 16px' },
-  tableCard:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, overflow: 'hidden' },
-  table:           { width: '100%', borderCollapse: 'collapse' },
-  th:              { textAlign: 'left', color: '#475569', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', padding: '12px 16px', background: '#0f172a', letterSpacing: 0.5 },
-  tr:              { borderBottom: '1px solid #334155' },
-  td:              { padding: '12px 16px', color: '#94a3b8', fontSize: 13 },
 };
 
 export default Leaderboard;

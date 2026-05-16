@@ -65,8 +65,15 @@ import asyncio
 import logging
 import os
 import time
-from collections import deque
+import sys
 from datetime import datetime
+
+if sys.version_info >= (3, 11):
+    from datetime import UTC
+else:
+    from datetime import timezone
+
+    UTC = timezone.utc
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -103,8 +110,8 @@ _WS_BROADCAST_QUEUE_SIZE = int(os.getenv("ORCHESTRATOR_WS_QUEUE", "256"))
 
 
 class _CircuitState(Enum):
-    CLOSED = "closed"      # Normal operation
-    OPEN = "open"          # Failing — calls rejected
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"  # Failing — calls rejected
     HALF_OPEN = "half_open"  # Testing recovery
 
 
@@ -142,10 +149,9 @@ class CircuitBreaker:
 
     @property
     def state(self) -> _CircuitState:
-        if self._state == _CircuitState.OPEN:
-            if time.monotonic() - self._last_failure_ts >= self._recovery_timeout:
-                self._state = _CircuitState.HALF_OPEN
-                logger.info("CircuitBreaker[%s]: OPEN → HALF_OPEN (probe allowed)", self.name)
+        if self._state == _CircuitState.OPEN and time.monotonic() - self._last_failure_ts >= self._recovery_timeout:
+            self._state = _CircuitState.HALF_OPEN
+            logger.info("CircuitBreaker[%s]: OPEN → HALF_OPEN (probe allowed)", self.name)
         return self._state
 
     def is_open(self) -> bool:
@@ -154,11 +160,7 @@ class CircuitBreaker:
     def allow_call(self) -> bool:
         """Return True if the call should be allowed through."""
         s = self.state
-        if s == _CircuitState.CLOSED:
-            return True
-        if s == _CircuitState.HALF_OPEN:
-            return True  # Allow one probe
-        return False  # OPEN — reject
+        return s in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN)
 
     def record_success(self) -> None:
         self._total_calls += 1
@@ -175,13 +177,14 @@ class CircuitBreaker:
         self._total_failures += 1
         self._failure_count += 1
         self._last_failure_ts = time.monotonic()
-        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN):
-            if self._failure_count >= self._threshold:
-                self._state = _CircuitState.OPEN
-                logger.warning(
-                    "CircuitBreaker[%s]: → OPEN after %d failures (last: %s)",
-                    self.name, self._failure_count, exc,
-                )
+        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN) and self._failure_count >= self._threshold:
+            self._state = _CircuitState.OPEN
+            logger.warning(
+                "CircuitBreaker[%s]: → OPEN after %d failures (last: %s)",
+                self.name,
+                self._failure_count,
+                exc,
+            )
 
     def reset(self) -> None:
         self._state = _CircuitState.CLOSED
@@ -408,12 +411,11 @@ class MarketDataOrchestrator:
             logger.info("MarketDataOrchestrator: Redis connected (%s)", _REDIS_URL)
         except Exception as exc:
             self._redis_healthy = False
-            logger.error(
+            # Warn (not error) — degraded mode is expected in dev/offline environments.
+            logger.warning(
                 "MarketDataOrchestrator: Redis UNAVAILABLE (%s) — caching disabled. "
-                "System will continue in degraded mode. "
-                "Set REDIS_URL env var and ensure Redis is running. "
-                "Trading continues but tick caching, cross-pod kill-switch propagation, "
-                "and order state persistence are offline.",
+                "Trading continues in degraded mode (no tick cache, no kill-switch propagation). "
+                "Set REDIS_URL and ensure Redis is running to restore full functionality.",
                 exc,
             )
 
@@ -423,6 +425,7 @@ class MarketDataOrchestrator:
             self._sentiment._lineage = self._lineage
             logger.info("MarketDataOrchestrator: DataLineageStore started")
         except Exception as exc:
+            # Non-fatal — lineage is an audit trail, not a trading dependency.
             logger.warning("MarketDataOrchestrator: lineage store error: %s", exc)
 
         # 3. Gold feed manager
@@ -456,40 +459,59 @@ class MarketDataOrchestrator:
         _FEED_TIMEOUT = float(os.getenv("ORCHESTRATOR_FEED_TIMEOUT_S", "15.0"))
 
         # 6. FRED → MacroStore bridge
+        # Timeouts on feeds 6-9 are expected in offline/dev environments.
+        # Each feed injects zero-filled neutral series so ML features are never
+        # NaN.  Log at INFO (not WARNING) — degraded mode is handled gracefully.
         try:
             await asyncio.wait_for(self._macro_bridge.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: MacroStoreBridge started")
-        except asyncio.TimeoutError:
-            logger.warning("MarketDataOrchestrator: MacroStoreBridge timed out after %.0fs — macro features degraded", _FEED_TIMEOUT)
+        except (TimeoutError, asyncio.TimeoutError):
+            logger.info(
+                "MarketDataOrchestrator: MacroStoreBridge timed out after %.0fs "
+                "— macro features degraded (FRED unreachable, neutral series injected)",
+                _FEED_TIMEOUT,
+            )
         except Exception as exc:
-            logger.warning("MarketDataOrchestrator: macro bridge error: %s", exc)
+            logger.info("MarketDataOrchestrator: macro bridge error: %s", exc)
 
         # 7. CFTC COT feed — real gold futures positioning (free, weekly)
         try:
             await asyncio.wait_for(self._cot_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: CFTCCOTFeed started")
-        except asyncio.TimeoutError:
-            logger.warning("MarketDataOrchestrator: CFTCCOTFeed timed out after %.0fs — COT features zero-filled", _FEED_TIMEOUT)
+        except (TimeoutError, asyncio.TimeoutError):
+            logger.info(
+                "MarketDataOrchestrator: CFTCCOTFeed timed out after %.0fs "
+                "— COT features zero-filled (CFTC unreachable)",
+                _FEED_TIMEOUT,
+            )
         except Exception as exc:
-            logger.warning("MarketDataOrchestrator: COT feed error: %s", exc)
+            logger.info("MarketDataOrchestrator: COT feed error: %s", exc)
 
         # 8. IMF central bank gold reserves (free, monthly)
         try:
             await asyncio.wait_for(self._imf_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: IMFGoldFeed started")
-        except asyncio.TimeoutError:
-            logger.warning("MarketDataOrchestrator: IMFGoldFeed timed out after %.0fs — IMF features zero-filled", _FEED_TIMEOUT)
+        except (TimeoutError, asyncio.TimeoutError):
+            logger.info(
+                "MarketDataOrchestrator: IMFGoldFeed timed out after %.0fs "
+                "— IMF features zero-filled (dataservices.imf.org unreachable)",
+                _FEED_TIMEOUT,
+            )
         except Exception as exc:
-            logger.warning("MarketDataOrchestrator: IMF feed error: %s", exc)
+            logger.info("MarketDataOrchestrator: IMF feed error: %s", exc)
 
         # 9. Yahoo Finance cross-asset macro (SPX, GLD, copper, oil, USDCNY)
         try:
             await asyncio.wait_for(self._yahoo_macro.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: YahooMacroFeed started")
-        except asyncio.TimeoutError:
-            logger.warning("MarketDataOrchestrator: YahooMacroFeed timed out after %.0fs — Yahoo macro features zero-filled", _FEED_TIMEOUT)
+        except (TimeoutError, asyncio.TimeoutError):
+            logger.info(
+                "MarketDataOrchestrator: YahooMacroFeed timed out after %.0fs "
+                "— Yahoo macro features zero-filled (Yahoo Finance unreachable)",
+                _FEED_TIMEOUT,
+            )
         except Exception as exc:
-            logger.warning("MarketDataOrchestrator: Yahoo macro feed error: %s", exc)
+            logger.info("MarketDataOrchestrator: Yahoo macro feed error: %s", exc)
 
         # 10. Ensure macro CSV fallback is loaded so features are never zero at startup
         #    at startup even without a FRED key or network access.
@@ -763,17 +785,19 @@ class MarketDataOrchestrator:
 
         # ── WebSocket broadcast (non-blocking enqueue) ────────────────────
         try:
-            ws_msg = _json.dumps({
-                "type": "tick",
-                "symbol": tick.symbol,
-                "bid": tick.bid,
-                "ask": tick.ask,
-                "mid": tick.mid,
-                "spread": tick.spread,
-                "source": tick.source.value,
-                "quality": tick.quality.value,
-                "timestamp": tick.timestamp.isoformat(),
-            })
+            ws_msg = _json.dumps(
+                {
+                    "type": "tick",
+                    "symbol": tick.symbol,
+                    "bid": tick.bid,
+                    "ask": tick.ask,
+                    "mid": tick.mid,
+                    "spread": tick.spread,
+                    "source": tick.source.value,
+                    "quality": tick.quality.value,
+                    "timestamp": tick.timestamp.isoformat(),
+                }
+            )
             self._ws_broadcaster.enqueue(ws_msg)
         except Exception as exc:
             logger.debug("Orchestrator: WS broadcast enqueue error: %s", exc)
@@ -788,8 +812,11 @@ class MarketDataOrchestrator:
         # ── Async tick subscriber fanout (fire-and-forget) ────────────────
         for _name, _coro_fn in list(self._async_tick_callbacks.items()):
             try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
+                try:
+                    loop = asyncio.get_running_loop()
+                except RuntimeError:
+                    loop = None
+                if loop is not None:
                     asyncio.create_task(_coro_fn(tick), name=f"tick_cb_{_name}")
             except Exception as _exc:
                 logger.debug("Orchestrator: async tick callback %s error: %s", _name, _exc)
@@ -872,10 +899,7 @@ class MarketDataOrchestrator:
             # Used by the ML model to capture intraday seasonality
             # (gold is most liquid during London/NY overlap 13:00-17:00 UTC)
             seconds_since_midnight = (
-                ref_time.hour * 3600
-                + ref_time.minute * 60
-                + ref_time.second
-                + ref_time.microsecond / 1_000_000
+                ref_time.hour * 3600 + ref_time.minute * 60 + ref_time.second + ref_time.microsecond / 1_000_000
             )
             features["session_time"] = round(seconds_since_midnight / 86400.0, 6)
 
@@ -930,11 +954,7 @@ class MarketDataOrchestrator:
                         "source": getattr(a, "source", ""),
                         "sentiment_score": getattr(a, "sentiment_score", 0.0),
                         "sentiment_label": getattr(a, "sentiment_label", "neutral"),
-                        "published_at": (
-                            a.published_at.isoformat()
-                            if getattr(a, "published_at", None)
-                            else None
-                        ),
+                        "published_at": (a.published_at.isoformat() if getattr(a, "published_at", None) else None),
                         "url": getattr(a, "url", None),
                     }
                     for a in (raw_articles or [])[:5]
@@ -1284,9 +1304,7 @@ class MarketDataOrchestrator:
         # sub-component health indicators for the OrchestratorHealthGrid.
         h["aggregate_health"] = self._compute_aggregate_health(h)
         h["status"] = (
-            "healthy" if h["aggregate_health"] >= 0.7
-            else "degraded" if h["aggregate_health"] >= 0.3
-            else "unhealthy"
+            "healthy" if h["aggregate_health"] >= 0.7 else "degraded" if h["aggregate_health"] >= 0.3 else "unhealthy"
         )
 
         return h
@@ -1306,18 +1324,16 @@ class MarketDataOrchestrator:
         score = 0.0
 
         # Gold feed: score proportional to active source count (max 5 sources)
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):  # nosec B110
             gold = h.get("gold_feed", {})
             active = len(gold.get("active_sources", []))
             score += 0.30 * min(active / 3.0, 1.0)  # 3+ sources = full score
-        except Exception:  # nosec B110
-            pass
 
         # Redis
-        try:
+        with contextlib.suppress(Exception):  # nosec B110
             score += 0.20 if h.get("redis_healthy", False) else 0.0
-        except Exception:  # nosec B110
-            pass
 
         # DQE source confidence — average across all sources
         try:

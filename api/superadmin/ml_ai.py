@@ -55,14 +55,8 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
         else:
             result["status"] = "unavailable"
 
-        result["active_model"] = (
-            health.get("model_version")
-            or health.get("model_id")
-            or "unknown"
-        )
-        result["inference_latency_ms"] = round(
-            float(health.get("last_latency_ms", 0.0)), 2
-        )
+        result["active_model"] = health.get("model_version") or health.get("model_id") or "unknown"
+        result["inference_latency_ms"] = round(float(health.get("last_latency_ms", 0.0)), 2)
         result["predictions_today"] = int(health.get("predict_count", 0))
 
         # oos_accuracy is stored as a fraction (0–1); frontend shows as percentage
@@ -82,9 +76,7 @@ async def get_ml_status(user: TokenPayload = Depends(_require_superadmin)) -> di
             raw = rc.get("ml:drift:status")
             if raw:
                 drift_data = _json.loads(raw)
-                result["drift_score"] = round(
-                    float(drift_data.get("drift_score", 0.0)), 4
-                )
+                result["drift_score"] = round(float(drift_data.get("drift_score", 0.0)), 4)
     except Exception as exc:
         logger.debug("get_ml_status: drift score redis: %s", exc)
 
@@ -116,8 +108,9 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
         predict_count_today = 0
         try:
             from ml.inference_engine import get_inference_engine
+
             predict_count_today = get_inference_engine()._predict_count
-        except Exception:  # noqa: BLE001 — inference engine is optional
+        except Exception:  # nosec B110
             pass
 
         for name, info in versions.items():
@@ -155,16 +148,14 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
 
             saved_dir = pathlib.Path(__file__).parent.parent.parent / "ml" / "saved_models"
             for pkl in sorted(saved_dir.glob("*.pkl")):
-                stat = pkl.stat()
+                pkl.stat()
                 models.append(
                     {
                         "name": pkl.stem,
                         "version": "1.0",
                         "status": "active",
                         "accuracy": 0.0,
-                        "last_trained": _utcnow().replace(
-                            second=0, microsecond=0
-                        ).isoformat(),
+                        "last_trained": _utcnow().replace(second=0, microsecond=0).isoformat(),
                         "predictions_today": 0,
                         "drift_score": 0.0,
                         "deployed_at": None,
@@ -191,13 +182,67 @@ async def retrain_model(model_name: str, user: TokenPayload = Depends(_require_s
 @router.post("/ml/deploy")
 async def deploy_model(body: DeployModelBody, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     _log_superadmin_action(user, "deploy_model", f"{body.model}@{body.version}")
-    return {"ok": True, "model": body.model, "version": body.version, "status": "deploy_queued"}
+    try:
+        from ml.model_registry import get_registry
+
+        registry = get_registry()
+        registry.promote(body.model)
+        # Reload the inference engine so it picks up the newly promoted model
+        try:
+            from ml.inference_engine import get_inference_engine
+
+            engine = get_inference_engine()
+            if hasattr(engine, "reload"):
+                await engine.reload() if hasattr(engine.reload, "__await__") else engine.reload()
+        except Exception as exc:
+            logger.warning("deploy_model: inference engine reload failed: %s", exc)
+        return {"ok": True, "model": body.model, "version": body.version, "status": "deployed"}
+    except Exception as exc:
+        logger.warning("deploy_model %s@%s failed: %s", body.model, body.version, exc)
+        raise HTTPException(status_code=500, detail="Deploy failed.") from exc
 
 
 @router.post("/ml/rollback/{model_name}")
 async def rollback_model(model_name: str, user: TokenPayload = Depends(_require_superadmin)) -> dict:
     _log_superadmin_action(user, "rollback_model", model_name)
-    return {"ok": True, "model": model_name, "status": "rollback_queued"}
+    try:
+        from ml.model_registry import get_registry
+
+        registry = get_registry()
+        # Demote the current active version back to staging, then promote the
+        # previous production version if one exists.
+        manifest = registry._load()
+        versions = manifest.get("versions", {})
+        active = manifest.get("active_version")
+        # Find the most recent non-active production or staging version
+        candidates = [
+            (name, info)
+            for name, info in versions.items()
+            if name != active and info.get("state") in ("production", "staging")
+        ]
+        if not candidates:
+            raise HTTPException(status_code=404, detail="No previous version available for rollback")
+        # Sort by registered_at descending and pick the most recent
+        candidates.sort(key=lambda x: x[1].get("registered_at", ""), reverse=True)
+        prev_name, _ = candidates[0]
+        # Use rollback() which bypasses quality gates — this is an emergency
+        # restore of a previously-validated model, not a new promotion.
+        registry.rollback(prev_name)
+        # Reload inference engine
+        try:
+            from ml.inference_engine import get_inference_engine
+
+            engine = get_inference_engine()
+            if hasattr(engine, "reload"):
+                await engine.reload() if hasattr(engine.reload, "__await__") else engine.reload()
+        except Exception as exc:
+            logger.warning("rollback_model: inference engine reload failed: %s", exc)
+        return {"ok": True, "model": model_name, "rolled_back_to": prev_name, "status": "rolled_back"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("rollback_model %s failed: %s", model_name, exc)
+        raise HTTPException(status_code=500, detail="Rollback failed.") from exc
 
 
 @router.get("/ml/metrics")
@@ -252,6 +297,7 @@ async def list_training_jobs(user: TokenPayload = Depends(_require_superadmin)) 
     """Active and recent ML training jobs."""
     try:
         from ml.training_manager import get_training_manager  # type: ignore[import]
+
         mgr = get_training_manager()
         return {"jobs": mgr.list_jobs()}
     except Exception:  # nosec B110
@@ -259,13 +305,19 @@ async def list_training_jobs(user: TokenPayload = Depends(_require_superadmin)) 
     # Fallback: read from DB or return empty
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
                 from database.models import SystemEvent
-                rows = db.query(SystemEvent).filter(
-                    SystemEvent.event_type == "ml_training"
-                ).order_by(SystemEvent.created_at.desc()).limit(50).all()
+
+                rows = (
+                    db.query(SystemEvent)
+                    .filter(SystemEvent.event_type == "ml_training")
+                    .order_by(SystemEvent.created_at.desc())
+                    .limit(50)
+                    .all()
+                )
                 jobs = [
                     {
                         "id": str(r.id),
@@ -288,19 +340,26 @@ async def list_ab_tests(user: TokenPayload = Depends(_require_superadmin)) -> di
     """Active A/B tests for ML models."""
     try:
         from ml.ab_testing import get_ab_test_manager  # type: ignore[import]
+
         mgr = get_ab_test_manager()
         return {"tests": mgr.list_tests()}
     except Exception:  # nosec B110
         pass
     try:
         from database.connection import get_db_manager
+
         mgr = get_db_manager()
         if mgr:
             with mgr.session() as db:
                 from database.models import SystemEvent
-                rows = db.query(SystemEvent).filter(
-                    SystemEvent.event_type == "ab_test"
-                ).order_by(SystemEvent.created_at.desc()).limit(20).all()
+
+                rows = (
+                    db.query(SystemEvent)
+                    .filter(SystemEvent.event_type == "ab_test")
+                    .order_by(SystemEvent.created_at.desc())
+                    .limit(20)
+                    .all()
+                )
                 tests = [
                     {
                         "id": str(r.id),
@@ -325,6 +384,7 @@ async def get_model_drift(user: TokenPayload = Depends(_require_superadmin)) -> 
     """Model drift metrics for all deployed models."""
     try:
         from ml.drift_detector import get_drift_detector  # type: ignore[import]
+
         detector = get_drift_detector()
         return detector.get_all_drift()
     except Exception:  # nosec B110
@@ -348,6 +408,7 @@ async def get_model_explainability(
     """SHAP / feature importance for a deployed model."""
     try:
         from ml.explainability import get_shap_values  # type: ignore[import]
+
         return get_shap_values(model)
     except Exception:  # nosec B110
         pass
@@ -355,17 +416,17 @@ async def get_model_explainability(
     try:
         import pickle
         from pathlib import Path
+
         model_path = Path("ml/saved_models") / f"{model}.pkl"
         if model_path.exists():
             with open(model_path, "rb") as f:
-                clf = pickle.load(f)
+                clf = pickle.load(f)  # nosec B301 — path-confined local model file
             if hasattr(clf, "feature_importances_"):
                 features = getattr(clf, "feature_names_in_", [f"f{i}" for i in range(len(clf.feature_importances_))])
                 importance = [
                     {"feature": str(feat), "importance": round(float(imp), 6)}
                     for feat, imp in sorted(
-                        zip(features, clf.feature_importances_),
-                        key=lambda x: x[1], reverse=True
+                        zip(features, clf.feature_importances_, strict=False), key=lambda x: x[1], reverse=True
                     )
                 ]
                 return {

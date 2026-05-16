@@ -12,6 +12,7 @@ export type SettingsTab =
   | 'billing'
   | 'integrations'
   | 'system'
+  | 'performance'
   | 'privacy'
   | 'accessibility'
   | 'admin'

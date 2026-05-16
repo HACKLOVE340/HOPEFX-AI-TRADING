@@ -30,6 +30,7 @@ def _get_indicator_library():
     if _indicator_library is None:
         try:
             from charting.indicators import indicator_library
+
             _indicator_library = indicator_library
         except Exception as exc:
             logger.debug("IndicatorLibrary unavailable: %s", exc)
@@ -93,15 +94,26 @@ class Chart:
         """
         if not self.candles:
             return {"values": []}
-        close  = [c["close"]  for c in self.candles]
-        high   = [c["high"]   for c in self.candles]
-        low    = [c["low"]    for c in self.candles]
+        close = [c["close"] for c in self.candles]
+        high = [c["high"] for c in self.candles]
+        low = [c["low"] for c in self.candles]
         volume = [c.get("volume", 0.0) for c in self.candles]
         try:
             from charting.indicators import (
-                ADX, ATR, BollingerBands, CMF, DonchianChannels,
-                Ichimoku, KeltnerChannels, MACD, MFI, OBV, Stochastic, VWAP,
+                ADX,
+                ATR,
+                BollingerBands,
+                CMF,
+                DonchianChannels,
+                Ichimoku,
+                KeltnerChannels,
+                MACD,
+                MFI,
+                OBV,
+                Stochastic,
+                VWAP,
             )
+
             name_upper = name.upper()
             if name_upper == "MACD":
                 macd, sig, hist = MACD(**params).calculate_full(close)
@@ -180,18 +192,22 @@ class Chart:
             # Try multi-series first (MACD, BB, ADX, etc.)
             multi = self.compute_indicator_hlcv(name, **params)
             if len(multi) > 1 or (len(multi) == 1 and "values" not in multi):
-                computed_indicators.append({
-                    "name": name,
-                    "params": params,
-                    "series": multi,
-                })
+                computed_indicators.append(
+                    {
+                        "name": name,
+                        "params": params,
+                        "series": multi,
+                    }
+                )
             else:
                 values = multi.get("values") or self.compute_indicator(name, **params)
-                computed_indicators.append({
-                    "name": name,
-                    "params": params,
-                    "values": values,
-                })
+                computed_indicators.append(
+                    {
+                        "name": name,
+                        "params": params,
+                        "values": values,
+                    }
+                )
 
         return {
             "symbol": self.symbol,
@@ -219,16 +235,16 @@ class ChartEngine:
 
     # Default indicator set applied to every new chart
     DEFAULT_INDICATORS: list[dict[str, Any]] = [
-        {"name": "EMA",  "params": {"period": 21}},
-        {"name": "EMA",  "params": {"period": 50}},
-        {"name": "SMA",  "params": {"period": 200}},
-        {"name": "BB",   "params": {"period": 20, "std_dev": 2.0}},
-        {"name": "RSI",  "params": {"period": 14}},
+        {"name": "EMA", "params": {"period": 21}},
+        {"name": "EMA", "params": {"period": 50}},
+        {"name": "SMA", "params": {"period": 200}},
+        {"name": "BB", "params": {"period": 20, "std_dev": 2.0}},
+        {"name": "RSI", "params": {"period": 14}},
         {"name": "MACD", "params": {"fast": 12, "slow": 26, "signal": 9}},
-        {"name": "ATR",  "params": {"period": 14}},
+        {"name": "ATR", "params": {"period": 14}},
         {"name": "VWAP", "params": {}},
-        {"name": "OBV",  "params": {}},
-        {"name": "ADX",  "params": {"period": 14}},
+        {"name": "OBV", "params": {}},
+        {"name": "ADX", "params": {"period": 14}},
     ]
 
     def __init__(self) -> None:

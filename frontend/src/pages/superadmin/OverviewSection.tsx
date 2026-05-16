@@ -8,6 +8,7 @@ import {
 } from './ui';
 import type { PlatformOverview } from './types';
 import { useSuperAdminNav } from './types';
+import { extractApiError } from '../../lib/utils';
 
 // ── Infra detail types ────────────────────────────────────────────────────────
 interface InfraHealth {
@@ -128,9 +129,7 @@ const OverviewSection: React.FC = () => {
       setData(res.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      const msg = (e as { response?: { data?: { detail?: string } }; message?: string })
-        ?.response?.data?.detail ?? (e as { message?: string })?.message ?? 'Failed to load overview';
-      setError(msg);
+      setError(extractApiError(e, 'Failed to load overview'));
     } finally {
       if (mountedRef.current) setLoading(false);
       if (mountedRef.current) setRefreshing(false);
@@ -165,7 +164,7 @@ const OverviewSection: React.FC = () => {
       setInfraMsg('Cache flushed successfully');
       setTimeout(loadInfra, 800);
     } catch (e: unknown) {
-      setInfraMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Cache flush failed');
+      setInfraMsg(extractApiError(e, 'Cache flush failed'));
     } finally { setFlushing(false); }
   };
 
@@ -179,7 +178,7 @@ const OverviewSection: React.FC = () => {
       setActionMsg(enabling ? '🛑 Kill switch activated — trading halted' : '▶️ Kill switch deactivated — trading resumed');
       load(true);
     } catch (e: unknown) {
-      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Kill-switch toggle failed');
+      setActionMsg(extractApiError(e, 'Kill-switch toggle failed'));
     } finally { if (mountedRef.current) setActionBusy(null); }
   };
 
@@ -193,7 +192,7 @@ const OverviewSection: React.FC = () => {
       setActionMsg(enabling ? '🔧 Maintenance mode enabled' : '✅ Maintenance mode disabled');
       load(true);
     } catch (e: unknown) {
-      setActionMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Maintenance toggle failed');
+      setActionMsg(extractApiError(e, 'Maintenance toggle failed'));
     } finally { if (mountedRef.current) setActionBusy(null); }
   };
 

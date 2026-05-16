@@ -33,8 +33,6 @@ Register in core/router_registry.py::
     app.include_router(fixes_router)
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from datetime import datetime, timezone
@@ -44,12 +42,17 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from api.auth import require_role
 
 from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
+router = APIRouter(
+    prefix="/api/security/fixes",
+    tags=["security-fixes"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────

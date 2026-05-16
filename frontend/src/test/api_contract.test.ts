@@ -22,9 +22,8 @@ import type {
   Position,
   Signal,
   AccountMetrics,
-  OrchestratorHealth,
 } from '../store';
-import type { QualityReport } from '../types/trading';
+import type { QualityReport, OrchestratorHealth } from '../types/trading';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

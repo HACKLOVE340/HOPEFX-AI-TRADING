@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, UserPlus, AlertCircle, CheckCircle } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 export default function Register() {
   const navigate = useNavigate()
@@ -39,7 +39,7 @@ export default function Register() {
     if (form.password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
     try {
-      await axios.post('/api/auth/register', {
+      await api.post('/api/auth/register', {
         email: form.email, username: form.username, password: form.password,
       })
       setSuccess(true)

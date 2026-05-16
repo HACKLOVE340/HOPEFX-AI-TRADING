@@ -93,6 +93,8 @@ class GoldFeedManager:
         self._lock = asyncio.Lock()
         self._tick_count: int = 0
         self._last_consensus_at: float = 0.0
+        # Suppress repeated poll-error warnings per source — log once, then DEBUG.
+        self._poll_error_warned: set = set()
 
         # Prometheus
         self._prom_consensus_price = None
@@ -138,7 +140,7 @@ class GoldFeedManager:
         self._running = True
         configured = [(src, feed) for src, feed in self._feeds.items() if feed.is_configured]
         if not configured:
-            logger.warning(
+            logger.info(
                 "GoldFeedManager: no gold feed API keys configured — live gold prices unavailable. "
                 "Set at least one of: GOLDAPI_IO_KEY, METALS_DEV_KEY, "
                 "METALS_API_KEY, METALPRICEAPI_KEY, COMMODITY_PRICE_API_KEY"
@@ -243,7 +245,17 @@ class GoldFeedManager:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.warning("GoldFeedManager poll error source=%s: %s", src.value, exc)
+                # Log first poll error per source as WARNING; suppress repeats
+                # to DEBUG so the log is not flooded when an API is offline.
+                if src not in self._poll_error_warned:
+                    logger.warning("GoldFeedManager poll error source=%s: %s", src.value, exc)
+                    self._poll_error_warned.add(src)
+                else:
+                    logger.debug(
+                        "GoldFeedManager poll error source=%s (suppressed): %s",
+                        src.value,
+                        exc,
+                    )
 
             elapsed = time.monotonic() - t0
             sleep_s = max(0.1, interval - elapsed)

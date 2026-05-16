@@ -108,6 +108,7 @@ const NuclearCandleChart = memo(() => {
   const predLowRef   = useRef<ISeriesApi<'Area'> | null>(null);
   const predMidRef   = useRef<ISeriesApi<'Line'> | null>(null);
   const markersRef   = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   const bars          = useNuclearStore(selectActiveBars);
   const predPath      = useNuclearStore((s) => s.predictionPath);
@@ -204,21 +205,26 @@ const NuclearCandleChart = memo(() => {
     // Signal markers
     markersRef.current = createSeriesMarkers(candle, []);
 
-    // Resize observer
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({
-          width:  containerRef.current.clientWidth,
-          height: containerRef.current.clientHeight,
-        });
-      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({
+            width:  containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight || undefined,
+          });
+        }
+      });
     });
     ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       chart.remove();
-      chartRef.current = null;
+      chartRef.current  = null;
+      candleRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -229,6 +235,9 @@ const NuclearCandleChart = memo(() => {
     if (!candleRef.current || !bars.length) return;
     const sorted = [...bars].sort((a, b) => a.time - b.time);
     candleRef.current.setData(sorted.map(barToCandle));
+    // Always scroll to the most recent candle after loading historical data
+    chartRef.current?.timeScale().fitContent();
+    chartRef.current?.timeScale().scrollToRealTime();
   }, [bars]);
 
   // ── Update prediction path ──────────────────────────────────────────────────

@@ -71,18 +71,20 @@ class TestConnectDisconnect:
 
 
 class TestGetAccountInfo:
-    def test_returns_account_info_with_balance(self):
+    @pytest.mark.asyncio
+    async def test_returns_account_info_with_balance(self):
         broker = _connected_broker()
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert isinstance(info, AccountInfo)
         assert info.balance == pytest.approx(100_000.0)
         assert info.equity == pytest.approx(100_000.0)
         assert info.positions_count == 0
 
-    def test_positions_count_reflects_open_positions(self):
+    @pytest.mark.asyncio
+    async def test_positions_count_reflects_open_positions(self):
         broker = _connected_broker()
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info.positions_count == 1
 
 
@@ -112,11 +114,12 @@ class TestPlaceOrder:
         with pytest.raises(ConnectionError):
             broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
 
-    def test_unknown_symbol_uses_default_price(self):
+    def test_unknown_symbol_raises_stale_price_error(self):
+        from brokers.paper_trading import StalePriceError
+
         broker = _connected_broker()
-        order = broker.place_order("UNKNOWN_SYM_XYZ", OrderSide.BUY, OrderType.MARKET, 1.0)
-        assert order.status == OrderStatus.FILLED
-        assert order.average_price == pytest.approx(1000.0, rel=0.01)
+        with pytest.raises(StalePriceError):
+            broker.place_order("UNKNOWN_SYM_XYZ", OrderSide.BUY, OrderType.MARKET, 1.0)
 
     def test_order_stored_in_orders_dict(self):
         broker = _connected_broker()
@@ -167,22 +170,25 @@ class TestCancelOrder:
 
 
 class TestGetPositions:
-    def test_returns_empty_initially(self):
+    @pytest.mark.asyncio
+    async def test_returns_empty_initially(self):
         broker = _connected_broker()
-        assert broker.get_positions() == []
+        assert await broker.get_positions() == []
 
-    def test_returns_position_after_buy(self):
+    @pytest.mark.asyncio
+    async def test_returns_position_after_buy(self):
         broker = _connected_broker()
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert len(positions) == 1
         assert positions[0].symbol == "XAUUSD"
 
-    def test_position_price_updated_from_market_prices(self):
+    @pytest.mark.asyncio
+    async def test_position_price_updated_from_market_prices(self):
         broker = _connected_broker()
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.market_prices["XAUUSD"] = 3500.0
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert positions[0].current_price == pytest.approx(3500.0)
 
 

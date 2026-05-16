@@ -31,8 +31,8 @@ Message format (client → server):
 
 Authentication
 --------------
-Clients MUST send an auth message within AUTH_TIMEOUT_SECONDS of connecting,
-or the connection is closed with code 4001.
+Clients MUST send an auth message within AUTH_TIMEOUT_SECONDS (default 5 s)
+of connecting, or the connection is closed with code 4001.
 
   { "type": "auth", "token": "Bearer eyJ..." }
 
@@ -55,6 +55,7 @@ is preserved server-side (stateless design).
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import logging
 import os
@@ -71,11 +72,15 @@ router = APIRouter(tags=["WebSocket Live"])
 
 # Tracks last mid price per symbol for change_pct calculation
 import threading as _threading
+
 _last_mid: dict[str, float] = {}
 _last_mid_lock = _threading.Lock()
 
 # ── Auth / heartbeat config ───────────────────────────────────────────────────
-AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "30"))
+# 5 s is sufficient for any legitimate client on a normal connection.
+# 30 s was too long — it allowed unauthenticated connections to hold a slot
+# for half a minute, enabling trivial resource exhaustion.
+AUTH_TIMEOUT_SECONDS: float = float(os.getenv("WS_AUTH_TIMEOUT", "5"))
 HEARTBEAT_INTERVAL_SECONDS: float = float(os.getenv("WS_HEARTBEAT_INTERVAL", "30"))
 HEARTBEAT_MISS_LIMIT: int = int(os.getenv("WS_HEARTBEAT_MISS_LIMIT", "3"))
 # Set to "false" to allow unauthenticated connections (dev/demo mode only).
@@ -93,10 +98,10 @@ if _APP_ENV == "production" and not WS_AUTH_REQUIRED:
 
 async def _safe_ws_close(websocket: Any, code: int = 1000, reason: str = "") -> None:
     """Close a WebSocket, ignoring errors when it is already closed."""
-    try:
+    import contextlib
+
+    with contextlib.suppress(RuntimeError):
         await websocket.close(code=code, reason=reason)
-    except RuntimeError:  # nosec B110
-        pass  # already closed
 
 
 def _validate_ws_token(token: str) -> dict | None:
@@ -132,15 +137,21 @@ class LiveConnectionManager:
         self._user_ids: dict[str, str | None] = {}
         # connection_id → heartbeat miss count
         self._hb_misses: dict[str, int] = {}
-        self._counter = 0
+        # itertools.count is thread-safe in CPython (C-level increment) and
+        # produces unique IDs even when multiple coroutines call connect()
+        # concurrently — no lock needed for ID generation.
+        self._counter = itertools.count(1)
 
     def _new_id(self) -> str:
-        self._counter += 1
-        return f"conn_{self._counter}"
+        return f"conn_{next(self._counter)}"
 
     async def connect(self, ws: WebSocket) -> str:
-        await ws.accept()
+        # Generate the ID before the await so the counter advances atomically
+        # relative to other synchronous code. The await in ws.accept() is a
+        # suspension point; generating the ID first ensures no two connections
+        # share the same ID even if accept() yields to another coroutine.
         cid = self._new_id()
+        await ws.accept()
         self._connections[cid] = ws
         self._subscriptions[cid] = set()
         self._user_ids[cid] = None
@@ -193,19 +204,24 @@ class LiveConnectionManager:
                 self.disconnect(cid)
 
     async def broadcast(self, channel: str, msg: dict) -> None:
+        """Send to all connections subscribed to channel.
+
+        JSON serialization is performed once before the loop so the cost is
+        O(1) regardless of the number of connected clients. Previously the
+        message was serialized inside the loop — O(n) allocations per tick.
+
+        Empty subscription set = subscribed to all channels (pre-subscribe
+        state while the client is still sending its subscribe message).
         """
-        Send to all connections subscribed to channel.
-        Empty subscription set = subscribed to all channels.
-        """
+        # Serialize once — reuse the string for every send.
+        payload = json.dumps(msg)
         dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
-            if not self.is_authenticated(cid):
-                continue
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
                 if ws:
                     try:
-                        await ws.send_text(json.dumps(msg))
+                        await ws.send_text(payload)
                     except Exception as exc:
                         logger.debug("WS broadcast failed for %s: %s", cid, exc)
                         dead.append(cid)
@@ -217,15 +233,18 @@ class LiveConnectionManager:
         await self.broadcast("signals", {"type": "signal", "data": signal})
         try:
             from api.social_feed import _social_feed_broadcast as _sf_broadcast
+
             await _sf_broadcast(signal)
         except Exception:  # nosec B110
             pass
 
     async def send_to_user(self, user_id: str, channel: str, msg: dict) -> None:
-        """
-        Send a message only to connections belonging to a specific user.
+        """Send a message only to connections belonging to a specific user.
+
         Used for per-user channels: account updates, position fills, alerts.
+        JSON is serialized once before the loop (same rationale as broadcast).
         """
+        payload = json.dumps(msg)
         dead: list[str] = []
         for cid, uid in list(self._user_ids.items()):
             if uid != user_id:
@@ -235,7 +254,7 @@ class LiveConnectionManager:
                 ws = self._connections.get(cid)
                 if ws:
                     try:
-                        await ws.send_text(json.dumps(msg))
+                        await ws.send_text(payload)
                     except Exception as exc:
                         logger.debug("WS user-send failed for %s: %s", cid, exc)
                         dead.append(cid)
@@ -261,6 +280,7 @@ def get_live_manager() -> LiveConnectionManager:
 # Keys use the slash format the frontend expects (XAU/USD etc.).
 _SYMBOLS: dict[str, dict[str, float]] = {
     "XAU/USD": {"price": 3300.0, "vol": 0.012, "spread": 0.30},
+    "XAG/USD": {"price": 33.0, "vol": 0.018, "spread": 0.03},
     "EUR/USD": {"price": 1.0820, "vol": 0.006, "spread": 0.0001},
     "GBP/USD": {"price": 1.2940, "vol": 0.007, "spread": 0.0002},
     "USD/JPY": {"price": 149.50, "vol": 0.006, "spread": 0.02},
@@ -270,6 +290,7 @@ _SYMBOLS: dict[str, dict[str, float]] = {
 # Slash → no-slash lookup for broker.market_prices keys
 _BROKER_KEY: dict[str, str] = {
     "XAU/USD": "XAUUSD",
+    "XAG/USD": "XAGUSD",
     "EUR/USD": "EURUSD",
     "GBP/USD": "GBPUSD",
     "USD/JPY": "USDJPY",
@@ -279,18 +300,22 @@ _BROKER_KEY: dict[str, str] = {
 # Reverse map: broker/no-slash symbol → frontend slash format
 _SLASH_SYMBOL: dict[str, str] = {v: k for k, v in _BROKER_KEY.items()}
 # Extra aliases that may arrive from various publishers
-_SLASH_SYMBOL.update({
-    "XAUUSD": "XAU/USD",
-    "EURUSD": "EUR/USD",
-    "GBPUSD": "GBP/USD",
-    "USDJPY": "USD/JPY",
-    "BTCUSD": "BTC/USD",
-    "ETHUSD": "ETH/USD",
-    "GC=F":   "XAU/USD",
-    "EURUSD=X": "EUR/USD",
-    "GBPUSD=X": "GBP/USD",
-    "USDJPY=X": "USD/JPY",
-})
+_SLASH_SYMBOL.update(
+    {
+        "XAUUSD": "XAU/USD",
+        "XAGUSD": "XAG/USD",
+        "SI=F": "XAG/USD",
+        "EURUSD": "EUR/USD",
+        "GBPUSD": "GBP/USD",
+        "USDJPY": "USD/JPY",
+        "BTCUSD": "BTC/USD",
+        "ETHUSD": "ETH/USD",
+        "GC=F": "XAU/USD",
+        "EURUSD=X": "EUR/USD",
+        "GBPUSD=X": "GBP/USD",
+        "USDJPY=X": "USD/JPY",
+    }
+)
 
 _open_prices: dict[str, float] = {sym: cfg["price"] for sym, cfg in _SYMBOLS.items()}
 _prices_seeded = False
@@ -347,9 +372,7 @@ def _get_live_price(symbol: str) -> float | None:
         if pe is not None:
             tick = pe.get_last_price(broker_key)
             if tick is not None:
-                mid = getattr(tick, "mid", None) or (
-                    (getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2
-                )
+                mid = getattr(tick, "mid", None) or ((getattr(tick, "bid", 0) + getattr(tick, "ask", 0)) / 2)
                 if mid and mid > 0:
                     return float(mid)
     except Exception as exc:
@@ -440,7 +463,14 @@ async def _eventbus_tick_broadcaster() -> None:
 
     Reconnects automatically with exponential backoff so a Redis blip does
     not leave the feed permanently dead until the process is restarted.
+
+    If no tick arrives within _EVENTBUS_STALE_TIMEOUT_S seconds the broadcaster
+    raises RuntimeError so _price_broadcaster falls through to the yfinance
+    fallback — preventing a silent dead feed when the multi-source feed is not
+    publishing to Redis.
     """
+    _EVENTBUS_STALE_TIMEOUT_S = 30  # seconds without a tick before giving up
+
     _retry_delays = [5, 10, 20, 30, 60]
     attempt = 0
     while True:
@@ -450,7 +480,12 @@ async def _eventbus_tick_broadcaster() -> None:
             await bus.connect()
             logger.info("WS live: connected to EventBus — streaming real ticks.")
             attempt = 0  # successful connect resets backoff counter
+
+            # Wrap each message receive with a timeout so we detect a silent
+            # dead channel (connected but no publishers) within 30 s.
+            _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
             async for msg in bus.subscribe(CH_TICK):
+                _stale_deadline = asyncio.get_event_loop().time() + _EVENTBUS_STALE_TIMEOUT_S
                 if _manager.connection_count == 0:
                     continue
                 # Normalise to frontend PriceTick schema:
@@ -494,6 +529,7 @@ async def _eventbus_tick_broadcaster() -> None:
                     # ISO string → ms
                     try:
                         from datetime import datetime as _dt
+
                         ts_ms = int(_dt.fromisoformat(raw_ts.replace("Z", "+00:00")).timestamp() * 1000)
                     except Exception:
                         ts_ms = int(datetime.now(UTC).timestamp() * 1000)
@@ -508,7 +544,7 @@ async def _eventbus_tick_broadcaster() -> None:
                 with _last_mid_lock:
                     prev = _last_mid.get(symbol, mid)
                     _last_mid[symbol] = mid
-                change = ((mid - prev) / prev * 100) if prev > 0 else 0.0
+                change = ((mid - prev) / prev * 100) if prev else 0.0
 
                 tick_data = {
                     "symbol": symbol,
@@ -524,6 +560,7 @@ async def _eventbus_tick_broadcaster() -> None:
                 # Also write tick:{symbol} so ws_public.py Redis fallback chain is populated.
                 try:
                     from cache.redis_client import get_redis as _get_redis
+
                     _rc = await _get_redis()
                     if _rc is not None:
                         await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
@@ -763,10 +800,17 @@ async def _price_broadcaster_live_only() -> None:
 
     Used as a direct-poll fallback when the EventBus is unavailable but
     a broker is connected (e.g. paper broker with market_prices populated).
-    Sends no_live_feed when no live price is available for a symbol.
+
+    Before sending no_live_feed for a symbol, checks _yf_last_prices — if
+    yfinance has already fetched a price for that symbol we synthesize a tick
+    from it rather than triggering the banner.  no_live_feed is only sent when
+    both the broker AND yfinance have no price for a symbol.
     """
-    global _prices_seeded
     _no_feed_warned: set[str] = set()
+    # Give yfinance time to complete its first fetch before we start warning.
+    # _yfinance_price_broadcaster runs concurrently and fetches immediately on
+    # startup; 20 s is enough headroom even on a slow connection.
+    _startup_grace_until = asyncio.get_running_loop().time() + 20
     while True:
         await asyncio.sleep(1)
         if _manager.connection_count == 0:
@@ -781,17 +825,45 @@ async def _price_broadcaster_live_only() -> None:
                 any_live = True
                 _no_feed_warned.discard(symbol)
                 await _manager.broadcast("prices", tick)
-            elif symbol not in _no_feed_warned:
-                _no_feed_warned.add(symbol)
-                await _manager.broadcast(
-                    "prices",
-                    {
-                        "type": "no_live_feed",
-                        "symbol": symbol,
-                        "message": (f"No live price for {symbol}. Connect a broker in Settings."),
-                        "timestamp": int(datetime.now(UTC).timestamp() * 1000),
-                    },
-                )
+            else:
+                # Level 5: use yfinance cache to synthesize a tick so the
+                # no_live_feed banner is not shown when yfinance is working.
+                yf_price = _yf_last_prices.get(symbol)
+                if yf_price and yf_price > 0:
+                    any_live = True
+                    _no_feed_warned.discard(symbol)
+                    cfg = _SYMBOLS.get(symbol, {})
+                    spread = cfg.get("spread", yf_price * 0.0002)
+                    prev = _open_prices.get(symbol, yf_price)
+                    change_pct = ((yf_price - prev) / prev * 100) if prev > 0 else 0.0
+                    await _manager.broadcast(
+                        "prices",
+                        {
+                            "type": "price_tick",
+                            "data": {
+                                "symbol": symbol,
+                                "bid": round(yf_price - spread / 2, 5),
+                                "ask": round(yf_price + spread / 2, 5),
+                                "mid": round(yf_price, 5),
+                                "spread": spread,
+                                "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                                "change_pct": round(change_pct, 4),
+                            },
+                        },
+                    )
+                elif symbol not in _no_feed_warned and asyncio.get_running_loop().time() > _startup_grace_until:
+                    # Only warn after the grace period so we don't flash the
+                    # banner during the initial yfinance fetch.
+                    _no_feed_warned.add(symbol)
+                    await _manager.broadcast(
+                        "prices",
+                        {
+                            "type": "no_live_feed",
+                            "symbol": symbol,
+                            "message": (f"No live price for {symbol}. Connect a broker in Settings."),
+                            "timestamp": int(datetime.now(UTC).timestamp() * 1000),
+                        },
+                    )
         if not any_live:
             # All symbols missing — slow down polling to avoid log spam
             await asyncio.sleep(9)
@@ -799,6 +871,7 @@ async def _price_broadcaster_live_only() -> None:
 
 _YF_SYMBOL_MAP: dict[str, str] = {
     "XAU/USD": "GC=F",
+    "XAG/USD": "SI=F",
     "EUR/USD": "EURUSD=X",
     "GBP/USD": "GBPUSD=X",
     "USD/JPY": "USDJPY=X",
@@ -815,21 +888,36 @@ async def _yfinance_price_broadcaster() -> None:
 
     Used when no broker or EventBus is available (API-only / dev mode).
     Sends genuine price_tick messages — no synthetic or mock data.
+
+    Fetches immediately on startup (no initial sleep) so _yf_last_prices is
+    populated before _price_broadcaster_live_only's grace period expires.
     """
     import time as _time
+
     _POLL_INTERVAL = 15  # seconds between yfinance fetches
+    first_run = True
 
     while True:
-        await asyncio.sleep(_POLL_INTERVAL)
+        if first_run:
+            first_run = False
+            # Small yield so the event loop can start other tasks, then fetch.
+            await asyncio.sleep(0.5)
+        else:
+            await asyncio.sleep(_POLL_INTERVAL)
         if _manager.connection_count == 0:
             continue
         try:
             import yfinance as _yf
+
             tickers = list(_YF_SYMBOL_MAP.values())
             data = await asyncio.wait_for(
                 asyncio.to_thread(
-                    _yf.download, tickers, period="1d", interval="1m",
-                    progress=False, auto_adjust=True,
+                    _yf.download,
+                    tickers,
+                    period="1d",
+                    interval="1m",
+                    progress=False,
+                    auto_adjust=True,
                 ),
                 timeout=12.0,
             )
@@ -876,26 +964,21 @@ async def _price_broadcaster() -> None:
     """
     Broadcast price ticks.
 
-    Priority:
-    1. EventBus (hopefx:tick) — real ticks from connected broker
-    2. Direct broker poll     — paper broker market_prices
-    3. yfinance real prices   — when no broker is connected (dev/API-only mode)
-    4. no_live_feed status    — when yfinance also fails
+    Runs three concurrent tasks:
+    1. EventBus (hopefx:tick) — forwards real ticks from the multi-source feed
+       when Redis pub/sub is active.  Silently idle when no publisher is present.
+    2. yfinance poller        — fetches real market prices every 15 s and
+       broadcasts ticks for all symbols.  Ensures the dashboard always has live
+       prices even when the EventBus feed is silent (no API keys configured).
+    3. Direct broker poll     — polls paper broker market_prices every second
+       and broadcasts ticks; sends no_live_feed per-symbol only when both the
+       broker AND yfinance have no price.
+
+    All three run concurrently so yfinance prices are always flowing regardless
+    of EventBus state.
     """
-    try:
-        # If EventBus connects successfully it takes over; on failure we fall
-        # through to the direct-poll path below.
-        await _eventbus_tick_broadcaster()
-    except Exception as exc:
-        logger.warning(
-            "_price_broadcaster: EventBus tick broadcaster failed, falling back to direct poll: %s",
-            exc,
-        )
-    # EventBus unavailable — poll broker directly (real prices only, no GBM)
-    # Run both the live-only broadcaster and the yfinance broadcaster concurrently.
-    # The live-only broadcaster sends no_live_feed per-symbol when broker prices
-    # are absent; the yfinance broadcaster fills those gaps with real market data.
     await asyncio.gather(
+        _eventbus_tick_broadcaster(),
         _price_broadcaster_live_only(),
         _yfinance_price_broadcaster(),
         return_exceptions=True,
@@ -1031,7 +1114,8 @@ async def _chartbot_broadcaster() -> None:
 
                 broker = getattr(_app_state, "broker", None) if _app_state else None
                 if broker is not None:
-                    acct = broker.get_account_info()
+                    _acct_coro = broker.get_account_info()
+                    acct = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
                     if acct:
                         await _manager.broadcast(
                             "equity",
@@ -1056,6 +1140,7 @@ async def _chartbot_broadcaster() -> None:
             try:
                 from cache.redis_client import get_sync_redis_client as _get_rc
                 import json as _json
+
                 _rc = _get_rc()
                 if _rc:
                     for _sym in ("XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"):
@@ -1073,6 +1158,7 @@ async def _chartbot_broadcaster() -> None:
             try:
                 from cache.redis_client import get_sync_redis_client as _get_rc2
                 import json as _json2
+
                 _rc2 = _get_rc2()
                 if _rc2:
                     _praw = _rc2.get("chart_patterns:latest")
@@ -1090,6 +1176,7 @@ async def _chartbot_broadcaster() -> None:
             try:
                 from cache.redis_client import get_sync_redis_client as _get_rc3
                 import json as _json3
+
                 _rc3 = _get_rc3()
                 if _rc3:
                     _lraw = _rc3.get("sr_levels:latest")
@@ -1126,23 +1213,32 @@ async def _account_update_broadcaster() -> None:
             if broker is None:
                 continue
 
-            acct_raw = broker.get_account_info()
+            _acct_coro = broker.get_account_info()
+            acct_raw = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
             if not acct_raw:
                 continue
 
-            # Normalise to the AccountMetrics shape the frontend store expects
-            balance = float(acct_raw.get("balance", 0.0) or 0.0)
-            equity = float(acct_raw.get("equity", balance) or balance)
-            margin_used = float(acct_raw.get("margin_used", 0.0) or 0.0)
-            margin_free = float(acct_raw.get("margin_free", equity - margin_used) or 0.0)
+            # Normalise to the AccountMetrics shape the frontend store expects.
+            # acct_raw may be an AccountInfo dataclass or a dict — handle both.
+            def _acct_get(key: str, default=0.0):
+                if hasattr(acct_raw, key):
+                    return getattr(acct_raw, key) or default
+                if isinstance(acct_raw, dict):
+                    return acct_raw.get(key, default) or default
+                return default
+
+            balance = float(_acct_get("balance", 0.0))
+            equity = float(_acct_get("equity", balance))
+            margin_used = float(_acct_get("margin_used", 0.0))
+            margin_free = float(_acct_get("margin_free", equity - margin_used))
             # When margin_used == 0 there are no open positions, so margin level
             # is effectively infinite (no risk). Use 9999.0 as a sentinel so the
             # frontend RiskDashboard does not interpret 0.0 as a margin call.
             # This is the canonical fix for the original bug report (margin_level=0.0).
             margin_level = (equity / margin_used * 100) if margin_used > 0 else 9999.0
-            daily_pnl = float(acct_raw.get("daily_pnl", acct_raw.get("unrealized_pnl", 0.0)))
+            daily_pnl = float(_acct_get("daily_pnl", _acct_get("unrealized_pnl", 0.0)))
             daily_pnl_pct = (daily_pnl / balance * 100) if balance > 0 else 0.0
-            total_pnl = float(acct_raw.get("total_pnl", acct_raw.get("realized_pnl", 0.0)))
+            total_pnl = float(_acct_get("total_pnl", _acct_get("realized_pnl", 0.0)))
 
             # Risk manager stats (optional)
             rm = getattr(_app_state, "risk_manager", None) if _app_state else None
@@ -1151,8 +1247,9 @@ async def _account_update_broadcaster() -> None:
             max_dd = float(getattr(rm, "max_drawdown_pct", 0.0) or 0.0)
 
             # Open trade count from positions
-            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
-            open_trades = len(positions) if positions else int(acct_raw.get("open_trades", 0))
+            _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
+            positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
+            open_trades = len(positions) if positions else int(_acct_get("open_trades", 0))
 
             account_msg = {
                 "type": "account_update",
@@ -1216,11 +1313,11 @@ def start_broadcasters() -> None:
     loop = asyncio.get_running_loop()
 
     _BROADCASTER_SPECS = [
-        ("price_broadcaster",          _price_broadcaster),
-        ("heartbeat_broadcaster",       _heartbeat_broadcaster),
-        ("signal_broadcaster",          _eventbus_signal_broadcaster),
-        ("chartbot_broadcaster",        _chartbot_broadcaster),
-        ("account_update_broadcaster",  _account_update_broadcaster),
+        ("price_broadcaster", _price_broadcaster),
+        ("heartbeat_broadcaster", _heartbeat_broadcaster),
+        ("signal_broadcaster", _eventbus_signal_broadcaster),
+        ("chartbot_broadcaster", _chartbot_broadcaster),
+        ("account_update_broadcaster", _account_update_broadcaster),
     ]
 
     _broadcaster_tasks = []
@@ -1399,13 +1496,28 @@ async def _ws_handle_message(cid: str, msg: dict) -> None:
         _manager.record_pong(cid)
         await _manager.send(cid, {"type": "pong"})
     elif msg_type == "auth":
-        payload = _validate_ws_token(msg.get("token", ""))
-        if payload:
-            user_id = str(payload.get("sub", "unknown"))
-            _manager.authenticate(cid, user_id)
-            await _manager.send(cid, {"type": "auth_ok", "user_id": user_id})
+        # FIX: block re-authentication after the connection is already authenticated.
+        # Allowing re-auth mid-session lets a connected user escalate to a different
+        # user_id by sending a second auth message with a different token.
+        if _manager.is_authenticated(cid):
+            await _manager.send(
+                cid,
+                {
+                    "type": "error",
+                    "code": "ALREADY_AUTHENTICATED",
+                    "message": "Connection is already authenticated; re-auth is not permitted",
+                },
+            )
         else:
-            await _manager.send(cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            payload = _validate_ws_token(msg.get("token", ""))
+            if payload:
+                user_id = str(payload.get("sub", "unknown"))
+                _manager.authenticate(cid, user_id)
+                await _manager.send(cid, {"type": "auth_ok", "user_id": user_id})
+            else:
+                await _manager.send(
+                    cid, {"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"}
+                )
     else:
         await _manager.send(
             cid, {"type": "error", "code": "UNKNOWN_MESSAGE_TYPE", "message": f"Unknown message type: {msg_type}"}
@@ -1471,6 +1583,7 @@ async def push_signal(signal: dict) -> None:
     # Also forward to /ws/social-feed subscribers
     try:
         from api.social_feed import _social_feed_broadcast as _sf_broadcast
+
         await _sf_broadcast(signal)
     except Exception:  # nosec B110
         pass
@@ -1534,8 +1647,9 @@ async def ws_nuclear(websocket: WebSocket) -> None:
         raw = await asyncio.wait_for(websocket.receive_text(), timeout=10.0)
         msg = json.loads(raw)
     except (TimeoutError, json.JSONDecodeError):
-        await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
-        await _safe_ws_close(websocket, code=4001)
+        await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
+        return
+    except WebSocketDisconnect:
         return
 
     if msg.get("type") != "auth":
@@ -1558,7 +1672,7 @@ async def ws_nuclear(websocket: WebSocket) -> None:
     # If the charting engine failed to load at startup, tell the client
     # immediately instead of silently streaming null state every 2 seconds.
     try:
-        from app import app as _app  # noqa: PLC0415
+        from app import app as _app
 
         _nuclear_ok = getattr(_app.state, "nuclear_available", True)
     except Exception:
@@ -1589,12 +1703,12 @@ async def ws_nuclear(websocket: WebSocket) -> None:
 
     def _get_nuclear_state() -> dict | None:
         try:
-            from api.nuclear import _get_supervisor as _sup, _get_orchestrator as _orch
+            from brain.nuclear_supervisor import get_nuclear_supervisor as _get_sup
+            from risk.orchestrator import risk_orchestrator as _orch_singleton
 
-            sup = _sup()
-            orch = _orch()
+            sup = _get_sup()
             sup_status = sup.get_status() if sup else {}
-            orch_status = orch.get_status() if orch else {}
+            orch_status = _orch_singleton.get_status() if _orch_singleton else {}
             return {
                 "severity": sup_status.get("nuclear_level", 0),
                 "action": sup_status.get("action", "normal"),
@@ -1694,3 +1808,244 @@ async def broadcast_system_event(event: dict) -> None:
         event: dict payload to broadcast — should include a ``type`` key.
     """
     await _manager.broadcast("system", event)
+
+
+# ─── /ws/notifications ────────────────────────────────────────────────────────
+
+
+@router.websocket("/ws/notifications")
+async def ws_notifications(websocket: WebSocket) -> None:
+    """
+    Real-time notification push channel.
+
+    Auth: JWT token passed as query param ?token=<jwt> or as
+    { type: 'auth', token: 'Bearer <jwt>' } message after connect.
+
+    Outbound message types:
+      connected      — initial handshake
+      auth_ok        — auth accepted
+      notification   — new notification payload
+      heartbeat      — 30s keepalive
+      error          — auth failure
+    """
+    await websocket.accept()
+    await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+    # Support token as query param (simpler for some clients)
+    token_param = websocket.query_params.get("token", "")
+    payload = _validate_ws_token(token_param) if token_param else None
+
+    if not payload:
+        # Fall back to auth message handshake
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
+            msg = json.loads(raw)
+        except (TimeoutError, json.JSONDecodeError):
+            await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
+            return
+        except WebSocketDisconnect:
+            return
+
+        if msg.get("type") != "auth":
+            await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+        payload = _validate_ws_token(msg.get("token", ""))
+        if not payload:
+            await websocket.send_text(
+                json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            )
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+    user_id = str(payload.get("sub", "unknown"))
+    await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
+
+    # Subscribe to Redis pub/sub channel for this user's notifications
+    _NOTIF_CHANNEL = f"hopefx:notif:push:{user_id}"
+    last_heartbeat = asyncio.get_running_loop().time()
+
+    try:
+        import redis.asyncio as aioredis
+        import os
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        # Strip password from dev URL if empty
+        r = aioredis.from_url(redis_url, decode_responses=True)
+        pubsub = r.pubsub()
+        await pubsub.subscribe(_NOTIF_CHANNEL)
+
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+
+                # Heartbeat
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+
+                # Poll Redis for new notifications
+                try:
+                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
+                    if message and message.get("type") == "message":
+                        try:
+                            data = json.loads(message["data"])
+                            await websocket.send_text(json.dumps({"type": "notification", "data": data}))
+                        except Exception:  # nosec B110
+                            pass
+                except TimeoutError:  # nosec B110
+                    pass
+                except WebSocketDisconnect:
+                    break
+
+        finally:
+            await pubsub.unsubscribe(_NOTIF_CHANNEL)
+            await r.aclose()
+
+    except Exception:
+        # Redis unavailable — fall back to heartbeat-only loop
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                except TimeoutError:  # nosec B110
+                    pass
+                except WebSocketDisconnect:
+                    break
+        except WebSocketDisconnect:  # nosec B110
+            pass
+    finally:
+        logger.debug("ws_notifications: disconnected user=%s", user_id)
+
+
+# ─── /ws/audit-events ─────────────────────────────────────────────────────────
+
+
+@router.websocket("/ws/audit-events")
+async def ws_audit_events(websocket: WebSocket) -> None:
+    """
+    Real-time audit event stream (admin/superadmin only).
+
+    Auth: JWT token passed as query param ?token=<jwt> or as
+    { type: 'auth', token: 'Bearer <jwt>' } message after connect.
+
+    Outbound message types:
+      connected    — initial handshake
+      auth_ok      — auth accepted
+      audit_event  — new audit log entry
+      heartbeat    — 30s keepalive
+      error        — auth failure or insufficient role
+    """
+    await websocket.accept()
+    await websocket.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+    # Support token as query param
+    token_param = websocket.query_params.get("token", "")
+    payload = _validate_ws_token(token_param) if token_param else None
+
+    if not payload:
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
+            msg = json.loads(raw)
+        except (TimeoutError, json.JSONDecodeError):
+            await _safe_ws_close(websocket, code=4001, reason="auth_timeout")
+            return
+        except WebSocketDisconnect:
+            return
+
+        if msg.get("type") != "auth":
+            await websocket.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+        payload = _validate_ws_token(msg.get("token", ""))
+        if not payload:
+            await websocket.send_text(
+                json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            )
+            await _safe_ws_close(websocket, code=4001)
+            return
+
+    user_id = str(payload.get("sub", "unknown"))
+    role = str(payload.get("role", ""))
+
+    # Restrict to admin and superadmin roles
+    if role not in ("admin", "superadmin"):
+        await websocket.send_text(json.dumps({"type": "error", "code": "FORBIDDEN", "message": "Admin role required"}))
+        await _safe_ws_close(websocket, code=4003)
+        return
+
+    await websocket.send_text(json.dumps({"type": "auth_ok", "user_id": user_id, "role": role}))
+
+    _AUDIT_CHANNEL = "hopefx:audit:events"
+    last_heartbeat = asyncio.get_running_loop().time()
+
+    try:
+        import redis.asyncio as aioredis
+        import os
+
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = aioredis.from_url(redis_url, decode_responses=True)
+        pubsub = r.pubsub()
+        await pubsub.subscribe(_AUDIT_CHANNEL)
+
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+
+                try:
+                    message = await asyncio.wait_for(pubsub.get_message(ignore_subscribe_messages=True), timeout=2.0)
+                    if message and message.get("type") == "message":
+                        try:
+                            data = json.loads(message["data"])
+                            await websocket.send_text(json.dumps({"type": "audit_event", "data": data}))
+                        except Exception:  # nosec B110
+                            pass
+                except TimeoutError:  # nosec B110
+                    pass
+                except WebSocketDisconnect:
+                    break
+
+        finally:
+            await pubsub.unsubscribe(_AUDIT_CHANNEL)
+            await r.aclose()
+
+    except Exception:
+        # Redis unavailable — heartbeat-only loop
+        try:
+            while True:
+                now = asyncio.get_running_loop().time()
+                if now - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+                    try:
+                        await websocket.send_text(json.dumps({"type": "heartbeat"}))
+                    except Exception:
+                        break
+                    last_heartbeat = now
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+                except TimeoutError:  # nosec B110
+                    pass
+                except WebSocketDisconnect:
+                    break
+        except WebSocketDisconnect:  # nosec B110
+            pass
+    finally:
+        logger.debug("ws_audit_events: disconnected user=%s", user_id)

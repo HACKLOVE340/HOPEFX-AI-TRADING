@@ -242,7 +242,7 @@ class TestAlpacaConnector:
         positions = c.get_positions()
         assert len(positions) == 1
         assert positions[0].symbol == "AAPL"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     def test_get_positions_short(self):
         c = self._make(connected=True)
@@ -258,7 +258,7 @@ class TestAlpacaConnector:
             ]
         )
         positions = c.get_positions()
-        assert positions[0].side == "SHORT"
+        assert positions[0].side_str == "SHORT"
 
     def test_get_positions_exception(self):
         c = self._make(connected=True)
@@ -472,6 +472,7 @@ class TestBinanceConnector:
                 "origQty": "0.001",
                 "status": "FILLED",
                 "executedQty": "0.001",
+                "cummulativeQuoteQty": "50.0",
                 "price": "50000",
                 "transactTime": 1704067200000,
             }
@@ -491,6 +492,7 @@ class TestBinanceConnector:
                 "origQty": "0.001",
                 "status": "NEW",
                 "executedQty": "0",
+                "cummulativeQuoteQty": "0",
                 "price": "45000",
                 "transactTime": 1704067200000,
             }
@@ -509,6 +511,7 @@ class TestBinanceConnector:
                 "origQty": "0.001",
                 "status": "NEW",
                 "executedQty": "0",
+                "cummulativeQuoteQty": "0",
                 "price": "44000",
                 "transactTime": 1704067200000,
             }

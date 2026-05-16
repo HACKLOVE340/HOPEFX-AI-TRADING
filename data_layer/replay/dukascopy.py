@@ -195,7 +195,7 @@ class DukascopyFetcher:
                 if data:
                     self._save_cache(symbol, hour, data)
                 return data or None
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             logger.warning("Dukascopy timeout: %s", url)
             return None
         except Exception as exc:

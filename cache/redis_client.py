@@ -390,6 +390,7 @@ async def get_redis(
     # in development/CI environments without a real Redis server.
     try:
         import fakeredis.aioredis as _fake_aio  # type: ignore[import]
+
         if _redis_instance is None:
             _redis_instance = _fake_aio.FakeRedis(decode_responses=decode_responses)
             _connection_mode = "fakeredis"
@@ -539,7 +540,10 @@ async def execute_with_readonly_retry(
             if attempt < max_retries and (is_readonly or is_moved or is_connection):
                 logger.warning(
                     "Redis %s error on attempt %d/%d (%s) — re-initialising client",
-                    command, attempt + 1, max_retries, exc_str[:80],
+                    command,
+                    attempt + 1,
+                    max_retries,
+                    exc_str[:80],
                 )
                 # Force re-initialisation so the next get_redis() discovers
                 # the new master (Sentinel) or updated slot map (Cluster)
@@ -563,6 +567,7 @@ def _get_or_create_fakeredis() -> Any:
     global _fakeredis_instance
     if _fakeredis_instance is None:
         import fakeredis as _fakeredis  # type: ignore[import]
+
         _fakeredis_instance = _fakeredis.FakeRedis(decode_responses=True)
     return _fakeredis_instance
 
@@ -608,7 +613,6 @@ def get_sync_redis() -> Any | None:
         # fakeredis as an in-process drop-in so all cache-dependent code paths
         # work correctly without requiring a running Redis instance.
         try:
-            import fakeredis as _fakeredis  # type: ignore[import]
             _fake = _get_or_create_fakeredis()
             logger.info("Using fakeredis in-process Redis substitute (no real Redis available)")
             return _fake
@@ -631,6 +635,7 @@ get_sync_redis_client = get_sync_redis
 
 # ── Pipeline batching helper ──────────────────────────────────────────────────
 
+
 class RedisPipelineBatch:
     """
     Async context manager that accumulates commands and executes them in a
@@ -651,7 +656,7 @@ class RedisPipelineBatch:
         self._client = client
         self._pipe: Any = None
 
-    async def __aenter__(self) -> "RedisPipelineBatch":
+    async def __aenter__(self) -> RedisPipelineBatch:
         if self._client is not None:
             try:
                 self._pipe = self._client.pipeline(transaction=False)
@@ -671,6 +676,7 @@ class RedisPipelineBatch:
         """Proxy attribute access to the underlying pipeline."""
         if self._pipe is not None:
             return getattr(self._pipe, name)
+
         # Return a no-op callable when pipeline is unavailable.
         # Intentional: callers queue pipeline commands that are silently
         # discarded when no pipeline connection exists, preventing crashes
@@ -678,6 +684,7 @@ class RedisPipelineBatch:
         def _noop(*args: Any, **kwargs: Any) -> None:
             """No-op pipeline command — pipeline unavailable."""
             return None  # explicit return so body is not just pass/...
+
         return _noop
 
 
@@ -873,11 +880,7 @@ class RedisHealthTelemetry:
 
     def snapshot(self) -> dict:
         with self._lock:
-            uptime = (
-                time.monotonic() - self._first_connected_at
-                if self._first_connected_at
-                else 0.0
-            )
+            uptime = time.monotonic() - self._first_connected_at if self._first_connected_at else 0.0
             return {
                 "ping_p50_ms": self._percentile(self._ping_latencies, 50),
                 "ping_p99_ms": self._percentile(self._ping_latencies, 99),

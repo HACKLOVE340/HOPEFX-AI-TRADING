@@ -142,8 +142,7 @@ class FinBERTScorer:
             logger.info("FinBERTScorer: ProsusAI/finbert loaded successfully")
         except Exception as exc:
             logger.info(
-                "FinBERTScorer: transformers/finbert not available (%s) — "
-                "falling back to VADER for FinBERT slot",
+                "FinBERTScorer: transformers/finbert not available (%s) — falling back to VADER for FinBERT slot",
                 exc,
             )
 
@@ -190,6 +189,7 @@ class FinBERTScorer:
         """VADER fallback when FinBERT is unavailable."""
         try:
             from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer  # type: ignore[import]
+
             sia = SentimentIntensityAnalyzer()
             return round(sia.polarity_scores(text)["compound"], 4)
         except Exception:
@@ -218,8 +218,15 @@ class SocialMediaSentiment:
         self._last_poll: float = 0.0
         self._lock = asyncio.Lock()
         self._gold_keywords = {
-            "gold", "xau", "xauusd", "bullion", "precious metals",
-            "gold price", "gold futures", "comex", "spot gold",
+            "gold",
+            "xau",
+            "xauusd",
+            "bullion",
+            "precious metals",
+            "gold price",
+            "gold futures",
+            "comex",
+            "spot gold",
         }
 
     async def poll(self) -> float:
@@ -268,7 +275,9 @@ class SocialMediaSentiment:
                 self._post_count += len(scores)
                 logger.debug(
                     "SocialMediaSentiment: scored %d posts avg=%.3f ema=%.3f",
-                    len(scores), batch_avg, self._ema,
+                    len(scores),
+                    batch_avg,
+                    self._ema,
                 )
 
             self._last_poll = now
@@ -517,9 +526,7 @@ class NewsSentimentEngine:
             # Update FinBERT EMA (score headline + summary)
             text = f"{article.headline} {article.summary}"[:512]
             finbert_score = self._finbert.score(text)
-            self._finbert_ema = (
-                _SENTIMENT_EMA_ALPHA * finbert_score + (1.0 - _SENTIMENT_EMA_ALPHA) * self._finbert_ema
-            )
+            self._finbert_ema = _SENTIMENT_EMA_ALPHA * finbert_score + (1.0 - _SENTIMENT_EMA_ALPHA) * self._finbert_ema
 
             # Prometheus
             if self._prom_art_count:
@@ -561,6 +568,10 @@ class NewsSentimentEngine:
 
         # Cache to Redis
         await self._cache_to_redis()
+
+        # Publish to event bus so ws_live _chartbot_broadcaster and any other
+        # subscriber receives news/sentiment updates without polling.
+        await self._publish_to_event_bus()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -771,7 +782,10 @@ class NewsSentimentEngine:
         if new_regime != self._regime:
             logger.info(
                 "SentimentRegime transition: %s → %s (ema=%.3f momentum=%.4f)",
-                self._regime, new_regime, blended, momentum,
+                self._regime,
+                new_regime,
+                blended,
+                momentum,
             )
             self._prev_regime = self._regime
             self._regime = new_regime
@@ -847,6 +861,58 @@ class NewsSentimentEngine:
             )
         except Exception as exc:
             logger.debug("NewsSentimentEngine Redis cache error: %s", exc)
+
+    async def _publish_to_event_bus(self) -> None:
+        """
+        Publish sentiment snapshot and recent articles to the event bus.
+
+        Publishes two messages per ingest cycle:
+          CH_SENTIMENT  — full sentiment snapshot (signal + recent_articles)
+          CH_NEWS_ITEM  — one message per new article (most recent 3 only)
+
+        This wires the sentiment engine into the ws_live _chartbot_broadcaster
+        subscription path so WebSocket clients receive push updates instead of
+        relying on the broadcaster's poll interval.
+        """
+        try:
+            from core.event_bus import CH_NEWS_ITEM, CH_SENTIMENT, bus
+
+            # Build sentiment snapshot (same shape as orchestrator.get_sentiment_snapshot)
+            features = self.get_ml_features()
+            sentiment_features = {k: v for k, v in features.items() if k.startswith("news_")}
+            recent_articles: list[dict] = []
+            try:
+                raw = self.get_recent_articles(hours=1.0, min_relevance=0.1)
+                recent_articles = [
+                    {
+                        "headline": getattr(a, "title", getattr(a, "headline", "")),
+                        "source": getattr(a, "source", ""),
+                        "sentiment_score": getattr(a, "sentiment_score", 0.0),
+                        "sentiment_label": getattr(a, "sentiment_label", "neutral"),
+                        "published_at": (a.published_at.isoformat() if getattr(a, "published_at", None) else None),
+                        "url": getattr(a, "url", None),
+                    }
+                    for a in (raw or [])[:5]
+                ]
+            except Exception as _exc:
+                logger.debug("_publish_to_event_bus: article serialisation error: %s", _exc)
+
+            await bus.publish(
+                CH_SENTIMENT,
+                {
+                    "type": "sentiment_update",
+                    "data": {"signal": sentiment_features, "recent_articles": recent_articles},
+                },
+            )
+
+            # Publish individual news items (most recent 3 to avoid flooding)
+            for article_dict in recent_articles[:3]:
+                await bus.publish(
+                    CH_NEWS_ITEM,
+                    {"type": "news_item", "data": article_dict},
+                )
+        except Exception as exc:
+            logger.debug("NewsSentimentEngine event bus publish error: %s", exc)
 
 
 # Module-level singleton

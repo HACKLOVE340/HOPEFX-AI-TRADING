@@ -25,7 +25,7 @@ import {
 import type { UTCTimestamp } from 'lightweight-charts';
 import { useStore, selectIsAuth, useHasHydrated } from '../../store';
 import { tradingApi } from '../../hooks/useApi';
-import { cn, fmtPrice } from '../../lib/utils';
+import { cn, fmtPrice, extractApiError } from '../../lib/utils';
 import type { PriceTick } from '../../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -143,6 +143,7 @@ export function AIChart({
   const candleRef    = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volRef       = useRef<ISeriesApi<'Histogram'> | null>(null);
   const maRef        = useRef<ISeriesApi<'Line'> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
@@ -196,30 +197,38 @@ export function AIChart({
     volRef.current    = vol;
     maRef.current     = ma;
 
-    const onResize = () => {
-      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
-    };
-    window.addEventListener('resize', onResize);
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    if (containerRef.current) ro.observe(containerRef.current);
 
     return () => {
-      window.removeEventListener('resize', onResize);
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
       chart.remove();
+      chartRef.current  = null;
+      candleRef.current = null;
+      volRef.current    = null;
+      maRef.current     = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Load OHLCV on symbol/timeframe change ─────────────────────────────────
+  // ── Load OHLCV on symbol/timeframe change + periodic refresh ──────────────
 
-  useEffect(() => {
+  const loadOhlcv = useCallback((initial = false) => {
     if (!candleRef.current || !hydrated || !isAuth) return;
-    setLoading(true);
-    setChartError(null);
-    setAiResult(null);
+    if (initial) { setLoading(true); setChartError(null); setAiResult(null); }
 
     tradingApi.ohlcv(symbol, timeframe, 300)
       .then((r) => {
         const raw  = r.data as OHLCVCandle[] | { data?: OHLCVCandle[] };
         const data = Array.isArray(raw) ? raw : (raw.data ?? []);
-        if (!data.length) { setChartError('No OHLCV data'); return; }
+        if (!data.length) { if (initial) setChartError('No OHLCV data'); return; }
 
         const sorted = [...data].sort((a, b) => toUTC(a.timestamp) - toUTC(b.timestamp));
         setCandles(sorted);
@@ -237,28 +246,42 @@ export function AIChart({
 
         maRef.current?.setData(computeMA(sorted, 20));
 
-        chartRef.current?.timeScale().fitContent();
+        if (initial) {
+          chartRef.current?.timeScale().fitContent();
+          chartRef.current?.timeScale().scrollToRealTime();
+        }
       })
       .catch((err) => {
-        setChartError(
-          err?.response?.data?.detail ?? err?.message ?? 'Failed to load chart',
-        );
+        if (!initial) return; // silent on background refresh
+        setChartError(extractApiError(err, 'Failed to load chart'));
       })
-      .finally(() => setLoading(false));
-  }, [symbol, timeframe, hydrated, isAuth]);
-
-  // ── Live tick update ──────────────────────────────────────────────────────
+      .finally(() => { if (initial) setLoading(false); });
+  }, [symbol, timeframe, hydrated, isAuth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!tick || !candleRef.current) return;
+    loadOhlcv(true);
+    // Refresh candles every 30s to pick up new bars without a full reload
+    const refreshTimer = setInterval(() => loadOhlcv(false), 30_000);
+    return () => clearInterval(refreshTimer);
+  }, [loadOhlcv]);
+
+  // ── Live tick update — updates the current candle's close in real time ───
+
+  useEffect(() => {
+    if (!tick || !candleRef.current || !candles.length) return;
+    // Use the last historical bar's open time so the tick updates the current
+    // candle rather than creating a phantom future candle.
+    const last = candles[candles.length - 1]!;
+    const barTime = toUTC(last.timestamp);
+    const mid = tick.mid ?? ((tick.bid + tick.ask) / 2);
     candleRef.current.update({
-      time:  Math.floor(tick.timestamp / 1000) as UTCTimestamp,
-      open:  tick.bid,
-      high:  Math.max(tick.bid, tick.ask),
-      low:   Math.min(tick.bid, tick.ask),
-      close: tick.ask,
+      time:  barTime,
+      open:  last.open,
+      high:  Math.max(last.high, tick.ask),
+      low:   Math.min(last.low,  tick.bid),
+      close: mid,
     });
-  }, [tick]);
+  }, [tick, candles]);
 
   // ── Apply AI overlays as price lines ─────────────────────────────────────
 
@@ -321,11 +344,7 @@ export function AIChart({
       setAiResult(r.data as AIResult);
       setLastAnalyzedAt(new Date().toLocaleTimeString());
     } catch (e: unknown) {
-      setAiError(
-        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-          ?? (e as { message?: string })?.message
-          ?? 'AI analysis failed',
-      );
+      setAiError(extractApiError(e, 'AI analysis failed'));
     } finally {
       setAnalyzing(false);
     }
@@ -409,7 +428,7 @@ export function AIChart({
       )}
 
       {/* ── Chart ──────────────────────────────────────────────────── */}
-      <div className="relative">
+      <div className="relative" style={{ height }}>
         {(loading || analyzing) && (
           <div className="absolute inset-0 flex items-center justify-center bg-[#060d18]/70 z-10 pointer-events-none">
             <span className="text-[11px] text-slate-500 animate-pulse">
@@ -417,17 +436,14 @@ export function AIChart({
             </span>
           </div>
         )}
-        {chartError ? (
-          <div
-            className="flex flex-col items-center justify-center gap-1"
-            style={{ height }}
-          >
+        {chartError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 z-20 bg-[#060d18]">
             <span className="text-[#ff1744] text-[11px]">⚠ {chartError}</span>
             <span className="text-slate-600 text-[10px]">Connect a data feed or load historical data</span>
           </div>
-        ) : (
-          <div ref={containerRef} style={{ width: '100%', height }} />
         )}
+        {/* Container always rendered so the chart canvas has a real size on init */}
+        <div ref={containerRef} style={{ width: '100%', height }} />
       </div>
 
       {/* ── AI analysis text summary ────────────────────────────────── */}

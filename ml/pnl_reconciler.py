@@ -366,7 +366,7 @@ class PnLReconciler:
         try:
             import os as _os
 
-            with _os.fdopen(tmp_fd, "w") as fh:
+            with _os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 json.dump(result.to_dict(), fh, indent=2)
             Path(tmp_path).replace(self._snapshot_path)
             logger.debug("PnLReconciler: snapshot written to %s", self._snapshot_path)

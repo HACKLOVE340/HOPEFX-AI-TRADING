@@ -2117,6 +2117,7 @@ class TestMT5BrokerConnector:
         info = await b.get_account_info()
         # Production returns a zero-filled AccountInfo (safe default) when not connected
         from brokers.base import AccountInfo
+
         assert isinstance(info, AccountInfo)
         assert info.balance == 0.0
 

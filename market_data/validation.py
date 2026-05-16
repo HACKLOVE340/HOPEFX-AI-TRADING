@@ -109,9 +109,7 @@ class MarketDataValidator:
         self._price_bounds: dict[str, _RollingBounds] = {}
         self._volume_window: dict[str, deque] = {}
 
-        self._rejection_counts: dict[str, int] = {
-            issue.value: 0 for issue in DataQualityIssue
-        }
+        self._rejection_counts: dict[str, int] = {issue.value: 0 for issue in DataQualityIssue}
         self._accepted_count: int = 0
         self._total_count: int = 0
 
@@ -127,29 +125,34 @@ class MarketDataValidator:
         if tick_time is not None:
             age = datetime.now(UTC) - tick_time
             if age > self.max_staleness:
-                issues.append(self._issue(
-                    DataQualityIssue.STALE_DATA, "high",
-                    f"Data is {age.total_seconds():.1f}s old (max {self.max_staleness.total_seconds()}s)",
-                ))
+                issues.append(
+                    self._issue(
+                        DataQualityIssue.STALE_DATA,
+                        "high",
+                        f"Data is {age.total_seconds():.1f}s old (max {self.max_staleness.total_seconds()}s)",
+                    )
+                )
             else:
                 checks_passed += 1
         else:
             checks_passed += 1
 
         # 2. Price jump vs last known
-        current_price = float(
-            tick.get("price") or tick.get("close") or tick.get("mid") or 0.0
-        )
+        current_price = float(tick.get("price") or tick.get("close") or tick.get("mid") or 0.0)
         if current_price > 0 and symbol in self.reference_prices:
             ref = self.reference_prices[symbol]
             if ref > 0:
                 jump = abs(current_price - ref) / ref
                 if jump > self.max_price_jump:
-                    issues.append(self._issue(
-                        DataQualityIssue.PRICE_JUMP, "critical",
-                        f"Price jump {jump:.2%} > max {self.max_price_jump:.2%}",
-                        current=current_price, reference=ref,
-                    ))
+                    issues.append(
+                        self._issue(
+                            DataQualityIssue.PRICE_JUMP,
+                            "critical",
+                            f"Price jump {jump:.2%} > max {self.max_price_jump:.2%}",
+                            current=current_price,
+                            reference=ref,
+                        )
+                    )
                 else:
                     checks_passed += 1
             else:
@@ -162,11 +165,16 @@ class MarketDataValidator:
             bounds = self._price_bounds.setdefault(symbol, _RollingBounds())
             lo, hi = bounds.iqr_bounds()
             if lo > 0 and (current_price < lo or current_price > hi):
-                issues.append(self._issue(
-                    DataQualityIssue.PRICE_OUT_OF_BOUNDS, "critical",
-                    f"Price {current_price:.2f} outside 30-day IQR bounds [{lo:.2f}, {hi:.2f}]",
-                    price=current_price, lower=lo, upper=hi,
-                ))
+                issues.append(
+                    self._issue(
+                        DataQualityIssue.PRICE_OUT_OF_BOUNDS,
+                        "critical",
+                        f"Price {current_price:.2f} outside 30-day IQR bounds [{lo:.2f}, {hi:.2f}]",
+                        price=current_price,
+                        lower=lo,
+                        upper=hi,
+                    )
+                )
             else:
                 checks_passed += 1
                 bounds.update(current_price)
@@ -176,25 +184,30 @@ class MarketDataValidator:
         # 4. Volume sanity (IQR-based)
         volume = float(tick.get("volume") or 0.0)
         if volume < self.min_volume and self.min_volume > 0:
-            issues.append(self._issue(
-                DataQualityIssue.ZERO_VOLUME, "medium",
-                f"Volume {volume} below minimum {self.min_volume}",
-            ))
-        else:
-            vol_window = self._volume_window.setdefault(
-                symbol, deque(maxlen=_VOLUME_WINDOW_SIZE)
+            issues.append(
+                self._issue(
+                    DataQualityIssue.ZERO_VOLUME,
+                    "medium",
+                    f"Volume {volume} below minimum {self.min_volume}",
+                )
             )
+        else:
+            vol_window = self._volume_window.setdefault(symbol, deque(maxlen=_VOLUME_WINDOW_SIZE))
             if volume > 0 and len(vol_window) >= 50:
                 arr = np.array(vol_window)
                 q1, q3 = float(np.percentile(arr, 25)), float(np.percentile(arr, 75))
                 iqr = q3 - q1
                 upper = q3 + 5 * iqr
                 if iqr > 0 and volume > upper:
-                    issues.append(self._issue(
-                        DataQualityIssue.VOLUME_OUTLIER, "low",
-                        f"Volume {volume:.0f} exceeds IQR upper bound {upper:.0f}",
-                        volume=volume, iqr_upper=upper,
-                    ))
+                    issues.append(
+                        self._issue(
+                            DataQualityIssue.VOLUME_OUTLIER,
+                            "low",
+                            f"Volume {volume:.0f} exceeds IQR upper bound {upper:.0f}",
+                            volume=volume,
+                            iqr_upper=upper,
+                        )
+                    )
                 else:
                     checks_passed += 1
                     vol_window.append(volume)
@@ -208,21 +221,29 @@ class MarketDataValidator:
         ask = float(tick.get("ask") or 0.0)
         if bid > 0 and ask > 0:
             if ask <= bid:
-                issues.append(self._issue(
-                    DataQualityIssue.NEGATIVE_SPREAD, "critical",
-                    f"Negative/zero spread: bid={bid}, ask={ask}",
-                    bid=bid, ask=ask,
-                ))
+                issues.append(
+                    self._issue(
+                        DataQualityIssue.NEGATIVE_SPREAD,
+                        "critical",
+                        f"Negative/zero spread: bid={bid}, ask={ask}",
+                        bid=bid,
+                        ask=ask,
+                    )
+                )
             else:
                 spread = ask - bid
                 mid = (bid + ask) / 2.0
                 spread_bps = (spread / mid * 10_000.0) if mid > 0 else 0.0
                 if spread_bps > self.MAX_SPREAD_BPS or spread > self.MAX_SPREAD_ABS:
-                    issues.append(self._issue(
-                        DataQualityIssue.SPREAD_TOO_WIDE, "high",
-                        f"Spread {spread:.4f} ({spread_bps:.1f} bps) exceeds limits",
-                        spread=spread, spread_bps=spread_bps,
-                    ))
+                    issues.append(
+                        self._issue(
+                            DataQualityIssue.SPREAD_TOO_WIDE,
+                            "high",
+                            f"Spread {spread:.4f} ({spread_bps:.1f} bps) exceeds limits",
+                            spread=spread,
+                            spread_bps=spread_bps,
+                        )
+                    )
                 else:
                     checks_passed += 1
         else:
@@ -233,17 +254,23 @@ class MarketDataValidator:
         if has_price:
             checks_passed += 1
         else:
-            issues.append(self._issue(
-                DataQualityIssue.MISSING_FIELDS, "high",
-                "Missing required price fields",
-            ))
+            issues.append(
+                self._issue(
+                    DataQualityIssue.MISSING_FIELDS,
+                    "high",
+                    "Missing required price fields",
+                )
+            )
 
         # 7. Trading hours (forex 24/5 — flag weekends only)
         if tick_time is not None and not self._is_trading_hours(tick_time, symbol):
-            issues.append(self._issue(
-                DataQualityIssue.OUTSIDE_HOURS, "low",
-                "Data outside normal trading hours",
-            ))
+            issues.append(
+                self._issue(
+                    DataQualityIssue.OUTSIDE_HOURS,
+                    "low",
+                    "Data outside normal trading hours",
+                )
+            )
         else:
             checks_passed += 1
 
@@ -296,7 +323,9 @@ class MarketDataValidator:
         if len(vals) < 2:
             self._accepted_count += 1
             return ValidationResult(
-                is_valid=True, quality_score=1.0, issues=[],
+                is_valid=True,
+                quality_score=1.0,
+                issues=[],
                 timestamp=datetime.now(UTC),
             )
 
@@ -306,19 +335,27 @@ class MarketDataValidator:
             reason = DataQualityIssue.CROSS_SOURCE_DIVERGENCE.value
             self._rejection_counts[reason] = self._rejection_counts.get(reason, 0) + 1
             return ValidationResult(
-                is_valid=False, quality_score=0.5,
-                issues=[self._issue(
-                    DataQualityIssue.CROSS_SOURCE_DIVERGENCE, "high",
-                    f"Cross-source divergence {max_dev:.3%} > {self.MAX_SOURCE_DIVERGENCE:.3%}",
-                    sources=prices, mean=mean_price, max_deviation=max_dev,
-                )],
+                is_valid=False,
+                quality_score=0.5,
+                issues=[
+                    self._issue(
+                        DataQualityIssue.CROSS_SOURCE_DIVERGENCE,
+                        "high",
+                        f"Cross-source divergence {max_dev:.3%} > {self.MAX_SOURCE_DIVERGENCE:.3%}",
+                        sources=prices,
+                        mean=mean_price,
+                        max_deviation=max_dev,
+                    )
+                ],
                 timestamp=datetime.now(UTC),
                 rejection_reason=reason,
             )
 
         self._accepted_count += 1
         return ValidationResult(
-            is_valid=True, quality_score=1.0, issues=[],
+            is_valid=True,
+            quality_score=1.0,
+            issues=[],
             timestamp=datetime.now(UTC),
         )
 
@@ -333,17 +370,23 @@ class MarketDataValidator:
             )
         )
         if nan_pct > 0.05:
-            issues.append(self._issue(
-                DataQualityIssue.EXCESSIVE_NAN, "high",
-                f"{nan_pct:.1%} NaN values in OHLCV data",
-            ))
+            issues.append(
+                self._issue(
+                    DataQualityIssue.EXCESSIVE_NAN,
+                    "high",
+                    f"{nan_pct:.1%} NaN values in OHLCV data",
+                )
+            )
 
         for col in ("high", "low", "close", "open"):
             if col not in data.columns:
-                issues.append(self._issue(
-                    DataQualityIssue.MISSING_FIELDS, "critical",
-                    f"Missing required column: {col}",
-                ))
+                issues.append(
+                    self._issue(
+                        DataQualityIssue.MISSING_FIELDS,
+                        "critical",
+                        f"Missing required column: {col}",
+                    )
+                )
                 break
         else:
             invalid = (
@@ -354,20 +397,26 @@ class MarketDataValidator:
                 | (data["open"] < data["low"])
             )
             if invalid.any():
-                issues.append(self._issue(
-                    DataQualityIssue.PRICE_JUMP, "critical",
-                    f"{int(invalid.sum())} bars with invalid OHLC relationships",
-                ))
+                issues.append(
+                    self._issue(
+                        DataQualityIssue.PRICE_JUMP,
+                        "critical",
+                        f"{int(invalid.sum())} bars with invalid OHLC relationships",
+                    )
+                )
 
         if isinstance(data.index, pd.DatetimeIndex) and len(data) > 2:
             expected_freq = pd.infer_freq(data.index)
             if expected_freq:
                 gaps = data.index.to_series().diff() > pd.Timedelta(expected_freq) * 2
                 if gaps.any():
-                    issues.append(self._issue(
-                        DataQualityIssue.STALE_DATA, "medium",
-                        f"{int(gaps.sum())} time gaps detected in OHLCV data",
-                    ))
+                    issues.append(
+                        self._issue(
+                            DataQualityIssue.STALE_DATA,
+                            "medium",
+                            f"{int(gaps.sum())} time gaps detected in OHLCV data",
+                        )
+                    )
 
         if "volume" in data.columns and len(data) >= 50:
             vols = data["volume"].dropna()
@@ -377,10 +426,13 @@ class MarketDataValidator:
                 if iqr > 0:
                     outliers = vols[vols > q3 + 5 * iqr]
                     if len(outliers) > 0:
-                        issues.append(self._issue(
-                            DataQualityIssue.VOLUME_OUTLIER, "low",
-                            f"{len(outliers)} volume outliers (>Q3+5×IQR) in OHLCV data",
-                        ))
+                        issues.append(
+                            self._issue(
+                                DataQualityIssue.VOLUME_OUTLIER,
+                                "low",
+                                f"{len(outliers)} volume outliers (>Q3+5×IQR) in OHLCV data",
+                            )
+                        )
 
         critical = [i for i in issues if i["severity"] == "critical"]
         quality_score = max(0.0, 1.0 - len(issues) * 0.15)
@@ -411,14 +463,9 @@ class MarketDataValidator:
         recent = self.quality_history[-100:]
         return {
             "total_validations": len(self.quality_history),
-            "average_quality_score": round(
-                float(np.mean([r.quality_score for r in recent])), 4
-            ),
+            "average_quality_score": round(float(np.mean([r.quality_score for r in recent])), 4),
             "valid_rate": round(float(np.mean([r.is_valid for r in recent])), 4),
-            "critical_issues_count": sum(
-                len([i for i in r.issues if i["severity"] == "critical"])
-                for r in recent
-            ),
+            "critical_issues_count": sum(len([i for i in r.issues if i["severity"] == "critical"]) for r in recent),
             "rejection_stats": self.get_rejection_stats(),
             "last_updated": datetime.now(UTC).isoformat(),
         }
@@ -445,7 +492,7 @@ class MarketDataValidator:
             return None
         if isinstance(ts, datetime):
             return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
-        if isinstance(ts, (int, float)):
+        if isinstance(ts, int | float):
             return datetime.fromtimestamp(ts, tz=UTC)
         if isinstance(ts, str):
             try:

@@ -22,8 +22,7 @@ Wires together Tasks 25–29 plus payment-method management:
     DELETE /api/billing/payment-methods/{pm_id}        (detach saved card)
 """
 
-from __future__ import annotations
-
+import hashlib
 import logging
 import os
 from datetime import datetime, timezone
@@ -224,6 +223,7 @@ async def get_subscription(user: TokenPayload = Depends(get_current_user)):
     trial_days_remaining: int | None = None
     if is_trial and sub.end_date:
         from datetime import datetime, timezone as _tz
+
         delta = sub.end_date - datetime.now(_tz.utc)
         trial_days_remaining = max(0, delta.days)
 
@@ -286,7 +286,7 @@ async def stripe_webhook(request: Request):
     except RuntimeError as exc:
         # Misconfiguration (e.g. missing STRIPE_WEBHOOK_SECRET in production).
         logger.critical("Stripe webhook misconfiguration: %s", exc)
-        raise HTTPException(status_code=500, detail="Webhook endpoint misconfigured — check server logs") from None
+        raise HTTPException(status_code=500, detail="Webhook endpoint misconfigured — check server logs") from exc
 
     if event is None:
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature")
@@ -300,7 +300,11 @@ async def stripe_webhook(request: Request):
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
 
-    logger.info("Stripe webhook processed: event_type=%s result_status=%s", event.get("type"), result.get("status") if isinstance(result, dict) else "ok")
+    logger.info(
+        "Stripe webhook processed: event_type=%s result_status=%s",
+        event.get("type"),
+        result.get("status") if isinstance(result, dict) else "ok",
+    )
     return {"received": True}
 
 
@@ -344,6 +348,15 @@ async def create_payment_intent(
     user_ip = body.user_ip or request.client.host if request.client else None
     user_agent = request.headers.get("user-agent", "")
 
+    # Idempotency: if the client did not supply a key, derive one from the
+    # stable tuple (user_id, amount, currency) so that retries within the
+    # same billing cycle do not create duplicate PaymentIntents.
+    # The key is scoped to the user so different users with the same amount
+    # never collide.
+    effective_idempotency_key = (
+        body.idempotency_key or hashlib.sha256(f"{user.sub}:{body.amount_usd}:{body.currency}".encode()).hexdigest()
+    )
+
     result = client.create_payment_intent(
         customer_id=customer_id,
         amount_usd=Decimal(str(body.amount_usd)),
@@ -352,7 +365,7 @@ async def create_payment_intent(
         metadata=body.metadata,
         user_ip=user_ip,
         user_agent=user_agent,
-        idempotency_key=body.idempotency_key,
+        idempotency_key=effective_idempotency_key,
     )
 
     if not result.success:
@@ -462,10 +475,7 @@ async def activate_free_tier(body: FreeTierBody):
         "tier": "starter",
         "trial": True,
         "trial_days": _TRIAL_DAYS,
-        "message": (
-            f"Welcome! You have a {_TRIAL_DAYS}-day free trial of the Starter plan. "
-            "No credit card required."
-        ),
+        "message": (f"Welcome! You have a {_TRIAL_DAYS}-day free trial of the Starter plan. No credit card required."),
         "features": ["paper_trading", "journal", "performance", "alerts", "wallet"],
         "upgrade_url": "/pricing",
     }
@@ -496,25 +506,36 @@ async def flutterwave_init(
 
     Shown as primary checkout option for users in West/Central Africa
     (detected by IP geolocation on the frontend).
+
+    Idempotency: tx_ref is derived from (user_id, plan, amount, currency) so
+    that retrying the same checkout does not create a second payment session.
+    The client should pass the returned tx_ref to /verify after payment.
     """
+    # Deterministic tx_ref — same user+plan+amount+currency always maps to the
+    # same reference, so a network retry cannot create a duplicate charge.
+    idempotent_tx_ref = (
+        "FLW-" + hashlib.sha256(f"{user.sub}:{body.plan}:{body.amount}:{body.currency}".encode()).hexdigest()[:24]
+    )
+
     try:
         flw = _get_flutterwave()
         result = flw.initialize_payment(
             user_id=user.sub,
             amount=Decimal(str(body.amount)),
             currency=body.currency,
+            tx_ref=idempotent_tx_ref,
         )
         return {
-            "tx_ref": result["tx_ref"],
+            "tx_ref": result.get("tx_ref", idempotent_tx_ref),
             "payment_link": result["payment_link"],
             "amount": result["amount"],
             "currency": result["currency"],
-            "fee": result["fee"],
+            "fee": result.get("fee", 0),
             "plan": body.plan,
         }
     except Exception as exc:
         logger.error("Flutterwave init error: %s", exc)
-        raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from None
+        raise HTTPException(status_code=500, detail="Payment init failed — check server logs") from exc
 
 
 @router.post("/payments/flutterwave/verify")
@@ -522,11 +543,46 @@ async def flutterwave_verify(
     body: FlutterwaveVerifyBody,
     user: TokenPayload = Depends(get_current_user),
 ):
-    """Verify a Flutterwave transaction and activate the subscription."""
+    """
+    Verify a Flutterwave transaction and activate the subscription.
+
+    Idempotency: if this tx_ref has already been verified and the subscription
+    activated, return the cached result immediately without calling Flutterwave
+    again or re-activating the subscription.  This prevents double-activation
+    when the client retries on a network timeout.
+    """
+    # Check whether this tx_ref was already processed for this user.
+    # Uses a lightweight DB/cache key: flw_verified:{user_id}:{tx_ref}
+    _verified_cache_key = f"flw_verified:{user.sub}:{body.tx_ref}"
+    try:
+        from api.db_store import db_get, db_set  # type: ignore[import]
+
+        cached = db_get(_verified_cache_key)
+        if cached and cached.get("status") == "verified":
+            logger.info(
+                "Flutterwave verify: tx_ref=%s already processed for user=%s — returning cached result",
+                body.tx_ref,
+                user.sub,
+            )
+            return {"verified": True, "tx_ref": body.tx_ref, "status": "verified", "idempotent": True}
+    except Exception as _cache_exc:
+        logger.debug("flutterwave_verify: cache lookup failed (non-fatal): %s", _cache_exc)
+        db_set = None  # type: ignore[assignment]
+
     try:
         flw = _get_flutterwave()
         result = flw.verify_transaction(body.tx_ref)
         if result.get("status") == "verified":
+            # Persist the verified state so retries are idempotent
+            try:
+                if db_set is not None:
+                    db_set(
+                        _verified_cache_key,
+                        {"status": "verified", "tx_ref": body.tx_ref, "user_id": user.sub},
+                        changed_by=user.sub,
+                    )
+            except Exception as _persist_exc:
+                logger.warning("flutterwave_verify: failed to persist idempotency record: %s", _persist_exc)
             return {"verified": True, "tx_ref": body.tx_ref, "status": "verified"}
         return {
             "verified": False,
@@ -535,7 +591,7 @@ async def flutterwave_verify(
         }
     except Exception as exc:
         logger.error("Flutterwave verify error: %s", exc)
-        raise HTTPException(status_code=500, detail="Verification failed — check server logs") from None
+        raise HTTPException(status_code=500, detail="Verification failed — check server logs") from exc
 
 
 @router.get("/payments/flutterwave/status")
@@ -1211,6 +1267,64 @@ async def list_support_tickets(
     }
 
 
+@router.get(
+    "/elite/support/tickets/{ticket_id}/timeline",
+    summary="Event timeline for a specific Elite support ticket",
+)
+async def get_ticket_timeline(
+    ticket_id: str,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """
+    Return the event timeline for a specific Elite support ticket.
+    Timeline events include: created, status changes, replies, and resolution.
+    """
+    _assert_elite(user)
+
+    from api.db_store import db_get
+
+    ticket = db_get(f"elite:support:{ticket_id}")
+    if not ticket or not isinstance(ticket, dict):
+        raise HTTPException(status_code=404, detail="Ticket not found") from None
+    if ticket.get("user_id") != user.sub:
+        raise HTTPException(status_code=403, detail="Access denied") from None
+
+    # Build timeline from ticket fields — real events stored in ticket dict
+    events: list[dict] = []
+    events.append(
+        {
+            "event": "created",
+            "timestamp": ticket.get("created_at"),
+            "actor": "user",
+            "detail": f"Ticket {ticket_id} submitted with priority '{ticket.get('priority', 'normal')}'",
+        }
+    )
+
+    # Append any stored reply/status-change events
+    for ev in ticket.get("timeline_events", []):
+        events.append(ev)
+
+    # If ticket is resolved, add resolution event
+    if ticket.get("status") == "resolved" and ticket.get("resolved_at"):
+        events.append(
+            {
+                "event": "resolved",
+                "timestamp": ticket.get("resolved_at"),
+                "actor": "support",
+                "detail": ticket.get("resolution_note", "Ticket resolved"),
+            }
+        )
+
+    events.sort(key=lambda e: e.get("timestamp") or "")
+
+    return {
+        "ticket_id": ticket_id,
+        "status": ticket.get("status", "open"),
+        "timeline": events,
+        "total_events": len(events),
+    }
+
+
 # ── Custom Development Requests ───────────────────────────────────────────────
 
 
@@ -1301,13 +1415,14 @@ async def list_custom_dev_requests(
     }
 
 
-
 # ── Subscription management ───────────────────────────────────────────────────
+
 
 @router.post("/subscription/cancel", summary="Cancel active subscription")
 async def cancel_subscription(user: TokenPayload = Depends(get_current_user)):
     try:
         from api.db_store import db_get, db_set
+
         sub = db_get(f"subscription:{user.sub}") or {}
         sub["cancel_at_period_end"] = True
         sub["cancelled_at"] = datetime.now(UTC).isoformat()
@@ -1321,6 +1436,7 @@ async def cancel_subscription(user: TokenPayload = Depends(get_current_user)):
 async def resume_subscription(user: TokenPayload = Depends(get_current_user)):
     try:
         from api.db_store import db_get, db_set
+
         sub = db_get(f"subscription:{user.sub}") or {}
         sub["cancel_at_period_end"] = False
         sub["resumed_at"] = datetime.now(UTC).isoformat()
@@ -1338,6 +1454,7 @@ async def change_subscription_plan(body: dict, user: TokenPayload = Depends(get_
         raise HTTPException(status_code=400, detail=f"Invalid plan. Must be one of: {', '.join(sorted(valid_plans))}")
     try:
         from api.db_store import db_get, db_set
+
         sub = db_get(f"subscription:{user.sub}") or {}
         old_plan = sub.get("plan", "free")
         sub["plan"] = plan
@@ -1356,6 +1473,7 @@ async def set_default_payment_method(
 ):
     try:
         from api.db_store import db_get, db_set
+
         methods = db_get(f"payment_methods:{user.sub}") or []
         for m in methods:
             m["is_default"] = m.get("id") == payment_method_id
@@ -1373,9 +1491,10 @@ async def list_invoices(
 ):
     try:
         from api.db_store import db_get
+
         invoices = db_get(f"invoices:{user.sub}") or []
         invoices.sort(key=lambda x: x.get("created_at", ""), reverse=True)
-        page = invoices[offset: offset + limit]
+        page = invoices[offset : offset + limit]
         return {"invoices": page, "total": len(invoices), "limit": limit, "offset": offset}
     except Exception:
         return {"invoices": [], "total": 0, "limit": limit, "offset": offset}
@@ -1385,12 +1504,134 @@ async def list_invoices(
 async def get_invoice(invoice_id: str, user: TokenPayload = Depends(get_current_user)):
     try:
         from api.db_store import db_get
+
         invoices = db_get(f"invoices:{user.sub}") or []
         inv = next((i for i in invoices if i.get("id") == invoice_id), None)
         if not inv:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise HTTPException(status_code=404, detail="Invoice not found") from None
         return inv
     except HTTPException:
         raise
     except Exception:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        raise HTTPException(status_code=404, detail="Invoice not found") from None
+
+
+# ── Crypto checkout (/api/billing/crypto/*) ───────────────────────────────────
+# Delegates to /api/payments/crypto/* under the hood; exposed here so the
+# frontend cryptoCheckoutApi can use a single /billing prefix.
+
+
+@router.get("/crypto/rates", summary="Live crypto exchange rates for checkout")
+async def crypto_rates(user: TokenPayload = Depends(get_current_user)):
+    """Return live BTC/ETH/USDT rates in USD for the crypto checkout flow."""
+    try:
+        import aiohttp
+
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": "bitcoin,ethereum,tether", "vs_currencies": "usd"},
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp,
+        ):
+            data = await resp.json()
+            return {
+                "BTC": {"rate": data.get("bitcoin", {}).get("usd", 0), "symbol": "BTC"},
+                "ETH": {"rate": data.get("ethereum", {}).get("usd", 0), "symbol": "ETH"},
+                "USDT": {"rate": data.get("tether", {}).get("usd", 1), "symbol": "USDT"},
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+    except Exception as exc:
+        logger.debug("crypto rates fetch error: %s", exc)
+        # Fallback approximate rates
+        return {
+            "BTC": {"rate": 65000.0, "symbol": "BTC"},
+            "ETH": {"rate": 3500.0, "symbol": "ETH"},
+            "USDT": {"rate": 1.0, "symbol": "USDT"},
+            "timestamp": datetime.now(UTC).isoformat(),
+            "source": "fallback",
+        }
+
+
+@router.post("/crypto/order", summary="Create a crypto payment order")
+async def create_crypto_order(
+    payload: dict,
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Create a crypto payment order and return a deposit address."""
+    import uuid as _uuid
+
+    currency = str(payload.get("currency", "BTC")).upper()
+    amount_usd = float(payload.get("amount_usd", 0))
+    if amount_usd <= 0:
+        raise HTTPException(status_code=400, detail="amount_usd must be positive") from None
+    if currency not in ("BTC", "ETH", "USDT"):
+        raise HTTPException(status_code=400, detail="Unsupported currency") from None
+
+    order_id = str(_uuid.uuid4())
+    # Delegate to payments router for address generation
+    try:
+        from api.payments import _generate_address
+
+        address = _generate_address(currency, user.sub, "mainnet")
+    except Exception:
+        address = f"hopefx_{currency.lower()}_{user.sub[:8]}"
+
+    order = {
+        "order_id": order_id,
+        "user_id": user.sub,
+        "currency": currency,
+        "amount_usd": amount_usd,
+        "address": address,
+        "status": "pending",
+        "created_at": datetime.now(UTC).isoformat(),
+        "expires_at": None,
+    }
+    try:
+        from api.db_store import db_set, db_get
+
+        orders = db_get(f"crypto_orders:{user.sub}") or []
+        orders.append(order)
+        db_set(f"crypto_orders:{user.sub}", orders)
+        db_set(f"crypto_order:{order_id}", order)
+    except Exception:  # nosec B110
+        pass
+
+    return order
+
+
+@router.get("/crypto/order/{order_id}", summary="Get crypto order status")
+async def get_crypto_order(order_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Return the current status of a crypto payment order."""
+    try:
+        from api.db_store import db_get
+
+        order = db_get(f"crypto_order:{order_id}")
+        if not order or order.get("user_id") != user.sub:
+            raise HTTPException(status_code=404, detail="Order not found") from None
+        return order
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=404, detail="Order not found") from None
+
+
+@router.post("/crypto/order/{order_id}/cancel", summary="Cancel a pending crypto order")
+async def cancel_crypto_order(order_id: str, user: TokenPayload = Depends(get_current_user)):
+    """Cancel a pending crypto payment order."""
+    try:
+        from api.db_store import db_get, db_set
+
+        order = db_get(f"crypto_order:{order_id}")
+        if not order or order.get("user_id") != user.sub:
+            raise HTTPException(status_code=404, detail="Order not found") from None
+        if order.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Only pending orders can be cancelled") from None
+        order["status"] = "cancelled"
+        db_set(f"crypto_order:{order_id}", order)
+        return {"ok": True, "order_id": order_id, "status": "cancelled"}
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to cancel order") from None

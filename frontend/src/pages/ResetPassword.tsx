@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { Activity, AlertCircle, CheckCircle2, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { authApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 function measureStrength(pw: string): { score: number; label: string; color: string } {
   if (!pw) return { score: 0, label: '', color: '#334155' };
@@ -54,10 +55,10 @@ const ResetPassword: React.FC = () => {
     return (
       <div style={s.page}>
         <div style={s.card}>
-          <a href="/" style={s.logoLink}>
+          <Link to="/" style={s.logoLink}>
             <div style={s.logoIcon}><Activity size={14} color="#3b82f6" /></div>
             <span style={s.logo}>HOPE<span style={{ color: '#3b82f6' }}>FX</span></span>
-          </a>
+          </Link>
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
               <AlertCircle size={32} color="#f87171" />
@@ -88,12 +89,11 @@ const ResetPassword: React.FC = () => {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      const msg = detail?.toLowerCase() ?? '';
+      const msg = extractApiError(err, '').toLowerCase();
       if (msg.includes('expired') || msg.includes('invalid'))
         setError('This reset link has expired or already been used. Please request a new one.');
       else
-        setError(detail ?? 'Failed to reset password. Please try again.');
+        setError(extractApiError(err, 'Failed to reset password. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -108,10 +108,10 @@ const ResetPassword: React.FC = () => {
   return (
     <div style={s.page}>
       <div style={s.card}>
-        <a href="/" style={s.logoLink}>
+        <Link to="/" style={s.logoLink}>
           <div style={s.logoIcon}><Activity size={14} color="#3b82f6" /></div>
           <span style={s.logo}>HOPE<span style={{ color: '#3b82f6' }}>FX</span></span>
-        </a>
+        </Link>
 
         {success ? (
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
@@ -237,18 +237,19 @@ const s: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
     background: 'radial-gradient(ellipse at 50% 0%,rgba(59,130,246,0.06) 0%,#0f172a 60%)',
-    padding: '20px',
+    padding: 'clamp(12px, 4vw, 24px)',
   },
   card: {
     background: '#1e293b', border: '1px solid #334155', borderRadius: 16,
-    padding: '40px 36px', width: '100%', maxWidth: 400,
+    padding: 'clamp(20px, 6vw, 40px) clamp(16px, 5vw, 36px)',
+    width: '100%', maxWidth: 420,
     boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
   },
   logoLink: { display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', textDecoration: 'none', marginBottom: 20 },
   logoIcon: {
     width: 28, height: 28, borderRadius: 8,
     background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   logo:    { fontSize: 24, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 },
   heading: { fontSize: 20, fontWeight: 700, color: '#f1f5f9', textAlign: 'center', margin: '0 0 8px' },
@@ -258,13 +259,17 @@ const s: Record<string, React.CSSProperties> = {
   label:   { fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
   input: {
     background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-    padding: '11px 14px', fontSize: 14, color: '#f8fafc', outline: 'none',
+    padding: '12px 14px', fontSize: 16, /* prevents iOS zoom */
+    color: '#f8fafc', outline: 'none',
     transition: 'border-color 0.15s,box-shadow 0.15s', width: '100%', boxSizing: 'border-box',
+    WebkitAppearance: 'none',
   },
   eyeBtn: {
     position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
-    background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-    display: 'flex', alignItems: 'center',
+    background: 'none', border: 'none', cursor: 'pointer',
+    minWidth: 44, minHeight: 44,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    touchAction: 'manipulation',
   },
   error: {
     display: 'flex', alignItems: 'flex-start', gap: 8,
@@ -273,13 +278,14 @@ const s: Record<string, React.CSSProperties> = {
   },
   btn: {
     background: 'linear-gradient(135deg,#3b82f6 0%,#2563eb 100%)',
-    color: '#fff', border: 'none', borderRadius: 8, padding: '13px',
+    color: '#fff', border: 'none', borderRadius: 8, padding: '14px',
     fontSize: 15, fontWeight: 700, cursor: 'pointer',
+    minHeight: 48, width: '100%',
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-    transition: 'opacity 0.15s', textDecoration: 'none',
+    transition: 'opacity 0.15s', textDecoration: 'none', touchAction: 'manipulation',
   },
   footer:   { display: 'flex', justifyContent: 'center', marginTop: 20 },
-  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748b', textDecoration: 'none' },
+  backLink: { display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: '#64748b', textDecoration: 'none', minHeight: 44 },
 };
 
 export default ResetPassword;

@@ -8,6 +8,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { useStore } from '../store';
+import { ToastProvider } from '../components/Toast';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -246,6 +247,16 @@ vi.mock('../hooks/useApi', () => ({
   resetCsrfCache:    vi.fn(),
   getCsrfToken:      vi.fn().mockResolvedValue(null),
   prefetchCsrfToken: vi.fn().mockResolvedValue(undefined),
+  notificationsApi: {
+    list:        vi.fn().mockResolvedValue({ data: { notifications: [], total: 0 } }),
+    unreadCount: vi.fn().mockResolvedValue({ data: { count: 0 } }),
+    markRead:    vi.fn().mockResolvedValue({ data: {} }),
+    markAllRead: vi.fn().mockResolvedValue({ data: {} }),
+    delete:      vi.fn().mockResolvedValue({ data: {} }),
+    preferences: vi.fn().mockResolvedValue({ data: {} }),
+    updatePrefs: vi.fn().mockResolvedValue({ data: {} }),
+    subscribe:   vi.fn().mockResolvedValue({ data: {} }),
+  },
 }));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -259,9 +270,11 @@ function makeQC() {
 function wrap(element: React.ReactElement, qc = makeQC()) {
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter>
-        <Routes><Route path="*" element={element} /></Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter>
+          <Routes><Route path="*" element={element} /></Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
@@ -286,8 +299,8 @@ describe('Portfolio page', () => {
 
   it('renders Portfolio heading', async () => {
     await renderPortfolio();
-    // h1 contains emoji prefix: "💼 Portfolio"
-    expect(screen.getByText(/portfolio/i)).toBeInTheDocument();
+    // 'Portfolio' appears in both nav breadcrumb and page <h1>
+    expect(screen.getAllByText(/portfolio/i).length).toBeGreaterThan(0);
   });
 
   it('renders account summary section', async () => {
@@ -399,7 +412,8 @@ describe('Performance page', () => {
 
   it('renders Performance heading', async () => {
     await renderPerformance();
-    expect(screen.getByText('Performance')).toBeInTheDocument();
+    // 'Performance' appears in both nav breadcrumb and page heading
+    expect(screen.getAllByText('Performance').length).toBeGreaterThan(0);
   });
 
   it('renders tab navigation', async () => {
@@ -414,7 +428,8 @@ describe('Performance page', () => {
 
   it('renders weekly tab button', async () => {
     await renderPerformance();
-    expect(screen.getByRole('button', { name: /weekly/i })).toBeInTheDocument();
+    // Multiple "weekly" buttons may exist (tab + other controls)
+    expect(screen.getAllByRole('button', { name: /weekly/i }).length).toBeGreaterThan(0);
   });
 
   it('renders refresh button', async () => {
@@ -424,7 +439,7 @@ describe('Performance page', () => {
 
   it('renders equity curve section', async () => {
     await renderPerformance();
-    expect(screen.getByText(/equity curve/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/equity curve/i).length).toBeGreaterThan(0);
   });
 
   it('shows total trades stat', async () => {
@@ -466,8 +481,9 @@ describe('Performance page', () => {
 
   it('switches to weekly tab', async () => {
     await renderPerformance();
-    const weeklyBtn = screen.getByRole('button', { name: /weekly/i });
-    fireEvent.click(weeklyBtn);
+    // Use the first weekly button (the tab button in the nav strip)
+    const weeklyBtns = screen.getAllByRole('button', { name: /weekly/i });
+    fireEvent.click(weeklyBtns[0]);
     await waitFor(() => {
       // Page renders "Weekly Performance Report" as h3 heading
       expect(document.body.textContent).toMatch(/weekly performance report/i);

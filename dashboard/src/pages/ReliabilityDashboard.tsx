@@ -23,7 +23,7 @@ import {
   Zap, Clock, Server, Shield, RotateCcw, ChevronDown, ChevronUp,
   Play, Cpu, Database, Wifi,
 } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -243,9 +243,9 @@ export default function ReliabilityDashboard() {
     setError(null)
     try {
       const [statusRes, histRes, metricsRes] = await Promise.allSettled([
-        axios.get('/api/superadmin/reliability/status'),
-        axios.get('/api/superadmin/reliability/history'),
-        axios.get('/api/superadmin/reliability/metrics'),
+        api.get('/api/superadmin/reliability/status'),
+        api.get('/api/superadmin/reliability/history'),
+        api.get('/api/superadmin/reliability/metrics'),
       ])
       if (statusRes.status === 'fulfilled') setStatus(statusRes.value.data)
       else setError('Could not load reliability status.')
@@ -259,7 +259,7 @@ export default function ReliabilityDashboard() {
   const runProbe = useCallback(async () => {
     setProbing(true)
     try {
-      const res = await axios.post('/api/superadmin/reliability/probe')
+      const res = await api.post('/api/superadmin/reliability/probe')
       setProbes(res.data.results ?? [])
     } catch {
       setProbes([])
@@ -272,7 +272,7 @@ export default function ReliabilityDashboard() {
     setSelfTesting(true)
     setSelfTestResult(null)
     try {
-      const res = await axios.post('/api/superadmin/reliability/self-test')
+      const res = await api.post('/api/superadmin/reliability/self-test')
       setSelfTestResult(res.data.summary ?? 'Self-test complete.')
     } catch {
       setSelfTestResult('Self-test failed — check server logs.')

@@ -160,7 +160,7 @@ LOOKBACK_DAYS = 365
 from cache.market_data_cache import MarketDataCache
 cache = MarketDataCache()
 df = cache.get_ohlcv(SYMBOL, TIMEFRAME, limit=LOOKBACK_DAYS * 24)
-logger.info(f"Loaded {len(df)} bars for {SYMBOL} {TIMEFRAME}")
+logger.info("Loaded %s bars for %s %s", len(df), SYMBOL, TIMEFRAME)
 df.head()
 """,
         )
@@ -577,7 +577,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
 
     from api.auth import TokenPayload, require_role
 
-    router = APIRouter(prefix="/api/research", tags=["Research"])
+    router = APIRouter(prefix="/api/research", tags=["Research"], dependencies=[Depends(require_role("trader"))])
 
     class CreateNotebookRequest(BaseModel):
         title: str
@@ -742,7 +742,10 @@ def create_research_router(engine: "ResearchNotebookEngine"):
                 "summary": f"Executed {len(results)} cells",
                 "signals": [],
                 "charts": [],
-                "metrics": {"cells_run": len(results), "cells_ok": sum(1 for r in results if r.get("status") == "completed")},
+                "metrics": {
+                    "cells_run": len(results),
+                    "cells_ok": sum(1 for r in results if r.get("status") == "completed"),
+                },
                 "generated_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
             },
             "cells": [

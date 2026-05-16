@@ -34,7 +34,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import text as _sa_text
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow
@@ -52,15 +51,33 @@ UTC = timezone.utc
 async def _probe_database() -> dict[str, Any]:
     t0 = time.perf_counter()
     try:
-        from database.connection import SessionLocal
+        import os as _os
 
-        db = SessionLocal()
-        try:
-            db.execute(_sa_text("SELECT 1"))
-            db.close()
-        except Exception:
-            db.close()
-            raise
+        db_url = _os.getenv("DATABASE_URL", "sqlite:///hopefx.db")
+
+        def _sync_probe() -> None:
+            from sqlalchemy import create_engine, text as _text
+            from sqlalchemy.pool import NullPool as _NullPool
+
+            # Strip async driver prefixes — create_engine is sync-only.
+            sync_url = db_url
+            if sync_url.startswith("sqlite+aiosqlite://"):
+                sync_url = sync_url.replace("sqlite+aiosqlite://", "sqlite://", 1)
+            elif sync_url.startswith("postgresql+asyncpg://"):
+                sync_url = sync_url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+            is_sqlite = "sqlite" in sync_url
+            engine = create_engine(
+                sync_url,
+                # NullPool: no idle connections held — avoids file-lock conflicts
+                # with the main engine when this probe runs concurrently.
+                poolclass=_NullPool,
+                connect_args={"check_same_thread": False, "timeout": 10} if is_sqlite else {},
+            )
+            with engine.connect() as conn:
+                conn.execute(_text("SELECT 1"))
+            engine.dispose()
+
+        await asyncio.get_running_loop().run_in_executor(None, _sync_probe)
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
         return {"status": "ok", "latency_ms": latency_ms, "detail": "SELECT 1 succeeded"}
     except Exception as exc:
@@ -139,10 +156,7 @@ async def _probe_ml_engine() -> dict[str, Any]:
                 engine = getattr(app_state, attr, None)
                 if engine is not None:
                     ready = getattr(engine, "is_ready", None)
-                    if callable(ready):
-                        ready = ready()
-                    else:
-                        ready = getattr(engine, "_ready", True)
+                    ready = ready() if callable(ready) else getattr(engine, "_ready", True)
                     return {
                         "status": "ok" if ready else "warning",
                         "latency_ms": round((time.perf_counter() - t0) * 1000, 2),

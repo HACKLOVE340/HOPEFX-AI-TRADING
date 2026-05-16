@@ -46,7 +46,8 @@ export const NAV_GROUPS: { id: NavGroup; label: string }[] = [
 export const NAV_ITEMS: NavItem[] = [
   // ── Core ──────────────────────────────────────────────────────────────────
   { path: '/dashboard',    label: 'Dashboard',      icon: '📊', group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
-  { path: '/trade',        label: 'Trade',          icon: '⚡', group: 'core',      plan: 'free',    featureKey: 'trade'        },
+  { path: '/home',         label: 'Live Feed',      icon: '⚡', group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
+  { path: '/trade',        label: 'Trade',          icon: '💹', group: 'core',      plan: 'free',    featureKey: 'trade'        },
   { path: '/portfolio',    label: 'Portfolio',      icon: '💼', group: 'core',      plan: 'free',    featureKey: 'portfolio'    },
   { path: '/watchlist',    label: 'Watchlist',      icon: '👁️', group: 'core',      plan: 'free',    featureKey: 'watchlist'    },
   { path: '/calendar',     label: 'Economic Calendar', icon: '📅', group: 'core',      plan: 'free',    featureKey: 'calendar'     },
@@ -55,9 +56,10 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/docs',         label: 'Documentation',  icon: '📚', group: 'core',      plan: 'free',    featureKey: 'dashboard'    },
 
   // ── Trading ───────────────────────────────────────────────────────────────
-  { path: '/ai-chart',   label: 'AI Chart Bot',   icon: '🧠', group: 'trading', plan: 'professional', featureKey: 'ai-chart'  },
-  { path: '/terminal',   label: 'Terminal',       icon: '🖥️', group: 'trading', plan: 'starter',      featureKey: 'terminal'  },
-  { path: '/nuclear',    label: 'Nuclear AI',     icon: '☢️', group: 'trading', plan: 'professional', featureKey: 'nuclear'   },
+  { path: '/ai-chart',           label: 'AI Chart Bot',      icon: '🧠', group: 'trading', plan: 'professional', featureKey: 'ai-chart'          },
+  { path: '/ai-chart-dashboard', label: 'AI Chart Dashboard',icon: '📊', group: 'trading', plan: 'professional', featureKey: 'ai-chart'          },
+  { path: '/terminal',           label: 'Terminal',          icon: '🖥️', group: 'trading', plan: 'starter',      featureKey: 'terminal'          },
+  { path: '/nuclear',            label: 'Nuclear AI',        icon: '☢️', group: 'trading', plan: 'professional', featureKey: 'nuclear'           },
 
   // ── Tools ─────────────────────────────────────────────────────────────────
   { path: '/journal',          label: 'Trade Journal',   icon: '📓', group: 'tools', plan: 'free',         featureKey: 'journal'          },

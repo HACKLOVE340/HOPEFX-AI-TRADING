@@ -217,30 +217,30 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     logger.info("\n" + "=" * 60)
     logger.info("  HOPEFX-AI-TRADING — Startup Plan (dry-run)")
     logger.info("=" * 60)
-    logger.info(f"  Broker  : {args.broker}")
-    logger.info(f"  Mode    : {args.mode}")
-    logger.info(f"  Config  : {args.config}")
-    logger.info(f"  Practice: {os.environ.get('OANDA_PRACTICE', 'true')}")
+    logger.info("  Broker  : %s", args.broker)
+    logger.info("  Mode    : %s", args.mode)
+    logger.info("  Config  : %s", args.config)
+    logger.info("  Practice: %s", os.environ.get("OANDA_PRACTICE", "true"))
     logger.info("")
 
     # Prop firm rules
     logger.info("  Prop Firm Rules:")
-    logger.info(f"    daily_dd        : {prop_cfg.get('daily_dd', 0.05) * 100:.1f}%")
-    logger.info(f"    max_dd          : {prop_cfg.get('max_dd', 0.10) * 100:.1f}%")
-    logger.info(f"    news_blackout   : ±{prop_cfg.get('news_blackout', 5)} min")
-    logger.info(f"    weekend_close   : {prop_cfg.get('weekend_close', True)}")
-    logger.info(f"    breach_action   : {prop_cfg.get('breach_action', 'pause')}")
-    logger.info(f"    max_daily_trades: {prop_cfg.get('max_daily_trades', 20)}")
-    logger.info(f"    enabled         : {prop_cfg.get('enabled', True)}")
+    logger.info("    daily_dd        : %.1f%%", prop_cfg.get("daily_dd", 0.05) * 100)
+    logger.info("    max_dd          : %.1f%%", prop_cfg.get("max_dd", 0.10) * 100)
+    logger.info("    news_blackout   : ±%s min", prop_cfg.get("news_blackout", 5))
+    logger.info("    weekend_close   : %s", prop_cfg.get("weekend_close", True))
+    logger.info("    breach_action   : %s", prop_cfg.get("breach_action", "pause"))
+    logger.info("    max_daily_trades: %s", prop_cfg.get("max_daily_trades", 20))
+    logger.info("    enabled         : %s", prop_cfg.get("enabled", True))
     logger.info("")
 
     # Env validation
     result = validate_environment(strict=False)
     logger.info("  Environment:")
     for msg in result.errors:
-        logger.error(f"    ❌ {msg}")
+        logger.error("    ❌ %s", msg)
     for msg in result.warnings:
-        logger.warning(f"    ⚠️  {msg}")
+        logger.warning("    ⚠️  %s", msg)
     if not result.errors and not result.warnings:
         logger.info("    ✅ All variables present")
     logger.info("")
@@ -249,7 +249,7 @@ def _print_plan(args: argparse.Namespace, prop_cfg: dict) -> None:
     pipeline = _get_pipeline(args.mode)
     logger.info("  Pipeline:")
     for step in pipeline:
-        logger.info(f"    → {step}")
+        logger.info("    → %s", step)
     logger.info("=" * 60)
     logger.info("")
 

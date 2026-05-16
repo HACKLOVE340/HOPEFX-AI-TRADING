@@ -10,6 +10,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ const AIStrategyGenerator: React.FC = () => {
       setDeployMsg('Strategy deployed to paper trading.');
       loadHistory();
     } catch (err: unknown) {
-      setDeployMsg(`Deploy failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setDeployMsg(`Deploy failed: ${extractApiError(err, 'Unknown error')}`);
     } finally {
       setDeploying(false);
     }
@@ -152,7 +153,7 @@ const AIStrategyGenerator: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       {/* LLM health banner — shown while checking and when unavailable */}
       {llmStatus === 'checking' && (
         <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#94a3b8' }}>

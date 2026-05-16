@@ -43,11 +43,7 @@ class PositionRepository(AsyncRepository[Position]):
             conditions.append(Position.user_id == user_id)
         if symbol:
             conditions.append(Position.symbol == symbol)
-        stmt = (
-            select(Position)
-            .where(and_(*conditions))
-            .order_by(desc(Position.opened_at))
-        )
+        stmt = select(Position).where(and_(*conditions)).order_by(desc(Position.opened_at))
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -82,8 +78,11 @@ class PositionRepository(AsyncRepository[Position]):
         position.current_price = current_price
         if unrealized_pnl is not None:
             position.unrealized_pnl = unrealized_pnl
-        # Recompute market value
-        qty = position.quantity or position.size or 0.0
+        # Recompute market value — use explicit None check so a quantity of
+        # 0.0 (falsy) does not fall through to the size field incorrectly.
+        qty = (
+            position.quantity if position.quantity is not None else position.size if position.size is not None else 0.0
+        )
         position.market_value = current_price * qty
         session.add(position)
         await session.flush()
@@ -120,12 +119,7 @@ class PositionRepository(AsyncRepository[Position]):
         conditions = [Position.symbol == symbol]
         if status:
             conditions.append(Position.status == status)
-        stmt = (
-            select(Position)
-            .where(and_(*conditions))
-            .order_by(desc(Position.opened_at))
-            .limit(limit)
-        )
+        stmt = select(Position).where(and_(*conditions)).order_by(desc(Position.opened_at)).limit(limit)
         result = await session.execute(stmt)
         return result.scalars().all()
 
@@ -203,9 +197,7 @@ class PositionRepository(AsyncRepository[Position]):
             sa_func.sum(Position.market_value).label("total_market_value"),
             sa_func.sum(Position.unrealized_pnl).label("total_unrealized_pnl"),
             sa_func.sum(Position.realized_pnl).label("total_realized_pnl"),
-        ).where(
-            and_(Position.user_id == user_id, Position.status == "open")
-        )
+        ).where(and_(Position.user_id == user_id, Position.status == "open"))
         result = await session.execute(stmt)
         row = result.one()
         return {

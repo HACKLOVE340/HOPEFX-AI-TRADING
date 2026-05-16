@@ -354,15 +354,15 @@ Examples:
                 csv_path=args.csv,
                 years=args.years,
             )
-            logger.info(f"\n{'=' * 50}")
-            logger.info(f"Results for {sym}:")
+            logger.info("\n%s", "=" * 50)
+            logger.info("Results for %s:", sym)
             for name, info in results.items():
                 m = info.get("metrics") or {}
                 acc = m.get("accuracy", m.get("rmse", "n/a"))
                 f1 = m.get("f1", "n/a")
                 path = info.get("model_path", "")
-                logger.info(f"  {name:<20} accuracy={acc}  f1={f1}")
-                logger.info(f"  {'':20} saved → {path}")
+                logger.info("  %s accuracy=%s  f1=%s", f"{name:<20}", acc, f1)
+                logger.info("  %s saved → %s", f"{'':20}", path)
         except Exception:
             logger.exception("Failed for %s: %s", sym)
             all_ok = False
@@ -370,7 +370,7 @@ Examples:
     if not all_ok:
         sys.exit(1)
 
-    logger.info(f"\nAll models saved to {args.model_dir}/")
+    logger.info("\nAll models saved to %s/", args.model_dir)
     logger.info("Next steps:")
     logger.info("  1. Review manifest.json in each symbol directory")
     logger.info("  2. Restart the app to load new weights")

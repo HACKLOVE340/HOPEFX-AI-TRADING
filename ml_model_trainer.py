@@ -89,8 +89,8 @@ if __name__ == "__main__":
     model.fit(X_train, y_train)
 
     cv_scores = cross_val_score(model, X, y, cv=5)
-    logger.info(f"Cross-Validation Scores: {cv_scores}")
-    logger.info(f"Average Score: {cv_scores.mean():.4f}")
+    logger.info("Cross-Validation Scores: %s", cv_scores)
+    logger.info("Average Score: %.4f", cv_scores.mean())
 
     predictions = model.predict(X_test)
     logger.info(confusion_matrix(y_test, predictions))

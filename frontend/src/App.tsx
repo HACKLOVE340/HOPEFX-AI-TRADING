@@ -12,7 +12,7 @@
  * Traders see features based on their active subscription tier.
  */
 
-import React, { useState, Component, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Component, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -28,6 +28,9 @@ import SubscriptionGate from './components/SubscriptionGate';
 import TrialBanner from './components/TrialBanner';
 import Sidebar from './components/sidebar/Sidebar';
 import { ThemeToggle } from './components/ThemeToggle';
+import { ToastProvider } from './components/Toast';
+import { ConfirmDialogProvider } from './components/ConfirmDialog';
+import { CommandPalette } from './components/CommandPalette';
 import { useStore, selectIsAuth, useHasHydrated } from './store';
 import { useWebSocket } from './hooks/useWebSocket';
 import { usePlan } from './hooks/usePlan';
@@ -120,7 +123,15 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime:            30_000,
-      retry:                2,
+      // Don't retry on 401/403/404/503 — these are definitive responses.
+      // Only retry on network errors (no response) or 5xx server errors
+      // that aren't 503 (server starting up).
+      retry: (failureCount, error) => {
+        const status = (error as { response?: { status?: number } })?.response?.status;
+        if (status === 401 || status === 403 || status === 404) return false;
+        if (status === 503) return failureCount < 3; // server starting — retry up to 3×
+        return failureCount < 2;
+      },
       retryDelay:           (attempt) => Math.min(1_000 * 2 ** attempt, 10_000),
       refetchOnWindowFocus: false,
     },
@@ -274,19 +285,25 @@ const NoLiveFeedBanner: React.FC = () => {
   const showNoFeed    = isAuth && status === 'connected' && noLiveFeed && !dismissed;
   if (!showWsDown && !showNoFeed) return null;
 
-  const label =
-    showNoFeed          ? (noLiveFeedMsg ?? 'No live broker feed — prices may be delayed.') :
-    status === 'connecting' ? 'Connecting to live feed…' :
-    status === 'error'      ? 'Live feed error — using REST fallback (30 s polling)' :
-                              'No live feed — using REST fallback (prices may be delayed)';
+  // Determine severity: connecting = amber, no_live_feed = amber, error/disconnected = amber
+  // All states use amber — this is informational, not a critical error.
+  const isConnecting = status === 'connecting';
 
-  const bg     = status === 'connecting' ? '#78350f' : '#450a0a';
-  const border = status === 'connecting' ? '#92400e' : '#7f1d1d';
-  const color  = status === 'connecting' ? '#fbbf24' : '#f87171';
+  const label =
+    showNoFeed
+      ? (noLiveFeedMsg ?? 'No live broker feed — connect a broker in Settings to receive real-time prices.')
+      : isConnecting
+        ? 'Connecting to live feed…'
+        : 'No live broker feed — prices updating via REST (30 s). Connect a broker in Settings.';
+
+  // Always amber — this is an informational notice, not an error state.
+  const bg     = '#451a03';
+  const border = '#78350f';
+  const color  = '#fbbf24';
 
   return (
     <div
-      role="alert"
+      role="status"
       aria-live="polite"
       style={{
         background: bg, borderBottom: `1px solid ${border}`,
@@ -338,11 +355,79 @@ const superAdminOnly = (el: React.ReactNode) => (
   </AuthGuard>
 );
 
+// ── useMediaQuery hook ────────────────────────────────────────────────────────
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(query).matches : false
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const handler = (e: MediaQueryListEvent) => setMatches(e.matches);
+    mql.addEventListener('change', handler);
+    setMatches(mql.matches);
+    return () => mql.removeEventListener('change', handler);
+  }, [query]);
+  return matches;
+}
+
+// ── Mobile top bar ────────────────────────────────────────────────────────────
+interface MobileTopBarProps {
+  onMenuOpen: () => void;
+}
+const MobileTopBar: React.FC<MobileTopBarProps> = ({ onMenuOpen }) => (
+  <div className="mobile-topbar">
+    <button
+      onClick={onMenuOpen}
+      aria-label="Open navigation menu"
+      style={{
+        background: 'transparent', border: 'none', color: '#94a3b8',
+        cursor: 'pointer', padding: '8px', borderRadius: 6,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        minWidth: 44, minHeight: 44,
+      }}
+    >
+      {/* Hamburger icon */}
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <rect x="2" y="4"  width="16" height="2" rx="1" fill="currentColor" />
+        <rect x="2" y="9"  width="16" height="2" rx="1" fill="currentColor" />
+        <rect x="2" y="14" width="16" height="2" rx="1" fill="currentColor" />
+      </svg>
+    </button>
+    <span style={{ fontSize: 17, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 }}>
+      HOPE<span style={{ color: '#3b82f6' }}>FX</span>
+    </span>
+    {/* Right side spacer to keep title centred */}
+    <div style={{ width: 44 }} />
+  </div>
+);
+
 // ── App shell ─────────────────────────────────────────────────────────────────
 const AppShell: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  // On desktop: sidebar can be collapsed (icon-only). On mobile: sidebar is a drawer.
+  const [collapsed,    setCollapsed]    = useState(false);
+  const [drawerOpen,   setDrawerOpen]   = useState(false);
   const isAuth   = useStore(selectIsAuth);
   const hydrated = useHasHydrated();
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (isMobile && drawerOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isMobile, drawerOpen]);
+
+  // Close drawer on route change (navigation)
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+
+  // Mark body so index.html CSS can lock the viewport height
+  useEffect(() => {
+    document.body.classList.add('app-shell-active');
+    return () => document.body.classList.remove('app-shell-active');
+  }, []);
 
   // Prefetch CSRF token on mount so it's ready before any POST/PUT/DELETE fires.
   React.useEffect(() => {
@@ -356,31 +441,60 @@ const AppShell: React.FC = () => {
   useBootstrapData();
 
   // Hold the entire shell until localStorage rehydration is complete.
-  // This prevents every child query from firing with token=null and
-  // flooding the server with 401s before the persisted token is available.
   if (!hydrated) return <PageFallback />;
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden',
-      background: 'var(--bg, #0f172a)',
-      color: 'var(--text, #f1f5f9)',
-      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-    }}>
-      {/* Banners are in normal flow — push content down instead of overlapping */}
+    <div
+      className="app-shell"
+      style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
+    >
+      {/* Banners push content down instead of overlapping */}
       <TrialBanner />
       <NoLiveFeedBanner />
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
-      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
-      <main style={{
-        flex: 1, overflow: 'hidden',
-        background: 'var(--bg, #0f172a)',
-        display: 'flex', flexDirection: 'column',
-      }}>
+
+      {/* Mobile top bar — only visible on small screens */}
+      {isMobile && <MobileTopBar onMenuOpen={() => setDrawerOpen(true)} />}
+
+      <div className="app-shell-body">
+        {/* ── Desktop sidebar (always in flow) ── */}
+        {!isMobile && (
+          <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
+        )}
+
+        {/* ── Mobile drawer overlay ── */}
+        {isMobile && drawerOpen && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="sidebar-backdrop"
+              onClick={closeDrawer}
+              aria-hidden="true"
+            />
+            {/* Drawer — full sidebar in expanded mode, slides in from left */}
+            <div
+              className="sidebar-slide-in"
+              style={{
+                position: 'fixed', top: 0, left: 0, bottom: 0,
+                width: 'min(280px, 85vw)',
+                zIndex: 35,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+              }}
+            >
+              <Sidebar
+                collapsed={false}
+                onToggle={closeDrawer}
+                onNavigate={closeDrawer}
+              />
+            </div>
+          </>
+        )}
+
+      <main className="app-shell-main" style={{ background: 'var(--bg, #0f172a)' }}>
         {/* PageScroller: scrollable wrapper for all non-terminal pages.
             Terminal pages (TradingDashboard, ChartDashboard) manage their own
             overflow internally and use flex:1 to fill this container. */}
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <div className="app-shell-scroller">
         <Suspense fallback={<PageFallback />}>
           <Routes>
             {/* Core */}
@@ -429,9 +543,11 @@ const AppShell: React.FC = () => {
 
             {/* Community */}
             <Route path="/leaderboard"  element={wrap(gated('leaderboard',  <Leaderboard />))} />
-            {/* /signals = canonical Signal Feed; /feed kept as alias */}
+            {/* /signals = canonical Signal Feed; /feed and /social kept as aliases */}
             <Route path="/signals"      element={wrap(gated('signals',      <SocialFeed />))} />
             <Route path="/feed"         element={<Navigate to="/signals" replace />} />
+            <Route path="/social"       element={<Navigate to="/signals" replace />} />
+            <Route path="/social-feed"  element={<Navigate to="/signals" replace />} />
             <Route path="/marketplace"  element={wrap(gated('marketplace',  <Marketplace />))} />
             <Route path="/affiliate"    element={wrap(gated('affiliate',    <Affiliate />))} />
 
@@ -450,6 +566,8 @@ const AppShell: React.FC = () => {
             {/* /upgrade = canonical Upgrade Plan; /pricing kept as alias */}
             <Route path="/upgrade"         element={wrap(<PricingPage />)} />
             <Route path="/pricing"         element={<Navigate to="/upgrade" replace />} />
+            {/* /docs inside AppShell so sidebar stays visible for logged-in users */}
+            <Route path="/docs"            element={wrap(<DocsPage />)} />
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
             <Route path="/2fa-setup"       element={wrap(<AuthGuard><TwoFactorSetup /></AuthGuard>)} />
             <Route path="/notifications"   element={wrap(<AuthGuard><NotificationsPage /></AuthGuard>)} />
@@ -460,6 +578,8 @@ const AppShell: React.FC = () => {
             {/* Admin */}
             <Route path="/admin"        element={wrap(adminOnly(<AdminPanel />))} />
             <Route path="/audit"        element={wrap(adminOnly(<AuditLog />))} />
+            <Route path="/audit-log"    element={<Navigate to="/audit" replace />} />
+            <Route path="/backtest"     element={<Navigate to="/ai-strategy" replace />} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
@@ -489,33 +609,40 @@ const AppShell: React.FC = () => {
   );
 };
 
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 const App: React.FC = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
-      <ErrorBoundary>
-        <Suspense fallback={<PageFallback />}>
-          <Routes>
-            <Route path="/"                element={<LandingPage />} />
-            <Route path="/landing"         element={<LandingPage />} />
-            <Route path="/login"           element={<Login />} />
-            <Route path="/register"        element={<Register />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password"  element={<ResetPassword />} />
-            <Route path="/onboarding"      element={<Onboarding />} />
-            {/* Public pages — no auth required */}
-            {/* /pricing = public marketing pricing page for unauthenticated visitors */}
-            {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
-            <Route path="/pricing"         element={<PricingPage />} />
-            <Route path="/docs"            element={<DocsPage />} />
-            <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
-            <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
-            <Route path="/privacy"         element={<PrivacyPolicy />} />
-            <Route path="/*"               element={<AppShell />} />
-          </Routes>
-        </Suspense>
-      </ErrorBoundary>
-    </BrowserRouter>
+    <ToastProvider>
+      <ConfirmDialogProvider>
+        <BrowserRouter>
+          <ErrorBoundary>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/"                element={<LandingPage />} />
+                <Route path="/landing"         element={<LandingPage />} />
+                <Route path="/login"           element={<Login />} />
+                <Route path="/register"        element={<Register />} />
+                <Route path="/forgot-password" element={<ForgotPassword />} />
+                <Route path="/reset-password"  element={<ResetPassword />} />
+                <Route path="/onboarding"      element={<Onboarding />} />
+                {/* Public pages — no auth required */}
+                {/* /pricing = public marketing pricing page for unauthenticated visitors */}
+                {/* /upgrade = authenticated plan upgrade page (inside AppShell) */}
+                <Route path="/pricing"         element={<PricingPage />} />
+                <Route path="/docs"            element={<DocsPage />} />
+                <Route path="/terms"           element={<TermsAndRiskDisclosure />} />
+                <Route path="/risk-disclosure" element={<TermsAndRiskDisclosure />} />
+                <Route path="/privacy"         element={<PrivacyPolicy />} />
+                <Route path="/*"               element={<AppShell />} />
+              </Routes>
+              {/* Global command palette — available on all authenticated pages */}
+              <CommandPalette />
+            </Suspense>
+          </ErrorBoundary>
+        </BrowserRouter>
+      </ConfirmDialogProvider>
+    </ToastProvider>
   </QueryClientProvider>
 );
 

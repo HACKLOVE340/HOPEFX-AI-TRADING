@@ -8,6 +8,8 @@
  */
 
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import {
   BookOpen, Zap, BarChart2, Brain, Shield, Globe,
   Code2, Settings, Users, ChevronRight, ExternalLink,
@@ -202,14 +204,7 @@ const DocsPage: React.FC = () => {
     : SECTIONS;
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg, #0f172a)',
-        color: 'var(--text, #f1f5f9)',
-        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-      }}
-    >
+    <div className="page-content" style={{ padding: 0 }}>
       {/* Header */}
       <div
         style={{
@@ -221,7 +216,10 @@ const DocsPage: React.FC = () => {
         <div style={{ maxWidth: 900, margin: '0 auto' }}>
           {/* Breadcrumb */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}>
-            <a href="/" style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}>Home</a>
+            <Link to="/home" style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+            >Home</Link>
             <ChevronRight size={12} style={{ color: '#334155' }} />
             <span style={{ color: '#94a3b8', fontSize: 13 }}>Documentation</span>
           </div>
@@ -372,6 +370,16 @@ const DocsPage: React.FC = () => {
           </p>
         </div>
 
+        {/* Quick navigation */}
+        <CrossLinkBar title="Quick Links" style={{ marginBottom: 32 }} links={[
+          { label: 'Dashboard',    href: '/dashboard',  icon: '📊', color: '#3b82f6' },
+          { label: 'Trade',        href: '/trade',      icon: '⚡', color: '#4ade80' },
+          { label: 'Pricing',      href: '/pricing',    icon: '💰', color: '#f59e0b' },
+          { label: 'Status',       href: '/status',     icon: '🟢', color: '#22c55e' },
+          { label: 'AI Strategy',  href: '/ai-strategy',icon: '🤖', color: '#a78bfa' },
+          { label: 'Leaderboard',  href: '/leaderboard',icon: '🏆', color: '#fbbf24' },
+        ]} />
+
         {/* Footer links */}
         <div style={{
           borderTop: '1px solid #1e293b',
@@ -382,22 +390,24 @@ const DocsPage: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'space-between',
         }}>
-          <div style={{ display: 'flex', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             {[
-              { label: 'Pricing', href: '/pricing' },
-              { label: 'Terms', href: '/terms' },
-              { label: 'Privacy', href: '/privacy' },
-              { label: 'Status', href: '/status' },
+              { label: 'Pricing', to: '/pricing' },
+              { label: 'Terms',   to: '/terms' },
+              { label: 'Privacy', to: '/privacy' },
+              { label: 'Status',  to: '/status' },
+              { label: 'Home',    to: '/home' },
+              { label: 'Trade',   to: '/trade' },
             ].map(l => (
-              <a
+              <Link
                 key={l.label}
-                href={l.href}
+                to={l.to}
                 style={{ color: '#475569', fontSize: 13, textDecoration: 'none' }}
-                onMouseOver={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
-                onMouseOut={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
               >
                 {l.label}
-              </a>
+              </Link>
             ))}
           </div>
           <a

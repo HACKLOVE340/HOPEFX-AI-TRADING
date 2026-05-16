@@ -8,6 +8,7 @@ import {
   ErrorState, LoadingRows,
 } from './ui';
 import type { BrokerHealth, TCAMetric } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -72,7 +73,7 @@ const BrokerManagementSection: React.FC = () => {
       setRouting(rRes.data.rules ?? rRes.data ?? []);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load broker data');
+      setError(extractApiError(e, 'Failed to load broker data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -87,7 +88,7 @@ const BrokerManagementSection: React.FC = () => {
       setMsg(`Reconnect triggered for broker ${brokerId}`);
       setTimeout(load, 2000);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Reconnect failed');
+      setMsg(extractApiError(e, 'Reconnect failed'));
     } finally { setBusy(null); }
   };
 
@@ -98,7 +99,7 @@ const BrokerManagementSection: React.FC = () => {
       setMsg(`Broker ${brokerId} disconnected`);
       setTimeout(load, 1500);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Disconnect failed');
+      setMsg(extractApiError(e, 'Disconnect failed'));
     } finally { setBusy(null); }
   };
 
@@ -110,7 +111,7 @@ const BrokerManagementSection: React.FC = () => {
       setEditRouting(false);
       setMsg('Routing configuration saved');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Save routing failed');
+      setMsg(extractApiError(e, 'Save routing failed'));
     } finally { setBusy(null); }
   };
 

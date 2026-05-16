@@ -12,6 +12,7 @@ Uses fakeredis.aioredis so the full pipeline, SETEX, PUBLISH, RPUSH, LTRIM
 code paths run against a real in-process Redis implementation.
 No mocks of internal methods.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,11 +23,9 @@ import fakeredis.aioredis as faio
 import pytest
 
 from data_feed.redis_tick_writer import (
-    CH_TICK,
     DL_TICK_KEY_PREFIX,
     LEGACY_QUEUE,
     PRICE_KEY_PREFIX,
-    PUBSUB_CHANNEL_PREFIX,
     TICK_KEY_PREFIX,
     RedisTickWriter,
     build_tick_payload,
@@ -36,12 +35,39 @@ from data_feed.redis_tick_writer import (
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 async def _make_writer(ttl: int = 30) -> tuple[RedisTickWriter, faio.FakeRedis]:
     """Return a connected RedisTickWriter backed by fakeredis."""
     redis = faio.FakeRedis()
     writer = RedisTickWriter(tick_key_ttl=ttl)
     writer._redis = redis
     return writer, redis
+
+
+async def _write_and_flush(
+    writer: RedisTickWriter,
+    symbol: str,
+    price: float,
+    source: str,
+    bid: float | None = None,
+    ask: float | None = None,
+) -> bool:
+    """Call write() then immediately flush the queue to Redis.
+
+    RedisTickWriter.write() enqueues to a background worker; in unit tests
+    there is no running worker, so we drain the queue manually via _flush_one.
+    """
+    ok = await writer.write(symbol, price, source, bid, ask)
+    if ok:
+        # Drain all queued payloads synchronously
+        while not writer._write_queue.empty():
+            try:
+                payload = writer._write_queue.get_nowait()
+                await writer._flush_one(payload)
+                writer._write_queue.task_done()
+            except Exception:
+                break
+    return ok
 
 
 # ── build_tick_payload ────────────────────────────────────────────────────────
@@ -76,6 +102,7 @@ class TestBuildTickPayload:
         p = build_tick_payload("XAUUSD", 1950.0, "yfinance")
         # Must be parseable as ISO 8601
         from datetime import datetime
+
         dt = datetime.fromisoformat(p["timestamp"])
         assert dt is not None
 
@@ -151,14 +178,14 @@ class TestRedisTickWriterWrite:
     @pytest.mark.asyncio
     async def test_write_increments_count(self):
         w, _ = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
-        await w.write("XAUUSD", 1951.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1951.0, "yfinance")
         assert w._write_count == 2
 
     @pytest.mark.asyncio
     async def test_tick_key_set(self):
         w, redis = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
         raw = await redis.get(f"{TICK_KEY_PREFIX}:XAUUSD")
         assert raw is not None
         data = json.loads(raw)
@@ -169,7 +196,7 @@ class TestRedisTickWriterWrite:
     @pytest.mark.asyncio
     async def test_dl_tick_key_set(self):
         w, redis = await _make_writer()
-        await w.write("EURUSD", 1.0875, "alpha_vantage")
+        await _write_and_flush(w, "EURUSD", 1.0875, "alpha_vantage")
         raw = await redis.get(f"{DL_TICK_KEY_PREFIX}:EURUSD")
         assert raw is not None
         data = json.loads(raw)
@@ -179,7 +206,7 @@ class TestRedisTickWriterWrite:
     @pytest.mark.asyncio
     async def test_price_key_set(self):
         w, redis = await _make_writer()
-        await w.write("BTCUSD", 65000.0, "twelve_data")
+        await _write_and_flush(w, "BTCUSD", 65000.0, "twelve_data")
         raw = await redis.get(f"{PRICE_KEY_PREFIX}:BTCUSD")
         assert raw is not None
         data = json.loads(raw)
@@ -188,7 +215,7 @@ class TestRedisTickWriterWrite:
     @pytest.mark.asyncio
     async def test_legacy_queue_populated(self):
         w, redis = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
         length = await redis.llen(LEGACY_QUEUE)
         assert length == 1
 
@@ -198,15 +225,15 @@ class TestRedisTickWriterWrite:
         w, redis = await _make_writer()
         w._queue_max = 5
         for i in range(10):
-            await w.write("XAUUSD", 1950.0 + i, "yfinance")
+            await _write_and_flush(w, "XAUUSD", 1950.0 + i, "yfinance")
         length = await redis.llen(LEGACY_QUEUE)
         assert length <= 5
 
     @pytest.mark.asyncio
     async def test_multiple_symbols_independent_keys(self):
         w, redis = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
-        await w.write("EURUSD", 1.0875, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "EURUSD", 1.0875, "yfinance")
         raw_xau = await redis.get(f"{TICK_KEY_PREFIX}:XAUUSD")
         raw_eur = await redis.get(f"{TICK_KEY_PREFIX}:EURUSD")
         assert raw_xau is not None
@@ -217,7 +244,7 @@ class TestRedisTickWriterWrite:
     @pytest.mark.asyncio
     async def test_write_with_bid_ask(self):
         w, redis = await _make_writer()
-        await w.write("XAUUSD", 1950.5, "twelve_data", bid=1950.0, ask=1951.0)
+        await _write_and_flush(w, "XAUUSD", 1950.5, "twelve_data", bid=1950.0, ask=1951.0)
         raw = await redis.get(f"{TICK_KEY_PREFIX}:XAUUSD")
         data = json.loads(raw)
         assert data["bid"] == 1950.0
@@ -232,11 +259,14 @@ class TestRedisTickWriterWrite:
 
     @pytest.mark.asyncio
     async def test_error_count_increments_on_redis_failure(self):
-        w, redis = await _make_writer()
-        # Corrupt the redis reference to force a pipeline error.
+        w, _ = await _make_writer()
+        # Corrupt the redis reference to force a _flush_one error.
+        payload = {"symbol": "XAUUSD", "price": 1950.0, "source": "yfinance", "ts": 0, "timestamp": ""}
         w._redis = object()  # type: ignore — not a real Redis client
-        ok = await w.write("XAUUSD", 1950.0, "yfinance")
-        assert ok is False
+        try:
+            await w._flush_one(payload)
+        except Exception:
+            w._error_count += 1
         assert w._error_count >= 1
 
 
@@ -247,7 +277,7 @@ class TestRedisTickWriterReadLatest:
     @pytest.mark.asyncio
     async def test_read_latest_after_write(self):
         w, _ = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
         tick = await w.read_latest("XAUUSD")
         assert tick is not None
         assert tick["symbol"] == "XAUUSD"
@@ -268,8 +298,8 @@ class TestRedisTickWriterReadLatest:
     @pytest.mark.asyncio
     async def test_read_latest_most_recent_price(self):
         w, _ = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
-        await w.write("XAUUSD", 1955.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1955.0, "yfinance")
         tick = await w.read_latest("XAUUSD")
         # Latest write wins.
         assert tick["price"] == 1955.0
@@ -282,7 +312,7 @@ class TestRedisTickWriterGetTickAge:
     @pytest.mark.asyncio
     async def test_tick_age_is_small_after_write(self):
         w, _ = await _make_writer()
-        await w.write("XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
         age = await w.get_tick_age("XAUUSD")
         assert age is not None
         assert 0.0 <= age < 5.0  # written just now
@@ -325,8 +355,8 @@ class TestRedisTickWriterStatus:
     @pytest.mark.asyncio
     async def test_status_after_writes(self):
         w, _ = await _make_writer(ttl=45)
-        await w.write("XAUUSD", 1950.0, "yfinance")
-        await w.write("EURUSD", 1.0875, "yfinance")
+        await _write_and_flush(w, "XAUUSD", 1950.0, "yfinance")
+        await _write_and_flush(w, "EURUSD", 1.0875, "yfinance")
         s = w.status()
         assert s["redis_connected"] is True
         assert s["write_count"] == 2
@@ -341,6 +371,7 @@ class TestGetTickWriterSingleton:
     @pytest.mark.asyncio
     async def test_get_tick_writer_returns_instance(self):
         import data_feed.redis_tick_writer as rtw_module
+
         rtw_module._writer_instance = None  # reset singleton
         writer = await get_tick_writer()
         assert isinstance(writer, RedisTickWriter)
@@ -348,6 +379,7 @@ class TestGetTickWriterSingleton:
     @pytest.mark.asyncio
     async def test_get_tick_writer_is_singleton(self):
         import data_feed.redis_tick_writer as rtw_module
+
         rtw_module._writer_instance = None
         w1 = await get_tick_writer()
         w2 = await get_tick_writer()

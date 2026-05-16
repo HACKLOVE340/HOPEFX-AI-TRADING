@@ -187,3 +187,32 @@ export function computeDrawdown(equity: number[]): number[] {
     return peak > 0 ? (e - peak) / peak : 0;
   });
 }
+
+/**
+ * Extract a human-readable error message from an Axios error.
+ *
+ * FastAPI can return `detail` as either a string or an object
+ * ({msg, loc, type} on 422/503). This function handles both shapes
+ * so callers never render [object Object].
+ *
+ * Priority: response.data.detail → response.data.message → err.message → fallback
+ */
+export function extractApiError(err: unknown, fallback = 'An error occurred'): string {
+  if (err == null) return fallback;
+  const response = (err as { response?: { status?: number; data?: { detail?: unknown; message?: unknown } } })?.response;
+  const data = response?.data;
+  const raw = data?.detail ?? data?.message;
+  if (typeof raw === 'string' && raw.length > 0) return raw;
+  if (raw && typeof raw === 'object') {
+    const d = raw as { msg?: string; message?: string };
+    const s = d.msg ?? d.message;
+    if (typeof s === 'string' && s.length > 0) return s;
+    return JSON.stringify(raw);
+  }
+  // For 404 with no body, return the fallback rather than the raw Axios message
+  // ("Request failed with status code 404") which is not user-friendly.
+  if (response?.status === 404) return fallback;
+  const msg = (err as { message?: unknown })?.message;
+  if (typeof msg === 'string' && msg.length > 0) return msg;
+  return fallback;
+}

@@ -446,7 +446,7 @@ async def factor_risk_report(
                     if sym:
                         positions[sym] = float(getattr(p, "market_value", 0.0))
     except Exception as exc:
-        logger.debug("factor_risk_report: position fetch failed: %s", exc)
+        logger.warning("factor_risk_report: position fetch failed: %s", exc)
 
     # Factor attribution
     factor_section: dict[str, Any] = {"available": False}
@@ -521,7 +521,7 @@ async def portfolio_summary(
                 positions = await broker.get_positions()
                 open_positions = len(positions)
     except Exception as exc:
-        logger.debug("portfolio_summary: broker fetch failed: %s", exc)
+        logger.warning("portfolio_summary: broker fetch failed: %s", exc)
 
     rb = _get_rebalancer()
     if rb is not None:
@@ -559,17 +559,19 @@ async def portfolio_positions(
         if broker is not None and hasattr(broker, "get_positions"):
             raw = await broker.get_positions()
             for p in raw:
-                positions_list.append({
-                    "symbol": getattr(p, "symbol", ""),
-                    "side": getattr(p, "side", "long"),
-                    "quantity": float(getattr(p, "quantity", 0.0)),
-                    "entry_price": float(getattr(p, "entry_price", 0.0)),
-                    "current_price": float(getattr(p, "current_price", 0.0)),
-                    "unrealised_pnl": float(getattr(p, "unrealised_pnl", 0.0)),
-                    "market_value": float(getattr(p, "market_value", 0.0)),
-                })
+                positions_list.append(
+                    {
+                        "symbol": getattr(p, "symbol", ""),
+                        "side": getattr(p, "side", "long"),
+                        "quantity": float(getattr(p, "quantity", 0.0)),
+                        "entry_price": float(getattr(p, "entry_price", 0.0)),
+                        "current_price": float(getattr(p, "current_price", 0.0)),
+                        "unrealised_pnl": float(getattr(p, "unrealised_pnl", 0.0)),
+                        "market_value": float(getattr(p, "market_value", 0.0)),
+                    }
+                )
     except Exception as exc:
-        logger.debug("portfolio_positions: broker fetch failed: %s", exc)
+        logger.warning("portfolio_positions: broker fetch failed: %s", exc)
 
     target_weights: dict[str, float] = {}
     rb = _get_rebalancer()

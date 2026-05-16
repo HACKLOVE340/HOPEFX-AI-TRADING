@@ -23,7 +23,6 @@ from __future__ import annotations
 import logging
 import threading
 import uuid
-from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
 
@@ -108,11 +107,11 @@ class ABTest:
             from scipy.stats import chi2_contingency
             import numpy as np
 
-            c_corr  = sum(1 for r in self._results["control"]    if r["correct"])
-            ch_corr = sum(1 for r in self._results["challenger"]  if r["correct"])
-            c_n  = len(self._results["control"])
+            c_corr = sum(1 for r in self._results["control"] if r["correct"])
+            ch_corr = sum(1 for r in self._results["challenger"] if r["correct"])
+            c_n = len(self._results["control"])
             ch_n = len(self._results["challenger"])
-            c_wrong  = c_n  - c_corr
+            c_wrong = c_n - c_corr
             ch_wrong = ch_n - ch_corr
             table = np.array([[c_corr, c_wrong], [ch_corr, ch_wrong]])
             if table.min() < 5:
@@ -287,7 +286,7 @@ class ABTestManager:
                         "metrics": test.get_metrics(),
                     },
                 )
-                db.merge(row)
+                db.merge(row)  # healer: ignore — SQLAlchemy merge, not pandas merge
                 db.commit()
         except Exception as exc:
             logger.debug("ABTestManager._persist_test: %s", exc)

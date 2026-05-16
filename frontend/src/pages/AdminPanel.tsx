@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, superadminApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import { PageHeader } from '../components/PageHeader';
 import { Spinner } from '../components/Spinner';
 import { ErrorBanner } from '../components/ErrorBanner';
@@ -332,7 +333,7 @@ const AdminPanel: React.FC = () => {
       if (ovRes.status === 'rejected') setError('Failed to load admin overview.');
     } catch (err: unknown) {
       if (!mountedRef.current) return;
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(extractApiError(err, 'Unknown error'));
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -367,7 +368,7 @@ const AdminPanel: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif', paddingBottom: 48 }}>
+    <div className="page-content">
       <PageHeader
         title="🔧 Admin Panel"
         subtitle="Platform operations, user management, and system health"

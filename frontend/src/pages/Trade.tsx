@@ -19,17 +19,31 @@
  *   DELETE /api/trading/positions
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'react-router-dom';
+import { useLocation, Link } from 'react-router-dom';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
+import { useFlashHighlight } from '../hooks/useFlashHighlight';
+import { PageHeader } from '../components';
+import { CrossLinkBar } from '../components/CrossLinkBar';
 import { useStore, selectWsStatus, useHasHydrated, selectIsAuth, selectSignals, selectRiskSnapshot } from '../store';
+
+const TRADE_CROSS_LINKS = [
+  { label: 'Trading Terminal', href: '/terminal',       icon: '🖥️', color: '#3b82f6' },
+  { label: 'Dashboard',        href: '/dashboard',      icon: '📊', color: '#60a5fa' },
+  { label: 'Watchlist',        href: '/watchlist',      icon: '👁',  color: '#34d399' },
+  { label: 'Risk Calculator',  href: '/risk-calculator',icon: '🛡',  color: '#f59e0b' },
+  { label: 'Trade Journal',    href: '/journal',        icon: '📓', color: '#a78bfa' },
+  { label: 'Copy Trading',     href: '/copy-trading',   icon: '🔁', color: '#f97316' },
+];
 import { usePositions, useAccount } from '../hooks/useOrchestratorData';
 import { tradingApi } from '../hooks/useApi';
 import { OrderEntryForm } from '../components/panels/OrderEntryForm';
 import { PositionsTable } from '../components/panels/PositionsTable';
 import { Sparkline } from '../components/ui/Sparkline';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime } from '../lib/utils';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, extractApiError } from '../lib/utils';
 import type { PriceTick } from '../types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -65,10 +79,12 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
   const change    = tick?.change_pct ?? 0;
   const isUp      = change >= 0;
   const sparkData = history.slice(-40).map((t) => t.mid);
+  const flash     = useFlashHighlight(tick?.mid);
 
   return (
     <button
       onClick={onClick}
+      style={{ background: selected ? undefined : flash, transition: 'background 0.4s ease' }}
       className={cn(
         'flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border text-left transition-all',
         'min-w-[148px] flex-shrink-0',
@@ -127,6 +143,28 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
   );
 };
 
+// ── Broker status banner ──────────────────────────────────────────────────────
+// Shown when the account endpoint returns no balance (broker still starting up).
+
+const BrokerStatusBanner: React.FC = () => {
+  const account  = useStore((s) => s.account);
+  const wsStatus = useStore(selectWsStatus);
+
+  // Only show when we have no account data AND WS is not connected
+  // (avoids flash during normal load)
+  if (account || wsStatus === 'connected') return null;
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#ffb800]/10 border border-[#ffb800]/30 text-[11px]">
+      <span className="text-[#ffb800] font-bold">⚠</span>
+      <span className="text-[#ffb800] font-semibold">
+        Paper trading broker is initialising — orders will be accepted once ready.
+        The account bar will populate automatically.
+      </span>
+    </div>
+  );
+};
+
 // ── Account bar ───────────────────────────────────────────────────────────────
 
 const AccountBar: React.FC = () => {
@@ -142,7 +180,7 @@ const AccountBar: React.FC = () => {
   const pnl        = account.total_pnl   ?? 0;
 
   return (
-    <div className="flex flex-wrap gap-4 px-4 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2.5 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
       {[
         { label: 'Balance',      value: `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
         { label: 'Equity',       value: `$${equity.toLocaleString('en-US',  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,    color: 'text-slate-200' },
@@ -170,11 +208,12 @@ const AccountBar: React.FC = () => {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' :
-            wsStatus === 'connecting' ? 'bg-[#ffb800]' : 'bg-[#ff1744]',
+            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
-        <span className="text-[10px] text-slate-500 capitalize">{wsStatus}</span>
+        <span className="text-[10px] text-slate-500 capitalize">
+          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+        </span>
       </div>
     </div>
   );
@@ -328,7 +367,7 @@ const RiskBar: React.FC = () => {
   ];
 
   return (
-    <div className="flex flex-wrap gap-4 px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
+    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-x-4 gap-y-2 px-3 sm:px-4 py-2 rounded-lg bg-[#0d1421] border border-[#1e2d3d] text-[11px]">
       {items.map(({ label, value, warn }) => (
         <div key={label} className="flex flex-col gap-0.5">
           <span className="text-[9px] uppercase tracking-wider text-slate-500">{label}</span>
@@ -377,55 +416,136 @@ function BottomSection() {
   );
 }
 
+// ── Keyboard shortcut hint bar ────────────────────────────────────────────────
+
+const KeyboardHints: React.FC = () => (
+  <div className="flex flex-wrap gap-3 px-3 py-1.5 rounded bg-[#0a0f1a] border border-[#1e2d3d] text-[10px] text-slate-600">
+    {[
+      ['1–6', 'Select symbol'],
+      ['B', 'Buy market'],
+      ['S', 'Sell market'],
+      ['Esc', 'Cancel / deselect'],
+      ['Cmd+K', 'Command palette'],
+    ].map(([key, desc]) => (
+      <span key={key} className="flex items-center gap-1">
+        <kbd className="px-1.5 py-0.5 rounded bg-[#1e2d3d] text-slate-400 font-mono text-[9px]">{key}</kbd>
+        <span>{desc}</span>
+      </span>
+    ))}
+  </div>
+);
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const Trade: React.FC = () => {
-  const location        = useLocation();
-  const signalState     = (location.state as { signal?: {
+  const location    = useLocation();
+  const signalState = (location.state as { signal?: {
     symbol?: string; direction?: string;
-    stop_loss?: number; take_profit?: number;
+    entry_price?: number; stop_loss?: number; take_profit?: number;
   } } | null)?.signal;
 
   const [selectedSymbol, setSelectedSymbol] = useState(signalState?.symbol ?? 'XAU/USD');
   const [closingAll, setClosingAll]         = useState(false);
+  const [pendingSide, setPendingSide]       = useState<'buy' | 'sell' | null>(null);
   const prices      = useStore((s) => s.prices);
   const allHistory  = useStore((s) => s.priceHistory);
   const qc          = useQueryClient();
+  const confirm     = useConfirm();
+  const toast       = useToast();
 
   usePositions();
 
-  const handleCloseAll = async () => {
-    if (!window.confirm('Close ALL open positions? This cannot be undone.')) return;
+  const handleCloseAll = useCallback(async () => {
+    const ok = await confirm({
+      title:        'Close all positions?',
+      description:  'This will market-close every open position immediately. This cannot be undone.',
+      confirmLabel: 'Close All',
+      variant:      'danger',
+    });
+    if (!ok) return;
     setClosingAll(true);
     try {
       await tradingApi.closeAllPositions();
       await qc.invalidateQueries({ queryKey: ['positions'] });
-    } catch {
-      // error surfaced by PositionsTable
+      toast.success('All positions closed.');
+    } catch (e: unknown) {
+      toast.error(extractApiError(e, 'Failed to close positions.'));
     } finally {
       setClosingAll(false);
     }
-  };
+  }, [confirm, qc, toast]);
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Ignore when typing in an input/textarea
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      // 1–6: select symbol by index
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx >= 0 && idx < SYMBOLS.length) {
+        setSelectedSymbol(SYMBOLS[idx]);
+        return;
+      }
+
+      switch (e.key.toLowerCase()) {
+        case 'b': setPendingSide('buy');  break;
+        case 's': setPendingSide('sell'); break;
+        case 'escape': setPendingSide(null); break;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
-    <div className="flex flex-col gap-4 p-4 min-h-screen bg-[#0a0f1a]">
+    <div className="page-content gap-3 sm:gap-4">
 
-      {/* Page header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[18px] font-bold text-slate-100">⚡ Trade</h1>
-          <p className="text-[12px] text-slate-500 mt-0.5">
-            Real-time execution — market, limit and stop orders
-          </p>
-        </div>
-        <button
-          onClick={handleCloseAll}
-          disabled={closingAll}
-          className="px-3 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50"
-        >
-          {closingAll ? 'Closing…' : '✕ Close All'}
-        </button>
-      </div>
+      <PageHeader
+        title="Trade"
+        icon="💹"
+        subtitle="Real-time execution — market, limit and stop orders"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Trade' },
+        ]}
+        actions={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Link
+              to="/watchlist"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#0c1a2e] border border-[#1e3a5f] text-[#38bdf8] hover:bg-[#1e3a5f]/40 transition-colors min-h-[36px]"
+              style={{ textDecoration: 'none' }}
+            >
+              👁 <span className="hidden xs:inline ml-1">Watchlist</span>
+            </Link>
+            <Link
+              to="/portfolio"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e1b4b] border border-[#4338ca] text-[#a78bfa] hover:bg-[#4338ca]/20 transition-colors min-h-[36px]"
+              style={{ textDecoration: 'none' }}
+            >
+              💼 <span className="hidden xs:inline ml-1">Portfolio</span>
+            </Link>
+            <Link
+              to="/risk-calculator"
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-semibold bg-[#1e293b] border border-[#334155] text-[#94a3b8] hover:bg-[#334155]/40 transition-colors min-h-[36px]"
+              style={{ textDecoration: 'none' }}
+            >
+              🛡 <span className="hidden xs:inline ml-1">Risk Calc</span>
+            </Link>
+            <button
+              onClick={handleCloseAll}
+              disabled={closingAll}
+              className="flex items-center px-2.5 py-1.5 rounded text-[11px] font-bold bg-[#ff1744]/10 border border-[#ff1744]/30 text-[#ff1744] hover:bg-[#ff1744]/20 transition-colors disabled:opacity-50 min-h-[36px]"
+            >
+              {closingAll ? 'Closing…' : '✕ Close All'}
+            </button>
+          </div>
+        }
+      />
+
+      {/* Broker readiness banner — shown only when broker is still starting */}
+      <BrokerStatusBanner />
 
       {/* Account metrics */}
       <AccountBar />
@@ -433,9 +553,12 @@ const Trade: React.FC = () => {
       {/* Risk bar */}
       <RiskBar />
 
-      {/* Symbol selector strip */}
+      {/* Keyboard shortcut hints */}
+      <KeyboardHints />
+
+      {/* Symbol selector strip — numbers 1-6 select via keyboard */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
-        {SYMBOLS.map((sym) => (
+        {SYMBOLS.map((sym, i) => (
           <SymbolCard
             key={sym}
             symbol={sym}
@@ -451,10 +574,17 @@ const Trade: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-4 items-start">
         <OrderEntryForm
           symbol={selectedSymbol}
-          defaultSide={signalState?.direction === 'SELL' ? 'sell' : signalState?.direction === 'BUY' ? 'buy' : undefined}
+          defaultSide={
+            pendingSide ??
+            (signalState?.direction === 'SELL' ? 'sell' : signalState?.direction === 'BUY' ? 'buy' : undefined)
+          }
+          defaultLimitPx={signalState?.entry_price ? String(signalState.entry_price) : undefined}
           defaultSl={signalState?.stop_loss ? String(signalState.stop_loss) : undefined}
           defaultTp={signalState?.take_profit ? String(signalState.take_profit) : undefined}
-          onOrderPlaced={() => qc.invalidateQueries({ queryKey: ['positions'] })}
+          onOrderPlaced={() => {
+            setPendingSide(null);
+            void qc.invalidateQueries({ queryKey: ['positions'] });
+          }}
         />
         <div className="flex flex-col gap-4">
           <PositionsTable symbol={selectedSymbol} />
@@ -469,6 +599,8 @@ const Trade: React.FC = () => {
 
       {/* Bottom: all positions + trade history tabs */}
       <BottomSection />
+
+      <CrossLinkBar links={TRADE_CROSS_LINKS} title="Related" style={{ marginTop: 24 }} />
     </div>
   );
 };

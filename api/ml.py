@@ -143,10 +143,10 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
     """
     import pathlib
 
-    symbol_upper = symbol.upper().replace("-", "/").replace("/", "_")
-    # Normalise: XAU/USD → XAU_USD, XAUUSD → XAU_USD
-    if "_" not in symbol_upper and len(symbol_upper) == 6:
-        symbol_upper = symbol_upper[:3] + "_" + symbol_upper[3:]
+    from utils.symbol import to_oanda
+
+    # Normalise: XAU/USD, XAUUSD, xau_usd → XAU_USD
+    symbol_upper = to_oanda(symbol)
 
     # 1. Live price engine async buffer — skip (sync context here)
 
@@ -185,7 +185,9 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
             broker = getattr(app_state, "broker", None)
             if broker and hasattr(broker, "get_market_data"):
-                raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
+                from utils.symbol import canonical as _canonical
+
+                raw = broker.get_market_data(_canonical(symbol), "1h", lookback)
                 if raw:
                     df = pd.DataFrame(raw)
                     df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
@@ -201,10 +203,12 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
         import asyncio as _asyncio_ml
 
         async def _fetch_db_ohlcv():
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.market_data_repository import MarketDataRepository as _MDR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _MDR(_db)
                 bars = await repo.get_latest_n_bars(
                     symbol=symbol_upper,
@@ -214,13 +218,17 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
                 return bars
 
         try:
-            loop = _asyncio_ml.get_event_loop()
-            if loop.is_running():
+            try:
+                _running_loop = _asyncio_ml.get_running_loop()
+            except RuntimeError:
+                _running_loop = None
+            if _running_loop is not None:
                 import concurrent.futures as _cf
+
                 with _cf.ThreadPoolExecutor(max_workers=1) as _ex:
                     bars = _ex.submit(_asyncio_ml.run, _fetch_db_ohlcv()).result(timeout=10)
             else:
-                bars = loop.run_until_complete(_fetch_db_ohlcv())
+                bars = _asyncio_ml.run(_fetch_db_ohlcv())
         except Exception:
             bars = _asyncio_ml.run(_fetch_db_ohlcv())
 
@@ -243,7 +251,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
         "(checked price_engine, CSV files, paper broker, MarketDataRepository). "
         "Ensure the data layer is running or place a CSV in data/%s_H1.csv.",
         symbol,
-        symbol.upper().replace("/", "_").replace("-", "_"),
+        __import__("utils.symbol", fromlist=["to_oanda"]).to_oanda(symbol),
     )
     return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
@@ -356,9 +364,9 @@ class AccuracyThresholds(BaseModel):
     accuracy_good: float = float(os.getenv("ML_THRESHOLD_ACCURACY_GOOD", "0.60"))
     accuracy_warn: float = float(os.getenv("ML_THRESHOLD_ACCURACY_WARN", "0.50"))
     win_rate_good: float = float(os.getenv("ML_THRESHOLD_WIN_RATE_GOOD", "0.55"))
-    sharpe_good:   float = float(os.getenv("ML_THRESHOLD_SHARPE_GOOD",   "1.50"))
-    sharpe_warn:   float = float(os.getenv("ML_THRESHOLD_SHARPE_WARN",   "0.50"))
-    f1_good:       float = float(os.getenv("ML_THRESHOLD_F1_GOOD",       "0.60"))
+    sharpe_good: float = float(os.getenv("ML_THRESHOLD_SHARPE_GOOD", "1.50"))
+    sharpe_warn: float = float(os.getenv("ML_THRESHOLD_SHARPE_WARN", "0.50"))
+    f1_good: float = float(os.getenv("ML_THRESHOLD_F1_GOOD", "0.60"))
 
 
 class AccuracyResponse(BaseModel):
@@ -508,9 +516,10 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
 
                         def _engine_health() -> dict:
                             from ml.inference_engine import get_inference_engine
+
                             return get_inference_engine().health()
 
-                        loop = asyncio.get_event_loop()
+                        loop = asyncio.get_running_loop()
                         with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
                             try:
                                 h = await asyncio.wait_for(
@@ -524,7 +533,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                                     win_rate = accuracy
                                     total_signals = total
                                     note = note or "Accuracy derived from live predict/fallback ratio"
-                            except (asyncio.TimeoutError, Exception) as _exc:
+                            except Exception as _exc:
                                 logger.debug("InferenceEngine health timed out or failed: %s", _exc)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
@@ -551,9 +560,10 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
 
         def _engine_health_fallback() -> dict:
             from ml.inference_engine import get_inference_engine
+
             return get_inference_engine().health()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         with _cf.ThreadPoolExecutor(max_workers=1) as _pool:
             try:
                 h = await asyncio.wait_for(
@@ -576,7 +586,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                         evaluated_at=datetime.now(UTC).isoformat(),
                         note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
                     )
-            except (asyncio.TimeoutError, Exception) as _exc:
+            except Exception as _exc:
                 logger.debug("InferenceEngine health fallback timed out: %s", _exc)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -725,7 +735,9 @@ async def predict(
                 )
         except ImportError:
             ...  # nosec B110
-    symbol_upper = symbol.upper().replace("-", "/")
+    from utils.symbol import canonical as _canonical
+
+    symbol_upper = _canonical(symbol)
     now_iso = datetime.now(UTC).isoformat()
     predictor = _get_predictor()
 
@@ -852,11 +864,10 @@ async def get_feature_importances(user: TokenPayload = Depends(require_role("tra
     orchestrator_features: list[dict] = []
     try:
         from data_layer.orchestrator import orchestrator as _orch
+
         live_features = _orch.get_ml_features()
         orchestrator_features = [
-            {"name": k, "value": v, "source": "orchestrator"}
-            for k, v in sorted(live_features.items())
-            if v is not None
+            {"name": k, "value": v, "source": "orchestrator"} for k, v in sorted(live_features.items()) if v is not None
         ]
     except Exception as _exc:
         logger.debug("Orchestrator ML features unavailable: %s", _exc)
@@ -898,13 +909,44 @@ async def trigger_retrain(
                 "train_with_macro.py",
             )
             if Path(script).exists():
-                subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
+                result = subprocess.run(  # nosec B603 B607 - list-form call with sys.executable; no shell=True, no user input
                     [sys.executable, script, "--years", "8"],
                     timeout=3600,
                     capture_output=True,
                     check=False,
                 )
+                if result.returncode != 0:
+                    logger.error(
+                        "Retrain script exited with code %d: %s",
+                        result.returncode,
+                        result.stderr.decode(errors="replace")[-2000:],
+                    )
+                    return
                 logger.info("Model retraining completed")
+
+                # Refresh the registry digest for the active model so that
+                # verify_active() reflects the newly written artifact.
+                # Without this, every integrity check after retrain reports
+                # a SHA-256 mismatch against the stale pre-retrain digest.
+                try:
+                    from ml.model_registry import get_registry
+
+                    reg = get_registry()
+                    active = reg.active_version()
+                    if active:
+                        new_digest = reg.refresh_digest(active["name"])
+                        logger.info(
+                            "Registry digest refreshed for '%s' after retrain: %s…",
+                            active["name"],
+                            new_digest[:16],
+                        )
+                    else:
+                        logger.warning(
+                            "Retrain complete but no active version in registry — "
+                            "run registry.register() to add the new artifact."
+                        )
+                except Exception as reg_exc:
+                    logger.error("Failed to refresh registry digest after retrain: %s", reg_exc)
             else:
                 logger.warning("train_with_macro.py not found — skipping retrain")
         except Exception as exc:
@@ -1089,10 +1131,12 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
         # Enrich with real live trade performance from TradeRepository
         live_trade_stats: dict = {}
         try:
-            from database.async_connection import get_async_db as _get_async_db
+            from database.async_connection import _default_pool as _async_pool
             from database.repositories.trade_repository import TradeRepository as _TR
 
-            async with _get_async_db() as _db:
+            if _async_pool is None:
+                raise RuntimeError("Async DB pool not initialised")
+            async with _async_pool.session() as _db:
                 repo = _TR(_db)
                 closed = await repo.get_by_user(user_id=None, status="closed", limit=500)
                 if closed:
@@ -1111,6 +1155,7 @@ async def ml_health(user: TokenPayload = Depends(get_current_user)):
 
         if not model_available:
             from fastapi.responses import JSONResponse
+
             return JSONResponse(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content=result)
         return result
 
@@ -1396,23 +1441,70 @@ async def rl_walk_forward(
 
 @router.get("/rl/status", tags=["ML Models"])
 async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
-    """Return saved RL model files and their sizes."""
+    """Return RL agent runtime status and saved model inventory.
+
+    Reads live state from Redis (key ``rl:agent:status``) when available,
+    falling back to model-file metadata so the response always has the
+    fields the frontend RLStatus interface requires.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
     from ml.rl_agent import _MODEL_DIR
 
+    # ── Model file inventory ──────────────────────────────────────────────────
     models = []
+    latest_mtime: float = 0.0
+    latest_version = "1.0"
     if Path(_MODEL_DIR).is_dir():
         for fname in sorted(os.listdir(_MODEL_DIR)):
             if fname.endswith(".zip"):
                 fpath = Path(_MODEL_DIR) / fname
+                mtime = os.path.getmtime(fpath)
                 models.append(
                     {
                         "name": fname,
                         "size_kb": round(os.path.getsize(fpath) / 1024, 1),
-                        "modified": os.path.getmtime(fpath),
+                        "modified": mtime,
                     }
                 )
+                if mtime > latest_mtime:
+                    latest_mtime = mtime
+                    # Derive a version string from the filename stem if possible
+                    # e.g. hopefx_ppo_v2.zip → "2.0"
+                    stem = Path(fname).stem
+                    parts = stem.rsplit("_v", 1)
+                    latest_version = f"{parts[-1]}.0" if len(parts) == 2 else "1.0"
+
+    # ── Live agent state from Redis ───────────────────────────────────────────
+    agent_state: dict = {}
+    try:
+        from cache.redis_client import get_sync_redis_client
+
+        rc = get_sync_redis_client()
+        if rc:
+            raw = rc.get("rl:agent:status")
+            if raw:
+                agent_state = _json.loads(raw)
+    except Exception:  # nosec B110 — Redis optional
+        pass
+
+    # ── Build response with guaranteed fields ─────────────────────────────────
+    now_iso = datetime.now(timezone.utc).isoformat()
+    last_updated = agent_state.get(
+        "last_updated",
+        datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat() if latest_mtime else now_iso,
+    )
 
     return {
+        # Fields required by the frontend RLStatus interface
+        "status": agent_state.get("status", "idle" if models else "no_model"),
+        "episode": int(agent_state.get("episode", 0)),
+        "total_reward": float(agent_state.get("total_reward", 0.0)),
+        "win_rate": float(agent_state.get("win_rate", 0.0)),
+        "last_updated": last_updated,
+        "model_version": agent_state.get("model_version", latest_version),
+        # Extended fields for the model inventory table
         "model_dir": _MODEL_DIR,
         "models": models,
         "count": len(models),
@@ -1748,6 +1840,7 @@ async def get_drift_status() -> dict:
             status["drift_z_max"] = round(getattr(eng, "_drift_z_max", 0.0), 3)
             try:
                 from ml.drift_monitor import get_drift_monitor
+
                 monitor = get_drift_monitor()
                 status["psi_monitor_loaded"] = monitor._stats != {}
                 status["framework"] = "z-score + PSI + KS-test (production)"
@@ -1775,6 +1868,7 @@ async def get_sharpe_circuit_breaker_status() -> dict:
     """
     try:
         from ml.sharpe_circuit_breaker import get_sharpe_cb
+
         cb = get_sharpe_cb()
         states = cb.get_status()
         any_open = any(v.get("is_open", False) for v in states.values())
@@ -1801,6 +1895,7 @@ async def get_sharpe_circuit_breaker_status() -> dict:
 
 # ── SHAP / Feature Importance ────────────────────────────────────────────────
 
+
 @router.get(
     "/explain/{model_name}",
     summary="SHAP feature importance for a deployed model",
@@ -1815,6 +1910,7 @@ async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
     not available for the model type.
     """
     from ml.explainability import get_shap_values
+
     return get_shap_values(model_name, top_n=top_n)
 
 
@@ -1826,10 +1922,12 @@ async def get_model_explanation(model_name: str, top_n: int = 30) -> dict:
 async def get_model_feature_importance(model_name: str, top_n: int = 30) -> dict:
     """Return XGBoost/RF built-in feature_importances_ (faster than SHAP)."""
     from ml.explainability import get_feature_importance
+
     return get_feature_importance(model_name, top_n=top_n)
 
 
 # ── Model-level Drift Detector (KS-test) ─────────────────────────────────────
+
 
 @router.get(
     "/model-drift",
@@ -1844,10 +1942,12 @@ async def get_model_drift() -> dict:
     Status values: ``stable`` | ``warning`` | ``drift_detected``
     """
     from ml.drift_detector import get_drift_detector
+
     return get_drift_detector().get_all_drift()
 
 
 # ── A/B Testing ───────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/ab-tests",
@@ -1857,6 +1957,7 @@ async def get_model_drift() -> dict:
 async def list_ab_tests() -> dict:
     """Return all active A/B model comparison tests."""
     from ml.ab_testing import get_ab_test_manager
+
     return {"tests": get_ab_test_manager().list_tests()}
 
 
@@ -1871,7 +1972,7 @@ async def create_ab_test(
     traffic_split: float = 0.20,
     control_model: str = "advanced_oos",
     name: str | None = None,
-    user: TokenPayload = Depends(require_role("admin")),
+    _user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
     """
     Start a new A/B test comparing challenger_model against control_model.
@@ -1879,6 +1980,7 @@ async def create_ab_test(
     ``traffic_split`` fraction of requests are routed to the challenger.
     """
     from ml.ab_testing import get_ab_test_manager
+
     test = get_ab_test_manager().create_test(
         challenger_model=challenger_model,
         traffic_split=traffic_split,
@@ -1897,10 +1999,11 @@ async def record_ab_result(
     test_id: str,
     arm: str,
     correct: bool,
-    user: TokenPayload = Depends(require_role("trader")),
+    _user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
     """Record whether the ``arm`` prediction was correct."""
     from ml.ab_testing import get_ab_test_manager
+
     mgr = get_ab_test_manager()
     ok = mgr.record_result(test_id, arm, correct=correct)
     return {"recorded": ok}
@@ -1911,14 +2014,18 @@ async def record_ab_result(
     summary="Stop an A/B test",
     tags=["ML Models"],
 )
-async def stop_ab_test(test_id: str, winner: str | None = None, user: TokenPayload = Depends(require_role("admin"))) -> dict:
+async def stop_ab_test(
+    test_id: str, winner: str | None = None, _user: TokenPayload = Depends(require_role("admin"))
+) -> dict:
     """Stop a running A/B test and optionally declare a winner."""
     from ml.ab_testing import get_ab_test_manager
+
     stopped = get_ab_test_manager().stop_test(test_id, winner=winner)
     return {"stopped": stopped, "test_id": test_id}
 
 
 # ── Training Manager ──────────────────────────────────────────────────────────
+
 
 @router.get(
     "/training-jobs",
@@ -1928,6 +2035,7 @@ async def stop_ab_test(test_id: str, winner: str | None = None, user: TokenPaylo
 async def list_training_jobs() -> dict:
     """Return all active and recently completed model training jobs."""
     from ml.training_manager import get_training_manager
+
     return {"jobs": get_training_manager().list_jobs()}
 
 
@@ -1937,7 +2045,7 @@ async def list_training_jobs() -> dict:
     tags=["ML Models"],
     status_code=202,
 )
-async def start_training_job(model: str, user: TokenPayload = Depends(require_role("admin"))) -> dict:
+async def start_training_job(model: str, _user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Dispatch a background training job for the named model.
 
@@ -1945,6 +2053,7 @@ async def start_training_job(model: str, user: TokenPayload = Depends(require_ro
     ``hybrid_ensemble``, ``xgb_macro``, ``rf_macro``.
     """
     from ml.training_manager import get_training_manager
+
     job = get_training_manager().start_job(model)
     return job.__dict__ if hasattr(job, "__dict__") else job
 
@@ -1954,9 +2063,10 @@ async def start_training_job(model: str, user: TokenPayload = Depends(require_ro
     summary="Cancel a running training job",
     tags=["ML Models"],
 )
-async def cancel_training_job(job_id: str, user: TokenPayload = Depends(require_role("admin"))) -> dict:
+async def cancel_training_job(job_id: str, _user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Cancel a background training job by ID."""
     from ml.training_manager import get_training_manager
+
     cancelled = get_training_manager().cancel_job(job_id)
     return {"cancelled": cancelled, "job_id": job_id}
 

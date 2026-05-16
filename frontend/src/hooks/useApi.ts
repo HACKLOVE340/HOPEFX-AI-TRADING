@@ -12,7 +12,7 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? '/api';
 
 export const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 8_000,
+  timeout: 30_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -116,6 +116,15 @@ async function _getCsrfToken(): Promise<string | null> {
   }
 
   if (_csrfToken && cookieVal === _csrfToken && Date.now() - _csrfFetchedAt < CSRF_TTL_MS) {
+    return _csrfToken;
+  }
+
+  // If the server already set the cookie (e.g. from a previous session or a
+  // server-side render), seed the in-memory cache from it immediately rather
+  // than making an unnecessary network round-trip to /auth/csrf-token.
+  if (cookieVal && !_csrfToken) {
+    _csrfToken     = cookieVal;
+    _csrfFetchedAt = Date.now();
     return _csrfToken;
   }
 
@@ -405,15 +414,23 @@ export const dataLayerApi = {
 };
 
 // ── Signals ───────────────────────────────────────────────────────────────────
+// Backend: /api/signals/* (api/signals.py — create_signals_router)
 
 export const signalsApi = {
-  active:    ()                   => api.get('/signals/active'),
-  latest:    ()                   => api.get('/signals/latest'),
-  history:   (limit = 50)         => api.get('/signals/history', { params: { limit } }),
-  summary:   ()                   => api.get('/signals/summary'),
-  analytics: ()                   => api.get('/signals/analytics'),
-  generate:  (payload: object)    => api.post('/signals/generate', payload),
-  setAlert:  (payload: object)    => api.post('/signals/alerts', payload),
+  active:       ()                   => api.get('/signals/active'),
+  latest:       ()                   => api.get('/signals/latest'),
+  history:      (limit = 50)         => api.get('/signals/history', { params: { limit } }),
+  summary:      ()                   => api.get('/signals/summary'),
+  analytics:    ()                   => api.get('/signals/analytics'),
+  generate:     (payload: object)    => api.post('/signals/generate', payload),
+  setAlert:     (payload: object)    => api.post('/signals/alerts', payload),
+  alerts:       ()                   => api.get('/signals/alerts'),
+  deleteAlert:  (alertId: string)    => api.delete(`/signals/alerts/${alertId}`),
+  engine:       ()                   => api.get('/signals/engine'),
+  /** Alias for engine() — returns signal engine status. */
+  status:       ()                   => api.get('/signals/engine'),
+  channels:     ()                   => api.get('/signals/channels'),
+  filterStats:  ()                   => api.get('/ml/signal-filter/stats'),
 };
 
 // ── ML extended ───────────────────────────────────────────────────────────────
@@ -905,8 +922,11 @@ export const backtestExtApi = {
 
 export const anomalyApi = {
   status:       ()              => api.get('/ml/health'),
+  /** Anomaly alerts are surfaced via signal analytics — same endpoint as signalsApi.analytics */
   alerts:       (params?: object) => api.get('/signals/analytics', { params }),
   retrain:      (payload?: object) => api.post('/ml/retrain', payload ?? {}),
+  /** Dedicated anomaly detection status from the ML anomaly router */
+  anomalyStatus: ()             => api.get('/ml/anomaly/status'),
 };
 
 // ── Allocator ─────────────────────────────────────────────────────────────────
@@ -947,16 +967,10 @@ export const llmApi = {
 };
 
 // ── Signal Engine ─────────────────────────────────────────────────────────────
+// Alias for signalsApi — kept for backward compatibility with existing consumers.
+// New code should import signalsApi directly.
 
-export const signalEngineApi = {
-  status:       ()              => api.get('/signals/summary'),
-  active:       ()              => api.get('/signals/active'),
-  latest:       ()              => api.get('/signals/latest'),
-  history:      (limit = 50)   => api.get('/signals/history', { params: { limit } }),
-  analytics:    ()              => api.get('/signals/analytics'),
-  generate:     (payload: object) => api.post('/signals/generate', payload),
-  filterStats:  ()              => api.get('/ml/signal-filter/stats'),
-};
+export const signalEngineApi = signalsApi;
 
 // ── Elite Tier 5 ──────────────────────────────────────────────────────────────
 // All endpoints require an active Elite subscription (or admin/superadmin role).
@@ -999,6 +1013,10 @@ export const eliteApi = {
   /** List all custom development requests for the authenticated user. */
   listCustomDevReqs: (limit = 50, offset = 0) =>
     api.get('/billing/elite/custom-dev/requests', { params: { limit, offset } }),
+
+  /** Ticket event timeline for drill-down. */
+  ticketTimeline:    (ticketId: string) =>
+    api.get(`/billing/elite/support/tickets/${ticketId}/timeline`),
 };
 
 // ── Geopolitical Intelligence ──────────────────────────────────────────────────
@@ -1016,10 +1034,11 @@ export const geopoliticalApi = {
 // Backend: /api/watchlist/* (api/watchlist.py)
 
 export const watchlistApi = {
-  list:   ()               => api.get('/watchlist'),
-  add:    (symbol: string) => api.post(`/watchlist/${encodeURIComponent(symbol)}`),
-  remove: (symbol: string) => api.delete(`/watchlist/${encodeURIComponent(symbol)}`),
-  prices: ()               => api.get('/watchlist/prices'),
+  list:    ()                        => api.get('/watchlist'),
+  add:     (symbol: string)          => api.post(`/watchlist/${encodeURIComponent(symbol)}`),
+  remove:  (symbol: string)          => api.delete(`/watchlist/${encodeURIComponent(symbol)}`),
+  prices:  ()                        => api.get('/watchlist/prices'),
+  reorder: (symbols: string[])       => api.patch('/watchlist/order', { symbols }),
 };
 
 // ── Strategy Marketplace ──────────────────────────────────────────────────────
@@ -1255,11 +1274,50 @@ export const chatApi = {
                       api.post(`/chat/rooms/${roomId}/messages`, { content: text, text, attachments }),
   deleteMessage:    (roomId: string, msgId: string)           =>
                       api.delete(`/chat/rooms/${roomId}/messages/${msgId}`),
+  addReaction:      (roomId: string, msgId: string, emoji: string) =>
+                      api.post(`/chat/rooms/${roomId}/messages/${msgId}/reactions`, { emoji }),
+  removeReaction:   (roomId: string, msgId: string, emoji: string) =>
+                      api.delete(`/chat/rooms/${roomId}/messages/${msgId}/reactions/${encodeURIComponent(emoji)}`),
+  markRead:         (roomId: string)                          => api.post(`/chat/rooms/${roomId}/read`),
   directMessages:   (userId: string, params?: Record<string, unknown>) =>
                       api.get(`/chat/dm/${userId}`, { params }),
   sendDM:           (userId: string, text: string)            =>
                       api.post(`/chat/dm/${userId}`, { content: text, text }),
   onlineUsers:      ()                                        => api.get('/chat/online'),
+};
+
+// ── Risk Calculator API ───────────────────────────────────────────────────────
+// Backend: /api/risk/calculator/*
+
+export const riskCalcApi = {
+  livePrice:        (symbol: string)                          => api.get(`/risk/live-price/${encodeURIComponent(symbol)}`),
+  history:          ()                                        => api.get('/risk/calculator/history'),
+  saveCalc:         (payload: Record<string, unknown>)        => api.post('/risk/calculator/history', payload),
+  deleteCalc:       (id: string)                              => api.delete(`/risk/calculator/history/${id}`),
+};
+
+// ── 2FA API ───────────────────────────────────────────────────────────────────
+// Backend: /api/2fa/*
+
+export const twoFactorApi = {
+  // GET /api/2fa/status — returns { user_id, enabled, backup_codes_remaining }
+  status:           ()                                        => api.get('/2fa/status'),
+  setup:            ()                                        => api.post('/2fa/setup'),
+  verify:           (code: string)                            => api.post('/2fa/verify', { code }),
+  disable:          (code: string)                            => api.post('/2fa/disable', { code }),
+  // GET /api/2fa/backup-codes — generates and returns 8 one-time codes
+  backupCodes:      ()                                        => api.get('/2fa/backup-codes'),
+  regenerateCodes:  ()                                        => api.post('/2fa/backup-codes/regenerate'),
+};
+
+// ── Crypto Checkout API ───────────────────────────────────────────────────────
+// Backend: /api/billing/crypto/*
+
+export const cryptoCheckoutApi = {
+  rates:            ()                                        => api.get('/billing/crypto/rates'),
+  createOrder:      (payload: Record<string, unknown>)        => api.post('/billing/crypto/order', payload),
+  orderStatus:      (orderId: string)                         => api.get(`/billing/crypto/order/${orderId}`),
+  cancelOrder:      (orderId: string)                         => api.post(`/billing/crypto/order/${orderId}/cancel`),
 };
 
 // ── Journal API ───────────────────────────────────────────────────────────────
@@ -1277,6 +1335,10 @@ export const journalApi = {
   export:           (format: 'csv' | 'json' = 'csv')         =>
                       api.get(`/journal/export?format=${format}`, { responseType: 'blob' }),
   tags:             ()                                        => api.get('/journal/tags'),
+  uploadScreenshot: (tradeId: string, form: FormData)         =>
+                      api.post(`/journal/trades/${tradeId}/screenshot`, form, {
+                        headers: { 'Content-Type': 'multipart/form-data' },
+                      }),
 };
 
 // ── Prop Firm API ─────────────────────────────────────────────────────────────
@@ -1346,4 +1408,36 @@ export const indicatorsApi = {
   preview:          (payload: Record<string, unknown>)        => api.post('/indicators/preview', payload),
   apply:            (id: string, payload: Record<string, unknown>) =>
                       api.post(`/indicators/${id}/apply`, payload),
+};
+
+// ── News API ──────────────────────────────────────────────────────────────────
+// Backend: /api/news/* (news/__init__.py create_news_router)
+
+export const newsApi = {
+  /** Latest news articles, optionally filtered by symbol. */
+  latest:           (params?: { symbol?: string; limit?: number }) =>
+                      api.get('/news/latest', { params }),
+  /** News-based sentiment score for a symbol. */
+  sentiment:        (symbol: string)                          => api.get(`/news/sentiment/${encodeURIComponent(symbol)}`),
+  /** Geopolitical risk signal for gold/USD. */
+  geopoliticalSignal: ()                                      => api.get('/news/geopolitical/signal'),
+  /** Recent geopolitical events. */
+  geopoliticalEvents: (forceRefresh = false)                  =>
+                      api.get('/news/geopolitical/events', { params: { force_refresh: forceRefresh } }),
+  /** Full geopolitical risk assessment. */
+  geopoliticalAssessment: ()                                  => api.get('/news/geopolitical/assessment'),
+  /** World Monitor deep-link views. */
+  worldMonitor:     ()                                        => api.get('/news/geopolitical/world-monitor'),
+  /** Upcoming high-impact economic events. */
+  economicUpcoming: (params?: { days?: number; importance?: string }) =>
+                      api.get('/news/economic/upcoming', { params }),
+};
+
+// ── Profiles List API ─────────────────────────────────────────────────────────
+// Backend: GET /api/profiles (api/profiles.py)
+
+export const profilesListApi = {
+  /** Paginated list of public trader profiles. */
+  list:             (params?: { limit?: number; offset?: number; search?: string; sort_by?: string }) =>
+                      api.get('/profiles', { params }),
 };

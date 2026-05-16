@@ -336,3 +336,56 @@ async def get_prices(
     """Return live prices for all symbols in the authenticated user's watchlist."""
     symbols = _load_watchlist(user.sub)
     return [WatchlistItem(**p) for s in symbols if (p := _get_price(s)) is not None]
+
+
+@router.patch("/order")
+async def reorder_watchlist(
+    body: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Persist a drag-to-reorder operation.
+
+    Expects ``{"symbols": ["XAU_USD", "EUR_USD", ...]}`` — the full ordered list.
+    """
+    symbols: list[str] = [str(s).upper() for s in (body.get("symbols") or [])]
+    if not symbols:
+        raise HTTPException(status_code=400, detail="symbols list is required")
+    if len(symbols) > 20:
+        raise HTTPException(status_code=400, detail="Watchlist limit is 20 symbols")
+
+    # Persist order to DB when available, otherwise keep in memory.
+    try:
+        session = _get_session()
+        if session is not None:
+            import asyncio
+
+            def _reorder():
+                with session() as db:
+                    # Delete existing rows and re-insert in order.
+                    db.execute(
+                        "DELETE FROM watchlist WHERE user_id = :uid",
+                        {"uid": user.sub},
+                    )
+                    for idx, sym in enumerate(symbols):
+                        db.execute(
+                            "INSERT OR IGNORE INTO watchlist (user_id, symbol, position) VALUES (:uid, :sym, :pos)",
+                            {"uid": user.sub, "sym": sym, "pos": idx},
+                        )
+                    db.commit()
+
+            await asyncio.get_running_loop().run_in_executor(None, _reorder)
+    except Exception as exc:
+        logger.debug("watchlist reorder DB error: %s", exc)
+
+    # Always update in-memory cache.
+    _watchlists[user.sub] = symbols
+    return {"symbols": symbols, "reordered": True}
+
+
+@router.put("/order", summary="Reorder watchlist symbols (PUT alias for PATCH /order)")
+async def reorder_watchlist_put(
+    body: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """PUT alias for PATCH /order — accepts the same payload for backward compatibility."""
+    return await reorder_watchlist(body, user)

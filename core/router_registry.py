@@ -174,6 +174,7 @@ def register_routers(
     # New routers added for full frontend coverage
     try:
         from api.notifications import router as notifications_router
+
         _notifications_router = notifications_router
     except Exception as _e:
         logger.warning("Notifications router not loaded: %s", _e)
@@ -182,6 +183,7 @@ def register_routers(
     try:
         from api.community_chat import router as community_chat_router
         from api.community_chat import ws_router as community_chat_ws_router
+
         _community_chat_router = community_chat_router
         _community_chat_ws_router = community_chat_ws_router
     except Exception as _e:
@@ -191,10 +193,19 @@ def register_routers(
 
     try:
         from api.kyc import kyc_alias_router as _kyc_alias_router
+
         _kyc_alias = _kyc_alias_router
     except Exception as _e:
         logger.warning("KYC alias router not loaded: %s", _e)
         _kyc_alias = None
+
+    try:
+        from api.webhooks import router as _webhooks_router
+
+        _webhooks = _webhooks_router
+    except Exception as _e:
+        logger.warning("Webhooks router not loaded: %s", _e)
+        _webhooks = None
 
     for _router in [
         auth_router,
@@ -246,6 +257,7 @@ def register_routers(
         (_community_chat_router, "Community Chat REST"),
         (_community_chat_ws_router, "Community Chat WS"),
         (_kyc_alias, "KYC alias"),
+        (_webhooks, "Webhooks (TradingView)"),
     ]:
         if _opt_router is not None:
             try:
@@ -331,10 +343,25 @@ def register_routers(
     if signals_router is not None:
         _include_router_deduped(app, signals_router)
         logger.info("Signals router registered (/api/signals)")
+    else:
+        # Always register signals router even when not passed explicitly
+        try:
+            from api.signals import create_signals_router as _create_sig_router
+
+            _sig_router = _create_sig_router()
+            if _sig_router is not None:
+                _include_router_deduped(app, _sig_router)
+                logger.info("Signals router auto-registered (/api/signals)")
+        except Exception as _sig_err:
+            logger.warning("Signals router not registered: %s", _sig_err)
 
     # ── GraphQL ───────────────────────────────────────────────────────────────
     if feature_flags.GRAPHQL_API and graphql_available and graphql_router is not None:
-        _include_router_deduped(app, graphql_router, prefix="/graphql")
+        # include_in_schema=False: strawberry uses from __future__ import annotations
+        # internally, making Request/Response params ForwardRefs that pydantic v2
+        # cannot resolve during OpenAPI schema generation.  The GraphQL endpoint
+        # is self-documenting via GraphiQL; it does not need OpenAPI coverage.
+        _include_router_deduped(app, graphql_router, prefix="/graphql", include_in_schema=False)
         logger.info("GraphQL endpoint mounted at /graphql")
     elif graphql_available and not feature_flags.GRAPHQL_API:
         logger.debug("GRAPHQL_API disabled — set FEATURE_GRAPHQL_API=true to enable")
@@ -395,6 +422,15 @@ def register_routers(
     except Exception as _pnl_err:
         logger.warning("P&L dashboard router not registered: %s", _pnl_err)
 
+    # ── Risk Calculator (/api/risk/live-price, /api/risk/calculator) ──────────
+    try:
+        from api.risk_calculator import router as risk_calc_router
+
+        _include_router_deduped(app, risk_calc_router)
+        logger.info("Risk calculator router registered (/api/risk)")
+    except Exception as _rc_err:
+        logger.warning("Risk calculator router not registered: %s", _rc_err)
+
     # ── SuperAdmin ────────────────────────────────────────────────────────────
     try:
         from api.superadmin import router as superadmin_router
@@ -410,12 +446,14 @@ def register_routers(
         from api.nuclear_strategy import router as nuclear_strategy_router
 
         _include_router_deduped(
-            app, nuclear_router,
+            app,
+            nuclear_router,
             prefix="/api/nuclear",
             tags=["nuclear"],
         )
         _include_router_deduped(
-            app, nuclear_strategy_router,
+            app,
+            nuclear_strategy_router,
             prefix="/api/nuclear-strategy",
             tags=["nuclear-strategy"],
         )
@@ -718,6 +756,7 @@ def register_routers(
                     tags=list(route.tags) if route.tags else [],
                     summary=route.summary,
                     description=route.description,
+                    dependencies=list(route.dependencies) if route.dependencies else [],
                     include_in_schema=False,  # hide from OpenAPI to avoid duplicate docs
                 )
 

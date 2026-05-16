@@ -183,12 +183,12 @@ class AsyncExecutionEngine:
             venue = self._select_venue(order)
 
             # Submit with timeout and retry
-            start_time = time.time()
+            start_time = time.monotonic()
 
             try:
                 await asyncio.wait_for(self._submit_to_venue(order, venue), timeout=2.0)
 
-                latency = (time.time() - start_time) * 1000  # ms
+                latency = (time.monotonic() - start_time) * 1000  # ms
                 self.latency_stats["submit"].append(latency)
 
                 if latency > 100:

@@ -636,13 +636,9 @@ class AffiliateManager:
         requested = Decimal(str(amount))
         pending = self._calculate_pending_commission(affiliate_id)
         if requested > pending:
-            raise ValueError(
-                f"Requested withdrawal ${requested} exceeds pending commissions ${pending}"
-            )
+            raise ValueError(f"Requested withdrawal ${requested} exceeds pending commissions ${pending}")
         if requested < self.MIN_PAYOUT:
-            raise ValueError(
-                f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}"
-            )
+            raise ValueError(f"Withdrawal amount ${requested} is below minimum ${self.MIN_PAYOUT}")
 
         payment_method = affiliate.payment_details.get("method", "bank_transfer")
         payout_id = f"WD-{uuid.uuid4().hex[:12].upper()}"
@@ -694,6 +690,28 @@ class AffiliateManager:
             }
             for idx, a in enumerate(sorted_affiliates[:limit])
         ]
+
+    def get_monthly_breakdown(self, affiliate_id: str, months: int = 12) -> list[dict[str, Any]]:
+        """Return month-by-month commission and referral counts for the last N months."""
+        from collections import defaultdict
+
+        referrals = self.get_affiliate_referrals(affiliate_id)
+        buckets: dict[str, dict[str, Any]] = defaultdict(lambda: {"commissions": 0.0, "referrals": 0})
+        for ref in referrals:
+            month_key = ref.created_at.strftime("%Y-%m")
+            buckets[month_key]["referrals"] += 1
+            if ref.commission_amount:
+                buckets[month_key]["commissions"] += float(ref.commission_amount)
+        # Build sorted list for the last N months
+        now = datetime.now(UTC)
+        result: list[dict[str, Any]] = []
+        for i in range(months - 1, -1, -1):
+            d = now.replace(day=1) - timedelta(days=i * 30)
+            key = d.strftime("%Y-%m")
+            label = d.strftime("%b %Y")
+            bucket = buckets.get(key, {"commissions": 0.0, "referrals": 0})
+            result.append({"month": label, "commissions": bucket["commissions"], "referrals": bucket["referrals"]})
+        return result
 
     def get_stats(self) -> dict[str, Any]:
         """Get overall affiliate program statistics"""

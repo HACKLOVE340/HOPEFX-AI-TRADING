@@ -77,13 +77,13 @@ _DATA_FEED_MAX_AGE_S: float = float(os.environ.get("HEALTH_CHECK_DATA_FEED_MAX_A
 
 
 class ComponentStatus(BaseModel):
-    status: str          # "ok" | "degraded" | "error"
+    status: str  # "ok" | "degraded" | "error"
     latency_ms: float
     detail: str
 
 
 class HealthResponse(BaseModel):
-    status: str          # "healthy" | "degraded" | "unhealthy"
+    status: str  # "healthy" | "degraded" | "unhealthy"
     timestamp: str
     uptime_seconds: float
     version: str
@@ -111,6 +111,7 @@ def _now_iso() -> str:
 def _version() -> str:
     try:
         from importlib.metadata import version
+
         return version("hopefx-ai-trading")
     except Exception:
         return os.environ.get("APP_VERSION", "unknown")
@@ -129,14 +130,14 @@ async def _check_redis() -> ComponentStatus:
             with borrow_client() as r:
                 r.ping()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await asyncio.wait_for(
             loop.run_in_executor(None, _ping),
             timeout=_TIMEOUT_S,
         )
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="PONG")
-    except asyncio.TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -162,7 +163,7 @@ async def _check_database() -> ComponentStatus:
         await asyncio.wait_for(_query(), timeout=_TIMEOUT_S)
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="SELECT 1 OK")
-    except asyncio.TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -230,22 +231,19 @@ async def _check_broker() -> ComponentStatus:
         def _get_info():
             return broker.get_account_info()
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         info = await asyncio.wait_for(
             loop.run_in_executor(None, _get_info),
             timeout=_TIMEOUT_S,
         )
         latency = (time.monotonic() - t0) * 1000
-        balance = (
-            getattr(info, "balance", None)
-            or (info.get("balance") if isinstance(info, dict) else None)
-        )
+        balance = getattr(info, "balance", None) or (info.get("balance") if isinstance(info, dict) else None)
         return ComponentStatus(
             status="ok",
             latency_ms=round(latency, 2),
             detail=f"balance={balance}" if balance is not None else "account info OK",
         )
-    except asyncio.TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -265,7 +263,7 @@ async def _check_event_bus() -> ComponentStatus:
         )
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="heartbeat published")
-    except asyncio.TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -299,9 +297,9 @@ async def _check_disk() -> ComponentStatus:
     t0 = time.monotonic()
     try:
         usage = shutil.disk_usage(_DISK_PATH)
-        free_gb = usage.free / (1024 ** 3)
-        total_gb = usage.total / (1024 ** 3)
-        used_pct = (usage.used / usage.total) * 100 if usage.total > 0 else 0.0
+        free_gb = usage.free / (1024**3)
+        total_gb = usage.total / (1024**3)
+        used_pct = (usage.used / usage.total) * 100
         latency = (time.monotonic() - t0) * 1000
         detail = f"{free_gb:.1f} GB free / {total_gb:.1f} GB total ({used_pct:.1f}% used)"
         if free_gb < _DISK_WARN_GB:
@@ -332,7 +330,7 @@ async def _run_all_checks() -> dict[str, ComponentStatus]:
     )
     names = ["redis", "database", "data_feed", "broker", "event_bus", "kill_switch", "disk"]
     out: dict[str, ComponentStatus] = {}
-    for name, result in zip(names, results):
+    for name, result in zip(names, results, strict=False):
         if isinstance(result, Exception):
             out[name] = ComponentStatus(status="error", latency_ms=0.0, detail=str(result)[:200])
         else:
@@ -362,8 +360,7 @@ health_router = APIRouter(tags=["Health"])
     response_model=LivenessResponse,
     summary="Liveness probe",
     description=(
-        "Always returns 200 when the process is alive. "
-        "Use for Kubernetes liveness probes — never checks dependencies."
+        "Always returns 200 when the process is alive. Use for Kubernetes liveness probes — never checks dependencies."
     ),
 )
 async def liveness() -> LivenessResponse:
@@ -396,7 +393,7 @@ async def readiness() -> dict[str, Any]:
     )
     names = ["redis", "database", "data_feed"]
     components: dict[str, ComponentStatus] = {}
-    for name, result in zip(names, critical_results):
+    for name, result in zip(names, critical_results, strict=False):
         if isinstance(result, Exception):
             components[name] = ComponentStatus(status="error", latency_ms=0.0, detail=str(result)[:200])
         else:
@@ -424,8 +421,7 @@ async def readiness() -> dict[str, Any]:
     response_model=HealthResponse,
     summary="Detailed health report",
     description=(
-        "Full component breakdown including non-critical checks. "
-        "Intended for monitoring dashboards and admin tooling."
+        "Full component breakdown including non-critical checks. Intended for monitoring dashboards and admin tooling."
     ),
 )
 async def detailed_health() -> HealthResponse:

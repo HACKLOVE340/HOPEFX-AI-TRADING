@@ -44,17 +44,17 @@ _ok: list[str] = []
 
 def _err(msg: str) -> None:
     _errors.append(msg)
-    logger.error(f"  [ERROR]   {msg}")
+    logger.error("  [ERROR]   %s", msg)
 
 
 def _warn(msg: str) -> None:
     _warnings.append(msg)
-    logger.warning(f"  [WARN]    {msg}")
+    logger.warning("  [WARN]    %s", msg)
 
 
 def _good(msg: str) -> None:
     _ok.append(msg)
-    logger.info(f"  [OK]      {msg}")
+    logger.info("  [OK]      %s", msg)
 
 
 # ── checks ────────────────────────────────────────────────────────────────────
@@ -396,7 +396,7 @@ def main() -> int:
     check_docker()
 
     logger.info("\n" + "=" * 60)
-    logger.error(f"  Results: {len(_ok)} OK  |  {len(_warnings)} warnings  |  {len(_errors)} errors")
+    logger.error("  Results: %s OK  |  %s warnings  |  %s errors", len(_ok), len(_warnings), len(_errors))
     logger.info("=" * 60)
 
     if _errors:

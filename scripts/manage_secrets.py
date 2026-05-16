@@ -321,9 +321,9 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     env[key] = new_val
     _write_env(ENV_FILE, env)
 
-    logger.info(f"Rotated {key}")
-    logger.info(f"  Old: {'(not set)' if not old_val else '(redacted)'}")
-    logger.info(f"  New: (redacted — see {ENV_FILE})")
+    logger.info("Rotated %s", key)
+    logger.info("  Old: %s", "(not set)" if not old_val else "(redacted)")
+    logger.info("  New: (redacted — see %s)", ENV_FILE)
     logger.info("\nRestart the application to pick up the new value.")
     if key in ("SECURITY_JWT_SECRET",):
         logger.warning("WARNING: Rotating JWT_SECRET invalidates all active user sessions.")
@@ -362,10 +362,10 @@ def cmd_audit(_args: argparse.Namespace) -> int:
         logger.info("No hardcoded secrets found.")
         return 0
 
-    logger.info(f"Found {len(findings)} potential hardcoded secret(s):\n")
+    logger.info("Found %s potential hardcoded secret(s):\n", len(findings))
     for path, lineno, label, snippet in findings:
-        logger.info(f"  {path}:{lineno}  [{label}]")
-        logger.info(f"    {snippet}")
+        logger.info("  %s:%s  [%s]", path, lineno, label)
+        logger.info("    %s", snippet)
     return 1
 
 
@@ -378,16 +378,16 @@ def cmd_check_env(_args: argparse.Namespace) -> int:
     extra = [k for k in current if k not in example]
 
     if missing:
-        logger.info(f"Keys in .env.example but missing from .env ({len(missing)}):")
+        logger.info("Keys in .env.example but missing from .env (%s):", len(missing))
         for k in missing:
-            logger.info(f"  - {k}")
+            logger.info("  - %s", k)
     else:
         logger.info("No missing keys.")
 
     if extra:
-        logger.info(f"\nKeys in .env but not in .env.example ({len(extra)}) — consider documenting:")
+        logger.info("\nKeys in .env but not in .env.example (%s) — consider documenting:", len(extra))
         for k in extra:
-            logger.info(f"  + {k}")
+            logger.info("  + %s", k)
 
     return 1 if missing else 0
 

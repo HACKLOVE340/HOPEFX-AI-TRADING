@@ -8,6 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { RateLimitRule } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -52,12 +53,25 @@ const RateLimitingSection: React.FC = () => {
         superadminApi.rateLimitViolations(),
       ]);
       if (!mountedRef.current) return;
-      setRules(rRes.data.rules ?? rRes.data);
-      setStats(sRes.data);
-      setViolations(vRes.data.violations ?? vRes.data);
+      const rulesRaw = rRes.data.rules ?? rRes.data;
+      setRules(Array.isArray(rulesRaw) ? rulesRaw : []);
+
+      // Backend returns either {total_requests, blocked_requests} or
+      // {stats: [{endpoint, hits}, ...]}. Normalise to the expected shape.
+      const sd = sRes.data ?? {};
+      if (typeof sd.total_requests === 'number') {
+        setStats({ total_requests: sd.total_requests, blocked_requests: sd.blocked_requests ?? 0 });
+      } else {
+        const statsArr: { hits?: number }[] = Array.isArray(sd.stats) ? sd.stats : [];
+        const total = statsArr.reduce((acc, s) => acc + (s.hits ?? 0), 0);
+        setStats({ total_requests: total, blocked_requests: 0 });
+      }
+
+      const violRaw = vRes.data.violations ?? vRes.data;
+      setViolations(Array.isArray(violRaw) ? violRaw : []);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load rate limit data');
+      setError(extractApiError(e, 'Failed to load rate limit data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -71,7 +85,7 @@ const RateLimitingSection: React.FC = () => {
       await superadminApi.updateRateLimitRule(rule.rule_id, { enabled: !rule.enabled });
       setRules(prev => prev.map(r => r.rule_id === rule.rule_id ? { ...r, enabled: !r.enabled } : r));
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Toggle failed');
+      setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
 
@@ -90,7 +104,7 @@ const RateLimitingSection: React.FC = () => {
       setEditing(prev => { const n = { ...prev }; delete n[ruleId]; return n; });
       setMsg('Rule updated');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Update failed');
+      setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
 
@@ -109,7 +123,7 @@ const RateLimitingSection: React.FC = () => {
       setShowCreate(false);
       setMsg('Rule created');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Create failed');
+      setMsg(extractApiError(e, 'Create failed'));
     } finally { setBusy(null); }
   };
 
@@ -120,7 +134,7 @@ const RateLimitingSection: React.FC = () => {
       setRules(prev => prev.filter(r => r.rule_id !== ruleId));
       setMsg('Rule deleted');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+      setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(null); }
   };
 

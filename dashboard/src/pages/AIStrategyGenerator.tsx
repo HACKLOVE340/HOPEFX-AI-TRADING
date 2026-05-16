@@ -8,6 +8,7 @@
 
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -82,7 +83,7 @@ const AIStrategyGenerator: React.FC = () => {
         strategy_code: '',
         backtest: null,
         iterations: 0,
-        error: err instanceof Error ? err.message : 'Unknown error',
+        error: extractApiError(err, 'Unknown error'),
       });
       setStage('error');
     }
@@ -111,7 +112,7 @@ const AIStrategyGenerator: React.FC = () => {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setDeployMsg('Strategy deployed to paper trading.');
     } catch (err: unknown) {
-      setDeployMsg(`Deploy failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setDeployMsg(`Deploy failed: ${extractApiError(err, 'Unknown error')}`);
     } finally {
       setDeploying(false);
     }

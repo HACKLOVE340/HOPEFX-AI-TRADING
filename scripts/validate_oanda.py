@@ -58,7 +58,7 @@ def validate(practice: bool = True) -> bool:
     account_id = os.getenv("OANDA_ACCOUNT_ID") or os.getenv("BROKER_OANDA_ACCOUNT") or ""
 
     env_label = "practice" if practice else "LIVE"
-    logger.info(f"\nOANDA {env_label} API validation")
+    logger.info("\nOANDA %s API validation", env_label)
     logger.info("=" * 40)
 
     # ── 1. Credentials present ────────────────────────────────────────────────
@@ -219,7 +219,7 @@ def validate_gate() -> None:
             logger.info("\nAll phase gates passed. Enable online learning:")
             logger.info("  FEATURE_ONLINE_LEARNING=true  (in .env)")
     except ImportError as exc:
-        logger.info(f"  Gate module unavailable: {exc}")
+        logger.info("  Gate module unavailable: %s", exc)
 
 
 def main() -> None:

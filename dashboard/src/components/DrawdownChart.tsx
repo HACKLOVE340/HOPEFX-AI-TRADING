@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, AreaData, Time, AreaSeries } from 'lightweight-charts'
+import { extractApiError } from '../lib/utils'
 
 interface DrawdownPoint {
   time: number
@@ -66,7 +67,7 @@ export function DrawdownChart() {
         chart.timeScale().fitContent()
         setEmpty(false)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load drawdown data')
+        setError(extractApiError(err, 'Failed to load drawdown data'))
       }
     }
 

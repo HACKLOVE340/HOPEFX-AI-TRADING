@@ -15,8 +15,11 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { PanelSkeleton } from '../components/ui/Skeleton';
+import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
   useStore,
   selectAccount,
@@ -29,6 +32,7 @@ import {
   selectSentiment,
 } from '../store';
 import { mlApi, tradingApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 import type { EquityPoint } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,35 +75,53 @@ const StatCard: React.FC<StatCardProps> = ({ label, value, sub, positive, highli
 
 // ─── Price ticker ─────────────────────────────────────────────────────────────
 // Symbol keys must match the WebSocket price_tick format (slash separator).
-const WATCHED_SYMBOLS = ['XAU/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
+const WATCHED_SYMBOLS = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'USD/JPY', 'BTC/USD'];
 
-const PriceTicker: React.FC = () => {
-  const prices = useStore((s) => s.prices);
+const TickerItem: React.FC<{ sym: string }> = ({ sym }) => {
+  const tick = useStore((st) => st.prices[sym]);
+  const flash = useFlashHighlight(tick?.mid);
+  const up    = tick ? tick.change_pct >= 0 : null;
+  const decimals =
+    sym.includes('JPY') ? 3 :
+    sym.includes('BTC') ? 0 :
+    sym.includes('XAU') ? 2 :
+    sym.includes('XAG') ? 3 : 5;
 
   return (
-    <div style={s.ticker}>
-      {WATCHED_SYMBOLS.map((sym) => {
-        const tick  = prices[sym];
-        const up    = tick ? tick.change_pct >= 0 : null;
-        const decimals =
-          sym.includes('JPY') ? 3 :
-          sym.includes('BTC') ? 0 :
-          sym.includes('XAU') ? 2 : 5;
-        return (
-          <div key={sym} style={s.tickerItem}>
-            <span style={s.tickerSymbol}>{sym}</span>
-            <span style={s.tickerPrice}>
-              {tick ? fmt(tick.mid, decimals) : '—'}
-            </span>
-            <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
-              {tick ? fmtPct(tick.change_pct) : '—'}
-            </span>
-          </div>
-        );
-      })}
-    </div>
+    <Link
+      to={`/ai-chart`}
+      state={{ symbol: sym }}
+      style={{
+        ...s.tickerItem,
+        background: flash,
+        transition: 'background 0.4s ease',
+        textDecoration: 'none',
+      }}
+    >
+      <span style={s.tickerSymbol}>{sym}</span>
+      <span style={s.tickerPrice}>
+        {tick ? fmt(tick.mid, decimals) : '—'}
+      </span>
+      <span style={{ ...s.tickerChange, color: up === true ? '#4ade80' : up === false ? '#f87171' : '#64748b' }}>
+        {tick ? fmtPct(tick.change_pct) : '—'}
+      </span>
+      {tick && (
+        <span style={{ fontSize: 10, color: '#475569', marginTop: 1 }}>
+          {fmt(tick.bid, decimals)} / {fmt(tick.ask, decimals)}
+        </span>
+      )}
+    </Link>
   );
 };
+
+const PriceTicker: React.FC = () => (
+  /* Outer div allows horizontal scroll on mobile without affecting the page */
+  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch', marginBottom: 12 }}>
+    <div style={{ ...s.ticker, minWidth: 'max-content' }}>
+      {WATCHED_SYMBOLS.map((sym) => <TickerItem key={sym} sym={sym} />)}
+    </div>
+  </div>
+);
 
 // ─── Equity chart (lightweight-charts) ───────────────────────────────────────
 
@@ -129,11 +151,12 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef     = useRef<IChartApi | null>(null);
   const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
+  const rafRef       = useRef<number>(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    chartRef.current = createChart(containerRef.current, {
+    const chart = createChart(containerRef.current, {
       layout: {
         background: { type: ColorType.Solid, color: '#0f172a' },
         textColor: '#64748b',
@@ -149,29 +172,40 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
       height: 240,
     });
 
-    seriesRef.current = chartRef.current.addSeries(AreaSeries, {
+    const series = chart.addSeries(AreaSeries, {
       lineColor:   '#3b82f6',
       topColor:    'rgba(59,130,246,0.25)',
       bottomColor: 'rgba(59,130,246,0.0)',
       lineWidth:   2,
     });
 
+    chartRef.current  = chart;
+    seriesRef.current = series;
+
     const points = toChartPoints(data);
     if (points.length > 0) {
-      seriesRef.current.setData(points);
-      chartRef.current.timeScale().fitContent();
+      series.setData(points);
+      chart.timeScale().fitContent();
+      chart.timeScale().scrollToRealTime();
     }
 
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
-      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
     });
     ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       ro.disconnect();
-      chartRef.current?.remove();
+      chart.remove();
+      chartRef.current  = null;
+      seriesRef.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -181,50 +215,63 @@ const EquityChart: React.FC<{ data: EquityPoint[] }> = ({ data }) => {
     if (points.length > 0) {
       seriesRef.current.setData(points);
       chartRef.current?.timeScale().fitContent();
+      chartRef.current?.timeScale().scrollToRealTime();
     }
   }, [data]);
 
   return <div ref={containerRef} style={{ width: '100%', height: 240 }} />;
 };
 
-// ─── Positions table ──────────────────────────────────────────────────────────
+// ─── Positions table with real-time P&L flash highlights ─────────────────────
 
 const PositionsTable: React.FC = () => {
   const positions = useStore(selectPositions);
+  const flashColors = useFlashMap(
+    positions.map((p) => ({ id: p.id, value: p.unrealized_pnl })),
+  );
 
   if (positions.length === 0) {
-    return <p style={s.empty}>No open positions.</p>;
+    return <EmptyState compact icon="📭" title="No open positions" description="Your live positions will appear here once you place a trade." links={[{ label: 'Trade Now', href: '/trade', icon: '⚡' }]} />;
   }
 
   return (
-    <table style={s.table}>
-      <thead>
-        <tr>
-          {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'Unreal. P&L', 'Opened'].map((h) => (
-            <th key={h} style={s.th}>{h}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {positions.map((p) => (
-          <tr key={p.id} style={s.tr}>
-            <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
-            <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
-              {p.side}
-            </td>
-            <td style={s.td}>{fmt(p.size, 2)}</td>
-            <td style={s.td}>{fmt(p.entry_price, 4)}</td>
-            <td style={s.td}>{fmt(p.current_price, 4)}</td>
-            <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-              {fmtUSD(p.unrealized_pnl)}
-            </td>
-            <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
-              {new Date(p.opened_at).toLocaleString()}
-            </td>
+    <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+      <table style={{ ...s.table, minWidth: 560 }}>
+        <thead>
+          <tr>
+            {['Symbol', 'Side', 'Size', 'Entry', 'Current', 'Unreal. P&L', 'Opened'].map((h) => (
+              <th key={h} style={s.th}>{h}</th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {positions.map((p) => (
+            <tr
+              key={p.id}
+              style={{
+                ...s.tr,
+                background: flashColors[p.id] ?? 'transparent',
+                transition: 'background 0.4s ease',
+              }}
+            >
+              <td style={{ ...s.td, fontWeight: 600, color: '#e2e8f0' }}>{p.symbol}</td>
+              <td style={{ ...s.td, color: p.side === 'long' ? '#4ade80' : '#f87171', fontWeight: 600, textTransform: 'uppercase' }}>
+                {p.side}
+              </td>
+              <td style={s.td}>{fmt(p.size, 2)}</td>
+              <td style={s.td}>{fmt(p.entry_price, 4)}</td>
+              <td style={s.td}>{fmt(p.current_price, 4)}</td>
+              <td style={{ ...s.td, color: p.unrealized_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+                {fmtUSD(p.unrealized_pnl)}
+              </td>
+              <td style={{ ...s.td, color: '#64748b', fontSize: 12 }}>
+                {new Date(p.opened_at).toLocaleString()}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 };
 
@@ -235,7 +282,7 @@ const SignalsPanel: React.FC = () => {
   const active  = signals.filter((sig) => sig.status === 'active').slice(0, 6);
 
   if (active.length === 0) {
-    return <p style={s.empty}>No active signals.</p>;
+    return <EmptyState compact icon="📡" title="No active signals" description="AI-generated trading signals will appear here in real-time." links={[{ label: 'Signals Feed', href: '/signals', icon: '📡' }]} />;
   }
 
   return (
@@ -311,7 +358,7 @@ const MlAccuracyCard: React.FC = () => {
       })
       .catch((err: unknown) => {
         setData(null);
-        setMlErr(err instanceof Error ? err.message : 'Failed to load model metrics.');
+        setMlErr(extractApiError(err, 'Failed to load model metrics.'));
       });
   }, []);
 
@@ -428,7 +475,7 @@ const MarketRegimePanel: React.FC = () => {
     regime.regime === 'ranging'       ? '#fbbf24' : '#94a3b8';
 
   return (
-    <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 16 }}>
       <div>
         <div style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Regime</div>
         <div style={{ fontSize: 18, fontWeight: 700, color: regimeColor }}>
@@ -529,35 +576,32 @@ const QUICK_LINKS = [
   { icon: '▶️', label: 'Replay',       path: '/replay'       },
 ];
 
-const QuickNav: React.FC = () => {
-  const navigate = useNavigate();
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {QUICK_LINKS.map(({ icon, label, path }) => (
-        <button
-          key={path}
-          onClick={() => navigate(path)}
-          style={{
-            background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
-            padding: '8px 14px', cursor: 'pointer', color: '#94a3b8',
-            fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'border-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6';
-            (e.currentTarget as HTMLButtonElement).style.color = '#60a5fa';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = '#334155';
-            (e.currentTarget as HTMLButtonElement).style.color = '#94a3b8';
-          }}
-        >
-          <span>{icon}</span> {label}
-        </button>
-      ))}
-    </div>
-  );
-};
+const QuickNav: React.FC = () => (
+  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+    {QUICK_LINKS.map(({ icon, label, path }) => (
+      <Link
+        key={path}
+        to={path}
+        style={{
+          background: '#0f172a', border: '1px solid #334155', borderRadius: 8,
+          padding: '8px 14px', color: '#94a3b8',
+          fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+          textDecoration: 'none', transition: 'border-color 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => {
+          (e.currentTarget as HTMLAnchorElement).style.borderColor = '#3b82f6';
+          (e.currentTarget as HTMLAnchorElement).style.color = '#60a5fa';
+        }}
+        onMouseLeave={e => {
+          (e.currentTarget as HTMLAnchorElement).style.borderColor = '#334155';
+          (e.currentTarget as HTMLAnchorElement).style.color = '#94a3b8';
+        }}
+      >
+        <span>{icon}</span> {label}
+      </Link>
+    ))}
+  </div>
+);
 
 // ─── WS status badge ──────────────────────────────────────────────────────────
 
@@ -587,50 +631,71 @@ const WsBadge: React.FC = () => {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const Dashboard: React.FC = () => {
-  // All data is populated by AppShell's useBootstrapData (TanStack Query + WebSocket).
-  // Reading directly from the store avoids duplicate polling loops.
-  const account      = useStore(selectAccount);
-  // Equity curve is fetched by useEquityCurve() inside useBootstrapData — read from store.
+  const account       = useStore(selectAccount);
   const equityHistory = useStore(selectEquityCurve);
-
   const acc = account;
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
-        <div>
-          <h1 style={s.heading}>Dashboard</h1>
-          <p style={s.subheading}>Real-time trading overview</p>
-        </div>
-        <WsBadge />
-      </div>
+    <div className="page-content">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Real-time trading overview"
+        icon="📊"
+        breadcrumbs={[{ label: "Dashboard" }]}
+        badge={<WsBadge />}
+        actions={
+          <Link
+            to="/trade"
+            style={{
+              background: '#1d4ed8', border: '1px solid #3b82f6', borderRadius: 8,
+              color: '#fff', fontSize: 13, fontWeight: 700, padding: '8px 18px',
+              textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            ⚡ New Trade
+          </Link>
+        }
+      />
 
       <PriceTicker />
 
-      <div style={s.statsGrid}>
-        <StatCard label="Balance"      value={acc ? '$' + fmt(acc.balance)                    : '—'} />
-        <StatCard label="Equity"       value={acc ? '$' + fmt(acc.equity)                     : '—'} highlight />
-        <StatCard label="Daily P&L"    value={acc ? fmtUSD(acc.daily_pnl)                     : '—'} positive={acc ? acc.daily_pnl >= 0 : null} sub={acc ? fmtPct(acc.daily_pnl_pct) : undefined} />
-        <StatCard label="Total P&L"    value={acc ? fmtUSD(acc.total_pnl)                     : '—'} positive={acc ? acc.total_pnl >= 0 : null} />
-        <StatCard label="Win Rate"     value={acc ? (acc.win_rate * 100).toFixed(1) + '%'     : '—'} positive={acc ? acc.win_rate >= 0.55 : null} />
-        <StatCard label="Sharpe"       value={acc ? acc.sharpe_ratio.toFixed(2)               : '—'} positive={acc ? acc.sharpe_ratio >= 1.5 : null} />
-        <StatCard label="Account DD"   value={acc ? (acc.max_drawdown * 100).toFixed(2) + '%' : '—'} positive={acc ? acc.max_drawdown < 0.1 : null} />
-        <StatCard label="Open Trades"  value={acc ? String(acc.open_trades)                   : '—'} />
-      </div>
+      {!acc ? (
+        <PanelSkeleton rows={3} />
+      ) : (
+        <div style={s.statsGrid}>
+          <StatCard label="Balance"     value={'$' + fmt(acc.balance)} />
+          <StatCard label="Equity"      value={'$' + fmt(acc.equity)} highlight />
+          <StatCard label="Daily P&L"   value={fmtUSD(acc.daily_pnl)} positive={acc.daily_pnl >= 0} sub={fmtPct(acc.daily_pnl_pct)} />
+          <StatCard label="Total P&L"   value={fmtUSD(acc.total_pnl)} positive={acc.total_pnl >= 0} />
+          <StatCard label="Win Rate"    value={(acc.win_rate * 100).toFixed(1) + '%'} positive={acc.win_rate >= 0.55} />
+          <StatCard label="Sharpe"      value={acc.sharpe_ratio.toFixed(2)} positive={acc.sharpe_ratio >= 1.5} />
+          <StatCard label="Account DD"  value={(acc.max_drawdown * 100).toFixed(2) + '%'} positive={acc.max_drawdown < 0.1} />
+          <StatCard label="Open Trades" value={String(acc.open_trades)} />
+        </div>
+      )}
 
       <div style={s.card}>
         <div style={s.cardHeader}>
-          <span style={s.cardTitle}>Equity Curve</span>
-          {acc && (
-            <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
-              {fmtUSD(acc.total_pnl)}
-            </span>
-          )}
+          <span style={s.cardTitle}>Live Equity Curve</span>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {acc && (
+              <span style={{ fontSize: 13, color: acc.total_pnl >= 0 ? '#4ade80' : '#f87171', fontWeight: 600 }}>
+                {fmtUSD(acc.total_pnl)}
+              </span>
+            )}
+            <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>
+              Full report →
+            </Link>
+          </div>
         </div>
         {equityHistory.length === 0 ? (
-          <p style={{ color: '#475569', fontSize: 13, padding: '40px 0', textAlign: 'center' }}>
-            No equity history yet. Start trading to see your curve.
-          </p>
+          <EmptyState
+            icon="📈"
+            title="No equity history yet"
+            description="Start trading to see your equity curve grow here."
+            links={[{ label: '⚡ Start Trading', href: '/trade' }]}
+            compact
+          />
         ) : (
           <EquityChart data={equityHistory} />
         )}
@@ -638,28 +703,43 @@ const Dashboard: React.FC = () => {
 
       <div style={s.twoCol}>
         <div style={s.card}>
-          <div style={s.cardTitle}>Open Positions</div>
+          <div style={{ ...s.cardHeader, marginBottom: 10 }}>
+            <span style={s.cardTitle}>Open Positions</span>
+            <Link to="/portfolio" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>View all →</Link>
+          </div>
           <PositionsTable />
         </div>
         <div style={s.card}>
-          <div style={s.cardTitle}>Active Signals</div>
+          <div style={{ ...s.cardHeader, marginBottom: 10 }}>
+            <span style={s.cardTitle}>Active Signals</span>
+            <Link to="/ai-strategy" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Strategy gen →</Link>
+          </div>
           <SignalsPanel />
         </div>
       </div>
 
       <div style={s.twoCol}>
         <div style={s.card}>
-          <div style={{ ...s.cardTitle, marginBottom: 12 }}>Market Regime — XAU/USD</div>
+          <div style={{ ...s.cardHeader, marginBottom: 12 }}>
+            <span style={s.cardTitle}>Market Regime — XAU/USD</span>
+            <Link to="/ai-chart" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>AI Chart →</Link>
+          </div>
           <MarketRegimePanel />
         </div>
         <div style={s.card}>
-          <div style={{ ...s.cardTitle, marginBottom: 12 }}>Risk Snapshot</div>
+          <div style={{ ...s.cardHeader, marginBottom: 12 }}>
+            <span style={s.cardTitle}>Risk Snapshot</span>
+            <Link to="/risk-calculator" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Calculator →</Link>
+          </div>
           <RiskSnapshotPanel />
         </div>
       </div>
 
       <div style={s.card}>
-        <div style={s.cardTitle}>ML Model Accuracy</div>
+        <div style={{ ...s.cardHeader, marginBottom: 12 }}>
+          <span style={s.cardTitle}>ML Model Accuracy</span>
+          <Link to="/performance" style={{ fontSize: 12, color: '#3b82f6', textDecoration: 'none' }}>Performance →</Link>
+        </div>
         <MlAccuracyCard />
       </div>
 
@@ -667,6 +747,17 @@ const Dashboard: React.FC = () => {
         <div style={{ ...s.cardTitle, marginBottom: 12 }}>Quick Navigation</div>
         <QuickNav />
       </div>
+
+      <CrossLinkBar title="Explore" links={[
+        { label: 'Trade',           href: '/trade',            icon: '⚡', color: '#3b82f6' },
+        { label: 'Portfolio',       href: '/portfolio',        icon: '💼', color: '#4ade80' },
+        { label: 'AI Charts',       href: '/ai-chart',         icon: '📈', color: '#06b6d4' },
+        { label: 'Signals',         href: '/signals',          icon: '📡', color: '#a78bfa' },
+        { label: 'Risk Calculator', href: '/risk-calculator',  icon: '🧮', color: '#f59e0b' },
+        { label: 'Economic Calendar',href: '/calendar',        icon: '📅', color: '#f97316' },
+        { label: 'Leaderboard',     href: '/leaderboard',      icon: '🏆', color: '#fbbf24' },
+        { label: 'Performance',     href: '/performance',      icon: '📊', color: '#22c55e' },
+      ]} />
     </div>
   );
 };
@@ -674,37 +765,42 @@ const Dashboard: React.FC = () => {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:       { padding: '24px 20px', maxWidth: 1280, margin: '0 auto' },
+  // Responsive page padding — overridden by media queries via className below
+  page:       { padding: '12px', maxWidth: 1280, margin: '0 auto', width: '100%' },
   header:     { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   heading:    { fontSize: 22, fontWeight: 700, color: '#f8fafc', margin: 0 },
   subheading: { fontSize: 13, color: '#64748b', margin: '2px 0 0' },
 
-  ticker:       { display: 'flex', gap: 0, overflowX: 'auto', marginBottom: 16, background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' },
-  tickerItem:   { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 120, padding: '10px 16px', borderRight: '1px solid #1e293b' },
+  // Ticker: no overflow here — wrapper div handles scroll
+  ticker:       { display: 'flex', gap: 0, background: '#0f172a', borderRadius: 10, border: '1px solid #1e293b' },
+  tickerItem:   { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110, padding: '10px 14px', borderRight: '1px solid #1e293b' },
   tickerSymbol: { fontSize: 10, color: '#64748b', fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase' },
-  tickerPrice:  { fontSize: 17, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
+  tickerPrice:  { fontSize: 16, fontWeight: 700, color: '#f8fafc', margin: '3px 0' },
   tickerChange: { fontSize: 12, fontWeight: 600 },
 
-  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 10, marginBottom: 14 },
-  statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '12px 14px' },
+  // Stats grid: auto-fill so it collapses to 2 cols on mobile naturally
+  statsGrid:         { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 8, marginBottom: 12 },
+  statCard:          { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '10px 12px' },
   statCardHighlight: { border: '1px solid #3b82f6', boxShadow: '0 0 12px rgba(59,130,246,0.15)' },
   statLabel:         { fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
-  statValue:         { fontSize: 20, fontWeight: 700, color: '#f8fafc' },
+  statValue:         { fontSize: 18, fontWeight: 700, color: '#f8fafc' },
   statSub:           { fontSize: 11, color: '#94a3b8', marginTop: 2 },
 
-  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '16px 18px', marginBottom: 14 },
+  card:       { background: '#1e293b', border: '1px solid #334155', borderRadius: 10, padding: '14px 14px', marginBottom: 12 },
   cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   cardTitle:  { fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
 
-  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 },
+  // twoCol: single column on mobile, 2 cols on sm+ — achieved via className
+  twoCol: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 340px), 1fr))', gap: 12, marginBottom: 12 },
 
   table: { width: '100%', borderCollapse: 'collapse' },
-  th:    { textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 8px', borderBottom: '1px solid #334155' },
+  th:    { textAlign: 'left', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5, padding: '6px 8px', borderBottom: '1px solid #334155', whiteSpace: 'nowrap' },
   tr:    { borderBottom: '1px solid #0f172a' },
-  td:    { padding: '9px 8px', fontSize: 13, color: '#cbd5e1' },
+  td:    { padding: '9px 8px', fontSize: 13, color: '#cbd5e1', whiteSpace: 'nowrap' },
   empty: { color: '#64748b', fontSize: 13, margin: '8px 0' },
 
-  signalGrid:   { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  // signalGrid: single col on mobile, 2 cols on sm+
+  signalGrid:   { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: 10 },
   signalCard:   { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' },
   signalHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   signalSymbol: { fontSize: 14, fontWeight: 700, color: '#e2e8f0' },
@@ -713,8 +809,8 @@ const s: Record<string, React.CSSProperties> = {
   signalKey:    { fontSize: 11, color: '#64748b', minWidth: 72 },
   signalVal:    { fontSize: 12, fontWeight: 600, color: '#e2e8f0' },
 
-  mlGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 },
-  mlCard:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '14px 16px' },
+  mlGrid:    { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(160px, 100%), 1fr))', gap: 10 },
+  mlCard:    { background: '#0f172a', border: '1px solid #1e293b', borderRadius: 8, padding: '12px 14px' },
   mlName:    { fontSize: 13, fontWeight: 600, color: '#e2e8f0', marginBottom: 10 },
   mlMetrics: { display: 'flex', gap: 16 },
   mlMetric:  { display: 'flex', flexDirection: 'column', gap: 2 },

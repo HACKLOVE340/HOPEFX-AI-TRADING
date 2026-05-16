@@ -27,7 +27,7 @@ import time
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from api.auth import TokenPayload
 from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _BACKUPS_KEY = "superadmin:system_health:backups"
-_JOBS_KEY    = "superadmin:system_health:jobs"
+_JOBS_KEY = "superadmin:system_health:jobs"
 
 
 def _probe_service(name: str, check_fn) -> dict[str, Any]:
@@ -44,15 +44,28 @@ def _probe_service(name: str, check_fn) -> dict[str, Any]:
     try:
         result = check_fn()
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-        return {"name": name, "status": "healthy", "latency_ms": latency_ms, "last_check": _utcnow().isoformat(), **(result or {})}
+        return {
+            "name": name,
+            "status": "healthy",
+            "latency_ms": latency_ms,
+            "last_check": _utcnow().isoformat(),
+            **(result or {}),
+        }
     except Exception as exc:
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
-        return {"name": name, "status": "down", "latency_ms": latency_ms, "last_check": _utcnow().isoformat(), "error": str(exc)}
+        return {
+            "name": name,
+            "status": "down",
+            "latency_ms": latency_ms,
+            "last_check": _utcnow().isoformat(),
+            "error": str(exc),
+        }
 
 
 def _check_db():
     from database.connection import SessionLocal
     from sqlalchemy import text
+
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
@@ -63,6 +76,7 @@ def _check_db():
 
 def _check_redis():
     from cache.redis_client import get_sync_redis_client
+
     rc = get_sync_redis_client()
     if rc is None:
         raise RuntimeError("Redis client not initialised")
@@ -73,6 +87,7 @@ def _check_redis():
 def _check_celery():
     try:
         from celery_app import celery_app
+
         inspect = celery_app.control.inspect(timeout=2)
         active = inspect.active()
         return {"workers": len(active) if active else 0}
@@ -97,17 +112,20 @@ async def get_service_statuses(
     services.append(_probe_service("celery", _check_celery))
 
     # FastAPI (self — always healthy if we're here)
-    services.append({
-        "name": "api",
-        "status": "healthy",
-        "latency_ms": 0.0,
-        "last_check": _utcnow().isoformat(),
-        "detail": "self-check",
-    })
+    services.append(
+        {
+            "name": "api",
+            "status": "healthy",
+            "latency_ms": 0.0,
+            "last_check": _utcnow().isoformat(),
+            "detail": "self-check",
+        }
+    )
 
     # ML engine
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         ml_status = "unknown"
         if rc:
@@ -115,20 +133,30 @@ async def get_service_statuses(
             if raw:
                 data = json.loads(raw)
                 ml_status = "healthy" if data.get("status") == "active" else "degraded"
-        services.append({"name": "ml_engine", "status": ml_status, "latency_ms": 0.0, "last_check": _utcnow().isoformat()})
+        services.append(
+            {"name": "ml_engine", "status": ml_status, "latency_ms": 0.0, "last_check": _utcnow().isoformat()}
+        )
     except Exception:
-        services.append({"name": "ml_engine", "status": "unknown", "latency_ms": 0.0, "last_check": _utcnow().isoformat()})
+        services.append(
+            {"name": "ml_engine", "status": "unknown", "latency_ms": 0.0, "last_check": _utcnow().isoformat()}
+        )
 
     # WebSocket server
-    services.append({
-        "name": "websocket",
-        "status": "healthy",
-        "latency_ms": 0.0,
-        "last_check": _utcnow().isoformat(),
-        "detail": "ws/live endpoint active",
-    })
+    services.append(
+        {
+            "name": "websocket",
+            "status": "healthy",
+            "latency_ms": 0.0,
+            "last_check": _utcnow().isoformat(),
+            "detail": "ws/live endpoint active",
+        }
+    )
 
-    return {"services": services, "total": len(services), "healthy": sum(1 for s in services if s["status"] == "healthy")}
+    return {
+        "services": services,
+        "total": len(services),
+        "healthy": sum(1 for s in services if s["status"] == "healthy"),
+    }
 
 
 @router.get("/system-health/backups")
@@ -139,6 +167,7 @@ async def get_backup_records(
     backups: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_BACKUPS_KEY)
@@ -164,12 +193,15 @@ async def trigger_backup(
     location = f"backups/{backup_id}.sql.gz"
     try:
         import subprocess
+
         db_url = os.getenv("DATABASE_URL", "")
         if db_url.startswith("postgresql"):
             # pg_dump
             result = subprocess.run(
                 ["pg_dump", "--format=custom", f"--file=/tmp/{backup_id}.dump", db_url],
-                capture_output=True, timeout=60,
+                capture_output=True,
+                timeout=60,
+                check=False,
             )
             if result.returncode == 0:
                 size_mb = round(os.path.getsize(f"/tmp/{backup_id}.dump") / 1024 / 1024, 2)
@@ -178,6 +210,7 @@ async def trigger_backup(
                 status = "failed"
         elif db_url.startswith("sqlite"):
             import shutil
+
             db_path = db_url.replace("sqlite:///", "").replace("sqlite://", "")
             if os.path.exists(db_path):
                 dest = f"/tmp/{backup_id}.db"
@@ -200,6 +233,7 @@ async def trigger_backup(
 
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_BACKUPS_KEY)
@@ -209,7 +243,7 @@ async def trigger_backup(
     except Exception:  # nosec B110
         pass
 
-    await _log_superadmin_action(user.sub, "backup_trigger", {"backup_id": backup_id, "type": backup_type})
+    _log_superadmin_action(user, "backup_trigger", {"backup_id": backup_id, "type": backup_type})
     return {"ok": True, "backup": record}
 
 
@@ -221,6 +255,7 @@ async def get_scheduled_jobs(
     jobs: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_JOBS_KEY)
@@ -231,18 +266,58 @@ async def get_scheduled_jobs(
 
     if not jobs:
         jobs = [
-            {"job_id": "job_weekly_report",    "name": "Weekly Report",         "schedule": "0 9 * * MON", "last_run": None, "next_run": None, "status": "active",  "last_duration_ms": 0},
-            {"job_id": "job_leaderboard",      "name": "Leaderboard Refresh",   "schedule": "*/15 * * * *","last_run": None, "next_run": None, "status": "active",  "last_duration_ms": 0},
-            {"job_id": "job_ml_retrain",       "name": "ML Model Retrain",      "schedule": "0 2 * * *",   "last_run": None, "next_run": None, "status": "active",  "last_duration_ms": 0},
-            {"job_id": "job_db_cleanup",       "name": "DB Cleanup",            "schedule": "0 3 * * *",   "last_run": None, "next_run": None, "status": "active",  "last_duration_ms": 0},
-            {"job_id": "job_risk_snapshot",    "name": "Risk Snapshot",         "schedule": "*/5 * * * *", "last_run": None, "next_run": None, "status": "active",  "last_duration_ms": 0},
+            {
+                "job_id": "job_weekly_report",
+                "name": "Weekly Report",
+                "schedule": "0 9 * * MON",
+                "last_run": None,
+                "next_run": None,
+                "status": "active",
+                "last_duration_ms": 0,
+            },
+            {
+                "job_id": "job_leaderboard",
+                "name": "Leaderboard Refresh",
+                "schedule": "*/15 * * * *",
+                "last_run": None,
+                "next_run": None,
+                "status": "active",
+                "last_duration_ms": 0,
+            },
+            {
+                "job_id": "job_ml_retrain",
+                "name": "ML Model Retrain",
+                "schedule": "0 2 * * *",
+                "last_run": None,
+                "next_run": None,
+                "status": "active",
+                "last_duration_ms": 0,
+            },
+            {
+                "job_id": "job_db_cleanup",
+                "name": "DB Cleanup",
+                "schedule": "0 3 * * *",
+                "last_run": None,
+                "next_run": None,
+                "status": "active",
+                "last_duration_ms": 0,
+            },
+            {
+                "job_id": "job_risk_snapshot",
+                "name": "Risk Snapshot",
+                "schedule": "*/5 * * * *",
+                "last_run": None,
+                "next_run": None,
+                "status": "active",
+                "last_duration_ms": 0,
+            },
         ]
 
     # Try to enrich from APScheduler
     try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
         # Get running scheduler from app state
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "scheduler"):
             sched = app_state.scheduler
             for job in sched.get_jobs():
@@ -258,8 +333,8 @@ async def get_scheduled_jobs(
 
 @router.post("/system-health/jobs/{job_id}/run")
 @router.post("/system/jobs/{job_id}/trigger")  # alias used by frontend
-@router.post("/system/jobs/{job_id}/pause")    # alias used by frontend
-@router.post("/system/jobs/{job_id}/resume")   # alias used by frontend
+@router.post("/system/jobs/{job_id}/pause")  # alias used by frontend
+@router.post("/system/jobs/{job_id}/resume")  # alias used by frontend
 async def run_job_now(
     job_id: str,
     user: TokenPayload = Depends(_require_superadmin),
@@ -267,18 +342,24 @@ async def run_job_now(
     # Try APScheduler
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "scheduler"):
             sched = app_state.scheduler
             job = sched.get_job(job_id)
             if job:
                 job.modify(next_run_time=_utcnow())
-                await _log_superadmin_action(user.sub, "job_run_now", {"job_id": job_id})
+                _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
                 return {"ok": True, "job_id": job_id, "triggered_at": _utcnow().isoformat()}
     except Exception as exc:
         logger.warning("Job run now: %s", exc)
 
-    await _log_superadmin_action(user.sub, "job_run_now", {"job_id": job_id})
-    return {"ok": True, "job_id": job_id, "triggered_at": _utcnow().isoformat(), "note": "Scheduler not available — job queued"}
+    _log_superadmin_action(user, "job_run_now", {"job_id": job_id})
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "triggered_at": _utcnow().isoformat(),
+        "note": "Scheduler not available — job queued",
+    }
 
 
 @router.get("/system-health/resources")
@@ -300,6 +381,7 @@ async def get_resource_utilisation(
     }
     try:
         import psutil
+
         resources["cpu_pct"] = round(psutil.cpu_percent(interval=0.1), 2)
         mem = psutil.virtual_memory()
         resources["memory_pct"] = round(mem.percent, 2)
@@ -316,7 +398,7 @@ async def get_resource_utilisation(
     except ImportError:
         # psutil not installed — use /proc
         try:
-            with open("/proc/meminfo") as f:
+            with open("/proc/meminfo", encoding="utf-8") as f:
                 lines = {l.split(":")[0]: int(l.split(":")[1].strip().split()[0]) for l in f if ":" in l}
             total_kb = lines.get("MemTotal", 0)
             avail_kb = lines.get("MemAvailable", 0)
@@ -354,11 +436,13 @@ async def get_system_api_keys(
     keys: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("superadmin:security_infra:api_keys")
             if raw:
                 import json
+
                 keys = json.loads(raw)
     except Exception:  # nosec B110
         pass
@@ -372,8 +456,10 @@ async def revoke_system_api_key(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     import json
+
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("superadmin:security_infra:api_keys")
@@ -386,7 +472,7 @@ async def revoke_system_api_key(
             rc.set("superadmin:security_infra:api_keys", json.dumps(keys), ex=86400 * 90)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "api_key_revoke", {"key_id": key_id})
+    _log_superadmin_action(user, "api_key_revoke", {"key_id": key_id})
     return {"ok": True}
 
 
@@ -396,13 +482,13 @@ async def get_dependency_graph(
 ) -> dict:
     """Return a dependency health graph for visualisation."""
     nodes = [
-        {"id": "api",        "label": "FastAPI",      "status": "healthy"},
-        {"id": "db",         "label": "Database",     "status": "unknown"},
-        {"id": "redis",      "label": "Redis",        "status": "unknown"},
-        {"id": "celery",     "label": "Celery",       "status": "unknown"},
-        {"id": "ml",         "label": "ML Engine",    "status": "unknown"},
-        {"id": "broker",     "label": "Broker",       "status": "unknown"},
-        {"id": "ws",         "label": "WebSocket",    "status": "healthy"},
+        {"id": "api", "label": "FastAPI", "status": "healthy"},
+        {"id": "db", "label": "Database", "status": "unknown"},
+        {"id": "redis", "label": "Redis", "status": "unknown"},
+        {"id": "celery", "label": "Celery", "status": "unknown"},
+        {"id": "ml", "label": "ML Engine", "status": "unknown"},
+        {"id": "broker", "label": "Broker", "status": "unknown"},
+        {"id": "ws", "label": "WebSocket", "status": "healthy"},
     ]
     edges = [
         {"from": "api", "to": "db"},
@@ -438,6 +524,7 @@ async def get_dependency_graph(
         elif node["id"] == "ml":
             try:
                 from cache.redis_client import get_sync_redis_client
+
                 rc = get_sync_redis_client()
                 if rc and rc.get("ml:model:status"):
                     node["status"] = "healthy"
@@ -448,6 +535,7 @@ async def get_dependency_graph(
         elif node["id"] == "broker":
             try:
                 from api.admin import app_state
+
                 if app_state and hasattr(app_state, "broker"):
                     connected = getattr(app_state.broker, "connected", False)
                     node["status"] = "healthy" if connected else "degraded"

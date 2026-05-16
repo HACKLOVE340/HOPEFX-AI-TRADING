@@ -62,7 +62,7 @@ class CircuitBreaker:
             if elapsed > self.config.timeout_seconds:
                 self.state = CircuitState.HALF_OPEN
                 self.half_open_calls = 0
-                logger.info(f"🔌 Circuit {self.name}: HALF_OPEN (testing recovery)")
+                logger.info("🔌 Circuit %s: HALF_OPEN (testing recovery)", self.name)
             else:
                 raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
 
@@ -88,7 +88,7 @@ class CircuitBreaker:
         if self.state == CircuitState.HALF_OPEN:
             self.successes += 1
             if self.successes >= self.config.success_threshold:
-                logger.info(f"✅ Circuit {self.name}: CLOSED (recovered)")
+                logger.info("✅ Circuit %s: CLOSED (recovered)", self.name)
                 self.state = CircuitState.CLOSED
                 self.failures = 0
                 self.successes = 0
@@ -104,12 +104,12 @@ class CircuitBreaker:
         self.last_failure_time = datetime.now(UTC)
 
         if self.state == CircuitState.HALF_OPEN:
-            logger.error(f"❌ Circuit {self.name}: OPEN (recovery failed)")
+            logger.error("❌ Circuit %s: OPEN (recovery failed)", self.name)
             self.state = CircuitState.OPEN
 
         elif self.state == CircuitState.CLOSED:
             if self.failures >= self.config.failure_threshold:
-                logger.error(f"🚫 Circuit {self.name}: OPEN ({self.failures} failures)")
+                logger.error("🚫 Circuit %s: OPEN (%s failures)", self.name, self.failures)
                 self.state = CircuitState.OPEN
 
     def get_stats(self) -> dict:
@@ -191,5 +191,5 @@ class TimeoutManager:
 
         try:
             return await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             raise TimeoutError(f"Operation '{operation}' timed out after {timeout}s") from None

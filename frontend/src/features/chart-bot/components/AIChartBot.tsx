@@ -10,6 +10,7 @@ import React, { useEffect, useRef, memo, useCallback } from 'react';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { useAIAnalysis } from '../hooks/useChartData';
 import { COLORS } from '../utils/design-tokens';
+import { extractApiError } from '../../../lib/utils';
 import {
   formatPrice, formatDateTime, formatConfidence, confidenceLabel,
   regimeLabel, regimeColor, confidenceColor,
@@ -273,7 +274,7 @@ const AIChartBot: React.FC = () => {
     setPending(true);
     requestAnalysis(context, {
       onSuccess: (data) => setAnalysis(data),
-      onError:   (err)  => setError(err instanceof Error ? err.message : 'Analysis failed'),
+      onError:   (err)  => setError(extractApiError(err, 'Analysis failed')),
     });
   }, [context, requestAnalysis, setPending, setAnalysis, setError]);
 

@@ -265,6 +265,14 @@ class KillSwitch:
         # trading while sibling pods are halted.
         await self._check_redis_latch()
 
+        # Verify broker-level Cancel-on-Disconnect (CoD) at startup.
+        # CoD is a broker-side safety net: if this process crashes before
+        # reqGlobalCancel() fires, the broker automatically cancels all open
+        # orders.  We check it here (in addition to IBKRConnector.connect())
+        # so the warning appears in the kill-switch startup log even when the
+        # broker connects after the kill switch starts.
+        await self._check_broker_cod()
+
         # Wire up legacy in-process event-bus subscription (kept for backward compat)
         if self._event_bus is not None:
             try:
@@ -325,6 +333,91 @@ class KillSwitch:
                     self._activate_internal(f"[redis-latch] {reason}")
         except Exception as exc:
             logger.debug("Kill switch: Redis latch check failed (non-fatal): %s", exc)
+
+    async def _check_broker_cod(self) -> None:
+        """
+        Verify broker-level Cancel-on-Disconnect (CoD) at kill-switch startup.
+
+        CoD is a broker-side safety net: if this process crashes before
+        reqGlobalCancel() fires, the broker automatically cancels all open
+        orders.  This check runs at startup so the warning appears in the
+        kill-switch log even when the broker connects after the kill switch.
+
+        Currently supports IBKR (ib_insync).  Other brokers (OANDA, MT5) do
+        not expose a CoD query API — their CoD is always on by default.
+
+        The check is best-effort: failure never prevents startup.
+        """
+        await self.check_broker_cod()
+
+    async def check_broker_cod(self) -> None:
+        """
+        Public entry point: verify broker-level Cancel-on-Disconnect (CoD).
+
+        Called twice:
+          1. From ``start()`` — early check; broker may not be connected yet,
+             in which case the check is deferred (logged at DEBUG).
+          2. From ``app.startup_event()`` after all components are initialised
+             — broker is guaranteed to be connected at this point.
+
+        Resolution order for the broker object:
+          1. ``execution.engine.get_active_broker()``
+          2. ``execution.smart_router.get_router()._primary_broker``
+          3. ``core.app_state.app_state.broker``
+
+        The check is best-effort: failure never prevents startup.
+        """
+        broker = None
+
+        try:
+            from execution.engine import get_active_broker
+
+            broker = get_active_broker()
+        except Exception:  # nosec B110
+            pass
+
+        if broker is None:
+            try:
+                from execution.smart_router import get_router
+
+                router = get_router()
+                if router is not None:
+                    broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
+            except Exception:  # nosec B110
+                pass
+
+        if broker is None:
+            try:
+                from core.app_state import app_state as _app_state
+
+                broker = getattr(_app_state, "broker", None)
+            except Exception:  # nosec B110
+                pass
+
+        if broker is None:
+            logger.debug("KillSwitch.check_broker_cod: no active broker yet — CoD check deferred")
+            return
+
+        broker_name = getattr(broker, "name", type(broker).__name__)
+
+        # IBKR: delegate to the connector's own CoD check
+        if hasattr(broker, "_check_cancel_on_disconnect"):
+            try:
+                broker._check_cancel_on_disconnect()
+                logger.info("KillSwitch: broker-level CoD check completed for %s", broker_name)
+            except Exception as exc:
+                logger.warning(
+                    "KillSwitch: broker CoD check raised on %s (non-fatal): %s",
+                    broker_name,
+                    exc,
+                )
+            return
+
+        # OANDA / MT5: CoD is always active at the broker level — log confirmation
+        logger.info(
+            "KillSwitch: broker %s has built-in Cancel-on-Disconnect (no explicit check needed)",
+            broker_name,
+        )
 
     def _write_redis_latch(self, reason: str) -> None:
         """

@@ -782,7 +782,7 @@ class OnlineLearnerStore:
             try:
                 self._model.update(features, y)
             except Exception as exc:
-                logger.debug("OnlineLearnerStore.on_fill update failed: %s", exc)
+                logger.warning("OnlineLearnerStore.on_fill update failed: %s", exc)
                 return False
 
             # Drift detection (Page-Hinkley + ADWIN)

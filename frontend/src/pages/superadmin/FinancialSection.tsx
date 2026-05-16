@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, ActionBtn, Select, Input, StatusBadge,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
@@ -199,7 +200,7 @@ const ChargebacksPanel: React.FC = () => {
             </tbody>
           </table>
           {items.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 28, color: '#475569', fontSize: 13 }}>No chargebacks found.</div>
+            <EmptyState compact icon="✅" title="No chargebacks found" description="Chargeback disputes will appear here when reported." />
           )}
         </div>
       )}
@@ -320,7 +321,7 @@ const TaxReportsPanel: React.FC = () => {
             </tbody>
           </table>
           {reports.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 28, color: '#475569', fontSize: 13 }}>No tax reports yet.</div>
+            <EmptyState compact icon="📄" title="No tax reports yet" description="Generated tax reports will appear here." />
           )}
         </div>
       )}
@@ -747,7 +748,7 @@ const FinancialSection: React.FC = () => {
                     </tbody>
                   </table>
                   {payments.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: 32, color: '#475569', fontSize: 13 }}>No payments found for this period.</div>
+                    <EmptyState compact icon="💳" title="No payments found" description="No payment records match the selected period." />
                   )}
                 </div>
               </SectionCard>

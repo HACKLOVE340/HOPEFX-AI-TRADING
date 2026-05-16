@@ -527,10 +527,10 @@ async def test_paper_broker_full_order_lifecycle():
     assert order is not None
     assert order.symbol == "XAUUSD"
 
-    positions = broker.get_positions()
+    positions = await broker.get_positions()
     assert isinstance(positions, list)
 
-    account = broker.get_account_info()
+    account = await broker.get_account_info()
     assert account is not None
     assert account.balance > 0
 
@@ -555,7 +555,7 @@ async def test_paper_broker_multiple_symbols():
         order = broker.place_order(sym, OrderSide.BUY, OrderType.MARKET, 0.01)
         assert order is not None
 
-    positions = broker.get_positions()
+    positions = await broker.get_positions()
     assert len(positions) >= 0  # may be 0 if broker nets positions
 
 

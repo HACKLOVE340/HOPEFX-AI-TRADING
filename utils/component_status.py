@@ -496,7 +496,7 @@ def print_component_status_report() -> None:
     logger.info("\n" + "=" * 70)
     logger.info("HOPEFX AI TRADING FRAMEWORK - COMPONENT STATUS REPORT")
     logger.info("=" * 70)
-    logger.info(f"Framework Version: {FRAMEWORK_VERSION}")
+    logger.info("Framework Version: %s", FRAMEWORK_VERSION)
     logger.info("-" * 70)
 
     statuses = get_all_component_statuses()
@@ -513,17 +513,17 @@ def print_component_status_report() -> None:
             ComponentHealth.UNKNOWN: "⚪",
         }.get(status.health, "⚪")
 
-        logger.info(f"{health_icon} {icon} {name:15} v{status.version:8} - {status.health.value}")
+        logger.info("%s %s %s v%s - %s", health_icon, icon, f"{name:15}", f"{status.version:8}", status.health.value)
 
         if status.features:
-            logger.info(f"     Features: {', '.join(status.features[:3])}")
+            logger.info("     Features: %s", ", ".join(status.features[:3]))
 
         if status.error:
             error_display = status.error[:60] + "..." if len(status.error) > 60 else status.error
-            logger.error(f"     Error: {error_display}")
+            logger.error("     Error: %s", error_display)
 
     logger.info("-" * 70)
-    logger.info(f"Total: {available_count}/{total_count} components available")
+    logger.info("Total: %s/%s components available", available_count, total_count)
     logger.info("=" * 70 + "\n")
 
 

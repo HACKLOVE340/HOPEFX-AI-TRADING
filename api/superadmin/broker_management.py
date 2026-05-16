@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -31,31 +30,34 @@ from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_BROKER_HEALTH_KEY  = "superadmin:brokers:health"
+_BROKER_HEALTH_KEY = "superadmin:brokers:health"
 _BROKER_ROUTING_KEY = "superadmin:brokers:routing"
-_TCA_KEY            = "superadmin:brokers:tca"
+_TCA_KEY = "superadmin:brokers:tca"
 
 
 def _get_broker_health_from_app() -> list[dict]:
     """Pull live broker health from app_state if available."""
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "broker"):
             broker = app_state.broker
             broker_type = getattr(broker, "broker_type", "paper")
             connected = getattr(broker, "connected", False)
-            return [{
-                "broker_id": broker_type,
-                "name": broker_type.title(),
-                "type": broker_type,
-                "status": "connected" if connected else "disconnected",
-                "latency_ms": 0.0,
-                "fill_rate_pct": 100.0 if connected else 0.0,
-                "slippage_avg_pips": 0.0,
-                "orders_today": 0,
-                "uptime_pct": 99.9 if connected else 0.0,
-                "last_heartbeat": _utcnow().isoformat(),
-            }]
+            return [
+                {
+                    "broker_id": broker_type,
+                    "name": broker_type.title(),
+                    "type": broker_type,
+                    "status": "connected" if connected else "disconnected",
+                    "latency_ms": 0.0,
+                    "fill_rate_pct": 100.0 if connected else 0.0,
+                    "slippage_avg_pips": 0.0,
+                    "orders_today": 0,
+                    "uptime_pct": 99.9 if connected else 0.0,
+                    "last_heartbeat": _utcnow().isoformat(),
+                }
+            ]
     except Exception:  # nosec B110
         pass
     return []
@@ -71,6 +73,7 @@ async def get_broker_health(
         # Fall back to Redis cache
         try:
             from cache.redis_client import get_sync_redis_client
+
             rc = get_sync_redis_client()
             if rc:
                 raw = rc.get(_BROKER_HEALTH_KEY)
@@ -82,33 +85,40 @@ async def get_broker_health(
     if not brokers:
         # Bootstrap from config
         import os
+
         broker_type = os.getenv("BROKER_TYPE", os.getenv("BROKER_DEFAULT", "paper"))
-        brokers = [{
-            "broker_id": broker_type,
-            "name": broker_type.title(),
-            "type": broker_type,
-            "status": "connected",
-            "latency_ms": 0.0,
-            "fill_rate_pct": 100.0,
-            "slippage_avg_pips": 0.0,
-            "orders_today": 0,
-            "uptime_pct": 99.9,
-            "last_heartbeat": _utcnow().isoformat(),
-        }]
+        brokers = [
+            {
+                "broker_id": broker_type,
+                "name": broker_type.title(),
+                "type": broker_type,
+                "status": "connected",
+                "latency_ms": 0.0,
+                "fill_rate_pct": 100.0,
+                "slippage_avg_pips": 0.0,
+                "orders_today": 0,
+                "uptime_pct": 99.9,
+                "last_heartbeat": _utcnow().isoformat(),
+            }
+        ]
 
     # Enrich with DB order stats
     try:
         from database.connection import SessionLocal
         from database.models import Trade
-        from datetime import datetime, timezone
+
         db = SessionLocal()
         try:
             today = _utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
             for b in brokers:
-                count = db.query(Trade).filter(
-                    Trade.broker == b["broker_id"],
-                    Trade.created_at >= today,
-                ).count()
+                count = (
+                    db.query(Trade)
+                    .filter(
+                        Trade.broker == b["broker_id"],
+                        Trade.created_at >= today,
+                    )
+                    .count()
+                )
                 b["orders_today"] = count
         finally:
             db.close()
@@ -125,6 +135,7 @@ async def reconnect_broker(
 ) -> dict:
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "broker"):
             broker = app_state.broker
             if hasattr(broker, "reconnect"):
@@ -133,7 +144,7 @@ async def reconnect_broker(
                 await broker.connect()
     except Exception as exc:
         logger.warning("Broker reconnect: %s", exc)
-    await _log_superadmin_action(user.sub, "broker_reconnect", {"broker_id": broker_id})
+    _log_superadmin_action(user, "broker_reconnect", {"broker_id": broker_id})
     return {"ok": True, "broker_id": broker_id}
 
 
@@ -144,13 +155,14 @@ async def disconnect_broker(
 ) -> dict:
     try:
         from api.admin import app_state
+
         if app_state and hasattr(app_state, "broker"):
             broker = app_state.broker
             if hasattr(broker, "disconnect"):
                 await broker.disconnect()
     except Exception as exc:
         logger.warning("Broker disconnect: %s", exc)
-    await _log_superadmin_action(user.sub, "broker_disconnect", {"broker_id": broker_id})
+    _log_superadmin_action(user, "broker_disconnect", {"broker_id": broker_id})
     return {"ok": True, "broker_id": broker_id}
 
 
@@ -193,16 +205,18 @@ async def get_tca_metrics(
                 slippages = [float(getattr(t, "slippage_pips", 0) or 0) for t in btrades]
                 fills = [1 if t.status == "closed" else 0 for t in btrades]
                 exec_times = [float(getattr(t, "execution_ms", 0) or 0) for t in btrades]
-                metrics.append({
-                    "broker_id": bname,
-                    "broker_name": bname.title(),
-                    "avg_slippage_pips": round(float(np.mean(slippages)) if slippages else 0.0, 4),
-                    "fill_rate_pct": round(float(np.mean(fills)) * 100 if fills else 100.0, 2),
-                    "rejection_rate_pct": 0.0,
-                    "avg_execution_ms": round(float(np.mean(exec_times)) if exec_times else 0.0, 2),
-                    "total_orders": len(btrades),
-                    "period": period,
-                })
+                metrics.append(
+                    {
+                        "broker_id": bname,
+                        "broker_name": bname.title(),
+                        "avg_slippage_pips": round(float(np.mean(slippages)) if slippages else 0.0, 4),
+                        "fill_rate_pct": round(float(np.mean(fills)) * 100 if fills else 100.0, 2),
+                        "rejection_rate_pct": 0.0,
+                        "avg_execution_ms": round(float(np.mean(exec_times)) if exec_times else 0.0, 2),
+                        "total_orders": len(btrades),
+                        "period": period,
+                    }
+                )
         finally:
             db.close()
     except Exception as exc:
@@ -218,6 +232,7 @@ async def get_broker_routing(
     config: dict[str, Any] = {}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_BROKER_ROUTING_KEY)
@@ -228,6 +243,7 @@ async def get_broker_routing(
 
     if not config:
         import os
+
         config = {
             "default_broker": os.getenv("BROKER_DEFAULT", "paper"),
             "routing_mode": "smart",
@@ -245,6 +261,7 @@ async def update_broker_routing(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_BROKER_ROUTING_KEY)
@@ -253,5 +270,5 @@ async def update_broker_routing(
             rc.set(_BROKER_ROUTING_KEY, json.dumps(config), ex=86400 * 30)
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
-    await _log_superadmin_action(user.sub, "broker_routing_update", body)
+    _log_superadmin_action(user, "broker_routing_update", body)
     return {"ok": True}

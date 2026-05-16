@@ -18,7 +18,7 @@ import React, { useEffect, useState, Component } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AIChart } from '../components/charts/AIChart';
-import { cn } from '../lib/utils';
+import { cn, extractApiError } from '../lib/utils';
 import { useStore, selectWsStatus, selectIsAuth, useHasHydrated } from '../store';
 import { tradingApi } from '../hooks/useApi';
 
@@ -96,11 +96,12 @@ function RegimeStrip() {
         <span
           className={cn(
             'w-1.5 h-1.5 rounded-full',
-            wsStatus === 'connected'  ? 'bg-[#00e676] animate-pulse' :
-            wsStatus === 'connecting' ? 'bg-[#ffb800]' : 'bg-[#ff1744]',
+            wsStatus === 'connected' ? 'bg-[#00e676] animate-pulse' : 'bg-[#ffb800]',
           )}
         />
-        <span className="text-slate-500 capitalize">{wsStatus}</span>
+        <span className="text-slate-500 capitalize">
+          {wsStatus === 'connected' ? 'live' : wsStatus === 'connecting' ? 'connecting…' : 'REST fallback'}
+        </span>
       </div>
 
       <div className="w-px h-4 bg-[#1e2d3d]" />
@@ -192,7 +193,7 @@ class ChartErrorBoundary extends React.Component<
     this.state = { hasError: false, message: '' };
   }
   static getDerivedStateFromError(err: unknown) {
-    return { hasError: true, message: err instanceof Error ? err.message : String(err) };
+    return { hasError: true, message: extractApiError(err, 'An error occurred') };
   }
   render() {
     if (this.state.hasError) {
@@ -220,7 +221,7 @@ export default function AIChartDashboard() {
   const [timeframe, setTimeframe] = useState<TF>('1h');
 
   return (
-    <div className="flex flex-col h-screen bg-[#080c14] overflow-hidden">
+    <div className="page-content" style={{ flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
 
       {/* ── Top bar ────────────────────────────────────────────────── */}
       <div className="flex items-center gap-4 px-4 py-2.5 bg-[#0a0f1a] border-b border-[#1e2d3d] shrink-0">

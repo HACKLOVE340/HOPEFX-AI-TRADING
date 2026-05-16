@@ -266,7 +266,7 @@ async def main() -> None:
         logger.info("Dry run — feature build complete. Not retraining model.")
         tick_cols_present = [c for c in X.columns if c.startswith("dl_")]
         logger.info("Tick features in matrix: %s", tick_cols_present)
-        logger.info(f"\nDry run complete. {len(tick_cols_present)} tick features present in matrix.")
+        logger.info("\nDry run complete. %s tick features present in matrix.", len(tick_cols_present))
         return
 
     # ── 6. Save enriched H1 CSV for train_advanced.py to consume ─────────────
@@ -337,12 +337,12 @@ async def main() -> None:
 
     logger.info("\n" + "=" * 60)
     logger.info("TICK RETRAIN COMPLETE")
-    logger.info(f"  Previous accuracy : {existing_acc:.4f}")
-    logger.info(f"  New accuracy      : {new_acc:.4f}")
-    logger.info(f"  Improved          : {'YES' if improved else 'NO'}")
-    logger.info(f"  Tick features     : {len(report['tick_features'])}")
-    logger.info(f"  Total features    : {report['total_features']}")
-    logger.info(f"  Report saved      : {report_path}")
+    logger.info("  Previous accuracy : %.4f", existing_acc)
+    logger.info("  New accuracy      : %.4f", new_acc)
+    logger.info("  Improved          : %s", "YES" if improved else "NO")
+    logger.info("  Tick features     : %s", len(report["tick_features"]))
+    logger.info("  Total features    : %s", report["total_features"])
+    logger.info("  Report saved      : %s", report_path)
     logger.info("=" * 60)
 
 

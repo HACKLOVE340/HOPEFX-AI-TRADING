@@ -59,18 +59,22 @@ _MAX_ACCOUNTS_PER_USER = 10
 
 # ── db_store helpers ──────────────────────────────────────────────────────────
 
+
 def _store_get(key: str) -> Any | None:
     from api.db_store import db_get
+
     return db_get(key)
 
 
 def _store_set(key: str, value: Any) -> None:
     from api.db_store import db_set
+
     db_set(key, value)
 
 
 def _store_delete(key: str) -> None:
     from api.db_store import db_delete
+
     db_delete(key)
 
 
@@ -84,10 +88,12 @@ def _account_key(owner_id: str, account_id: str) -> str:
 
 # ── DB-backed sub_accounts helpers ───────────────────────────────────────────
 
+
 def _db_session():
     """Return a synchronous DB session or None."""
     try:
         from database.connection import SessionLocal
+
         return SessionLocal()
     except Exception:
         return None
@@ -100,6 +106,7 @@ def _db_list_sub_accounts(owner_id: str) -> list[dict] | None:
         return None
     try:
         from sqlalchemy import text as _text
+
         rows = db.execute(
             _text("SELECT * FROM sub_accounts WHERE owner_id = :oid AND is_active = true ORDER BY created_at DESC"),
             {"oid": owner_id},
@@ -119,14 +126,15 @@ def _db_create_sub_account(data: dict) -> dict | None:
         return None
     try:
         from sqlalchemy import text as _text
+
         db.execute(
             _text(
                 "INSERT INTO sub_accounts "
-                "(id, owner_id, name, description, account_type, currency, "
-                " initial_balance, current_balance, max_drawdown_pct, daily_loss_limit, "
+                "(id, owner_id, label, description, account_type, currency, "
+                " initial_balance, balance, max_drawdown_pct, daily_loss_limit, "
                 " broker, broker_account_id, is_active, created_at, updated_at) "
-                "VALUES (:id, :owner_id, :name, :description, :account_type, :currency, "
-                " :initial_balance, :current_balance, :max_drawdown_pct, :daily_loss_limit, "
+                "VALUES (:id, :owner_id, :label, :description, :account_type, :currency, "
+                " :initial_balance, :balance, :max_drawdown_pct, :daily_loss_limit, "
                 " :broker, :broker_account_id, :is_active, :created_at, :updated_at)"
             ),
             data,
@@ -142,8 +150,18 @@ def _db_create_sub_account(data: dict) -> dict | None:
 
 
 _SUB_ACCOUNT_UPDATABLE_COLS: frozenset[str] = frozenset(
-    {"label", "name", "description", "active", "is_active", "max_drawdown_pct",
-     "daily_loss_limit", "broker", "broker_account_id", "updated_at"}
+    {
+        "label",
+        "name",
+        "description",
+        "active",
+        "is_active",
+        "max_drawdown_pct",
+        "daily_loss_limit",
+        "broker",
+        "broker_account_id",
+        "updated_at",
+    }
 )
 
 
@@ -160,13 +178,14 @@ def _db_update_sub_account(account_id: str, owner_id: str, updates: dict) -> dic
         return None
     try:
         from sqlalchemy import text as _text
+
         set_parts = ", ".join(f"{k} = :{k}" for k in safe_updates)
-        updates = safe_updates
-        updates["account_id"] = account_id
-        updates["owner_id"] = owner_id
+        # Build params dict separately — do not mutate safe_updates in place
+        # as that would add account_id/owner_id to the column set on the next call.
+        params = {**safe_updates, "account_id": account_id, "owner_id": owner_id}
         db.execute(
             _text(f"UPDATE sub_accounts SET {set_parts} WHERE id = :account_id AND owner_id = :owner_id"),  # nosec B608
-            updates,
+            params,
         )
         db.commit()
         row = db.execute(
@@ -189,6 +208,7 @@ def _db_get_team_members(team_id: str) -> list[dict] | None:
         return None
     try:
         from sqlalchemy import text as _text
+
         rows = db.execute(
             _text("SELECT * FROM sub_account_members WHERE sub_account_id = :tid ORDER BY joined_at DESC"),
             {"tid": team_id},
@@ -210,6 +230,33 @@ def _save_index(owner_id: str, ids: list[str]) -> None:
 
 
 def _get_account(owner_id: str, account_id: str) -> dict | None:
+    return _store_get(_account_key(owner_id, account_id))
+
+
+def _get_account_any(owner_id: str, account_id: str) -> dict | None:
+    """Return a sub-account from the DB table first, then the key-value store.
+
+    Accounts created via the DB path are not present in the key-value store,
+    so endpoints that only call _get_account() return 404 for those accounts.
+    This helper checks both sources so all creation paths are covered.
+    """
+    # 1. DB-backed sub_accounts table (primary path)
+    db = _db_session()
+    if db is not None:
+        try:
+            from sqlalchemy import text as _text
+
+            row = db.execute(
+                _text("SELECT * FROM sub_accounts WHERE id = :aid AND owner_id = :oid AND is_active = true"),
+                {"aid": account_id, "oid": owner_id},
+            ).fetchone()
+            if row is not None:
+                return dict(row._mapping)
+        except Exception as exc:
+            logger.debug("_get_account_any DB lookup failed: %s", exc)
+        finally:
+            db.close()
+    # 2. Key-value store fallback
     return _store_get(_account_key(owner_id, account_id))
 
 
@@ -238,7 +285,7 @@ class CreateSubAccountRequest(BaseModel):
     broker_account_id: str | None = None
 
     @model_validator(mode="after")
-    def require_label_or_name(self) -> "CreateSubAccountRequest":
+    def require_label_or_name(self) -> CreateSubAccountRequest:
         if not (self.label or self.name):
             raise ValueError("Either 'label' or 'name' must be provided")
         return self
@@ -350,12 +397,12 @@ async def create_sub_account(
     db_data = {
         "id": acc_id,
         "owner_id": user.sub,
-        "name": req.resolved_label,
+        "label": req.resolved_label,
         "description": req.description or "",
         "account_type": req.account_type,
         "currency": req.currency,
         "initial_balance": balance,
-        "current_balance": balance,
+        "balance": balance,
         "max_drawdown_pct": req.max_drawdown_pct,
         "daily_loss_limit": req.daily_loss_limit,
         "broker": req.broker or "",
@@ -380,7 +427,7 @@ async def get_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Return details of a single sub-account owned by the current user."""
-    acc = _get_account(user.sub, account_id)
+    acc = _get_account_any(user.sub, account_id)
     if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
     return acc
@@ -393,7 +440,7 @@ async def update_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> dict[str, Any]:
     """Update sub-account fields."""
-    acc = _get_account(user.sub, account_id)
+    acc = _get_account_any(user.sub, account_id)
     if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
 
@@ -425,14 +472,15 @@ async def delete_sub_account(
     user: TokenPayload = Depends(get_current_user),
 ) -> None:
     """Delete a sub-account. Cannot delete the last active account."""
-    acc = _get_account(user.sub, account_id)
+    acc = _get_account_any(user.sub, account_id)
     if acc is None:
         raise HTTPException(status_code=404, detail="Sub-account not found")
 
     if acc.get("active", True) or acc.get("is_active", True):
         ids = _get_index(user.sub)
         active_count = sum(
-            1 for aid in ids
+            1
+            for aid in ids
             if (a := _get_account(user.sub, aid)) and (a.get("active", True) or a.get("is_active", True))
         )
         if active_count <= 1:
@@ -457,12 +505,16 @@ async def transfer_between_sub_accounts(
     if account_id == req.to_account_id:
         raise HTTPException(status_code=400, detail="Source and destination must be different accounts")
 
-    # Serialize transfers per user to prevent double-spend TOCTOU race
-    if user.sub not in _TRANSFER_LOCKS:
-        _TRANSFER_LOCKS[user.sub] = asyncio.Lock()
+    # Serialize transfers per user to prevent double-spend TOCTOU race.
+    # dict.setdefault is atomic in CPython (GIL-protected) — two concurrent
+    # coroutines calling setdefault for the same key will both get the same
+    # Lock object. The previous check-then-set pattern was not atomic: two
+    # coroutines could both pass the 'not in' check and create two different
+    # locks, defeating the serialization entirely.
+    _TRANSFER_LOCKS.setdefault(user.sub, asyncio.Lock())
     async with _TRANSFER_LOCKS[user.sub]:
-        src = _get_account(user.sub, account_id)
-        dst = _get_account(user.sub, req.to_account_id)
+        src = _get_account_any(user.sub, account_id)
+        dst = _get_account_any(user.sub, req.to_account_id)
 
         if src is None:
             raise HTTPException(status_code=404, detail="Source sub-account not found")
@@ -491,23 +543,31 @@ async def transfer_between_sub_accounts(
 
         _save_account(user.sub, src)
         _save_account(user.sub, dst)
+        # Capture balances inside the lock so the return values are always
+        # defined even if an exception is raised before this point.
+        _result_src_bal = new_src_bal
+        _result_dst_bal = new_dst_bal
 
     logger.info(
         "Transfer %.2f from %s to %s by user %s",
-        req.amount, account_id, req.to_account_id, user.sub,
+        req.amount,
+        account_id,
+        req.to_account_id,
+        user.sub,
     )
     return {
         "ok": True,
         "from_account_id": account_id,
         "to_account_id": req.to_account_id,
         "amount": req.amount,
-        "from_balance": new_src_bal,
-        "to_balance": new_dst_bal,
+        "from_balance": _result_src_bal,
+        "to_balance": _result_dst_bal,
         "note": req.note,
     }
 
 
 # ── Team endpoints ────────────────────────────────────────────────────────────
+
 
 def _team_members_key(team_id: str) -> str:
     return f"team_members:{team_id}"

@@ -8,6 +8,9 @@
 data_feed:
   primary: "goldapi"
 
+  # Active trading symbol.  Used for per-symbol price-bound lookups.
+  symbol: "XAUUSD"
+
   # Ordered list of fallback providers tried when the active provider fails.
   fallback_order:
     - "goldapi"
@@ -28,6 +31,33 @@ data_feed:
 
   # Rolling price history kept in memory (number of ticks).
   history_size: 5000
+
+  # Per-symbol plausible price bounds.  Ticks outside [min, max] are
+  # rejected as stale/corrupt data.  Add entries here when trading
+  # additional instruments.  Built-in defaults are used for any symbol
+  # not listed (see data_feed/engine.py _DEFAULT_PRICE_BOUNDS).
+  price_bounds:
+    XAUUSD:
+      min: 1000.0
+      max: 10000.0
+    XAGUSD:
+      min: 5.0
+      max: 500.0
+    XPTUSD:
+      min: 200.0
+      max: 5000.0
+    EURUSD:
+      min: 0.5
+      max: 2.5
+    GBPUSD:
+      min: 0.5
+      max: 3.0
+    USDJPY:
+      min: 50.0
+      max: 250.0
+    BTCUSD:
+      min: 1000.0
+      max: 1000000.0
 
   # ── Provider credentials ────────────────────────────────────────────────────
   # Replace placeholder values or set the corresponding environment variables.

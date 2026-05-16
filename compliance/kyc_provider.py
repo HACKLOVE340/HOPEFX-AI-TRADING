@@ -145,7 +145,9 @@ class SumsubProvider(KYCProvider):
         self._app_token = os.getenv("SUMSUB_APP_TOKEN", "")
         self._secret = os.getenv("SUMSUB_SECRET_KEY", "")
         if (not self._app_token or not self._secret) and not _sumsub_creds_warned:
-            logger.warning(
+            # INFO not WARNING — missing KYC credentials is expected in dev.
+            # KYC endpoints will return 503 until credentials are configured.
+            logger.info(
                 "Sumsub: SUMSUB_APP_TOKEN or SUMSUB_SECRET_KEY not set — "
                 "KYC verification will be unavailable until credentials are configured"
             )
@@ -280,7 +282,7 @@ class OnfidoProvider(KYCProvider):
         self._api_token = os.getenv("ONFIDO_API_TOKEN", "")
         self._workflow_id = os.getenv("ONFIDO_WORKFLOW_ID", "")
         if not self._api_token and not _onfido_creds_warned:
-            logger.warning(
+            logger.info(
                 "Onfido: ONFIDO_API_TOKEN not set — "
                 "Onfido KYC verification will be unavailable until credentials are configured"
             )
@@ -482,7 +484,7 @@ class RefinitivScreener:
         country: str | None = None,
     ) -> SanctionsResult:
         if not self._api_key:
-            logger.warning("Refinitiv: REFINITIV_API_KEY not set — skipping sanctions screen")
+            logger.debug("Refinitiv: REFINITIV_API_KEY not set — skipping sanctions screen")
             return SanctionsResult(
                 screened=False,
                 is_match=False,

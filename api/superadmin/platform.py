@@ -657,8 +657,20 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
 
         if app_state and hasattr(app_state, "engine"):
             eng = app_state.engine
-            result["running"] = bool(getattr(eng, "_running", result["running"]))
-            result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
+            is_running = bool(getattr(eng, "_running", False))
+            result["running"] = is_running
+
+            if is_running:
+                # Engine is active — heartbeat absence is a real failure.
+                result["heartbeat_ok"] = getattr(eng, "_heartbeat", None) is not None
+            else:
+                # Engine exists but hasn't been started (API-only mode / standby).
+                # Heartbeat absence is expected, not an error.
+                result["heartbeat_ok"] = True
+                # Only override status to "standby" if config hasn't explicitly
+                # set it to "stopped" or "paused" (e.g. via kill-switch).
+                if result.get("status") not in ("stopped", "paused"):
+                    result["status"] = "standby"
 
             # Prefer _get_status() for live positions / signals
             if callable(getattr(eng, "_get_status", None)):
@@ -679,9 +691,7 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
             # last_signal_at: try engine attr
             last_sig = getattr(eng, "_last_signal_at", None)
             if last_sig is not None:
-                result["last_signal_at"] = (
-                    last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
-                )
+                result["last_signal_at"] = last_sig.isoformat() if hasattr(last_sig, "isoformat") else str(last_sig)
 
         # Decision engine counters (cycles, executed, blocked, errors, execution_rate)
         if app_state and hasattr(app_state, "decision_engine"):
@@ -703,7 +713,6 @@ async def get_engine_status(user: TokenPayload = Depends(_require_superadmin)) -
     if result["last_signal_at"] is None:
         try:
             from cache.redis_client import get_sync_redis_client
-            import json as _json
 
             rc = get_sync_redis_client()
             if rc:
@@ -959,29 +968,21 @@ async def get_engine_metrics(user: TokenPayload = Depends(_require_superadmin)) 
     try:
         from database.connection import SessionLocal
         from database.models import Trade
-        from sqlalchemy import func
 
         db = SessionLocal()
         try:
             # All trades opened today
-            today_trades = (
-                db.query(Trade)
-                .filter(Trade.entry_time >= today_start)
-                .all()
-            )
+            today_trades = db.query(Trade).filter(Trade.entry_time >= today_start).all()
             metrics["trades_today"] = len(today_trades)
 
             # Open positions from DB (override engine count if DB has more)
             open_count = sum(1 for t in today_trades if t.is_open)
-            if open_count > metrics["open_positions"]:
-                metrics["open_positions"] = open_count
+            metrics["open_positions"] = max(metrics["open_positions"], open_count)
 
             # PnL today: sum of total_pnl for closed trades opened today
             closed_today = [t for t in today_trades if not t.is_open]
             if closed_today:
-                metrics["pnl_today"] = round(
-                    sum(float(t.total_pnl or 0.0) for t in closed_today), 2
-                )
+                metrics["pnl_today"] = round(sum(float(t.total_pnl or 0.0) for t in closed_today), 2)
                 winning = sum(1 for t in closed_today if (t.total_pnl or 0.0) > 0)
                 metrics["win_rate_today"] = round(winning / len(closed_today), 4)
 

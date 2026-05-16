@@ -1,13 +1,9 @@
 /**
  * DataTable — generic sortable, paginated data table.
  *
- * Features:
- * - Column-level sort (click header to toggle asc/desc)
- * - Client-side pagination
- * - Loading skeleton rows
- * - Empty state slot
- * - Custom cell renderers via Column.render()
- * - Sticky header
+ * Mobile-first: table scrolls horizontally on small screens.
+ * Columns can be marked hideOnMobile to reduce clutter on xs/sm.
+ * Pagination controls stack on mobile.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -16,15 +12,14 @@ import { Spinner } from './Spinner';
 export interface Column<T> {
   key: string;
   header: string;
-  /** Width hint (CSS value, e.g. "120px" or "1fr") */
+  /** Width hint (CSS value, e.g. "120px") */
   width?: string;
-  /** Align cell content */
   align?: 'left' | 'center' | 'right';
-  /** Custom renderer — receives the row object */
   render?: (row: T) => React.ReactNode;
-  /** Field path for default sort (dot-notation not supported — use render for complex fields) */
   sortKey?: keyof T;
   sortable?: boolean;
+  /** Hide this column on screens narrower than sm (640px) */
+  hideOnMobile?: boolean;
 }
 
 interface DataTableProps<T> {
@@ -34,8 +29,8 @@ interface DataTableProps<T> {
   loading?: boolean;
   pageSize?: number;
   emptyMessage?: string;
-  /** Called when a row is clicked */
   onRowClick?: (row: T) => void;
+  className?: string;
   style?: React.CSSProperties;
 }
 
@@ -49,6 +44,7 @@ export function DataTable<T>({
   pageSize = 20,
   emptyMessage = 'No data',
   onRowClick,
+  className = '',
   style,
 }: DataTableProps<T>): React.ReactElement {
   const [sortCol, setSortCol] = useState<string | null>(null);
@@ -84,10 +80,19 @@ export function DataTable<T>({
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const pageData   = sorted.slice(page * pageSize, (page + 1) * pageSize);
 
+  // Visible page numbers (max 5 on mobile, 7 on desktop)
+  const visiblePages = useMemo(() => {
+    const maxPages = 7;
+    if (totalPages <= maxPages) return Array.from({ length: totalPages }, (_, i) => i);
+    const start = Math.max(0, Math.min(page - 3, totalPages - maxPages));
+    return Array.from({ length: maxPages }, (_, i) => start + i);
+  }, [totalPages, page]);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, ...style }}>
-      <div style={s.wrapper}>
-        <table style={s.table}>
+    <div className={`flex flex-col gap-0 ${className}`} style={style}>
+      {/* Scrollable table wrapper */}
+      <div className="overflow-x-auto rounded-lg border border-terminal-border" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+        <table className="w-full border-collapse text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
           <thead>
             <tr>
               {columns.map((col) => {
@@ -97,17 +102,14 @@ export function DataTable<T>({
                   <th
                     key={col.key}
                     onClick={() => handleSort(col)}
-                    style={{
-                      ...s.th,
-                      width: col.width,
-                      textAlign: col.align ?? 'left',
-                      cursor: canSort ? 'pointer' : 'default',
-                      userSelect: 'none',
-                    }}
+                    className={`bg-terminal-raised border-b border-terminal-border text-slate-500 text-2xs font-semibold uppercase tracking-wider px-3 sm:px-4 py-2.5 sticky top-0 whitespace-nowrap select-none ${
+                      canSort ? 'cursor-pointer hover:text-slate-300' : ''
+                    } ${col.hideOnMobile ? 'hidden sm:table-cell' : ''}`}
+                    style={{ textAlign: col.align ?? 'left', width: col.width }}
                   >
                     {col.header}
                     {canSort && (
-                      <span style={{ marginLeft: 4, opacity: isSorted ? 1 : 0.3 }}>
+                      <span className={`ml-1 ${isSorted ? 'opacity-100' : 'opacity-30'}`}>
                         {isSorted ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
                       </span>
                     )}
@@ -121,15 +123,21 @@ export function DataTable<T>({
               Array.from({ length: Math.min(pageSize, 5) }).map((_, i) => (
                 <tr key={i}>
                   {columns.map((col) => (
-                    <td key={col.key} style={s.td}>
-                      <div style={s.skeleton} />
+                    <td
+                      key={col.key}
+                      className={`px-3 sm:px-4 py-2.5 ${col.hideOnMobile ? 'hidden sm:table-cell' : ''}`}
+                    >
+                      <div className="h-3.5 rounded bg-terminal-raised animate-pulse w-4/5" />
                     </td>
                   ))}
                 </tr>
               ))
             ) : pageData.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} style={{ ...s.td, textAlign: 'center', padding: 32, color: '#64748b' }}>
+                <td
+                  colSpan={columns.length}
+                  className="px-4 py-8 text-center text-slate-500 text-sm"
+                >
                   {emptyMessage}
                 </td>
               </tr>
@@ -138,15 +146,17 @@ export function DataTable<T>({
                 <tr
                   key={rowKey(row)}
                   onClick={() => onRowClick?.(row)}
-                  style={{
-                    ...s.tr,
-                    cursor: onRowClick ? 'pointer' : 'default',
-                  }}
+                  className={`border-b border-terminal-border/60 transition-colors ${
+                    onRowClick ? 'cursor-pointer hover:bg-terminal-raised/50' : ''
+                  }`}
                 >
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      style={{ ...s.td, textAlign: col.align ?? 'left' }}
+                      className={`text-slate-200 px-3 sm:px-4 py-2.5 align-middle whitespace-nowrap ${
+                        col.hideOnMobile ? 'hidden sm:table-cell' : ''
+                      }`}
+                      style={{ textAlign: col.align ?? 'left' }}
                     >
                       {col.render
                         ? col.render(row)
@@ -162,38 +172,35 @@ export function DataTable<T>({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div style={s.pagination}>
-          <span style={{ color: '#64748b', fontSize: 12 }}>
+        <div className="flex items-center justify-between gap-2 border-t border-terminal-border px-3 py-2 flex-wrap">
+          <span className="text-slate-500 text-xs tabular-nums">
             {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sorted.length)} of {sorted.length}
           </span>
-          <div style={{ display: 'flex', gap: 4 }}>
+          <div className="flex gap-1 flex-wrap">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              style={s.pageBtn}
+              className="min-w-[28px] h-7 px-1.5 bg-transparent border border-terminal-border rounded text-slate-400 text-xs cursor-pointer disabled:opacity-40 hover:border-slate-500 transition-colors"
             >
               ‹
             </button>
-            {Array.from({ length: Math.min(totalPages, 7) }).map((_, i) => {
-              const pg = totalPages <= 7 ? i : Math.max(0, Math.min(page - 3, totalPages - 7)) + i;
-              return (
-                <button
-                  key={pg}
-                  onClick={() => setPage(pg)}
-                  style={{
-                    ...s.pageBtn,
-                    background: pg === page ? '#3b82f6' : 'transparent',
-                    color: pg === page ? '#fff' : '#94a3b8',
-                  }}
-                >
-                  {pg + 1}
-                </button>
-              );
-            })}
+            {visiblePages.map((pg) => (
+              <button
+                key={pg}
+                onClick={() => setPage(pg)}
+                className={`min-w-[28px] h-7 px-1.5 border rounded text-xs cursor-pointer transition-colors ${
+                  pg === page
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-transparent border-terminal-border text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                {pg + 1}
+              </button>
+            ))}
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              style={s.pageBtn}
+              className="min-w-[28px] h-7 px-1.5 bg-transparent border border-terminal-border rounded text-slate-400 text-xs cursor-pointer disabled:opacity-40 hover:border-slate-500 transition-colors"
             >
               ›
             </button>
@@ -202,73 +209,10 @@ export function DataTable<T>({
       )}
 
       {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 8 }}>
+        <div className="flex justify-center py-2">
           <Spinner size="sm" />
         </div>
       )}
     </div>
   );
 }
-
-const s: Record<string, React.CSSProperties> = {
-  wrapper: {
-    overflowX: 'auto',
-    borderRadius: 8,
-    border: '1px solid var(--border, #334155)',
-  },
-  table: {
-    borderCollapse: 'collapse',
-    fontSize: 13,
-    minWidth: '100%',
-    tableLayout: 'auto',
-  },
-  th: {
-    background: 'var(--surface-raised, #1e293b)',
-    borderBottom: '1px solid var(--border, #334155)',
-    color: 'var(--text-muted, #94a3b8)',
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: 0.5,
-    padding: '10px 14px',
-    position: 'sticky',
-    textTransform: 'uppercase',
-    top: 0,
-    whiteSpace: 'nowrap',
-  },
-  tr: {
-    borderBottom: '1px solid var(--border-subtle, #1e293b)',
-    transition: 'background 0.1s',
-  },
-  td: {
-    color: 'var(--text, #f1f5f9)',
-    padding: '10px 14px',
-    verticalAlign: 'middle',
-    whiteSpace: 'nowrap',
-  },
-  skeleton: {
-    background: 'linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%)',
-    backgroundSize: '200% 100%',
-    borderRadius: 4,
-    height: 14,
-    width: '80%',
-    animation: 'shimmer 1.5s infinite',
-  },
-  pagination: {
-    alignItems: 'center',
-    borderTop: '1px solid var(--border, #334155)',
-    display: 'flex',
-    gap: 8,
-    justifyContent: 'space-between',
-    padding: '8px 12px',
-  },
-  pageBtn: {
-    background: 'transparent',
-    border: '1px solid var(--border, #334155)',
-    borderRadius: 4,
-    color: '#94a3b8',
-    cursor: 'pointer',
-    fontSize: 12,
-    minWidth: 28,
-    padding: '3px 6px',
-  },
-};

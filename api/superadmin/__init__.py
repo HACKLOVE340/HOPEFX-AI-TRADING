@@ -68,6 +68,7 @@ from .auto_healing import router as _auto_healing_router
 from .diagnostics import router as _diagnostics_router
 from .reliability import router as _reliability_router
 from .health_engine_api import router as _health_engine_router
+
 # Previously unmounted sub-routers — all 11 wired here
 from .alerting import router as _alerting_router
 from .broker_management import router as _broker_management_router
@@ -110,12 +111,12 @@ router.include_router(_security_router)
 router.include_router(_logs_router)
 router.include_router(_feature_flags_router)
 router.include_router(_audit_router)
-router.include_router(_infrastructure_router)  # all 23-section routes live here
+router.include_router(_infrastructure_router)  # /infra/* routes only
 router.include_router(_auto_healing_router)
 router.include_router(_diagnostics_router)
 router.include_router(_reliability_router)
 router.include_router(_health_engine_router)
-# Previously unmounted — now live
+# Dedicated sub-routers — each owns its section exclusively
 router.include_router(_alerting_router)
 router.include_router(_broker_management_router)
 router.include_router(_compliance_router)

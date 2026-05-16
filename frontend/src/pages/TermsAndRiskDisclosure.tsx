@@ -5,7 +5,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
 // ── Section data ──────────────────────────────────────────────────────────────
 
@@ -197,12 +197,12 @@ const TermsAndRiskDisclosure: React.FC = () => {
       {/* Header */}
       <header style={s.header}>
         <div style={s.headerInner}>
-          <button onClick={() => navigate('/')} style={s.logo}>
+          <Link to="/" style={{...s.logo, textDecoration:'none', cursor:'pointer'}}>
             HOPE<span style={{ color: '#3b82f6' }}>FX</span>
-          </button>
+          </Link>
           <nav style={s.nav}>
-            <button onClick={() => navigate('/login')} style={s.navLink}>Sign In</button>
-            <button onClick={() => navigate('/register')} style={s.navBtn}>Get Started</button>
+            <Link to="/login" style={{...s.navLink, textDecoration:'none'}}>Sign In</Link>
+            <Link to="/register" style={{...s.navBtn, textDecoration:'none'}}>Get Started</Link>
           </nav>
         </div>
       </header>
@@ -274,9 +274,9 @@ const TermsAndRiskDisclosure: React.FC = () => {
                 Risk Disclosure
               </button>
               <span style={{ color: '#334155' }}>·</span>
-              <button onClick={() => navigate('/')} style={s.footerNavLink}>
+              <Link to="/" style={{...s.footerNavLink, textDecoration:'none'}}>
                 Back to Home
-              </button>
+              </Link>
             </div>
           </div>
         </div>

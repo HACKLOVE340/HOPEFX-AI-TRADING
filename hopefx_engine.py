@@ -34,13 +34,30 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from typing import ClassVar
 import logging
 import os
 import signal
 import sys
 from collections import deque
 from datetime import datetime, timezone
-from typing import ClassVar
+
+# ── Prometheus metrics ────────────────────────────────────────────────────────
+# Imported from core.metrics so they are registered in the shared Prometheus
+# registry and exported via /metrics regardless of import order.
+# core.metrics provides no-op stubs when prometheus_client is not installed.
+try:
+    from core.metrics import NEWS_QUEUE_DROPS as _NEWS_QUEUE_DROPS
+    from core.metrics import NEWS_QUEUE_ENQUEUED as _NEWS_QUEUE_ENQUEUED
+except Exception:  # pragma: no cover — core.metrics import failure (test isolation)
+
+    class _NoopCounter:  # type: ignore[no-redef]
+        def inc(self, amount: float = 1) -> None:
+            pass
+
+    _NEWS_QUEUE_DROPS = _NoopCounter()  # type: ignore[assignment]
+    _NEWS_QUEUE_ENQUEUED = _NoopCounter()  # type: ignore[assignment]
+
 
 import pandas as pd
 
@@ -82,12 +99,16 @@ def validate_startup_environment() -> list[str]:
     - Python version >= 3.10
     """
 
-    warnings: ClassVar[list[str]] = []
-    errors: ClassVar[list[str]] = []
+    warnings: list[str] = []
+    errors: list[str] = []
     is_production = os.environ.get("APP_ENV", "development") == "production"
     is_test = os.environ.get("APP_ENV", "") == "test"
 
     # Python version
+    if sys.version_info < (3, 10):
+        errors.append(
+            f"Python {sys.version_info.major}.{sys.version_info.minor} is not supported; Python >= 3.10 is required"
+        )
 
     # JWT secret
     jwt_secret = os.environ.get("SECURITY_JWT_SECRET", "")
@@ -178,8 +199,8 @@ class HopeFXEngine:
     # Safety caps on position size to prevent runaway sizing.
     # Units are troy ounces (oz) for XAU/USD gold spot.
     # 1 standard lot = 100 oz; mini lot = 10 oz.
-    MAX_LIVE_POSITION_SIZE: float = 1.0  # max 1 oz (0.01 standard lot) for live trading
-    MAX_PAPER_POSITION_SIZE: float = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
+    MAX_LIVE_POSITION_SIZE: ClassVar[float] = 1.0  # max 1 oz (0.01 standard lot) for live trading
+    MAX_PAPER_POSITION_SIZE: ClassVar[float] = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
 
     def __init__(self) -> None:
         # ── broker config ─────────────────────────────────────────────────────
@@ -287,16 +308,35 @@ class HopeFXEngine:
         Called internally whenever the engine receives a news item from
         the broker stream, economic calendar, or sentiment feed.
         """
-        # Push to queue for poll-mode consumers (non-blocking; drop if full)
-        with contextlib.suppress(asyncio.QueueFull):
+        # Push to queue for poll-mode consumers (non-blocking).
+        # Log and count drops so queue saturation is visible in dashboards.
+        try:
             self._news_queue.put_nowait(event)
+            _NEWS_QUEUE_ENQUEUED.inc()
+        except asyncio.QueueFull:
+            _NEWS_QUEUE_DROPS.inc()
+            logger.warning(
+                "news_queue full (maxsize=%d) — dropping event type=%r source=%r. "
+                "Increase EVENT_BUS_NEWS_QUEUE_MAXSIZE or speed up consumers.",
+                self._news_queue.maxsize,
+                event.get("type", "unknown"),
+                event.get("source", "unknown"),
+            )
 
         # Fire all registered async callbacks concurrently
         if self._news_callbacks:
-            await asyncio.gather(
+            results = await asyncio.gather(
                 *(cb(event) for cb in self._news_callbacks),
                 return_exceptions=True,
             )
+            # Log any callback errors so they don't vanish silently.
+            for cb, result in zip(self._news_callbacks, results, strict=False):
+                if isinstance(result, BaseException):
+                    logger.error(
+                        "News callback %s raised: %s",
+                        getattr(cb, "__qualname__", repr(cb)),
+                        result,
+                    )
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -690,7 +730,42 @@ class HopeFXEngine:
                 d.reason = f"nuclear:{getattr(signal, 'strategy_id', 'agent')}"
                 await self._execute_decision(d, entry_price, symbol)
         except Exception as exc:
-            logger.error("_on_nuclear_signal error: %s", exc)
+            # Log with full traceback so the failure is visible in production logs.
+            logger.exception(
+                "_on_nuclear_signal FAILED — signal dropped: symbol=%s side=%s exc=%s",
+                getattr(signal, "symbol", "?"),
+                "BUY" if getattr(signal, "direction", "long") == "long" else "SELL",
+                exc,
+            )
+            # Enqueue to dead-letter buffer so operators can inspect dropped signals.
+            _dead_letter: deque = getattr(self, "_nuclear_dead_letter", None)
+            if _dead_letter is None:
+                self._nuclear_dead_letter: deque = deque(maxlen=100)
+                _dead_letter = self._nuclear_dead_letter
+            _dead_letter.append(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "symbol": getattr(signal, "symbol", "?"),
+                    "direction": getattr(signal, "direction", "?"),
+                    "confidence": getattr(signal, "confidence", None),
+                    "error": str(exc),
+                    "error_type": type(exc).__name__,
+                }
+            )
+            # Publish breach event so monitoring / alerting picks it up.
+            try:
+                from core.event_bus import event_bus as _eb
+
+                await _eb.publish_breach(
+                    {
+                        "type": "nuclear_signal_dropped",
+                        "symbol": getattr(signal, "symbol", "?"),
+                        "error": str(exc),
+                        "dead_letter_queue_depth": len(_dead_letter),
+                    }
+                )
+            except Exception as _pub_exc:
+                logger.debug("Could not publish nuclear breach event: %s", _pub_exc)
 
     async def _nuclear_loop(self) -> None:
         """
@@ -1282,7 +1357,7 @@ class HopeFXEngine:
                             )
                             self._oms.submit_order(_oms_order.id)
                         except Exception as _oms_exc:
-                            logger.debug("OMS create_order failed: %s", _oms_exc)
+                            logger.warning("OMS create_order failed: %s", _oms_exc)
 
                     # Online learner feedback
                     try:
@@ -1507,7 +1582,7 @@ class HopeFXEngine:
                     open_positions=open_pos,
                 )
         except Exception as exc:
-            logger.debug("Equity update failed: %s", exc)
+            logger.warning("Equity update failed: %s", exc)
 
     # ── status / snapshot helpers ─────────────────────────────────────────────
 

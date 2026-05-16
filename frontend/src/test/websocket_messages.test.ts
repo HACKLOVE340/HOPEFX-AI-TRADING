@@ -544,3 +544,58 @@ describe('server acknowledgement messages', () => {
     expect(() => handleMessage(JSON.stringify({ type: 'unsubscribed', channels: ['prices'] }))).not.toThrow();
   });
 });
+
+// ─── _setLastMid cap regression tests ─────────────────────────────────────────
+// Bug: _lastMid was a plain object with no eviction policy. Unexpected or
+// malformed symbol strings from the server caused unbounded memory growth.
+// Fix: _setLastMid() evicts the oldest entry when the map exceeds
+// MAX_TRACKED_SYMBOLS (100) entries.
+
+import { _setLastMid_testOnly, _lastMid_testOnly } from '../hooks/useWebSocket';
+
+describe('_setLastMid cap (unbounded growth regression)', () => {
+  beforeEach(() => {
+    // Clear the map before each test via the test-only export
+    _lastMid_testOnly.clear();
+  });
+
+  it('stores a new symbol', () => {
+    _setLastMid_testOnly('XAUUSD', 1950.0);
+    expect(_lastMid_testOnly.get('XAUUSD')).toBe(1950.0);
+  });
+
+  it('updates an existing symbol without eviction', () => {
+    _setLastMid_testOnly('XAUUSD', 1950.0);
+    _setLastMid_testOnly('XAUUSD', 1960.0);
+    expect(_lastMid_testOnly.get('XAUUSD')).toBe(1960.0);
+    expect(_lastMid_testOnly.size).toBe(1);
+  });
+
+  it('evicts oldest entry when cap is reached', () => {
+    const CAP = 100;
+    // Fill to cap
+    for (let i = 0; i < CAP; i++) {
+      _setLastMid_testOnly(`SYM_${i}`, i * 1.0);
+    }
+    expect(_lastMid_testOnly.size).toBe(CAP);
+    const firstKey = _lastMid_testOnly.keys().next().value;
+    expect(firstKey).toBe('SYM_0');
+
+    // Adding one more should evict SYM_0
+    _setLastMid_testOnly('SYM_NEW', 999.0);
+    expect(_lastMid_testOnly.size).toBe(CAP);
+    expect(_lastMid_testOnly.has('SYM_0')).toBe(false);
+    expect(_lastMid_testOnly.has('SYM_NEW')).toBe(true);
+  });
+
+  it('does not evict when updating an existing key at cap', () => {
+    const CAP = 100;
+    for (let i = 0; i < CAP; i++) {
+      _setLastMid_testOnly(`SYM_${i}`, i * 1.0);
+    }
+    // Update existing key — should not evict anything
+    _setLastMid_testOnly('SYM_0', 42.0);
+    expect(_lastMid_testOnly.size).toBe(CAP);
+    expect(_lastMid_testOnly.get('SYM_0')).toBe(42.0);
+  });
+});

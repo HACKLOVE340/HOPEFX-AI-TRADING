@@ -59,21 +59,21 @@ warned: list[str] = []
 
 def ok(msg: str) -> None:
     passed.append(msg)
-    logger.info(f"  {GREEN}✓{RESET} {msg}")
+    logger.info("  %s✓%s %s", GREEN, RESET, msg)
 
 
 def fail(msg: str) -> None:
     failed.append(msg)
-    logger.error(f"  {RED}✗ FAIL{RESET} {msg}")
+    logger.error("  %s✗ FAIL%s %s", RED, RESET, msg)
 
 
 def warn(msg: str) -> None:
     warned.append(msg)
-    logger.warning(f"  {YELLOW}⚠ WARN{RESET} {msg}")
+    logger.warning("  %s⚠ WARN%s %s", YELLOW, RESET, msg)
 
 
 def section(title: str) -> None:
-    logger.info(f"\n{BOLD}{title}{RESET}")
+    logger.info("\n%s%s%s", BOLD, title, RESET)
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
@@ -777,18 +777,18 @@ except Exception as e:
 # =============================================================================
 # SUMMARY
 # =============================================================================
-logger.info(f"\n{BOLD}{'=' * 60}{RESET}")
-logger.info(f"{BOLD}HARDENING AUDIT SUMMARY{RESET}")
-logger.info(f"  {GREEN}Passed:   {len(passed)}{RESET}")
-logger.warning(f"  {YELLOW}Warnings: {len(warned)}{RESET}")
-logger.error(f"  {RED}Failed:   {len(failed)}{RESET}")
-logger.info(f"{BOLD}{'=' * 60}{RESET}")
+logger.info("\n%s%s%s", BOLD, "=" * 60, RESET)
+logger.info("%sHARDENING AUDIT SUMMARY%s", BOLD, RESET)
+logger.info("  %sPassed:   %s%s", GREEN, len(passed), RESET)
+logger.warning("  %sWarnings: %s%s", YELLOW, len(warned), RESET)
+logger.error("  %sFailed:   %s%s", RED, len(failed), RESET)
+logger.info("%s%s%s", BOLD, "=" * 60, RESET)
 
 if failed:
-    logger.error(f"\n{RED}FAILED CHECKS:{RESET}")
+    logger.error("\n%sFAILED CHECKS:%s", RED, RESET)
     for f in failed:
-        logger.info(f"  ✗ {f}")
+        logger.info("  ✗ %s", f)
     sys.exit(1)
 else:
-    logger.info(f"\n{GREEN}All hardening checks passed.{RESET}")
+    logger.info("\n%sAll hardening checks passed.%s", GREEN, RESET)
     sys.exit(0)

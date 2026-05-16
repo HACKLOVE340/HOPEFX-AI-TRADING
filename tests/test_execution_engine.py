@@ -11,11 +11,11 @@ ExecutionRequest validation.
 """
 
 import asyncio
-from unittest.mock import MagicMock
 
 import pytest
 
 from brokers.base import Order, OrderSide, OrderStatus, OrderType
+from brokers.paper_trading import PaperTradingBroker
 from execution.engine import (
     EngineCircuitBreaker,
     ExecutionEngine,
@@ -23,6 +23,7 @@ from execution.engine import (
     ExecutionRequest,
     ExecutionStatus,
 )
+from risk.manager import RiskConfig, RiskManager
 
 # ---------------------------------------------------------------------------
 # ExecutionRequest validation
@@ -126,47 +127,64 @@ class TestEngineCircuitBreaker:
 # ---------------------------------------------------------------------------
 
 
-def _make_broker_manager(order_status=OrderStatus.FILLED):
-    mgr = MagicMock()
-    mock_order = Order(
-        id="order-001",
-        symbol="XAUUSD",
-        side=OrderSide.BUY,
-        type=OrderType.MARKET,
-        quantity=1.0,
-        status=order_status,
-        filled_quantity=1.0,
-        average_price=1950.0,
+class _ConnectedPaperBroker(PaperTradingBroker):
+    """PaperTradingBroker pre-connected with a seeded market price.
+
+    Used as a real broker in ExecutionEngine tests — no mocking required.
+    The broker is synchronously connected (bypasses the async connect() call)
+    so it can be used in synchronous test setup.
+
+    The class name contains "Paper" so ExecutionEngine._is_live_broker()
+    correctly identifies it as a paper broker and does not block orders
+    with the LIVE_MODE_CONFIRMED guard.
+    """
+
+    paper_trading: bool = True  # explicit flag for ExecutionEngine._is_live_broker()
+
+    def __init__(self, order_status: OrderStatus = OrderStatus.FILLED) -> None:
+        super().__init__(initial_balance=100_000.0, commission_per_lot=0.0)
+        self.connected = True  # PaperTradingBroker uses self.connected
+        self.market_prices["XAUUSD"] = 1950.0
+        import time
+        self._price_timestamps["XAUUSD"] = time.time()
+        self._forced_status = order_status
+
+    def is_connected(self) -> bool:
+        return self.connected
+
+    def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
+        order = super().place_order(symbol, side, order_type, quantity, price=price)
+        if order is not None and self._forced_status != OrderStatus.FILLED:
+            order.status = self._forced_status
+        return order
+
+    def get_account_info(self):
+        from brokers.base import AccountInfo
+        return AccountInfo(
+            balance=self.balance,
+            equity=self.balance,
+            margin_used=0.0,
+            margin_available=self.balance,
+            positions_count=len(self.positions),
+        )
+
+
+def _make_broker_manager(order_status: OrderStatus = OrderStatus.FILLED) -> _ConnectedPaperBroker:
+    """Return a real connected PaperTradingBroker for ExecutionEngine tests."""
+    return _ConnectedPaperBroker(order_status)
+
+
+def _make_risk_manager(allow_trade: bool = True) -> RiskManager:
+    """Return a real RiskManager with permissive limits for ExecutionEngine tests."""
+    cfg = RiskConfig(
+        max_position_size_pct=0.99,
+        max_drawdown_pct=0.10,
+        max_open_positions=100,
     )
-    mgr.place_order.return_value = mock_order
-    mgr.is_connected.return_value = True
-    return mgr
-
-
-def _make_risk_manager(allow_trade=True):
-    rm = MagicMock()
-    rm._trading_halted = False
-    rm._halt_reason = None
-    rm._halt_until = None
-    rm.daily_pnl = 0.0
-    rm.daily_starting_equity = 100_000.0
-    rm.current_drawdown = 0.0
-    rm.current_balance = 100_000.0
-    rm.initial_balance = 100_000.0
-    rm.open_positions = []
-    rm._kill_switch = None
-    rm._returns_history = [0.001] * 20
-
-    cfg = MagicMock()
-    cfg.daily_loss_limit_pct = 0.05
-    cfg.max_drawdown_pct = 0.10
-    cfg.max_position_size_pct = 0.99  # permissive for tests
-    cfg.max_open_positions = 100
-    rm.config = cfg
-
-    rm.check_cvar_pre_trade = MagicMock(return_value=(True, "OK"))
-    rm._compute_cvar = MagicMock(return_value=0.001)
-    rm.validate_trade = MagicMock(return_value=(True, "OK"))
+    rm = RiskManager(config=cfg, initial_balance=100_000.0)
+    if not allow_trade:
+        rm._trading_halted = True
+        rm._halt_reason = "test halt"
     return rm
 
 
@@ -183,16 +201,16 @@ class TestExecutionEngine:
 
         assert report.success is True
         assert report.status == ExecutionStatus.FILLED
-        assert report.order_id == "order-001"
         assert report.latency_ms >= 0
 
     @pytest.mark.asyncio
     async def test_kill_switch_blocks(self):
+        from kill_switch import KillSwitch
+
         broker = _make_broker_manager()
         risk = _make_risk_manager()
-        ks = MagicMock()
-        ks.is_active.return_value = True
-        ks._reason = "emergency halt"
+        ks = KillSwitch()
+        ks.activate("emergency halt")
 
         engine = ExecutionEngine(broker, risk, kill_switch=ks)
         await engine.start()
@@ -203,6 +221,8 @@ class TestExecutionEngine:
         assert report.success is False
         assert report.status == ExecutionStatus.BLOCKED
         assert "KILL_SWITCH" in report.message
+
+        ks.reset_for_testing()
 
     @pytest.mark.asyncio
     async def test_engine_stopped_blocks(self):
@@ -219,8 +239,12 @@ class TestExecutionEngine:
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_blocks_after_failures(self):
-        broker = _make_broker_manager()
-        broker.place_order.side_effect = RuntimeError("broker down")
+        class _FailingBroker(_ConnectedPaperBroker):
+            """Real broker that always raises on place_order to trigger circuit breaker."""
+            def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
+                raise RuntimeError("broker down")
+
+        broker = _FailingBroker()
         risk = _make_risk_manager()
         engine = ExecutionEngine(broker, risk)
         engine._circuit_breaker = EngineCircuitBreaker(max_failures=2, window_sec=60.0, reset_sec=9999.0)
@@ -285,8 +309,12 @@ class TestExecutionEngine:
 
     @pytest.mark.asyncio
     async def test_broker_error_returns_error_report(self):
-        broker = _make_broker_manager()
-        broker.place_order.side_effect = RuntimeError("connection lost")
+        class _ErrorBroker(_ConnectedPaperBroker):
+            """Real broker that raises on place_order to test error handling."""
+            def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
+                raise RuntimeError("connection lost")
+
+        broker = _ErrorBroker()
         risk = _make_risk_manager()
         engine = ExecutionEngine(broker, risk)
         await engine.start()
@@ -301,9 +329,12 @@ class TestExecutionEngine:
     @pytest.mark.asyncio
     async def test_never_raises_to_caller(self):
         """ExecutionEngine.execute() must never raise — always returns a report."""
-        broker = MagicMock()
-        broker.place_order.side_effect = Exception("catastrophic failure")
-        broker.is_connected.return_value = True
+        class _CatastrophicBroker(_ConnectedPaperBroker):
+            """Real broker that raises an unexpected exception."""
+            def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
+                raise Exception("catastrophic failure")
+
+        broker = _CatastrophicBroker()
         risk = _make_risk_manager()
         engine = ExecutionEngine(broker, risk)
         await engine.start()

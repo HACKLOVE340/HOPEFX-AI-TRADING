@@ -26,16 +26,16 @@ Author: HOPEFX Development Team
 """
 
 # ── Module constants ─────────────────────────────────────────────────────────
-_RISK_HIGH             = 70
-_RISK_MEDIUM           = 50
-_RISK_LOW              = 30
-_RISK_VERY_LOW         = 20   # corrected: base global risk when no events are present
-_EVENT_WEIGHT_MAJOR    = 6
+_RISK_HIGH = 70
+_RISK_MEDIUM = 50
+_RISK_LOW = 30
+_RISK_VERY_LOW = 20  # corrected: base global risk when no events are present
+_EVENT_WEIGHT_MAJOR = 6
 _EVENT_WEIGHT_MODERATE = 4
-_EVENT_WEIGHT_MINOR    = 5
-_EVENT_WEIGHT_MICRO    = 3
-_BULLISH_RATIO_STRONG  = 2
-_BLACKOUT_MINUTES      = 60
+_EVENT_WEIGHT_MINOR = 5
+_EVENT_WEIGHT_MICRO = 3
+_BULLISH_RATIO_STRONG = 2
+_BLACKOUT_MINUTES = 60
 
 import asyncio
 import contextlib
@@ -369,9 +369,25 @@ class GeopoliticalRiskProvider:
         self._poll_task: asyncio.Task | None = None
         self._running: bool = False
 
-        # Suppress repeated "all sources unavailable" warnings — log once per
-        # provider lifetime, then downgrade to DEBUG to keep logs readable.
+        # "All sources unavailable" warning suppression.
+        # Set True after the first warning fires; reset to False when any live
+        # source succeeds so the warning re-fires if sources go down again.
         self._all_sources_warned: bool = False
+
+        # Per-source failure counters for diagnostics (reset on success).
+        self._source_failures: dict[str, int] = {
+            "worldmonitor": 0,
+            "gdelt": 0,
+            "acled": 0,
+            "reliefweb": 0,
+        }
+
+        # Maximum age (seconds) for stale-cache serving when all live sources
+        # are unavailable.  Beyond this threshold the cache is considered too
+        # stale to be useful and the static fallback is used instead.
+        self._stale_cache_max_age_s: float = float(
+            self.config.get("stale_cache_max_age_s", 3600)  # 1 hour default
+        )
 
         logger.info("GeopoliticalRiskProvider initialized with layers: %s", self.data_layers)
 
@@ -418,8 +434,7 @@ class GeopoliticalRiskProvider:
         _env = os.getenv("ENVIRONMENT", "").lower()
         if os.getenv("HOPEFX_CI") or _env in ("testing", "test", "ci"):
             logger.debug(
-                "GeopoliticalRiskProvider: cache refresh skipped in CI/test environment "
-                "(HOPEFX_CI=%s ENVIRONMENT=%s)",
+                "GeopoliticalRiskProvider: cache refresh skipped in CI/test environment (HOPEFX_CI=%s ENVIRONMENT=%s)",
                 os.getenv("HOPEFX_CI", ""),
                 os.getenv("ENVIRONMENT", ""),
             )
@@ -432,14 +447,40 @@ class GeopoliticalRiskProvider:
                 event.risk_score = self._calculate_risk_score(event)
                 event.affected_currencies = self._get_affected_currencies(event)
 
-            self._cache["events"] = events
-            self._cache_timestamp = datetime.now(UTC)
+            # Only update the cache when we received live events (not static
+            # fallback events).  Static fallback events carry source="static_fallback"
+            # and should not overwrite a previously valid live cache entry.
+            live_events = [e for e in events if e.source != "static_fallback"]
+            if live_events:
+                self._cache["events"] = live_events
+                self._cache_timestamp = datetime.now(UTC)
+                # Reset the warning flag so it fires again if sources go down later.
+                if self._all_sources_warned:
+                    logger.info(
+                        "GeopoliticalRiskProvider: live sources recovered — "
+                        "%d events fetched. Warning suppression reset.",
+                        len(live_events),
+                    )
+                    self._all_sources_warned = False
+                # Reset per-source failure counters for sources that contributed events.
+                sources_seen = {e.source.split("/")[0] for e in live_events}
+                for src in sources_seen:
+                    if src in self._source_failures:
+                        self._source_failures[src] = 0
+            elif events:
+                # Static fallback only — don't overwrite cache timestamp so the
+                # stale-cache guard continues to apply correctly.
+                self._cache.setdefault("events", events)
 
             cutoff = datetime.now(UTC) - timedelta(days=7)
-            self.event_history.extend(events)
+            self.event_history.extend(live_events if live_events else events)
             self.event_history = [e for e in self.event_history if e.timestamp > cutoff]
 
-            logger.debug("GeopoliticalRiskProvider: cache refreshed with %d events", len(events))
+            logger.debug(
+                "GeopoliticalRiskProvider: cache refreshed — %d live events, %d total",
+                len(live_events) if live_events else 0,
+                len(events),
+            )
         except Exception as exc:
             logger.error("GeopoliticalRiskProvider: cache refresh failed: %s", exc)
 
@@ -547,73 +588,109 @@ class GeopoliticalRiskProvider:
         timeout_s = int(self.config.get("request_timeout", 15))
         _is_production = os.getenv("APP_ENV", "development").lower() == "production"
 
+        # Track which sources failed this cycle for diagnostic logging.
+        _failed_sources: list[str] = []
+
         # ── 1. World Monitor public REST API (no key required) ───────────────
         # Always attempted first — free, no authentication needed for web access.
         # WORLDMONITOR_API_URL can override the base URL for self-hosted instances.
         events = await self._fetch_from_worldmonitor(timeout_s)
         if events:
             logger.info("Fetched %d geopolitical events from World Monitor", len(events))
+            self._source_failures["worldmonitor"] = 0
             return events
+        else:
+            self._source_failures["worldmonitor"] += 1
+            _failed_sources.append(f"worldmonitor (consecutive_failures={self._source_failures['worldmonitor']})")
 
         # ── 2. GDELT fallback (always attempted — free, no key) ───────────────
         gdelt_events = await self._fetch_events_from_gdelt()
         if gdelt_events:
             logger.info("Fetched %d geopolitical events from GDELT", len(gdelt_events))
+            self._source_failures["gdelt"] = 0
             return gdelt_events
+        else:
+            self._source_failures["gdelt"] += 1
+            _failed_sources.append(f"gdelt (consecutive_failures={self._source_failures['gdelt']})")
 
         # ── 3. ACLED fallback (requires ACLED_API_KEY + ACLED_EMAIL) ──────────
         acled_events = await self._fetch_events_from_acled(timeout_s)
         if acled_events:
             logger.info("Fetched %d geopolitical events from ACLED", len(acled_events))
+            self._source_failures["acled"] = 0
             return acled_events
+        else:
+            self._source_failures["acled"] += 1
+            _failed_sources.append(f"acled (consecutive_failures={self._source_failures['acled']})")
 
         # ── 4. ReliefWeb fallback (free, no key) ──────────────────────────────
         reliefweb_events = await self._fetch_events_from_reliefweb(timeout_s)
         if reliefweb_events:
             logger.info("Fetched %d geopolitical events from ReliefWeb", len(reliefweb_events))
+            self._source_failures["reliefweb"] = 0
             return reliefweb_events
+        else:
+            self._source_failures["reliefweb"] += 1
+            _failed_sources.append(f"reliefweb (consecutive_failures={self._source_failures['reliefweb']})")
 
-        # ── 5. Serve stale cache ───────────────────────────────────────────────
+        # ── 5. Serve stale cache (with TTL guard) ─────────────────────────────
+        # Only serve stale cache if it is not too old.  Beyond
+        # _stale_cache_max_age_s the data is considered unreliable and the
+        # static fallback is preferred.
         cached = self._cache.get("events", [])
-        if cached:
-            logger.warning(
-                "All geopolitical sources unavailable — serving %d cached events",
-                len(cached),
-            )
-            return cached
+        if cached and self._cache_timestamp is not None:
+            cache_age_s = (datetime.now(UTC) - self._cache_timestamp).total_seconds()
+            if cache_age_s <= self._stale_cache_max_age_s:
+                logger.warning(
+                    "All geopolitical sources unavailable — serving %d stale cached events "
+                    "(age=%.0fs, max=%.0fs). Failed: %s",
+                    len(cached),
+                    cache_age_s,
+                    self._stale_cache_max_age_s,
+                    ", ".join(_failed_sources),
+                )
+                return cached
+            else:
+                logger.warning(
+                    "Stale cache too old (age=%.0fs > max=%.0fs) — skipping stale cache, "
+                    "falling back to static events. Failed sources: %s",
+                    cache_age_s,
+                    self._stale_cache_max_age_s,
+                    ", ".join(_failed_sources),
+                )
 
-        # ── 6. Graceful degradation ────────────────────────────────────────────
-        # Never raise RuntimeError — doing so in an async poll task silently
-        # kills the task and leaves the system without geopolitical data.
-        # Log at CRITICAL in production so operators are paged; WARNING in
-        # development so the condition is visible without being fatal.
-        # Always return an empty list so callers can continue operating.
+        # ── 6. Graceful degradation warning ───────────────────────────────────
+        # Never raise — doing so in an async poll task silently kills the task.
+        # Log at CRITICAL in production so operators are paged; WARNING in dev.
+        # The flag is reset in _refresh_cache() when a live source recovers so
+        # the warning fires again after recovery → outage → recovery cycles.
         _log_fn = logger.critical if _is_production else logger.warning
         if not self._all_sources_warned:
             _log_fn(
-                "All geopolitical data sources unavailable and cache empty — "
-                "returning no events. Ensure outbound HTTPS access to "
-                "api.gdeltproject.org, api.acleddata.com, or api.reliefweb.int. "
-                "World Monitor: https://worldmonitor.app/."
+                "All geopolitical data sources unavailable and cache empty/expired — "
+                "serving static fallback events. Failed sources: %s. "
+                "Ensure outbound HTTPS access to worldmonitor.app, "
+                "api.gdeltproject.org, api.acleddata.com, api.reliefweb.int.",
+                ", ".join(_failed_sources),
             )
             self._all_sources_warned = True
         else:
-            logger.debug("All geopolitical data sources still unavailable (suppressed repeat warning).")
+            logger.debug(
+                "All geopolitical data sources still unavailable (warning suppressed). Failed: %s",
+                ", ".join(_failed_sources),
+            )
 
-        # ── 7. Static curated fallback (non-production only) ──────────────────
-        # Return a curated baseline when ALL live sources are unreachable in
-        # development/staging so the frontend shows meaningful context.
-        # In production we return [] as documented above so callers handle
-        # the no-data case explicitly and aren't misled by stale hardcoded data.
-        if not _is_production:
-            static = self._get_static_fallback_events()
-            if static:
-                logger.info(
-                    "GeopoliticalRiskProvider: serving %d static fallback events "
-                    "(live sources unreachable).",
-                    len(static),
-                )
-                return static
+        # ── 7. Static curated fallback ─────────────────────────────────────────
+        # When ALL live sources are unreachable (sandbox, airgap, proxy), return
+        # a curated baseline of well-documented ongoing conflicts and hotspots so
+        # the frontend shows meaningful geopolitical context instead of zeros.
+        static = self._get_static_fallback_events()
+        if static:
+            logger.info(
+                "GeopoliticalRiskProvider: serving %d static fallback events (live sources unreachable).",
+                len(static),
+            )
+            return static
         return []
 
     def _get_static_fallback_events(self) -> list["GeopoliticalEvent"]:
@@ -1707,27 +1784,51 @@ class WorldMonitorIntegration:
         # Crisis-specific zoomed views aligned with current major conflicts
         crisis_views = {
             "ukraine_russia": self.build_monitor_url(
-                view="europe", lat=49.0, lon=32.0, zoom=5.0, time_range="7d",
+                view="europe",
+                lat=49.0,
+                lon=32.0,
+                zoom=5.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "outages"],
             ),
             "israel_gaza": self.build_monitor_url(
-                view="mena", lat=31.5, lon=35.0, zoom=6.5, time_range="7d",
+                view="mena",
+                lat=31.5,
+                lon=35.0,
+                zoom=6.5,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "nuclear"],
             ),
             "red_sea_houthi": self.build_monitor_url(
-                view="mena", lat=15.0, lon=43.0, zoom=5.5, time_range="7d",
+                view="mena",
+                lat=15.0,
+                lon=43.0,
+                zoom=5.5,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "outages"],
             ),
             "taiwan_strait": self.build_monitor_url(
-                view="asia", lat=24.0, lon=120.0, zoom=6.0, time_range="7d",
+                view="asia",
+                lat=24.0,
+                lon=120.0,
+                zoom=6.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "nuclear"],
             ),
             "sudan_africa": self.build_monitor_url(
-                view="africa", lat=15.0, lon=30.0, zoom=5.0, time_range="7d",
+                view="africa",
+                lat=15.0,
+                lon=30.0,
+                zoom=5.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military"],
             ),
             "korea_peninsula": self.build_monitor_url(
-                view="asia", lat=38.0, lon=127.0, zoom=6.0, time_range="7d",
+                view="asia",
+                lat=38.0,
+                lon=127.0,
+                zoom=6.0,
+                time_range="7d",
                 layers=["conflicts", "hotspots", "military", "nuclear"],
             ),
         }

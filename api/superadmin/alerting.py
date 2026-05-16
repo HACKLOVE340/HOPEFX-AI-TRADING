@@ -34,13 +34,14 @@ from ._shared import _require_superadmin, _utcnow, _log_superadmin_action
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_RULES_KEY   = "superadmin:alerting:rules"
+_RULES_KEY = "superadmin:alerting:rules"
 _HISTORY_KEY = "superadmin:alerting:history"
 
 
 def _load_alert_rules() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_RULES_KEY)
@@ -111,6 +112,7 @@ def _load_alert_rules() -> list[dict]:
 def _save_alert_rules(rules: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_RULES_KEY, json.dumps(rules), ex=86400 * 90)
@@ -121,18 +123,22 @@ def _save_alert_rules(rules: list[dict]) -> None:
 def _append_alert_history(rule_id: str, rule_name: str, severity: str, detail: str) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_HISTORY_KEY)
             history = json.loads(raw) if raw else []
-            history.insert(0, {
-                "event_id": str(uuid.uuid4()),
-                "rule_id": rule_id,
-                "rule_name": rule_name,
-                "severity": severity,
-                "detail": detail,
-                "fired_at": _utcnow().isoformat(),
-            })
+            history.insert(
+                0,
+                {
+                    "event_id": str(uuid.uuid4()),
+                    "rule_id": rule_id,
+                    "rule_name": rule_name,
+                    "severity": severity,
+                    "detail": detail,
+                    "fired_at": _utcnow().isoformat(),
+                },
+            )
             rc.set(_HISTORY_KEY, json.dumps(history[:500]), ex=86400 * 30)
     except Exception:  # nosec B110
         pass
@@ -167,7 +173,7 @@ async def create_alert_rule(
     rules = _load_alert_rules()
     rules.append(rule)
     _save_alert_rules(rules)
-    await _log_superadmin_action(user.sub, "alert_rule_create", {"rule_id": rule_id})
+    _log_superadmin_action(user, "alert_rule_create", {"rule_id": rule_id})
     return {"ok": True, "rule": rule}
 
 
@@ -185,7 +191,7 @@ async def update_alert_rule(
                     r[k] = v
             r["updated_at"] = _utcnow().isoformat()
             _save_alert_rules(rules)
-            await _log_superadmin_action(user.sub, "alert_rule_update", {"rule_id": rule_id})
+            _log_superadmin_action(user, "alert_rule_update", {"rule_id": rule_id})
             return {"ok": True, "rule": r}
     raise HTTPException(status_code=404, detail="Alert rule not found")
 
@@ -201,7 +207,7 @@ async def delete_alert_rule(
     if len(rules) == before:
         raise HTTPException(status_code=404, detail="Alert rule not found")
     _save_alert_rules(rules)
-    await _log_superadmin_action(user.sub, "alert_rule_delete", {"rule_id": rule_id})
+    _log_superadmin_action(user, "alert_rule_delete", {"rule_id": rule_id})
     return {"ok": True}
 
 
@@ -216,10 +222,11 @@ async def silence_alert_rule(
     for r in rules:
         if r["rule_id"] == rule_id:
             from datetime import timedelta
+
             r["silenced_until"] = (_utcnow() + timedelta(minutes=duration_minutes)).isoformat()
             r["silenced_by"] = user.sub
             _save_alert_rules(rules)
-            await _log_superadmin_action(user.sub, "alert_rule_silence", {"rule_id": rule_id, "minutes": duration_minutes})
+            _log_superadmin_action(user, "alert_rule_silence", {"rule_id": rule_id, "minutes": duration_minutes})
             return {"ok": True, "silenced_until": r["silenced_until"]}
     raise HTTPException(status_code=404, detail="Alert rule not found")
 
@@ -238,6 +245,7 @@ async def test_alert_rule(
     sent_channels: list[str] = []
     try:
         from notifications import get_alert_engine
+
         engine = get_alert_engine()
         if engine:
             await engine.send_alert(
@@ -253,7 +261,7 @@ async def test_alert_rule(
     rule["last_fired"] = _utcnow().isoformat()
     _save_alert_rules(rules)
     _append_alert_history(rule_id, rule["name"], rule["severity"], "Test fire by superadmin")
-    await _log_superadmin_action(user.sub, "alert_rule_test", {"rule_id": rule_id})
+    _log_superadmin_action(user, "alert_rule_test", {"rule_id": rule_id})
     return {"ok": True, "sent_channels": sent_channels}
 
 
@@ -265,6 +273,7 @@ async def get_alert_history(
     history: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_HISTORY_KEY)
@@ -281,15 +290,17 @@ async def get_prometheus_status(
 ) -> dict:
     """Return Prometheus scrape status and alert manager connectivity."""
     import os
+
     prom_url = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
-    am_url   = os.getenv("ALERTMANAGER_URL", "http://localhost:9093")
+    am_url = os.getenv("ALERTMANAGER_URL", "http://localhost:9093")
 
     prom_ok = False
-    am_ok   = False
+    am_ok = False
     prom_version = "unknown"
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=3) as client:
             r = await client.get(f"{prom_url}/api/v1/status/buildinfo")
             if r.status_code == 200:
@@ -300,6 +311,7 @@ async def get_prometheus_status(
 
     try:
         import httpx
+
         async with httpx.AsyncClient(timeout=3) as client:
             r = await client.get(f"{am_url}/-/healthy")
             am_ok = r.status_code == 200
@@ -325,6 +337,7 @@ async def get_alert_channels(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     import os
+
     channels = [
         {
             "channel_id": "email",

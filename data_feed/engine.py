@@ -64,9 +64,22 @@ import yaml
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
 
-# Plausible XAUUSD price range used to reject obviously bad ticks.
-_PRICE_MIN = 1_000.0
-_PRICE_MAX = 10_000.0
+# Default plausible price bounds per symbol.  Overridden by
+# ``data_feed.price_bounds.<SYMBOL>.min/max`` in config/data_feed.yaml.
+# Keys are canonical uppercase symbols (e.g. "XAUUSD", "XAGUSD").
+_DEFAULT_PRICE_BOUNDS: dict[str, tuple[float, float]] = {
+    "XAUUSD": (1_000.0, 10_000.0),  # Gold / USD
+    "XAGUSD": (5.0, 500.0),  # Silver / USD
+    "XPTUSD": (200.0, 5_000.0),  # Platinum / USD
+    "XPDUSD": (200.0, 10_000.0),  # Palladium / USD
+    "EURUSD": (0.5, 2.5),
+    "GBPUSD": (0.5, 3.0),
+    "USDJPY": (50.0, 250.0),
+    "BTCUSD": (1_000.0, 1_000_000.0),
+}
+# Fallback bounds used when a symbol is not in the table above.
+_FALLBACK_PRICE_MIN = 0.0
+_FALLBACK_PRICE_MAX = float("inf")
 
 # How long (seconds) a circuit-breaker stays open before re-trying.
 _CIRCUIT_BREAKER_COOLDOWN = 60
@@ -188,6 +201,63 @@ class ProductionDataEngine:
         self._raw_config = self._load_config(config_path)
         self._cfg = self._raw_config["data_feed"]
 
+        # Per-symbol price bounds — loaded from config, falling back to the
+        # built-in table.  Bounds are keyed by canonical MT5 form (no separator,
+        # uppercase) so "XAU_USD", "XAU/USD", and "XAUUSD" all resolve to the
+        # same entry.  utils.symbol.canonical handles the normalisation; the
+        # inline fallback strips separators manually when the module is absent.
+        self._price_bounds: dict[str, tuple[float, float]] = dict(_DEFAULT_PRICE_BOUNDS)
+        try:
+            from utils.symbol import canonical as _canonical_sym_bounds
+        except ImportError:
+
+            def _canonical_sym_bounds(s: str) -> str:  # type: ignore[misc]
+                return s.upper().replace("/", "").replace("_", "").replace(" ", "").replace("-", "")
+
+        cfg_bounds = self._cfg.get("price_bounds", {})
+        for sym, bounds in cfg_bounds.items():
+            sym_canonical = _canonical_sym_bounds(sym)
+            try:
+                lo = float(bounds.get("min", _FALLBACK_PRICE_MIN))
+                hi = float(bounds.get("max", _FALLBACK_PRICE_MAX))
+                if lo >= hi:
+                    logger.warning(
+                        "Price bounds config for %s has min (%.2f) >= max (%.2f) — using defaults",
+                        sym_canonical,
+                        lo,
+                        hi,
+                    )
+                    continue
+                self._price_bounds[sym_canonical] = (lo, hi)
+                logger.debug(
+                    "Price bounds loaded from config: %s [%.2f, %.2f] (raw key: %r)",
+                    sym_canonical,
+                    lo,
+                    hi,
+                    sym,
+                )
+            except (TypeError, ValueError) as exc:
+                logger.warning("Invalid price_bounds config for %s: %s — using defaults", sym, exc)
+
+        # Active symbol — normalised to canonical MT5 form (no separator).
+        # Uses utils.symbol.canonical so "XAU_USD", "XAU/USD", "GOLD" etc.
+        # all resolve to "XAUUSD" for price-bounds lookups.
+        try:
+            from utils.symbol import canonical as _canonical_sym
+
+            self._symbol: str = _canonical_sym(self._cfg.get("symbol", "XAUUSD"))
+        except ImportError:
+            self._symbol = self._cfg.get("symbol", "XAUUSD").upper().replace("_", "").replace("/", "")
+        self._price_min, self._price_max = self._price_bounds.get(
+            self._symbol, (_FALLBACK_PRICE_MIN, _FALLBACK_PRICE_MAX)
+        )
+        logger.info(
+            "Price bounds for %s: [%.2f, %.2f]",
+            self._symbol,
+            self._price_min,
+            self._price_max,
+        )
+
         # State
         self.current_price: float | None = None
         self.last_update: datetime | None = None
@@ -204,12 +274,10 @@ class ProductionDataEngine:
         self._circuit_open_at: dict[str, datetime | None] = dict.fromkeys(self._fallback_order)
 
         # Source health scores (adaptive polling + failover hysteresis)
-        self._health: dict[str, _SourceHealth] = {
-            p: _SourceHealth(p) for p in self._fallback_order
-        }
+        self._health: dict[str, _SourceHealth] = {p: _SourceHealth(p) for p in self._fallback_order}
         # Hysteresis counters for failover/recovery
-        self._failover_count: int = 0   # consecutive polls below FAILOVER_THRESHOLD
-        self._recovery_count: int = 0   # consecutive polls above RECOVERY_THRESHOLD
+        self._failover_count: int = 0  # consecutive polls below FAILOVER_THRESHOLD
+        self._recovery_count: int = 0  # consecutive polls above RECOVERY_THRESHOLD
         self._primary_provider: str = self._cfg.get("primary", self._fallback_order[0])
 
         # HTTP session (created in start())
@@ -282,7 +350,8 @@ class ProductionDataEngine:
                     self._circuit_open_at[provider] = datetime.now(tz=UTC)
                     logger.warning(
                         "Circuit breaker OPEN for provider '%s' after %d failures",
-                        provider, self._fail_count[provider],
+                        provider,
+                        self._fail_count[provider],
                     )
                 # Hysteresis-based failover
                 self._check_failover(provider)
@@ -305,7 +374,10 @@ class ProductionDataEngine:
                 if next_provider != provider:
                     logger.warning(
                         "Hysteresis failover: %s (score=%.2f) → %s after %d degraded polls",
-                        provider, health.score, next_provider, self._failover_count,
+                        provider,
+                        health.score,
+                        next_provider,
+                        self._failover_count,
                     )
                     self.active_provider = next_provider
                     self._failover_count = 0
@@ -325,7 +397,9 @@ class ProductionDataEngine:
             if self._recovery_count >= _HYSTERESIS_COUNT:
                 logger.info(
                     "Hysteresis recovery: returning to primary %s (score=%.2f) after %d healthy polls",
-                    self._primary_provider, primary_health.score, self._recovery_count,
+                    self._primary_provider,
+                    primary_health.score,
+                    self._recovery_count,
                 )
                 self.active_provider = self._primary_provider
                 self._recovery_count = 0
@@ -383,13 +457,20 @@ class ProductionDataEngine:
         for attempt in range(1, max_retries + 1):
             try:
                 price = await self._call_rest_provider(provider)
-                if price and _PRICE_MIN < price < _PRICE_MAX:
+                if price and self._price_min < price < self._price_max:
                     self._record_price(price)
                     self._fail_count[provider] = 0
                     await self._broadcast(price)
                     return True
                 # Out-of-range price — log and retry without double-penalising health
-                logger.debug("Provider '%s' returned out-of-range price: %s", provider, price)
+                logger.debug(
+                    "Provider '%s' returned out-of-range price for %s: %s (bounds: [%.2f, %.2f])",
+                    provider,
+                    self._symbol,
+                    price,
+                    self._price_min,
+                    self._price_max,
+                )
             except TimeoutError:
                 logger.warning(
                     "Provider '%s' timed out (attempt %d/%d)",
@@ -454,7 +535,7 @@ class ProductionDataEngine:
                 return False
 
         price = await self._mt5_backup.get_price()
-        if price and _PRICE_MIN < price < _PRICE_MAX:
+        if price and self._price_min < price < self._price_max:
             self._record_price(price)
             await self._broadcast(price)
             return True

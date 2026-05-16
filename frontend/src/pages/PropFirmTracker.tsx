@@ -16,6 +16,7 @@ import {
 import { propFirmExtApi } from '../hooks/useApi';
 import { usePolling } from '../hooks/usePolling';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
+import { extractApiError } from '../lib/utils';
 
 interface PropFirmStatus {
   daily_loss_pct: number;
@@ -175,10 +176,10 @@ const PropFirmTracker: React.FC = () => {
       : '#86efac',
   };
 
-  const errorMsg = error instanceof Error ? error.message : error ? String(error) : null;
+  const errorMsg = error ? extractApiError(error, 'An error occurred') : null;
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <span style={{ fontSize: 28 }}>🛡️</span>
         <h1 style={s.title}>Prop Firm Challenge Tracker</h1>

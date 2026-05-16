@@ -23,10 +23,11 @@ def create_replay_router(engine: "ChartReplayEngine"):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/replay", tags=["Replay"])
+    router = APIRouter(prefix="/api/replay", tags=["Replay"], dependencies=[Depends(get_current_user)])
 
     class CreateSessionRequest(BaseModel):
         symbol: str = "XAUUSD"

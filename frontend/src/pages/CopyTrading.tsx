@@ -11,12 +11,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { copyTradingApi } from '../hooks/useApi';
-
-function extractApiError(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: string } } })
-    ?.response?.data?.detail;
-  return detail ?? fallback;
-}
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -208,7 +203,7 @@ const CopyTrading: React.FC = () => {
     : '0.00';
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Copy Trading Marketplace</h1>

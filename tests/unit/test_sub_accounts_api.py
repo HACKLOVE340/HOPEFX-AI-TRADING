@@ -67,10 +67,12 @@ def client(db_store: dict[str, Any]) -> TestClient:
         patch("api.db_store.db_get", side_effect=_db_get),
         patch("api.db_store.db_set", side_effect=_db_set),
         patch("api.db_store.db_delete", side_effect=_db_delete),
-        # Force db_store path: returning None from these makes both create and
-        # list fall back to the in-memory db_store, avoiding real-DB contamination.
+        # Force the db_store fallback path by making all SQLAlchemy helpers
+        # return None — this keeps tests hermetic and independent of any
+        # SQLite/PostgreSQL state on the test machine.
         patch("api.accounts._db_list_sub_accounts", return_value=None),
         patch("api.accounts._db_create_sub_account", return_value=None),
+        patch("api.accounts._db_update_sub_account", return_value=None),
     ):
         yield TestClient(app, raise_server_exceptions=True)
 
@@ -230,7 +232,7 @@ class TestUpdateSubAccount:
 
 class TestDeleteSubAccount:
     def test_delete_one_of_two_accounts(self, client: TestClient):
-        acc1 = _create_account(client, "Keep")
+        _acc1 = _create_account(client, "Keep")
         acc2 = _create_account(client, "Remove")
         resp = client.delete(f"/api/accounts/sub-accounts/{acc2['account_id']}")
         assert resp.status_code == 204

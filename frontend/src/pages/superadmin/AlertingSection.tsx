@@ -8,6 +8,7 @@ import {
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { AlertRule } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -53,7 +54,7 @@ const AlertingSection: React.FC = () => {
       setPromStatus(pRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load alerting data');
+      setError(extractApiError(e, 'Failed to load alerting data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, []);
 
@@ -67,7 +68,7 @@ const AlertingSection: React.FC = () => {
       await superadminApi.updateAlertRule(rule.rule_id, { enabled: !rule.enabled });
       setRules(prev => prev.map(r => r.rule_id === rule.rule_id ? { ...r, enabled: !r.enabled } : r));
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Toggle failed');
+      setMsg(extractApiError(e, 'Toggle failed'));
     } finally { setBusy(null); }
   };
 
@@ -78,7 +79,7 @@ const AlertingSection: React.FC = () => {
       await superadminApi.silenceAlert(silenceId, parseInt(silenceDuration));
       setMsg(`Alert silenced for ${silenceDuration} minutes`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Silence failed');
+      setMsg(extractApiError(e, 'Silence failed'));
     } finally { setBusy(null); setSilenceId(null); }
   };
 
@@ -97,7 +98,7 @@ const AlertingSection: React.FC = () => {
       setShowCreate(false);
       setMsg('Alert rule created');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Create failed');
+      setMsg(extractApiError(e, 'Create failed'));
     } finally { setBusy(null); }
   };
 
@@ -108,7 +109,7 @@ const AlertingSection: React.FC = () => {
       setRules(prev => prev.filter(r => r.rule_id !== ruleId));
       setMsg('Rule deleted');
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Delete failed');
+      setMsg(extractApiError(e, 'Delete failed'));
     } finally { setBusy(null); setDeleteConfirm(null); }
   };
 

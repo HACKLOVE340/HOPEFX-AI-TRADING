@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { FlaskConical, Play, TrendingUp, TrendingDown, Minus } from 'lucide-react'
-import axios from 'axios'
+import { api } from '../hooks/useApi'
 
 interface StrategyResult {
   name: string
@@ -37,7 +37,7 @@ export default function ABTesting() {
 
   // Load existing test results on mount
   useEffect(() => {
-    axios.get('/api/advanced/ab-tests')
+    api.get('/api/advanced/ab-tests')
       .then(r => {
         const data = r.data.tests ?? r.data ?? []
         if (Array.isArray(data) && data.length > 0) {
@@ -57,7 +57,7 @@ export default function ABTesting() {
     setLoading(true)
     setError(null)
     try {
-      const res = await axios.post('/api/advanced/ab-test', {
+      const res = await api.post('/api/advanced/ab-test', {
         strategy_a: selected[0],
         strategy_b: selected[1],
         symbol: 'XAU/USD',

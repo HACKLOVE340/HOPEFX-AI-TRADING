@@ -116,10 +116,10 @@ Tracks model health and prediction quality:
 
 | Panel | Metric | Description |
 |-------|--------|-------------|
-| Model Accuracy | `hopefx_ml_accuracy` | OOS accuracy (target: 66.4%) |
+| Model Accuracy | `hopefx_ml_accuracy` | OOS accuracy (current: 56.5%) |
 | Prediction Confidence | `hopefx_ml_confidence_avg` | Average confidence score |
 | Abstain Rate | `hopefx_ml_abstain_rate` | % of bars where model abstains |
-| Feature Count | `hopefx_ml_feature_count` | Active features (target: 176) |
+| Feature Count | `hopefx_ml_feature_count` | Active features (current: 193) |
 | Online Learner Updates | `hopefx_online_learner_updates_total` | Hourly update count |
 | Regime | `hopefx_market_regime` | Current regime (0=ranging, 1=trending, 2=volatile) |
 | Fallback Active | `hopefx_ml_fallback_active` | 1 if fallback model is in use |

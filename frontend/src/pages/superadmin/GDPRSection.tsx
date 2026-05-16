@@ -3,11 +3,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { superadminApi } from '../../hooks/useApi';
 import { usePolling } from '../../hooks/usePolling';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, StatusBadge, ActionBtn, Select, Input,
   KpiTile, ErrorState, LoadingRows, ConfirmDialog,
 } from './ui';
 import type { DataSubjectRequest } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const fmtDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -55,8 +57,10 @@ const GDPRSection: React.FC = () => {
         superadminApi.retentionPolicies(),
       ]);
       if (!mountedRef.current) return;
-      setRequests(rRes.data.requests ?? rRes.data);
-      const p: RetentionPolicy[] = pRes.data.policies ?? pRes.data;
+      const reqRaw = rRes.data.requests ?? rRes.data;
+      setRequests(Array.isArray(reqRaw) ? reqRaw : []);
+      const polRaw = pRes.data.policies ?? pRes.data;
+      const p: RetentionPolicy[] = Array.isArray(polRaw) ? polRaw : [];
       setPolicies(p);
       // Initialise edit map with current values
       const edits: Record<string, number> = {};
@@ -64,7 +68,7 @@ const GDPRSection: React.FC = () => {
       setPolicyEdits(edits);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load GDPR data');
+      setError(extractApiError(e, 'Failed to load GDPR data'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [statusFilter, typeFilter]);
 
@@ -89,7 +93,7 @@ const GDPRSection: React.FC = () => {
       setMsg(`Request ${action === 'approve' ? 'approved' : 'rejected'}`);
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Action failed');
+      setMsg(extractApiError(e, 'Action failed'));
     } finally { setBusy(null); setConfirm(null); }
   };
 
@@ -102,7 +106,7 @@ const GDPRSection: React.FC = () => {
       setEraseUserId(''); setEraseReason('');
       await load();
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Erasure failed');
+      setMsg(extractApiError(e, 'Erasure failed'));
     } finally { setBusy(null); setEraseConfirm(false); }
   };
 
@@ -112,7 +116,7 @@ const GDPRSection: React.FC = () => {
       await superadminApi.gdprExportUser(userId);
       setMsg(`Export queued for ${userId} — user will receive download link`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Export failed');
+      setMsg(extractApiError(e, 'Export failed'));
     } finally { setBusy(null); }
   };
 
@@ -126,7 +130,7 @@ const GDPRSection: React.FC = () => {
       // Update local state
       setPolicies(prev => prev.map(p => p.data_type === dataType ? { ...p, retention_days: days } : p));
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Update failed');
+      setMsg(extractApiError(e, 'Update failed'));
     } finally { setBusy(null); }
   };
 
@@ -325,7 +329,7 @@ const GDPRSection: React.FC = () => {
           {consentLoading ? (
             <LoadingRows rows={4} />
           ) : consentLog.length === 0 ? (
-            <div style={{ color: '#475569', fontSize: 13, textAlign: 'center', padding: 24 }}>No consent events found.</div>
+            <EmptyState compact icon="📜" title="No consent events found" description="User consent records will appear here as users accept or withdraw consent." />
           ) : (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>

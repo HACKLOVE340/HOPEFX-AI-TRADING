@@ -3,8 +3,23 @@ services:
     name: "Redis"
     description: "Redis pub/sub and session cache"
     commands:
-      start: redis-server --daemonize no --loglevel warning --bind 127.0.0.1
-      ready: redis-cli ping
+      # No password in dev — REDIS_URL in backend uses redis://127.0.0.1:6379/0 (no auth).
+      # maxmemory 256mb prevents OOM on dev machines; allkeys-lru matches production policy.
+      start: |
+        which redis-server || (apt-get update -qq && apt-get install -y redis-server -qq)
+        # Stop any existing instance so we own the process
+        redis-cli shutdown nosave 2>/dev/null || true
+        sleep 1
+        redis-server \
+          --daemonize no \
+          --loglevel warning \
+          --bind 127.0.0.1 \
+          --maxmemory 256mb \
+          --maxmemory-policy allkeys-lru \
+          --tcp-keepalive 60 \
+          --timeout 300 \
+          --save ""
+      ready: redis-cli -h 127.0.0.1 ping
 
   backend:
     name: "FastAPI Backend"
@@ -13,7 +28,14 @@ services:
       start: |
         cd /workspaces/HOPEFX-AI-TRADING
         [ -f .env ] || python3 scripts/bootstrap_dev.py
-        OTEL_ENABLED=false APP_ENV=development REDIS_URL=redis://127.0.0.1:6379/0 REDIS_FORCE_TLS=false REDIS_PASSWORD= python3 run.py --mode api
+        export OTEL_ENABLED=false
+        export APP_ENV=development
+        export REDIS_URL=redis://127.0.0.1:6379/0
+        export REDIS_FORCE_TLS=false
+        export REDIS_PASSWORD=
+        export IS_FORCE_TLS=false
+        export STANDBY_ROLE=primary
+        python3 run.py --mode api
       ready: curl -sf http://localhost:8000/api/health
 
   frontend:

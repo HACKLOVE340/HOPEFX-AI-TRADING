@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -64,8 +65,8 @@ def _redis():
     try:
         import redis as _r
         import os
-        c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"),
-                        socket_connect_timeout=1, socket_timeout=1)
+
+        c = _r.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"), socket_connect_timeout=1, socket_timeout=1)
         c.ping()
         return c
     except Exception:
@@ -154,20 +155,99 @@ def _seed_default_rooms() -> None:
         return
     now = datetime.now(UTC).isoformat()
     defaults = [
-        {"id": "general", "name": "General", "description": "General trading discussion",
-         "type": "public", "member_count": 0, "pinned": True, "created_at": now, "last_message_at": now},
-        {"id": "signals", "name": "Signals", "description": "AI signal alerts and discussion",
-         "type": "public", "member_count": 0, "pinned": True, "created_at": now, "last_message_at": now},
-        {"id": "gold-xauusd", "name": "Gold / XAUUSD", "description": "Gold trading strategies",
-         "type": "public", "member_count": 0, "pinned": False, "created_at": now, "last_message_at": now},
-        {"id": "support", "name": "Support", "description": "Platform support and help",
-         "type": "public", "member_count": 0, "pinned": False, "created_at": now, "last_message_at": now},
+        {
+            "id": "general",
+            "name": "General",
+            "description": "General trading discussion",
+            "type": "public",
+            "member_count": 0,
+            "pinned": True,
+            "created_at": now,
+            "last_message_at": now,
+        },
+        {
+            "id": "signals",
+            "name": "Signals",
+            "description": "AI signal alerts and discussion",
+            "type": "public",
+            "member_count": 0,
+            "pinned": True,
+            "created_at": now,
+            "last_message_at": now,
+        },
+        {
+            "id": "gold-xauusd",
+            "name": "Gold / XAUUSD",
+            "description": "Gold trading strategies",
+            "type": "public",
+            "member_count": 0,
+            "pinned": False,
+            "created_at": now,
+            "last_message_at": now,
+        },
+        {
+            "id": "support",
+            "name": "Support",
+            "description": "Platform support and help",
+            "type": "public",
+            "member_count": 0,
+            "pinned": False,
+            "created_at": now,
+            "last_message_at": now,
+        },
     ]
     for d in defaults:
         _save_room(d)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
+
+_REACTIONS_PREFIX = "hopefx:community:reactions:"
+_READ_PREFIX = "hopefx:community:read:"
+_MEM_REACTIONS: dict[str, dict[str, list[str]]] = {}  # msg_id -> emoji -> [user_ids]
+_MEM_READ: dict[str, set[str]] = {}  # room_id -> set of user_ids
+
+
+def _get_reactions(msg_id: str) -> dict[str, list[str]]:
+    r = _redis()
+    if r:
+        try:
+            raw = r.hgetall(f"{_REACTIONS_PREFIX}{msg_id}")
+            return {k.decode(): json.loads(v) for k, v in raw.items()}
+        except Exception:  # nosec B110
+            pass
+    return dict(_MEM_REACTIONS.get(msg_id, {}))
+
+
+def _save_reaction(msg_id: str, emoji: str, user_ids: list[str]) -> None:
+    r = _redis()
+    if r:
+        try:
+            if user_ids:
+                r.hset(f"{_REACTIONS_PREFIX}{msg_id}", emoji, json.dumps(user_ids))
+            else:
+                r.hdel(f"{_REACTIONS_PREFIX}{msg_id}", emoji)
+            return
+        except Exception:  # nosec B110
+            pass
+    if msg_id not in _MEM_REACTIONS:
+        _MEM_REACTIONS[msg_id] = {}
+    if user_ids:
+        _MEM_REACTIONS[msg_id][emoji] = user_ids
+    else:
+        _MEM_REACTIONS[msg_id].pop(emoji, None)
+
+
+def _mark_room_read(room_id: str, user_id: str) -> None:
+    r = _redis()
+    if r:
+        try:
+            r.sadd(f"{_READ_PREFIX}{room_id}", user_id)
+            return
+        except Exception:  # nosec B110
+            pass
+    _MEM_READ.setdefault(room_id, set()).add(user_id)
+
 
 class CreateRoomBody(BaseModel):
     name: str
@@ -177,7 +257,7 @@ class CreateRoomBody(BaseModel):
 
 class SendMessageBody(BaseModel):
     content: str | None = None  # canonical field name
-    text: str | None = None     # legacy alias — kept for backward compat
+    text: str | None = None  # legacy alias — kept for backward compat
     attachments: list[str] | None = None
 
     @property
@@ -190,6 +270,7 @@ class SendMessageBody(BaseModel):
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/rooms")
 async def list_rooms(user: TokenPayload = Depends(get_current_user)) -> dict:
@@ -263,6 +344,7 @@ async def send_message(
     # Push to WebSocket subscribers in this room (non-blocking)
     try:
         import asyncio
+
         asyncio.ensure_future(_ws_broadcast(room_id, {"type": "message", "message": msg}))
     except Exception:  # nosec B110
         pass
@@ -291,6 +373,52 @@ async def delete_message(
     else:
         _MEM_MSGS[room_id] = new_msgs
     return {"success": True}
+
+
+@router.post("/rooms/{room_id}/messages/{msg_id}/reactions")
+async def add_reaction(
+    room_id: str,
+    msg_id: str,
+    body: dict,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Add an emoji reaction to a message. Idempotent — adding the same emoji twice is a no-op."""
+    emoji = (body.get("emoji") or "").strip()
+    if not emoji:
+        raise HTTPException(status_code=422, detail="emoji is required")
+    reactions = _get_reactions(msg_id)
+    users = reactions.get(emoji, [])
+    if user.sub not in users:
+        users = users + [user.sub]
+        _save_reaction(msg_id, emoji, users)
+    return {"msg_id": msg_id, "emoji": emoji, "count": len(users), "reactions": {**reactions, emoji: users}}
+
+
+@router.delete("/rooms/{room_id}/messages/{msg_id}/reactions/{emoji}")
+async def remove_reaction(
+    room_id: str,
+    msg_id: str,
+    emoji: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Remove the current user's emoji reaction from a message."""
+    reactions = _get_reactions(msg_id)
+    users = [u for u in reactions.get(emoji, []) if u != user.sub]
+    _save_reaction(msg_id, emoji, users)
+    updated = {**reactions, emoji: users}
+    if not users:
+        updated.pop(emoji, None)
+    return {"msg_id": msg_id, "emoji": emoji, "count": len(users), "reactions": updated}
+
+
+@router.post("/rooms/{room_id}/read")
+async def mark_room_read(
+    room_id: str,
+    user: TokenPayload = Depends(get_current_user),
+) -> dict:
+    """Mark all messages in a room as read for the current user."""
+    _mark_room_read(room_id, user.sub)
+    return {"room_id": room_id, "read": True}
 
 
 @router.get("/dm/{target_user_id}")
@@ -325,6 +453,7 @@ async def send_dm(
 @router.get("/online")
 async def online_users(user: TokenPayload = Depends(get_current_user)) -> dict:
     import time as _time
+
     now = _time.time()
     r = _redis()
     if r:
@@ -357,14 +486,34 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
     """
     import asyncio
 
-    # Auth — token passed as query param (same pattern as /ws/live)
+    # Auth — token passed as query param (same pattern as /ws/live).
+    # FIX: invalid or missing tokens must reject the connection, not silently
+    # allow unauthenticated access.  Chat rooms contain user-generated content
+    # that should only be visible to authenticated members.
     token_param = websocket.query_params.get("token", "")
-    if token_param:
-        try:
-            from api.auth import decode_access_token
-            decode_access_token(token_param)
-        except Exception:  # nosec B110
-            pass  # allow unauthenticated reads; writes gated via REST
+    _ws_chat_auth_required: bool = os.getenv("WS_AUTH_REQUIRED", "true").lower() == "true"
+
+    if _ws_chat_auth_required:
+        _chat_user_id: str | None = None
+        if token_param:
+            try:
+                from api.auth import decode_access_token
+
+                _payload = decode_access_token(token_param)
+                _chat_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
+            except Exception:
+                _chat_user_id = None
+
+        if _chat_user_id is None:
+            # Must accept before closing — FastAPI requires accept() before close()
+            await websocket.accept()
+            await websocket.send_text(
+                json.dumps({"type": "error", "code": "AUTH_REQUIRED", "message": "Valid JWT required"})
+            )
+            await websocket.close(code=4001)
+            return
+    else:
+        _chat_user_id = "anonymous"
 
     await websocket.accept()
 

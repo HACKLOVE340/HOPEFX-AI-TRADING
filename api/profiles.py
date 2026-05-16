@@ -7,6 +7,7 @@
 Trader Profile API
 
 Endpoints:
+  GET  /api/profiles              — paginated list of public profiles
   GET  /api/profiles/me           — current user's profile
   PUT  /api/profiles/me           — update current user's profile
   GET  /api/profiles/{trader_id}  — public profile by trader_id
@@ -78,6 +79,45 @@ def _get_or_create(user: TokenPayload) -> TraderProfile:
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.get("")
+async def list_profiles(
+    limit: int = 20,
+    offset: int = 0,
+    search: str | None = None,
+    sort_by: str = "total_pnl",
+) -> dict:
+    """
+    Return a paginated list of public trader profiles.
+
+    Query params:
+      limit   — max results (default 20, max 100)
+      offset  — pagination offset
+      search  — filter by username prefix (case-insensitive)
+      sort_by — field to sort by: total_pnl | win_rate | total_trades | sharpe_ratio
+    """
+    limit = min(max(1, limit), 100)
+    all_profiles = _manager.list_profiles()
+    public = [p for p in all_profiles if getattr(p, "is_public", True)]
+
+    if search:
+        q = search.lower()
+        public = [p for p in public if p.username.lower().startswith(q)]
+
+    _sort_fields = {"total_pnl", "win_rate", "total_trades", "sharpe_ratio"}
+    if sort_by not in _sort_fields:
+        sort_by = "total_pnl"
+
+    public.sort(key=lambda p: getattr(p, sort_by, 0) or 0, reverse=True)
+
+    page = public[offset : offset + limit]
+    return {
+        "profiles": [_profile_to_response(p) for p in page],
+        "total": len(public),
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/me")
@@ -157,7 +197,6 @@ async def unfollow_trader(
     return {"unfollowed": True, "trader_id": trader_id}
 
 
-
 @router.get("/{trader_id}/followers")
 async def get_followers(trader_id: str):
     """Return follower count for a trader."""
@@ -179,6 +218,7 @@ async def get_trader_strategies(trader_id: str):
     """Return public strategies for a trader."""
     try:
         from api.db_store import db_get
+
         strategies = db_get(f"strategies:{trader_id}") or []
         public = [s for s in strategies if s.get("is_public", False)]
         return {"strategies": public, "total": len(public)}
@@ -192,9 +232,14 @@ async def get_trader_stats(trader_id: str):
     profile = _manager.get_profile(trader_id)
     if not profile:
         return {
-            "trader_id": trader_id, "total_trades": 0, "win_rate": 0.0,
-            "total_return_pct": 0.0, "sharpe_ratio": 0.0,
-            "max_drawdown_pct": 0.0, "followers": 0, "following": 0,
+            "trader_id": trader_id,
+            "total_trades": 0,
+            "win_rate": 0.0,
+            "total_return_pct": 0.0,
+            "sharpe_ratio": 0.0,
+            "max_drawdown_pct": 0.0,
+            "followers": 0,
+            "following": 0,
         }
     return {
         "trader_id": trader_id,
@@ -212,6 +257,7 @@ async def get_trader_stats(trader_id: str):
 async def upload_avatar(user: TokenPayload = Depends(get_current_user)):
     """Avatar upload — returns a generated avatar URL."""
     import hashlib
+
     avatar_hash = hashlib.md5(user.sub.encode()).hexdigest()  # nosec B324
     avatar_url = f"https://www.gravatar.com/avatar/{avatar_hash}?d=identicon&s=200"
     _manager.update_profile(user.sub, avatar_url=avatar_url)

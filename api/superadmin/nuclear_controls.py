@@ -38,19 +38,23 @@ _HEDGE_STATE_KEY = "superadmin:nuclear:hedge"
 
 def _get_kill_switch():
     """Return the global KillSwitch instance if available."""
-    # Use module attribute access (not 'from … import') so we always read
-    # the current value of app_state, not the None captured at import time.
     try:
-        import api.admin as _admin_mod
-        state = getattr(_admin_mod, "app_state", None)
-        if state and hasattr(state, "kill_switch"):
-            return state.kill_switch
-    except Exception:  # nosec B110
-        pass
-    try:
-        import kill_switch as _ks_mod
-        if hasattr(_ks_mod, "_instance"):
-            return _ks_mod._instance
+        # Try to get the singleton from app state
+        try:
+            from api.admin import app_state
+
+            if app_state and hasattr(app_state, "kill_switch"):
+                return app_state.kill_switch
+        except Exception:  # nosec B110
+            pass
+        # Fall back to module-level singleton
+        try:
+            import kill_switch as _ks_mod
+
+            if hasattr(_ks_mod, "_instance"):
+                return _ks_mod._instance
+        except Exception:  # nosec B110
+            pass
     except Exception:  # nosec B110
         pass
     return None
@@ -59,16 +63,20 @@ def _get_kill_switch():
 def _append_nuclear_log(event: str, detail: dict, actor: str) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_NUCLEAR_LOG_KEY)
             log = json.loads(raw) if raw else []
-            log.insert(0, {
-                "event": event,
-                "detail": detail,
-                "actor": actor,
-                "timestamp": _utcnow().isoformat(),
-            })
+            log.insert(
+                0,
+                {
+                    "event": event,
+                    "detail": detail,
+                    "actor": actor,
+                    "timestamp": _utcnow().isoformat(),
+                },
+            )
             rc.set(_NUCLEAR_LOG_KEY, json.dumps(log[:200]), ex=86400 * 90)
     except Exception:  # nosec B110
         pass
@@ -90,6 +98,7 @@ async def get_nuclear_status(
     hedge_params: dict = {}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_HEDGE_STATE_KEY)
@@ -104,6 +113,7 @@ async def get_nuclear_status(
     risk_override: dict = {}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get("superadmin:nuclear:risk_override")
@@ -142,6 +152,7 @@ async def nuclear_halt(
     # Also set via Redis so all pods pick it up
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set("kill_switch:active", "1", ex=86400)
@@ -150,7 +161,26 @@ async def nuclear_halt(
         pass
 
     _append_nuclear_log("HALT", {"reason": reason}, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_halt", {"reason": reason})
+    _log_superadmin_action(user, "nuclear_halt", {"reason": reason})
+
+    # Broadcast nuclear_halt to all connected WebSocket clients so the
+    # frontend can display the emergency halt banner immediately.
+    try:
+        from api.ws_live import manager as _ws_manager
+        import asyncio as _asyncio
+
+        _halt_msg = {
+            "type": "nuclear_halt",
+            "data": {
+                "reason": reason,
+                "activated_by": user.sub,
+                "timestamp": _utcnow().isoformat(),
+            },
+        }
+        _asyncio.create_task(_ws_manager.broadcast("system", _halt_msg))
+    except Exception as _ws_err:
+        logger.debug("nuclear_halt WS broadcast skipped: %s", _ws_err)
+
     return {"ok": True, "kill_switch_active": True, "reason": reason}
 
 
@@ -170,6 +200,7 @@ async def nuclear_resume(
 
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.delete("kill_switch:active")
@@ -178,7 +209,26 @@ async def nuclear_resume(
         pass
 
     _append_nuclear_log("RESUME", {}, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_resume", {})
+    _log_superadmin_action(user, "nuclear_resume", {})
+
+    # Broadcast system_event so the frontend clears the halt banner.
+    try:
+        from api.ws_live import manager as _ws_manager
+        import asyncio as _asyncio
+
+        _resume_msg = {
+            "type": "system_event",
+            "data": {
+                "event": "nuclear_resume",
+                "message": "Trading resumed by superadmin.",
+                "activated_by": user.sub,
+                "timestamp": _utcnow().isoformat(),
+            },
+        }
+        _asyncio.create_task(_ws_manager.broadcast("system", _resume_msg))
+    except Exception as _ws_err:
+        logger.debug("nuclear_resume WS broadcast skipped: %s", _ws_err)
+
     return {"ok": True, "kill_switch_active": False}
 
 
@@ -189,22 +239,30 @@ async def activate_hedge(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
-            rc.set(_HEDGE_STATE_KEY, json.dumps({"active": True, "params": body, "activated_at": _utcnow().isoformat(), "activated_by": user.sub}), ex=86400)
+            rc.set(
+                _HEDGE_STATE_KEY,
+                json.dumps(
+                    {"active": True, "params": body, "activated_at": _utcnow().isoformat(), "activated_by": user.sub}
+                ),
+                ex=86400,
+            )
     except Exception:  # nosec B110
         pass
 
     # Attempt to place hedge via risk orchestrator
     try:
         from risk.orchestrator import risk_orchestrator
+
         if hasattr(risk_orchestrator, "activate_hedge"):
             await risk_orchestrator.activate_hedge(**body)
     except Exception as exc:
         logger.warning("Hedge activate via orchestrator: %s", exc)
 
     _append_nuclear_log("HEDGE_ACTIVATE", body, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_hedge_activate", body)
+    _log_superadmin_action(user, "nuclear_hedge_activate", body)
     return {"ok": True, "hedge_active": True}
 
 
@@ -214,6 +272,7 @@ async def deactivate_hedge(
 ) -> dict:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_HEDGE_STATE_KEY, json.dumps({"active": False}), ex=86400)
@@ -222,13 +281,14 @@ async def deactivate_hedge(
 
     try:
         from risk.orchestrator import risk_orchestrator
+
         if hasattr(risk_orchestrator, "deactivate_hedge"):
             await risk_orchestrator.deactivate_hedge()
     except Exception as exc:
         logger.warning("Hedge deactivate via orchestrator: %s", exc)
 
     _append_nuclear_log("HEDGE_DEACTIVATE", {}, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_hedge_deactivate", {})
+    _log_superadmin_action(user, "nuclear_hedge_deactivate", {})
     return {"ok": True, "hedge_active": False}
 
 
@@ -240,6 +300,7 @@ async def max_risk_override(
     override = {**body, "set_by": user.sub, "set_at": _utcnow().isoformat()}
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set("superadmin:nuclear:risk_override", json.dumps(override), ex=3600)
@@ -249,6 +310,7 @@ async def max_risk_override(
     # Apply to live risk manager
     try:
         from risk.manager import RiskManager
+
         if hasattr(RiskManager, "_instance") and RiskManager._instance:
             rm = RiskManager._instance
             for k, v in body.items():
@@ -258,7 +320,7 @@ async def max_risk_override(
         logger.warning("Risk override apply: %s", exc)
 
     _append_nuclear_log("RISK_OVERRIDE", body, user.sub)
-    await _log_superadmin_action(user.sub, "nuclear_risk_override", body)
+    _log_superadmin_action(user, "nuclear_risk_override", body)
     return {"ok": True, "override": override}
 
 
@@ -269,6 +331,7 @@ async def get_nuclear_log(
     log: list[dict] = []
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_NUCLEAR_LOG_KEY)

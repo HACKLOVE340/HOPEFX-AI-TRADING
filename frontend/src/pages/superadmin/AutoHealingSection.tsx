@@ -3,11 +3,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { usePolling } from '../../hooks/usePolling';
 import { superadminApi } from '../../hooks/useApi';
+import { EmptyState } from '../../components/EmptyState';
 import {
   SectionCard, ActionBtn, KpiTile, StatusBadge,
   Toggle, Input, Select, Divider,
   ErrorState, LoadingRows, ConfirmDialog, Spinner,
 } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -763,7 +765,7 @@ const PatchHistoryPanel: React.FC<{
       subtitle="All patch attempts — applied, rejected, and rolled back"
       actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
       {patches.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>No patches applied yet</div>
+        <EmptyState compact icon="🩹" title="No patches applied yet" description="Auto-heal patches will appear here once the system detects and resolves issues." />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {patches.slice().reverse().map((p, i) => (
@@ -818,7 +820,7 @@ const QuarantinePanel: React.FC<{
     subtitle="Files copied to quarantine before any modification"
     actions={<ActionBtn label="Refresh" onClick={onRefresh} icon="🔄" size="sm" loading={loading} />}>
     {entries.length === 0 ? (
-      <div style={{ textAlign: 'center', padding: '24px 0', color: '#475569', fontSize: 13 }}>Quarantine is empty</div>
+      <EmptyState compact icon="🔒" title="Quarantine is empty" description="Suspicious files and processes will be isolated here when detected." />
     ) : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {entries.slice().reverse().map((e, i) => (
@@ -997,8 +999,7 @@ const AutoHealingSection: React.FC = () => {
   const mountedRef = useRef(true);
   useEffect(() => { mountedRef.current = true; return () => { mountedRef.current = false; }; }, []);
 
-  const errDetail = (e: unknown) =>
-    (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+  const errDetail = (e: unknown, fb: string) => extractApiError(e, fb);
 
   const showMsg = (text: string, type: 'ok' | 'err' = 'ok') => {
     setMsg(text); setMsgType(type);
@@ -1085,7 +1086,7 @@ const AutoHealingSection: React.FC = () => {
       await Promise.all([loadStatus(), loadConfig(), loadDrift(), loadPatches(), loadQuarantine(), loadApproval()]);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError(errDetail(e) ?? 'Failed to load healing configuration');
+      setError(errDetail(e, 'Failed to load healing configuration'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [loadStatus, loadConfig, loadDrift, loadPatches, loadQuarantine, loadApproval]);
 
@@ -1117,7 +1118,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Baseline rebuild triggered — this may take a moment');
       setTimeout(loadStatus, 3000);
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Rebuild failed', 'err');
+      showMsg(errDetail(e, 'Rebuild failed'), 'err');
     } finally { setRebuildBusy(false); }
   };
 
@@ -1128,7 +1129,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Test re-scan started — index will update shortly');
       setTimeout(loadStatus, 4000);
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Re-scan failed', 'err');
+      showMsg(errDetail(e, 'Re-scan failed'), 'err');
     } finally { setReindexBusy(false); }
   };
 
@@ -1140,7 +1141,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg(res.data.success ? `Tests passed: ${res.data.passed ?? 0} ✓` : `Tests failed: ${res.data.failed ?? 0} ✗`, res.data.success ? 'ok' : 'err');
       setTimeout(loadStatus, 2000);
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Test run failed', 'err');
+      showMsg(errDetail(e, 'Test run failed'), 'err');
     } finally { setTestRunBusy(false); }
   };
 
@@ -1151,7 +1152,7 @@ const AutoHealingSection: React.FC = () => {
       showMsg('Patch approved and queued for application');
       await loadApproval();
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Approval failed', 'err');
+      showMsg(errDetail(e, 'Approval failed'), 'err');
     } finally { setApprovingIdx(null); }
   };
 
@@ -1165,7 +1166,7 @@ const AutoHealingSection: React.FC = () => {
       await superadminApi.autoHealSaveConfig(toSave);
       showMsg('Configuration saved and applied to live engine');
     } catch (e: unknown) {
-      showMsg(errDetail(e) ?? 'Save failed', 'err');
+      showMsg(errDetail(e, 'Save failed'), 'err');
     } finally { setSaving(false); }
   };
 

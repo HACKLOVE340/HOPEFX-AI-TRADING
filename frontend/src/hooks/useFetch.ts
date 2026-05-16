@@ -7,7 +7,7 @@
  *     unmounts, preventing "Can't perform a React state update on an
  *     unmounted component" crashes.
  *   - Hard deadline — if the fetch hasn't resolved in `timeoutMs` (default
- *     8 s), loading is forced false and a timeout error is shown so the page
+ *     30 s), loading is forced false and a timeout error is shown so the page
  *     never hangs.
  *   - Ref guard — skips setState calls after unmount even if the promise
  *     resolves just after the deadline fires.
@@ -36,6 +36,26 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// ── Shared error extractor ────────────────────────────────────────────────────
+// FastAPI can return detail as an object ({msg, loc, type}) on 503/422.
+// Probe .msg → .message → JSON.stringify before falling back to err.message.
+function extractFetchError(err: unknown): string {
+  if (typeof err === 'object' && err !== null && 'response' in err) {
+    const response = (err as { response?: { status?: number; data?: { detail?: unknown; message?: unknown } } }).response;
+    const data = response?.data;
+    const raw = data?.detail ?? data?.message;
+    if (typeof raw === 'string') return raw;
+    if (raw && typeof raw === 'object') {
+      const d = raw as { msg?: string; message?: string };
+      return d.msg ?? d.message ?? JSON.stringify(raw);
+    }
+    // 404 with no body — return a generic message rather than the raw Axios string
+    if (response?.status === 404) return 'Resource not found.';
+  }
+  const msg = (err as { message?: unknown })?.message;
+  return typeof msg === 'string' && msg.length > 0 ? msg : 'Request failed.';
+}
+
 export interface FetchState<T> {
   loading: boolean;
   error:   string | null;
@@ -50,11 +70,11 @@ export interface FetchState<T> {
  * @param fetcher   A function that performs the API call and returns a Promise
  *                  resolving to the data value.  The AbortSignal is passed as
  *                  the first argument — forward it to axios: `{ signal }`.
- * @param timeoutMs Hard deadline in milliseconds (default: 8000).
+ * @param timeoutMs Hard deadline in milliseconds (default: 30000).
  */
 export function useFetch<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
-  timeoutMs = 8_000,
+  timeoutMs = 30_000,
 ): FetchState<T> {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -84,7 +104,7 @@ export function useFetch<T>(
       if (mountedRef.current && !controller.signal.aborted) {
         controller.abort();
         setLoading(false);
-        setError('Request timed out. Please check your connection and try again.');
+        setError('Request is taking longer than expected. Click retry or wait — the server may be warming up.');
       }
     }, timeoutMs);
 
@@ -99,19 +119,9 @@ export function useFetch<T>(
       .catch((err: unknown) => {
         clearTimeout(deadlineId);
         if (mountedRef.current && !controller.signal.aborted) {
-          const name = err instanceof Error ? err.name : '';
+          const name = (err as { name?: unknown })?.name;
           if (name === 'AbortError' || name === 'CanceledError') return; // intentional cancel
-          const msg =
-            typeof err === 'object' && err !== null && 'response' in err
-              ? ((err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.detail ??
-                 (err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.message ??
-                 'Request failed.')
-              : err instanceof Error
-              ? err.message
-              : 'Request failed.';
-          setError(msg);
+          setError(extractFetchError(err));
         }
       })
       .finally(() => {
@@ -144,7 +154,7 @@ export function useFetchDeps<T>(
   fetcher: (signal: AbortSignal) => Promise<T>,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   deps: readonly any[],
-  timeoutMs = 8_000,
+  timeoutMs = 30_000,
 ): FetchState<T> {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
@@ -169,7 +179,7 @@ export function useFetchDeps<T>(
       if (mountedRef.current && !controller.signal.aborted) {
         controller.abort();
         setLoading(false);
-        setError('Request timed out. Please check your connection and try again.');
+        setError('Request is taking longer than expected. Click retry or wait — the server may be warming up.');
       }
     }, timeoutMs);
 
@@ -184,19 +194,9 @@ export function useFetchDeps<T>(
       .catch((err: unknown) => {
         clearTimeout(deadlineId);
         if (mountedRef.current && !controller.signal.aborted) {
-          const name = err instanceof Error ? err.name : '';
+          const name = (err as { name?: unknown })?.name;
           if (name === 'AbortError' || name === 'CanceledError') return;
-          const msg =
-            typeof err === 'object' && err !== null && 'response' in err
-              ? ((err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.detail ??
-                 (err as { response?: { data?: { detail?: string; message?: string } } })
-                  .response?.data?.message ??
-                 'Request failed.')
-              : err instanceof Error
-              ? err.message
-              : 'Request failed.';
-          setError(msg);
+          setError(extractFetchError(err));
         }
       })
       .finally(() => {

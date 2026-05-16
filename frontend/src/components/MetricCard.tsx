@@ -1,8 +1,8 @@
 /**
  * MetricCard — single KPI display card.
  *
- * Shows a label, primary value, optional delta (with colour), and optional
- * sub-label. Used across Dashboard, Performance, Risk pages.
+ * Mobile-first: full-width on xs, auto-sized in grid on sm+.
+ * Supports loading skeleton, delta colour, icon, trend sparkline slot.
  */
 
 import React from 'react';
@@ -16,9 +16,23 @@ interface MetricCardProps {
   deltaPositive?: boolean;
   subLabel?: string;
   icon?: string;
+  /** Optional trend indicator: 'up' | 'down' | 'flat' */
+  trend?: 'up' | 'down' | 'flat';
+  /** Accent colour override for the card border/icon bg */
+  accent?: 'blue' | 'green' | 'red' | 'amber' | 'purple';
+  className?: string;
   style?: React.CSSProperties;
   loading?: boolean;
+  onClick?: () => void;
 }
+
+const ACCENT_CLASSES: Record<string, { border: string; iconBg: string }> = {
+  blue:   { border: 'border-blue-500/30',   iconBg: 'bg-blue-500/10 text-blue-400' },
+  green:  { border: 'border-green-500/30',  iconBg: 'bg-green-500/10 text-green-400' },
+  red:    { border: 'border-red-500/30',    iconBg: 'bg-red-500/10 text-red-400' },
+  amber:  { border: 'border-amber-500/30',  iconBg: 'bg-amber-500/10 text-amber-400' },
+  purple: { border: 'border-purple-500/30', iconBg: 'bg-purple-500/10 text-purple-400' },
+};
 
 export const MetricCard: React.FC<MetricCardProps> = ({
   label,
@@ -27,79 +41,80 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   deltaPositive,
   subLabel,
   icon,
+  trend,
+  accent,
+  className = '',
   style,
   loading = false,
+  onClick,
 }) => {
   const deltaColor =
     deltaPositive === undefined
-      ? '#94a3b8'
+      ? 'text-slate-400'
       : deltaPositive
-      ? '#4ade80'
-      : '#f87171';
+      ? 'text-green-400'
+      : 'text-red-400';
+
+  const accentCls = accent ? ACCENT_CLASSES[accent] : null;
+  const borderCls = accentCls ? accentCls.border : 'border-terminal-border';
+
+  const trendIcon =
+    trend === 'up' ? '↑' : trend === 'down' ? '↓' : trend === 'flat' ? '→' : null;
+  const trendColor =
+    trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-slate-500';
 
   return (
-    <div style={{ ...cardStyle, ...style }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <span style={labelStyle}>{label}</span>
-        {icon && <span style={{ fontSize: 18, opacity: 0.6 }}>{icon}</span>}
+    <div
+      className={`bg-terminal-surface border ${borderCls} rounded-xl flex flex-col gap-1 p-3 sm:p-4 transition-all ${
+        onClick ? 'cursor-pointer hover:border-blue-500/40 hover:bg-terminal-raised' : ''
+      } ${className}`}
+      style={style}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+    >
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-slate-500 text-2xs sm:text-xs font-semibold uppercase tracking-wider leading-tight">
+          {label}
+        </span>
+        {icon && (
+          <div
+            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0 ${
+              accentCls ? accentCls.iconBg : 'bg-terminal-raised text-slate-400'
+            }`}
+          >
+            {icon}
+          </div>
+        )}
       </div>
 
+      {/* Value row */}
       {loading ? (
-        <div style={skeletonStyle} />
+        <div className="h-7 sm:h-8 rounded bg-terminal-raised animate-pulse mt-1 w-3/5" />
       ) : (
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-          <span style={valueStyle}>{value}</span>
+        <div className="flex items-baseline gap-2 mt-1 flex-wrap">
+          <span className="text-slate-100 text-xl sm:text-2xl font-bold tracking-tight tabular-nums leading-none">
+            {value}
+          </span>
           {delta && (
-            <span style={{ color: deltaColor, fontSize: 12, fontWeight: 600 }}>
+            <span className={`text-xs font-semibold tabular-nums ${deltaColor}`}>
               {delta}
             </span>
+          )}
+          {trendIcon && (
+            <span className={`text-xs font-bold ${trendColor}`}>{trendIcon}</span>
           )}
         </div>
       )}
 
+      {/* Sub-label */}
       {subLabel && !loading && (
-        <span style={subLabelStyle}>{subLabel}</span>
+        <span className="text-slate-600 text-2xs sm:text-xs mt-0.5 leading-tight">
+          {subLabel}
+        </span>
       )}
     </div>
   );
-};
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--surface, #1e293b)',
-  border: '1px solid var(--border, #334155)',
-  borderRadius: 10,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 2,
-  padding: '14px 16px',
-};
-
-const labelStyle: React.CSSProperties = {
-  color: 'var(--text-muted, #94a3b8)',
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: 0.5,
-  textTransform: 'uppercase',
-};
-
-const valueStyle: React.CSSProperties = {
-  color: 'var(--text, #f1f5f9)',
-  fontSize: 22,
-  fontWeight: 700,
-  letterSpacing: -0.5,
-};
-
-const subLabelStyle: React.CSSProperties = {
-  color: 'var(--text-muted, #64748b)',
-  fontSize: 11,
-  marginTop: 2,
-};
-
-const skeletonStyle: React.CSSProperties = {
-  background: 'linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%)',
-  backgroundSize: '200% 100%',
-  borderRadius: 4,
-  height: 28,
-  marginTop: 6,
-  width: '60%',
 };

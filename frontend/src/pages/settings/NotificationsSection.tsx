@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../../hooks/useApi';
 import type { NotificationSettings } from './types';
 import { Card, SectionHeader, Field, Input, Toggle, Button, SaveBar } from './ui';
+import { extractApiError } from '../../lib/utils';
 
 const DEFAULT: NotificationSettings = {
   discord_enabled: false, discord_webhook_url: '',
@@ -75,8 +76,7 @@ const NotificationsSection: React.FC = () => {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-      setSaveErr(detail ?? 'Failed to save notification settings.');
+      setSaveErr(extractApiError(err, 'Failed to save notification settings.'));
     } finally {
       setSaving(false);
     }

@@ -254,6 +254,12 @@ class IBKRConnector(BrokerConnector):
                 # Start heartbeat
                 self._start_heartbeat()
 
+                # Verify broker-level Cancel-on-Disconnect (CoD) at startup.
+                # CoD instructs TWS/Gateway to cancel all open orders if the
+                # API connection drops — a hardware-level safety net that works
+                # even if this process crashes before reqGlobalCancel() fires.
+                self._check_cancel_on_disconnect()
+
                 logger.info(
                     "IBKRConnector connected | account=%s mode=%s",
                     self._account_id,
@@ -313,6 +319,60 @@ class IBKRConnector(BrokerConnector):
     # Heartbeat
     # ------------------------------------------------------------------
 
+    def _check_cancel_on_disconnect(self) -> None:
+        """
+        Verify that broker-level Cancel-on-Disconnect (CoD) is active.
+
+        CoD instructs TWS/Gateway to cancel all open orders automatically
+        when the API connection drops — a safety net that operates at the
+        broker level independently of this process.
+
+        ib_insync does not expose a direct CoD query API, so we read the
+        account value ``CancelOrdersOnDisconnect`` when available.  If the
+        flag is absent (older TWS versions) or disabled, a CRITICAL log is
+        emitted so operators are alerted.
+
+        The check is best-effort: failure never prevents connection from
+        succeeding, but the warning must be visible in production logs.
+        """
+        if not self._ib or self._cfg.readonly:
+            return
+        try:
+            vals = {
+                v.tag: v.value
+                for v in self._ib.accountValues(account=self._account_id or "")
+                if v.tag == "CancelOrdersOnDisconnect"
+            }
+            cod_value = vals.get("CancelOrdersOnDisconnect", "").strip().lower()
+            if cod_value in ("true", "1", "yes"):
+                logger.info(
+                    "IBKRConnector: Cancel-on-Disconnect is ENABLED for account %s",
+                    self._account_id,
+                )
+            elif cod_value in ("false", "0", "no"):
+                logger.critical(
+                    "IBKRConnector: Cancel-on-Disconnect is DISABLED for account %s. "
+                    "Enable it in TWS/Gateway: Global Configuration → API → Settings → "
+                    "'Cancel orders on disconnect'. Without CoD, open orders will remain "
+                    "active if this process crashes.",
+                    self._account_id,
+                )
+                self._capture_sentry(
+                    RuntimeError(f"IBKR Cancel-on-Disconnect is DISABLED for account {self._account_id}")
+                )
+            else:
+                # Tag not returned by this TWS version — log at WARNING so
+                # operators know to verify the setting manually.
+                logger.warning(
+                    "IBKRConnector: CancelOrdersOnDisconnect account value not available "
+                    "(TWS version may not support it). Verify CoD is enabled manually in "
+                    "TWS/Gateway: Global Configuration → API → Settings → "
+                    "'Cancel orders on disconnect'.",
+                )
+        except Exception as exc:
+            # Never let a CoD check failure prevent the connection from succeeding.
+            logger.warning("IBKRConnector: Cancel-on-Disconnect check failed (non-fatal): %s", exc)
+
     def _start_heartbeat(self) -> None:
         """Start background thread that pings TWS to detect stale connections."""
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
@@ -370,12 +430,26 @@ class IBKRConnector(BrokerConnector):
 
         # Forex pairs: 6-char symbols like EURUSD, GBPJPY, etc.
         _FOREX_PAIRS = frozenset(
-            {"EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD",
-             "USDCAD", "EURGBP", "EURJPY", "GBPJPY", "USDHKD", "USDSGD",
-             "EURCHF", "AUDNZD"}
+            {
+                "EURUSD",
+                "GBPUSD",
+                "USDJPY",
+                "USDCHF",
+                "AUDUSD",
+                "NZDUSD",
+                "USDCAD",
+                "EURGBP",
+                "EURJPY",
+                "GBPJPY",
+                "USDHKD",
+                "USDSGD",
+                "EURCHF",
+                "AUDNZD",
+            }
         )
         if sym in _FOREX_PAIRS:
             from ib_insync import Forex  # type: ignore[import]
+
             base, quote = sym[:3], sym[3:]
             c = Forex(sym, baseCurrency=base, currency=quote)
             self._ib.qualifyContracts(c)
@@ -384,12 +458,14 @@ class IBKRConnector(BrokerConnector):
         # Silver / other metals
         if sym in ("XAGUSD", "SILVER", "XAG"):
             from ib_insync import Commodity  # type: ignore[import]
+
             c = Commodity("XAGUSD", "SMART", "USD")
             self._ib.qualifyContracts(c)
             return c
 
         # Default: treat as US equity on SMART
         from ib_insync import Stock  # type: ignore[import]
+
         c = Stock(symbol, "SMART", _XAUUSD_CURRENCY)
         self._ib.qualifyContracts(c)
         return c

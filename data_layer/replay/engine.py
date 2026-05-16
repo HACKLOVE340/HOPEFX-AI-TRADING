@@ -333,7 +333,8 @@ class MarketReplayEngine:
                     self._metrics.gaps_detected += 1
                     logger.debug(
                         "MarketReplayEngine: gap %.1fs at %s",
-                        gap_s, current_ts.isoformat(),
+                        gap_s,
+                        current_ts.isoformat(),
                     )
 
                     if gap_fill and prev_mid > 0:
@@ -351,7 +352,9 @@ class MarketReplayEngine:
                                 volume=0.0,
                             )
                             # Mark as synthetic via extra field if supported
-                            object.__setattr__(synthetic, "is_synthetic", True) if hasattr(synthetic, "__dataclass_fields__") else None
+                            object.__setattr__(synthetic, "is_synthetic", True) if hasattr(
+                                synthetic, "__dataclass_fields__"
+                            ) else None
                             self._metrics.synthetic_ticks_emitted += 1
                             self._metrics.gaps_filled += 1
                             yield synthetic
@@ -375,7 +378,9 @@ class MarketReplayEngine:
                 self._metrics.ticks_rejected += 1
                 logger.debug(
                     "MarketReplayEngine: inverted spread at %s bid=%.4f ask=%.4f — skipped",
-                    ts, bid, ask,
+                    ts,
+                    bid,
+                    ask,
                 )
                 continue
 

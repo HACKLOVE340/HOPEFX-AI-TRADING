@@ -7,6 +7,19 @@
  */
 
 import React, { Suspense, lazy } from 'react';
+import { Link } from 'react-router-dom';
+import { PageHeader } from '../components/PageHeader';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+import { Badge } from '../components/Badge';
+
+const SR_CROSS_LINKS = [
+  { label: 'Super Admin',         href: '/superadmin',         icon: '⚡', color: '#f87171' },
+  { label: 'System Status',       href: '/status',             icon: '🟢', color: '#4ade80' },
+  { label: 'Auto-Heal',           href: '/auto-heal',          icon: '🩺', color: '#34d399' },
+  { label: 'Security Dashboard',  href: '/security',           icon: '🛡️', color: '#f59e0b' },
+  { label: 'Audit Log',           href: '/audit',              icon: '🔍', color: '#a78bfa' },
+  { label: 'Admin Panel',         href: '/admin',              icon: '🔧', color: '#60a5fa' },
+];
 
 const SystemReliabilitySection = lazy(
   () => import('./superadmin/SystemReliabilitySection'),
@@ -30,37 +43,38 @@ const Fallback: React.FC = () => (
 const SystemReliability: React.FC = () => (
   <>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    <div style={{
-      minHeight: '100vh',
-      background: '#0f172a',
-      color: '#f1f5f9',
-      fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-      padding: '32px 24px',
-      boxSizing: 'border-box',
-    }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        {/* Page header */}
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ fontSize: 12, color: '#475569', marginBottom: 6 }}>
-            Super Admin → System Reliability
-          </div>
-          <h1 style={{
-            fontSize: 28, fontWeight: 800, color: '#f8fafc',
-            margin: 0, letterSpacing: '-0.02em',
-          }}>
-            🔬 System Reliability Dashboard
-          </h1>
-          <p style={{ fontSize: 14, color: '#64748b', marginTop: 6, marginBottom: 0 }}>
-            Real-time end-to-end connectivity status, OTel tracing, self-test suite,
-            environment audit, and system metrics for every platform component.
-          </p>
-        </div>
+    <div className="page-content">
+        <PageHeader
+          title="System Reliability Dashboard"
+        icon="🔬"
+          subtitle="Real-time end-to-end connectivity, OTel tracing, self-test suite, environment audit, and system metrics for every platform component."
+          breadcrumbs={[
+            { label: 'Home',        href: '/home' },
+            { label: 'Admin Panel', href: '/admin' },
+            { label: 'Super Admin', href: '/superadmin' },
+            { label: 'System Reliability' },
+          ]}
+          badge={<Badge variant="info" style={{ fontSize: 11 }}>🔬 Live</Badge>}
+          actions={
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Link to="/superadmin"
+                style={{ padding: '6px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 7, color: '#f87171', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                ⚡ Super Admin
+              </Link>
+              <Link to="/status"
+                style={{ padding: '6px 14px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 7, color: '#4ade80', fontSize: 12, fontWeight: 700, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+                🟢 Status
+              </Link>
+            </div>
+          }
+        />
 
         {/* Section content */}
         <Suspense fallback={<Fallback />}>
           <SystemReliabilitySection />
         </Suspense>
-      </div>
+
+        <CrossLinkBar links={SR_CROSS_LINKS} title="Related" style={{ marginTop: 32 }} />
     </div>
   </>
 );

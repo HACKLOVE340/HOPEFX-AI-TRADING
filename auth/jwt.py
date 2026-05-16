@@ -45,10 +45,24 @@ def _get_secret() -> str:
 
 
 # Module-level alias kept for backward compatibility with code that reads
-# auth.jwt.SECRET_KEY directly — raises RuntimeError if secret is unset.
-@property  # type: ignore[misc]
-def SECRET_KEY() -> str:
+# auth.jwt.SECRET_KEY directly.
+# NOTE: @property is invalid at module scope — it produces a property *object*,
+# not a callable, so auth.jwt.SECRET_KEY would return the descriptor itself
+# rather than the secret string. Use _get_secret() for all internal calls.
+# This constant is evaluated once at import time; callers that need the
+# current value (e.g. after env var changes in tests) must call _get_secret().
+def _SECRET_KEY_value() -> str:
+    """Return the JWT secret. Raises RuntimeError if unset or invalid."""
     return _load_secret()
+
+
+# Expose as a module attribute so `from auth.jwt import SECRET_KEY` works.
+# Evaluated lazily via a module __getattr__ so import does not fail when the
+# env var is not yet set (e.g. during test collection before fixtures run).
+def __getattr__(name: str) -> str:
+    if name == "SECRET_KEY":
+        return _load_secret()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 ALGORITHM = "HS256"
@@ -115,11 +129,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     """
     to_encode = data.copy()
     now = datetime.now(UTC)
-    expire = (
-        now + expires_delta
-        if expires_delta
-        else now + timedelta(minutes=_get_access_token_expire_minutes())
-    )
+    expire = now + expires_delta if expires_delta else now + timedelta(minutes=_get_access_token_expire_minutes())
     # Inject standard claims — do not overwrite caller-supplied jti if present
     to_encode.setdefault("jti", str(uuid.uuid4()))
     to_encode.setdefault("type", "access")

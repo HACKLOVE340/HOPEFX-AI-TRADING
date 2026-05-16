@@ -122,8 +122,8 @@ class ProductionConfigManager:
 
         logger.info("=" * 70)
         logger.info("DEVELOPMENT KEYS GENERATED (DO NOT USE IN PRODUCTION)")
-        logger.info(f"Encryption Key: {self._encryption_key.hex()}")
-        logger.info(f"Salt: {self._salt.hex()}")
+        logger.info("Encryption Key: %s", self._encryption_key.hex())
+        logger.info("Salt: %s", self._salt.hex())
         logger.info("Set these in environment for persistence")
         logger.info("=" * 70)
 

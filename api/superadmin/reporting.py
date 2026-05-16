@@ -35,20 +35,21 @@ router = APIRouter()
 _REPORTS_KEY = "superadmin:reporting:reports"
 
 REPORT_TEMPLATES = [
-    {"type": "user_summary",      "name": "User Summary",          "description": "All users with roles, plans, trade counts"},
-    {"type": "revenue",           "name": "Revenue Report",        "description": "MRR, ARR, plan breakdown, churn"},
-    {"type": "trade_activity",    "name": "Trade Activity",        "description": "All trades with PnL, symbols, brokers"},
-    {"type": "risk_summary",      "name": "Risk Summary",          "description": "VaR, drawdown, circuit breaker events"},
-    {"type": "compliance",        "name": "Compliance Report",     "description": "KYC status, AML alerts, sanctions"},
-    {"type": "system_health",     "name": "System Health",         "description": "Uptime, latency, error rates per service"},
-    {"type": "ml_performance",    "name": "ML Performance",        "description": "Model accuracy, drift, predictions"},
-    {"type": "audit_trail",       "name": "Audit Trail Export",    "description": "Full immutable audit log"},
+    {"type": "user_summary", "name": "User Summary", "description": "All users with roles, plans, trade counts"},
+    {"type": "revenue", "name": "Revenue Report", "description": "MRR, ARR, plan breakdown, churn"},
+    {"type": "trade_activity", "name": "Trade Activity", "description": "All trades with PnL, symbols, brokers"},
+    {"type": "risk_summary", "name": "Risk Summary", "description": "VaR, drawdown, circuit breaker events"},
+    {"type": "compliance", "name": "Compliance Report", "description": "KYC status, AML alerts, sanctions"},
+    {"type": "system_health", "name": "System Health", "description": "Uptime, latency, error rates per service"},
+    {"type": "ml_performance", "name": "ML Performance", "description": "Model accuracy, drift, predictions"},
+    {"type": "audit_trail", "name": "Audit Trail Export", "description": "Full immutable audit log"},
 ]
 
 
 def _load_reports() -> list[dict]:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(_REPORTS_KEY)
@@ -62,6 +63,7 @@ def _load_reports() -> list[dict]:
 def _save_reports(reports: list[dict]) -> None:
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(_REPORTS_KEY, json.dumps(reports[:200]), ex=86400 * 90)
@@ -92,27 +94,80 @@ async def _build_report_data(report_type: str, period: str) -> tuple[list[str], 
 
             if report_type == "user_summary":
                 from database.user_models import User
+
                 users = db.query(User).filter(User.created_at >= cutoff).all()
                 headers = ["user_id", "username", "email", "role", "plan", "is_active", "created_at"]
-                rows = [[str(u.user_id), u.username, u.email, u.role, getattr(u, "plan", "free"), str(u.is_active), str(u.created_at)] for u in users]
+                rows = [
+                    [
+                        str(u.user_id),
+                        u.username,
+                        u.email,
+                        u.role,
+                        getattr(u, "plan", "free"),
+                        str(u.is_active),
+                        str(u.created_at),
+                    ]
+                    for u in users
+                ]
 
             elif report_type == "trade_activity":
                 from database.models import Trade
+
                 trades = db.query(Trade).filter(Trade.created_at >= cutoff).limit(5000).all()
-                headers = ["trade_id", "user_id", "symbol", "side", "quantity", "entry_price", "exit_price", "pnl", "status", "created_at"]
-                rows = [[str(t.trade_id), str(t.user_id), t.symbol, t.side, str(t.quantity), str(t.entry_price), str(t.exit_price or ""), str(t.pnl or ""), t.status, str(t.created_at)] for t in trades]
+                headers = [
+                    "trade_id",
+                    "user_id",
+                    "symbol",
+                    "side",
+                    "quantity",
+                    "entry_price",
+                    "exit_price",
+                    "pnl",
+                    "status",
+                    "created_at",
+                ]
+                rows = [
+                    [
+                        str(t.trade_id),
+                        str(t.user_id),
+                        t.symbol,
+                        t.side,
+                        str(t.quantity),
+                        str(t.entry_price),
+                        str(t.exit_price or ""),
+                        str(t.pnl or ""),
+                        t.status,
+                        str(t.created_at),
+                    ]
+                    for t in trades
+                ]
 
             elif report_type == "revenue":
                 from database.models import WalletTransaction
+
                 txns = db.query(WalletTransaction).filter(WalletTransaction.created_at >= cutoff).all()
                 headers = ["txn_id", "user_id", "type", "amount", "currency", "status", "created_at"]
-                rows = [[str(t.id), str(t.user_id), t.transaction_type, str(t.amount), t.currency, t.status, str(t.created_at)] for t in txns]
+                rows = [
+                    [
+                        str(t.id),
+                        str(t.user_id),
+                        t.transaction_type,
+                        str(t.amount),
+                        t.currency,
+                        t.status,
+                        str(t.created_at),
+                    ]
+                    for t in txns
+                ]
 
             elif report_type == "audit_trail":
                 from database.models import AuditLogEntry
+
                 entries = db.query(AuditLogEntry).filter(AuditLogEntry.created_at >= cutoff).limit(5000).all()
                 headers = ["id", "event_type", "user_id", "detail", "created_at"]
-                rows = [[str(e.id), e.event_type, str(e.user_id or ""), e.detail or "", str(e.created_at)] for e in entries]
+                rows = [
+                    [str(e.id), e.event_type, str(e.user_id or ""), e.detail or "", str(e.created_at)] for e in entries
+                ]
 
             else:
                 headers = ["report_type", "period", "generated_at"]
@@ -184,6 +239,7 @@ async def generate_report(
     # Cache the CSV content
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.set(f"superadmin:report:data:{report_id}", csv_content, ex=3600 * 24)
@@ -198,7 +254,7 @@ async def generate_report(
     reports[0] = report
     _save_reports(reports)
 
-    await _log_superadmin_action(user.sub, "report_generate", {"type": report_type, "period": period, "report_id": report_id})
+    _log_superadmin_action(user, "report_generate", {"type": report_type, "period": period, "report_id": report_id})
     return {"ok": True, "report": report}
 
 
@@ -211,6 +267,7 @@ async def download_report(
     csv_content: str | None = None
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             raw = rc.get(f"superadmin:report:data:{report_id}")
@@ -254,10 +311,11 @@ async def delete_report(
     # Also delete cached CSV
     try:
         from cache.redis_client import get_sync_redis_client
+
         rc = get_sync_redis_client()
         if rc:
             rc.delete(f"superadmin:report:data:{report_id}")
     except Exception:  # nosec B110
         pass
-    await _log_superadmin_action(user.sub, "report_delete", {"report_id": report_id})
+    _log_superadmin_action(user, "report_delete", {"report_id": report_id})
     return {"ok": True}

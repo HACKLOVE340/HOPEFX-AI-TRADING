@@ -103,7 +103,8 @@ class TestPaperTradingBroker:
         canceled_order = paper_broker.get_order(order_id)
         assert canceled_order.status == OrderStatus.CANCELLED
 
-    def test_get_positions(self, paper_broker):
+    @pytest.mark.asyncio
+    async def test_get_positions(self, paper_broker):
         """Test getting open positions."""
         # Open a position
         paper_broker.place_order(
@@ -114,7 +115,7 @@ class TestPaperTradingBroker:
             price=1.1000,
         )
 
-        positions = paper_broker.get_positions()
+        positions = await paper_broker.get_positions()
 
         assert len(positions) > 0
         assert positions[0].symbol == "EUR_USD"
@@ -213,9 +214,10 @@ class TestPaperTradingBroker:
         # Net P&L must be negative
         assert paper_broker.balance < balance_before_close
 
-    def test_get_account_info(self, paper_broker):
+    @pytest.mark.asyncio
+    async def test_get_account_info(self, paper_broker):
         """Test getting account information."""
-        info = paper_broker.get_account_info()
+        info = await paper_broker.get_account_info()
 
         # AccountInfo is a dataclass, use attribute access
         assert hasattr(info, "balance")
@@ -247,5 +249,5 @@ class TestPaperTradingBroker:
         assert isinstance(price, int | float)
 
         # Test with unknown symbol - should return 0.0
-        price = paper_broker.get_market_price("EUR_USD")
+        price = paper_broker.get_market_price("UNKNOWN_SYMBOL_XYZ")
         assert price == 0.0

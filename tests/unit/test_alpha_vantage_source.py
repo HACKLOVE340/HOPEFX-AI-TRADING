@@ -12,9 +12,9 @@ Uses aioresponses to intercept real aiohttp requests so the full HTTP
 client code path (headers, params, JSON parsing, error handling) runs
 against real AlphaVantageSource code.  No mocks of internal methods.
 """
+
 from __future__ import annotations
 
-import json
 import re
 
 import aiohttp
@@ -54,9 +54,7 @@ _RATE_LIMITED_RESPONSE = {
     )
 }
 
-_INFORMATION_RESPONSE = {
-    "Information": "The **demo** API key is for demo purposes only."
-}
+_INFORMATION_RESPONSE = {"Information": "The **demo** API key is for demo purposes only."}
 
 _EURUSD_RESPONSE = {
     "Realtime Currency Exchange Rate": {
@@ -68,10 +66,7 @@ _EURUSD_RESPONSE = {
 
 
 def _av_url_with_params(from_sym: str, to_sym: str, api_key: str) -> str:
-    return (
-        f"{_AV_BASE_URL}?function={_AV_FUNCTION}"
-        f"&from_currency={from_sym}&to_currency={to_sym}&apikey={api_key}"
-    )
+    return f"{_AV_BASE_URL}?function={_AV_FUNCTION}&from_currency={from_sym}&to_currency={to_sym}&apikey={api_key}"
 
 
 # ── Construction ──────────────────────────────────────────────────────────────
@@ -244,9 +239,7 @@ class TestAlphaVantageHTTPErrors:
     async def test_zero_rate_returns_none(self):
         src = AlphaVantageSource(api_key="testkey")
         cfg = {"alpha_vantage_symbol": "XAU", "alpha_vantage_market": "USD"}
-        payload = {
-            "Realtime Currency Exchange Rate": {"5. Exchange Rate": "0.0"}
-        }
+        payload = {"Realtime Currency Exchange Rate": {"5. Exchange Rate": "0.0"}}
         with aioresponses() as m:
             m.get(_AV_URL_RE, payload=payload)
             price = await src.fetch("XAUUSD", cfg)

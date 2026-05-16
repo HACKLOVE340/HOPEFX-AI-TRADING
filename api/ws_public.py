@@ -35,7 +35,7 @@ import json
 import logging
 import os
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -73,7 +73,7 @@ _active_connections: set[WebSocket] = set()
 _last_mid: dict[str, float] = {}
 
 # Per-IP tracking: ip → count of open connections
-_ip_open_count: dict[str, int] = defaultdict(int)
+_ip_open_count: Counter[str] = Counter()
 # Per-IP rate window: ip → deque of connect timestamps (monotonic seconds)
 _ip_rate_window: dict[str, deque] = defaultdict(deque)
 _ip_lock = asyncio.Lock()

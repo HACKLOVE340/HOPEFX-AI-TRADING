@@ -70,35 +70,36 @@ logger = logging.getLogger(__name__)
 
 # ── Weight configuration ──────────────────────────────────────────────────────
 
-_W_ML     = float(os.getenv("SCORER_W_ML",    "0.35"))
-_W_TECH   = float(os.getenv("SCORER_W_TECH",  "0.20"))
-_W_MACRO  = float(os.getenv("SCORER_W_MACRO", "0.15"))
-_W_REGIME = float(os.getenv("SCORER_W_REGIME","0.15"))
-_W_MTF    = float(os.getenv("SCORER_W_MTF",   "0.10"))
-_W_VOL    = float(os.getenv("SCORER_W_VOL",   "0.05"))
+_W_ML = float(os.getenv("SCORER_W_ML", "0.35"))
+_W_TECH = float(os.getenv("SCORER_W_TECH", "0.20"))
+_W_MACRO = float(os.getenv("SCORER_W_MACRO", "0.15"))
+_W_REGIME = float(os.getenv("SCORER_W_REGIME", "0.15"))
+_W_MTF = float(os.getenv("SCORER_W_MTF", "0.10"))
+_W_VOL = float(os.getenv("SCORER_W_VOL", "0.05"))
 
 _STRONG_THRESHOLD = float(os.getenv("SCORER_STRONG_THRESHOLD", "0.75"))
-_GOOD_THRESHOLD   = float(os.getenv("SCORER_GOOD_THRESHOLD",   "0.60"))
-_FAIR_THRESHOLD   = float(os.getenv("SCORER_FAIR_THRESHOLD",   "0.45"))
+_GOOD_THRESHOLD = float(os.getenv("SCORER_GOOD_THRESHOLD", "0.60"))
+_FAIR_THRESHOLD = float(os.getenv("SCORER_FAIR_THRESHOLD", "0.45"))
 
 
 # ── Result dataclass ──────────────────────────────────────────────────────────
 
+
 @dataclass
 class DimensionScores:
-    ml_confidence:   float = 0.5
-    technical:       float = 0.5
+    ml_confidence: float = 0.5
+    technical: float = 0.5
     macro_alignment: float = 0.5
-    regime:          float = 0.5
-    mtf_confluence:  float = 0.5
-    volatility:      float = 0.5
-    details:         dict[str, Any] = field(default_factory=dict)
+    regime: float = 0.5
+    mtf_confluence: float = 0.5
+    volatility: float = 0.5
+    details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class SignalScore:
     composite: float
-    grade: str            # STRONG / GOOD / FAIR / WEAK
+    grade: str  # STRONG / GOOD / FAIR / WEAK
     dimensions: DimensionScores
     direction: str
     symbol: str
@@ -123,12 +124,12 @@ class SignalScore:
             "direction": self.direction,
             "symbol": self.symbol,
             "dimensions": {
-                "ml_confidence":   round(d.ml_confidence, 4),
-                "technical":       round(d.technical, 4),
+                "ml_confidence": round(d.ml_confidence, 4),
+                "technical": round(d.technical, 4),
                 "macro_alignment": round(d.macro_alignment, 4),
-                "regime":          round(d.regime, 4),
-                "mtf_confluence":  round(d.mtf_confluence, 4),
-                "volatility":      round(d.volatility, 4),
+                "regime": round(d.regime, 4),
+                "mtf_confluence": round(d.mtf_confluence, 4),
+                "volatility": round(d.volatility, 4),
             },
             "details": d.details,
             "latency_ms": round(self.latency_ms, 2),
@@ -136,6 +137,7 @@ class SignalScore:
 
 
 # ── Individual dimension scorers ──────────────────────────────────────────────
+
 
 def _score_ml_confidence(
     signal_payload: dict[str, Any],
@@ -159,9 +161,11 @@ def _score_ml_confidence(
     # directional confidence: how strongly does the model agree?
     if is_long:
         # prob > 0.5 = bullish confirmation
-        raw = (prob - 0.5) * 2.0   # maps [0.5, 1.0] → [0.0, 1.0]
+        raw = (prob - 0.5) * 2.0  # maps [0.5, 1.0] → [0.0, 1.0]
     else:
-        # prob < 0.5 = bearish confirmation: (0.5 - prob)*2 → [0,1] as prob→0
+        # prob < 0.5 = bearish confirmation
+        raw = (0.5 - prob) * 2.0  # maps [0.0, 0.5] → [1.0, 0.0] ... wait:
+        # Actually: for a SELL signal, low prob is good. (0.5 - prob)*2 → [0,1] as prob→0
         raw = (0.5 - prob) * 2.0
 
     raw = float(np.clip(raw, 0.0, 1.0))
@@ -218,8 +222,12 @@ def _score_technical_consensus(
     try:
         import pandas as pd
         from research.ta_compat import (
-            RSIIndicator, MACD, EMAIndicator, ADXIndicator,
-            BollingerBands, StochasticOscillator,
+            RSIIndicator,
+            MACD,
+            EMAIndicator,
+            ADXIndicator,
+            BollingerBands,
+            StochasticOscillator,
         )
 
         c = pd.Series(ohlcv["close"].astype(float).values)
@@ -235,18 +243,17 @@ def _score_technical_consensus(
         bb = BollingerBands(c, 20)
         bb_pct = float(bb.bollinger_pband().iloc[-1])
         stoch = float(StochasticOscillator(h, l, c).stoch().iloc[-1])
-        last_close = float(c.iloc[-1])
         mom5 = float((c.iloc[-1] - c.iloc[-6]) / (c.iloc[-6] + 1e-9)) if len(c) >= 6 else 0.0
 
         is_long = direction.upper() in ("BUY", "LONG")
 
         indicator_votes = {
-            "rsi_bullish":      (rsi > 50) == is_long,
-            "macd_hist":        (macd_hist_v > 0) == is_long,
-            "ema_crossover":    (ema20 > ema50) == is_long,
-            "bb_position":      (bb_pct > 0.5) == is_long,
-            "stoch_position":   (stoch > 50) == is_long,
-            "momentum_5bar":    (mom5 > 0) == is_long,
+            "rsi_bullish": (rsi > 50) == is_long,
+            "macd_hist": (macd_hist_v > 0) == is_long,
+            "ema_crossover": (ema20 > ema50) == is_long,
+            "bb_position": (bb_pct > 0.5) == is_long,
+            "stoch_position": (stoch > 50) == is_long,
+            "momentum_5bar": (mom5 > 0) == is_long,
         }
 
         # ADX: only vote when trend is strong (> 20), otherwise neutral
@@ -325,9 +332,9 @@ def _score_macro_alignment(
                 details["vix"] = round(vix_val, 1)
                 if is_gold:
                     if vix_val > 25:
-                        votes.append(is_long)    # high VIX = safe-haven → bullish gold
+                        votes.append(is_long)  # high VIX = safe-haven → bullish gold
                     elif vix_val < 15:
-                        votes.append(not is_long) # very low VIX = risk-on → bearish gold
+                        votes.append(not is_long)  # very low VIX = risk-on → bearish gold
                     # 15–25 = neutral, no vote
 
         # Yield curve spread (10Y - 2Y): steepening = risk-on = bearish gold
@@ -345,7 +352,7 @@ def _score_macro_alignment(
                 details["yield_curve_spread"] = round(spread_now, 3)
                 details["spread_change_5bar"] = round(spread_chg, 3)
                 if is_gold:
-                    # Steepening (risk-on) = bearish gold
+                    # Steepening (spread rising, risk-on) = bearish gold
                     votes.append((spread_chg < 0) == is_long)
         elif "macro_yield_spread" in macro_df.columns and "macro_yield_spread_chg" in macro_df.columns:
             # Pre-computed path (macro_features pipeline output)
@@ -433,24 +440,23 @@ def _score_regime_suitability(
     High ADX (> 30) boosts trending regime confidence.
     """
     regime: str = signal_payload.get("regime", "unknown")
-    if not regime or regime == "unknown":
-        if ohlcv is not None and len(ohlcv) >= 52:
-            try:
-                from research.vector_store import _regime_label
-                import pandas as pd
-                regime = _regime_label(ohlcv)
-            except Exception:
-                regime = "unknown"
+    if (not regime or regime == "unknown") and ohlcv is not None and len(ohlcv) >= 52:
+        try:
+            from research.vector_store import _regime_label
+
+            regime = _regime_label(ohlcv)
+        except Exception:
+            regime = "unknown"
 
     is_long = direction.upper() in ("BUY", "LONG")
 
     regime_matrix = {
-        "trending_up":   {True: 0.85, False: 0.20},
+        "trending_up": {True: 0.85, False: 0.20},
         "trending_down": {True: 0.20, False: 0.85},
-        "overbought":    {True: 0.30, False: 0.75},
-        "oversold":      {True: 0.75, False: 0.30},
-        "ranging":       {True: 0.55, False: 0.55},
-        "unknown":       {True: 0.50, False: 0.50},
+        "overbought": {True: 0.30, False: 0.75},
+        "oversold": {True: 0.75, False: 0.30},
+        "ranging": {True: 0.55, False: 0.55},
+        "unknown": {True: 0.50, False: 0.50},
     }
 
     score = regime_matrix.get(regime, {True: 0.50, False: 0.50}).get(is_long, 0.50)
@@ -495,7 +501,7 @@ def _score_mtf_confluence(
     }
 
     trend_votes = []
-    for tf, trend in timeframe_trends.items():
+    for _tf, trend in timeframe_trends.items():
         if trend in ("up", "down"):
             trend_votes.append((trend == "up") == is_long)
 
@@ -559,17 +565,17 @@ def _score_volatility_quality(
         atr_rel = atr_current / (atr_median + 1e-9)
 
         if atr_rel < 0.3:
-            score = 0.20    # dead market
+            score = 0.20  # dead market
         elif atr_rel < 0.6:
-            score = 0.50    # below-normal vol
+            score = 0.50  # below-normal vol
         elif atr_rel <= 1.8:
-            score = 0.85    # sweet-spot
+            score = 0.85  # sweet-spot
         elif atr_rel <= 2.5:
-            score = 0.50    # elevated — wider spreads
+            score = 0.50  # elevated — wider spreads
         elif atr_rel <= 3.5:
-            score = 0.25    # high vol spike
+            score = 0.25  # high vol spike
         else:
-            score = 0.10    # extreme spike
+            score = 0.10  # extreme spike
 
         # ATR as pct of price for context
         last_close = float(c.iloc[-1])
@@ -590,6 +596,7 @@ def _score_volatility_quality(
 
 # ── Composite scorer ──────────────────────────────────────────────────────────
 
+
 class SignalScorer:
     """
     Computes a composite signal strength score across six dimensions.
@@ -601,9 +608,7 @@ class SignalScorer:
         # Normalize weights so they always sum to 1.0
         raw = [_W_ML, _W_TECH, _W_MACRO, _W_REGIME, _W_MTF, _W_VOL]
         total = sum(raw) or 1.0
-        self._w_ml, self._w_tech, self._w_macro, self._w_regime, self._w_mtf, self._w_vol = [
-            w / total for w in raw
-        ]
+        self._w_ml, self._w_tech, self._w_macro, self._w_regime, self._w_mtf, self._w_vol = [w / total for w in raw]
 
     def score(
         self,
@@ -651,12 +656,12 @@ class SignalScorer:
 
         # ── Composite ─────────────────────────────────────────────────────────
         composite = (
-            self._w_ml     * d_ml
-            + self._w_tech   * d_tech
-            + self._w_macro  * d_macro
+            self._w_ml * d_ml
+            + self._w_tech * d_tech
+            + self._w_macro * d_macro
             + self._w_regime * d_regime
-            + self._w_mtf    * d_mtf
-            + self._w_vol    * d_vol
+            + self._w_mtf * d_mtf
+            + self._w_vol * d_vol
         )
         composite = float(np.clip(composite, 0.0, 1.0))
 

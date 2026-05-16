@@ -50,6 +50,7 @@ export const LineChart: React.FC<LineChartProps> = ({
   const containerRef  = useRef<HTMLDivElement>(null);
   const chartRef      = useRef<IChartApi | null>(null);
   const seriesRefs    = useRef<ISeriesApi<'Line'>[]>([]);
+  const rafRef        = useRef<number>(0);
   const { theme }     = useTheme();
   const isDark        = theme === 'dark';
 
@@ -77,14 +78,19 @@ export const LineChart: React.FC<LineChartProps> = ({
 
     chartRef.current = chart;
 
+    // rAF-throttled ResizeObserver prevents layout thrashing
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) {
-        chart.applyOptions({ width: containerRef.current.clientWidth });
-      }
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
     });
-    if (containerRef.current) ro.observe(containerRef.current);
+    ro.observe(containerRef.current);
 
     return () => {
+      cancelAnimationFrame(rafRef.current);
       ro.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -132,6 +138,7 @@ export const LineChart: React.FC<LineChartProps> = ({
     });
 
     chartRef.current.timeScale().fitContent();
+    chartRef.current.timeScale().scrollToRealTime();
   }, [series]);
 
   return (

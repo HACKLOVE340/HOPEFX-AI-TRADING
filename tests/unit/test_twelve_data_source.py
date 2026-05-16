@@ -12,6 +12,7 @@ Uses aioresponses to intercept real aiohttp requests so the full HTTP
 client code path (params, JSON parsing, error handling) runs against
 real TwelveDataSource code.  No mocks of internal methods.
 """
+
 from __future__ import annotations
 
 import re

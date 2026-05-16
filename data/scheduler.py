@@ -233,7 +233,7 @@ async def _fetch_oanda(
                 logger.error("OANDA fetch failed status=%d: %s", resp.status, text[:200])
                 return []
             data = await resp.json()
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         logger.error("OANDA fetch timed out for %s/%s", symbol, granularity)
         return []
     except Exception as exc:
@@ -356,7 +356,7 @@ async def _fetch_yfinance(
                 loop.run_in_executor(None, lambda: ticker.history(period=period, interval=interval)),
                 timeout=12.0,
             )
-    except TimeoutError:
+    except (TimeoutError, asyncio.TimeoutError):
         logger.warning("yfinance fetch timed out for %s/%s after 12s", yf_symbol, interval)
         return []
     except Exception as exc:
@@ -666,6 +666,7 @@ class DataScheduler:
         # In development, stagger the first run by 60s so the server is fully
         # responsive before the yfinance batch fetch saturates the thread pool.
         import os as _os
+
         if _os.getenv("APP_ENV", "development").lower() in ("development", "dev"):
             logger.info("DataScheduler: deferring first run by 60s (dev mode)")
             await asyncio.sleep(60)
@@ -871,21 +872,21 @@ if __name__ == "__main__":
                 from_date=from_dt,
                 to_date=to_dt,
             )
-            logger.info(f"\nBackfill complete: {count} bars appended.")
-            logger.info(f"Data saved to: {_csv_path(args.symbol, args.granularity)}")
+            logger.info("\nBackfill complete: %s bars appended.", count)
+            logger.info("Data saved to: %s", _csv_path(args.symbol, args.granularity))
         elif args.timeframe:
             if args.timeframe not in TIMEFRAME_SECONDS:
-                logger.info(f"Unknown timeframe '{args.timeframe}'. Supported: {', '.join(ALL_TIMEFRAMES)}")
+                logger.info("Unknown timeframe '%s'. Supported: %s", args.timeframe, ", ".join(ALL_TIMEFRAMES))
                 return
             count = await _update_timeframe(args.symbol, args.timeframe)
-            logger.info(f"Fetched and appended {count} new bars for {args.symbol}/{args.timeframe}.")
+            logger.info("Fetched and appended %s new bars for %s/%s.", count, args.symbol, args.timeframe)
         else:
             scheduler = DataScheduler(symbol=args.symbol)
             results = await scheduler.run_once()
             total = sum(results.values())
-            logger.info(f"\nUpdate complete: {total} total new bars")
+            logger.info("\nUpdate complete: %s total new bars", total)
             for tf, n in results.items():
                 path = _csv_path(args.symbol, tf)
-                logger.info(f"  {tf:>4}  {n:>5} new bars  →  {path}")
+                logger.info("  %s  %s new bars  →  %s", f"{tf:>4}", f"{n:>5}", path)
 
     asyncio.run(_main())

@@ -7,6 +7,7 @@ import {
   ErrorState,
 } from './ui';
 import type { LogEntry } from './types';
+import { extractApiError } from '../../lib/utils';
 
 const LEVEL_COLORS: Record<string, { color: string; bg: string }> = {
   DEBUG:    { color: '#94a3b8', bg: '#1e293b' },
@@ -47,7 +48,7 @@ const LogsSection: React.FC = () => {
       setLogLevels(lvlRes.data);
     } catch (e: unknown) {
       if (!mountedRef.current) return;
-      setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to load logs');
+      setError(extractApiError(e, 'Failed to load logs'));
     } finally { if (mountedRef.current) setLoading(false); }
   }, [levelFilter, loggerFilter, search]);
 
@@ -69,7 +70,7 @@ const LogsSection: React.FC = () => {
       setLogLevels(prev => ({ ...prev, [logger]: level }));
       setMsg(`Log level for ${logger} set to ${level}`);
     } catch (e: unknown) {
-      setMsg((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? 'Failed to set log level');
+      setMsg(extractApiError(e, 'Failed to set log level'));
     } finally { setSavingLevel(null); }
   };
 

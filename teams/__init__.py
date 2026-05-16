@@ -704,7 +704,7 @@ def create_teams_router(manager: "TeamManager"):
 
     from api.auth import TokenPayload, get_current_user as _get_current_user
 
-    router = APIRouter(prefix="/api/teams", tags=["Teams"])
+    router = APIRouter(prefix="/api/teams", tags=["Teams"], dependencies=[Depends(_get_current_user)])
 
     class CreateTeamRequest(BaseModel):
         name: str
@@ -899,7 +899,9 @@ def create_teams_router(manager: "TeamManager"):
         }
 
     @router.patch("/{team_id}/members/{user_id}")
-    async def update_member(team_id: str, user_id: str, req: ChangeRoleRequest, user: TokenPayload = Depends(_get_current_user)):
+    async def update_member(
+        team_id: str, user_id: str, req: ChangeRoleRequest, user: TokenPayload = Depends(_get_current_user)
+    ):
         """Update a member's role (PATCH alias for PUT /{team_id}/members/{user_id}/role)."""
         try:
             new_role = UserRole(req.new_role)

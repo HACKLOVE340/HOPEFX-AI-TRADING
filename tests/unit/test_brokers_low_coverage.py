@@ -133,6 +133,7 @@ class TestMT5BrokerAccount:
         result = asyncio.run(broker.get_account_info())
         # Production returns a zero-filled AccountInfo (safe default), not None
         from brokers.base import AccountInfo
+
         assert isinstance(result, AccountInfo)
         assert result.balance == 0.0
 
@@ -2145,7 +2146,8 @@ class TestMT5ConnectorOther:
         tick = MagicMock(bid=1.079, ask=1.080)
         mt5.symbol_info_tick.return_value = tick
         result = conn.get_positions()
-        assert result[0].side == "SHORT"
+        # Position.side is an OrderSide enum; use side_str for legacy "SHORT" string
+        assert result[0].side_str == "SHORT"
 
     def test_get_positions_none(self, mt5_connector):
         conn, mod, mt5 = mt5_connector

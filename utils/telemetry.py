@@ -229,9 +229,9 @@ class AlertManager:
                         await self._trigger_emergency_stop(alert)
 
             except Exception as e:
-                logger.error(f"Alert evaluation error: {e}")
+                logger.error("Alert evaluation error: %s", e)
 
     async def _trigger_emergency_stop(self, alert: dict):
         """Trigger system emergency stop"""
-        logger.info(f"🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: {alert['message']}")
+        logger.info("🚨 EMERGENCY ALERT TRIGGERING KILL SWITCH: %s", alert["message"])
         # Emit kill switch event

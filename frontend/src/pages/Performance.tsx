@@ -9,11 +9,12 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { performanceApi, tradingApi } from '../hooks/useApi';
 import { PanelSkeleton } from '../components/ui/Skeleton';
-import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown } from '../lib/utils';
+import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { cn, fmtPrice, fmtPnl, fmtDateTime, computeDrawdown, extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -183,7 +184,7 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 260px), 1fr))', gap: 14, marginTop: 16 }}>
       <div style={s.card}>
         <h3 style={s.cardTitle}>Trade Breakdown</h3>
         {rows.map(({ label, value, color }) => (
@@ -213,10 +214,18 @@ function TradeBreakdown({ trades }: { trades: Trade[] }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 type Tab = 'overview' | 'trades' | 'weekly';
+type Period = 'weekly' | 'monthly' | 'yearly' | 'all';
+
+// Benchmark returns (annualised %) for comparison
+const BENCHMARKS: Record<string, number> = {
+  'S&P 500': 10.5,
+  'Gold':     8.2,
+  'BTC':     42.0,
+};
 
 const Performance: React.FC = () => {
-  const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab]       = useState<Tab>('overview');
+  const [period, setPeriod] = useState<Period>('all');
   const [tradeSymbol, setTradeSymbol] = useState('');
 
   const publicQ = useQuery<PublicPerformance>({
@@ -290,52 +299,74 @@ const Performance: React.FC = () => {
   }, [publicQ, equityQ]);
 
   return (
-    <div style={s.page}>
-      {/* Header */}
-      <div style={s.header}>
-        <div>
-          <h1 style={s.title}>Performance</h1>
-          <p style={s.subtitle}>Live paper trading results — updated continuously</p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {(['overview', 'trades', 'weekly'] as Tab[]).map((t) => (
-              <button key={t} onClick={() => setTab(t)} style={{ ...s.tabBtn, ...(tab === t ? s.tabBtnActive : {}) }}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+    <div className="page-content gap-4 sm:gap-6">
+      <PageHeader
+        title="Performance"
+        icon="🏆"
+        subtitle="Live trading results — equity curve, drawdown, trade stats"
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Analytics', href: '/pnl' },
+          { label: 'Performance' },
+        ]}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Tab selector */}
+            <div style={{ display: 'flex', gap: 4 }}>
+              {(['overview', 'trades', 'weekly'] as Tab[]).map((t) => (
+                <button key={t} onClick={() => setTab(t)} style={{ ...s.tabBtn, ...(tab === t ? s.tabBtnActive : {}) }}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+            {/* Period toggle */}
+            <div style={{ display: 'flex', gap: 2, background: '#0f172a', border: '1px solid #1e293b', borderRadius: 6, padding: 2 }}>
+              {(['weekly', 'monthly', 'yearly', 'all'] as Period[]).map((p) => (
+                <button key={p} onClick={() => setPeriod(p)} style={{
+                  ...s.tabBtn, padding: '4px 10px', fontSize: 11, border: 'none',
+                  background: period === p ? '#1e3a5f' : 'transparent',
+                  color: period === p ? '#60a5fa' : '#475569',
+                }}>
+                  {p.charAt(0).toUpperCase() + p.slice(1)}
+                </button>
+              ))}
+            </div>
+            <Link to="/pnl"       style={{ ...s.refreshBtn, background: 'rgba(251,191,36,0.1)', borderColor: 'rgba(251,191,36,0.3)', color: '#fbbf24', textDecoration: 'none' }}>💰 P&L</Link>
+            <Link to="/portfolio" style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)',  borderColor: 'rgba(34,197,94,0.3)',  color: '#22c55e', textDecoration: 'none' }}>💼 Portfolio</Link>
+            <Link to="/tca"       style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa', textDecoration: 'none' }}>📊 TCA</Link>
+            <Link to="/journal"   style={{ ...s.refreshBtn, background: 'rgba(59,130,246,0.1)', borderColor: 'rgba(59,130,246,0.3)', color: '#60a5fa', textDecoration: 'none' }}>📓 Journal</Link>
+            <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
+              {publicQ.isFetching ? '⟳' : '↻'} Refresh
+            </button>
           </div>
-          <button
-            onClick={() => navigate('/portfolio')}
-            style={{ ...s.refreshBtn, background: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}
-          >
-            💼 Portfolio
-          </button>
-          <button
-            onClick={() => navigate('/tca')}
-            style={{ ...s.refreshBtn, background: 'rgba(139,92,246,0.1)', borderColor: 'rgba(139,92,246,0.3)', color: '#a78bfa' }}
-          >
-            📊 TCA
-          </button>
-          <button onClick={refresh} disabled={publicQ.isFetching} style={s.refreshBtn}>
-            {publicQ.isFetching ? '⟳' : '↻'} Refresh
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Overview ──────────────────────────────────────────────────────── */}
       {tab === 'overview' && (
         <>
           {publicQ.isLoading && <div style={{ padding: 24 }}><PanelSkeleton rows={4} /></div>}
-          {publicQ.isError && <div style={s.errorBox}>Failed to load performance data</div>}
-          {!publicQ.isLoading && !publicQ.isError && !pub && (
-            <div style={{ textAlign: 'center', padding: '48px 24px', color: '#475569' }}>
-              <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#94a3b8', marginBottom: 8 }}>No performance data yet</div>
-              <div style={{ fontSize: 13, maxWidth: 400, margin: '0 auto', lineHeight: 1.6 }}>
-                Make your first trade on the <a href="/trade" style={{ color: '#60a5fa' }}>Trading</a> page to start tracking performance metrics, equity curve, and Sharpe ratio.
-              </div>
+          {publicQ.isError && (
+            <div style={s.errorBox}>
+              {extractApiError(publicQ.error, 'Failed to load performance data')}
             </div>
+          )}
+          {!publicQ.isLoading && !publicQ.isError && !pub && (
+            <EmptyState
+              icon="📊"
+              title="No performance data yet"
+              description="Make your first trade to start tracking equity curve, Sharpe ratio, win rate, and drawdown metrics."
+              action={
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Link to="/trade" style={{ padding: '8px 18px', background: '#3b82f6', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none', display: 'inline-block' }}>
+                    ⚡ Start Trading
+                  </Link>
+                  <Link to="/ai-strategy" style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #334155', borderRadius: 8, color: '#94a3b8', fontSize: 13, textDecoration: 'none', display: 'inline-block' }}>
+                    🧠 AI Strategy
+                  </Link>
+                </div>
+              }
+            />
           )}
           {pub && (
             <>
@@ -366,11 +397,53 @@ const Performance: React.FC = () => {
               )}
             </div>
             {equityQ.isLoading && <PanelSkeleton rows={3} />}
-            {equity.length > 1
+            {equityQ.isError && (
+              <div style={{ textAlign: 'center', color: '#f87171', padding: 40, fontSize: 13 }}>
+                Failed to load equity curve — {extractApiError(equityQ.error, 'check your connection')}
+              </div>
+            )}
+            {!equityQ.isLoading && !equityQ.isError && (equity.length > 1
               ? <EquityCurveChart points={equity} />
-              : !equityQ.isLoading && <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No equity data yet</div>
-            }
+              : <div style={{ textAlign: 'center', color: '#475569', padding: 40, fontSize: 13 }}>No equity data yet</div>
+            )}
           </div>
+
+          {/* Benchmark comparison */}
+          {pub && pub.avg_return_pct != null && (
+            <div style={s.card}>
+              <h3 style={{ ...s.cardTitle, marginBottom: 16 }}>Benchmark Comparison — Annualised Return</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Strategy row */}
+                {(() => {
+                  const stratReturn = pub.avg_return_pct ?? 0;
+                  const allReturns  = [stratReturn, ...Object.values(BENCHMARKS)];
+                  const maxReturn   = Math.max(...allReturns.map(Math.abs), 1);
+                  return (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#60a5fa', width: 80, flexShrink: 0 }}>HOPEFX</span>
+                        <div style={{ flex: 1, height: 8, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', borderRadius: 4, background: stratReturn >= 0 ? '#00e676' : '#ff1744', width: `${Math.abs(stratReturn) / maxReturn * 100}%`, transition: 'width 0.6s ease' }} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: stratReturn >= 0 ? '#00e676' : '#ff1744', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>
+                          {stratReturn >= 0 ? '+' : ''}{stratReturn.toFixed(2)}%
+                        </span>
+                      </div>
+                      {Object.entries(BENCHMARKS).map(([name, ret]) => (
+                        <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 12, color: '#64748b', width: 80, flexShrink: 0 }}>{name}</span>
+                          <div style={{ flex: 1, height: 6, background: '#0f172a', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', borderRadius: 4, background: '#475569', width: `${Math.abs(ret) / maxReturn * 100}%` }} />
+                          </div>
+                          <span style={{ fontSize: 12, color: '#475569', width: 60, textAlign: 'right', fontFamily: 'monospace' }}>+{ret.toFixed(1)}%</span>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Trade breakdown */}
           {tradesQ.data && <TradeBreakdown trades={tradesQ.data.trades} />}
@@ -396,7 +469,11 @@ const Performance: React.FC = () => {
             </div>
           </div>
           {tradesQ.isLoading && <PanelSkeleton rows={6} />}
-          {tradesQ.isError && <div style={{ color: '#f87171', fontSize: 13 }}>Failed to load trades — authentication required</div>}
+          {tradesQ.isError && (
+            <div style={{ color: '#f87171', fontSize: 13 }}>
+              Failed to load trades — {extractApiError(tradesQ.error, 'authentication required')}
+            </div>
+          )}
           {filteredTrades.length > 0 && (
             <div style={{ overflowX: 'auto' }}>
               <table style={s.table}>
@@ -472,6 +549,15 @@ const Performance: React.FC = () => {
       <div style={s.apiNote}>
         Raw data: <a href="/api/performance/public" target="_blank" rel="noopener noreferrer" style={{ color: '#fbbf24', fontFamily: 'monospace' }}>/api/performance/public</a> — no authentication required.
       </div>
+
+      <CrossLinkBar title="Related" style={{ marginTop: 24 }} links={[
+        { label: '💰 P&L Dashboard',  href: '/pnl',           color: '#60a5fa' },
+        { label: '💼 Portfolio',       href: '/portfolio',     color: '#a78bfa' },
+        { label: '📓 Trade Journal',   href: '/journal',       color: '#fbbf24' },
+        { label: '📊 TCA',             href: '/tca',           color: '#34d399' },
+        { label: '🤖 AI Strategy',     href: '/ai-strategy',   color: '#f97316' },
+        { label: '📈 Walk-Forward',    href: '/walk-forward',  color: '#4ade80' },
+      ]}/>
     </div>
   );
 };
@@ -479,7 +565,7 @@ const Performance: React.FC = () => {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const s: Record<string, React.CSSProperties> = {
-  page:        { padding: 24, maxWidth: 1100, margin: '0 auto' },
+  page:        { padding: 'clamp(12px,4vw,24px)', maxWidth: 1100, margin: '0 auto' },
   header:      { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, flexWrap: 'wrap', gap: 12 },
   title:       { fontSize: 24, fontWeight: 700, color: '#f1f5f9', margin: '0 0 6px' },
   subtitle:    { fontSize: 14, color: '#64748b', margin: 0 },
@@ -498,7 +584,7 @@ const s: Record<string, React.CSSProperties> = {
   table:       { width: '100%', borderCollapse: 'collapse', fontSize: 12 },
   th:          { textAlign: 'left', color: '#475569', fontSize: 10, fontWeight: 600, textTransform: 'uppercase', padding: '6px 10px', borderBottom: '1px solid #334155' },
   td:          { padding: '8px 10px', color: '#94a3b8', fontSize: 12 },
-  filterInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '6px 10px', fontSize: 12, outline: 'none', width: 140 },
+  filterInput: { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, color: '#f1f5f9', padding: '8px 10px', fontSize: 16, outline: 'none', width: '100%', maxWidth: 160, WebkitAppearance: 'none' },
   apiNote:     { background: '#1e293b', border: '1px solid #334155', borderRadius: 8, padding: '12px 16px', fontSize: 13, color: '#64748b', marginTop: 16 },
 };
 

@@ -681,11 +681,7 @@ class DataQualityEngine:
 
     def get_all_kalman_prices(self) -> dict[str, float]:
         """Return Kalman-smoothed prices for all sources that have data."""
-        return {
-            src.value: state.kalman_smoothed
-            for src, state in self._sources.items()
-            if state.kalman_smoothed > 0
-        }
+        return {src.value: state.kalman_smoothed for src, state in self._sources.items() if state.kalman_smoothed > 0}
 
     # ── Cross-source arbitrage detection ─────────────────────────────────────
 
@@ -711,11 +707,7 @@ class DataQualityEngine:
 
         An empty list means no arbitrage detected.
         """
-        valid = {
-            src: t
-            for src, t in ticks.items()
-            if t.is_valid() and t.quality != TickQuality.REJECTED
-        }
+        valid = {src: t for src, t in ticks.items() if t.is_valid() and t.quality != TickQuality.REJECTED}
         if len(valid) < 2:
             return []
 
@@ -739,13 +731,15 @@ class DataQualityEngine:
                     records.append(record)
                     logger.warning(
                         "DQE arbitrage detected %s=%.4f vs %s=%.4f diff=%.4f%%",
-                        sa.value, pa, sb.value, pb, diff_pct * 100,
+                        sa.value,
+                        pa,
+                        sb.value,
+                        pb,
+                        diff_pct * 100,
                     )
                     if self._prom_arbitrage:
                         with contextlib.suppress(Exception):
-                            self._prom_arbitrage.labels(
-                                source_a=sa.value, source_b=sb.value
-                            ).inc()
+                            self._prom_arbitrage.labels(source_a=sa.value, source_b=sb.value).inc()
         return records
 
     # ── ML-based anomaly scoring ──────────────────────────────────────────────

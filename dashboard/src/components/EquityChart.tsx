@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { createChart, IChartApi, AreaData, Time, AreaSeries } from 'lightweight-charts'
+import { extractApiError } from '../lib/utils'
 
 interface EquityPoint {
   time: number
@@ -65,7 +66,7 @@ export function EquityChart() {
         chart.timeScale().fitContent()
         setEmpty(false)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load equity curve')
+        setError(extractApiError(err, 'Failed to load equity curve'))
       }
     }
 

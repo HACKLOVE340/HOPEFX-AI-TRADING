@@ -483,6 +483,7 @@ class TestBinanceConnector:
                 "type": "MARKET",
                 "origQty": "0.001",
                 "executedQty": "0.001",
+                "cummulativeQuoteQty": "50.0",
                 "status": "FILLED",
                 "price": "50000",
                 "transactTime": 1704067200000,
@@ -784,7 +785,7 @@ class TestOANDAConnector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "EUR/USD"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     @patch("brokers.oanda.requests.Session")
     def test_get_account_info(self, mock_session_cls):
@@ -870,7 +871,27 @@ class TestMT5Connector:
     """Tests for MT5Connector (uses MetaTrader5 stub)."""
 
     def setup_method(self):
-        """Reset MT5 stub state before each test."""
+        """Reset MT5 stub state before each test.
+
+        Also reloads brokers.mt5 to re-bind its module-level ``mt5`` reference
+        to ``_mt5_stub``.  Other test files (e.g. test_brokers_low_coverage.py)
+        call importlib.reload(brokers.mt5) inside a patch.dict context, which
+        leaves brokers.mt5.mt5 pointing at a different MagicMock after the
+        context exits.  Reloading here ensures this class always uses _mt5_stub.
+        """
+        import importlib
+
+        # Ensure sys.modules["MetaTrader5"] is our stub before reloading
+        sys.modules["MetaTrader5"] = _mt5_stub
+
+        import brokers.mt5 as _mt5_mod
+
+        importlib.reload(_mt5_mod)
+
+        # Re-import MT5Connector from the freshly reloaded module
+        global MT5Connector
+        MT5Connector = _mt5_mod.MT5Connector
+
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True
         _mt5_stub.account_info.return_value = MagicMock(
@@ -1003,7 +1024,7 @@ class TestMT5Connector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "XAUUSD"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     def test_get_positions_not_connected(self):
         broker = MT5Connector(MT5_CONFIG)
@@ -1190,7 +1211,7 @@ class TestInteractiveBrokersConnector:
 
         assert len(positions) == 1
         assert positions[0].symbol == "AAPL"
-        assert positions[0].side == "LONG"
+        assert positions[0].side_str == "LONG"
 
     def test_get_positions_not_connected(self):
         broker = self._make_broker()
@@ -1508,7 +1529,11 @@ class TestBrokerFactory:
 
     def test_create_mt5_broker(self):
         broker = BrokerFactory.create_broker("mt5", MT5_CONFIG)
-        assert isinstance(broker, MT5Connector)
+        # Re-import MT5Connector to get the current class object — TestMT5Connector
+        # reloads brokers.mt5 in setup_method which can leave the module-level
+        # MT5Connector pointing at a stale class.  Check by name to be robust.
+        from brokers.mt5 import MT5Connector as _MT5Connector
+        assert isinstance(broker, _MT5Connector) or type(broker).__name__ == "MT5Connector"
 
     def test_create_ib_broker(self):
         try:
@@ -1756,3 +1781,82 @@ class TestTopstepTraderConnector:
         _mt5_stub.initialize.return_value = True
         _mt5_stub.login.return_value = True
         assert broker.connect() is True
+
+
+# ---------------------------------------------------------------------------
+# _units() regression tests
+# Bug: _units() returned int 0 for fractional quantities (e.g. 0.3), which
+# OANDA rejects with UNITS_INVALID. OANDAConnector.place_order() used
+# int(quantity) (truncation, not rounding) with no zero-guard at all.
+# ---------------------------------------------------------------------------
+
+
+class TestOandaUnits:
+    """Unit tests for brokers.oanda._units() helper."""
+
+    @pytest.fixture(autouse=True)
+    def _import(self):
+        from brokers.oanda import _units
+
+        self._units = _units
+
+    def test_buy_positive(self):
+        assert self._units("buy", 1.0) == 1
+
+    def test_sell_negative(self):
+        assert self._units("sell", 1.0) == -1
+
+    def test_long_alias(self):
+        assert self._units("long", 5.0) == 5
+
+    def test_short_alias(self):
+        assert self._units("short", 5.0) == -5
+
+    def test_rounds_to_nearest(self):
+        # round(2.4) = 2, round(2.6) = 3
+        assert self._units("buy", 2.4) == 2
+        assert self._units("buy", 2.6) == 3
+
+    def test_zero_quantity_raises(self):
+        """quantity=0.3 rounds to 0 — must raise ValueError, not silently send 0."""
+        with pytest.raises(ValueError, match="rounds to 0 units"):
+            self._units("buy", 0.3)
+
+    def test_zero_quantity_sell_raises(self):
+        with pytest.raises(ValueError, match="rounds to 0 units"):
+            self._units("sell", 0.4)
+
+    def test_exactly_zero_raises(self):
+        with pytest.raises(ValueError):
+            self._units("buy", 0.0)
+
+    def test_negative_quantity_raises(self):
+        """Negative quantity also rounds to 0 — must raise."""
+        with pytest.raises(ValueError):
+            self._units("buy", -0.3)
+
+    def test_large_quantity(self):
+        assert self._units("buy", 100_000.0) == 100_000
+        assert self._units("sell", 100_000.0) == -100_000
+
+    def test_case_insensitive_direction(self):
+        assert self._units("BUY", 1.0) == 1
+        assert self._units("SELL", 1.0) == -1
+        assert self._units("Long", 1.0) == 1
+        assert self._units("Short", 1.0) == -1
+
+    def test_warning_on_significant_rounding(self, caplog):
+        """Quantities that round by more than 0.01 must emit a warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="brokers.oanda"):
+            self._units("buy", 1.6)  # rounds to 2, diff=0.4 > 0.01
+        assert any("rounded" in r.message.lower() for r in caplog.records)
+
+    def test_no_warning_on_exact_integer(self, caplog):
+        """Exact integers must not emit a rounding warning."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="brokers.oanda"):
+            self._units("buy", 3.0)
+        assert not any("rounded" in r.message.lower() for r in caplog.records)

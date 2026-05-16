@@ -81,7 +81,7 @@ async def test_buy_signal_to_fill(broker, risk, metrics):
     metrics.get_collector("hopefx_orders_total").inc(1, {"symbol": "XAUUSD", "side": "buy"})
     metrics.get_collector("hopefx_signals_total").inc(1, {"direction": "buy"})
 
-    positions = broker.get_positions()
+    positions = await broker.get_positions()
     assert any(p.symbol == "XAUUSD" for p in positions)
 
     await broker.disconnect()
@@ -214,7 +214,7 @@ async def test_price_update_reflected_in_positions(broker):
     broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
 
     broker.update_market_price("XAUUSD", 2050.0)
-    positions = broker.get_positions()
+    positions = await broker.get_positions()
     xau = next((p for p in positions if p.symbol == "XAUUSD"), None)
     assert xau is not None
     # Unrealised P&L should be positive after a 50-point move

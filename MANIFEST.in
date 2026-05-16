@@ -9,3 +9,24 @@
 # for the sdist but then fails with FileNotFoundError when building the wheel
 # from that sdist in an isolated environment.
 include requirements.txt
+
+# Exclude frontend assets, node_modules, and non-Python build artifacts
+# from the source distribution — they are not needed by pip installers.
+prune frontend
+prune mobile
+prune mobile-app
+prune dashboard
+prune node_modules
+prune docs
+prune helm
+prune k8s
+prune k6
+prune locust
+prune grafana
+prune nginx
+prune docker
+prune deployments
+prune assets
+prune .git
+prune build
+prune dist

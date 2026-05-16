@@ -15,7 +15,25 @@ import type { EquitySnapshot, RiskSnapshot, VolumeDeltaBar, WsNewsItem, SystemAl
 
 // Module-level map: symbol → last known mid price, used to compute change_pct
 // when the server sends 0 or omits the field.
-const _lastMid: Record<string, number> = {};
+// Capped at MAX_TRACKED_SYMBOLS entries to prevent unbounded growth when the
+// server sends unexpected or malformed symbol strings. Oldest entry is evicted
+// when the cap is reached (insertion-order eviction via Map iteration).
+const MAX_TRACKED_SYMBOLS = 100;
+const _lastMid = new Map<string, number>();
+
+function _setLastMid(symbol: string, mid: number): void {
+  if (!_lastMid.has(symbol) && _lastMid.size >= MAX_TRACKED_SYMBOLS) {
+    // Evict the oldest entry (first key in Map insertion order)
+    const oldest = _lastMid.keys().next().value;
+    if (oldest !== undefined) _lastMid.delete(oldest);
+  }
+  _lastMid.set(symbol, mid);
+}
+
+// Test-only exports — not part of the public API.
+// Imported by websocket_messages.test.ts to inspect and reset internal state.
+export const _setLastMid_testOnly = _setLastMid;
+export const _lastMid_testOnly    = _lastMid;
 
 const _envWsUrl = import.meta.env.VITE_WS_URL as string | undefined;
 const WS_URL: string = _envWsUrl ?? (() => {
@@ -27,7 +45,7 @@ const HEARTBEAT_INTERVAL_MS  = 30_000;
 const INITIAL_RECONNECT_MS   = 1_000;
 const MAX_RECONNECT_MS       = 30_000;
 // Poll REST prices when WS is not connected so the UI shows live-ish data.
-const REST_POLL_INTERVAL_MS  = 30_000;
+const REST_POLL_INTERVAL_MS  = 5_000;
 
 interface WsMessage {
   type:
@@ -75,6 +93,10 @@ export function useWebSocket(enabled = true) {
   const restPollTimer  = useRef<ReturnType<typeof setInterval> | null>(null);
   const unmounted      = useRef(false);
   const authedRef      = useRef(false);
+  // Stable ref to the latest connect function so onclose setTimeout always
+  // calls the current version rather than a stale closure captured at the
+  // time the WebSocket was created.
+  const connectRef     = useRef<() => void>(() => {});
 
   // Stable ref to useStore.getState — never changes, so it's safe in
   // useCallback deps without causing reconnect loops on every render.
@@ -143,10 +165,13 @@ export function useWebSocket(enabled = true) {
         setWsStatus('connected');
         // Clear stale no-live-feed banner on successful reconnect.
         setNoLiveFeed(false);
+        // Include 'system' channel so nuclear_halt / circuit_breaker events
+        // are received after auth-required reconnects (was missing here but
+        // present in the non-auth 'connected' path).
         wsRef.current?.send(JSON.stringify({
           type: 'subscribe',
           channels: ['prices', 'positions', 'signals', 'account', 'alerts',
-                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news'],
+                     'microstructure', 'volume_delta', 'sentiment', 'risk', 'equity', 'news', 'system'],
         }));
         break;
 
@@ -155,13 +180,13 @@ export function useWebSocket(enabled = true) {
         // Compute change_pct from previous mid if server sends 0 or omits it.
         // _lastMid is a module-level map so it persists across reconnects.
         const mid = raw.mid ?? ((raw.bid + raw.ask) / 2);
-        const prev = _lastMid[raw.symbol];
+        const prev = _lastMid.get(raw.symbol);
         const computed_change_pct = raw.change_pct
           ? raw.change_pct
           : prev != null && prev !== 0
             ? ((mid - prev) / prev) * 100
             : 0;
-        _lastMid[raw.symbol] = mid;
+        _setLastMid(raw.symbol, mid);
         const tick: PriceTick = { ...raw, change_pct: computed_change_pct };
         setPrice(tick);
         // Clear the no-live-feed banner once real ticks arrive.
@@ -321,12 +346,12 @@ export function useWebSocket(enabled = true) {
       for (const [rawSymbol, raw] of Object.entries(res.data)) {
         const symbol = normaliseSymbol(rawSymbol);
         const mid    = (raw.bid + raw.ask) / 2;
-        const prev   = _lastMid[symbol];
+        const prev   = _lastMid.get(symbol);
         const rawAny = raw as Record<string, unknown>;
         const change_pct = prev != null && prev !== 0
           ? ((mid - prev) / prev) * 100
           : (typeof rawAny['change_pct'] === 'number' ? (rawAny['change_pct'] as number) : 0);
-        _lastMid[symbol] = mid;
+        _setLastMid(symbol, mid);
         setPrice({
           symbol,
           bid:        raw.bid,
@@ -374,8 +399,11 @@ export function useWebSocket(enabled = true) {
 
     ws.onmessage = (event) => handleMessage(event.data as string);
     ws.onerror = () => {
+      // Only update status here. Do NOT start the REST poll — onclose always
+      // fires after onerror, so starting the poll here creates a race where
+      // both WS (still in CLOSING state) and REST poll run simultaneously,
+      // producing duplicate price updates until onopen fires on reconnect.
       getState().setWsStatus('error');
-      startRestPoll(); // WS errored — start REST fallback
     };
 
     ws.onclose = () => {
@@ -383,14 +411,24 @@ export function useWebSocket(enabled = true) {
       if (unmounted.current) return;
       getState().setWsStatus('disconnected');
       authedRef.current = false;
-      startRestPoll(); // WS closed — start REST fallback
+      // Start REST fallback only here — onclose is the definitive signal that
+      // the connection is gone (fires after onerror when there is an error,
+      // and directly when the server closes cleanly).
+      startRestPoll();
       const delay = reconnectDelay.current;
       // Add ±10% jitter to prevent thundering herd when many clients reconnect
       const jitter = delay * (0.9 + Math.random() * 0.2);
       reconnectDelay.current = Math.min(delay * 2, MAX_RECONNECT_MS);
-      reconnectTimer.current = setTimeout(connect, jitter);
+      // Use connectRef so the timeout always calls the latest connect function
+      // rather than the stale closure captured when this WebSocket was created.
+      reconnectTimer.current = setTimeout(() => connectRef.current(), jitter);
     };
   }, [handleMessage, getState, startHeartbeat, startRestPoll, stopRestPoll]);
+
+  // Keep connectRef current so onclose setTimeout always calls the latest version.
+  useEffect(() => {
+    connectRef.current = connect;
+  });
 
   useEffect(() => {
     if (!enabled) return;

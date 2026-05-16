@@ -18,6 +18,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { journalApi } from '../hooks/useApi';
+import { extractApiError } from '../lib/utils';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -142,7 +143,7 @@ const TradeJournal: React.FC = () => {
       setEditing(null);
       await fetchAll();
     } catch (err: unknown) {
-      setSaveErr(err instanceof Error ? err.message : 'Failed to save journal entry. Please try again.');
+      setSaveErr(extractApiError(err, 'Failed to save journal entry. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -156,7 +157,7 @@ const TradeJournal: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Trade Journal</h1>

@@ -666,11 +666,11 @@ async def check_orchestrator_start_stop() -> None:
 
 
 async def run_all(verbose: bool = False) -> tuple[int, int]:
-    logger.info(f"\n{BOLD}HOPEFX End-to-End Production Validation{RESET}")
-    logger.info(f"  Timestamp: {datetime.now(UTC).isoformat()}")
-    logger.info(f"  Python:    {sys.version.split()[0]}\n")
+    logger.info("\n%sHOPEFX End-to-End Production Validation%s", BOLD, RESET)
+    logger.info("  Timestamp: %s", datetime.now(UTC).isoformat())
+    logger.info("  Python:    %s\n", sys.version.split()[0])
 
-    logger.info(f"{BOLD}Synchronous checks{RESET}")
+    logger.info("%sSynchronous checks%s", BOLD, RESET)
     check_architecture()
     check_imports()
     check_orchestrator()
@@ -694,7 +694,7 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
     check_forward_test_no_mocks()
     check_order_flow_no_mocks()
 
-    logger.info(f"\n{BOLD}Async / lifecycle checks{RESET}")
+    logger.info("\n%sAsync / lifecycle checks%s", BOLD, RESET)
     await check_orchestrator_start_stop()
 
     # Summary
@@ -703,23 +703,23 @@ async def run_all(verbose: bool = False) -> tuple[int, int]:
     failed_c = sum(1 for _, p, c, _ in results if not p and c)
     warnings = sum(1 for _, p, c, _ in results if not p and not c)
 
-    logger.info(f"\n{BOLD}Summary{RESET}")
-    logger.info(f"  Total:    {total}")
-    logger.info(f"  {PASS}Passed:   {passed}")
+    logger.info("\n%sSummary%s", BOLD, RESET)
+    logger.info("  Total:    %s", total)
+    logger.info("  %sPassed:   %s", PASS, passed)
     if failed_c:
-        logger.error(f"  {FAIL}Failed (critical): {failed_c}")
+        logger.error("  %sFailed (critical): %s", FAIL, failed_c)
     if warnings:
-        logger.warning(f"  {WARN}Warnings:  {warnings}")
+        logger.warning("  %sWarnings:  %s", WARN, warnings)
 
     if failed_c == 0:
-        logger.info(f"\n  {PASS}{BOLD}All critical checks passed. System is production-ready.{RESET}\n")
+        logger.info("\n  %s%sAll critical checks passed. System is production-ready.%s\n", PASS, BOLD, RESET)
     else:
-        logger.error(f"\n  {FAIL}{BOLD}{failed_c} critical check(s) failed. Fix before deploying.{RESET}\n")
+        logger.error("\n  %s%s%s critical check(s) failed. Fix before deploying.%s\n", FAIL, BOLD, failed_c, RESET)
         if verbose:
-            logger.error(f"{BOLD}Failed checks:{RESET}")
+            logger.error("%sFailed checks:%s", BOLD, RESET)
             for name, passed, critical, detail in results:
                 if not passed and critical:
-                    logger.error(f"  {FAIL} {name}: {detail}")
+                    logger.error("  %s %s: %s", FAIL, name, detail)
 
     return passed, failed_c
 

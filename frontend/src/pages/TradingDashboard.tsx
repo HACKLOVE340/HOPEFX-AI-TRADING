@@ -22,8 +22,20 @@
  */
 
 import React, { Suspense } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
+import { CrossLinkBar } from '../components/CrossLinkBar';
+
+const TD_CROSS_LINKS = [
+  { label: 'Trade',           href: '/trade',           icon: '⚡', color: '#3b82f6' },
+  { label: 'Portfolio',       href: '/portfolio',       icon: '📊', color: '#8b5cf6' },
+  { label: 'Performance',     href: '/performance',     icon: '📈', color: '#06b6d4' },
+  { label: 'AI Strategy',     href: '/ai-strategy',     icon: '🤖', color: '#f59e0b' },
+  { label: 'Journal',         href: '/journal',         icon: '📓', color: '#10b981' },
+  { label: 'Risk Calculator', href: '/risk-calculator', icon: '🛡',  color: '#ec4899' },
+  { label: 'Watchlist',       href: '/watchlist',       icon: '👁',  color: '#38bdf8' },
+  { label: 'Signals',         href: '/signals',         icon: '📡', color: '#a78bfa' },
+];
 // useBootstrapData and useWebSocket are intentionally NOT imported here —
 // both are managed globally in AppShell (App.tsx) to prevent duplicate
 // polling and duplicate WebSocket connections on page navigation.
@@ -33,7 +45,7 @@ import { PanelSkeleton, ChartSkeleton, TickerSkeleton } from '../components/ui/S
 // ── Eagerly loaded (above-the-fold, tiny) ─────────────────────────────────────
 import { LivePriceTicker }  from '../components/panels/LivePriceTicker';
 import { AccountBar }       from '../components/terminal/AccountBar';
-import { NewsTicker }       from '../components/panels/NewsTicker';
+
 
 // ── Quick-action bar ──────────────────────────────────────────────────────────
 const QuickActionBar: React.FC = () => {
@@ -43,14 +55,16 @@ const QuickActionBar: React.FC = () => {
   const pnlColor = unrealisedPnl >= 0 ? '#22c55e' : '#ef4444';
 
   const actions = [
-    { label: '⚡ Trade',           path: '/trade',          color: '#3b82f6' },
-    { label: '📊 Analytics',       path: '/performance',    color: '#8b5cf6' },
-    { label: '🧠 AI Strategy',     path: '/ai-strategy',    color: '#06b6d4' },
-    { label: '🌍 Geopolitical',    path: '/geopolitical',   color: '#f59e0b' },
-    { label: '📓 Journal',         path: '/journal',        color: '#10b981' },
+    { label: '⚡ Trade',           path: '/trade',           color: '#3b82f6' },
+    { label: '📊 Portfolio',       path: '/portfolio',       color: '#8b5cf6' },
+    { label: '📈 Analytics',       path: '/performance',     color: '#06b6d4' },
+    { label: '🧠 AI Strategy',     path: '/ai-strategy',     color: '#f59e0b' },
+    { label: '🌍 Geopolitical',    path: '/geopolitical',    color: '#f97316' },
+    { label: '📓 Journal',         path: '/journal',         color: '#10b981' },
     { label: '🛡 Risk Calc',       path: '/risk-calculator', color: '#ec4899' },
-    { label: '📡 Signal Feed',     path: '/signals',         color: '#a78bfa' },
-    { label: '🔁 Copy Trading',    path: '/copy-trading',   color: '#34d399' },
+    { label: '📡 Signals',         path: '/signals',         color: '#a78bfa' },
+    { label: '🔁 Copy Trading',    path: '/copy-trading',    color: '#34d399' },
+    { label: '👁 Watchlist',       path: '/watchlist',       color: '#38bdf8' },
   ];
 
   return (
@@ -61,6 +75,22 @@ const QuickActionBar: React.FC = () => {
       borderBottom: '1px solid #1a2e4a',
       overflowX: 'auto', flexShrink: 0,
     }}>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, marginRight: 4 }}>
+        <Link
+          to="/dashboard"
+          style={{ fontSize: 10, color: '#475569', textDecoration: 'none', fontWeight: 600, letterSpacing: 0.5 }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#64748b'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLAnchorElement).style.color = '#475569'; }}
+        >
+          HOME
+        </Link>
+        <span style={{ fontSize: 10, color: '#1e293b' }}>›</span>
+        <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: 0.5 }}>TERMINAL</span>
+      </div>
+
+      <div style={{ width: 1, height: 20, background: '#1e293b', flexShrink: 0 }} />
+
       {/* Today P&L */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
@@ -150,75 +180,74 @@ function DashboardInner() {
       </PanelErrorBoundary>
       <QuickActionBar />
 
-      {/* ── Main grid ────────────────────────────────────────────────────── */}
-      <div className="flex-1 min-h-0 grid grid-cols-12 grid-rows-2 gap-2 p-2 overflow-hidden">
+      {/* ── Main grid — desktop: 12-col fixed; mobile: scrollable stack ── */}
 
-        {/* Equity curve — large center-left, spans 2 rows */}
+      {/* Desktop (lg+): original 12-col grid */}
+      <div className="hidden lg:grid flex-1 min-h-0 grid-cols-12 grid-rows-2 gap-2 p-2 overflow-hidden">
         <div className="col-span-5 row-span-2 min-h-0">
-          <Suspense fallback={<ChartSkeleton />}>
-            <EquityCurveChart />
-          </Suspense>
+          <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
         </div>
-
-        {/* Signal feed — center column, spans 2 rows (guarded) */}
         <div className="col-span-3 row-span-2 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={6} />}>
-            <LiveSignalFeedGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
         </div>
-
-        {/* Risk dashboard — cols 9-10, row 1 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={4} />}>
-            <RiskDashboardGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><RiskDashboardGuarded /></Suspense>
         </div>
-
-        {/* Order book — cols 11-12, row 1 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={8} />}>
-            <OrderBookDepthGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={8} />}><OrderBookDepthGuarded /></Suspense>
         </div>
-
-        {/* Sentiment gauge — cols 9-10, row 2 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={3} />}>
-            <SentimentGaugeGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
         </div>
-
-        {/* Microstructure — cols 11-12, row 2 (guarded) */}
         <div className="col-span-2 row-span-1 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={5} />}>
-            <MicrostructurePanelGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={5} />}><MicrostructurePanelGuarded /></Suspense>
+        </div>
+      </div>
+
+      {/* Mobile/tablet (< lg): vertically scrollable single-column stack */}
+      <div className="lg:hidden flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-2">
+        <div className="min-h-[260px]">
+          <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Suspense fallback={<PanelSkeleton rows={3} />}><RiskDashboardGuarded /></Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
+        </div>
+        <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
+        <div className="grid grid-cols-2 gap-2">
+          <Suspense fallback={<PanelSkeleton rows={4} />}><OrderBookDepthGuarded /></Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><MicrostructurePanelGuarded /></Suspense>
         </div>
       </div>
 
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
-      <div className="h-52 shrink-0 grid grid-cols-12 gap-2 px-2 pb-2">
-        {/* Macro calendar — left 5 cols (guarded) */}
+      {/* Desktop */}
+      <div className="hidden lg:grid h-52 shrink-0 grid-cols-12 gap-2 px-2 pb-2">
         <div className="col-span-5 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={3} />}>
-            <MacroCalendarGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
         </div>
-
-        {/* Orchestrator health — center 4 cols (guarded) */}
         <div className="col-span-4 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={4} />}>
-            <OrchestratorHealthGridGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><OrchestratorHealthGridGuarded /></Suspense>
         </div>
-
-        {/* ML model panel — right 3 cols (guarded) */}
         <div className="col-span-3 min-h-0">
-          <Suspense fallback={<PanelSkeleton rows={4} />}>
-            <MLModelPanelGuarded />
-          </Suspense>
+          <Suspense fallback={<PanelSkeleton rows={4} />}><MLModelPanelGuarded /></Suspense>
         </div>
       </div>
+      {/* Mobile: stack bottom panels */}
+      <div className="lg:hidden flex flex-col gap-2 px-2 pb-2">
+        <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
+        <div className="grid grid-cols-2 gap-2">
+          <Suspense fallback={<PanelSkeleton rows={3} />}><OrchestratorHealthGridGuarded /></Suspense>
+          <Suspense fallback={<PanelSkeleton rows={3} />}><MLModelPanelGuarded /></Suspense>
+        </div>
+      </div>
+
+      {/* Cross-links footer strip */}
+      <CrossLinkBar
+        links={TD_CROSS_LINKS}
+        title="Quick Nav"
+        style={{ padding: '8px 8px 10px', margin: 0, borderTop: '1px solid #1a2e4a', background: 'rgba(6,13,24,0.8)', flexShrink: 0 }}
+      />
     </div>
   );
 }

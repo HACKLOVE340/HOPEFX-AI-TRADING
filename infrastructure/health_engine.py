@@ -165,7 +165,7 @@ class HealthEngine:
             detail = raw.get("detail", "")
             extra = {k: v for k, v in raw.items() if k not in ("status", "detail")}
             return ProbeResult(name=name, label=label, status=status, latency_ms=latency_ms, detail=detail, extra=extra)
-        except TimeoutError:
+        except (TimeoutError, asyncio.TimeoutError):
             return ProbeResult(
                 name=name,
                 label=label,
@@ -414,14 +414,11 @@ def _register_default_probes(engine: HealthEngine) -> None:
                     raw = await rc.get(key)
                     if raw:
                         try:
-                            data = json.loads(raw) if isinstance(raw, (str, bytes)) else {}
+                            data = json.loads(raw) if isinstance(raw, str | bytes) else {}
                         except (json.JSONDecodeError, ValueError):
                             data = {}
-                        ts_val = data.get("ts", data.get("timestamp", data.get("time", None)))
-                        if ts_val is not None:
-                            age_s = time.time() - float(ts_val)
-                        else:
-                            age_s = 0.0
+                        ts_val = data.get("ts", data.get("timestamp", data.get("time")))
+                        age_s = time.time() - float(ts_val) if ts_val is not None else 0.0
                         return {
                             "status": "ok" if age_s < 120 else "warning",
                             "detail": f"last tick age={age_s:.1f}s key={key}",

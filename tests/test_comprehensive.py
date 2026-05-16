@@ -56,8 +56,16 @@ class TestMarketData(unittest.TestCase):
         # assertion.  Use a unique symbol that no other test writes to.
         self.cache = MarketDataCache(host="localhost", port=6379, db=0)
         # Wipe any in-memory state left by earlier tests in the same process.
-        self.cache._local_cache.clear()
-        self.cache._local_ttl.clear()
+        # The production cache uses _fallback_store (_InMemoryStore) when Redis
+        # is unavailable; clear its internal dicts directly.
+        if hasattr(self.cache, "_fallback_store"):
+            self.cache._fallback_store._data.clear()
+            self.cache._fallback_store._expiry.clear()
+        # Legacy attribute names kept for backward compatibility
+        if hasattr(self.cache, "_local_cache"):
+            self.cache._local_cache.clear()
+        if hasattr(self.cache, "_local_ttl"):
+            self.cache._local_ttl.clear()
 
     def test_get_returns_none_for_missing_key(self):
         # Use a symbol that no other test writes to guarantee a clean miss.

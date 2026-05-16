@@ -20,7 +20,6 @@ import logging
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import ClassVar
 
 from analysis.advanced_order_flow import (
     AdvancedOrderFlowAnalyzer,
@@ -198,7 +197,7 @@ class OrderFlowDashboard:
 
     def _build_summary(self, analysis: dict) -> dict:
         """Build a high-level summary from the full analysis."""
-        signals: ClassVar[list[str]] = []
+        signals: list[str] = []
         bias = "neutral"
         strength = "weak"
 

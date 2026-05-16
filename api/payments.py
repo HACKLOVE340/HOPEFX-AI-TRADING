@@ -17,14 +17,12 @@ POST /api/payments/webhook                 — on-chain confirmation callback
                                              (HMAC-SHA256 verified)
 """
 
-from __future__ import annotations
-
 import hashlib
 import hmac
 import json
 import logging
 import os
-import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
@@ -32,6 +30,22 @@ UTC = timezone.utc
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from api.auth import TokenPayload, get_current_user
+
+# ── Withdrawal rate limit ─────────────────────────────────────────────────────
+# Enforced via Depends() on the /withdraw route so it appears in OpenAPI docs
+# and is applied before the handler body runs.
+try:
+    from rate_limiting.advanced import rate_limit_dependency as _rl_dep
+    from rate_limiting_configuration import WITHDRAWAL_RATE as _WITHDRAWAL_RATE  # type: ignore[import]
+
+    _withdraw_rate_limit = _rl_dep(_WITHDRAWAL_RATE)
+except Exception:  # pragma: no cover — rate limiting optional in dev
+
+    async def _withdraw_rate_limit(request: Request) -> None:  # type: ignore[misc]
+        # Rate limiting unavailable (optional dependency not installed) — allow request
+        return None
+
+
 from pydantic import BaseModel, Field
 
 
@@ -88,14 +102,20 @@ class PaymentStatusResponse(BaseModel):
 
 
 def _get_db_session():
-    """Return a SQLAlchemy session from the global app_state, or None."""
+    """Return a SQLAlchemy session from app_state or SessionLocal fallback."""
     try:
         from core.app_state import app_state
 
         if app_state and app_state.db_session_factory:
             return app_state.db_session_factory()  # pylint: disable=not-callable
     except Exception as _exc:
-        logger.debug("Suppressed exception: %s", _exc)
+        logger.warning("payments: app_state db_session_factory unavailable: %s", _exc)
+    try:
+        from database.connection import SessionLocal
+
+        return SessionLocal()
+    except Exception as _exc2:
+        logger.warning("payments: SessionLocal fallback failed: %s", _exc2)
     return None
 
 
@@ -213,7 +233,9 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
             detail="Address generation unavailable — check server logs",
         ) from None
 
-    payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
+    # UUID-based payment_id eliminates timestamp collision when two requests
+    # arrive in the same second (e.g. client double-tap or network retry).
+    payment_id = f"PAY_{uuid.uuid4().hex}"
     payment = {
         "payment_id": payment_id,
         "currency": currency,
@@ -387,6 +409,18 @@ async def payment_webhook(
     confirmations = int(payload.get("confirmations", p["confirmations"]))
     tx_hash = payload.get("tx_hash")
 
+    # Idempotency guard: if the payment is already in a terminal state
+    # (complete / failed / expired), do not re-process.  Duplicate webhook
+    # delivery is common — payment processors retry on non-2xx or timeouts.
+    _terminal_states = {"complete", "failed", "expired"}
+    if p.get("status") in _terminal_states:
+        logger.info(
+            "Webhook duplicate: payment_id=%s already in terminal state=%s — skipping re-processing",
+            payment_id,
+            p["status"],
+        )
+        return {"received": True, "payment_id": payment_id, "status": p["status"], "idempotent": True}
+
     update_kwargs: dict = {
         "status": new_status,
         "confirmations": confirmations,
@@ -480,7 +514,9 @@ async def fiat_deposit(
 
 async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     provider = os.getenv("FIAT_PROVIDER", "manual")
-    reference = f"DEP-{int(time.time())}"
+    # UUID-based reference prevents collision when two deposits are initiated
+    # in the same second (e.g. double-tap, network retry).
+    reference = f"DEP-{uuid.uuid4().hex[:16].upper()}"
     logger.info("Fiat deposit initiated: amount=%.2f method=%s ref=%s", req.amount, req.method, reference)
 
     if provider == "stripe":
@@ -526,7 +562,11 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     status_code=202,
     summary="Initiate a fiat withdrawal",
 )
-async def fiat_withdraw(req: FiatWithdrawRequest, user: TokenPayload = Depends(get_current_user)):
+async def fiat_withdraw(
+    req: FiatWithdrawRequest,
+    user: TokenPayload = Depends(get_current_user),
+    _rl: None = Depends(_withdraw_rate_limit),
+):
     """
     Initiate a fiat (USD) withdrawal to bank account or card.
 
@@ -541,7 +581,7 @@ async def fiat_withdraw(req: FiatWithdrawRequest, user: TokenPayload = Depends(g
             detail=f"Minimum withdrawal is ${min_withdrawal:.2f}",
         )
 
-    reference = f"WDR-{int(time.time())}"
+    reference = f"WDR-{uuid.uuid4().hex[:16].upper()}"
     logger.info(
         "Fiat withdrawal initiated: amount=%.2f dest=%s ref=%s",
         req.amount,
