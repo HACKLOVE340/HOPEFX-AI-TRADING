@@ -199,6 +199,8 @@ class LiveConnectionManager:
         """
         dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
+            if not self.is_authenticated(cid):
+                continue
             if channel in subs or not subs:
                 ws = self._connections.get(cid)
                 if ws:
