@@ -227,6 +227,12 @@ class OrderLifecycleManager:
 
     def fill_order(self, order_id: str, fill_qty: Decimal, fill_price: Decimal) -> bool:
         """Process order fill"""
+        if fill_qty <= 0:
+            logger.warning("OMS fill_order: fill_qty=%s <= 0 for order %s — ignoring", fill_qty, order_id)
+            return False
+        if fill_price <= 0:
+            logger.warning("OMS fill_order: fill_price=%s <= 0 for order %s — ignoring", fill_price, order_id)
+            return False
         order = self.orders.get(order_id)
         if not order or not order.can_fill(fill_qty, fill_price):
             return False

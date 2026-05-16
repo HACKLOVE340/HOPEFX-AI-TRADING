@@ -155,14 +155,21 @@ class CCXTConnector(BrokerConnector):
         if stop_price:
             params["stopPrice"] = stop_price
 
-        raw = self._exchange.create_order(
-            symbol,
-            ccxt_type,
-            ccxt_side,
-            quantity,
-            price,
-            params,
-        )
+        try:
+            raw = self._exchange.create_order(
+                symbol,
+                ccxt_type,
+                ccxt_side,
+                quantity,
+                price,
+                params,
+            )
+        except Exception as exc:
+            logger.error(
+                "CCXTConnector.place_order failed: symbol=%s side=%s qty=%s price=%s: %s",
+                symbol, ccxt_side, quantity, price, exc,
+            )
+            raise
         return self._parse_order(raw)
 
     def cancel_order(self, order_id: str, symbol: str | None = None) -> bool:
