@@ -7,7 +7,9 @@ set -eu
 TMPL=/etc/alertmanager/alertmanager.yml.tmpl
 OUT=/tmp/alertmanager.yml
 
-envsubst < "$TMPL" > "$OUT"
+while IFS= read -r line || [ -n "$line" ]; do
+    eval "printf '%s\n' \"$line\""
+done < "$TMPL" > "$OUT"
 
 exec /bin/alertmanager \
     --config.file="$OUT" \
