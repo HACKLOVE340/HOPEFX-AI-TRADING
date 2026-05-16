@@ -38,22 +38,19 @@ _HEDGE_STATE_KEY = "superadmin:nuclear:hedge"
 
 def _get_kill_switch():
     """Return the global KillSwitch instance if available."""
+    # Use module attribute access (not 'from … import') so we always read
+    # the current value of app_state, not the None captured at import time.
     try:
-        from kill_switch import KillSwitch
-        # Try to get the singleton from app state
-        try:
-            from api.admin import app_state
-            if app_state and hasattr(app_state, "kill_switch"):
-                return app_state.kill_switch
-        except Exception:  # nosec B110
-            pass
-        # Fall back to module-level singleton
-        try:
-            import kill_switch as _ks_mod
-            if hasattr(_ks_mod, "_instance"):
-                return _ks_mod._instance
-        except Exception:  # nosec B110
-            pass
+        import api.admin as _admin_mod
+        state = getattr(_admin_mod, "app_state", None)
+        if state and hasattr(state, "kill_switch"):
+            return state.kill_switch
+    except Exception:  # nosec B110
+        pass
+    try:
+        import kill_switch as _ks_mod
+        if hasattr(_ks_mod, "_instance"):
+            return _ks_mod._instance
     except Exception:  # nosec B110
         pass
     return None
