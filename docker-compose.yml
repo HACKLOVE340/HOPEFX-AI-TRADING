@@ -371,7 +371,9 @@ services:
       start_period: 15s
 
   alertmanager:
-    image: prom/alertmanager:v0.27.0
+    build:
+      context: ./monitoring/alertmanager
+      dockerfile: Dockerfile
     restart: unless-stopped
     # Port is NOT exposed to the host — Prometheus reaches it via the internal
     # Docker network at alertmanager:9093, matching prometheus.yml config.
@@ -384,13 +386,7 @@ services:
       ALERTMANAGER_SMTP_USERNAME: ${ALERTMANAGER_SMTP_USERNAME:-}
       ALERTMANAGER_SMTP_PASSWORD: ${ALERTMANAGER_SMTP_PASSWORD:-}
     volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - alertmanager_data:/alertmanager
-    command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
-      - "--web.listen-address=:9093"
-      - "--cluster.listen-address="  # single-instance; disable clustering
     depends_on:
       prometheus:
         condition: service_healthy
