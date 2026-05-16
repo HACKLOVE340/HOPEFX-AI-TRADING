@@ -598,8 +598,11 @@ class NuclearHopeFXSupervisor:
             self.trading_paused,
         )
 
-        # 4. Start background monitoring loop if not already running
+        # 4. Start background monitoring loop if not already running.
+        # Set the flag synchronously before create_task so that concurrent
+        # callers see it immediately — the coroutine's finally block resets it.
         if not getattr(self, "_monitoring_task_running", False):
+            self._monitoring_task_running = True
             asyncio.create_task(
                 self._nuclear_monitoring_loop(),
                 name="nuclear_monitoring_loop",
@@ -613,7 +616,6 @@ class NuclearHopeFXSupervisor:
         is alive.  Exits when nuclear_level drops back to 0 (manual_resume
         or auto-resume).
         """
-        self._monitoring_task_running = True
         heartbeat_interval = 60  # seconds
         logger.info("Nuclear monitoring loop started")
         try:
