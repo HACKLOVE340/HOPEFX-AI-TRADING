@@ -565,8 +565,9 @@ class RegimeConditionalModel(BaseEstimator, ClassifierMixin):
         self._global_model = _build_model(REGIME_MIXED, len(X))
         self._global_model.fit(X, y)
 
-        # Regime-specific models
-        for regime in [REGIME_MEAN_REVERTING, REGIME_TRENDING, REGIME_MIXED]:
+        # Regime-specific models (includes PARABOLIC so it gets a dedicated model
+        # instead of silently falling back to the global mixed-regime model)
+        for regime in [REGIME_MEAN_REVERTING, REGIME_TRENDING, REGIME_MIXED, REGIME_HIGH_VOL_PARABOLIC]:
             mask = labels == regime
             n = mask.sum()
             self._regime_counts[regime] = int(n)

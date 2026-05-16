@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
+import threading
 
 try:
     import torch
@@ -381,6 +382,9 @@ class SklearnOnlineLearner:
         self._ref_probs: np.ndarray | None = None  # reference distribution
         self._drift_count = 0
 
+        # Thread safety: serialize concurrent partial_fit + predict_proba calls
+        self._lock = threading.Lock()
+
         # Performance tracking: rolling accuracy
         self._correct_window: deque = deque(maxlen=self._PERF_WINDOW)
         self._rolling_accuracy: float = 0.5
@@ -630,6 +634,11 @@ class SklearnOnlineLearner:
         """
         if self._model is None:
             return False
+        with self._lock:
+            return self._partial_fit_locked(bars)
+
+    def _partial_fit_locked(self, bars: pd.DataFrame) -> bool:
+        """Model update — must be called with self._lock held."""
         try:
             X = self._extract_features(bars)
             y = self._extract_label(bars)
@@ -693,16 +702,17 @@ class SklearnOnlineLearner:
         """
         if self._model is None or not self._fitted:
             return None
-        try:
-            X = self._extract_features(bars)
-            if X is None:
+        with self._lock:
+            try:
+                X = self._extract_features(bars)
+                if X is None:
+                    return None
+                X_scaled = self._scaler.transform(X)
+                proba = self._model.predict_proba(X_scaled)
+                return float(proba[0, 1])
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                logger.debug("SklearnOnlineLearner.predict_proba failed: %s", exc)
                 return None
-            X_scaled = self._scaler.transform(X)
-            proba = self._model.predict_proba(X_scaled)
-            return float(proba[0, 1])
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            logger.debug("SklearnOnlineLearner.predict_proba failed: %s", exc)
-            return None
 
     def reset(self) -> None:
         """
