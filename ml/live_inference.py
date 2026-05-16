@@ -50,6 +50,7 @@ _SAVED = Path(__file__).parent / "saved_models"
 _MIN_BARS = 100  # minimum bars for reliable feature computation
 _CACHE_TTL = int(os.getenv("FEATURE_CACHE_TTL_SECONDS", "60"))  # 1-minute default
 _CACHE_PREFIX = "hopefx:features:"
+_MAX_CONSECUTIVE_ERRORS = int(os.getenv("LIVE_INFERENCE_MAX_ERRORS", "10"))
 
 
 # ── Feature cache ─────────────────────────────────────────────────────────────
@@ -674,9 +675,22 @@ class LiveInferenceLoop:
             start = time.monotonic()
             try:
                 await self._tick()
+                self._error_count = 0  # reset on successful tick
             except Exception as exc:
-                logger.error("LiveInferenceLoop: unhandled tick error: %s", exc)
                 self._error_count += 1
+                logger.error(
+                    "LiveInferenceLoop: unhandled tick error (%d/%d): %s",
+                    self._error_count,
+                    _MAX_CONSECUTIVE_ERRORS,
+                    exc,
+                )
+                if self._error_count >= _MAX_CONSECUTIVE_ERRORS:
+                    logger.critical(
+                        "LiveInferenceLoop: %d consecutive errors — stopping loop for safety",
+                        self._error_count,
+                    )
+                    self._running = False
+                    break
             elapsed = time.monotonic() - start
             sleep_for = max(0.0, self.interval_seconds - elapsed)
             await asyncio.sleep(sleep_for)

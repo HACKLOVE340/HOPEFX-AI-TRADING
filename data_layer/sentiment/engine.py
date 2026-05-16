@@ -56,6 +56,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import math
 import os
 import time
 from collections import deque
@@ -615,6 +616,8 @@ class NewsSentimentEngine:
             ema = _SENTIMENT_EMA_ALPHA * a.sentiment_score + (1.0 - _SENTIMENT_EMA_ALPHA) * ema
             # FinBERT score for causal window (use stored score if available)
             fb_score = self._finbert.score(f"{a.headline} {a.summary}"[:512])
+            if not math.isfinite(fb_score):
+                fb_score = 0.0
             finbert_ema = _SENTIMENT_EMA_ALPHA * fb_score + (1.0 - _SENTIMENT_EMA_ALPHA) * finbert_ema
 
         # Blended score: VADER + FinBERT weighted average

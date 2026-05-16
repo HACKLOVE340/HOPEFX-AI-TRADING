@@ -161,9 +161,7 @@ def _score_ml_confidence(
         # prob > 0.5 = bullish confirmation
         raw = (prob - 0.5) * 2.0   # maps [0.5, 1.0] → [0.0, 1.0]
     else:
-        # prob < 0.5 = bearish confirmation
-        raw = (0.5 - prob) * 2.0   # maps [0.0, 0.5] → [1.0, 0.0] ... wait:
-        # Actually: for a SELL signal, low prob is good. (0.5 - prob)*2 → [0,1] as prob→0
+        # prob < 0.5 = bearish confirmation: (0.5 - prob)*2 → [0,1] as prob→0
         raw = (0.5 - prob) * 2.0
 
     raw = float(np.clip(raw, 0.0, 1.0))
