@@ -506,7 +506,7 @@ async def _eventbus_tick_broadcaster() -> None:
                 with _last_mid_lock:
                     prev = _last_mid.get(symbol, mid)
                     _last_mid[symbol] = mid
-                change = ((mid - prev) / prev * 100) if prev else 0.0
+                change = ((mid - prev) / prev * 100) if prev > 0 else 0.0
 
                 tick_data = {
                     "symbol": symbol,

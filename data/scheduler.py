@@ -591,7 +591,8 @@ async def _update_timeframe(
                     granularity,
                     result.errors,
                 )
-    except Exception:  # nosec B110 — validator unavailable; persist all bars
+    except Exception as exc:  # validator unavailable; persist all bars unvalidated
+        logger.warning("DataScheduler: bar validator raised %s — persisting %d bars unvalidated", exc, len(bars))
         valid_bars = bars
 
     return _append_bars(path, valid_bars)
@@ -623,6 +624,7 @@ class DataScheduler:
         self.timeframes = timeframes
         self.interval_secs = interval_secs
         self._running = False
+        self._executing = False
 
     async def run_once(self) -> dict[str, int]:
         """
@@ -668,13 +670,19 @@ class DataScheduler:
             logger.info("DataScheduler: deferring first run by 60s (dev mode)")
             await asyncio.sleep(60)
         while self._running:
+            if self._executing:
+                await asyncio.sleep(1)
+                continue
+            self._executing = True
             try:
                 results = await self.run_once()
                 logger.info("DataScheduler update: %s", results)
             except asyncio.CancelledError:
                 raise
             except Exception:
-                logger.exception("DataScheduler update failed: %s")
+                logger.exception("DataScheduler update failed")
+            finally:
+                self._executing = False
             await asyncio.sleep(self.interval_secs)
 
     def stop(self) -> None:

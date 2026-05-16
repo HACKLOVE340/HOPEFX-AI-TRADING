@@ -144,7 +144,7 @@ async def _get_price_tick(symbol: str) -> dict | None:
         if tick:
             mid = (tick.bid + tick.ask) / 2.0
             prev = _last_mid.get(symbol, mid)
-            change_pct = ((mid - prev) / prev * 100.0) if prev else 0.0
+            change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
             _last_mid[symbol] = mid
             return {
                 "symbol": symbol,
@@ -170,7 +170,7 @@ async def _get_price_tick(symbol: str) -> dict | None:
                 ask = float(data.get("ask", 0))
                 mid = (bid + ask) / 2.0
                 prev = _last_mid.get(symbol, mid)
-                change_pct = ((mid - prev) / prev * 100.0) if prev else 0.0
+                change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
                 _last_mid[symbol] = mid
                 return {
                     "symbol": symbol,

@@ -196,6 +196,7 @@ class OANDABroker:
         self.connected: bool = False
         self._total_orders: int = 0
         self._total_fills: int = 0
+        self._count_lock = asyncio.Lock()
         # Optional injected API object (used by tests to bypass HTTP calls)
         self.api = None
         # Optional injected risk manager (used by tests)
@@ -354,12 +355,14 @@ class OANDABroker:
 
         payload = {"order": order_body}
 
-        self._total_orders += 1
+        async with self._count_lock:
+            self._total_orders += 1
         result = await self._post_order_with_retry(payload, client_ref)
         result["latency_ms"] = round((time.monotonic() - t0) * 1000, 2)
 
         if result.get("status") == "filled":
-            self._total_fills += 1
+            async with self._count_lock:
+                self._total_fills += 1
 
         return result
 
@@ -737,7 +740,9 @@ class OANDAConnector:
             body["order"]["type"] = "MARKET"
         else:
             body["order"]["type"] = "LIMIT"
-            body["order"]["price"] = str(price or 0)
+            if not price or price <= 0:
+                raise ValueError(f"LIMIT order requires a valid price, got {price!r}")
+            body["order"]["price"] = str(price)
             body["order"]["timeInForce"] = "GTC"
         try:
             url = f"{self.base_url}/v3/accounts/{self._account_id}/orders"
@@ -746,15 +751,19 @@ class OANDAConnector:
             data = resp.json()
             if "orderFillTransaction" in data:
                 txn = data["orderFillTransaction"]
+                fill_price_raw = txn.get("price")
+                fill_price = float(fill_price_raw) if fill_price_raw else None
+                if fill_price is None or fill_price <= 0:
+                    logger.error("OANDAConnector: orderFillTransaction missing valid price: %s", txn)
                 return _Order(
                     id=txn.get("id", str(uuid.uuid4())),
                     symbol=symbol,
                     side=side,
                     type=order_type,
                     quantity=abs(float(txn.get("units", quantity))),
-                    price=float(txn.get("price", price or 0)),
+                    price=fill_price,
                     status=_OrderStatus.FILLED,
-                    average_price=float(txn.get("price", price or 0)),
+                    average_price=fill_price,
                     timestamp=datetime.now(UTC),
                 )
             if "orderCreateTransaction" in data:
@@ -765,7 +774,7 @@ class OANDAConnector:
                     side=side,
                     type=order_type,
                     quantity=abs(float(txn.get("units", quantity))),
-                    price=float(txn.get("price", price or 0)),
+                    price=price,
                     status=_OrderStatus.OPEN,
                     timestamp=datetime.now(UTC),
                 )
