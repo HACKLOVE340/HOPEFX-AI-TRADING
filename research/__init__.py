@@ -594,7 +594,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         content: str = ""
 
     @router.get("/notebooks")
-    async def list_notebooks(query: str | None = None, author: str | None = None):
+    async def list_notebooks(query: str | None = None, author: str | None = None, user: TokenPayload = Depends(require_role("trader"))):
         """List all research notebooks (excluding templates)."""
         notebooks = engine.search_notebooks(query=query, author=author)
         # Enrich with status field expected by the frontend
@@ -607,7 +607,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         return {"notebooks": notebooks}
 
     @router.post("/notebooks")
-    async def create_notebook(req: CreateNotebookRequest):
+    async def create_notebook(req: CreateNotebookRequest, user: TokenPayload = Depends(require_role("trader"))):
         """Create a new research notebook."""
         nb = engine.create_notebook(
             title=req.title,
@@ -630,7 +630,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         }
 
     @router.post("/notebooks/{notebook_id}/cells")
-    async def add_cell(notebook_id: str, req: AddCellRequest):
+    async def add_cell(notebook_id: str, req: AddCellRequest, user: TokenPayload = Depends(require_role("trader"))):
         """Add a cell to a notebook."""
         try:
             cell_type = CellType(req.cell_type)
