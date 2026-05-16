@@ -46,9 +46,15 @@ def _ensure_db_tables() -> None:
 
     Uses an isolated in-memory SQLite DB so this module never touches the
     shared hopefx.db file used by other test modules.
+
+    Resets the database.connection._db_manager singleton so that any prior
+    test that initialised the manager against a different DB (e.g.
+    test_api_exception_leak_fixes.py sets DATABASE_URL=sqlite:///./test_leak_fixes.db)
+    does not pollute this module's sessions.
     """
     try:
         from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
 
         from database.models import Base  # user_models also uses this Base
 
@@ -64,14 +70,35 @@ def _ensure_db_tables() -> None:
             Base.metadata.drop_all(mem_engine)
             Base.metadata.create_all(mem_engine)
 
-        # Patch the module-level engine so the app uses our isolated DB
+        # Reset the global _db_manager singleton so SessionLocal binds to our
+        # isolated in-memory DB, not whatever DB a prior test module initialised.
         import database.connection as _db_conn
 
-        _db_conn.engine = mem_engine  # type: ignore[attr-defined]
+        _db_conn._db_manager = None  # type: ignore[attr-defined]
+
+        # Re-initialise the manager with our isolated engine
+        from database.connection import DatabaseManager
+
+        new_manager = DatabaseManager.__new__(DatabaseManager)
+        new_manager._engine = mem_engine
+        new_manager._session_factory = sessionmaker(bind=mem_engine)
+        new_manager._metrics = None  # type: ignore[attr-defined]
+        _db_conn._db_manager = new_manager  # type: ignore[attr-defined]
+
+        # Also patch the module-level engine proxy
         try:
-            _db_conn._manager._engine = mem_engine  # type: ignore[attr-defined]
+            _db_conn.engine = mem_engine  # type: ignore[attr-defined]
         except Exception:
             pass
+
+        # Patch SessionLocal in api.superadmin.users directly so it uses our engine
+        try:
+            import api.superadmin.users as _users_mod
+
+            _users_mod.SessionLocal = sessionmaker(bind=mem_engine)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
     except Exception:
         # Fall back to the shared file DB — drop/recreate for a clean schema
         try:

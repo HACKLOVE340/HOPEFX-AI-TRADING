@@ -76,6 +76,23 @@ NUCLEAR_ALERT_SEVERITY: int = 7
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# JWT token validation helper (mirrors api/ws_live.py:_validate_ws_token)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _validate_ws_token(token: str) -> "dict | None":
+    """Validate a Bearer token from a WS auth message. Returns payload or None."""
+    token = token.removeprefix("Bearer ")
+    try:
+        from auth.jwt import decode_access_token
+
+        return decode_access_token(token)
+    except Exception as exc:  # nosec B110
+        logger.debug("Nuclear WS token validation failed: %s", exc)
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Connection manager
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -205,6 +222,48 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
         allowed, reason = await limiter.check_and_register(ws, client_ip)
         if not allowed:
             return
+
+        await ws.accept()
+        await ws.send_text(json.dumps({"type": "connected", "auth_required": True}))
+
+        # ── In-band JWT auth handshake ─────────────────────────────────────────
+        # Client must send { "type": "auth", "token": "Bearer <jwt>" } within
+        # 10 seconds of connecting, matching the same pattern as /ws/live and
+        # /ws/nuclear in api/ws_live.py.
+        try:
+            raw = await asyncio.wait_for(ws.receive_text(), timeout=10.0)
+            auth_msg = json.loads(raw)
+        except (TimeoutError, asyncio.TimeoutError):
+            await ws.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+        except WebSocketDisconnect:
+            await limiter.release(client_ip)
+            return
+        except json.JSONDecodeError:
+            await ws.send_text(json.dumps({"type": "error", "code": "INVALID_JSON"}))
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+
+        if auth_msg.get("type") != "auth":
+            await ws.send_text(json.dumps({"type": "error", "code": "AUTH_REQUIRED"}))
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+
+        payload = _validate_ws_token(auth_msg.get("token", ""))
+        if not payload:
+            await ws.send_text(
+                json.dumps({"type": "error", "code": "AUTH_FAILED", "message": "Invalid or expired token"})
+            )
+            await ws.close(code=4001)
+            await limiter.release(client_ip)
+            return
+
+        user_id = str(payload.get("sub", "unknown"))
+        await ws.send_text(json.dumps({"type": "auth_ok", "user_id": user_id}))
 
         await _manager.connect(ws)
         # Send immediate snapshot on connect
