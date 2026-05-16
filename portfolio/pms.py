@@ -318,9 +318,9 @@ class PortfolioOptimizer:
         if len(symbols) < 2:
             return dict.fromkeys(symbols, 1.0)
 
-        # Build returns matrix
+        # Build returns matrix — convert deque to list for slicing
         min_len = min(len(r) for r in self.returns_history.values())
-        returns_matrix = np.array([self.returns_history[sym][-min_len:] for sym in symbols])
+        returns_matrix = np.array([list(self.returns_history[sym])[-min_len:] for sym in symbols])
 
         # Calculate expected returns and covariance
         returns_matrix_clean = np.nan_to_num(returns_matrix, nan=0.0)

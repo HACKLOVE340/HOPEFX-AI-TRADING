@@ -119,12 +119,15 @@ def main() -> int:
     for package in sorted(GUARDED_PACKAGES):
         for py_file in _collect_py_files(REPO_ROOT, package):
             mod = _module_name(py_file, REPO_ROOT)
-            # A file is "live" if its full module name OR any prefix appears
-            # in the import set (accounts for `from execution import engine`
-            # matching execution.engine)
+            # A file is "live" if:
+            #   1. Its full module name is imported (e.g., "execution.engine")
+            #   2. A parent module is imported and this is a submodule
+            #      (e.g., "execution" imported, checking "execution.engine")
+            # Do NOT mark a file live just because it's a prefix of an import
+            # (e.g., "core" should not make "core.signal_engine" live).
             is_live = (
                 mod in all_imports
-                or any(mod.startswith(imp + ".") or imp.startswith(mod) for imp in all_imports)
+                or any(mod.startswith(imp + ".") for imp in all_imports)
             )
             if not is_live:
                 dead.append(str(py_file.relative_to(REPO_ROOT)))

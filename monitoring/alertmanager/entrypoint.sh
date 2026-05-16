@@ -1,7 +1,8 @@
 #!/bin/sh
 # monitoring/alertmanager/entrypoint.sh
-# Expands ${VAR:-default} placeholders in alertmanager.yml.tmpl using the
-# container's environment variables, then execs the real alertmanager binary.
+# Expands ${VAR:-default} placeholders in alertmanager.yml.tmpl using shell
+# evaluation (not envsubst, which does not support :- defaults), then execs
+# the real alertmanager binary.
 set -eu
 
 TMPL=/etc/alertmanager/alertmanager.yml.tmpl

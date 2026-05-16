@@ -339,7 +339,8 @@ class OHLCVBuilder:
     ) -> list[BarState]:
         """Return the last *n* closed bars in chronological order."""
         history = self._closed_bars.get((symbol, timeframe), [])
-        return history[-n:]
+        # Convert deque to list for slicing support
+        return list(history)[-n:]
 
     def get_latest_closed_bar(self, symbol: str, timeframe: str) -> BarState | None:
         """Return the most recently closed bar, or None."""

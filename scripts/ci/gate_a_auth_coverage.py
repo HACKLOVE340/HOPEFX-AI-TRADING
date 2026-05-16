@@ -161,8 +161,10 @@ def check_file(path: Path) -> list[str]:
     except (SyntaxError, UnicodeDecodeError):
         return []
 
-    if _file_has_router_level_auth(tree):
-        return []  # router-level auth covers all routes in this file
+    # Do NOT skip the entire file if any router has auth — a file can have
+    # multiple routers, and only endpoints on auth-protected routers should
+    # be exempt. Instead, check each endpoint individually.
+    # TODO: Track which router each endpoint is registered on for precise checking.
 
     violations: list[str] = []
     for node in ast.walk(tree):
