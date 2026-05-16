@@ -234,11 +234,21 @@ class OHLCVBuilder:
         # (symbol, timeframe) → BarState
         self._open_bars: dict[tuple[str, str], BarState] = {}
 
+        class _SliceableBarHistory(deque[BarState]):
+            """Deque-backed history that preserves slice access for callers."""
+
+            def __getitem__(
+                self, index: int | slice
+            ) -> BarState | list[BarState]:
+                if isinstance(index, slice):
+                    return list(self)[index]
+                return super().__getitem__(index)
+
         # Closed bar history per (symbol, timeframe): bounded deque of BarState
         self._max_history: int = 500
-        self._closed_bars: dict[tuple[str, str], deque[BarState]] = defaultdict(
-            lambda: deque(maxlen=self._max_history)
-        )
+        self._closed_bars: dict[
+            tuple[str, str], _SliceableBarHistory
+        ] = defaultdict(lambda: _SliceableBarHistory(maxlen=self._max_history))
 
         # Callbacks
         self._callbacks: list[BarCloseCallback] = []
