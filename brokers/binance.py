@@ -209,7 +209,7 @@ class BinanceConnector(BrokerConnector):
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("executedQty", 0)),
                 average_price=(
-                    float(result["cummulativeQuoteQty"]) / float(result["executedQty"])
+                    float(result.get("cummulativeQuoteQty", 0)) / float(result["executedQty"])
                     if float(result.get("executedQty") or 0) > 0
                     else (float(result.get("price", 0)) if result.get("price") else None)
                 ),
@@ -319,7 +319,7 @@ class BinanceConnector(BrokerConnector):
                 status=self._parse_order_status(result["status"]),
                 filled_quantity=float(result.get("executedQty", 0)),
                 average_price=(
-                    float(result["cummulativeQuoteQty"]) / float(result["executedQty"])
+                    float(result.get("cummulativeQuoteQty", 0)) / float(result["executedQty"])
                     if float(result.get("executedQty") or 0) > 0
                     else (float(result.get("price", 0)) if result.get("price") else None)
                 ),

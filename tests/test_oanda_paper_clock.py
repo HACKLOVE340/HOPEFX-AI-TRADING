@@ -256,6 +256,7 @@ class TestInitBrokerSelection:
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data").mkdir()
         monkeypatch.setenv("BROKER_TYPE", "oanda")
+        monkeypatch.setenv("FALLBACK_TO_PAPER", "true")
         monkeypatch.delenv("BROKER_OANDA_TOKEN", raising=False)
         monkeypatch.delenv("OANDA_API_KEY", raising=False)
 

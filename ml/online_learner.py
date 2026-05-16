@@ -391,6 +391,16 @@ class SklearnOnlineLearner:
 
         self._init_model()
 
+    def __getstate__(self) -> dict:
+        state = self.__dict__.copy()
+        # threading.Lock is not picklable; reconstruct on load
+        state.pop("_lock", None)
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
+        self._lock = threading.Lock()
+
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _init_model(self) -> None:

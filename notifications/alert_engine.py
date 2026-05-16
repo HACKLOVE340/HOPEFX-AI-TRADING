@@ -807,7 +807,7 @@ class AlertEngine:
         if alert_id:
             history = [t for t in history if t.alert_id == alert_id]
 
-        return history[-limit:]
+        return list(history)[-limit:]
 
     def get_stats(self) -> dict:
         """Get alert engine statistics."""
