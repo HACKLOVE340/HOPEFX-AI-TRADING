@@ -20,13 +20,20 @@ Author: HOPEFX Development Team
 import abc
 import logging
 
+import xml.etree.ElementTree as _stdlib_ET  # used for Element type annotation only
+
 try:
     import defusedxml.ElementTree as _ET  # type: ignore[import-untyped]
 
     ET = _ET
+    # defusedxml wraps stdlib's parse/fromstring but does not re-export Element.
+    # Alias it from stdlib so type annotations (ET.Element) resolve correctly.
+    if not hasattr(ET, "Element"):
+        ET.Element = _stdlib_ET.Element  # type: ignore[attr-defined]
+        ET.ParseError = _stdlib_ET.ParseError  # type: ignore[attr-defined]
 except ImportError:
     # defusedxml not installed — fall back to stdlib; input is validated upstream
-    import xml.etree.ElementTree as ET
+    import xml.etree.ElementTree as ET  # type: ignore[assignment]
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
