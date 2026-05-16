@@ -264,7 +264,7 @@ class TestAdvancedPredictorPredict:
 
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.1, 0.9]])
-        X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
+        X = pd.DataFrame(np.random.randn(10, 10), columns=[f"f{i}" for i in range(10)])
         with (
             patch.object(p, "_build_features", return_value=X),
             patch.object(ap, "THRESHOLD_LONG", 0.58),
@@ -280,7 +280,7 @@ class TestAdvancedPredictorPredict:
 
         p = self._loaded_predictor(tmp_path)
         p._model.predict_proba.return_value = np.array([[0.9, 0.1]])
-        X = pd.DataFrame(np.random.randn(1, 10), columns=[f"f{i}" for i in range(10)])
+        X = pd.DataFrame(np.random.randn(10, 10), columns=[f"f{i}" for i in range(10)])
         with (
             patch.object(p, "_build_features", return_value=X),
             patch.object(ap, "THRESHOLD_SHORT", 0.42),

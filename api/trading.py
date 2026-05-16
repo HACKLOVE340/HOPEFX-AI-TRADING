@@ -996,7 +996,7 @@ async def close_position(
     # Ownership check: verify the position belongs to the requesting user.
     # Positions opened via the DB-backed path carry user_id; broker-native
     # positions (no DB row) fall through and are allowed for role >= trader.
-    if app_state.db_session_factory is not None:
+    if getattr(app_state, "db_session_factory", None) is not None:
         try:
             from database.models import Position as _Pos
 

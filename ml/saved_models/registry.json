@@ -89,7 +89,7 @@
       "registered_at": "2026-04-03T16:27:00.000000+00:00",
       "promoted_at": "2026-04-03T16:27:00.000000+00:00",
       "state": "active",
-      "oos_accuracy": 0.565,
+      "oos_accuracy": 0.5992,
       "oos_f1": 0.6885,
       "oos_auc": 0.5427,
       "oos_p_value": 0.0,

@@ -600,18 +600,20 @@ class GeopoliticalRiskProvider:
         else:
             logger.debug("All geopolitical data sources still unavailable (suppressed repeat warning).")
 
-        # ── 7. Static curated fallback ─────────────────────────────────────────
-        # When ALL live sources are unreachable (sandbox, airgap, proxy), return
-        # a curated baseline of well-documented ongoing conflicts and hotspots so
-        # the frontend shows meaningful geopolitical context instead of zeros.
-        static = self._get_static_fallback_events()
-        if static:
-            logger.info(
-                "GeopoliticalRiskProvider: serving %d static fallback events "
-                "(live sources unreachable).",
-                len(static),
-            )
-            return static
+        # ── 7. Static curated fallback (non-production only) ──────────────────
+        # Return a curated baseline when ALL live sources are unreachable in
+        # development/staging so the frontend shows meaningful context.
+        # In production we return [] as documented above so callers handle
+        # the no-data case explicitly and aren't misled by stale hardcoded data.
+        if not _is_production:
+            static = self._get_static_fallback_events()
+            if static:
+                logger.info(
+                    "GeopoliticalRiskProvider: serving %d static fallback events "
+                    "(live sources unreachable).",
+                    len(static),
+                )
+                return static
         return []
 
     def _get_static_fallback_events(self) -> list["GeopoliticalEvent"]:
