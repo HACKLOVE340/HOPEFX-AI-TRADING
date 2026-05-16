@@ -731,7 +731,7 @@ class NuclearHopeFXSupervisor:
             "monitoring_only": self._monitoring_only,
             "monitoring_loop_running": self._monitoring_task_running,
             "kill_switch_active": ks.is_active() if ks else None,
-            "kill_switch_reason": ks.reason if ks else None,
+            "kill_switch_reason": getattr(ks, "reason", None) if ks else None,
             "rl_agent_loaded": self.rl_agent is not None,
             "vecnorm_loaded": self._vec_normalize is not None,
             "model_path": str(self._model_path),

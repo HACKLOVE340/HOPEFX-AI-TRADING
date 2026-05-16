@@ -196,8 +196,9 @@ class SMCICTEngine:
         atr = entry_feat.atr if entry_feat.atr > 0 else price * 0.005
 
         # OB: price near EMA21 (institutional re-entry zone)
-        ob_zone_long = abs(price - entry_feat.ema_21) / (price + 1e-9) < 0.003
-        ob_zone_short = abs(price - entry_feat.ema_21) / (price + 1e-9) < 0.003
+        _ema21_dist = abs(price - entry_feat.ema_21) / (price + 1e-9)
+        ob_zone_long = _ema21_dist < 0.003   # within 0.3% of EMA21 — valid long OB
+        ob_zone_short = _ema21_dist < 0.003  # within 0.3% of EMA21 — valid short OB
 
         # FVG: BB pct_b at extremes signals imbalance
         fvg_long = entry_feat.bb_pct_b < 0.2 and structure == LONG

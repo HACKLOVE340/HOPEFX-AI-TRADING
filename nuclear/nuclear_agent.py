@@ -382,7 +382,7 @@ class NuclearStrategyAgent:
 
     def status(self) -> dict[str, Any]:
         """Return agent status snapshot for the dashboard/API."""
-        reader_stats = self._reader.stats()
+        reader_stats = self._reader.stats() or {}
         last = self._last_result
 
         return {
