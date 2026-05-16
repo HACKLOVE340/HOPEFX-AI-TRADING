@@ -25,7 +25,9 @@ from datetime import timezone
 UTC = timezone.utc
 from http import HTTPStatus
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from api.auth import TokenPayload, require_role
 from pydantic import BaseModel
 
 _HTTP_OK = HTTPStatus.OK.value
@@ -57,7 +59,7 @@ class BrokerTestResponse(BaseModel):
 
 
 @router.post("/test-connection", response_model=BrokerTestResponse)
-async def test_broker_connection(req: BrokerTestRequest) -> BrokerTestResponse:
+async def test_broker_connection(req: BrokerTestRequest, user: TokenPayload = Depends(require_role("trader"))) -> BrokerTestResponse:
     """
     Test broker credentials and return connection status, latency, and balance.
 
@@ -531,7 +533,7 @@ class StampOandaRequest(BaseModel):
     "/stamp-oanda",
     summary="Stamp real OANDA account_id into the paper trading clock (admin)",
 )
-async def stamp_oanda_clock(req: StampOandaRequest):
+async def stamp_oanda_clock(req: StampOandaRequest, user: TokenPayload = Depends(require_role("admin"))):
     """
     Manually stamp a real OANDA account_id into the paper trading clock.
 

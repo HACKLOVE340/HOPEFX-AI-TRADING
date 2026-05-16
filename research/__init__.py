@@ -773,7 +773,7 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         return {"templates": engine.get_templates()}
 
     @router.post("/notebooks/from-template/{template_id}")
-    async def create_from_template(template_id: str, req: CreateNotebookRequest):
+    async def create_from_template(template_id: str, req: CreateNotebookRequest, user: TokenPayload = Depends(require_role("trader"))):
         """Create a notebook from a template."""
         nb = engine.create_from_template(template_id, req.title, req.author)
         if nb is None:

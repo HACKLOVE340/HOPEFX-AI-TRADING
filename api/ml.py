@@ -1871,6 +1871,7 @@ async def create_ab_test(
     traffic_split: float = 0.20,
     control_model: str = "advanced_oos",
     name: str | None = None,
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
     """
     Start a new A/B test comparing challenger_model against control_model.
@@ -1896,6 +1897,7 @@ async def record_ab_result(
     test_id: str,
     arm: str,
     correct: bool,
+    user: TokenPayload = Depends(require_role("trader")),
 ) -> dict:
     """Record whether the ``arm`` prediction was correct."""
     from ml.ab_testing import get_ab_test_manager
@@ -1909,7 +1911,7 @@ async def record_ab_result(
     summary="Stop an A/B test",
     tags=["ML Models"],
 )
-async def stop_ab_test(test_id: str, winner: str | None = None) -> dict:
+async def stop_ab_test(test_id: str, winner: str | None = None, user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Stop a running A/B test and optionally declare a winner."""
     from ml.ab_testing import get_ab_test_manager
     stopped = get_ab_test_manager().stop_test(test_id, winner=winner)
@@ -1935,7 +1937,7 @@ async def list_training_jobs() -> dict:
     tags=["ML Models"],
     status_code=202,
 )
-async def start_training_job(model: str) -> dict:
+async def start_training_job(model: str, user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Dispatch a background training job for the named model.
 
@@ -1952,7 +1954,7 @@ async def start_training_job(model: str) -> dict:
     summary="Cancel a running training job",
     tags=["ML Models"],
 )
-async def cancel_training_job(job_id: str) -> dict:
+async def cancel_training_job(job_id: str, user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Cancel a background training job by ID."""
     from ml.training_manager import get_training_manager
     cancelled = get_training_manager().cancel_job(job_id)

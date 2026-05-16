@@ -42,8 +42,10 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +218,7 @@ async def get_fix_stats(request: Request) -> dict[str, Any]:
 async def approve_fix(
     body: ApproveFixRequest,
     request: Request,
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """
     Approve an LLM-generated fix and trigger the GitHub PR pipeline.
