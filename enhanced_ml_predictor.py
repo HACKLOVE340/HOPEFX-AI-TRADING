@@ -34,6 +34,8 @@ UTC = timezone.utc
 from enum import Enum
 from typing import Any
 
+import importlib.util as _importlib_util
+
 import numpy as np
 import pandas as pd
 
@@ -67,9 +69,9 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
-    import importlib.util as _importlib_util
 
-warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
+if not TENSORFLOW_AVAILABLE:
+    warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 PYTORCH_AVAILABLE = _importlib_util.find_spec("torch") is not None
 
