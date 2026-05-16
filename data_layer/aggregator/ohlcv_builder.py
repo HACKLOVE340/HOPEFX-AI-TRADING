@@ -60,7 +60,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Awaitable
@@ -230,9 +230,11 @@ class OHLCVBuilder:
         # (symbol, timeframe) → BarState
         self._open_bars: dict[tuple[str, str], BarState] = {}
 
-        # Closed bar history per (symbol, timeframe): deque of BarState
-        self._closed_bars: dict[tuple[str, str], list[BarState]] = defaultdict(list)
+        # Closed bar history per (symbol, timeframe): bounded deque of BarState
         self._max_history: int = 500
+        self._closed_bars: dict[tuple[str, str], deque[BarState]] = defaultdict(
+            lambda: deque(maxlen=self._max_history)
+        )
 
         # Callbacks
         self._callbacks: list[BarCloseCallback] = []
@@ -438,10 +440,7 @@ class OHLCVBuilder:
     ) -> None:
         """Store the closed bar and dispatch to callbacks."""
         history = self._closed_bars[key]
-        history.append(bar)
-        # Cap history size.
-        if len(history) > self._max_history:
-            history.pop(0)
+        history.append(bar)  # deque with maxlen auto-evicts oldest
 
         self.bars_closed += 1
 
