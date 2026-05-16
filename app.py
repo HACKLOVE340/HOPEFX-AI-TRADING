@@ -667,9 +667,6 @@ async def startup_event():
         await _start_l2_feed(app_state)
         _tasks_done.append("l2_feed")
 
-        _start_sharpe_circuit_breaker(app_state)
-        _tasks_done.append("sharpe_circuit_breaker")
-
         _start_nuclear_price_bridge(app_state)
         _tasks_done.append("nuclear_price_bridge")
 
