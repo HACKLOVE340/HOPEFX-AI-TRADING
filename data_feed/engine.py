@@ -471,7 +471,7 @@ class ProductionDataEngine:
                     self._price_min,
                     self._price_max,
                 )
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 logger.warning(
                     "Provider '%s' timed out (attempt %d/%d)",
                     provider,

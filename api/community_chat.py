@@ -535,7 +535,7 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
                         await websocket.send_json({"type": "pong"})
                 except Exception:  # nosec B110
                     pass
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 # Send heartbeat to keep connection alive
                 try:
                     await websocket.send_json({"type": "heartbeat"})

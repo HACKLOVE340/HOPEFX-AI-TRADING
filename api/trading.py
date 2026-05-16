@@ -2944,7 +2944,11 @@ def _register_risk_performance_routes(r: Any) -> None:
             if hasattr(broker, "_get_account_info_sync"):
                 account = broker._get_account_info_sync()
             else:
-                account = asyncio.run(broker.get_account_info()) if asyncio.iscoroutinefunction(broker.get_account_info) else broker.get_account_info()
+                account = (
+                    asyncio.run(broker.get_account_info())
+                    if asyncio.iscoroutinefunction(broker.get_account_info)
+                    else broker.get_account_info()
+                )
             if hasattr(broker, "_get_positions_sync"):
                 positions = broker._get_positions_sync()
             elif hasattr(broker, "get_positions"):

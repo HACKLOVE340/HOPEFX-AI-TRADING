@@ -280,7 +280,7 @@ def get_live_manager() -> LiveConnectionManager:
 # Keys use the slash format the frontend expects (XAU/USD etc.).
 _SYMBOLS: dict[str, dict[str, float]] = {
     "XAU/USD": {"price": 3300.0, "vol": 0.012, "spread": 0.30},
-    "XAG/USD": {"price": 33.0,   "vol": 0.018, "spread": 0.03},
+    "XAG/USD": {"price": 33.0, "vol": 0.018, "spread": 0.03},
     "EUR/USD": {"price": 1.0820, "vol": 0.006, "spread": 0.0001},
     "GBP/USD": {"price": 1.2940, "vol": 0.007, "spread": 0.0002},
     "USD/JPY": {"price": 149.50, "vol": 0.006, "spread": 0.02},
@@ -304,7 +304,7 @@ _SLASH_SYMBOL.update(
     {
         "XAUUSD": "XAU/USD",
         "XAGUSD": "XAG/USD",
-        "SI=F":   "XAG/USD",
+        "SI=F": "XAG/USD",
         "EURUSD": "EUR/USD",
         "GBPUSD": "GBP/USD",
         "USDJPY": "USD/JPY",
@@ -1812,6 +1812,7 @@ async def broadcast_system_event(event: dict) -> None:
 
 # ─── /ws/notifications ────────────────────────────────────────────────────────
 
+
 @router.websocket("/ws/notifications")
 async def ws_notifications(websocket: WebSocket) -> None:
     """
@@ -1930,6 +1931,7 @@ async def ws_notifications(websocket: WebSocket) -> None:
 
 # ─── /ws/audit-events ─────────────────────────────────────────────────────────
 
+
 @router.websocket("/ws/audit-events")
 async def ws_audit_events(websocket: WebSocket) -> None:
     """
@@ -1980,9 +1982,7 @@ async def ws_audit_events(websocket: WebSocket) -> None:
 
     # Restrict to admin and superadmin roles
     if role not in ("admin", "superadmin"):
-        await websocket.send_text(
-            json.dumps({"type": "error", "code": "FORBIDDEN", "message": "Admin role required"})
-        )
+        await websocket.send_text(json.dumps({"type": "error", "code": "FORBIDDEN", "message": "Admin role required"}))
         await _safe_ws_close(websocket, code=4003)
         return
 

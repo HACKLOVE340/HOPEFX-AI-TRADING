@@ -554,7 +554,9 @@ async def get_drawdown_stats(
                 arr = np.nan_to_num(np.array(all_dd_pcts), nan=0.0)
                 stats.update(
                     {
-                        "current_drawdown_pct": round(float(arr.mean()), 4),  # healer: ignore — nan_to_num applied above
+                        "current_drawdown_pct": round(
+                            float(arr.mean()), 4
+                        ),  # healer: ignore — nan_to_num applied above
                         "max_drawdown_pct": round(float(arr.max()), 4),
                         "accounts_in_drawdown": accounts_in_dd,
                         "accounts_near_limit": accounts_near_limit,

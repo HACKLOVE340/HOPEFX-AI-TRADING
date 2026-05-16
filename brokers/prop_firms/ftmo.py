@@ -11,7 +11,6 @@ FTMO (Forex Trader Mom) Integration
 - Risk limit enforcement
 """
 
-import asyncio
 import hashlib
 import hmac
 import json
@@ -186,7 +185,7 @@ class FTMOBroker:
                     phase_progress=float(data["phaseProgress"]),
                 )
 
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.error("FTMO API timeout")
             raise RuntimeError("FTMO API request timed out") from None
         except Exception as e:

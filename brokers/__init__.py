@@ -1040,7 +1040,7 @@ class OANDABroker(BaseBroker):
                             f"OANDA API error {resp.status}: {error_text}",
                         )
 
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     logger.error("Request timeout (attempt %s)", attempt + 1)
 
                     if attempt < self.max_retries - 1:

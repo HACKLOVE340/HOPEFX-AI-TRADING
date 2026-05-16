@@ -2014,7 +2014,9 @@ async def record_ab_result(
     summary="Stop an A/B test",
     tags=["ML Models"],
 )
-async def stop_ab_test(test_id: str, winner: str | None = None, _user: TokenPayload = Depends(require_role("admin"))) -> dict:
+async def stop_ab_test(
+    test_id: str, winner: str | None = None, _user: TokenPayload = Depends(require_role("admin"))
+) -> dict:
     """Stop a running A/B test and optionally declare a winner."""
     from ml.ab_testing import get_ab_test_manager
 

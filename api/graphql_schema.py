@@ -463,6 +463,7 @@ def _live_account() -> AccountInfo:
         try:
             import asyncio as _asyncio
             import inspect as _inspect
+
             broker = state.broker
             # Use sync helper when available (PaperTradingBroker exposes one)
             if hasattr(broker, "_get_account_info_sync"):
@@ -470,17 +471,15 @@ def _live_account() -> AccountInfo:
             elif _inspect.iscoroutinefunction(broker.get_account_info):
                 try:
                     loop = _asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Cannot block inside a running loop — return defaults
-                        info = None
-                    else:
-                        info = loop.run_until_complete(broker.get_account_info())
+                    # Cannot block inside a running loop — return defaults
+                    info = None if loop.is_running() else loop.run_until_complete(broker.get_account_info())
                 except RuntimeError:
                     info = None
             else:
                 info = broker.get_account_info()
             if info is None:
                 raise AttributeError("no account info")
+
             def _get(key, default=0.0):
                 if hasattr(info, key):
                     return getattr(info, key) or default

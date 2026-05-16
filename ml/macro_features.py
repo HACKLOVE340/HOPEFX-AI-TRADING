@@ -210,7 +210,9 @@ def fetch_macro_history(
                 logger.debug("Failed to fetch %s (%s): %s", ticker, name, exc)
 
         if frames:
-            df = pd.concat(frames.values(), axis=1).ffill().fillna(0.0)  # healer: ignore — fillna(0.0) guards residual NaN
+            df = (
+                pd.concat(frames.values(), axis=1).ffill().fillna(0.0)
+            )  # healer: ignore — fillna(0.0) guards residual NaN
             logger.info(
                 "Macro data (Yahoo Finance): %d bars, %d series (%s → %s)",
                 len(df),
