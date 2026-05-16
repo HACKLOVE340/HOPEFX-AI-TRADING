@@ -65,6 +65,25 @@ spec:
               mountPath: /app/fix_store
             - name: fix-logs
               mountPath: /app/fix_logs
+          # Readiness: only mark Ready after the main loop has written its first
+          # heartbeat.  This prevents the pod from receiving traffic (or being
+          # counted as a live standby) before the trading state is initialised.
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - |
+                  import os, sys, time
+                  hb = 'state/heartbeat.json'
+                  if not os.path.exists(hb):
+                      sys.exit(1)
+                  age = time.time() - os.path.getmtime(hb)
+                  sys.exit(0 if age < 120 else 1)
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
           # Liveness: checkpoint file written on every clean shutdown/restart
           livenessProbe:
             exec:
