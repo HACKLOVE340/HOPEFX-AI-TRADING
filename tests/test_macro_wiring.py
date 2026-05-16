@@ -30,13 +30,15 @@ os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
 os.environ.setdefault("CSRF_PROTECTION", "false")
 
-_SECRET = os.environ["SECURITY_JWT_SECRET"]
-
 
 def _auth(role: str = "admin") -> dict[str, str]:
+    # Read the secret at call time so the token is always signed with whatever
+    # SECURITY_JWT_SECRET is currently set to — avoids ordering pollution when
+    # the conftest or CI env sets a different value before this module runs.
+    secret = os.environ.get("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-32-chars!!")
     token = jwt.encode(
         {"sub": "test-user", "role": role, "type": "access", "exp": int(time.time()) + 3600},
-        _SECRET,
+        secret,
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
