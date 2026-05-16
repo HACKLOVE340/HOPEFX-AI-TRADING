@@ -122,11 +122,11 @@ def _db_create_sub_account(data: dict) -> dict | None:
         db.execute(
             _text(
                 "INSERT INTO sub_accounts "
-                "(id, owner_id, label, description, account_type, currency, "
-                " initial_balance, balance, max_drawdown_pct, daily_loss_limit, "
+                "(id, owner_id, name, description, account_type, currency, "
+                " initial_balance, current_balance, max_drawdown_pct, daily_loss_limit, "
                 " broker, broker_account_id, is_active, created_at, updated_at) "
-                "VALUES (:id, :owner_id, :label, :description, :account_type, :currency, "
-                " :initial_balance, :balance, :max_drawdown_pct, :daily_loss_limit, "
+                "VALUES (:id, :owner_id, :name, :description, :account_type, :currency, "
+                " :initial_balance, :current_balance, :max_drawdown_pct, :daily_loss_limit, "
                 " :broker, :broker_account_id, :is_active, :created_at, :updated_at)"
             ),
             data,
@@ -350,12 +350,12 @@ async def create_sub_account(
     db_data = {
         "id": acc_id,
         "owner_id": user.sub,
-        "label": req.resolved_label,
+        "name": req.resolved_label,
         "description": req.description or "",
         "account_type": req.account_type,
         "currency": req.currency,
         "initial_balance": balance,
-        "balance": balance,
+        "current_balance": balance,
         "max_drawdown_pct": req.max_drawdown_pct,
         "daily_loss_limit": req.daily_loss_limit,
         "broker": req.broker or "",

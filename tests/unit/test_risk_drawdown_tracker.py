@@ -196,15 +196,15 @@ class TestDayRollover:
     def test_day_rollover_resets_daily_open_equity_mode(self):
         t = _tracker(drawdown_mode="equity")
         t.update(equity=95_000.0)  # daily open stays at 100k
-        # Simulate day change
-        t._day = t._day - 1  # force rollover on next update
+        # Simulate day change — _day is a (year, month, day) tuple
+        t._day = (2000, 1, 1)  # force rollover on next update
         result = t.update(equity=95_000.0, balance=95_000.0)
         # After rollover, daily_open = equity = 95k → daily_dd = 0
         assert result.daily_drawdown_pct == pytest.approx(0.0, abs=1e-6)
 
     def test_day_rollover_resets_daily_open_balance_mode(self):
         t = _tracker(drawdown_mode="balance")
-        t._day = t._day - 1  # force rollover
+        t._day = (2000, 1, 1)  # force rollover
         result = t.update(equity=95_000.0, balance=93_000.0)
         # After rollover in balance mode, daily_open = balance = 93k → daily_dd = 0
         assert result.daily_drawdown_pct == pytest.approx(0.0, abs=1e-6)
@@ -213,7 +213,7 @@ class TestDayRollover:
         t = _tracker()
         t.record_fill(pnl=-500.0)
         assert t.daily_realised_pnl == pytest.approx(-500.0)
-        t._day = t._day - 1
+        t._day = (2000, 1, 1)
         t.update(equity=100_000.0)
         assert t.daily_realised_pnl == pytest.approx(0.0)
 
