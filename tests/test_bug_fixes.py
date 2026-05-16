@@ -318,7 +318,12 @@ class TestJwtSecretKey:
     """auth.jwt.SECRET_KEY must return the secret string via __getattr__."""
 
     def _load_jwt_module(self, secret: str):
-        """Load auth/jwt.py in isolation with a given secret."""
+        """Load auth/jwt.py in isolation with a given secret.
+
+        Returns (mod, secret_key_value) where secret_key_value is captured
+        while the env var is still set — SECRET_KEY is lazy via __getattr__
+        so it must be read before the env is restored.
+        """
         import importlib.util
 
         env_backup = os.environ.copy()
@@ -327,27 +332,37 @@ class TestJwtSecretKey:
             spec = importlib.util.spec_from_file_location(f"auth_jwt_{id(secret)}", "auth/jwt.py")
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
-            return mod
+            # Capture SECRET_KEY now while the env var is still set.
+            # __getattr__ reads os.environ at call time, so this must happen
+            # inside the try block before the finally restores the env.
+            captured_secret_key = mod.SECRET_KEY
+            return mod, captured_secret_key
         finally:
             os.environ.clear()
             os.environ.update(env_backup)
 
     def test_secret_key_is_string_not_property(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
-        mod = self._load_jwt_module(secret)
-        val = mod.SECRET_KEY
+        mod, val = self._load_jwt_module(secret)
         assert isinstance(val, str), f"Expected str, got {type(val).__name__}"
         assert not isinstance(val, property), "SECRET_KEY must not be a property object"
 
     def test_secret_key_returns_correct_value(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
-        mod = self._load_jwt_module(secret)
-        assert secret == mod.SECRET_KEY
+        _mod, captured = self._load_jwt_module(secret)
+        assert secret == captured
 
     def test_secret_key_matches_get_secret(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
-        mod = self._load_jwt_module(secret)
-        assert mod._get_secret() == mod.SECRET_KEY
+        mod, captured = self._load_jwt_module(secret)
+        # _get_secret() also reads env at call time — restore env temporarily
+        env_backup = os.environ.copy()
+        os.environ["SECURITY_JWT_SECRET"] = secret
+        try:
+            assert mod._get_secret() == captured
+        finally:
+            os.environ.clear()
+            os.environ.update(env_backup)
 
     def test_get_secret_raises_when_unset(self):
         import importlib.util
