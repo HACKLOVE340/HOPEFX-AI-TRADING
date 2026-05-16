@@ -19,12 +19,44 @@ price.  After the fix:
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock
 
 import pytest
 
 from brokers.base import OrderSide, OrderType
 from brokers.paper_trading import PaperTradingBroker
+from data.real_time_price_engine import PriceFeedBase, Tick, OHLCV
+
+
+class _StaticPriceFeed(PriceFeedBase):
+    """Real PriceFeedBase implementation that serves a fixed bid/ask tick.
+
+    Used in tests to inject deterministic spread data into PaperTradingBroker
+    without any mocking — the broker calls get_last_price() which returns a
+    real Tick object with real bid/ask/mid attributes.
+    """
+
+    def __init__(self, symbol: str, bid: float, ask: float) -> None:
+        super().__init__(symbols=[symbol], config={})
+        mid = (bid + ask) / 2.0
+        import time
+        tick = Tick(
+            symbol=symbol,
+            timestamp=time.time(),
+            bid=bid,
+            ask=ask,
+            mid=mid,
+            volume=0,
+        )
+        self._last_prices[symbol] = tick
+
+    async def connect(self) -> None:
+        self.active = True
+
+    async def disconnect(self) -> None:
+        self.active = False
+
+    async def get_ohlcv(self, symbol: str, timeframe: str, limit: int = 100) -> list[OHLCV]:
+        return []
 
 
 def _make_broker(seed: int = 42) -> PaperTradingBroker:
@@ -46,11 +78,8 @@ def _make_tick(bid: float, ask: float) -> SimpleNamespace:
 
 
 def _attach_feed(broker: PaperTradingBroker, bid: float, ask: float) -> None:
-    """Wire a minimal price feed that returns a tick with real bid/ask."""
-    tick = _make_tick(bid, ask)
-    feed = MagicMock()
-    feed.get_last_price.return_value = tick
-    broker._price_feed = feed
+    """Wire a real price feed that returns a tick with real bid/ask."""
+    broker._price_feed = _StaticPriceFeed("XAUUSD", bid, ask)
     # Also seed market_prices so the staleness guard doesn't fire
     broker.market_prices["XAUUSD"] = (bid + ask) / 2.0
     import time

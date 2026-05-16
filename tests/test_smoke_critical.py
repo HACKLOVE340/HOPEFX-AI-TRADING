@@ -20,7 +20,7 @@ import asyncio
 import pathlib
 import tempfile
 from decimal import Decimal
-from unittest.mock import MagicMock
+from brokers.base import AccountInfo as _AccountInfo
 
 import pytest
 
@@ -30,9 +30,13 @@ import pytest
 
 class TestPositionSizer:
     def _account(self, equity: float = 100_000.0):
-        acct = MagicMock()
-        acct.equity = Decimal(str(equity))
-        return acct
+        return _AccountInfo(
+            balance=equity,
+            equity=equity,
+            margin_used=0.0,
+            margin_available=equity,
+            positions_count=0,
+        )
 
     def test_atr_size_correct(self):
         from risk.position_sizing import PositionSizer
@@ -707,8 +711,13 @@ def test_position_sizer_small_equity_produces_small_size():
     """Tiny equity produces a proportionally tiny position size."""
     from risk.position_sizing import PositionSizer
     ps = PositionSizer(method="atr", risk_pct=0.01, max_lots=200.0)
-    acct = MagicMock()
-    acct.equity = Decimal("1000")  # very small account
+    acct = _AccountInfo(
+        balance=1000.0,
+        equity=1000.0,
+        margin_used=0.0,
+        margin_available=1000.0,
+        positions_count=0,
+    )
     size = ps.calculate_size(acct, Decimal("2000"), atr=Decimal("10"))
     # risk=10; size=10/10=1 lot
     assert float(size) == pytest.approx(1.0, abs=0.01)
