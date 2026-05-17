@@ -44,7 +44,23 @@ _POSITION_TTL = 7 * 24 * 3600  # 7 days
 
 
 def _key_prefixes(namespace: str) -> tuple[str, str, str, str]:
-    """Return (order_prefix, position_prefix, order_index, position_index) for namespace."""
+    """Return (order_prefix, position_prefix, order_index, position_index) for namespace.
+
+    When *namespace* is an empty string the legacy un-namespaced layout is used::
+
+        hopefx:orders:<id>
+        hopefx:positions:<symbol>
+        hopefx:orders:index
+        hopefx:positions:index
+
+    When *namespace* is non-empty (e.g. ``"user-42"`` or a UUID) the keys are
+    scoped under that namespace to isolate this instance from all others::
+
+        hopefx:user-42:orders:<id>
+        hopefx:user-42:positions:<symbol>
+        hopefx:user-42:orders:index
+        hopefx:user-42:positions:index
+    """
     if namespace:
         base = f"hopefx:{namespace}:"
     else:
