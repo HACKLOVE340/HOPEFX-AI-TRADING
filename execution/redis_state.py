@@ -61,10 +61,7 @@ def _key_prefixes(namespace: str) -> tuple[str, str, str, str]:
         hopefx:user-42:orders:index
         hopefx:user-42:positions:index
     """
-    if namespace:
-        base = f"hopefx:{namespace}:"
-    else:
-        base = "hopefx:"
+    base = f"hopefx:{namespace}:" if namespace else "hopefx:"
     return (
         f"{base}orders:",
         f"{base}positions:",
