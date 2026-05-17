@@ -585,7 +585,7 @@ class SMCICTStrategy(BaseStrategy):
         threshold: float = 0.001,
     ) -> bool:
         """Check if price is near any of the given levels"""
-        return any(abs(price - level) / level <= threshold for level in levels)
+        return any(abs(price - level) / level <= threshold for level in levels if level != 0)
 
     def _price_in_fvg(self, price: float, fvgs: list[dict]) -> bool:
         """Check if price is inside any Fair Value Gap"""

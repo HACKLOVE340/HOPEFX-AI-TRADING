@@ -89,7 +89,7 @@ class MeanReversionStrategy(BaseStrategy):
 
             # Calculate distance from bands (normalized)
             band_width = current_upper - current_lower
-            if band_width == 0:
+            if abs(band_width) < 1e-8:
                 return {"type": "HOLD", "confidence": 0.0, "reason": "Zero band width"}
 
             # Distance from bands as percentage

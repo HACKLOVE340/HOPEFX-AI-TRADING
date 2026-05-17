@@ -53,6 +53,7 @@ def _patch_all_subsystems():
 
 
 def test_validate_startup_env_exits_when_oanda_missing(monkeypatch):
+    monkeypatch.setenv("PAPER_TRADING", "false")
     monkeypatch.delenv("OANDA_API_KEY", raising=False)
     monkeypatch.delenv("OANDA_ACCOUNT_ID", raising=False)
     # Ensure paper mode is off so OANDA credentials are required

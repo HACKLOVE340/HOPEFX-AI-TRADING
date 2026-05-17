@@ -19,7 +19,6 @@ Author: HOPEFX Development Team
 
 import abc
 import logging
-
 import xml.etree.ElementTree as _stdlib_ET  # used for Element type annotation only
 
 try:
@@ -33,7 +32,7 @@ try:
         ET.ParseError = _stdlib_ET.ParseError  # type: ignore[attr-defined]
 except ImportError:
     # defusedxml not installed — fall back to stdlib; input is validated upstream
-    import xml.etree.ElementTree as ET  # type: ignore[assignment]
+    ET = _stdlib_ET  # type: ignore[assignment]
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -82,7 +81,7 @@ def _parse_date(text: str | None) -> datetime:
     return datetime.now(UTC)
 
 
-def _xml_text(el: ET.Element | None) -> str:
+def _xml_text(el: _stdlib_ET.Element | None) -> str:
     return (el.text or "").strip() if el is not None else ""
 
 

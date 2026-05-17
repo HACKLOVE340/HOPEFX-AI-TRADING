@@ -1216,6 +1216,7 @@ class TestLiveConnectionManager:
     async def test_broadcast_reaches_subscriber(self):
         ws = _MockWS()
         cid = await self.mgr.connect(ws)
+        self.mgr.authenticate(cid, "user-test")
         self.mgr.subscribe(cid, ["account"])
         msg = {"type": "account_update", "data": {"balance": 10000.0}}
         await self.mgr.broadcast("account", msg)
@@ -1234,7 +1235,8 @@ class TestLiveConnectionManager:
     async def test_broadcast_empty_subscriptions_receives_all(self):
         """A connection with no explicit subscriptions gets every channel."""
         ws = _MockWS()
-        await self.mgr.connect(ws)  # no subscribe() call → empty set
+        cid = await self.mgr.connect(ws)  # no subscribe() call → empty set
+        self.mgr.authenticate(cid, "user-test")
         await self.mgr.broadcast("prices", {"type": "price_tick", "data": {}})
         assert len(ws.sent) == 1
 
@@ -1247,6 +1249,7 @@ class TestLiveConnectionManager:
 
         ws = _DeadWS()
         cid = await self.mgr.connect(ws)
+        self.mgr.authenticate(cid, "user-test")
         self.mgr.subscribe(cid, ["prices"])
         await self.mgr.broadcast("prices", {"type": "price_tick", "data": {}})
         assert self.mgr.connection_count == 0

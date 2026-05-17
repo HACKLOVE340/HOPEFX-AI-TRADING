@@ -1438,11 +1438,21 @@ async def _place_order_and_notify(
       - Paper trading gate fill counter
       - Online learner Phase-3 feedback
     """
-    order = await broker.place_market_order(
-        symbol=symbol,
-        side=direction.lower(),
-        quantity=quantity,
-    )
+    try:
+        order = await broker.place_market_order(
+            symbol=symbol,
+            side=direction.lower(),
+            quantity=quantity,
+        )
+    except Exception as exc:
+        logger.error(
+            "Auto-trade broker error: %s %s qty=%s error=%s",
+            direction,
+            symbol,
+            quantity,
+            exc,
+        )
+        return
 
     # Validate the order result before recording the fill.
     order_status = getattr(order, "status", None) or (order.get("status") if isinstance(order, dict) else None)

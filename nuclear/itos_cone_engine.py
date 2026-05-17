@@ -395,9 +395,16 @@ class ItosConeEngine:
         if total_w == 0:
             total_w = 1.0
 
-        # Weighted drift and vol
-        mu_merged = sum(c.drift_annual * weights.get(tf, 1.0) / total_w for tf, c in cones.items())
-        sigma_merged = sum(c.volatility_annual * weights.get(tf, 1.0) / total_w for tf, c in cones.items())
+        # Weighted drift and vol — nan_to_num guards against cones with NaN params
+        import math as _math
+        mu_merged = sum(
+            (c.drift_annual if _math.isfinite(c.drift_annual) else 0.0) * weights.get(tf, 1.0) / total_w
+            for tf, c in cones.items()
+        )
+        sigma_merged = sum(
+            (c.volatility_annual if _math.isfinite(c.volatility_annual) else 0.15) * weights.get(tf, 1.0) / total_w
+            for tf, c in cones.items()
+        )
         conf_merged = sum(c.confidence * weights.get(tf, 1.0) / total_w for tf, c in cones.items())
 
         # Use the highest-confidence cone's current price

@@ -255,7 +255,9 @@ class TestAdvancedPredictorEarlyExits:
                 pred._load()
 
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        # Use 10 rows so the per-feature variance check passes (std(axis=0) on
+        # a single row is always 0, triggering flat_market_low_variance instead).
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["direction"] == "neutral"
@@ -280,7 +282,7 @@ class TestAdvancedPredictorDirections:
     def test_long_direction(self, tmp_path):
         pred = self._setup_pred(tmp_path, prob=0.80)
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["direction"] == "long"
@@ -289,7 +291,7 @@ class TestAdvancedPredictorDirections:
     def test_short_direction(self, tmp_path):
         pred = self._setup_pred(tmp_path, prob=0.20)
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["direction"] == "short"
@@ -307,7 +309,7 @@ class TestAdvancedPredictorDirections:
     def test_high_confidence_flag(self, tmp_path):
         pred = self._setup_pred(tmp_path, prob=0.90)
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["high_confidence"] is True

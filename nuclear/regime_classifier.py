@@ -187,6 +187,12 @@ class RegimeClassifier:
         self._high_vol_vix = high_vol_vix_threshold
         self._adx_trend = adx_trend_threshold
         self._history: deque[RegimeResult] = deque(maxlen=500)
+        # Debounce: require 3 consecutive bars before accepting a regime flip
+        self._debounce_candidate: str | None = None
+        self._debounce_count: int = 0
+        self._confirmed_regime: str | None = None
+        _REGIME_DEBOUNCE_BARS: int = 3
+        self._regime_debounce_bars = _REGIME_DEBOUNCE_BARS
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -276,12 +282,25 @@ class RegimeClassifier:
             top_vote = votes[regime]
             confidence = min(top_vote / (total_votes + 1e-9), 1.0)
 
+        # Debounce: only accept a regime flip after 3 consecutive bars agree
+        if regime == self._debounce_candidate:
+            self._debounce_count += 1
+        else:
+            self._debounce_candidate = regime
+            self._debounce_count = 1
+        if self._debounce_count >= self._regime_debounce_bars or self._confirmed_regime is None:
+            self._confirmed_regime = regime
+        # Use confirmed regime; reduce confidence if still pending confirmation
+        debounce_pending = self._confirmed_regime != regime
+        stable_regime = self._confirmed_regime
+        stable_confidence = confidence if not debounce_pending else confidence * 0.5
+
         # Sub-regime label
-        sub_regime = self._sub_regime(regime, mtf, cone_merged)
+        sub_regime = self._sub_regime(stable_regime, mtf, cone_merged)
 
         result = RegimeResult(
-            regime=regime,
-            confidence=round(confidence, 3),
+            regime=stable_regime,
+            confidence=round(stable_confidence, 3),
             sub_regime=sub_regime,
             macro_regime=macro_regime,
             cone_bias=cone_bias,
@@ -292,12 +311,13 @@ class RegimeClassifier:
         )
         self._record(result)
         logger.debug(
-            "RegimeClassifier: %s (conf=%.2f) sub=%s macro=%s cone=%s",
-            regime,
-            confidence,
+            "RegimeClassifier: %s (conf=%.2f) sub=%s macro=%s cone=%s pending=%s",
+            stable_regime,
+            stable_confidence,
             sub_regime,
             macro_regime,
             cone_bias,
+            debounce_pending,
         )
         return result
 

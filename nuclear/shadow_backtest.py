@@ -342,9 +342,13 @@ class ShadowBacktestEngine:
         for i in range(1, len(window)):
             tick = window[i]
 
-            # Build a minimal feature snapshot from available bars
+            # Build features from only bars closed BEFORE this tick to avoid lookahead
+            bars_at_tick = {
+                tf: [b for b in bars if (b.close_time or b.open_time) <= tick.timestamp]
+                for tf, bars in bars_by_tf.items()
+            }
             try:
-                mtf = build_features_from_bars(bars_by_tf, symbol=symbol)
+                mtf = build_features_from_bars(bars_at_tick, symbol=symbol)
             except Exception as _exc:  # skip tick if feature build fails
                 logger.debug("Feature build failed at tick %d for %s: %s", i, symbol, _exc)
                 continue
@@ -655,12 +659,13 @@ class ShadowBacktestEngine:
         aligned = [t for t in trades if t.cone_aligned]
         cone_wr = sum(1 for t in aligned if t.is_winner) / len(aligned) if aligned else 0.0
 
-        # Average realised RR
-        avg_rr = (
-            float(np.mean([abs(t.pnl_pct) / abs(t.entry_price - t.stop_loss + 1e-9) * t.entry_price for t in trades]))
-            if trades
-            else 0.0
-        )
+        # Average realised RR: reward% / risk% (both normalised by entry price)
+        rr_values = [
+            abs(t.pnl_pct) / (abs(t.entry_price - t.stop_loss) / (t.entry_price + 1e-9))
+            for t in trades
+            if abs(t.entry_price - t.stop_loss) > 1e-9 and t.entry_price > 0
+        ]
+        avg_rr = float(np.mean(rr_values)) if rr_values else 0.0
 
         # Regime and strategy breakdowns
         regime_breakdown: dict[str, int] = {}

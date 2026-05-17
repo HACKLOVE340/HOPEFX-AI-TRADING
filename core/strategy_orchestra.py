@@ -9,7 +9,7 @@ Coordinates multiple strategies to prevent conflicts and maximize returns
 """
 
 import logging
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -46,7 +46,7 @@ class StrategyOrchestra:
         self.current_regime: str = "unknown"
         self.signal_buffer: dict[str, list[Signal]] = defaultdict(list)
         self._rebalancer: Any | None = None
-        self._returns_buffer: dict[str, list[float]] = defaultdict(list)
+        self._returns_buffer: dict[str, deque] = defaultdict(lambda: deque(maxlen=1000))
 
         self.event_bus.subscribe("POSITION_CLOSED", self._on_position_closed)
         self.event_bus.subscribe("REGIME_CHANGE", self._on_regime_change)

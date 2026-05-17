@@ -410,14 +410,12 @@ class TestLiveInferenceLoop:
     @pytest.mark.asyncio
     async def test_run_handles_tick_exception(self):
         loop = self._make_loop()
-        call_count = 0
 
         async def boom():
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise RuntimeError("tick error")
+            # Stop before raising so there's no subsequent successful tick
+            # that would reset _error_count back to 0.
             loop.stop()
+            raise RuntimeError("tick error")
 
         with patch.object(loop, "_tick", side_effect=boom), patch("asyncio.sleep", new_callable=AsyncMock):
             await loop.run()

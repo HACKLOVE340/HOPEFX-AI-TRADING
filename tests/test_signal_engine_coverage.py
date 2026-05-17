@@ -1912,8 +1912,12 @@ class TestPlaceOrderAndNotify:
         broker = MagicMock()
         broker.place_market_order = AsyncMock(side_effect=RuntimeError("order rejected"))
         app_state = _make_app_state(broker=broker)
-        with pytest.raises(RuntimeError, match="order rejected"):
+        # Broker errors are caught and logged — function returns None, never raises.
+        with patch("core.signal_engine.logger") as mock_logger:
             await se._place_order_and_notify(broker, app_state, "XAUUSD", "BUY", 1.0, self._payload())
+        mock_logger.error.assert_called()
+        logged_args = " ".join(str(a) for call in mock_logger.error.call_args_list for a in call.args)
+        assert "order rejected" in logged_args
 
     async def test_sell_direction_lowercased_in_order(self):
         order = self._order()
