@@ -161,7 +161,7 @@ class MacroStoreBridge:
             try:
                 await self._refresh_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("MacroStoreBridge.stop: refresh task cancelled")
         try:
             await self._fred.close()
         except Exception as exc:

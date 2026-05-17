@@ -164,7 +164,6 @@ def check_file(path: Path) -> list[str]:
     # Do NOT skip the entire file if any router has auth — a file can have
     # multiple routers, and only endpoints on auth-protected routers should
     # be exempt. Instead, check each endpoint individually.
-    # TODO: Track which router each endpoint is registered on for precise checking.
 
     violations: list[str] = []
     for node in ast.walk(tree):
