@@ -838,7 +838,7 @@ function TradingPage() {
   const tick     = prices[symbol];
 
   return (
-    <div className="flex flex-col h-screen bg-[#060d18] text-slate-200 overflow-hidden">
+    <div className="flex flex-col bg-[#060d18] text-slate-200 overflow-hidden" style={{ flex: 1, minHeight: 0, height: 0 }}>
       <TopBar
         symbol={symbol} setSymbol={setSymbol}
         timeframe={timeframe} setTimeframe={setTimeframe}

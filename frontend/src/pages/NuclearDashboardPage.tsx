@@ -18,7 +18,7 @@ const CROSS_LINKS = [
 ];
 
 const NuclearDashboardPage: React.FC = () => (
-  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', overflow: 'hidden' }}>
+  <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, height: 0, width: '100%', overflow: 'hidden' }}>
     {/* PageHeader strip */}
     <div style={{
       padding: '8px 16px 0',
@@ -75,7 +75,7 @@ const NuclearDashboardPage: React.FC = () => (
     </div>
 
     {/* Dashboard content */}
-    <div style={{ flex: 1, overflow: 'hidden' }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
       <NuclearDashboard />
     </div>
   </div>
