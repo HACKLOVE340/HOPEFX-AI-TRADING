@@ -542,13 +542,17 @@ const AppShell: React.FC = () => {
             <Route path="/tca"          element={wrap(gated('tca',          <TCADashboard />))} />
 
             {/* Community */}
-            <Route path="/leaderboard"  element={wrap(gated('leaderboard',  <Leaderboard />))} />
+            {/* Leaderboard and Marketplace are public-preview pages — no login required.
+                Authenticated users get full interactive features; anonymous visitors see
+                the read-only view.  Removing AuthGuard here prevents the redirect to
+                /login for unauthenticated visitors and makes the pages discoverable. */}
+            <Route path="/leaderboard"  element={wrap(<Leaderboard />)} />
             {/* /signals = canonical Signal Feed; /feed and /social kept as aliases */}
             <Route path="/signals"      element={wrap(gated('signals',      <SocialFeed />))} />
             <Route path="/feed"         element={<Navigate to="/signals" replace />} />
             <Route path="/social"       element={<Navigate to="/signals" replace />} />
             <Route path="/social-feed"  element={<Navigate to="/signals" replace />} />
-            <Route path="/marketplace"  element={wrap(gated('marketplace',  <Marketplace />))} />
+            <Route path="/marketplace"  element={wrap(<Marketplace />)} />
             <Route path="/affiliate"    element={wrap(gated('affiliate',    <Affiliate />))} />
 
             {/* Enterprise features */}

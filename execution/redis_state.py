@@ -10,11 +10,22 @@ Persists open orders and positions to Redis so they can be restored after
 a restart. Call :func:`save_order`, :func:`save_position` as state changes
 occur, and :func:`load_state_on_boot` once at startup.
 
-Keys used:
+Keys used (without namespace):
     hopefx:orders:<order_id>   – JSON-encoded order dict (TTL = 7 days)
     hopefx:orders:index        – Redis set of active order IDs
     hopefx:positions:<symbol>  – JSON-encoded position dict (TTL = 7 days)
     hopefx:positions:index     – Redis set of open position symbols
+
+Keys used (with namespace, e.g. "user-42"):
+    hopefx:user-42:orders:<order_id>
+    hopefx:user-42:orders:index
+    hopefx:user-42:positions:<symbol>
+    hopefx:user-42:positions:index
+
+Namespacing isolates broker instances from each other — especially important
+in test environments where multiple broker instances share the same Redis DB.
+Each instance should be given a stable namespace (e.g. user_id) so its state
+persists across restarts without bleeding into other instances.
 """
 
 from __future__ import annotations
@@ -30,10 +41,20 @@ logger = logging.getLogger(__name__)
 
 _ORDER_TTL = 7 * 24 * 3600  # 7 days
 _POSITION_TTL = 7 * 24 * 3600  # 7 days
-_ORDER_KEY_PREFIX = "hopefx:orders:"
-_POSITION_KEY_PREFIX = "hopefx:positions:"
-_ORDER_INDEX = "hopefx:orders:index"
-_POSITION_INDEX = "hopefx:positions:index"
+
+
+def _key_prefixes(namespace: str) -> tuple[str, str, str, str]:
+    """Return (order_prefix, position_prefix, order_index, position_index) for namespace."""
+    if namespace:
+        base = f"hopefx:{namespace}:"
+    else:
+        base = "hopefx:"
+    return (
+        f"{base}orders:",
+        f"{base}positions:",
+        f"{base}orders:index",
+        f"{base}positions:index",
+    )
 
 
 def _now_iso() -> str:
@@ -46,10 +67,27 @@ class RedisStateStore:
 
     Accepts both sync (redis.Redis) and async (redis.asyncio.Redis) clients.
     All methods are synchronous; use :class:`AsyncRedisStateStore` for async.
+
+    Parameters
+    ----------
+    redis_client : sync Redis client
+    namespace : str
+        Optional namespace that scopes all Redis keys to this broker instance.
+        Pass a stable identifier (e.g. user_id or broker name) for production
+        deployments so state survives restarts.  Each test broker instance
+        should use a unique namespace (e.g. a UUID) to prevent cross-test
+        state pollution.  Empty string (default) preserves the legacy
+        un-namespaced key layout.
     """
 
-    def __init__(self, redis_client: Any) -> None:
+    def __init__(self, redis_client: Any, namespace: str = "") -> None:
         self._r = redis_client
+        (
+            self._order_prefix,
+            self._position_prefix,
+            self._order_index,
+            self._position_index,
+        ) = _key_prefixes(namespace)
 
     # ------------------------------------------------------------------
     # Orders
@@ -61,11 +99,11 @@ class RedisStateStore:
         if not order_id:
             logger.warning("RedisStateStore.save_order: order has no ID, skipping")
             return
-        key = f"{_ORDER_KEY_PREFIX}{order_id}"
+        key = f"{self._order_prefix}{order_id}"
         payload = json.dumps({**order, "_saved_at": _now_iso()})
         try:
             self._r.set(key, payload, ex=_ORDER_TTL)
-            self._r.sadd(_ORDER_INDEX, order_id)
+            self._r.sadd(self._order_index, order_id)
             logger.debug("RedisStateStore: saved order %s", order_id)
         except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.save_order error: %s", exc)
@@ -73,8 +111,8 @@ class RedisStateStore:
     def remove_order(self, order_id: str) -> None:
         """Remove a closed/cancelled order from persistence."""
         try:
-            self._r.delete(f"{_ORDER_KEY_PREFIX}{order_id}")
-            self._r.srem(_ORDER_INDEX, order_id)
+            self._r.delete(f"{self._order_prefix}{order_id}")
+            self._r.srem(self._order_index, order_id)
             logger.debug("RedisStateStore: removed order %s", order_id)
         except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.remove_order error: %s", exc)
@@ -83,10 +121,10 @@ class RedisStateStore:
         """Return all persisted open orders."""
         orders: list[dict[str, Any]] = []
         try:
-            order_ids = self._r.smembers(_ORDER_INDEX)
+            order_ids = self._r.smembers(self._order_index)
             for oid in order_ids:
                 raw = self._r.get(
-                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}",
+                    f"{self._order_prefix}{oid.decode() if isinstance(oid, bytes) else oid}",
                 )
                 if raw:
                     orders.append(json.loads(raw))
@@ -106,11 +144,11 @@ class RedisStateStore:
                 "RedisStateStore.save_position: position has no symbol, skipping",
             )
             return
-        key = f"{_POSITION_KEY_PREFIX}{symbol}"
+        key = f"{self._position_prefix}{symbol}"
         payload = json.dumps({**position, "_saved_at": _now_iso()})
         try:
             self._r.set(key, payload, ex=_POSITION_TTL)
-            self._r.sadd(_POSITION_INDEX, symbol)
+            self._r.sadd(self._position_index, symbol)
             logger.debug("RedisStateStore: saved position %s", symbol)
         except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.save_position error: %s", exc)
@@ -118,8 +156,8 @@ class RedisStateStore:
     def remove_position(self, symbol: str) -> None:
         """Remove a closed position from persistence."""
         try:
-            self._r.delete(f"{_POSITION_KEY_PREFIX}{symbol}")
-            self._r.srem(_POSITION_INDEX, symbol)
+            self._r.delete(f"{self._position_prefix}{symbol}")
+            self._r.srem(self._position_index, symbol)
             logger.debug("RedisStateStore: removed position %s", symbol)
         except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.remove_position error: %s", exc)
@@ -128,10 +166,10 @@ class RedisStateStore:
         """Return all persisted open positions."""
         positions: list[dict[str, Any]] = []
         try:
-            symbols = self._r.smembers(_POSITION_INDEX)
+            symbols = self._r.smembers(self._position_index)
             for sym in symbols:
                 raw = self._r.get(
-                    f"{_POSITION_KEY_PREFIX}{sym.decode() if isinstance(sym, bytes) else sym}",
+                    f"{self._position_prefix}{sym.decode() if isinstance(sym, bytes) else sym}",
                 )
                 if raw:
                     positions.append(json.loads(raw))
@@ -168,38 +206,51 @@ class RedisStateStore:
 class AsyncRedisStateStore:
     """
     Async version of :class:`RedisStateStore` for use with ``redis.asyncio``.
+
+    Parameters
+    ----------
+    redis_client : async Redis client
+    namespace : str
+        Optional namespace to scope all Redis keys.  See :class:`RedisStateStore`
+        for the full description of namespace semantics.
     """
 
-    def __init__(self, redis_client: Any) -> None:
+    def __init__(self, redis_client: Any, namespace: str = "") -> None:
         self._r = redis_client
+        (
+            self._order_prefix,
+            self._position_prefix,
+            self._order_index,
+            self._position_index,
+        ) = _key_prefixes(namespace)
 
     async def save_order(self, order: dict[str, Any]) -> None:
         order_id = str(order.get("id") or order.get("order_id", ""))
         if not order_id:
             logger.warning("AsyncRedisStateStore.save_order: order has no ID, skipping")
             return
-        key = f"{_ORDER_KEY_PREFIX}{order_id}"
+        key = f"{self._order_prefix}{order_id}"
         payload = json.dumps({**order, "_saved_at": _now_iso()})
         try:
             await self._r.set(key, payload, ex=_ORDER_TTL)
-            await self._r.sadd(_ORDER_INDEX, order_id)
+            await self._r.sadd(self._order_index, order_id)
         except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.save_order error: %s", exc)
 
     async def remove_order(self, order_id: str) -> None:
         try:
-            await self._r.delete(f"{_ORDER_KEY_PREFIX}{order_id}")
-            await self._r.srem(_ORDER_INDEX, order_id)
+            await self._r.delete(f"{self._order_prefix}{order_id}")
+            await self._r.srem(self._order_index, order_id)
         except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.remove_order error: %s", exc)
 
     async def load_orders(self) -> list[dict[str, Any]]:
         orders: list[dict[str, Any]] = []
         try:
-            order_ids = await self._r.smembers(_ORDER_INDEX)
+            order_ids = await self._r.smembers(self._order_index)
             for oid in order_ids:
                 raw = await self._r.get(
-                    f"{_ORDER_KEY_PREFIX}{oid.decode() if isinstance(oid, bytes) else oid}",
+                    f"{self._order_prefix}{oid.decode() if isinstance(oid, bytes) else oid}",
                 )
                 if raw:
                     orders.append(json.loads(raw))
@@ -214,28 +265,28 @@ class AsyncRedisStateStore:
                 "AsyncRedisStateStore.save_position: position has no symbol, skipping",
             )
             return
-        key = f"{_POSITION_KEY_PREFIX}{symbol}"
+        key = f"{self._position_prefix}{symbol}"
         payload = json.dumps({**position, "_saved_at": _now_iso()})
         try:
             await self._r.set(key, payload, ex=_POSITION_TTL)
-            await self._r.sadd(_POSITION_INDEX, symbol)
+            await self._r.sadd(self._position_index, symbol)
         except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.save_position error: %s", exc)
 
     async def remove_position(self, symbol: str) -> None:
         try:
-            await self._r.delete(f"{_POSITION_KEY_PREFIX}{symbol}")
-            await self._r.srem(_POSITION_INDEX, symbol)
+            await self._r.delete(f"{self._position_prefix}{symbol}")
+            await self._r.srem(self._position_index, symbol)
         except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.remove_position error: %s", exc)
 
     async def load_positions(self) -> list[dict[str, Any]]:
         positions: list[dict[str, Any]] = []
         try:
-            symbols = await self._r.smembers(_POSITION_INDEX)
+            symbols = await self._r.smembers(self._position_index)
             for sym in symbols:
                 raw = await self._r.get(
-                    f"{_POSITION_KEY_PREFIX}{sym.decode() if isinstance(sym, bytes) else sym}",
+                    f"{self._position_prefix}{sym.decode() if isinstance(sym, bytes) else sym}",
                 )
                 if raw:
                     positions.append(json.loads(raw))
@@ -261,7 +312,10 @@ class AsyncRedisStateStore:
 
 
 def create_state_store(
-    redis_client: Any, *, async_client: bool = False
+    redis_client: Any,
+    *,
+    async_client: bool = False,
+    namespace: str = "",
 ) -> Union[AsyncRedisStateStore, RedisStateStore]:
     """
     Factory that returns the appropriate store type.
@@ -269,10 +323,13 @@ def create_state_store(
     Args:
         redis_client: A sync or async Redis client instance.
         async_client: Pass ``True`` for ``redis.asyncio`` clients.
+        namespace: Optional namespace string to scope all Redis keys.
+            Each broker instance should pass a stable unique identifier so its
+            keys do not collide with other broker instances on the same Redis DB.
 
     Returns:
         :class:`AsyncRedisStateStore` or :class:`RedisStateStore`.
     """
     if async_client:
-        return AsyncRedisStateStore(redis_client)
-    return RedisStateStore(redis_client)
+        return AsyncRedisStateStore(redis_client, namespace=namespace)
+    return RedisStateStore(redis_client, namespace=namespace)
