@@ -364,7 +364,7 @@ class BrokerFactory:
         """Load and return the YAML config, or None if the file is missing."""
         if yaml is None:
             logger.error(
-                "PyYAML is not installed. Install 'pyyaml' to use YAML broker configs."
+                "Missing PyYAML dependency. Install the pyyaml package to enable YAML broker configuration."
             )
             return None
 
