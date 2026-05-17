@@ -375,15 +375,18 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     atr = tr.ewm(
         com=period - 1, min_periods=period
     ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    # Replace NaN ATR (warmup period) with a near-zero safe denominator so the
+    # division below does not silently propagate NaN through valid data rows.
+    atr_safe = atr.fillna(0.0)
     pdi = (
         100
         * plus_dm.ewm(com=period - 1, min_periods=period).mean()
-        / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+        / (atr_safe + 1e-12)
     )
     mdi = (
         100
         * minus_dm.ewm(com=period - 1, min_periods=period).mean()
-        / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+        / (atr_safe + 1e-12)
     )
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-12)
     return (

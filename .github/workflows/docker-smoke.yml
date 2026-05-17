@@ -90,7 +90,7 @@ jobs:
           # (they will be overridden by docker-compose.smoke.yml at runtime).
           cat >> .env <<'ENVEOF'
           POSTGRES_PASSWORD=ci_smoke_password
-          REDIS_PASSWORD=
+          REDIS_PASSWORD=ci-smoke-redis-password
           SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
           CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!

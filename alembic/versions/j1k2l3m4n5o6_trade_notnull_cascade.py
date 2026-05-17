@@ -6,13 +6,15 @@ Create Date: 2026-04-22 00:00:00.000000
 
 Changes
 -------
-1. trades.side          — backfill NULL → 'unknown', then set NOT NULL
-2. trades.entry_price   — backfill NULL → 0.0,       then set NOT NULL
-3. trades.entry_quantity— backfill NULL → 0.0,       then set NOT NULL
+1. trades.side          — backfill NULL → 'buy', then set NOT NULL
+2. trades.entry_price   — backfill NULL → 0.0,   then set NOT NULL
+3. trades.entry_quantity— backfill NULL → 0.0,   then set NOT NULL
 4. trades.account_id FK — add ON DELETE CASCADE so orphan trade rows are
                           automatically removed when the parent Account is deleted.
 
 The backfill uses safe defaults that preserve existing rows without data loss.
+'buy' is chosen for trades.side because it is a universally valid value in the
+``orderside`` enum and represents the most common default trade direction.
 """
 
 from __future__ import annotations
@@ -31,7 +33,11 @@ def upgrade() -> None:
     dialect = conn.dialect.name  # "postgresql" | "sqlite" | "mysql"
 
     # ── 1. Backfill NULLs before tightening constraints ───────────────────────
-    op.execute("UPDATE trades SET side = 'unknown' WHERE side IS NULL")
+    # Use 'buy' — a valid value in the orderside enum — for the side backfill.
+    # 'unknown' is not a member of the enum and causes an invalid-input error on
+    # PostgreSQL.  Rows with a NULL side represent legacy data where the direction
+    # was not recorded; 'buy' is the safest neutral default.
+    op.execute("UPDATE trades SET side = 'buy' WHERE side IS NULL")
     op.execute("UPDATE trades SET entry_price = 0.0 WHERE entry_price IS NULL")
     op.execute("UPDATE trades SET entry_quantity = 0.0 WHERE entry_quantity IS NULL")
 

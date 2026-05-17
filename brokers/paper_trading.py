@@ -211,6 +211,7 @@ class PaperTradingBroker(BrokerConnector):
         commission_per_lot: float | None = None,
         slippage_model: str = "gaussian",
         seed: int | None = None,
+        namespace: str | None = None,
     ):
         """
         Initialize paper trading broker.
@@ -223,6 +224,13 @@ class PaperTradingBroker(BrokerConnector):
             RNG seed for the slippage model.  None (default) uses a random
             seed — appropriate for live paper trading where realistic variance
             is desired.  Pass an integer for deterministic replay or tests.
+        namespace : str | None
+            Redis key namespace that scopes this broker's persisted state.
+            Provide a stable identifier (e.g. user_id, "prod_paper") for
+            production deployments so state persists across restarts.
+            If None (default), a UUID is generated per instance — each new
+            instance therefore gets a clean slate, which prevents tests and
+            short-lived instances from inheriting state from prior runs.
         """
         if config is None:
             config = {}
@@ -248,6 +256,13 @@ class PaperTradingBroker(BrokerConnector):
 
         self.orders: dict[str, Order] = {}
         self.positions: dict[str, Position] = {}
+
+        # ── Redis namespace ───────────────────────────────────────────────────
+        # Each broker instance uses a unique namespace in Redis so instances
+        # do not pollute each other's state.  Production deployments should
+        # pass a stable namespace (e.g. user_id or a service name) so state
+        # survives restarts.  None generates a fresh UUID per instance.
+        self._redis_namespace: str = namespace if namespace is not None else str(uuid.uuid4())
 
         # ── Redis state persistence ───────────────────────────────────────────
         # Orders and positions are persisted to Redis so they survive process
@@ -368,8 +383,11 @@ class PaperTradingBroker(BrokerConnector):
                 socket_timeout=2,
             )
             r.ping()
-            self._redis_state = RedisStateStore(r)
-            logger.info("PaperTradingBroker: Redis state persistence connected")
+            self._redis_state = RedisStateStore(r, namespace=self._redis_namespace)
+            logger.info(
+                "PaperTradingBroker: Redis state persistence connected (namespace=%s)",
+                self._redis_namespace,
+            )
         except Exception as exc:
             self._redis_state = None
             import os as _os
