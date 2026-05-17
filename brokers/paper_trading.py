@@ -226,21 +226,27 @@ class PaperTradingBroker(BrokerConnector):
             is desired.  Pass an integer for deterministic replay or tests.
         namespace : str | None
             Redis key namespace that scopes this broker's persisted state.
-            When ``None`` (default), a UUID is generated for this instance.
-            UUID default gives every new instance a clean slate — no inherited
-            state from previous runs — which is the correct behavior when you
-            want an isolated, fresh paper-trading session.
 
-            For **production deployments that need crash recovery**, pass a
-            stable identifier (e.g. user ID, ``"paper-user-42"``) so that
-            Redis state (open positions, orders) survives process restarts.
-            Example::
+            When ``None`` (default), the effective namespace is determined
+            automatically:
 
+            * **Production** (``APP_ENV`` is not ``"test"``): derived from
+              ``user_id`` (default ``"paper"``).  This is a stable, restart-safe
+              value — Redis state (open positions, orders) survives process
+              restarts automatically.
+            * **Test / CI** (``APP_ENV=test``): a fresh UUID is generated per
+              instance to prevent cross-test state pollution when multiple broker
+              instances share the same Redis DB.
+
+            Pass an explicit string to override this logic for both production
+            and test environments::
+
+                # Per-user production namespace (state persists across restarts)
                 broker = PaperTradingBroker(user_id="user-42", namespace="user-42")
 
-            All instances sharing the same namespace will load each other's
-            persisted state on ``connect()``, so each persistent session
-            should use a unique, stable identifier.
+                # Explicit clean-slate instance regardless of APP_ENV
+                import uuid
+                broker = PaperTradingBroker(namespace=str(uuid.uuid4()))
         """
         if config is None:
             config = {}
@@ -268,11 +274,20 @@ class PaperTradingBroker(BrokerConnector):
         self.positions: dict[str, Position] = {}
 
         # ── Redis namespace ───────────────────────────────────────────────────
-        # Each broker instance uses a unique namespace in Redis so instances
-        # do not pollute each other's state.  Production deployments should
-        # pass a stable namespace (e.g. user_id or a service name) so state
-        # survives restarts.  None generates a fresh UUID per instance.
-        self._redis_namespace: str = namespace if namespace is not None else str(uuid.uuid4())
+        # Resolve the Redis namespace used to scope this instance's keys.
+        # Explicit value always wins.  When None, use a stable identifier in
+        # production (so state survives restarts) but a fresh UUID in test
+        # environments (so concurrent test instances don't share state).
+        if namespace is not None:
+            self._redis_namespace: str = namespace
+        elif os.getenv("APP_ENV", "").lower() == "test":
+            # In test mode, auto-isolate each instance to prevent cross-test
+            # pollution when a real Redis is available in the test environment.
+            self._redis_namespace = str(uuid.uuid4())
+        else:
+            # Production default: derive from user_id ("paper" by default).
+            # Stable across restarts so Redis persists open positions/orders.
+            self._redis_namespace = user_id
 
         # ── Redis state persistence ───────────────────────────────────────────
         # Orders and positions are persisted to Redis so they survive process
