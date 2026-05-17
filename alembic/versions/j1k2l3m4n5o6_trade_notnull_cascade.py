@@ -87,15 +87,19 @@ def downgrade() -> None:
     conn = op.get_bind()
     dialect = conn.dialect.name
 
-    # Remove FK constraint
     if dialect == "sqlite":
-        with op.batch_alter_table("trades") as batch_op:
-            batch_op.drop_constraint("fk_trades_account_id", type_="foreignkey")
+        # SQLite does not persist FK constraint names — batch_alter_table with
+        # recreate="always" rebuilds the table from scratch, which naturally
+        # drops all FKs without needing to reference them by name.
+        with op.batch_alter_table("trades", recreate="always") as batch_op:
             batch_op.alter_column("side",           existing_type=sa.String(20),  nullable=True)
             batch_op.alter_column("entry_price",    existing_type=sa.Float(),     nullable=True)
             batch_op.alter_column("entry_quantity", existing_type=sa.Float(),     nullable=True)
     else:
-        op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
+        try:
+            op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
+        except Exception:  # nosec B110 — constraint may not exist
+            pass
         op.alter_column("trades", "side",           existing_type=sa.String(20),  nullable=True)
         op.alter_column("trades", "entry_price",    existing_type=sa.Float(),     nullable=True)
         op.alter_column("trades", "entry_quantity", existing_type=sa.Float(),     nullable=True)

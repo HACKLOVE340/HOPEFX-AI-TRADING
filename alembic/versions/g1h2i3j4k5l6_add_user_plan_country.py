@@ -63,5 +63,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("users", "country")
-    op.drop_column("users", "plan")
+    bind = op.get_bind()
+    if bind.dialect.name == "sqlite":
+        rows = bind.execute(sa.text("PRAGMA table_info(users)")).fetchall()
+        existing_cols = {row[1] for row in rows}
+    else:
+        rows = bind.execute(
+            sa.text("SELECT column_name FROM information_schema.columns WHERE table_name='users'")
+        ).fetchall()
+        existing_cols = {row[0] for row in rows}
+    cols_to_drop = [c for c in ("country", "plan") if c in existing_cols]
+    if cols_to_drop:
+        with op.batch_alter_table("users") as batch_op:
+            for col in cols_to_drop:
+                batch_op.drop_column(col)
