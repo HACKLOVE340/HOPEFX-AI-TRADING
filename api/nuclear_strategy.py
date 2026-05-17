@@ -142,7 +142,7 @@ async def analyze(
         logger.error("analyze endpoint error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Pipeline error: {exc}",
+            detail="Pipeline error.",
         ) from exc
     return result.to_dict()
 
@@ -344,7 +344,7 @@ async def force_analyze(
         logger.error("force_analyze error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Pipeline error: {exc}",
+            detail="Pipeline error.",
         ) from exc
     return result.to_dict()
 
@@ -378,7 +378,7 @@ async def start_agent(
         logger.error("agent/start error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent start failed: {exc}",
+            detail="Agent start failed.",
         ) from exc
 
 
@@ -403,7 +403,7 @@ async def stop_agent(
         logger.error("agent/stop error: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Agent stop failed: {exc}",
+            detail="Agent stop failed.",
         ) from exc
 
 

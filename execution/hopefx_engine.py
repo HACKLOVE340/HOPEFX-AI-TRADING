@@ -200,6 +200,9 @@ class HopeFXEngine:
         self._last_signal_ts: float = 0.0  # monotonic, for cooldown
         self._last_tick_epoch: float = 0.0
         self._open_positions: dict[str, dict[str, Any]] = {}
+        # Pending orders: order_id → {signal, order_request, submitted_at}
+        # Populated when broker returns status="pending" (limit orders).
+        self._pending_orders: dict[str, dict[str, Any]] = {}
         self._fill_history: list[FillRecord] = []
         self._start_time: float | None = None
         self._loop_task: asyncio.Task[None] | None = None
@@ -280,12 +283,19 @@ class HopeFXEngine:
           4. Run ML inference
           5. Gate through risk checks
           6. Route order if signal passes all gates
+
+        State machine:
+          RUNNING → process ticks normally
+          PAUSED  → sleep the full interval, do not process ticks
+          HALTED  → exit loop immediately
         """
         interval = 1.0 / _TICK_LOOP_HZ
-        while self._state == EngineState.RUNNING:
+        while self._state in (EngineState.RUNNING, EngineState.PAUSED):
             t0 = time.monotonic()
             try:
-                await self._process_tick()
+                if self._state == EngineState.RUNNING:
+                    await self._process_tick()
+                # PAUSED: fall through to sleep without processing
             except asyncio.CancelledError:
                 break
             except (RuntimeError, ValueError, AttributeError) as exc:
@@ -580,8 +590,14 @@ class HopeFXEngine:
 
         elif status == "pending":
             # Limit order accepted by broker but not yet filled.
-            # Track the pending order so we can monitor it for fill/cancel.
+            # Store in _pending_orders so the fill can be matched when it arrives.
             order_id = fill.get("order_id", order_request.get("order_id", ""))
+            self._pending_orders[order_id] = {
+                "signal": signal,
+                "order_request": order_request,
+                "submitted_at": time.monotonic(),
+                "broker": fill.get("broker", "?"),
+            }
             logger.info(
                 "PENDING ORDER signal_id=%s order_id=%s broker=%s — awaiting fill",
                 signal.signal_id,
@@ -671,7 +687,13 @@ class HopeFXEngine:
         self._fill_count += 1
         self._fill_history.append(fill_record)
 
-        # Track open position
+        # ── Capture existing position BEFORE overwriting ───────────────────
+        # BUG FIX: must snapshot the old position here, before we write the
+        # new one into _open_positions.  Reading it after the write always
+        # returns the new position, so the direction-flip logic never fired.
+        existing = self._open_positions.get(signal.symbol)
+
+        # Track open position (overwrites any previous entry for this symbol)
         position_id = fill_record.fill_id
         self._open_positions[signal.symbol] = {
             "position_id": position_id,
@@ -708,9 +730,6 @@ class HopeFXEngine:
             spread_at_fill=signal.tick_spread,
         )
 
-        # ── Update drawdown tracker with new balance ───────────────────────
-        self._current_equity = self._current_equity  # balance unchanged on open
-
         # ── Replicate state to hot-standby ────────────────────────────────
         if self._standby is not None:
             self._standby.update_positions(self._open_positions)
@@ -730,11 +749,10 @@ class HopeFXEngine:
                 }
             )
 
-        # ── Close any existing shadow position on the same symbol ─────────
-        # If we already had an open position on this symbol and are now
-        # opening in the opposite direction, the previous position is closed.
-        # Notify shadow engine so it can record the live PnL for comparison.
-        existing = self._open_positions.get(signal.symbol)
+        # ── Close any existing position on the same symbol (direction flip) ─
+        # existing was captured before the new position was written above.
+        # If the old position was in the opposite direction, realise its PnL
+        # and notify the shadow engine so it can record the live comparison.
         if existing and existing.get("direction") != signal.direction:
             prev_entry = existing.get("entry_price", fill_price)
             prev_qty = existing.get("quantity", quantity)
@@ -951,6 +969,32 @@ class HopeFXEngine:
             realised_pnl,
             close_price,
         )
+
+    async def on_pending_fill(self, order_id: str, fill: dict[str, Any]) -> None:
+        """
+        Called by the broker adapter when a previously-pending limit order fills.
+
+        Looks up the original signal from _pending_orders, removes the pending
+        entry, and delegates to _on_fill so the position is tracked correctly.
+        """
+        pending = self._pending_orders.pop(order_id, None)
+        if pending is None:
+            logger.warning("on_pending_fill: unknown order_id=%s — ignoring", order_id)
+            return
+        signal: ExecutionSignal = pending["signal"]
+        order_request: dict[str, Any] = pending["order_request"]
+        latency_ms = (time.monotonic() - pending["submitted_at"]) * 1000
+        logger.info(
+            "PENDING FILL order_id=%s signal_id=%s latency=%.1fms",
+            order_id,
+            signal.signal_id,
+            latency_ms,
+        )
+        await self._on_fill(signal, order_request, {**fill, "status": "filled"}, latency_ms)
+
+    def get_open_position(self, symbol: str) -> dict[str, Any] | None:
+        """Return the current open position for *symbol*, or None."""
+        return self._open_positions.get(symbol)
 
     def _record_rejection(self, signal: ExecutionSignal, reason: str) -> None:
         """Write rejection event to lineage."""

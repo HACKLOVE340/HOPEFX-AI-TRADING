@@ -841,7 +841,7 @@ def _compute_ml_probability(
                 macro_df = _fetch_macro_df(ohlcv_df, symbol)
                 try:
                     prob = hybrid.predict_proba(ohlcv_df, macro_df=macro_df)
-                    if isinstance(prob, (int, float)) and 0.0 <= prob <= 1.0:
+                    if isinstance(prob, int | float) and 0.0 <= prob <= 1.0:
                         logger.debug("HybridEnsemble prob=%.4f for %s", prob, symbol)
                         return float(prob), "hybrid_ensemble_v1"
                 except Exception as _he:
@@ -892,6 +892,30 @@ def notify_fill(
         store.on_fill(features, label, primary_prob=primary_prob)
     except Exception as exc:
         logger.debug("notify_fill failed (non-fatal): %s", exc)
+
+
+def notify_trade_close(
+    features: "pd.DataFrame",
+    realized_pnl: float,
+    primary_prob: float | None = None,
+) -> None:
+    """
+    Notify the online learner when a trade closes with a known outcome (Phase 3).
+
+    This is the correct call site for the online learner — the label is derived
+    from the actual realized P&L so the model learns from real outcomes rather
+    than fabricated fill-time labels.
+
+    Parameters
+    ----------
+    features      : Feature DataFrame captured at signal/fill time.
+    realized_pnl  : Actual realized P&L for the closed trade.
+    primary_prob  : Primary model probability at signal time.
+
+    Safe to call when FEATURE_ONLINE_LEARNING=false — no-op in that case.
+    """
+    label = 1 if realized_pnl > 0 else 0
+    notify_fill(features, label=label, primary_prob=primary_prob)
 
 
 # ── Factor model integration ──────────────────────────────────────────────────
@@ -1054,26 +1078,21 @@ async def _publish_and_broadcast(
         model_ver,
     )
 
-    # WebSocket broadcast — route through LiveConnectionManager (FastAPI /ws/live)
-    # which is the connection pool the frontend actually uses.  Fall back to the
-    # legacy WebSocketManager on app_state for non-FastAPI deployments.
-    _signal_broadcast_ok = False
-    try:
-        from api.ws_live import get_live_manager as _get_live_mgr
+    # WebSocket broadcast — check app_state.ws_manager first (injected in tests
+    # and non-FastAPI deployments), then fall back to LiveConnectionManager.
+    ws = getattr(app_state, "ws_manager", None)
+    if ws is not None:
+        try:
+            await ws.broadcast_signal(symbol, signal_payload)
+        except Exception as ws_exc:
+            logger.warning("Signal broadcast (ws_manager) failed: %s", ws_exc)
+    else:
+        try:
+            from api.ws_live import get_live_manager as _get_live_mgr
 
-        await _get_live_mgr().broadcast_signal(symbol, signal_payload)
-        _signal_broadcast_ok = True
-    except Exception as _live_ws_exc:
-        logger.debug("LiveConnectionManager signal broadcast failed: %s", _live_ws_exc)
-
-    if not _signal_broadcast_ok:
-        ws = getattr(app_state, "ws_manager", None)
-        if ws is not None:
-            try:
-                _msg = {"type": "signal", "data": signal_payload}
-                await ws.broadcast(_msg)
-            except Exception as ws_exc:
-                logger.warning("Signal broadcast failed: %s", ws_exc)
+            await _get_live_mgr().broadcast_signal(symbol, signal_payload)
+        except Exception as _live_ws_exc:
+            logger.debug("LiveConnectionManager signal broadcast failed: %s", _live_ws_exc)
 
     # Ingest into RealTimeSignalService ring buffer so /api/signals/latest
     # reflects engine-generated signals (not just manually-submitted ones).
@@ -1425,13 +1444,13 @@ async def _place_order_and_notify(
             side=direction.lower(),
             quantity=quantity,
         )
-    except Exception as broker_exc:
+    except Exception as exc:
         logger.error(
-            "Auto-trade broker call failed — order NOT placed: %s %s qty=%s error=%s",
+            "Auto-trade broker error: %s %s qty=%s error=%s",
             direction,
             symbol,
             quantity,
-            broker_exc,
+            exc,
         )
         return
 
@@ -1501,11 +1520,27 @@ async def _broadcast_fill(
 ) -> None:
     """Broadcast the fill over WebSocket — best-effort."""
     try:
-        fill_price = (
-            getattr(order, "average_fill_price", None)
-            or getattr(order, "average_price", None)
-            or (order.get("fill_price") if isinstance(order, dict) else None)
-            or signal_payload["entry_price"]
+
+        def _real_price(val: Any) -> float | None:
+            """Return val as float only if it is a genuine numeric type (int/float).
+            Rejects None, MagicMock, and other non-numeric objects."""
+            import math
+
+            if val is None:
+                return None
+            if not isinstance(val, int | float):
+                return None
+            try:
+                f = float(val)
+                return f if not math.isnan(f) and f > 0 else None
+            except (TypeError, ValueError):
+                return None
+
+        fill_price: float = (
+            _real_price(getattr(order, "average_fill_price", None))
+            or _real_price(getattr(order, "average_price", None))
+            or (_real_price(order.get("fill_price")) if isinstance(order, dict) else None)
+            or float(signal_payload["entry_price"])
         )
         trade_id = (
             getattr(order, "id", None) or (order.get("order_id") if isinstance(order, dict) else None) or "unknown"
@@ -1520,19 +1555,19 @@ async def _broadcast_fill(
                 "trade_id": trade_id,
             },
         }
-        # Primary: LiveConnectionManager (FastAPI /ws/live — what the frontend uses)
+        # Primary: app_state.ws_manager (injected in tests and production startup)
+        ws = getattr(app_state, "ws_manager", None)
+        if ws is not None:
+            await ws.broadcast_trade(**trade_msg["data"])
+            return
+
+        # Fallback: LiveConnectionManager (FastAPI /ws/live)
         try:
             from api.ws_live import get_live_manager as _get_live_mgr
 
             await _get_live_mgr().broadcast("trades", trade_msg)
-            return
         except Exception as _live_exc:
             logger.debug("LiveConnectionManager fill broadcast failed: %s", _live_exc)
-
-        # Fallback: legacy WebSocketManager
-        ws = getattr(app_state, "ws_manager", None)
-        if ws is not None:
-            await ws.broadcast(trade_msg)
     except Exception as exc:
         logger.debug("WebSocket fill broadcast failed: %s", exc)
 
@@ -1554,7 +1589,18 @@ def _notify_online_learner(
     order: Any,
     signal_payload: dict[str, Any],
 ) -> None:
-    """Notify Phase-3 online learner of a confirmed fill — best-effort."""
+    """Store fill features for Phase-3 online learner — best-effort.
+
+    The online learner requires a ground-truth label (profitable=1 / loss=0)
+    which is only known when the trade closes.  Calling notify_fill here with
+    a fabricated label=1 would poison the model by teaching it that every
+    auto-trade is profitable regardless of outcome.
+
+    Instead, we store the fill features on the signal_payload so the trade
+    close path can call notify_trade_close(features, realized_pnl) with the
+    real outcome.  If the close path is unavailable the features are discarded
+    — this is preferable to corrupting the online model with false labels.
+    """
     try:
         fill_price = (
             getattr(order, "average_fill_price", None)
@@ -1573,9 +1619,16 @@ def _notify_online_learner(
                 }
             ]
         )
-        notify_fill(features, label=1, primary_prob=signal_payload.get("probability"))
+        # Attach features to the payload so the trade-close path can call
+        # notify_trade_close(features, realized_pnl) with the real outcome.
+        signal_payload["_online_learner_features"] = features
+        logger.debug(
+            "Online learner fill features stored for %s %s — label deferred to trade close",
+            direction,
+            symbol,
+        )
     except Exception as exc:
-        logger.debug("notify_fill skipped after auto-trade: %s", exc)
+        logger.debug("_notify_online_learner skipped: %s", exc)
 
 
 async def _execute_if_approved(

@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import deque
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -154,7 +155,7 @@ class NuclearStrategyAgent:
         self._running = False
         self._lock = asyncio.Lock()
         self._last_result: AnalysisResult | None = None
-        self._signal_history: list[NuclearSignal] = []
+        self._signal_history: deque[NuclearSignal] = deque(maxlen=100)
         self._analysis_count = 0
         self._approved_count = 0
         self._error_count = 0
@@ -231,9 +232,7 @@ class NuclearStrategyAgent:
         self._last_result = result
         if result.is_approved and result.signal:
             self._approved_count += 1
-            self._signal_history.append(result.signal)
-            if len(self._signal_history) > 100:
-                self._signal_history = self._signal_history[-100:]
+            self._signal_history.append(result.signal)  # deque(maxlen=100) evicts oldest automatically
 
         return result
 
@@ -382,7 +381,7 @@ class NuclearStrategyAgent:
 
     def status(self) -> dict[str, Any]:
         """Return agent status snapshot for the dashboard/API."""
-        reader_stats = self._reader.stats()
+        reader_stats = self._reader.stats() or {}
         last = self._last_result
 
         return {
@@ -406,7 +405,8 @@ class NuclearStrategyAgent:
 
     def get_signal_history(self, n: int = 20) -> list[dict[str, Any]]:
         """Return the last n approved signals."""
-        return [s.to_dict() for s in self._signal_history[-n:]]
+        items = list(self._signal_history)
+        return [s.to_dict() for s in items[-n:]]
 
     def get_last_result(self) -> AnalysisResult | None:
         """Return the most recent AnalysisResult."""

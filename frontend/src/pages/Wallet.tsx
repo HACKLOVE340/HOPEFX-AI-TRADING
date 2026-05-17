@@ -232,7 +232,7 @@ const Wallet: React.FC = () => {
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <div className="page-content">
       <PageHeader
         title="Wallet & Payments"
         icon="💰"

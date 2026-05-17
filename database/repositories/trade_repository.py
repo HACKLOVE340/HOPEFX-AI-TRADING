@@ -141,7 +141,9 @@ class TradeRepository(AsyncRepository[Trade]):
         trade.exit_price = exit_price
         trade.exit_time = exit_time
         trade.realized_pnl = realized_pnl
-        trade.total_pnl = realized_pnl
+        # Accumulate total_pnl rather than overwriting it — partial closes
+        # may have already recorded P&L in previous calls.
+        trade.total_pnl = (trade.total_pnl or 0.0) + realized_pnl
         trade.is_open = False
         trade.status = TradeStatus.CLOSED
         if exit_quantity is not None:

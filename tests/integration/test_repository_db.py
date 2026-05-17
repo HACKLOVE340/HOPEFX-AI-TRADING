@@ -94,7 +94,7 @@ def async_engine():
             except Exception:
                 pass
 
-    asyncio.get_event_loop().run_until_complete(_create())
+    asyncio.run(_create())
     yield eng
 
 

@@ -265,7 +265,7 @@ class HOPEFXLogger:
             try:
                 if hasattr(sys.stdout, "reconfigure"):
                     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-            except Exception:
+            except Exception:  # nosec B110
                 pass
             console_handler = logging.StreamHandler(sys.stdout)
             if json_format:

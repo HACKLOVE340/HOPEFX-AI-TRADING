@@ -204,14 +204,7 @@ const DocsPage: React.FC = () => {
     : SECTIONS;
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg, #0f172a)',
-        color: 'var(--text, #f1f5f9)',
-        fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
-      }}
-    >
+    <div className="page-content" style={{ padding: 0 }}>
       {/* Header */}
       <div
         style={{

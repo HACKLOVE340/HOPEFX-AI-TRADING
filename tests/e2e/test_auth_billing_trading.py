@@ -96,6 +96,7 @@ def _build_test_app():
             self.risk_manager = None
             self.ws_manager = None
             self.compliance_manager = None
+            self.db_session_factory = None  # no DB in unit tests; ownership check skipped
             self.initialized = True
 
     paper_broker = PaperTradingBroker(initial_balance=100_000.0)

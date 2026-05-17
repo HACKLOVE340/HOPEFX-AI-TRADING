@@ -206,16 +206,18 @@ class TestEnrichPriceFromTickFeed:
 
 
 class TestEnrichPriceFromDataLayer:
-    def test_skips_when_data_layer_unavailable(self):
+    @pytest.mark.asyncio
+    async def test_skips_when_data_layer_unavailable(self):
         """Import error → non-fatal, returns original request."""
         eng = _make_engine()
         req = _buy_request()
         with patch.dict("sys.modules", {"data_layer.orchestrator": None}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
         # Should return an ExecutionRequest (not a blocked report)
         assert isinstance(result, ExecutionRequest)
 
-    def test_returns_blocked_report_when_not_safe_to_trade(self):
+    @pytest.mark.asyncio
+    async def test_returns_blocked_report_when_not_safe_to_trade(self):
         eng = _make_engine()
         req = _buy_request()
 
@@ -227,13 +229,14 @@ class TestEnrichPriceFromDataLayer:
         mock_module.orchestrator = mock_orch
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
 
         assert isinstance(result, ExecutionReport)
         assert result.status == ExecutionStatus.BLOCKED
         assert "DATA_LAYER" in result.message
 
-    def test_injects_price_from_data_layer_when_no_price(self):
+    @pytest.mark.asyncio
+    async def test_injects_price_from_data_layer_when_no_price(self):
         eng = _make_engine()
         req = _buy_request(price=None)
 
@@ -247,12 +250,13 @@ class TestEnrichPriceFromDataLayer:
         mock_module.orchestrator = mock_orch
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
 
         assert isinstance(result, ExecutionRequest)
         assert result.price == 2005.0
 
-    def test_does_not_overwrite_existing_price(self):
+    @pytest.mark.asyncio
+    async def test_does_not_overwrite_existing_price(self):
         eng = _make_engine()
         req = _buy_request(price=1995.0)
 
@@ -265,11 +269,12 @@ class TestEnrichPriceFromDataLayer:
         mock_module.orchestrator = mock_orch
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
 
         assert result.price == 1995.0  # existing price preserved
 
-    def test_orchestrator_not_started_skips_check(self):
+    @pytest.mark.asyncio
+    async def test_orchestrator_not_started_skips_check(self):
         """When orchestrator._started is False, safety check is not run."""
         eng = _make_engine()
         req = _buy_request()
@@ -281,23 +286,25 @@ class TestEnrichPriceFromDataLayer:
         mock_module.orchestrator = mock_orch
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
 
         # Not started → should NOT call is_safe_to_trade
         mock_orch.is_safe_to_trade.assert_not_called()
         assert isinstance(result, ExecutionRequest)
 
-    def test_skips_when_data_layer_raises_import_error(self):
+    @pytest.mark.asyncio
+    async def test_skips_when_data_layer_raises_import_error(self):
         """ModuleNotFoundError (subclass of ImportError) is non-fatal."""
         eng = _make_engine()
         req = _buy_request()
         # Simulate a broken sub-import inside data_layer.orchestrator by
         # patching the module to None (triggers ModuleNotFoundError on import).
         with patch.dict("sys.modules", {"data_layer": None, "data_layer.orchestrator": None}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
         assert isinstance(result, ExecutionRequest)
 
-    def test_skips_when_orchestrator_raises_attribute_error(self):
+    @pytest.mark.asyncio
+    async def test_skips_when_orchestrator_raises_attribute_error(self):
         """AttributeError from a malformed orchestrator object is non-fatal."""
         eng = _make_engine()
         req = _buy_request()
@@ -307,10 +314,11 @@ class TestEnrichPriceFromDataLayer:
         type(mock_module).orchestrator = property(lambda self: (_ for _ in ()).throw(AttributeError("no attr")))
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
         assert isinstance(result, ExecutionRequest)
 
-    def test_skips_when_is_safe_to_trade_raises_value_error(self):
+    @pytest.mark.asyncio
+    async def test_skips_when_is_safe_to_trade_raises_value_error(self):
         """ValueError from is_safe_to_trade is non-fatal."""
         eng = _make_engine()
         req = _buy_request()
@@ -323,7 +331,7 @@ class TestEnrichPriceFromDataLayer:
         mock_module.orchestrator = mock_orch
 
         with patch.dict("sys.modules", {"data_layer.orchestrator": mock_module}):
-            result = eng._enrich_price_from_data_layer(req, time.monotonic())
+            result = await eng._enrich_price_from_data_layer(req, time.monotonic())
         assert isinstance(result, ExecutionRequest)
 
 
@@ -359,13 +367,15 @@ class TestCloneRequestWithPrice:
 
 
 class TestSharpeCircuitBreaker:
-    def test_no_model_version_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_no_model_version_returns_none(self):
         eng = _make_engine()
         req = _buy_request(strategy_id=None, metadata={})
-        result = eng._check_sharpe_circuit_breaker(req, time.monotonic())
+        result = await eng._check_sharpe_circuit_breaker(req, time.monotonic())
         assert result is None
 
-    def test_open_circuit_returns_blocked_report(self):
+    @pytest.mark.asyncio
+    async def test_open_circuit_returns_blocked_report(self):
         eng = _make_engine()
         req = _buy_request(metadata={"model_version": "advanced_oos_v1"})
 
@@ -376,13 +386,14 @@ class TestSharpeCircuitBreaker:
         mock_module.get_sharpe_cb.return_value = mock_cb
 
         with patch.dict("sys.modules", {"ml.sharpe_circuit_breaker": mock_module}):
-            result = eng._check_sharpe_circuit_breaker(req, time.monotonic())
+            result = await eng._check_sharpe_circuit_breaker(req, time.monotonic())
 
         assert isinstance(result, ExecutionReport)
         assert result.status == ExecutionStatus.BLOCKED
         assert "SHARPE_CIRCUIT_OPEN" in result.message
 
-    def test_closed_circuit_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_closed_circuit_returns_none(self):
         eng = _make_engine()
         req = _buy_request(metadata={"model_version": "advanced_oos_v1"})
 
@@ -393,21 +404,23 @@ class TestSharpeCircuitBreaker:
         mock_module.get_sharpe_cb.return_value = mock_cb
 
         with patch.dict("sys.modules", {"ml.sharpe_circuit_breaker": mock_module}):
-            result = eng._check_sharpe_circuit_breaker(req, time.monotonic())
+            result = await eng._check_sharpe_circuit_breaker(req, time.monotonic())
 
         assert result is None
 
-    def test_cb_unavailable_returns_none(self):
+    @pytest.mark.asyncio
+    async def test_cb_unavailable_returns_none(self):
         """Import error or exception → non-fatal, returns None."""
         eng = _make_engine()
         req = _buy_request(metadata={"model_version": "advanced_oos_v1"})
 
         with patch.dict("sys.modules", {"ml.sharpe_circuit_breaker": None}):
-            result = eng._check_sharpe_circuit_breaker(req, time.monotonic())
+            result = await eng._check_sharpe_circuit_breaker(req, time.monotonic())
 
         assert result is None
 
-    def test_strategy_id_used_as_fallback_model_version(self):
+    @pytest.mark.asyncio
+    async def test_strategy_id_used_as_fallback_model_version(self):
         eng = _make_engine()
         req = _buy_request(strategy_id="my_strategy", metadata={})
 
@@ -418,7 +431,7 @@ class TestSharpeCircuitBreaker:
         mock_module.get_sharpe_cb.return_value = mock_cb
 
         with patch.dict("sys.modules", {"ml.sharpe_circuit_breaker": mock_module}):
-            result = eng._check_sharpe_circuit_breaker(req, time.monotonic())
+            result = await eng._check_sharpe_circuit_breaker(req, time.monotonic())
 
         # is_open called with strategy_id
         mock_cb.is_open.assert_called_with("my_strategy")
@@ -638,3 +651,137 @@ class TestUpdateSharpeCircuitBreaker:
 
         with patch.dict("sys.modules", {"ml.sharpe_circuit_breaker": mock_module}):
             eng._update_sharpe_circuit_breaker(req, report)  # must not raise
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _check_pre_submission_guards  (async since engine.py fix)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestCheckPreSubmissionGuards:
+    @pytest.mark.asyncio
+    async def test_kill_switch_active_returns_blocked(self):
+        eng = _make_engine()
+        eng._kill_switch = MagicMock()
+        eng._kill_switch.is_active.return_value = True
+        eng._kill_switch._reason = "manual halt"
+        req = _buy_request()
+        result = await eng._check_pre_submission_guards(req, time.monotonic())
+        assert isinstance(result, ExecutionReport)
+        assert result.status == ExecutionStatus.BLOCKED
+        assert "KILL_SWITCH" in result.message
+
+    @pytest.mark.asyncio
+    async def test_engine_stopped_returns_blocked(self):
+        eng = _make_engine()
+        eng._running = False
+        req = _buy_request()
+        result = await eng._check_pre_submission_guards(req, time.monotonic())
+        assert isinstance(result, ExecutionReport)
+        assert result.status == ExecutionStatus.BLOCKED
+        assert "ENGINE_STOPPED" in result.message
+
+    @pytest.mark.asyncio
+    async def test_live_mode_not_confirmed_with_live_broker_returns_blocked(self):
+        eng = _make_engine()
+        eng._live_mode_confirmed = False
+        # Make _is_live_broker() return True
+        with patch.object(eng, "_is_live_broker", return_value=True):
+            req = _buy_request()
+            result = await eng._check_pre_submission_guards(req, time.monotonic())
+        assert isinstance(result, ExecutionReport)
+        assert result.status == ExecutionStatus.BLOCKED
+        assert "LIVE_MODE_NOT_CONFIRMED" in result.message
+
+    @pytest.mark.asyncio
+    async def test_all_guards_pass_returns_none(self):
+        eng = _make_engine()
+        eng._kill_switch = None
+        eng._running = True
+        eng._live_mode_confirmed = True
+        req = _buy_request()
+        # Spread monitor unavailable → non-fatal, guard passes
+        with patch.dict("sys.modules", {"execution.spread_monitor": None}):
+            result = await eng._check_pre_submission_guards(req, time.monotonic())
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_no_kill_switch_object_passes(self):
+        eng = _make_engine()
+        eng._kill_switch = None
+        eng._running = True
+        eng._live_mode_confirmed = True
+        req = _buy_request()
+        with patch.dict("sys.modules", {"execution.spread_monitor": None}):
+            result = await eng._check_pre_submission_guards(req, time.monotonic())
+        assert result is None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _check_spread_spike  (async since engine.py fix)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestCheckSpreadSpike:
+    @pytest.mark.asyncio
+    async def test_spiking_spread_returns_blocked(self):
+        eng = _make_engine()
+        req = _buy_request()
+
+        snap = MagicMock()
+        snap.current_spread = 0.005
+        snap.baseline_spread = 0.001
+        snap.ratio = 5.0
+
+        mock_monitor = MagicMock()
+        mock_monitor.is_spread_spiking.return_value = True
+        mock_monitor.get_snapshot.return_value = snap
+
+        mock_module = MagicMock()
+        mock_module.get_spread_monitor.return_value = mock_monitor
+
+        with patch.dict("sys.modules", {"execution.spread_monitor": mock_module}):
+            result = await eng._check_spread_spike(req, time.monotonic())
+
+        assert isinstance(result, ExecutionReport)
+        assert result.status == ExecutionStatus.BLOCKED
+        assert "SPREAD_SPIKE" in result.message
+
+    @pytest.mark.asyncio
+    async def test_normal_spread_returns_none(self):
+        eng = _make_engine()
+        req = _buy_request()
+
+        mock_monitor = MagicMock()
+        mock_monitor.is_spread_spiking.return_value = False
+
+        mock_module = MagicMock()
+        mock_module.get_spread_monitor.return_value = mock_monitor
+
+        with patch.dict("sys.modules", {"execution.spread_monitor": mock_module}):
+            result = await eng._check_spread_spike(req, time.monotonic())
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_spread_monitor_unavailable_returns_none(self):
+        """ImportError from spread monitor is non-fatal."""
+        eng = _make_engine()
+        req = _buy_request()
+        with patch.dict("sys.modules", {"execution.spread_monitor": None}):
+            result = await eng._check_spread_spike(req, time.monotonic())
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_spread_monitor_runtime_error_returns_none(self):
+        """RuntimeError from spread monitor is non-fatal."""
+        eng = _make_engine()
+        req = _buy_request()
+
+        mock_module = MagicMock()
+        mock_module.get_spread_monitor.side_effect = RuntimeError("monitor down")
+
+        with patch.dict("sys.modules", {"execution.spread_monitor": mock_module}):
+            result = await eng._check_spread_spike(req, time.monotonic())
+
+        assert result is None

@@ -183,12 +183,12 @@ class AsyncExecutionEngine:
             venue = self._select_venue(order)
 
             # Submit with timeout and retry
-            start_time = time.time()
+            start_time = time.monotonic()
 
             try:
                 await asyncio.wait_for(self._submit_to_venue(order, venue), timeout=2.0)
 
-                latency = (time.time() - start_time) * 1000  # ms
+                latency = (time.monotonic() - start_time) * 1000  # ms
                 self.latency_stats["submit"].append(latency)
 
                 if latency > 100:
@@ -465,11 +465,16 @@ class AsyncExecutionEngine:
 
     async def _apply_fill(self, order: Order, fill: Fill) -> None:
         """Apply fill to order"""
+        if not (fill.quantity > 0):
+            logger.warning("_apply_fill: received zero/negative fill quantity %.6f — skipping", fill.quantity)
+            return
+        if not (fill.price > 0):
+            logger.warning("_apply_fill: received zero/negative fill price %.6f — skipping", fill.price)
+            return
         async with self.order_locks[order.id]:
+            prev_qty = order.filled_qty
             order.filled_qty += fill.quantity
-            order.avg_fill_price = (
-                order.avg_fill_price * (order.filled_qty - fill.quantity) + fill.price * fill.quantity
-            ) / order.filled_qty
+            order.avg_fill_price = (order.avg_fill_price * prev_qty + fill.price * fill.quantity) / order.filled_qty
 
             if order.filled_qty >= order.quantity * 0.99:
                 order.status = OrderStatus.FILLED

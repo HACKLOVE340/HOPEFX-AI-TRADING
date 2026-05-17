@@ -523,7 +523,7 @@ class ExecutionEngine:
             t0 = time.monotonic()
             await self._inc_orders()
 
-            _enriched = self._enrich_price_from_data_layer(request, t0)
+            _enriched = await self._enrich_price_from_data_layer(request, t0)
             if isinstance(_enriched, ExecutionReport):
                 try:
                     _root_span.add_event("data_layer.blocked", {"reason": _enriched.message})
@@ -534,7 +534,7 @@ class ExecutionEngine:
 
             request = self._enrich_price_from_tick_feed(request)
 
-            block = self._check_pre_submission_guards(request, t0)
+            block = await self._check_pre_submission_guards(request, t0)
             if block is not None:
                 try:
                     is_ks = "[KILL_SWITCH]" in block.message
@@ -583,7 +583,7 @@ class ExecutionEngine:
                     logger.debug("OTel span error in %s: %s", __name__, _span_exc)
                 return algo_report
 
-            block = self._check_sharpe_circuit_breaker(request, t0)
+            block = await self._check_sharpe_circuit_breaker(request, t0)
             if block is not None:
                 try:
                     _root_span.add_event("sharpe_circuit_breaker.open", {"reason": block.message})
@@ -639,7 +639,9 @@ class ExecutionEngine:
     # execute() sub-steps — each ≤ 30 lines, independently testable
     # ------------------------------------------------------------------
 
-    def _enrich_price_from_data_layer(self, request: ExecutionRequest, t0: float) -> ExecutionRequest | ExecutionReport:
+    async def _enrich_price_from_data_layer(
+        self, request: ExecutionRequest, t0: float
+    ) -> ExecutionRequest | ExecutionReport:
         """
         Check data-layer safety and inject the current mid-price when absent.
 
@@ -714,9 +716,9 @@ class ExecutionEngine:
             metadata={**request.metadata, **extra_meta},
         )
 
-    def _check_pre_submission_guards(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+    async def _check_pre_submission_guards(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
-        Check kill-switch, engine-stopped, and LIVE_MODE_CONFIRMED state synchronously.
+        Check kill-switch, engine-stopped, and LIVE_MODE_CONFIRMED state.
 
         The circuit-breaker check (async) is handled in _check_pre_trade_gate().
         Returns a blocked ExecutionReport on the first failed guard, or None.
@@ -742,7 +744,7 @@ class ExecutionEngine:
             return self._blocked_report(request, msg, t0)
 
         # ── Spread spike guard ────────────────────────────────────────────────
-        spread_block = self._check_spread_spike(request, t0)
+        spread_block = await self._check_spread_spike(request, t0)
         if spread_block is not None:
             return spread_block
 
@@ -760,7 +762,7 @@ class ExecutionEngine:
         broker_name = type(broker).__name__.lower()
         return not ("paper" in broker_name or "mock" in broker_name or "fake" in broker_name)
 
-    def _check_spread_spike(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+    async def _check_spread_spike(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Block the order if the current spread for the symbol is abnormally wide.
 
@@ -1048,7 +1050,7 @@ class ExecutionEngine:
 
         return _broker_fn
 
-    def _check_sharpe_circuit_breaker(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
+    async def _check_sharpe_circuit_breaker(self, request: ExecutionRequest, t0: float) -> ExecutionReport | None:
         """
         Gate the model out when its rolling live Sharpe is below threshold.
 
@@ -1397,8 +1399,8 @@ class ExecutionEngine:
                 None,
                 lambda: self._redis.setex(key, 604800, payload),
             )
-        except (ConnectionError, OSError, RuntimeError) as exc:
-            # Redis failure must not block execution
+        except (OSError, RuntimeError) as exc:
+            # Redis failure must not block execution (ConnectionError is a subclass of OSError)
             logger.error("ExecutionEngine: Redis persist failed: %s", exc)
             self._capture_sentry(exc)
 

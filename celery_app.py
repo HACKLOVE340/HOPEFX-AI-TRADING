@@ -67,7 +67,7 @@ def _redis_lock(name: str, timeout: int = 3600):
         timeout: Lock TTL in seconds.  MUST be strictly greater than the
                  Celery task's ``time_limit`` — if the lock expires before
                  the task finishes, a second instance can start concurrently.
-                 Rule of thumb: timeout = time_limit + 60.
+                 Rule: timeout = time_limit + 60 (minimum safe buffer).
     """
     try:
         import redis as _redis_mod  # type: ignore[import-untyped]
@@ -275,19 +275,19 @@ else:
             return _NoOpInspect()
 
         def broadcast(self, command: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.broadcast: Celery not installed, ignoring command=%s", command)
 
         def revoke(self, task_id: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.revoke: Celery not installed, ignoring task_id=%s", task_id)
 
         def purge(self) -> int:
             return 0
 
         def rate_limit(self, task_name: str, rate_limit: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.rate_limit: Celery not installed, ignoring task=%s", task_name)
 
         def time_limit(self, task_name: str, **kwargs) -> None:
-            pass
+            logger.debug("_NoOpControl.time_limit: Celery not installed, ignoring task=%s", task_name)
 
         def ping(self, destination: list | None = None, timeout: float = 1.0) -> list:
             return []
@@ -334,9 +334,7 @@ def _task(**kwargs):
 # ── ML tasks ─────────────────────────────────────────────────────────────────
 
 
-@_task(
-    name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360
-)  # lock timeout must be <= time_limit
+@_task(name="celery_app.ml_hourly_online_update", queue="ml", soft_time_limit=300, time_limit=360)
 def ml_hourly_online_update(self=None):
     """
     Incremental online-learning update for all configured symbols.
@@ -347,7 +345,9 @@ def ml_hourly_online_update(self=None):
     import asyncio
 
     try:
-        with _redis_lock("ml_train", timeout=355):
+        # Lock TTL must exceed time_limit (360 s) so the lock does not expire
+        # while the task is still running.  Use time_limit + 60 s buffer.
+        with _redis_lock("ml_train", timeout=420):
             from ml.hourly_trainer import HourlyTrainer
 
             trainer = HourlyTrainer()
@@ -388,6 +388,31 @@ def ml_daily_full_retrain(self=None):
 
             trainer = HourlyTrainer()
             asyncio.run(trainer.run_full_retrain())
+
+            # Refresh the registry digest for the active model so that
+            # verify_active() reflects the newly written artifact.
+            # Without this, every integrity check after retrain reports
+            # a SHA-256 mismatch against the stale pre-retrain digest.
+            try:
+                from ml.model_registry import get_registry
+
+                reg = get_registry()
+                active = reg.active_version()
+                if active:
+                    new_digest = reg.refresh_digest(active["name"])
+                    logger.info(
+                        "ml_daily_full_retrain: registry digest refreshed for '%s' — %s…",
+                        active["name"],
+                        new_digest[:16],
+                    )
+                else:
+                    logger.warning(
+                        "ml_daily_full_retrain: retrain complete but no active version in "
+                        "registry — run registry.register() to add the new artifact."
+                    )
+            except Exception as reg_exc:
+                logger.error("ml_daily_full_retrain: failed to refresh registry digest: %s", reg_exc)
+
         return {"status": "ok"}
     except RuntimeError as exc:
         if "already held" in str(exc):
@@ -489,7 +514,7 @@ def affiliate_commission_payout(self=None):
 # ── Risk / compliance tasks ───────────────────────────────────────────────────
 
 
-@_task(name="celery_app.pnl_reconciliation", queue="risk")
+@_task(name="celery_app.pnl_reconciliation", queue="risk", soft_time_limit=300, time_limit=360)
 def pnl_reconciliation(self=None):
     """
     Run the P&L reconciliation gate check.
@@ -501,20 +526,28 @@ def pnl_reconciliation(self=None):
     import asyncio
 
     try:
-        from ml.pnl_reconciler import get_reconciler
+        # Lock TTL must exceed time_limit (360 s) so the lock does not expire
+        # while the task is still running.  Use time_limit + 60 s buffer.
+        with _redis_lock("pnl_reconciliation", timeout=420):
+            from ml.pnl_reconciler import get_reconciler
 
-        reconciler = get_reconciler()
-        result = asyncio.run(reconciler.reconcile())
-        logger.info(
-            "pnl_reconciliation: passed=%s drift=%.4f",
-            result.passed,
-            result.drift_pct,
-        )
-        return {
-            "status": "ok",
-            "passed": result.passed,
-            "drift_pct": result.drift_pct,
-        }
+            reconciler = get_reconciler()
+            result = asyncio.run(reconciler.reconcile())
+            logger.info(
+                "pnl_reconciliation: passed=%s drift=%.4f",
+                result.passed,
+                result.drift_pct,
+            )
+            return {
+                "status": "ok",
+                "passed": result.passed,
+                "drift_pct": result.drift_pct,
+            }
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("pnl_reconciliation skipped — lock already held by another task")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("pnl_reconciliation failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
@@ -525,7 +558,7 @@ def pnl_reconciliation(self=None):
 # ── Infrastructure tasks ──────────────────────────────────────────────────────
 
 
-@_task(name="celery_app.database_backup", queue="infra")
+@_task(name="celery_app.database_backup", queue="infra", soft_time_limit=1800, time_limit=2100)
 def database_backup(self=None):
     """
     Trigger a database backup snapshot.
@@ -536,12 +569,20 @@ def database_backup(self=None):
     import asyncio
 
     try:
-        from database.backup import DatabaseBackupManager
+        # Lock TTL must exceed time_limit (2100 s) so the lock does not expire
+        # while the task is still running.  Use time_limit + 60 s buffer.
+        with _redis_lock("database_backup", timeout=2160):
+            from database.backup import DatabaseBackupManager
 
-        mgr = DatabaseBackupManager()
-        result = asyncio.run(mgr.create_backup())
-        logger.info("database_backup: %s", result)
-        return {"status": "ok", "backup": result}
+            mgr = DatabaseBackupManager()
+            result = asyncio.run(mgr.create_backup())
+            logger.info("database_backup: %s", result)
+            return {"status": "ok", "backup": result}
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("database_backup skipped — lock already held by another task")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("database_backup failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:
@@ -549,7 +590,7 @@ def database_backup(self=None):
         raise
 
 
-@_task(name="celery_app.self_healer_scan", queue="infra")
+@_task(name="celery_app.self_healer_scan", queue="infra", soft_time_limit=240, time_limit=300)
 def self_healer_scan(self=None):
     """
     Run a SelfHealer anomaly scan.
@@ -560,14 +601,22 @@ def self_healer_scan(self=None):
     import asyncio
 
     try:
-        from core.self_healer import get_self_healer
+        # Lock TTL must exceed time_limit (300 s) so the lock does not expire
+        # while the task is still running.  Use time_limit + 60 s buffer.
+        with _redis_lock("self_healer_scan", timeout=360):
+            from core.self_healer import get_self_healer
 
-        healer = get_self_healer()
-        result = asyncio.run(healer.scan())
-        actions = result.get("actions_taken", [])
-        if actions:
-            logger.info("self_healer_scan: took %d actions: %s", len(actions), actions)
-        return {"status": "ok", "actions_taken": len(actions)}
+            healer = get_self_healer()
+            result = asyncio.run(healer.scan())
+            actions = result.get("actions_taken", [])
+            if actions:
+                logger.info("self_healer_scan: took %d actions: %s", len(actions), actions)
+            return {"status": "ok", "actions_taken": len(actions)}
+    except RuntimeError as exc:
+        if "already held" in str(exc):
+            logger.info("self_healer_scan skipped — lock already held by another task")
+            return {"status": "skipped", "reason": "concurrent_lock"}
+        raise
     except Exception as exc:
         logger.error("self_healer_scan failed: %s", exc)
         if self is not None and _CELERY_AVAILABLE:

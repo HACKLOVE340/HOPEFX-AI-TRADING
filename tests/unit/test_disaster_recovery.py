@@ -77,7 +77,11 @@ class TestContinuousBackup:
     def test_init_creates_backup_dir(self, backup_dir):
         from utils.disaster_recovery import ContinuousBackup
 
+<<<<<<< HEAD
         ContinuousBackup(backup_path=str(backup_dir))
+=======
+        _cb = ContinuousBackup(backup_path=str(backup_dir))
+>>>>>>> origin/main
         assert backup_dir.exists()
 
     @pytest.mark.asyncio

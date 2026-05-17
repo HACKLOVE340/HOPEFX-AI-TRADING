@@ -48,7 +48,7 @@ class TestFullTradePipeline:
         )
         assert order is not None
 
-        positions = self.broker.get_positions()
+        positions = await self.broker.get_positions()
         assert any(p.symbol == "XAUUSD" for p in positions)
 
         self.broker.update_market_price("XAUUSD", 2060.0)
@@ -108,7 +108,7 @@ class TestFullTradePipeline:
         self.broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
         self.broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
 
-        positions = self.broker.get_positions()
+        positions = await self.broker.get_positions()
         symbols = {p.symbol for p in positions}
         assert "XAUUSD" in symbols
         assert "EURUSD" in symbols

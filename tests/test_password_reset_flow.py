@@ -196,7 +196,11 @@ class TestResetPassword:
         assert user.password_reset_token is None  # one-time use: token cleared
 
     def test_invalid_token_returns_error(self):
+<<<<<<< HEAD
         self._user_with_token("correcttoken")
+=======
+        _user = self._user_with_token("correcttoken")
+>>>>>>> origin/main
         svc = _make_service(user=None)  # no matching user for wrong token
         ok, msg = svc.reset_password("wrongtoken", "NewSecurePass1!")
         assert ok is False
@@ -289,10 +293,18 @@ class TestPasswordResetRouter:
 
     def test_reset_password_success_200(self):
         self._mock_svc.reset_password.return_value = (True, "Password reset successfully.")
+        # Build a properly signed token so the router's signature check passes.
+        from auth.router import _make_signed_token, _SALT_PASSWORD_RESET, _PASSWORD_RESET_TTL
+
+        signed = _make_signed_token(
+            {"tok": "rawtoken123", "email": "user@example.com"},
+            salt=_SALT_PASSWORD_RESET,
+            max_age_seconds=_PASSWORD_RESET_TTL,
+        )
         client = self._client()
         r = client.post(
             "/api/auth/reset-password",
-            json={"token": "goodtoken", "new_password": "Secure123!"},
+            json={"token": signed, "new_password": "Secure123!"},
             headers={"X-CSRF-Token": "skip"},
         )
         assert r.status_code == 200

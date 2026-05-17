@@ -108,7 +108,7 @@ const Profile: React.FC = () => {
   const st = profile.stats;
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       {/* Header */}
       <div style={s.header}>
         <div style={s.avatarWrap}>

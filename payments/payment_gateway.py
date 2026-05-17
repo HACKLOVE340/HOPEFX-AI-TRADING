@@ -86,6 +86,11 @@ class PaymentGateway:
                 self._process_crypto(payment)
             elif payment.method == PaymentMethod.BANK_TRANSFER:
                 self._process_bank(payment)
+            else:
+                raise NotImplementedError(  # healer: ignore
+                    f"Payment method {payment.method.value!r} is not implemented. "
+                    "Payment cannot be collected. Do not mark as success."
+                )
 
             payment.status = PaymentStatus.SUCCESS
             payment.completed_at = datetime.now(UTC)

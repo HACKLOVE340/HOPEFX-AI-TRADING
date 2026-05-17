@@ -945,9 +945,10 @@ def _register_scanner_write_routes(router: Any, scanner: MarketScanner) -> None:
 
 def create_scanner_router(scanner: MarketScanner):
     """Create FastAPI router with scanner endpoints."""
-    from fastapi import APIRouter
+    from fastapi import APIRouter, Depends
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/scanner", tags=["Market Scanner"])
+    router = APIRouter(prefix="/api/scanner", tags=["Market Scanner"], dependencies=[Depends(get_current_user)])
     _register_scanner_read_routes(router, scanner)
     _register_scanner_write_routes(router, scanner)
     return router

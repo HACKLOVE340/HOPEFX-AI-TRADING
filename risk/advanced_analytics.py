@@ -710,9 +710,9 @@ class AdvancedRiskAnalytics:
         for i in range(1, len(returns)):
             ewma_var[i] = decay * ewma_var[i - 1] + (1 - decay) * returns[i] ** 2
 
-        ewma_var = np.nan_to_num(ewma_var, nan=0.0)
-        current_vol = np.sqrt(max(float(ewma_var[-1]), 0.0))
-        hist_vol = np.sqrt(max(float(np.mean(ewma_var)), 0.0))
+        ewma_var_clean: NDArray[np.float64] = np.nan_to_num(ewma_var, nan=0.0)
+        current_vol = np.sqrt(max(float(ewma_var_clean[-1]), 0.0))
+        hist_vol = np.sqrt(max(float(np.mean(ewma_var_clean)), 0.0))
 
         if hist_vol == 0:
             return self.calculate_var_historical(
@@ -1344,7 +1344,7 @@ class AdvancedRiskAnalytics:
                     return 1e10
             sigma2_safe = np.maximum(np.nan_to_num(sigma2, nan=1e-12), 1e-12)
             ll = -0.5 * np.sum(np.log(sigma2_safe) + arr**2 / sigma2_safe)
-            return -ll
+            return float(-ll)
 
         # Initial guess: small omega, typical alpha/beta for FX/gold
         sample_var = float(np.var(arr, ddof=1))

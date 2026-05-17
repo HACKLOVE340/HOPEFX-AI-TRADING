@@ -34,6 +34,8 @@ UTC = timezone.utc
 from enum import Enum
 from typing import Any
 
+import importlib.util as _importlib_util
+
 import numpy as np
 import pandas as pd
 
@@ -67,9 +69,9 @@ try:
     TENSORFLOW_AVAILABLE = True
 except ImportError:
     TENSORFLOW_AVAILABLE = False
-    import importlib.util as _importlib_util
 
-warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
+if not TENSORFLOW_AVAILABLE:
+    warnings.warn("TensorFlow not available - deep learning disabled", stacklevel=2)
 
 PYTORCH_AVAILABLE = _importlib_util.find_spec("torch") is not None
 
@@ -1048,7 +1050,7 @@ class DeepLearningModel:
         logger.info("Online update completed with lr=%s", new_lr)
 
     def save(self, filepath: str):
-        """Save model and configuration"""
+        """Save model and configuration, then refresh the registry digest."""
         if self.model:
             self.model.save(f"{filepath}/model.h5")
 
@@ -1064,6 +1066,24 @@ class DeepLearningModel:
                 json.dump(config_dict, f, indent=2)
 
             logger.info("Model saved to %s", filepath)
+
+            # Refresh the registry digest so verify_active() reflects the new
+            # artifact. Without this, integrity checks report a SHA-256 mismatch
+            # against the stale pre-save digest.
+            try:
+                from ml.model_registry import get_registry
+
+                reg = get_registry()
+                active = reg.active_version()
+                if active:
+                    new_digest = reg.refresh_digest(active["name"])
+                    logger.info(
+                        "Registry digest refreshed for '%s' after save: %s…",
+                        active["name"],
+                        new_digest[:16],
+                    )
+            except Exception as _reg_exc:
+                logger.warning("Failed to refresh registry digest after save: %s", _reg_exc)
 
     def load(self, filepath: str):
         """Load model and configuration"""
@@ -2047,8 +2067,8 @@ def run_ml_test():
     logger.info("Predictions generated: %s", report["predictions_generated"])
 
     if report["recent_performance"]["accuracy"] is not None:
-        logger.info("\nRecent accuracy: %s", f"{report['recent_performance']['accuracy']:.1%}")
-        logger.info("Average confidence: %s", f"{report['recent_performance']['avg_confidence']:.1%}")
+        logger.info("\nRecent accuracy: %.1f%%", report["recent_performance"]["accuracy"] * 100)
+        logger.info("Average confidence: %.1f%%", report["recent_performance"]["avg_confidence"] * 100)
 
     logger.info("\nFeatures used: %s", report["feature_count"])
     logger.info("Top 5 features:")

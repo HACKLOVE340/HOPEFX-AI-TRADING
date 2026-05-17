@@ -418,7 +418,7 @@ class ExecutionSystem:
         try:
             loop.add_signal_handler(signal.SIGTERM, lambda: _handle_shutdown("SIGTERM"))
             loop.add_signal_handler(signal.SIGINT, lambda: _handle_shutdown("SIGINT"))
-        except (NotImplementedError, RuntimeError):
+        except RuntimeError:
             ...  # nosec B110
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
@@ -463,7 +463,7 @@ async def _connect_oanda() -> Any | None:
             return broker
         logger.warning("OANDA broker connection failed")
         return None
-    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
+    except (ImportError, RuntimeError, ValueError) as exc:
         logger.error("OANDA broker init error: %s", exc)
         return None
 
@@ -487,7 +487,7 @@ async def _connect_ibkr() -> Any | None:
             return broker
         logger.warning("IBKR broker connection failed (TWS/Gateway not running?)")
         return None
-    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
+    except (ImportError, RuntimeError, ValueError) as exc:
         logger.error("IBKR broker init error: %s", exc)
         return None
 
@@ -509,7 +509,7 @@ async def _connect_cme() -> Any | None:
             return broker
         logger.warning("CME COMEX broker connection failed")
         return None
-    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
+    except (ImportError, RuntimeError, ValueError) as exc:
         logger.error("CME COMEX broker init error: %s", exc)
         return None
 
@@ -529,7 +529,7 @@ async def _connect_cpp_shim() -> Any | None:
             "Build: cd execution/cpp_shim && cmake -B build && cmake --build build"
         )
         return None
-    except (ImportError, ConnectionError, RuntimeError, ValueError) as exc:
+    except (ImportError, RuntimeError, ValueError) as exc:
         logger.error("C++ shim init error: %s", exc)
         return None
 
@@ -601,7 +601,7 @@ def _wire_notify_fill(orchestrator: Any) -> None:
                 orchestrator._redis.lpush(key, json.dumps(fill_record))
                 orchestrator._redis.ltrim(key, 0, 999)  # keep last 1000 fills
                 orchestrator._redis.expire(key, 86400)  # 24h TTL
-        except (ConnectionError, RuntimeError, TypeError) as exc:
+        except (RuntimeError, TypeError) as exc:
             logger.debug("notify_fill Redis update failed: %s", exc)
 
         # Notify replay engine

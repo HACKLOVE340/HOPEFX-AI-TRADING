@@ -492,7 +492,7 @@ class MarketDataValidator:
             return None
         if isinstance(ts, datetime):
             return ts if ts.tzinfo else ts.replace(tzinfo=UTC)
-        if isinstance(ts, (int, float)):
+        if isinstance(ts, int | float):
             return datetime.fromtimestamp(ts, tz=UTC)
         if isinstance(ts, str):
             try:

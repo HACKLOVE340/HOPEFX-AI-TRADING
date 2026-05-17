@@ -595,7 +595,9 @@ class AdvancedPredictor:
                             logger.debug("MTF: dropped %d cols not in model feature set", dropped)
                         mtf_cols = valid_mtf_cols
                     if mtf_cols:
-                        X = pd.concat([X, mtf_last[mtf_cols]], axis=1)
+                        X = pd.concat(
+                            [X, mtf_last[mtf_cols]], axis=1
+                        )  # healer: ignore — fillna(0.0) applied after _align_features
             except Exception as exc:
                 logger.debug("MTF append failed (non-fatal): %s", exc)
 
@@ -855,7 +857,7 @@ class HybridEnsemblePredictor:
             import pickle
 
             with open(meta_path, "rb") as f:
-                state = pickle.load(f)
+                state = pickle.load(f)  # nosec B301 — path-confined local model file
             self._meta = state.get("meta")
             self._meta_scaler = state.get("scaler")
             if self._meta is not None:
@@ -904,11 +906,13 @@ class HybridEnsemblePredictor:
         """XGBoost probability via AdvancedPredictor base model."""
         try:
             pred = get_predictor()
+            # _load() acquires pred._lock internally — do not hold it here to
+            # avoid a deadlock (threading.Lock is not reentrant).
+            if pred._model is None:
+                pred._load()
+            if pred._model is None:
+                return 0.5
             with pred._lock:
-                if pred._model is None:
-                    pred._load()
-                if pred._model is None:
-                    return 0.5
                 X_df = pd.DataFrame(X, columns=pred._feature_names or [f"f{i}" for i in range(X.shape[1])])
                 X_df = pred._align_features(X_df)
                 X_df = X_df.replace([np.inf, -np.inf], np.nan).fillna(0.0)

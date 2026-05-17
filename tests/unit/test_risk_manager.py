@@ -41,13 +41,34 @@ class TestRiskManager:
         )
 
     def test_position_size_limit_check(self, risk_manager, sample_trade):
-        """FIA 1.1: Maximum Order Size validation"""
-        # Test within limit
-        result = risk_manager.check_position_size(sample_trade, max_pct=0.05)
+        """FIA 1.1: Maximum Order Size validation.
+
+        check_position_size() treats Trade.size as the USD notional of the
+        position.  The default account equity is $100,000 (RISK_ACCOUNT_EQUITY
+        env var).  sample_trade has size=10,000 → 10% of equity, which exceeds
+        the 5% limit.  Use a 4,000-unit trade (4% of equity) to test the
+        within-limit path.
+        """
+        # Within limit: $4,000 notional on $100k equity = 4% < 5%
+        small_trade = Trade(
+            id=1,
+            symbol="EURUSD",
+            side="buy",
+            size=4000,
+            entry_price=1.0850,
+            timestamp=datetime.now(UTC),
+        )
+        result = risk_manager.check_position_size(small_trade, max_pct=0.05)
         assert result.passed is True
         assert result.risk_level == RiskLevel.LOW
 
-        # Test exceeding limit
+        # Exceeding limit: $10,000 notional on $100k equity = 10% > 5%
+        result = risk_manager.check_position_size(sample_trade, max_pct=0.05)
+        assert result.passed is False
+        assert result.risk_level == RiskLevel.CRITICAL
+        assert "Position size" in result.message
+
+        # Large trade: $1,000,000 notional — clearly exceeds limit
         large_trade = Trade(
             id=2,
             symbol="EURUSD",

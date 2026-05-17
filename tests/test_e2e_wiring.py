@@ -377,10 +377,10 @@ class TestMLEndpoints:
         assert "generated_at" in data
 
     def test_predict_normalises_symbol(self, ml_client):
-        """Symbol is uppercased and dashes replaced with slashes."""
+        """Symbol variants (xau-usd, XAU/USD, etc.) are normalised to the canonical MT5 form XAUUSD."""
         resp = ml_client.post("/api/ml/predict/xau-usd", json={"timeframe": "H1", "lookback": 50})
         assert resp.status_code == 200
-        assert resp.json()["symbol"] == "XAU/USD"
+        assert resp.json()["symbol"] == "XAUUSD"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

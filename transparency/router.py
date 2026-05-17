@@ -22,10 +22,11 @@ def create_transparency_router(engine: "ExecutionTransparencyEngine"):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter
+    from fastapi import APIRouter, Depends
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/transparency", tags=["Transparency"])
+    router = APIRouter(prefix="/api/transparency", tags=["Transparency"], dependencies=[Depends(get_current_user)])
 
     class RecordExecutionRequest(BaseModel):
         order_id: str

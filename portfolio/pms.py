@@ -10,6 +10,7 @@ Real-time P&L, exposure, and portfolio optimization
 """
 
 import contextlib
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -266,17 +267,15 @@ class PortfolioOptimizer:
 
     def __init__(self, pms: PortfolioManager):
         self.pms = pms
-        self.returns_history: dict[str, list[float]] = {}
+        self.returns_history: dict[str, deque[float]] = {}
         self.covariance_matrix: np.ndarray | None = None
         self.target_volatility = 0.15  # 15% annualized
 
     def update_returns(self, symbol: str, daily_return: float):
         """Add daily return to history"""
         if symbol not in self.returns_history:
-            self.returns_history[symbol] = []
+            self.returns_history[symbol] = deque(maxlen=252)  # 1 year rolling
         self.returns_history[symbol].append(daily_return)
-        if len(self.returns_history[symbol]) > 252:  # 1 year
-            self.returns_history[symbol].pop(0)
 
     def calculate_kelly_sizes(self) -> dict[str, float]:
         """
@@ -319,9 +318,9 @@ class PortfolioOptimizer:
         if len(symbols) < 2:
             return dict.fromkeys(symbols, 1.0)
 
-        # Build returns matrix
+        # Build returns matrix — convert deque to list for slicing
         min_len = min(len(r) for r in self.returns_history.values())
-        returns_matrix = np.array([self.returns_history[sym][-min_len:] for sym in symbols])
+        returns_matrix = np.array([list(self.returns_history[sym])[-min_len:] for sym in symbols])
 
         # Calculate expected returns and covariance
         returns_matrix_clean = np.nan_to_num(returns_matrix, nan=0.0)

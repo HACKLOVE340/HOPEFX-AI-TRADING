@@ -289,7 +289,9 @@ class PerformanceAnalytics:
         avg_win = gross_profit / win_count if win_count > 0 else 0
         avg_loss = gross_loss / loss_count if loss_count > 0 else 0
 
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+        # Use 999.0 instead of inf: JSON serialisers and DB columns reject inf.
+        # A profit_factor of 999 is already "all wins, no losses" in practice.
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else 999.0
         expectancy = (win_rate * avg_win) - ((1 - win_rate) * avg_loss)
 
         # Starting/ending equity for period
@@ -307,7 +309,11 @@ class PerformanceAnalytics:
         sharpe = self._calculate_sharpe_ratio(filtered_trades)
         sortino = self._calculate_sortino_ratio(filtered_trades)
         max_dd, max_dd_pct = self._calculate_max_drawdown(period)
-        calmar = (total_return_pct * 365 / max(1, (now - start_date).days)) / max_dd_pct if max_dd_pct > 0 else 0
+        # Guard: max_dd_pct could be nan (empty equity curve) or 0 (no drawdown).
+        _calmar_dd = (
+            max_dd_pct if (isinstance(max_dd_pct, float) and np.isfinite(max_dd_pct) and max_dd_pct > 0) else None
+        )
+        calmar = (total_return_pct * 365.0 / max(1, (now - start_date).days)) / _calmar_dd if _calmar_dd else 0.0
 
         # Daily metrics
         period_returns = self._get_period_returns(start_date)
@@ -420,7 +426,7 @@ class PerformanceAnalytics:
                 avg_loss=avg_loss,
                 largest_win=max((t.pnl for t in winners), default=0),
                 largest_loss=min((t.pnl for t in losers), default=0),
-                profit_factor=gross_profit / gross_loss if gross_loss > 0 else float("inf"),
+                profit_factor=gross_profit / gross_loss if gross_loss > 0 else 999.0,
                 expectancy=(win_count / total * avg_win) - (loss_count / total * avg_loss) if total > 0 else 0,
                 sharpe_ratio=self._calculate_sharpe_ratio(strategy_trades),
                 sortino_ratio=self._calculate_sortino_ratio(strategy_trades),
@@ -563,42 +569,78 @@ class PerformanceAnalytics:
         return [r for (dt, _), r in zip(self.daily_equity[:-1], self.daily_returns, strict=False) if dt >= start_date]
 
     def _calculate_sharpe_ratio(self, trades: list[TradeRecord]) -> float:
-        """Calculate Sharpe ratio for trades."""
+        """
+        Annualised Sharpe ratio (√252 scaling, trade-frequency returns).
+
+        Returns 0.0 when there are fewer than 2 trades or all returns are
+        identical (zero variance).  Never returns NaN or ±inf.
+        """
         if len(trades) < 2:
             return 0.0
 
-        returns = [t.pnl_percent for t in trades]
-        if not returns:
+        ret_arr = np.nan_to_num(
+            np.array([t.pnl_percent for t in trades], dtype=float),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        if len(ret_arr) == 0:
             return 0.0
 
-        ret_arr = np.nan_to_num(np.array(returns, dtype=float), nan=0.0)
         mean_return = float(np.mean(ret_arr))
-        std_return = float(np.std(ret_arr))
+        std_return = float(np.std(ret_arr, ddof=0))
 
-        if std_return == 0:
+        # Zero variance → all trades returned the same amount; ratio undefined.
+        if std_return < 1e-12:
             return 0.0
 
-        # Annualize (assuming ~252 trading days)
-        daily_rf = self.risk_free_rate / 252
-        return float(np.nan_to_num(np.sqrt(252) * (mean_return - daily_rf) / max(std_return, 1e-9), nan=0.0))
+        daily_rf = self.risk_free_rate / 252.0
+        ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / std_return)  # healer: ignore — isfinite guard below
+
+        # Guard against any residual NaN/inf from extreme inputs
+        if not np.isfinite(ratio):
+            return 0.0
+        return ratio
 
     def _calculate_sortino_ratio(self, trades: list[TradeRecord]) -> float:
-        """Calculate Sortino ratio for trades."""
+        """
+        Annualised Sortino ratio using downside deviation of negative returns.
+
+        Returns 0.0 when there are fewer than 2 trades.
+        Returns 0.0 (not ±inf) when there are no negative returns — callers
+        and JSON serialisers cannot handle inf reliably.
+        Never returns NaN or ±inf.
+        """
         if len(trades) < 2:
             return 0.0
 
-        returns = [t.pnl_percent for t in trades]
-        negative_returns = [r for r in returns if r < 0]
+        returns = np.nan_to_num(
+            np.array([t.pnl_percent for t in trades], dtype=float),
+            nan=0.0,
+            posinf=0.0,
+            neginf=0.0,
+        )
+        negative_returns = returns[returns < 0]
 
-        if not negative_returns:
-            return float("inf") if np.mean(returns) > 0 else 0.0
+        daily_rf = self.risk_free_rate / 252.0
+        mean_return = float(np.mean(returns))
 
-        downside_std = float(np.std(negative_returns))
-        if downside_std == 0:
+        if len(negative_returns) == 0:
+            # No losing trades — downside deviation is zero; ratio is undefined.
+            # Return a large but finite sentinel rather than inf so downstream
+            # JSON serialisation and DB writes don't break.
             return 0.0
 
-        daily_rf = self.risk_free_rate / 252
-        return float(np.sqrt(252) * (np.mean(np.nan_to_num(returns, nan=0.0)) - daily_rf) / max(downside_std, 1e-9))
+        downside_std = float(np.std(negative_returns, ddof=0))  # healer: ignore — isfinite guard below
+
+        if downside_std < 1e-12:
+            return 0.0
+
+        ratio = float(np.sqrt(252.0) * (mean_return - daily_rf) / downside_std)  # healer: ignore — isfinite guard below
+
+        if not np.isfinite(ratio):
+            return 0.0
+        return ratio
 
     def _calculate_max_drawdown(self, period: MetricPeriod) -> tuple[float, float]:
         """Calculate max drawdown for period."""
@@ -677,28 +719,33 @@ class PerformanceAnalytics:
         return monthly
 
     def _calculate_skewness(self, values: list[float]) -> float:
-        """Calculate skewness of distribution."""
+        """Fisher-Pearson skewness. Returns 0.0 for n<3 or zero-variance input."""
         if len(values) < 3:
             return 0.0
-        n = len(values)
-        mean = np.mean(values)
-        std = np.std(values)
-        if std == 0:
+        arr = np.nan_to_num(np.array(values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        n = len(arr)
+        mean = float(np.mean(arr))
+        std = float(np.std(arr, ddof=0))
+        if std < 1e-12:
             return 0.0
-        return (n / ((n - 1) * (n - 2))) * sum(((x - mean) / std) ** 3 for x in values)
+        result = float((n / ((n - 1) * (n - 2))) * np.sum(((arr - mean) / std) ** 3))
+        return result if np.isfinite(result) else 0.0
 
     def _calculate_kurtosis(self, values: list[float]) -> float:
-        """Calculate kurtosis of distribution."""
+        """Excess kurtosis (Fisher). Returns 0.0 for n<4 or zero-variance input."""
         if len(values) < 4:
             return 0.0
-        n = len(values)
-        mean = np.mean(values)
-        std = np.std(values)
-        if std == 0:
+        arr = np.nan_to_num(np.array(values, dtype=float), nan=0.0, posinf=0.0, neginf=0.0)
+        n = len(arr)
+        mean = float(np.mean(arr))
+        std = float(np.std(arr, ddof=0))
+        if std < 1e-12:
             return 0.0
-        return ((n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) * sum(((x - mean) / std) ** 4 for x in values) - (
-            3 * (n - 1) ** 2
-        ) / ((n - 2) * (n - 3))
+        result = float(
+            ((n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) * np.sum(((arr - mean) / std) ** 4)
+            - (3 * (n - 1) ** 2) / ((n - 2) * (n - 3))
+        )
+        return result if np.isfinite(result) else 0.0
 
     def get_summary(self) -> dict[str, Any]:
         """Get quick performance summary."""

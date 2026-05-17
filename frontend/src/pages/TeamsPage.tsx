@@ -288,7 +288,7 @@ const TeamsPage: React.FC = () => {
   const teams = data?.teams ?? [];
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 1200, margin: '0 auto' }}>
+    <div className="page-content">
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>

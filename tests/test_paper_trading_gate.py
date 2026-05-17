@@ -232,14 +232,18 @@ def test_status_contains_all_keys(gate_started):
 
 @pytest.fixture(scope="module")
 def api_client(tmp_path_factory):
-    """TestClient with status router mounted."""
+    """TestClient with status router mounted and auth dependency overridden."""
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
 
+    from api.auth import TokenPayload, get_current_user
     from api.status import router
 
     app = FastAPI()
     app.include_router(router)
+    # Override auth so the gate/fill endpoint (which requires a logged-in user)
+    # can be exercised without a real JWT in unit tests.
+    app.dependency_overrides[get_current_user] = lambda: TokenPayload(sub="test-user", role="trader")
     return TestClient(app)
 
 

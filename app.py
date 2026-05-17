@@ -233,6 +233,16 @@ _register_routers(
     signals_router=_signals_router,
 )
 
+# Strawberry GraphQL uses `from __future__ import annotations` internally, which
+# turns Request/Response params into ForwardRef strings that pydantic v2 cannot
+# resolve during OpenAPI schema generation.  Mark those routes as excluded from
+# the schema so /openapi.json succeeds.  GraphQL is self-documenting via GraphiQL.
+from fastapi.routing import APIRoute as _APIRoute
+
+for _route in app.routes:
+    if isinstance(_route, _APIRoute) and _route.path.startswith("/graphql"):
+        _route.include_in_schema = False
+
 # Kill switch — instantiated at module level so it can be imported by other
 # components (risk manager, order router, etc.) via:
 #   from app import kill_switch
@@ -293,7 +303,14 @@ try:
             low: float
             volume: float = 0.0
 
-        _decision_deferred = _APIRouter(prefix="/api/decision", tags=["Decision Engine"])
+        from fastapi import Depends as _Depends
+        from api.auth import require_role as _require_role
+
+        _decision_deferred = _APIRouter(
+            prefix="/api/decision",
+            tags=["Decision Engine"],
+            dependencies=[_Depends(_require_role("admin"))],
+        )
 
         @_decision_deferred.get("/status", summary="Decision engine health and metrics")
         async def _decision_status():
@@ -633,6 +650,20 @@ async def startup_event():
         _registry.print_table()
         _push_state_to_api_modules(app_state)
 
+        # Initialise the async DB pool so get_async_db() and the /api/health/ready
+        # db_pool check work correctly.  Must run after the registry (which runs
+        # alembic migrations) so the schema is guaranteed to exist.
+        try:
+            from database.async_connection import AsyncConnectionPool, set_default_pool as _set_pool
+
+            _async_pool = AsyncConnectionPool()
+            await _async_pool.connect()
+            _set_pool(_async_pool)
+            app_state.async_db_pool = _async_pool
+            logger.info("Async DB pool initialised and registered as default pool")
+        except Exception as _pool_err:
+            logger.warning("Async DB pool init failed (non-fatal): %s", _pool_err)
+
         # Populate _tasks_done / _tasks_failed from the registry results so
         # mark_startup_complete() and the health endpoint report accurate state.
         for _cname, _comp in _components.items():
@@ -666,9 +697,6 @@ async def startup_event():
         await _start_l2_feed(app_state)
         _tasks_done.append("l2_feed")
 
-        _start_sharpe_circuit_breaker(app_state)
-        _tasks_done.append("sharpe_circuit_breaker")
-
         _start_nuclear_price_bridge(app_state)
         _tasks_done.append("nuclear_price_bridge")
 
@@ -688,6 +716,18 @@ async def startup_event():
         logger.info("=" * 70)
         logger.info("API SERVER READY")
         logger.info("=" * 70)
+
+        # Re-run broker-level CoD check now that the broker is connected.
+        # The first check in kill_switch.start() runs before the broker
+        # connects and is silently deferred; this second check runs after
+        # all components are initialised so the broker is guaranteed to be
+        # available.  Failure is non-fatal — logged at WARNING only.
+        try:
+            await kill_switch.check_broker_cod()
+            _tasks_done.append("kill_switch_cod_check")
+        except Exception as _cod_err:
+            logger.warning("kill_switch CoD post-startup check failed (non-fatal): %s", _cod_err)
+            _tasks_failed.append(f"kill_switch_cod_check: {_cod_err}")
 
         # Mark startup probe as complete so /api/health/startup returns 200
         try:

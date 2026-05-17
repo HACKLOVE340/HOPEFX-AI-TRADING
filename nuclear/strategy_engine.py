@@ -36,6 +36,7 @@ Usage
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -196,8 +197,9 @@ class SMCICTEngine:
         atr = entry_feat.atr if entry_feat.atr > 0 else price * 0.005
 
         # OB: price near EMA21 (institutional re-entry zone)
-        ob_zone_long = abs(price - entry_feat.ema_21) / (price + 1e-9) < 0.003
-        ob_zone_short = abs(price - entry_feat.ema_21) / (price + 1e-9) < 0.003
+        _ema21_dist = abs(price - entry_feat.ema_21) / (price + 1e-9)
+        ob_zone_long = _ema21_dist < 0.003  # within 0.3% of EMA21 — valid long OB
+        ob_zone_short = _ema21_dist < 0.003  # within 0.3% of EMA21 — valid short OB
 
         # FVG: BB pct_b at extremes signals imbalance
         fvg_long = entry_feat.bb_pct_b < 0.2 and structure == LONG
@@ -600,7 +602,7 @@ class NuclearStrategyEngine:
         self._breakout = BreakoutEngine()
         self._mean_rev = MeanReversionEngine()
         self._cone_validator = ConeValidator()
-        self._signal_history: list[StrategySignal] = []
+        self._signal_history: deque[StrategySignal] = deque(maxlen=200)
 
     def generate(
         self,
@@ -668,9 +670,7 @@ class NuclearStrategyEngine:
             )
             return None
 
-        self._signal_history.append(validated)
-        if len(self._signal_history) > 200:
-            self._signal_history = self._signal_history[-200:]
+        self._signal_history.append(validated)  # deque(maxlen=200) evicts oldest automatically
 
         logger.info(
             "NuclearStrategyEngine: %s %s @ %.4f SL=%.4f TP1=%.4f conf=%.2f RR=%.2f",
@@ -685,7 +685,8 @@ class NuclearStrategyEngine:
         return validated
 
     def signal_history(self, n: int = 20) -> list[dict[str, Any]]:
-        return [s.to_dict() for s in self._signal_history[-n:]]
+        items = list(self._signal_history)
+        return [s.to_dict() for s in items[-n:]]
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────

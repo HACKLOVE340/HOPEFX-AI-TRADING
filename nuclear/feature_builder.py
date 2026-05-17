@@ -343,24 +343,25 @@ class FeatureBuilder:
 
         # ── ATR ───────────────────────────────────────────────────────────────
         period = min(_ATR_PERIOD, n - 1)
-        atr = _compute_atr(highs, lows, closes, period)
+        atr = float(np.nan_to_num(_compute_atr(highs, lows, closes, period), nan=0.0))
         feat.atr = atr
         feat.atr_pct = atr / (price + 1e-9)
 
         # ── Bollinger Bands ───────────────────────────────────────────────────
         bb_period = min(_BB_PERIOD, n)
         if bb_period >= 2:
-            bb_mid = float(np.mean(closes[-bb_period:]))
-            bb_std = float(np.std(closes[-bb_period:], ddof=1))
+            bb_mid = float(np.nan_to_num(np.mean(closes[-bb_period:]), nan=price))
+            bb_std = float(np.nan_to_num(np.std(closes[-bb_period:], ddof=1), nan=0.0))
             bb_upper = bb_mid + _BB_STD * bb_std
             bb_lower = bb_mid - _BB_STD * bb_std
-            bb_width = (bb_upper - bb_lower) / (bb_mid + 1e-9)
-            bb_pct_b = (price - bb_lower) / (bb_upper - bb_lower + 1e-9)
+            bb_diff = bb_upper - bb_lower
+            bb_width = bb_diff / (bb_mid + 1e-9)
+            bb_pct_b = (price - bb_lower) / bb_diff if bb_diff > 1e-8 else 0.5
 
             feat.bb_upper = bb_upper
             feat.bb_lower = bb_lower
             feat.bb_mid = bb_mid
-            feat.bb_width = bb_width
+            feat.bb_width = float(np.nan_to_num(bb_width, nan=0.0))
             feat.bb_pct_b = float(np.clip(bb_pct_b, -0.5, 1.5))
 
             # Squeeze: current width < 20th percentile of rolling widths

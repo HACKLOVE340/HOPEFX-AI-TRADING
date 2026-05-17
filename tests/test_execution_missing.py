@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
 
 import pytest
 
@@ -343,9 +343,13 @@ class TestTWAPExecutor:
 
     @pytest.mark.asyncio
     async def test_with_router_filled(self):
-        router = MagicMock()
-        router.route = AsyncMock(return_value={"status": "filled", "fill_price": 2000.0})
-        exec_ = TWAPExecutor(router=router)
+        class _FilledRouter:
+            """Real router that always returns a filled result."""
+
+            async def route(self, order_req: dict) -> dict:
+                return {"status": "filled", "fill_price": order_req.get("mid_price", 2000.0)}
+
+        exec_ = TWAPExecutor(router=_FilledRouter())
         result = await exec_.execute(
             parent_id="t1",
             symbol="XAUUSD",
@@ -360,9 +364,13 @@ class TestTWAPExecutor:
 
     @pytest.mark.asyncio
     async def test_router_failure_counted(self):
-        router = MagicMock()
-        router.route = AsyncMock(side_effect=RuntimeError("broker down"))
-        exec_ = TWAPExecutor(router=router)
+        class _FailingRouter:
+            """Real router that always raises to simulate broker failure."""
+
+            async def route(self, order_req: dict) -> dict:
+                raise RuntimeError("broker down")
+
+        exec_ = TWAPExecutor(router=_FailingRouter())
         result = await exec_.execute(
             parent_id="t1",
             symbol="XAUUSD",
@@ -555,16 +563,14 @@ class TestSpreadMonitor:
 
     def test_on_tick_obj_with_bid_ask(self):
         mon = SpreadMonitor(min_ticks=1)
-        tick = MagicMock()
-        tick.bid = 2000.0
-        tick.ask = 2000.3
+        tick = SimpleNamespace(bid=2000.0, ask=2000.3, mid=2000.15)
         snap = mon.on_tick_obj("XAUUSD", tick)
         assert snap.current_spread == pytest.approx(0.3)
 
     def test_on_tick_obj_mid_fallback(self):
         mon = SpreadMonitor(min_ticks=1)
-        tick = MagicMock(spec=["mid"])
-        tick.mid = 2000.0
+        # Tick with only mid — no bid/ask — exercises the mid fallback path
+        tick = SimpleNamespace(mid=2000.0)
         snap = mon.on_tick_obj("XAUUSD", tick)
         assert snap.current_spread > 0
 

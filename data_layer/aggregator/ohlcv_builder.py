@@ -60,7 +60,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -234,9 +234,19 @@ class OHLCVBuilder:
         # (symbol, timeframe) → BarState
         self._open_bars: dict[tuple[str, str], BarState] = {}
 
-        # Closed bar history per (symbol, timeframe): deque of BarState
-        self._closed_bars: dict[tuple[str, str], list[BarState]] = defaultdict(list)
+        class _SliceableBarHistory(deque[BarState]):
+            """Deque-backed history that preserves slice access for callers."""
+
+            def __getitem__(self, index: int | slice) -> BarState | list[BarState]:
+                if isinstance(index, slice):
+                    return list(self)[index]
+                return super().__getitem__(index)
+
+        # Closed bar history per (symbol, timeframe): bounded deque of BarState
         self._max_history: int = 500
+        self._closed_bars: dict[tuple[str, str], _SliceableBarHistory] = defaultdict(
+            lambda: _SliceableBarHistory(maxlen=self._max_history)
+        )
 
         # Callbacks
         self._callbacks: list[BarCloseCallback] = []
@@ -327,7 +337,8 @@ class OHLCVBuilder:
     ) -> list[BarState]:
         """Return the last *n* closed bars in chronological order."""
         history = self._closed_bars.get((symbol, timeframe), [])
-        return history[-n:]
+        # Convert deque to list for slicing support
+        return list(history)[-n:]
 
     def get_latest_closed_bar(self, symbol: str, timeframe: str) -> BarState | None:
         """Return the most recently closed bar, or None."""
@@ -440,10 +451,7 @@ class OHLCVBuilder:
     ) -> None:
         """Store the closed bar and dispatch to callbacks."""
         history = self._closed_bars[key]
-        history.append(bar)
-        # Cap history size.
-        if len(history) > self._max_history:
-            history.pop(0)
+        history.append(bar)  # deque with maxlen auto-evicts oldest
 
         self.bars_closed += 1
 

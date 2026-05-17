@@ -202,7 +202,7 @@ class TestSLTPMonitorLifecycle:
         from execution.sl_tp_monitor import SLTPMonitor
 
         m = SLTPMonitor(position_manager=None, broker=None, tick_cache={})
-        fut = asyncio.get_event_loop().create_future()
+        fut = asyncio.get_running_loop().create_future()
         fut.set_result(None)
         m._on_task_done(fut)  # no exception — must not crash
 

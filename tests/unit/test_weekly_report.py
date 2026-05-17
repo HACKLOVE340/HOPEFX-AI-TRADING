@@ -26,6 +26,11 @@ from datetime import datetime, timezone
 import numpy as np
 import pytest
 
+try:
+    from reports.weekly_report import TradeRecord
+except ImportError:
+    TradeRecord = None  # type: ignore[assignment,misc]
+
 UTC = timezone.utc
 
 try:
@@ -39,9 +44,15 @@ _WEEK_END = datetime(2025, 1, 12, 23, 59, tzinfo=UTC)
 
 
 def _make_trade(pnl: float, symbol: str = "XAUUSD") -> TradeRecord:
+<<<<<<< HEAD
     from reports.weekly_report import TradeRecord
 
     return TradeRecord(
+=======
+    from reports.weekly_report import TradeRecord as _TR
+
+    return _TR(
+>>>>>>> origin/main
         trade_id=str(uuid.uuid4()),
         symbol=symbol,
         side="BUY" if pnl >= 0 else "SELL",

@@ -19,12 +19,14 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
 ]
 keywords = ["trading", "ai", "machine-learning", "xauusd", "forex", "cryptocurrency", "bitcoin"]
 dynamic = ["dependencies"]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 
 [project.optional-dependencies]
 dev = [
@@ -58,15 +60,42 @@ dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
 # Auto-discover all packages at the repo root.
-# Excludes test directories, build artifacts, and the hopefx/ sub-codebase
-# (which is a legacy parallel tree — root modules are canonical).
+# Excludes test directories, build artifacts, frontend assets, and the
+# hopefx/ sub-codebase (legacy parallel tree — root modules are canonical).
 where = ["."]
-exclude = ["tests*", "hopefx*", "src*", "build*", "dist*", "*.egg-info*"]
+exclude = [
+    "tests*",
+    "hopefx*",
+    "src*",
+    "build*",
+    "dist*",
+    "*.egg-info*",
+    "frontend*",
+    "mobile*",
+    "mobile-app*",
+    "dashboard*",
+    "node_modules*",
+    "docs*",
+    "examples*",
+    "helm*",
+    "k8s*",
+    "locust*",
+    "k6*",
+    "grafana*",
+    "nginx*",
+    "docker*",
+    "deployments*",
+    "assets*",
+]
 
 [tool.setuptools.package-data]
-# Include py.typed markers (PEP 561) so downstream type checkers recognise
-# these packages as typed.
-"*" = ["*.txt", "*.md", "*.json", "*.yaml", "*.yml", "py.typed"]
+# Include py.typed markers (PEP 561) and essential config files.
+# Deliberately narrow — do NOT use "*" glob which would pull in node_modules
+# JSON, frontend assets, and other non-Python files.
+"*" = ["py.typed"]
+"ml" = ["py.typed"]
+"risk" = ["py.typed"]
+"whitelabel" = ["py.typed"]
 
 [tool.black]
 line-length = 100

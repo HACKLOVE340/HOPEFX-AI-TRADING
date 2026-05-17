@@ -144,7 +144,7 @@ async def list_users(
             db.close()
     except Exception as exc:
         logger.error("list_users: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.get("/users/{user_id}")
@@ -175,7 +175,7 @@ async def get_user(user_id: str, user: TokenPayload = Depends(_require_superadmi
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.patch("/users/{user_id}")
@@ -202,7 +202,7 @@ async def update_user(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.delete("/users/{user_id}")
@@ -226,7 +226,7 @@ async def delete_user(user_id: str, user: TokenPayload = Depends(_require_supera
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.patch("/users/{user_id}/role")
@@ -252,7 +252,7 @@ async def set_user_role(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.patch("/users/{user_id}/plan")
@@ -287,7 +287,7 @@ async def set_user_plan(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.post("/users/{user_id}/ban")
@@ -311,7 +311,7 @@ async def ban_user(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.post("/users/{user_id}/unban")
@@ -331,7 +331,7 @@ async def unban_user(user_id: str, user: TokenPayload = Depends(_require_superad
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.post("/users/{user_id}/reset-password")
@@ -368,7 +368,7 @@ async def reset_user_password(user_id: str, user: TokenPayload = Depends(_requir
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.post("/users/{user_id}/impersonate")
@@ -425,7 +425,7 @@ async def impersonate_user(user_id: str, user: TokenPayload = Depends(_require_s
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail="Internal server error.") from exc
 
 
 @router.get("/users/{user_id}/activity")

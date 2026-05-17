@@ -340,7 +340,7 @@ class _ASTAnalyzer(ast.NodeVisitor):
     def visit_BinOp(self, node: ast.BinOp) -> None:
         """Detect potential division by zero (literal zero denominator)."""
         if isinstance(node.op, ast.Div) and isinstance(node.right, ast.Constant) and node.right.value == 0:
-            # Allow suppression via inline comment: # noqa: division-by-zero or # healer: ignore
+            # Allow suppression via inline comment: noqa directive or # healer: ignore
             line_text = self.lines[node.lineno - 1] if node.lineno <= len(self.lines) else ""
             if "# noqa" not in line_text and "# healer: ignore" not in line_text:
                 self._add(

@@ -555,8 +555,9 @@ describe('Login page', () => {
     fireEvent.change(screen.getByLabelText(/^password$/i), { target: { value: 'pass' } });
     fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
+    // humaniseError passes through unrecognised messages as-is (≤120 chars)
     await waitFor(() => {
-      expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
+      expect(screen.getByText(/network error/i)).toBeInTheDocument();
     });
   });
 

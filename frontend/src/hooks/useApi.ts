@@ -119,6 +119,15 @@ async function _getCsrfToken(): Promise<string | null> {
     return _csrfToken;
   }
 
+  // If the server already set the cookie (e.g. from a previous session or a
+  // server-side render), seed the in-memory cache from it immediately rather
+  // than making an unnecessary network round-trip to /auth/csrf-token.
+  if (cookieVal && !_csrfToken) {
+    _csrfToken     = cookieVal;
+    _csrfFetchedAt = Date.now();
+    return _csrfToken;
+  }
+
   return _fetchCsrfToken();
 }
 

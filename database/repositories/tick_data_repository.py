@@ -71,10 +71,10 @@ class TickDataRepository(AsyncRepository[TickData]):
         )
         session.add(tick)
         await session.flush()
-        try:  # noqa: SIM105
+        import contextlib
+
+        with contextlib.suppress(Exception):  # nosec B110 — BigInteger PK refresh may fail on SQLite
             await session.refresh(tick)
-        except Exception:  # nosec B110
-            pass  # BigInteger PK refresh may fail on SQLite; safe to ignore
         return tick
 
     async def bulk_insert_ticks(

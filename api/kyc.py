@@ -18,8 +18,6 @@ GET  /kyc/status                  — current user's KYC status
 All endpoints require authentication except webhooks (verified by HMAC signature).
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 

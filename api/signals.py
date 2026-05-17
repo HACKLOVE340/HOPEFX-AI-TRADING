@@ -46,7 +46,7 @@ SIGNAL_DISCLAIMER: str = (
     "constitute financial advice. Past performance is not indicative of future results. "
     "Trading foreign exchange and commodities on margin carries a high level of risk. "
     "You may lose some or all of your invested capital. Only trade with funds you can "
-    "afford to lose. Model out-of-sample accuracy is approximately 59.92% — signals "
+    "afford to lose. Model out-of-sample accuracy is approximately 56.5% — signals "
     "may be incorrect. Always apply independent judgement before acting on any signal."
 )
 

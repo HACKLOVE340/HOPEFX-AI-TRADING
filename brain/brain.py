@@ -314,8 +314,13 @@ class HOPEFXBrain:
                 except Exception as e:
                     await self._handle_cycle_error(e)
 
-                # Adaptive cycle timing
-                await self._maintain_cycle_timing(cycle_start)
+                # Adaptive cycle timing — TimeoutError here is the normal poll
+                # expiry from asyncio.wait_for inside _maintain_cycle_timing.
+                # On Python <=3.10 asyncio.TimeoutError is NOT a subclass of
+                # the builtin TimeoutError, so we suppress it explicitly to
+                # prevent it from reaching the outer emergency-stop handler.
+                with contextlib.suppress(TimeoutError):
+                    await self._maintain_cycle_timing(cycle_start)
 
         except asyncio.CancelledError:
             logger.info("Brain dominate loop cancelled")

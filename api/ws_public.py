@@ -35,7 +35,7 @@ import json
 import logging
 import os
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -73,7 +73,7 @@ _active_connections: set[WebSocket] = set()
 _last_mid: dict[str, float] = {}
 
 # Per-IP tracking: ip → count of open connections
-_ip_open_count: dict[str, int] = defaultdict(int)
+_ip_open_count: Counter[str] = Counter()
 # Per-IP rate window: ip → deque of connect timestamps (monotonic seconds)
 _ip_rate_window: dict[str, deque] = defaultdict(deque)
 _ip_lock = asyncio.Lock()
@@ -144,7 +144,7 @@ async def _get_price_tick(symbol: str) -> dict | None:
         if tick:
             mid = (tick.bid + tick.ask) / 2.0
             prev = _last_mid.get(symbol, mid)
-            change_pct = ((mid - prev) / prev * 100.0) if prev else 0.0
+            change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
             _last_mid[symbol] = mid
             return {
                 "symbol": symbol,
@@ -170,7 +170,7 @@ async def _get_price_tick(symbol: str) -> dict | None:
                 ask = float(data.get("ask", 0))
                 mid = (bid + ask) / 2.0
                 prev = _last_mid.get(symbol, mid)
-                change_pct = ((mid - prev) / prev * 100.0) if prev else 0.0
+                change_pct = ((mid - prev) / prev * 100.0) if prev > 0 else 0.0
                 _last_mid[symbol] = mid
                 return {
                     "symbol": symbol,

@@ -22,7 +22,6 @@ import uuid
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import ClassVar
 
 from data_layer.feeds.news.base import NewsFeedBase
 from data_layer.types import NewsArticle, NewsSource
@@ -43,7 +42,7 @@ class FinnhubFeed(NewsFeedBase):
         if not self.is_configured:
             return []
 
-        articles: ClassVar[list[NewsArticle]] = []
+        articles: list[NewsArticle] = []
         try:
             data = await self._get(
                 f"{_BASE}/news",
@@ -105,7 +104,7 @@ class FinnhubFeed(NewsFeedBase):
             return {
                 "bullish_pct": float(data.get("bullishPercent", 0.5)),
                 "bearish_pct": float(data.get("bearishPercent", 0.5)),
-                "buzz": float(data.get("buzz", {}).get("articlesInLastWeek", 0)),
+                "buzz": float((data.get("buzz") or {}).get("articlesInLastWeek", 0)),
                 "source": "finnhub",
             }
         except Exception as exc:

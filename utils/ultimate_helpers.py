@@ -14,8 +14,15 @@ from collections.abc import Callable
 from functools import wraps
 from typing import Any
 
-import psutil
 import logging
+
+try:
+    import psutil as _psutil
+
+    _PSUTIL_OK = True
+except ImportError:
+    _psutil = None  # type: ignore[assignment]
+    _PSUTIL_OK = False
 
 logger = logging.getLogger(__name__)
 
@@ -78,10 +85,17 @@ class PerformanceProfiler:
 
     def snapshot(self) -> dict:
         """Get current system performance"""
+        if _PSUTIL_OK:
+            cpu = _psutil.cpu_percent(interval=0)
+            mem = _psutil.virtual_memory().percent
+            dio = _psutil.disk_io_counters()
+            disk_io = dio._asdict() if dio else {}
+        else:
+            cpu, mem, disk_io = 0.0, 0.0, {}
         return {
-            "cpu_percent": psutil.cpu_percent(interval=1),
-            "memory_percent": psutil.virtual_memory().percent,
-            "disk_io": psutil.disk_io_counters()._asdict() if psutil.disk_io_counters() else {},
+            "cpu_percent": cpu,
+            "memory_percent": mem,
+            "disk_io": disk_io,
             "gpu_memory": torch.cuda.memory_allocated() / 1e9 if HAS_TORCH and torch.cuda.is_available() else 0,
             "gpu_memory_cached": torch.cuda.memory_reserved() / 1e9 if HAS_TORCH and torch.cuda.is_available() else 0,
         }

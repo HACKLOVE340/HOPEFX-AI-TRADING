@@ -62,9 +62,10 @@ class TestInitPaperBrokerAsync:
         assert await b.disconnect() is True
         assert b.connected is False
 
-    def test_get_account_info_structure(self):
+    @pytest.mark.asyncio
+    async def test_get_account_info_structure(self):
         b = self._broker()
-        info = b.get_account_info()
+        info = await b.get_account_info()
         # Returns AccountInfo dataclass
         assert hasattr(info, "balance") or "balance" in info
 
@@ -81,7 +82,7 @@ class TestInitPaperBrokerAsync:
     @pytest.mark.asyncio
     async def test_get_positions_empty(self):
         b = self._broker()
-        positions = b.get_positions()
+        positions = await b.get_positions()
         assert isinstance(positions, list)
 
     def test_cancel_order_not_found(self):

@@ -64,7 +64,7 @@ def db_session(db_engine) -> Generator[Session, None, None]:
 @pytest.fixture(autouse=True)
 def patch_db_store(db_engine, monkeypatch):
     """
-    Redirect api.db_store._get_session() to a fresh session on the in-memory
+    Redirect api.db_store._session_ctx() to a fresh session on the in-memory
     engine for every call.  Using a factory (not a single shared session)
     avoids cross-thread session state issues while still hitting the same
     StaticPool connection.
@@ -72,14 +72,21 @@ def patch_db_store(db_engine, monkeypatch):
     Also patches the Redis pool so tests don't block trying to connect to a
     real Redis instance.
     """
+    import contextlib
+
     import api.db_store as _ds
 
     SessionLocal = sessionmaker(bind=db_engine)
 
-    def _make_session():
-        return SessionLocal()
+    @contextlib.contextmanager
+    def _make_session_ctx():
+        session = SessionLocal()
+        try:
+            yield session
+        finally:
+            session.close()
 
-    monkeypatch.setattr(_ds, "_get_session", _make_session)
+    monkeypatch.setattr(_ds, "_session_ctx", _make_session_ctx)
 
     # Prevent social_feed from blocking on Redis connection during tests
     import cache.redis_pool as _rp

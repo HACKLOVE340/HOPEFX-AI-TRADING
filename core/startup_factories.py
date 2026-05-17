@@ -378,25 +378,38 @@ async def init_database(s: Any) -> Any:
         from alembic import command as alembic_command
         from alembic.config import Config as AlembicConfig
         from alembic.runtime.migration import MigrationContext
-        from alembic.util.exc import CommandError  # noqa: F401 as AlembicCommandError
+        from alembic.util.exc import CommandError as AlembicCommandError
 
         alembic_cfg = AlembicConfig("alembic.ini")
         alembic_cfg.set_main_option("sqlalchemy.url", conn_str)
 
         # Determine current revision before attempting upgrade so we can
-        # distinguish "already at head" (no-op) from a genuine failure.
+        # skip the upgrade entirely when already at head (avoids a SQLite
+        # write-lock deadlock when database.connection already holds a conn).
         with engine.connect() as _conn:
             _mctx = MigrationContext.configure(_conn)
             _current_rev = _mctx.get_current_revision()
 
-        # Run alembic upgrade in a thread executor so it doesn't block the
-        # async event loop during startup (alembic is synchronous I/O).
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, lambda: alembic_command.upgrade(alembic_cfg, "head"))
-        logger.info(
-            "Database migrations applied (alembic upgrade head, was=%s)",
-            _current_rev or "none",
-        )
+        # Resolve the head revision without touching the DB.
+        from alembic.script import ScriptDirectory as _ScriptDir
+
+        _script = _ScriptDir.from_config(alembic_cfg)
+        _head_rev = _script.get_current_head()
+
+        if _current_rev == _head_rev:
+            logger.info(
+                "Database already at alembic head (%s) — skipping upgrade",
+                _current_rev,
+            )
+        else:
+            # Run alembic upgrade in a thread executor so it doesn't block the
+            # async event loop during startup (alembic is synchronous I/O).
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, lambda: alembic_command.upgrade(alembic_cfg, "head"))
+            logger.info(
+                "Database migrations applied (alembic upgrade head, was=%s)",
+                _current_rev or "none",
+            )
     except ImportError:
         # Alembic not installed — first-run path for minimal/dev installs.
         # create_all is safe here because there is no existing schema to drift from.
@@ -406,7 +419,7 @@ async def init_database(s: Any) -> Any:
             logger.info("Database schema ensured via create_all (checkfirst=True)")
         except Exception as exc2:
             logger.warning("create_all also failed: %s", exc2)
-    except Exception as exc:
+    except (AlembicCommandError, Exception) as exc:
         # Alembic is installed but upgrade failed. Most common cause on dev
         # machines: the DB was created via create_all before Alembic was
         # introduced, so alembic_version table is missing.
@@ -911,7 +924,7 @@ async def init_risk_manager(s: Any) -> Any:
         import risk.manager as _rm_mod
 
         _rm_mod.risk_manager = rm
-    except Exception:
+    except Exception:  # nosec B110
         pass
     log_activity("Risk Manager initialized")
     return rm

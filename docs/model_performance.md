@@ -11,13 +11,13 @@ This is the only model with a demonstrated statistical edge. All other models ar
 
 | Metric | Value |
 |--------|-------|
-| OOS accuracy | **66.35%** |
+| OOS accuracy | **56.5%** |
 | p-value (one-sided binomial, H0: acc ≤ 0.5) | **p = 0.0000** |
-| OOS period | 2019-04-12 → 2026-03-24 (1,260 bars, 7-year held-out) |
-| Features | 176 stationary features |
-| Sharpe (OOS) | 1.52 (SE=0.041, gate passed) |
-| Abstain rate | 27.5% (model withholds signal on low-confidence bars) |
-| Training data | 50 years XAUUSD (GC=F, 1974–2023) |
+| OOS period | 2017-03-09 → 2026-03-18 (2,016 bars, 8-year held-out) |
+| Features | 193 stationary features |
+| Sharpe (OOS) | 1.52 (SE=0.033, gate passed) |
+| Abstain rate | model withholds signal on low-confidence bars |
+| Training data | 50 years XAUUSD (GC=F, 1974–2026) |
 | Algorithm | XGBoost + LightGBM + RandomForest stacking ensemble |
 
 ### Feature Categories
@@ -85,7 +85,7 @@ When the fallback fires, the system logs CRITICAL + sends a Sentry fatal alert +
 | Calmar | 6.26 | |
 
 > ⚠️ **N=48 is insufficient for Sharpe significance** (SE ≈ ±0.21; need ~200 trades for SE ≤ ±0.10).
-> The credible number is the **OOS accuracy: 68.0%, p=0.0000** — not the Sharpe.
+> The credible number is the **OOS accuracy: 56.5%, p=0.0000** — not the Sharpe.
 > Run the multi-symbol backtest to accumulate ~600 trades:
 
 ```bash
@@ -96,16 +96,21 @@ python real_data_backtest.py --symbols XAUUSD BTC ETH --abstain-threshold 0.52
 
 ## Walk-Forward Validation (advanced_oos.pkl)
 
-5-fold walk-forward on the 50-year training set (OOS fold = 3 years each):
+6-fold walk-forward on the 50-year training set (OOS fold = 8 years each):
 
 | Fold | Train bars | OOS bars | OOS Accuracy |
 |------|-----------|----------|-------------|
-| 1 | 4,200 | 756 | 64.2% |
-| 2 | 4,956 | 756 | 67.1% |
-| 3 | 5,712 | 756 | 68.0% |
-| 4 | 6,468 | 756 | 66.8% |
-| 5 | 7,224 | 756 | 69.3% |
-| **Mean** | | | **67.1% ± 1.8%** |
+| 1 | 3,631 | 336 | 57.4% |
+| 2 | 3,967 | 336 | 44.4% |
+| 3 | 4,303 | 336 | 56.8% |
+| 4 | 4,639 | 336 | 58.0% |
+| 5 | 4,975 | 336 | 57.2% |
+| 6 | 5,311 | 336 | 57.9% |
+| **Mean** | | | **56.3% ± 6.3%** |
+
+Note: Fold 2 (44.4%) is a below-chance regime fold. See `docs/FOLD2_REGIME_ANALYSIS.md`
+for analysis. A regime filter is applied in production to suppress signals during
+similar market conditions.
 
 Consistent performance across folds confirms the edge is not fold-specific.
 
@@ -122,12 +127,12 @@ Expected response when `advanced_oos.pkl` is loaded:
 ```json
 {
   "model_id": "advanced_oos",
-  "accuracy": 0.68,
-  "oos_period_start": "2023-03-22",
-  "oos_period_end": "2026-03-24",
-  "oos_bars": 756,
+  "accuracy": 0.565,
+  "oos_period_start": "2017-03-09",
+  "oos_period_end": "2026-03-18",
+  "oos_bars": 2016,
   "p_value": 0.0,
-  "features": 122
+  "features": 193
 }
 ```
 

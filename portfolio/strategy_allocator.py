@@ -43,8 +43,6 @@ Integration
     allocator.mount_router(app)
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os
@@ -458,7 +456,14 @@ class StrategyAllocator:
         logger.info("StrategyAllocator: router mounted at /api/portfolio/allocator")
 
     def _build_router(self) -> APIRouter:
-        router = APIRouter(prefix="/api/portfolio/allocator", tags=["strategy-allocator"])
+        from fastapi import Depends
+        from api.auth import get_current_user
+
+        router = APIRouter(
+            prefix="/api/portfolio/allocator",
+            tags=["strategy-allocator"],
+            dependencies=[Depends(get_current_user)],
+        )
         alloc = self
 
         @router.get("/pods")

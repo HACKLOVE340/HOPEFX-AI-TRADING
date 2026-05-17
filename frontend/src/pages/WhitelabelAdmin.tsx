@@ -302,7 +302,7 @@ const WhitelabelAdmin: React.FC = () => {
   const filtered = filter === 'all' ? tenants : tenants.filter((t) => t.status === filter);
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       {creating && (
         <CreateModal
           onCreated={(t) => { setTenants((prev) => [t, ...prev]); setCreating(false); }}

@@ -102,7 +102,7 @@ def _load_model(model_name: str) -> Any | None:
                 import pickle
 
                 with open(pkl_path, "rb") as f:
-                    obj = pickle.load(f)
+                    obj = pickle.load(f)  # nosec B301 — path-confined local model file
             break
         except Exception as exc:
             logger.debug("explainability._load_model(%s) via %s: %s", model_name, loader_name, exc)
@@ -191,7 +191,7 @@ def _get_feature_names(model: Any, model_name: str) -> list[str]:
         pred = get_predictor()
         if pred._feature_names:
             return pred._feature_names
-    except Exception:
+    except Exception:  # nosec B110
         pass
     n = getattr(model, "n_features_in_", 50)
     return [f"feature_{i:03d}" for i in range(n)]

@@ -956,16 +956,35 @@ async def ws_social_feed(websocket: WebSocket) -> None:
       {"type": "ping"}                — resets heartbeat timer
     """
     import asyncio as _asyncio
-    from api.auth import decode_token
 
     token = websocket.query_params.get("token", "")
-    try:
-        decode_token(token)
-    except Exception:
+    _sf_user_id: str | None = None
+
+    if token:
+        try:
+            from api.auth import decode_token
+
+            _payload = decode_token(token)
+            _sf_user_id = str(_payload.get("sub", _payload.get("user_id", ""))) if _payload else None
+        except Exception:
+            _sf_user_id = None
+
+    # FIX: accept() MUST be called before close() — FastAPI raises RuntimeError
+    # if close() is called on an unaccepted WebSocket.  Reject after accept.
+    await websocket.accept()
+
+    if _sf_user_id is None:
+        await websocket.send_text(
+            _json.dumps(
+                {
+                    "type": "error",
+                    "code": "AUTH_REQUIRED",
+                    "message": "Valid JWT required as ?token= query parameter",
+                }
+            )
+        )
         await websocket.close(code=4001)
         return
-
-    await websocket.accept()
     _sf_connections.add(websocket)
     try:
         while True:

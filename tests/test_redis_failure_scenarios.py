@@ -209,6 +209,10 @@ class TestTickCacheWriteFailure:
     async def test_none_redis_does_not_attempt_write(self):
         """When Redis client is None, the write block is skipped entirely."""
         redis_client = None
+<<<<<<< HEAD
+=======
+        _symbol = "XAUUSD"
+>>>>>>> origin/main
         writes = []
 
         if redis_client is not None:

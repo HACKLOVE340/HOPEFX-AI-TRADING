@@ -284,7 +284,7 @@ const RiskCalculator: React.FC = () => {
     '#f87171';
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <PageHeader
         title="Risk / Reward Calculator"
         icon="🧮"

@@ -153,7 +153,7 @@ class TestXGBoostPredictor:
 
         df = _ohlcv(n=n, seed=seed)
         X = FeatureEngineer(lookback=5).compute(df)
-        y = (X["ret_1"].shift(-1) > 0).astype(int).dropna()  # noqa: lookahead-bias — intentional label construction in test
+        y = (X["ret_1"].shift(-1) > 0).astype(int).dropna()  # intentional lookahead — label construction in test
         return X.loc[y.index], y
 
     def test_fit_and_predict(self):

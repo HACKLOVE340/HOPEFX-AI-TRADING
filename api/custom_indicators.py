@@ -23,12 +23,10 @@ POST   /api/indicators/calculate          — calculate a built-in indicator on 
 from __future__ import annotations
 
 import logging
-import math
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
-from starlette import status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -175,7 +173,7 @@ async def list_builtin_indicators() -> dict:
 
 
 @router.post("/calculate", summary="Calculate a built-in indicator on provided data")
-async def calculate_indicator(body: CalculateRequest) -> dict:
+async def calculate_indicator(body: CalculateRequest, _user: TokenPayload = Depends(get_current_user)) -> dict:
     """Apply a built-in indicator to a data series and return the result."""
     try:
         from charting.indicators import SMA, EMA, WMA, RSI, MACD, BollingerBands, CCI, WilliamsR
@@ -216,7 +214,7 @@ async def calculate_indicator(body: CalculateRequest) -> dict:
         raise
     except Exception as exc:
         logger.warning("calculate_indicator: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Indicator calculation failed.") from None
 
 
 class PreviewRequest(BaseModel):
@@ -436,7 +434,7 @@ async def apply_indicator(
         }
     except Exception as exc:
         logger.warning("apply_indicator calculate: %s", exc)
-        raise HTTPException(status_code=500, detail=str(exc)) from None
+        raise HTTPException(status_code=500, detail="Indicator calculation failed.") from None
 
 
 class TestIndicatorRequest(BaseModel):
@@ -488,7 +486,9 @@ async def test_indicator(
             )
         )
         values = calc_result.get("result", {}).get("values", [])
-        sample = [v for v in values if v is not None and not (isinstance(v, float) and math.isnan(v))][:20]
+        import math as _math
+
+        sample = [v for v in values if v is not None and not (isinstance(v, float) and _math.isnan(v))][:20]
         passed = len(sample) > 0
         return {
             "indicator_id": indicator_id,

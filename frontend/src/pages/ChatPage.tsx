@@ -153,7 +153,7 @@ const ChatPage: React.FC = () => {
   const isOwn = (msg: ChatMessage) => msg.user_id === user?.id;
 
   return (
-    <div style={{ display: 'flex', height: 'calc(100vh - 64px)', background: '#0a0f1a', overflow: 'hidden' }}>
+    <div className="page-content" style={{ flexDirection: 'row', overflow: 'hidden', padding: 0 }}>
       {/* Sidebar — room list */}
       <div style={{ width: 260, borderRight: '1px solid #1e293b', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '16px 16px 12px', borderBottom: '1px solid #1e293b' }}>

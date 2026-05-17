@@ -44,6 +44,7 @@ import contextlib
 import logging
 import os
 import signal
+from collections import deque
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -496,7 +497,7 @@ class ForwardTestHarness:
         self._state = state
         self._running = False
         self._equity = 10_000.0
-        self._tick_buffer: list[dict] = []
+        self._tick_buffer: deque[dict] = deque(maxlen=200)
 
     async def run(self) -> None:
         self._running = True
@@ -536,8 +537,6 @@ class ForwardTestHarness:
                 return
 
             self._tick_buffer.append({"close": price, "bid": price, "ask": price})
-            if len(self._tick_buffer) > 200:
-                self._tick_buffer.pop(0)
 
             if not self._news.is_safe_to_trade():
                 return

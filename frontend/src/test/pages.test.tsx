@@ -182,12 +182,27 @@ function wrap(element: React.ReactElement, path = '/') {
 
 const mockUser = { id: '1', email: 'a@b.com', username: 'trader1', role: 'trader' as const };
 
+const mockAccount = {
+  balance:       100000,
+  equity:        102500,
+  margin_used:   5000,
+  margin_free:   97500,
+  margin_level:  2050,
+  daily_pnl:     250,
+  daily_pnl_pct: 0.0025,
+  total_pnl:     2500,
+  win_rate:      0.62,
+  sharpe_ratio:  1.8,
+  max_drawdown:  0.04,
+  open_trades:   3,
+};
+
 beforeEach(() => {
   useStore.setState({
     token: 'tok', user: mockUser, isAuthenticated: true,
     prices: {}, priceHistory: {},
     positions: [], signals: [],
-    account: null,
+    account: mockAccount,
     wsStatus: 'disconnected', lastHeartbeat: null,
   });
 });
@@ -207,7 +222,8 @@ describe('Dashboard page', () => {
 
   it('renders Dashboard heading', async () => {
     await renderDashboard();
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+    // 'Dashboard' appears in both the nav breadcrumb and the page <h1>
+    expect(screen.getAllByText('Dashboard').length).toBeGreaterThan(0);
   });
 
   it('renders real-time trading overview text', async () => {
@@ -252,7 +268,8 @@ describe('Dashboard page', () => {
 
   it('renders Equity Curve section', async () => {
     await renderDashboard();
-    expect(screen.getByText(/equity curve/i)).toBeInTheDocument();
+    // Heading is "Live Equity Curve"
+    expect(screen.getByText(/live equity curve/i)).toBeInTheDocument();
   });
 
   it('renders XAU/USD in ticker', async () => {

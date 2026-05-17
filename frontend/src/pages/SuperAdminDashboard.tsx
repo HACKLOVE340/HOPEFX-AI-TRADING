@@ -321,8 +321,7 @@ const SuperAdminDashboard: React.FC = () => {
         />
       )}
 
-      <div className="min-h-screen bg-[#020817] text-slate-100 px-3 sm:px-6 py-4 sm:py-6 pb-12">
-        <div className="max-w-screen-xl mx-auto">
+      <div className="page-content">
 
           {/* Breadcrumbs */}
           <div className="mb-3">
@@ -485,7 +484,6 @@ const SuperAdminDashboard: React.FC = () => {
 
           {/* Cross-links */}
           <CrossLinkBar links={SA_CROSS_LINKS} title="Platform Sections" className="mt-6" />
-        </div>
       </div>
     </>
   );

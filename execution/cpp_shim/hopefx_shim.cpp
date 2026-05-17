@@ -361,8 +361,13 @@ private:
         return v.empty() ? def : v;
     }
 
-    std::string host_, sender_, target_, username_, password_;
-    int port_, busy_poll_us_, sock_, seq_num_;
+    // Declaration order must match constructor initialiser-list order to avoid
+    // -Wreorder warnings: host_, port_, sender_, target_, username_, password_,
+    // busy_poll_us_, sock_, seq_num_
+    std::string host_;
+    int port_;
+    std::string sender_, target_, username_, password_;
+    int busy_poll_us_, sock_, seq_num_;
 };
 
 // ── CPU affinity ──────────────────────────────────────────────────────────────

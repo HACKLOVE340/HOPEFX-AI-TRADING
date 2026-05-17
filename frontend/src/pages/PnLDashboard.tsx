@@ -395,7 +395,7 @@ const PnLDashboard: React.FC = () => {
   const error      = summaryQ.error ?? fillsQ.error ?? positionsQ.error;
 
   return (
-    <div className="px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="page-content space-y-4 sm:space-y-6">
 
       <PageHeader
         title="P&L Dashboard"

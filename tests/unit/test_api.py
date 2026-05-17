@@ -1216,6 +1216,7 @@ class TestLiveConnectionManager:
     async def test_broadcast_reaches_subscriber(self):
         ws = _MockWS()
         cid = await self.mgr.connect(ws)
+        self.mgr.authenticate(cid, "user-test")
         self.mgr.subscribe(cid, ["account"])
         msg = {"type": "account_update", "data": {"balance": 10000.0}}
         await self.mgr.broadcast("account", msg)
@@ -1234,7 +1235,8 @@ class TestLiveConnectionManager:
     async def test_broadcast_empty_subscriptions_receives_all(self):
         """A connection with no explicit subscriptions gets every channel."""
         ws = _MockWS()
-        await self.mgr.connect(ws)  # no subscribe() call → empty set
+        cid = await self.mgr.connect(ws)  # no subscribe() call → empty set
+        self.mgr.authenticate(cid, "user-test")
         await self.mgr.broadcast("prices", {"type": "price_tick", "data": {}})
         assert len(ws.sent) == 1
 
@@ -1247,6 +1249,7 @@ class TestLiveConnectionManager:
 
         ws = _DeadWS()
         cid = await self.mgr.connect(ws)
+        self.mgr.authenticate(cid, "user-test")
         self.mgr.subscribe(cid, ["prices"])
         await self.mgr.broadcast("prices", {"type": "price_tick", "data": {}})
         assert self.mgr.connection_count == 0
@@ -1347,12 +1350,13 @@ class TestAccountBroadcasterMarginLevel:
         )
         assert result == 9999.0
 
-    def test_paper_broker_always_yields_sentinel(self):
+    @pytest.mark.asyncio
+    async def test_paper_broker_always_yields_sentinel(self):
         """PaperTradingBroker always returns margin_used=0.0 → sentinel."""
         from brokers.paper_trading import PaperTradingBroker
 
         broker = PaperTradingBroker(initial_balance=10000.0)
-        info = broker.get_account_info()
-        margin_used = float(info.get("margin_used", 0.0) or 0.0)
+        info = await broker.get_account_info()
+        margin_used = float(info.margin_used if hasattr(info, "margin_used") else 0.0)
         margin_level = (info.equity / margin_used * 100) if margin_used > 0 else 9999.0
         assert margin_level == 9999.0

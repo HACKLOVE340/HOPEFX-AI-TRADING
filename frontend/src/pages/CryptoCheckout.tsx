@@ -374,7 +374,7 @@ const CryptoCheckout: React.FC = () => {
   // ── Step: Select ───────────────────────────────────────────────────────────
   if (step === 'select') {
     return (
-      <div style={st.page}>
+      <div className="page-content">
         <PageHeader title="Crypto Checkout" subtitle="Pay with Bitcoin, Ethereum, or USDT — no card required."
           breadcrumbs={breadcrumbs}
           actions={<Link to="/upgrade" style={st.headerLink}>← All Plans</Link>}
@@ -466,7 +466,7 @@ const CryptoCheckout: React.FC = () => {
   // ── Step: Address ───────────────────────────────────────────────────────────
   if (step === 'address' && depositInfo) {
     return (
-      <div style={st.page}>
+      <div className="page-content">
         <PageHeader title="Send Payment" breadcrumbs={breadcrumbs}
           actions={<button onClick={() => setStep('select')} style={st.backBtn}>← Back</button>}
         />
@@ -542,7 +542,7 @@ const CryptoCheckout: React.FC = () => {
     const confirmed = paymentStatus?.confirmations ?? 0;
     const pct = Math.min(100, required > 0 ? (confirmed / required) * 100 : 0);
     return (
-      <div style={st.page}>
+      <div className="page-content">
         <PageHeader title="Confirming Payment" breadcrumbs={breadcrumbs} />
         <div style={{ ...st.card, textAlign: 'center', padding: '40px 32px' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
@@ -574,7 +574,7 @@ const CryptoCheckout: React.FC = () => {
   // ── Step: Complete ──────────────────────────────────────────────────────────
   if (step === 'complete') {
     return (
-      <div style={st.page}>
+      <div className="page-content">
         <PageHeader title="Payment Confirmed" breadcrumbs={breadcrumbs} />
         <div style={{ ...st.card, textAlign: 'center', padding: '48px 32px' }}>
           <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>

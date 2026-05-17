@@ -19,10 +19,18 @@ import type { OrchestratorHealth, ComponentHealth } from '../../types';
 // ── Feed health types (from /api/data-layer/feeds) ────────────────────────────
 
 interface FeedHealth {
-  gold_feeds:   Record<string, unknown>;
-  news_feeds:   Record<string, unknown>;
-  macro_bridge: Record<string, unknown>;
-  cache_stats:  Record<string, unknown>;
+  // API returns "gold_feed" (singular) — accept both for forward-compat
+  gold_feed?:   Record<string, unknown>;
+  gold_feeds?:  Record<string, unknown>;
+  news_feeds?:  Record<string, unknown>;
+  macro_bridge?: Record<string, unknown>;
+  cache_stats?:  Record<string, unknown>;
+  dqe_health?:   Record<string, unknown>;
+}
+
+/** Resolve whichever key the API sends for gold feed data. */
+function goldFeeds(d: FeedHealth): Record<string, unknown> {
+  return d.gold_feeds ?? d.gold_feed ?? {};
 }
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -271,13 +279,13 @@ function OrchestratorHealthGridInner() {
             {feedsQ.data && (
               <div className="flex flex-col gap-3">
                 {/* Gold feeds */}
-                {Object.keys(feedsQ.data.gold_feeds).length > 0 && (
+                {Object.keys(goldFeeds(feedsQ.data)).length > 0 && (
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                       Gold Feeds
                     </div>
                     <div className="flex flex-col gap-1">
-                      {Object.entries(feedsQ.data.gold_feeds).map(([name, data]) => (
+                      {Object.entries(goldFeeds(feedsQ.data)).map(([name, data]) => (
                         <FeedRow key={name} name={name} data={data} />
                       ))}
                     </div>
@@ -285,13 +293,13 @@ function OrchestratorHealthGridInner() {
                 )}
 
                 {/* News feeds */}
-                {Object.keys(feedsQ.data.news_feeds).length > 0 && (
+                {Object.keys(feedsQ.data.news_feeds ?? {}).length > 0 && (
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                       News Feeds
                     </div>
                     <div className="flex flex-col gap-1">
-                      {Object.entries(feedsQ.data.news_feeds).map(([name, data]) => (
+                      {Object.entries(feedsQ.data.news_feeds ?? {}).map(([name, data]) => (
                         <FeedRow key={name} name={name} data={data} />
                       ))}
                     </div>
@@ -299,13 +307,13 @@ function OrchestratorHealthGridInner() {
                 )}
 
                 {/* Cache stats */}
-                {Object.keys(feedsQ.data.cache_stats).length > 0 && (
+                {Object.keys(feedsQ.data.cache_stats ?? {}).length > 0 && (
                   <div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                       Cache
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
-                      {Object.entries(feedsQ.data.cache_stats).map(([k, v]) => (
+                      {Object.entries(feedsQ.data.cache_stats ?? {}).map(([k, v]) => (
                         <div key={k} className="flex justify-between px-2 py-1 rounded bg-[#0d1421] border border-[#1e2d3d]">
                           <span className="text-[10px] text-slate-500 capitalize">{k.replace(/_/g, ' ')}</span>
                           <span className="text-[10px] text-slate-300 tabular-nums font-mono">

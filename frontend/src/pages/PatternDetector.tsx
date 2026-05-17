@@ -204,7 +204,7 @@ const PatternDetector: React.FC = () => {
   useEffect(() => { scan(); }, [scan]);
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       {/* Header */}
       <div style={s.header}>
         <div>

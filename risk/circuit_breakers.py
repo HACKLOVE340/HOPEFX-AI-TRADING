@@ -122,8 +122,11 @@ class CircuitBreaker:
         self.daily_pnl = 0.0
         self.total_pnl = 0.0
         self.peak_balance = 0.0
-        self.current_drawdown = 0.0
+        self.current_drawdown = 0.0  # total drawdown from all-time peak
+        self.daily_drawdown = 0.0  # drawdown from today's open balance
         self.session_start_balance = 0.0
+        self.day_open_balance = 0.0  # balance at start of current trading day
+        self._current_day: int = datetime.now(UTC).day
 
         # Order tracking
         self.orders_last_minute: deque = deque(maxlen=100)
@@ -149,8 +152,13 @@ class CircuitBreaker:
 
     def _initialize_monitoring(self):
         """Start background monitoring"""
-        self.peak_balance = self.broker.get_balance()
-        self.session_start_balance = self.peak_balance
+        initial_balance = self.broker.get_balance()
+        # Guard: if broker returns 0 (not yet connected), use a sentinel so
+        # the first real balance update sets the peak correctly.
+        self.peak_balance = initial_balance if initial_balance > 0 else 0.0
+        self.session_start_balance = initial_balance
+        self.day_open_balance = initial_balance
+        self._current_day = datetime.now(UTC).day
 
         try:
             loop = asyncio.get_running_loop()
@@ -179,18 +187,38 @@ class CircuitBreaker:
         self.total_pnl = current_balance - self.session_start_balance
         self.daily_pnl = self._calculate_daily_pnl()
 
-        # Update drawdown
-        self.peak_balance = max(self.peak_balance, current_balance)
-        self.current_drawdown = (self.peak_balance - current_balance) / self.peak_balance
+        # Day rollover: reset daily anchor at midnight UTC
+        today = datetime.now(UTC).day
+        if today != self._current_day:
+            self.day_open_balance = current_balance
+            self._current_day = today
+            logger.info("CircuitBreaker: day rollover — day_open_balance=%.2f", self.day_open_balance)
 
-        # Check drawdown limits
-        if self.current_drawdown >= self.limits.max_daily_drawdown_pct:
+        # Update all-time peak (never decreases)
+        self.peak_balance = max(self.peak_balance, current_balance)
+
+        # Total drawdown: from all-time peak.  Guard against peak_balance == 0
+        # (broker not yet connected or returned 0 on first call).
+        if self.peak_balance > 0:
+            self.current_drawdown = (self.peak_balance - current_balance) / self.peak_balance
+        else:
+            self.current_drawdown = 0.0
+
+        # Daily drawdown: from today's open balance.  Guard against zero anchor.
+        if self.day_open_balance > 0:
+            self.daily_drawdown = (self.day_open_balance - current_balance) / self.day_open_balance
+        else:
+            self.daily_drawdown = 0.0
+
+        # Check daily drawdown limit (measured from day-open, not all-time peak)
+        if self.daily_drawdown >= self.limits.max_daily_drawdown_pct:
             await self._trigger_circuit_breaker(
                 "DAILY_DRAWDOWN",
-                f"Daily drawdown limit breached: {self.current_drawdown:.2%}",
+                f"Daily drawdown limit breached: {self.daily_drawdown:.2%}",
             )
             return
 
+        # Check total drawdown limit (measured from all-time peak)
         if self.current_drawdown >= self.limits.max_total_drawdown_pct:
             await self._trigger_circuit_breaker(
                 "TOTAL_DRAWDOWN",
@@ -425,8 +453,8 @@ class CircuitBreaker:
             if self.state != CircuitState.HALF_OPEN:
                 return
 
-            # Check if drawdown has recovered
-            if self.current_drawdown < self.limits.max_daily_drawdown_pct * 0.5:
+            # Check if daily drawdown has recovered below 50% of the daily limit
+            if self.daily_drawdown < self.limits.max_daily_drawdown_pct * 0.5:
                 self.state = CircuitState.CLOSED
                 self.limits.max_position_size_pct /= 0.5  # Restore limits
                 logger.info("🟢 Circuit breaker CLOSED - normal trading resumed")
@@ -526,6 +554,8 @@ class CircuitBreaker:
                 "state": self.state.value,
                 "daily_pnl": self.daily_pnl,
                 "peak_balance": self.peak_balance,
+                "day_open_balance": self.day_open_balance,
+                "current_day": self._current_day,
                 "consecutive_losses": self.consecutive_losses,
                 "breach_history": json.dumps(self.breach_history[-10:]),  # Last 10
                 "timestamp": datetime.now(UTC).isoformat(),
@@ -547,6 +577,14 @@ class CircuitBreaker:
                 self.daily_pnl = float(data.get(b"daily_pnl", 0))
                 self.peak_balance = float(data.get(b"peak_balance", 0))
                 self.consecutive_losses = int(data.get(b"consecutive_losses", 0))
+                # Restore day_open_balance only when the persisted day matches today.
+                # If the process restarted on a new day, the anchor must be reset
+                # to the current balance (done in _initialize_monitoring).
+                persisted_day = int(data.get(b"current_day", 0))
+                today = datetime.now(UTC).day
+                if persisted_day == today:
+                    self.day_open_balance = float(data.get(b"day_open_balance", 0))
+                    self._current_day = today
                 logger.info("Loaded previous risk state from Redis")
         except Exception as e:
             logger.error("Failed to load state: %s", e)
@@ -595,8 +633,11 @@ class CircuitBreaker:
         with self.state_lock:
             return {
                 "state": self.state.value,
-                "current_drawdown": self.current_drawdown,
+                "total_drawdown": self.current_drawdown,
+                "daily_drawdown": self.daily_drawdown,
                 "daily_pnl": self.daily_pnl,
+                "peak_balance": self.peak_balance,
+                "day_open_balance": self.day_open_balance,
                 "consecutive_losses": self.consecutive_losses,
                 "open_positions": len(self.broker.get_positions()),
                 "manual_override": self._manual_override,

@@ -557,10 +557,11 @@ class TestGatekeeperOrchestratorWiring:
         assert gk._get_data_quality_from_orch() == pytest.approx(1.0)
 
     def test_data_quality_fallback_on_exception(self):
+        # Fail-closed: exception from orchestrator returns 0.0 to block the trade.
         orch = MagicMock()
         orch.get_latest_tick.side_effect = RuntimeError("feed down")
         gk = _make_gk(orchestrator=orch)
-        assert gk._get_data_quality_from_orch() == pytest.approx(1.0)
+        assert gk._get_data_quality_from_orch() == pytest.approx(0.0)
 
     def test_blackout_from_orchestrator(self):
         orch = MagicMock()
@@ -842,7 +843,12 @@ class TestSignalConsumer:
 @pytest.mark.unit
 class TestGetDataQualityFallback:
     def test_signal_fallback_when_orch_returns_zero(self):
-        """When orchestrator returns 0 quality, fall back to signal attribute."""
+        """When orchestrator returns 0 quality, the 0 is used (fail-closed).
+
+        The orchestrator is authoritative when wired — its value is used
+        unconditionally, including 0.0.  Signal fallback only applies when
+        no orchestrator is configured (standalone/test mode).
+        """
         orch = MagicMock()
         tick = MagicMock()
         tick.confidence = 0.0
@@ -850,15 +856,13 @@ class TestGetDataQualityFallback:
         gk = _make_gk(orchestrator=orch)
         sig = _signal(data_quality=0.75)
         quality = gk._get_data_quality(sig)
-        assert quality == pytest.approx(0.75)
+        # Orchestrator present → its value (0.0) is used, not the signal's 0.75
+        assert quality == pytest.approx(0.0)
 
     def test_signal_fallback_default_when_no_attribute(self):
-        """Signal without data_quality attribute defaults to 1.0."""
-        orch = MagicMock()
-        tick = MagicMock()
-        tick.confidence = 0.0
-        orch.get_latest_tick.return_value = tick
-        gk = _make_gk(orchestrator=orch)
+        """Without an orchestrator, signal without data_quality defaults to 1.0."""
+        # No orchestrator → standalone/test mode → signal fallback applies
+        gk = _make_gk()  # no orchestrator
         sig = MagicMock(spec=[])  # no data_quality attr
         quality = gk._get_data_quality(sig)
         assert quality == pytest.approx(1.0)

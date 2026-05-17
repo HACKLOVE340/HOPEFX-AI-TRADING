@@ -298,10 +298,10 @@ class MarketDataCache:
             self._log_error("get_or_compute.compute", exc)
             return None
         finally:
-            try:  # noqa: SIM105
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 self._r.delete(lock_key)
-            except Exception:  # nosec B110
-                pass
 
     def invalidate(self, key: str) -> bool:
         """

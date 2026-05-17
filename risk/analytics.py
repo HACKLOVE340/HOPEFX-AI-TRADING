@@ -892,7 +892,7 @@ def _garch11_loglik(
     # Gaussian log-likelihood
     sigma2_safe = np.maximum(np.nan_to_num(sigma2, nan=1e-12), 1e-12)
     ll = -0.5 * np.sum(np.log(sigma2_safe) + returns**2 / sigma2_safe)
-    return -ll  # return negative for minimisation
+    return float(-ll)  # return negative for minimisation
 
 
 def calculate_var_garch(

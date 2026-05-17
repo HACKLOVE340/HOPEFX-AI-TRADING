@@ -383,7 +383,7 @@ const PricingPage: React.FC = () => {
     : [{ label: 'Home', href: '/' }, { label: 'Pricing' }];
 
   return (
-    <div style={{ padding: '40px 28px', maxWidth: 1300, margin: '0 auto' }}>
+    <div className="page-content" style={{ maxWidth: 1300 }}>
       <PageHeader
         title="Pricing"
         subtitle="Simple, transparent pricing. No hidden fees."

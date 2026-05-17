@@ -271,7 +271,7 @@ Signals are generated on every completed H1 (1-hour) bar. The ML model abstains 
 
 ### What is the win rate?
 
-The production model achieves 66.4% OOS accuracy on XAUUSD H1 (1,260 held-out bars, 7-year OOS period, p=0.0000). In live trading, after accounting for spread and slippage, the realized win rate is approximately 57–62%.
+The production model achieves 56.5% OOS accuracy on XAUUSD H1 (2,016 held-out bars, 8-year OOS period, p=0.0000). In live trading, after accounting for spread and slippage, the realized win rate is approximately 54–58%.
 
 Past performance does not guarantee future results. Always use proper risk management.
 
@@ -301,9 +301,9 @@ Stop loss is placed at the nearest significant structure level (swing high/low, 
 
 ### What ML model does HOPEFX use?
 
-A calibrated XGBoost stacking ensemble (XGBoost + LightGBM + RandomForest + isotonic calibration) trained on 50 years of XAUUSD data with 176 stationary features.
+A calibrated XGBoost + LightGBM + RandomForest stacking ensemble trained on 50 years of XAUUSD data with 193 stationary features.
 
-OOS accuracy: **66.4%** (p=0.0000, N=1,260 bars, 7-year held-out period, 2019–2026).
+OOS accuracy: **56.5%** (p=0.0000, N=2,016 bars, 8-year held-out period, 2017–2026).
 
 ### How is the model validated?
 

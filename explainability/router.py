@@ -18,10 +18,11 @@ def create_explainability_router(explainer: "AIExplainer"):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/explainability", tags=["Explainability"])
+    router = APIRouter(prefix="/api/explainability", tags=["Explainability"], dependencies=[Depends(get_current_user)])
 
     class ExplainRequest(BaseModel):
         prediction: float

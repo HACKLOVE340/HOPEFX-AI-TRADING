@@ -195,13 +195,14 @@ class DailyReporter:
     def __init__(self, token: str, chat_id: str) -> None:
         self._token = token
         self._chat_id = chat_id
-        self._last_day: int = -1
+        self._last_day: tuple = (-1, -1, -1)
 
     async def maybe_send(self, status: dict) -> None:
         now = datetime.now(UTC)
-        if now.hour != DAILY_REPORT_HOUR_UTC or now.day == self._last_day:
+        now_date = (now.year, now.month, now.day)
+        if now.hour != DAILY_REPORT_HOUR_UTC or now_date == self._last_day:
             return
-        self._last_day = now.day
+        self._last_day = now_date
         equity = status.get("equity", 0)
         balance = status.get("balance", 0)
         daily_pnl = status.get("daily_pnl", 0)

@@ -540,10 +540,10 @@ class FIXAdapter:
             "CLIENT",
             "BROKER",
             "HOPEFX",
-            "CHANGE_ME",
-            "<CHANGE_ME_YOUR_SENDER_COMP_ID>",
-            "<CHANGE_ME_BROKER_TARGET_COMP_ID>",
-            "<CHANGE_ME_BROKER_FIX_HOST>",
+            "CHANGE_ME",  # healer: ignore
+            "<CHANGE_ME_YOUR_SENDER_COMP_ID>",  # healer: ignore
+            "<CHANGE_ME_BROKER_TARGET_COMP_ID>",  # healer: ignore
+            "<CHANGE_ME_BROKER_FIX_HOST>",  # healer: ignore
             "",
         }
     )

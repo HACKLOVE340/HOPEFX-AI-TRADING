@@ -20,8 +20,15 @@ UTC = timezone.utc
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import aiofiles
 import logging
+
+try:
+    import aiofiles as _aiofiles
+
+    _AIOFILES_OK = True
+except ImportError:
+    _aiofiles = None  # type: ignore[assignment]
+    _AIOFILES_OK = False
 
 logger = logging.getLogger(__name__)
 
@@ -102,9 +109,12 @@ class ContinuousBackup:
         filename = f"snapshot_{state.timestamp.replace(':', '-')}.json.gz"
         filepath = self.backup_path / filename
 
-        async with aiofiles.open(filepath, "wb") as f:
-            compressed = gzip.compress(json.dumps(asdict(state)).encode())
-            await f.write(compressed)
+        compressed = gzip.compress(json.dumps(asdict(state)).encode())
+        if _AIOFILES_OK:
+            async with _aiofiles.open(filepath, "wb") as f:
+                await f.write(compressed)
+        else:
+            filepath.write_bytes(compressed)
 
         # Upload to cloud if enabled
         if self.cloud_enabled:
@@ -141,10 +151,13 @@ class ContinuousBackup:
         """Restore system state from snapshot"""
         filepath = self.backup_path / snapshot_file
 
-        async with aiofiles.open(filepath, "rb") as f:
-            compressed = await f.read()
-            data = gzip.decompress(compressed)
-            state_dict = json.loads(data)
+        if _AIOFILES_OK:
+            async with _aiofiles.open(filepath, "rb") as f:
+                compressed = await f.read()
+        else:
+            compressed = filepath.read_bytes()
+        data = gzip.decompress(compressed)
+        state_dict = json.loads(data)
 
         # Verify checksum
         state_copy = state_dict.copy()

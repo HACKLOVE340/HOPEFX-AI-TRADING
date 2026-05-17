@@ -44,7 +44,7 @@ class TestBrokerLifecycle:
     async def test_account_balance_matches_initial(self):
         broker = PaperTradingBroker(initial_balance=50_000.0)
         await broker.connect()
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert info.balance == pytest.approx(50_000.0, rel=1e-3)
         await broker.disconnect()
 
@@ -52,7 +52,7 @@ class TestBrokerLifecycle:
     async def test_no_positions_on_fresh_connect(self):
         broker = PaperTradingBroker(initial_balance=10_000.0)
         await broker.connect()
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert isinstance(positions, list)
         assert len(positions) == 0
         await broker.disconnect()
@@ -62,7 +62,7 @@ class TestBrokerLifecycle:
         """Broker works as an async context manager."""
         async with PaperTradingBroker(initial_balance=10_000.0) as broker:
             assert broker is not None
-            info = broker.get_account_info()
+            info = await broker.get_account_info()
             assert info.balance == pytest.approx(10_000.0, rel=1e-3)
 
 
@@ -81,7 +81,7 @@ class TestOrderPlacement:
         order = broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
         assert order is not None
 
-        positions = broker.get_positions()
+        positions = await broker.get_positions()
         assert any(p.symbol == "XAUUSD" for p in positions)
         await broker.disconnect()
 
@@ -127,7 +127,7 @@ class TestOrderPlacement:
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
         broker.place_order("EURUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
 
-        symbols = {p.symbol for p in broker.get_positions()}
+        symbols = {p.symbol for p in await broker.get_positions()}
         assert "XAUUSD" in symbols
         assert "EURUSD" in symbols
         await broker.disconnect()
@@ -144,13 +144,13 @@ class TestPnLCalculation:
         broker = PaperTradingBroker(initial_balance=100_000.0)
         await broker.connect()
         broker.update_market_price("XAUUSD", 2000.0)
-        initial = broker.get_account_info().balance
+        initial = (await broker.get_account_info()).balance
 
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.update_market_price("XAUUSD", 2050.0)
         broker.close_position("XAUUSD")
 
-        final = broker.get_account_info().balance
+        final = (await broker.get_account_info()).balance
         assert final > initial
         await broker.disconnect()
 
@@ -159,13 +159,13 @@ class TestPnLCalculation:
         broker = PaperTradingBroker(initial_balance=100_000.0)
         await broker.connect()
         broker.update_market_price("XAUUSD", 2000.0)
-        initial = broker.get_account_info().balance
+        initial = (await broker.get_account_info()).balance
 
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 1.0)
         broker.update_market_price("XAUUSD", 1950.0)
         broker.close_position("XAUUSD")
 
-        final = broker.get_account_info().balance
+        final = (await broker.get_account_info()).balance
         assert final < initial
         await broker.disconnect()
 
@@ -174,13 +174,13 @@ class TestPnLCalculation:
         broker = PaperTradingBroker(initial_balance=100_000.0)
         await broker.connect()
         broker.update_market_price("XAUUSD", 2000.0)
-        initial = broker.get_account_info().balance
+        initial = (await broker.get_account_info()).balance
 
         broker.place_order("XAUUSD", OrderSide.SELL, OrderType.MARKET, 1.0)
         broker.update_market_price("XAUUSD", 1950.0)
         broker.close_position("XAUUSD")
 
-        final = broker.get_account_info().balance
+        final = (await broker.get_account_info()).balance
         assert final > initial
         await broker.disconnect()
 
@@ -190,12 +190,12 @@ class TestPnLCalculation:
         broker = PaperTradingBroker(initial_balance=100_000.0)
         await broker.connect()
         broker.update_market_price("XAUUSD", 2000.0)
-        initial = broker.get_account_info().balance
+        initial = (await broker.get_account_info()).balance
 
         broker.place_order("XAUUSD", OrderSide.BUY, OrderType.MARKET, 0.1)
         broker.close_position("XAUUSD")
 
-        final = broker.get_account_info().balance
+        final = (await broker.get_account_info()).balance
         # Balance should be very close to initial (only commission difference)
         assert abs(final - initial) < 100.0
         await broker.disconnect()
@@ -211,7 +211,7 @@ class TestAccountState:
     async def test_account_info_has_required_fields(self):
         broker = PaperTradingBroker(initial_balance=100_000.0)
         await broker.connect()
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         assert hasattr(info, "balance")
         assert hasattr(info, "equity")
         assert info.balance > 0
@@ -222,7 +222,7 @@ class TestAccountState:
     async def test_equity_equals_balance_with_no_positions(self):
         broker = PaperTradingBroker(initial_balance=100_000.0)
         await broker.connect()
-        info = broker.get_account_info()
+        info = await broker.get_account_info()
         # With no open positions, equity should equal balance
         assert info.equity == pytest.approx(info.balance, rel=1e-3)
         await broker.disconnect()
@@ -232,7 +232,7 @@ class TestAccountState:
         for balance in [10_000.0, 50_000.0, 200_000.0]:
             broker = PaperTradingBroker(initial_balance=balance)
             await broker.connect()
-            info = broker.get_account_info()
+            info = await broker.get_account_info()
             assert info.balance == pytest.approx(balance, rel=1e-3)
             await broker.disconnect()
 

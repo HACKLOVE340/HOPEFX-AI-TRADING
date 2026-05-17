@@ -1483,7 +1483,7 @@ class TestSLTPMonitorClosePaths:
     @pytest.mark.asyncio
     async def test_on_task_done_non_crash(self):
         mon, _, _ = self._make()
-        fut = asyncio.get_event_loop().create_future()
+        fut = asyncio.get_running_loop().create_future()
         fut.set_result(None)
         mon._on_task_done(fut)  # should not raise
 

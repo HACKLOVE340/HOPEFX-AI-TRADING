@@ -704,7 +704,7 @@ def create_teams_router(manager: "TeamManager"):
 
     from api.auth import TokenPayload, get_current_user as _get_current_user
 
-    router = APIRouter(prefix="/api/teams", tags=["Teams"])
+    router = APIRouter(prefix="/api/teams", tags=["Teams"], dependencies=[Depends(_get_current_user)])
 
     class CreateTeamRequest(BaseModel):
         name: str

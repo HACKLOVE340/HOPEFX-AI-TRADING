@@ -97,7 +97,7 @@ const ABTesting: React.FC = () => {
   const sel = selected || tests[0];
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Strategy A/B Testing</h1>

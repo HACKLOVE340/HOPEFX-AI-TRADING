@@ -480,7 +480,9 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
             reason = getattr(assessment, "reason", None) or getattr(assessment, "messages", ["risk_check_failed"])
             reason_str = "; ".join(reason) if isinstance(reason, list) else str(reason)
             logger.warning("Order blocked by risk manager: user=%s reason=%s", user_id, reason_str)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}"
+            ) from None
     except HTTPException:
         raise
     except Exception as exc:
@@ -687,25 +689,16 @@ def _notify_paper_gate_and_online_learner(order: "OrderRequest", result: Any) ->
     except Exception as exc:
         logger.debug("gate.record_fill skipped: %s", exc)
 
-    try:
-        import pandas as _pd
-
-        from core.signal_engine import notify_fill as _notify_fill
-
-        _features = _pd.DataFrame(
-            [
-                {
-                    "symbol": order.symbol,
-                    "side": order.side,
-                    "quantity": order.quantity,
-                    "fill_price": result.average_fill_price or 0.0,
-                    "source": "rest_api",
-                }
-            ]
-        )
-        _notify_fill(_features, label=1, primary_prob=None)
-    except Exception as exc:
-        logger.debug("notify_fill skipped: %s", exc)
+    # Online learner: do NOT call notify_fill with a fabricated label=1 here.
+    # The label (profitable=1 / loss=0) is only known when the trade closes.
+    # Passing label=1 at fill time poisons the model by teaching it that every
+    # REST-API order is profitable.  The trade-close path should call
+    # notify_trade_close(features, realized_pnl) with the real outcome instead.
+    logger.debug(
+        "Online learner fill notification deferred to trade close: %s %s",
+        order.side,
+        order.symbol,
+    )
 
 
 async def _record_fill(
@@ -739,15 +732,20 @@ async def _record_fill(
     filled_qty = _get("filled_quantity", "quantity") or order.quantity
 
     # Reject if broker signalled a failure status in the result.
-    result_status = _get("status")
-    if result_status in ("rejected", "error", "cancelled"):
-        reason = _get("reason") or result_status
+    # Order.status is an OrderStatus enum; normalise to lowercase string so
+    # the comparison works regardless of whether the broker returns an enum
+    # value (e.g. OrderStatus.REJECTED) or a plain string (e.g. "rejected").
+    raw_status = _get("status")
+    result_status_str = (raw_status.value if hasattr(raw_status, "value") else str(raw_status or "")).lower()
+    if result_status_str in ("rejected", "error", "cancelled"):
+        # Prefer rejected_reason attribute (Order dataclass), then generic reason.
+        reason = _get("rejected_reason") or _get("reason") or result_status_str
         logger.error(
             "Order rejected by broker: user=%s symbol=%s side=%s status=%s reason=%s",
             user_id,
             order.symbol,
             order.side,
-            result_status,
+            result_status_str,
             reason,
         )
         raise HTTPException(
@@ -1086,18 +1084,22 @@ async def close_position(
 
             with app_state.db_session_factory() as _db:
                 _pos_row = _db.query(_Pos).filter(_Pos.id == position_id).first()
-                if _pos_row is not None and _pos_row.user_id and _pos_row.user_id != user.sub:  # noqa: SIM102
-                    if user.role not in ("admin", "superadmin"):
-                        logger.warning(
-                            "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
-                            user.sub,
-                            position_id,
-                            _pos_row.user_id,
-                        )
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You do not own this position",
-                        )
+                if (
+                    _pos_row is not None
+                    and _pos_row.user_id
+                    and _pos_row.user_id != user.sub
+                    and user.role not in ("admin", "superadmin")
+                ):
+                    logger.warning(
+                        "IDOR blocked: user=%s tried to close position=%s owned by user=%s",
+                        user.sub,
+                        position_id,
+                        _pos_row.user_id,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="You do not own this position",
+                    )
         except HTTPException:
             raise
         except Exception as _idor_exc:
@@ -1111,6 +1113,24 @@ async def close_position(
         )
 
     logger.info("Position closed: user=%s position_id=%s", user.sub, position_id)
+
+    # Notify Phase-3 online learner with the real outcome label.
+    # realized_pnl comes from the broker close response; fall back to 0.0
+    # when unavailable so the learner records a neutral (loss) label rather
+    # than a fabricated profitable one.
+    try:
+        import pandas as _pd
+        from core.signal_engine import notify_trade_close as _notify_close
+
+        _realized = float(
+            getattr(success, "realized_pnl", None)
+            or (success.get("realized_pnl") if isinstance(success, dict) else None)
+            or 0.0
+        )
+        _close_features = _pd.DataFrame([{"position_id": position_id, "user_id": user.sub, "source": "rest_api_close"}])
+        _notify_close(_close_features, realized_pnl=_realized, primary_prob=None)
+    except Exception as _ol_exc:
+        logger.debug("notify_trade_close skipped: %s", _ol_exc)
 
     # Publish POSITION_CLOSED to the legacy event bus so StrategyOrchestra
     # can update its allocation tracking and rebalancer.
@@ -1222,7 +1242,7 @@ async def modify_position(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_position failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info(
         "Position modified: user=%s position_id=%s sl=%s tp=%s trail=%s",
@@ -1272,7 +1292,7 @@ async def partial_close_position(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("partial_close_position failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info(
         "Partial close: user=%s position_id=%s quantity=%s",
@@ -1303,12 +1323,12 @@ async def hedge_position(
     positions = await _broker_call("get_positions")
     target = next((p for p in positions if str(p.id) == position_id), None)
     if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Position not found.") from None
 
     hedge_side = "sell" if str(getattr(target, "side", "long")).lower() in ("long", "buy") else "buy"
     hedge_qty = float(getattr(target, "quantity", getattr(target, "size", 0)))
     if hedge_qty <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position has zero size.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Position has zero size.") from None
 
     hedge_order = OrderRequest(
         symbol=target.symbol,
@@ -1367,7 +1387,7 @@ async def cancel_order(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("cancel_order failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info("Order cancelled: user=%s order_id=%s", user.sub, order_id)
     return result or {"status": "cancelled", "order_id": order_id}
@@ -1410,7 +1430,7 @@ async def modify_order(
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Broker timeout.") from None
     except Exception as exc:
         logger.exception("modify_order failed: %s", exc)
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Broker operation failed.") from exc
 
     logger.info("Order modified: user=%s order_id=%s changes=%s", user.sub, order_id, kwargs)
     return result or {"status": "ok", "order_id": order_id}
@@ -1854,10 +1874,20 @@ async def get_account(
             if _async_pool is None:
                 raise RuntimeError("Async DB pool not initialised")
             async with _async_pool.session() as _db:
-                _trade_repo = _TradeRepo(_db)
-                _pos_repo = _PosRepo(_db)
-                closed = await _trade_repo.get_by_user(user_id=user.sub, status="closed", limit=10000)
-                open_positions = await _pos_repo.get_open_positions(symbol=None)
+                # Repositories are stateless — session is the first positional
+                # arg on every method, not a constructor arg. Instantiate with
+                # no args and pass _db explicitly on each call.
+                _trade_repo = _TradeRepo()
+                _pos_repo = _PosRepo()
+                # get_by_user returns all trades for the user; filter to closed
+                # in Python. get_by_user has no status parameter.
+                _all_trades = await _trade_repo.get_by_user(_db, user_id=user.sub, limit=10000)
+                closed = [
+                    t for t in _all_trades if getattr(t, "status", None) == "closed" or not getattr(t, "is_open", True)
+                ]
+                # Filter open positions to this user only — passing user_id=None
+                # would return all users' positions (data isolation breach).
+                open_positions = await _pos_repo.get_open_positions(_db, user_id=user.sub, symbol=None)
                 _open_trades = len(open_positions)
 
                 if closed:
@@ -1865,8 +1895,8 @@ async def get_account(
                     _total_pnl = round(sum(pnls), 2)
                     _balance = round(starting + _total_pnl, 2)
                     wins = [p for p in pnls if p > 0]
-                    # win_rate as fraction 0-1 (frontend multiplies by 100 for display)
-                    _win_rate = round(len(wins) / len(pnls), 4) if pnls else 0.0
+                    # win_rate as percentage 0-100 (consistent with live-broker path)
+                    _win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
 
                     # Equity curve for drawdown + Sharpe
                     eq_vals: list[float] = []
@@ -1880,8 +1910,8 @@ async def get_account(
                         peak = max(peak, v)
                         dd = (peak - v) / peak if peak > 0 else 0.0
                         _max_dd = max(_max_dd, dd)
-                    # max_drawdown as fraction 0-1 (frontend multiplies by 100 for display)
-                    _max_dd = round(_max_dd, 4)
+                    # max_drawdown as percentage 0-100 (consistent with live-broker path)
+                    _max_dd = round(_max_dd * 100, 2)
 
                     if len(pnls) >= 10:
                         rets = [pnls[i] / eq_vals[i - 1] if eq_vals[i - 1] > 0 else 0.0 for i in range(1, len(pnls))]
@@ -1921,13 +1951,11 @@ async def get_account(
         _equity = round(_balance + _unrealized, 2)
         _daily_pnl_pct = round((_daily_pnl / _balance * 100) if _balance > 0 else 0.0, 4)
 
-        # Kill switch state
+        # Kill switch state — use the injected helper so tests can override
         _ks_active = False
         try:
-            from app import kill_switch as _ks
-
-            active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
-            _ks_active = bool(active() if callable(active) else active)
+            _ks = _get_kill_switch()
+            _ks_active = bool(_ks and _ks.is_active())
         except Exception:  # nosec B110
             pass
 
@@ -1999,12 +2027,19 @@ async def get_account(
         if _async_pool is None:
             raise RuntimeError("Async DB pool not initialised")
         async with _async_pool.session() as _db:
-            _trade_repo = _TradeRepo(_db)
-            _pos_repo = _PosRepo(_db)
-            # Closed trades for stats — user_id=None fetches all (admin view)
-            closed = await _trade_repo.get_by_user(user_id=None, status="closed", limit=10000)
-            # Open positions count via PositionRepository
-            open_positions = await _pos_repo.get_open_positions(symbol=None)
+            # Repositories are stateless — session is the first positional arg
+            # on every method, not a constructor arg.
+            _trade_repo = _TradeRepo()
+            _pos_repo = _PosRepo()
+            # Scope to the authenticated user — user_id=None would return all
+            # users' trades, leaking cross-user data (data isolation breach).
+            # get_by_user has no status parameter; filter closed trades in Python.
+            _all_trades = await _trade_repo.get_by_user(_db, user_id=user.sub, limit=10000)
+            closed = [
+                t for t in _all_trades if getattr(t, "status", None) == "closed" or not getattr(t, "is_open", True)
+            ]
+            # Filter open positions to this user only.
+            open_positions = await _pos_repo.get_open_positions(_db, user_id=user.sub, symbol=None)
             open_trades = len(open_positions)
 
             if closed:
@@ -2014,7 +2049,7 @@ async def get_account(
                 win_rate = round(len(wins) / len(pnls) * 100, 2) if pnls else 0.0
 
                 # Equity curve for drawdown + Sharpe
-                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "10000"))
+                starting = float(_os.getenv("PAPER_STARTING_BALANCE", "100000"))
                 eq_vals: list[float] = []
                 running = starting
                 for p in pnls:
@@ -2061,13 +2096,11 @@ async def get_account(
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
 
-    # ── Kill switch state ─────────────────────────────────────────────────────
+    # ── Kill switch state — use the injected helper so tests can override ─────
     kill_switch_active = False
     try:
-        from app import kill_switch as _ks
-
-        active = getattr(_ks, "_active", False) or getattr(_ks, "is_active", False)
-        kill_switch_active = bool(active() if callable(active) else active)
+        _ks = _get_kill_switch()
+        kill_switch_active = bool(_ks and _ks.is_active())
     except Exception:  # nosec B110
         pass
 
@@ -2494,7 +2527,7 @@ async def start_paper_trading(
 
     account = {
         "user_id": user.sub,
-        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "10000")),
+        "balance": float(os.getenv("PAPER_STARTING_BALANCE", "100000")),
         "currency": "USD",
         "mode": "paper",
         "activated_at": datetime.now(timezone.utc).isoformat(),
@@ -2573,14 +2606,14 @@ async def _query_trades(user_id: str, symbol: str | None, limit: int, offset: in
         if _async_pool is None:
             raise RuntimeError("Async DB pool not initialised")
         async with _async_pool.session() as _db:
-            repo = _TradeRepo(_db)
+            # Repository is stateless — pass session as first positional arg.
+            repo = _TradeRepo()
             trades = await repo.get_by_user(
+                _db,
                 user_id=user_id,
-                symbol=symbol.upper() if symbol else None,
                 limit=limit,
-                offset=offset,
             )
-            return trades
+            return list(trades)
     except Exception as exc:
         logger.warning("Trade history DB query failed: %s", exc)
         return []
@@ -2821,7 +2854,7 @@ def _register_strategy_crud(r: Any) -> None:
             "strategy_brain",
         }
         if req.strategy_type not in _KNOWN:
-            raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}")
+            raise HTTPException(400, f"Unknown strategy type: {req.strategy_type}") from None
         sid = str(_uuid.uuid4())[:8]
         record = {
             "id": sid,
@@ -2841,14 +2874,14 @@ def _register_strategy_crud(r: Any) -> None:
     def get_strategy(strategy_id: str, user: TokenPayload = Depends(get_current_user)):
         key = _resolve(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         return _strategy_store[key]
 
     @r.delete("/strategies/{strategy_id}")
     def delete_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("admin"))):
         key = _resolve(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         del _strategy_store[key]
         return {"status": "deleted"}
 
@@ -2856,7 +2889,7 @@ def _register_strategy_crud(r: Any) -> None:
     def start_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         _strategy_store[key]["enabled"] = True
         return {"status": "started", "strategy_id": strategy_id}
 
@@ -2864,7 +2897,7 @@ def _register_strategy_crud(r: Any) -> None:
     def stop_strategy(strategy_id: str, user: TokenPayload = Depends(require_role("trader"))):
         key = _resolve_strategy_key(strategy_id)
         if key is None:
-            raise HTTPException(404, "Strategy not found")
+            raise HTTPException(404, "Strategy not found") from None
         _strategy_store[key]["enabled"] = False
         return {"status": "stopped", "strategy_id": strategy_id}
 
@@ -2906,8 +2939,23 @@ def _register_risk_performance_routes(r: Any) -> None:
             broker = getattr(app_state, "broker", None)
             if broker is None:
                 raise AttributeError("no broker")
-            account = broker.get_account_info()
-            positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+            # Use sync helper when available (PaperTradingBroker), otherwise
+            # fall back to asyncio.run for async-only brokers.
+            if hasattr(broker, "_get_account_info_sync"):
+                account = broker._get_account_info_sync()
+            else:
+                account = (
+                    asyncio.run(broker.get_account_info())
+                    if asyncio.iscoroutinefunction(broker.get_account_info)
+                    else broker.get_account_info()
+                )
+            if hasattr(broker, "_get_positions_sync"):
+                positions = broker._get_positions_sync()
+            elif hasattr(broker, "get_positions"):
+                _pos = broker.get_positions()
+                positions = asyncio.run(_pos) if asyncio.iscoroutine(_pos) else _pos
+            else:
+                positions = []
 
             # Daily PnL: sum unrealised PnL across open positions
             daily_pnl = sum(getattr(p, "unrealized_pnl", 0.0) or 0.0 for p in positions)
@@ -3036,7 +3084,8 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
             raise AttributeError("no broker")
 
         # Use account info (always fast — in-memory for paper broker)
-        account = broker.get_account_info()
+        _acct_coro = broker.get_account_info()
+        account = await _acct_coro if asyncio.iscoroutine(_acct_coro) else _acct_coro
         balance = float(getattr(account, "balance", 100_000.0) or 100_000.0)
         equity = float(getattr(account, "equity", balance) or balance)
         margin_used = float(getattr(account, "margin_used", 0.0) or 0.0)
@@ -3057,7 +3106,8 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
         except Exception:  # nosec B110
             pass
 
-        positions = broker.get_positions() if hasattr(broker, "get_positions") else []
+        _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
+        positions = await _pos_coro if asyncio.iscoroutine(_pos_coro) else _pos_coro
         open_count = len(positions)
         kill_switch = False
         try:

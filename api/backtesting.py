@@ -420,6 +420,10 @@ async def run_backtest(
 
     try:
         metrics = _run_backtest_sync(req)
+        # _run_backtest_sync returns a 'raw' key with the full PerformanceMetrics
+        # dict for internal use.  Strip it before building BacktestResult so
+        # Pydantic doesn't raise a validation error on the unknown field.
+        metrics_for_model = {k: v for k, v in metrics.items() if k != "raw"}
         result = {
             "run_id": run_id,
             "strategy": req.strategy,
@@ -430,7 +434,7 @@ async def run_backtest(
             "status": "completed",
             "error": None,
             "created_at": created_at,
-            **metrics,
+            **metrics_for_model,
         }
     except Exception as exc:  # pylint: disable=broad-exception-caught
         logger.warning("Backtest failed: %s", exc)
@@ -659,7 +663,12 @@ async def download_pdf_report(
     key metrics (Sharpe, drawdown, win rate), and a disclaimer.
     """
     if run_id not in _results:
-        raise HTTPException(status_code=404, detail="Backtest result not found")
+        # Try DB lookup on cold cache (e.g. after process restart)
+        value = db_get(f"{_DB_PREFIX}{run_id}")
+        if value:
+            _results[run_id] = value
+        else:
+            raise HTTPException(status_code=404, detail="Backtest result not found")
 
     result = _results[run_id]
     pdf_bytes = _build_pdf(result)
@@ -1408,7 +1417,7 @@ async def _compat_list_results(
     user: TokenPayload = Depends(get_current_user),
 ) -> list[BacktestResult]:
     """Alias: GET /api/backtesting/list or /results → list_results."""
-    return await list_results(limit, user)
+    return await list_results(_user=user, limit=limit)
 
 
 # /api/backtesting/list  (same data as /results)
@@ -1418,7 +1427,7 @@ async def _compat_list2(
     user: TokenPayload = Depends(get_current_user),
 ) -> list[BacktestResult]:
     """Alias: GET /api/backtesting/list → list_results."""
-    return await list_results(limit, user)
+    return await list_results(_user=user, limit=limit)
 
 
 @_compat_router.get("/results/{run_id}", include_in_schema=False)

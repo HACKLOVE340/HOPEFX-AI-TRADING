@@ -493,12 +493,16 @@ class AutoRollbackManager:
 
         import re as _re
 
-        for rel_path in target_files:
+        for _raw_path in target_files:
             # Normalise Windows-style backslashes to forward slashes before
             # validation.  The self-healer stores paths using os.sep which is
             # '\\' on Windows; git always accepts forward slashes on all
             # platforms, so we normalise unconditionally.
+<<<<<<< HEAD
             rel_path = str(rel_path).replace("\\", "/")  # noqa: PLW2901
+=======
+            rel_path = str(_raw_path).replace("\\", "/")
+>>>>>>> origin/main
 
             # Validate path is a safe relative file path before passing to subprocess.
             # Allowed: letters, digits, dot, underscore, forward-slash, hyphen, space.

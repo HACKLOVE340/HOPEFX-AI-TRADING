@@ -252,10 +252,11 @@ class TestInitBrokerSelection:
 
     @pytest.mark.asyncio
     async def test_falls_back_to_paper_when_no_oanda_creds(self, monkeypatch, tmp_path):
-        """BROKER_TYPE=oanda but no token -> PaperTradingBroker."""
+        """BROKER_TYPE=oanda but no token -> PaperTradingBroker (requires FALLBACK_TO_PAPER=true)."""
         monkeypatch.chdir(tmp_path)
         (tmp_path / "data").mkdir()
         monkeypatch.setenv("BROKER_TYPE", "oanda")
+        monkeypatch.setenv("FALLBACK_TO_PAPER", "true")
         monkeypatch.delenv("BROKER_OANDA_TOKEN", raising=False)
         monkeypatch.delenv("OANDA_API_KEY", raising=False)
 

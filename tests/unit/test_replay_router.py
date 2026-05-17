@@ -21,12 +21,21 @@ Covers:
 
 from __future__ import annotations
 
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from replay.engine import ChartReplayEngine
 from replay.router import create_replay_router
+
+
+def _make_auth_headers() -> dict[str, str]:
+    """Return Authorization headers with a valid test JWT."""
+    from auth.jwt import create_access_token
+
+    token = create_access_token({"sub": "test-user@hopefx.io", "role": "trader", "user_id": "test-uid-001"})
+    return {"Authorization": f"Bearer {token}"}
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -40,10 +49,10 @@ def engine() -> ChartReplayEngine:
 
 @pytest.fixture()
 def client(engine: ChartReplayEngine) -> TestClient:
-    """Sync TestClient backed by a minimal FastAPI app."""
+    """Sync TestClient backed by a minimal FastAPI app with auth wired."""
     app = FastAPI()
     app.include_router(create_replay_router(engine))
-    return TestClient(app, raise_server_exceptions=True)
+    return TestClient(app, raise_server_exceptions=True, headers=_make_auth_headers())
 
 
 @pytest.fixture()

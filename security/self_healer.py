@@ -517,20 +517,29 @@ class SelfHealer:
         self._protected_paths: list[str] = [
             # Core live-trading execution files — must never be auto-patched
             "live_trading.py",
+            "hopefx_engine.py",
             "execution/engine.py",
             "execution/order_gateway.py",
             "execution/trade_executor.py",
             "execution/paper_runner.py",
             "execution/broker_circuit_breaker.py",
+            "execution/position_tracker.py",
+            "execution/fill_processor.py",
             # Risk and kill-switch — safety-critical
             "risk_manager.py",
             "risk/manager.py",
             "risk/pre_trade_gate.py",
+            "risk/gatekeeper.py",
             "risk/circuit_breakers.py",
+            "risk/position_sizer.py",
             "kill_switch.py",
+            # Resilience — circuit breakers protect live order flow
+            "resilience/service_circuit_breakers.py",
+            "core/live_trading_gate.py",
             # Auth — credential and session security
             "auth/jwt.py",
             "auth/service.py",
+            "auth/dependencies.py",
             # ML model artifacts and config secrets
             "ml/models/",
             "config/secrets/",
@@ -539,6 +548,10 @@ class SelfHealer:
             "brokers/oanda_broker.py",
             "brokers/mt5_broker.py",
             "brokers/ibkr_connector.py",
+            "brokers/base_broker.py",
+            # Data feed — price integrity
+            "data_feed/engine.py",
+            "data_feed/mt5_backup.py",
         ]
         self._tests_enabled: bool = True
         self._test_categories: dict[str, bool] = {

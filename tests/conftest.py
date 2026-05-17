@@ -78,6 +78,8 @@ def _restore_critical_env_vars():
         "JWT_SECRET",
         "APP_ENV",
         "BROKER",
+        "PAPER_TRADING",
+        "BROKER_TYPE",
     )
     snapshot = {k: os.environ.get(k) for k in _KEYS}
     # Ensure canonical JWT secret is always set going into each test
@@ -444,3 +446,43 @@ def sample_market_data():
             index=dates,
         )
     return data
+
+
+# ── Auth-coverage fixture ─────────────────────────────────────────────────────
+
+
+@pytest.fixture(scope="session")
+def app():
+    """
+    Session-scoped fixture that returns the live FastAPI application instance.
+
+    Used by test_auth_coverage.py to iterate every registered route and assert
+    that all mutating endpoints carry an auth dependency.  Session-scoped so
+    the app is imported once per test session — importing it is expensive
+    (registers all routers, wires all dependencies).
+
+    Skips automatically if the app cannot be imported in the current
+    environment (e.g. missing optional C-extensions in a minimal CI image).
+    The skip is surfaced as a single ``pytest.skip`` rather than N individual
+    test failures, keeping the CI output clean.
+
+    Environment requirements
+    ------------------------
+    The following env vars must be set before this fixture is used.  They are
+    set by the module-level ``os.environ.setdefault`` calls at the top of this
+    conftest, so they are always present when running via ``pytest tests/``:
+
+      APP_ENV=test
+      SECURITY_JWT_SECRET=<>=32 chars>
+      STARTUP_GATE=false
+      CSRF_PROTECTION=false  (set by test_auth_coverage.py before import)
+    """
+    try:
+        from app import app as _fastapi_app
+
+        return _fastapi_app
+    except Exception as exc:
+        pytest.skip(
+            f"app fixture: FastAPI app could not be imported — {exc}\n"
+            "Install the full requirements-ci.txt to run auth-coverage tests."
+        )

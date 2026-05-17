@@ -270,7 +270,7 @@ const ReplayPage: React.FC = () => {
   const sessions = data?.sessions ?? [];
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 1300, margin: '0 auto' }}>
+    <div className="page-content">
       <PageHeader
         title="Market Replay"
         icon="⏪"

@@ -129,10 +129,12 @@ class _EquityTracker:
         self._peak = initial
         self._current = initial
         self._day_open = initial
-        self._day = datetime.now(UTC).day
+        _now = datetime.now(UTC)
+        self._day: tuple = (_now.year, _now.month, _now.day)
 
     def update(self, equity: float) -> None:
-        today = datetime.now(UTC).day
+        _utc = datetime.now(UTC)
+        today = (_utc.year, _utc.month, _utc.day)
         if today != self._day:
             self._day_open = equity
             self._day = today
@@ -635,21 +637,29 @@ class Gatekeeper:
     # ── Orchestrator data access ──────────────────────────────────────────────
 
     def _get_data_quality(self, signal) -> float:
-        """Orchestrator tick confidence is authoritative."""
-        q = self._get_data_quality_from_orch()
-        if q > 0:
-            return q
-        return getattr(signal, "data_quality", 1.0)
+        """Orchestrator tick confidence is authoritative.
+
+        When the orchestrator is wired, its value is always used (including 0.0
+        on error — fail-closed). The signal's own data_quality is only used
+        when no orchestrator is configured (standalone/test mode).
+        """
+        if getattr(self, "_orch", None) is not None:
+            # Orchestrator present — use its value unconditionally (fail-closed on error).
+            return self._get_data_quality_from_orch()
+        # No orchestrator — fall back to signal attribute (standalone/test mode).
+        return float(getattr(signal, "data_quality", 1.0))
 
     def _get_data_quality_from_orch(self) -> float:
         if getattr(self, "_orch", None) is None:
             return 1.0
         try:
             tick = getattr(self, "_orch", None) and self._orch.get_latest_tick()
-            return float(tick.confidence) if tick else 1.0
+            return float(tick.confidence) if tick else 0.0
         except Exception:
-            logger.debug("_get_data_quality_from_orch: tick read failed", exc_info=True)
-            return 1.0
+            # Fail-closed: unknown data quality blocks the trade via the
+            # data_quality < _MIN_DATA_QUALITY check in gate step 5.
+            logger.warning("_get_data_quality_from_orch: tick read failed — returning 0.0 (fail-closed)", exc_info=True)
+            return 0.0
 
     def _get_blackout(self) -> bool:
         """Return True when a news/macro blackout is active.
@@ -683,10 +693,15 @@ class Gatekeeper:
         return bool(cal is not None and cal.is_blackout())
 
     def _get_impact_score(self, signal) -> float:
-        score = self._get_impact_score_from_orch()
-        if score > 0:
-            return score
-        return getattr(signal, "impact_score", 0.0)
+        """Orchestrator macro impact score is authoritative.
+
+        When the orchestrator is wired, its value is always used (including 1.0
+        on error — fail-closed). The signal's own impact_score is only used
+        when no orchestrator is configured (standalone/test mode).
+        """
+        if getattr(self, "_orch", None) is not None:
+            return self._get_impact_score_from_orch()
+        return float(getattr(signal, "impact_score", 0.0))
 
     def _get_impact_score_from_orch(self) -> float:
         if getattr(self, "_orch", None) is None:
@@ -694,8 +709,12 @@ class Gatekeeper:
         try:
             return float(self._orch.get_macro_impact_score())
         except Exception:
-            logger.debug("_get_impact_score_from_orch: orchestrator call failed", exc_info=True)
-            return 0.0
+            # Fail-closed: unknown macro impact treated as maximum (1.0) so
+            # the _IMPACT_BLACKOUT threshold check blocks the trade.
+            logger.warning(
+                "_get_impact_score_from_orch: orchestrator call failed — returning 1.0 (fail-closed)", exc_info=True
+            )
+            return 1.0
 
     def _get_sentiment(self, signal) -> float:
         score = self._get_sentiment_from_orch()

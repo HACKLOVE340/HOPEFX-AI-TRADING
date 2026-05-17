@@ -139,8 +139,8 @@ class RSIStrategy(BaseStrategy):
             previous_rsi = rsi.iloc[-2]
             current_price = close.iloc[-1]
 
-            # Check for NaN
-            if pd.isna(current_rsi):
+            # Check for NaN or inf from rolling RSI computation
+            if pd.isna(current_rsi) or not (float("-inf") < current_rsi < float("inf")):
                 return {
                     "type": "HOLD",
                     "confidence": 0.0,

@@ -804,7 +804,6 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
         Trigger an async ML model retrain.  Returns immediately with a job id;
         training runs in a background thread so the HTTP response is not blocked.
         """
-        import asyncio  # noqa: F401
         import threading
         import uuid
 
@@ -815,11 +814,12 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
                 import subprocess
                 import sys
 
-                subprocess.run(  # noqa: PLW1510
+                subprocess.run(
                     [sys.executable, "ml/train_advanced.py", "--years", "3", "--oos-years", "1"],
                     capture_output=True,
                     text=True,
                     timeout=3600,
+                    check=False,
                 )
             except Exception as exc:
                 _ml_logger.warning("Background retrain failed: %s", exc)
@@ -868,8 +868,6 @@ def create_ml_router(feature_engineer: "TechnicalFeatureEngineer"):
     async def get_rl_status():
         """Return RL agent training and deployment status."""
         try:
-            from ml.rl_agent import RLAgent  # noqa: F401
-
             model_dir = _Path(__file__).parent / "rl_models"
             models = []
             if model_dir.exists():

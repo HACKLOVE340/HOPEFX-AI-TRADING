@@ -17,14 +17,12 @@ POST /api/payments/webhook                 — on-chain confirmation callback
                                              (HMAC-SHA256 verified)
 """
 
-from __future__ import annotations
-
 import hashlib
 import hmac
 import json
 import logging
 import os
-import time
+import uuid
 from datetime import datetime, timedelta, timezone
 
 UTC = timezone.utc
@@ -44,7 +42,8 @@ try:
 except Exception:  # pragma: no cover — rate limiting optional in dev
 
     async def _withdraw_rate_limit(request: Request) -> None:  # type: ignore[misc]
-        pass
+        # Rate limiting unavailable (optional dependency not installed) — allow request
+        return None
 
 
 from pydantic import BaseModel, Field
@@ -234,7 +233,9 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
             detail="Address generation unavailable — check server logs",
         ) from None
 
-    payment_id = f"PAY_{req.user_id}_{currency}_{int(time.time())}"
+    # UUID-based payment_id eliminates timestamp collision when two requests
+    # arrive in the same second (e.g. client double-tap or network retry).
+    payment_id = f"PAY_{uuid.uuid4().hex}"
     payment = {
         "payment_id": payment_id,
         "currency": currency,
@@ -408,6 +409,18 @@ async def payment_webhook(
     confirmations = int(payload.get("confirmations", p["confirmations"]))
     tx_hash = payload.get("tx_hash")
 
+    # Idempotency guard: if the payment is already in a terminal state
+    # (complete / failed / expired), do not re-process.  Duplicate webhook
+    # delivery is common — payment processors retry on non-2xx or timeouts.
+    _terminal_states = {"complete", "failed", "expired"}
+    if p.get("status") in _terminal_states:
+        logger.info(
+            "Webhook duplicate: payment_id=%s already in terminal state=%s — skipping re-processing",
+            payment_id,
+            p["status"],
+        )
+        return {"received": True, "payment_id": payment_id, "status": p["status"], "idempotent": True}
+
     update_kwargs: dict = {
         "status": new_status,
         "confirmations": confirmations,
@@ -501,7 +514,9 @@ async def fiat_deposit(
 
 async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
     provider = os.getenv("FIAT_PROVIDER", "manual")
-    reference = f"DEP-{int(time.time())}"
+    # UUID-based reference prevents collision when two deposits are initiated
+    # in the same second (e.g. double-tap, network retry).
+    reference = f"DEP-{uuid.uuid4().hex[:16].upper()}"
     logger.info("Fiat deposit initiated: amount=%.2f method=%s ref=%s", req.amount, req.method, reference)
 
     if provider == "stripe":
@@ -566,7 +581,7 @@ async def fiat_withdraw(
             detail=f"Minimum withdrawal is ${min_withdrawal:.2f}",
         )
 
-    reference = f"WDR-{int(time.time())}"
+    reference = f"WDR-{uuid.uuid4().hex[:16].upper()}"
     logger.info(
         "Fiat withdrawal initiated: amount=%.2f dest=%s ref=%s",
         req.amount,

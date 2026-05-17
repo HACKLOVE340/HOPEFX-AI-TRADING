@@ -15,8 +15,7 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import sys
-from types import ModuleType
-from unittest.mock import MagicMock
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -75,14 +74,23 @@ def _make_broker(balance: float = 100_000.0, seed: int = 42) -> PaperTradingBrok
     return PaperTradingBroker(initial_balance=balance, seed=seed)
 
 
-def _make_price_feed(symbol: str = "XAUUSD", price: float = 2000.0):
-    tick = MagicMock()
-    tick.ask = price * 1.0001
-    tick.bid = price * 0.9999
-    tick.mid = price
-    feed = MagicMock()
-    feed.get_last_price.return_value = tick
-    return feed
+class _StaticFeed:
+    """Real price feed stub — returns a fixed tick for any symbol.
+
+    Uses SimpleNamespace (not MagicMock) so attribute access is explicit
+    and deterministic.  The broker only reads .ask, .bid, and .mid.
+    """
+
+    def __init__(self, price: float = 2000.0) -> None:
+        self._price = price
+
+    def get_last_price(self, symbol: str) -> SimpleNamespace:
+        p = self._price
+        return SimpleNamespace(ask=p * 1.0001, bid=p * 0.9999, mid=p)
+
+
+def _make_price_feed(symbol: str = "XAUUSD", price: float = 2000.0) -> _StaticFeed:
+    return _StaticFeed(price)
 
 
 # ---------------------------------------------------------------------------

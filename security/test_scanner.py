@@ -368,7 +368,7 @@ async def async_reindex(root: Path = PROJECT_ROOT) -> dict[str, Any]:
     try:
         import asyncio
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         index = await loop.run_in_executor(None, lambda: scan_tests(root))
         _save_index(index)
         logger.info("test_scanner: async reindex complete — %d tests in %d files", index["total"], index["files"])

@@ -384,7 +384,11 @@ class SignalComposer:
 
         # Macro component
         macro = mtf.macro
-        if macro.gold_bullish_macro and raw.direction == LONG or macro.gold_bearish_macro and raw.direction == SHORT:
+        if macro is None:
+            macro_comp = 0.0
+        elif (macro.gold_bullish_macro and raw.direction == LONG) or (
+            macro.gold_bearish_macro and raw.direction == SHORT
+        ):
             macro_comp = 0.10
         elif macro.risk_off and raw.direction == LONG:
             macro_comp = 0.05  # partial alignment

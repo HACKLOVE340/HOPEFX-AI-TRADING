@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from typing import ClassVar
 import logging
 import os
 import signal
@@ -42,19 +43,13 @@ from collections import deque
 from datetime import datetime, timezone
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
-# Optional: gracefully degrade when prometheus_client is not installed.
+# Imported from core.metrics so they are registered in the shared Prometheus
+# registry and exported via /metrics regardless of import order.
+# core.metrics provides no-op stubs when prometheus_client is not installed.
 try:
-    from prometheus_client import Counter as _PCounter
-
-    _NEWS_QUEUE_DROPS = _PCounter(
-        "hopefx_news_queue_drops_total",
-        "Number of news events dropped because the internal queue was full",
-    )
-    _NEWS_QUEUE_ENQUEUED = _PCounter(
-        "hopefx_news_queue_enqueued_total",
-        "Number of news events successfully enqueued for poll-mode consumers",
-    )
-except Exception:  # pragma: no cover — prometheus_client optional
+    from core.metrics import NEWS_QUEUE_DROPS as _NEWS_QUEUE_DROPS
+    from core.metrics import NEWS_QUEUE_ENQUEUED as _NEWS_QUEUE_ENQUEUED
+except Exception:  # pragma: no cover — core.metrics import failure (test isolation)
 
     class _NoopCounter:  # type: ignore[no-redef]
         def inc(self, amount: float = 1) -> None:
@@ -204,8 +199,8 @@ class HopeFXEngine:
     # Safety caps on position size to prevent runaway sizing.
     # Units are troy ounces (oz) for XAU/USD gold spot.
     # 1 standard lot = 100 oz; mini lot = 10 oz.
-    MAX_LIVE_POSITION_SIZE: float = 1.0  # max 1 oz (0.01 standard lot) for live trading
-    MAX_PAPER_POSITION_SIZE: float = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
+    MAX_LIVE_POSITION_SIZE: ClassVar[float] = 1.0  # max 1 oz (0.01 standard lot) for live trading
+    MAX_PAPER_POSITION_SIZE: ClassVar[float] = 10.0  # max 10 oz (0.1 standard lot) for paper/test trading
 
     def __init__(self) -> None:
         # ── broker config ─────────────────────────────────────────────────────

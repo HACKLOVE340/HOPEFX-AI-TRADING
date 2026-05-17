@@ -67,7 +67,7 @@ class RedisStateStore:
             self._r.set(key, payload, ex=_ORDER_TTL)
             self._r.sadd(_ORDER_INDEX, order_id)
             logger.debug("RedisStateStore: saved order %s", order_id)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.save_order error: %s", exc)
 
     def remove_order(self, order_id: str) -> None:
@@ -76,7 +76,7 @@ class RedisStateStore:
             self._r.delete(f"{_ORDER_KEY_PREFIX}{order_id}")
             self._r.srem(_ORDER_INDEX, order_id)
             logger.debug("RedisStateStore: removed order %s", order_id)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.remove_order error: %s", exc)
 
     def load_orders(self) -> list[dict[str, Any]]:
@@ -90,7 +90,7 @@ class RedisStateStore:
                 )
                 if raw:
                     orders.append(json.loads(raw))
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.load_orders error: %s", exc)
         return orders
 
@@ -112,7 +112,7 @@ class RedisStateStore:
             self._r.set(key, payload, ex=_POSITION_TTL)
             self._r.sadd(_POSITION_INDEX, symbol)
             logger.debug("RedisStateStore: saved position %s", symbol)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.save_position error: %s", exc)
 
     def remove_position(self, symbol: str) -> None:
@@ -121,7 +121,7 @@ class RedisStateStore:
             self._r.delete(f"{_POSITION_KEY_PREFIX}{symbol}")
             self._r.srem(_POSITION_INDEX, symbol)
             logger.debug("RedisStateStore: removed position %s", symbol)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.remove_position error: %s", exc)
 
     def load_positions(self) -> list[dict[str, Any]]:
@@ -135,7 +135,7 @@ class RedisStateStore:
                 )
                 if raw:
                     positions.append(json.loads(raw))
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("RedisStateStore.load_positions error: %s", exc)
         return positions
 
@@ -183,14 +183,14 @@ class AsyncRedisStateStore:
         try:
             await self._r.set(key, payload, ex=_ORDER_TTL)
             await self._r.sadd(_ORDER_INDEX, order_id)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.save_order error: %s", exc)
 
     async def remove_order(self, order_id: str) -> None:
         try:
             await self._r.delete(f"{_ORDER_KEY_PREFIX}{order_id}")
             await self._r.srem(_ORDER_INDEX, order_id)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.remove_order error: %s", exc)
 
     async def load_orders(self) -> list[dict[str, Any]]:
@@ -203,7 +203,7 @@ class AsyncRedisStateStore:
                 )
                 if raw:
                     orders.append(json.loads(raw))
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.load_orders error: %s", exc)
         return orders
 
@@ -219,14 +219,14 @@ class AsyncRedisStateStore:
         try:
             await self._r.set(key, payload, ex=_POSITION_TTL)
             await self._r.sadd(_POSITION_INDEX, symbol)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.save_position error: %s", exc)
 
     async def remove_position(self, symbol: str) -> None:
         try:
             await self._r.delete(f"{_POSITION_KEY_PREFIX}{symbol}")
             await self._r.srem(_POSITION_INDEX, symbol)
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.remove_position error: %s", exc)
 
     async def load_positions(self) -> list[dict[str, Any]]:
@@ -239,7 +239,7 @@ class AsyncRedisStateStore:
                 )
                 if raw:
                     positions.append(json.loads(raw))
-        except (ConnectionError, OSError, ValueError) as exc:
+        except (OSError, ValueError) as exc:
             logger.error("AsyncRedisStateStore.load_positions error: %s", exc)
         return positions
 

@@ -118,7 +118,7 @@ const Leaderboard: React.FC = () => {
   const top3 = sorted.slice(0, 3);
 
   return (
-    <div className="max-w-5xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
+    <div className="page-content">
       <PageHeader
         title="Global Leaderboard"
         icon="🥇"

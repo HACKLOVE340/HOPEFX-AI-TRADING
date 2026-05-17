@@ -229,6 +229,53 @@ jobs:
           python -m pip install --upgrade --retries 5 --timeout 60 pip
           pip install --retries 5 --timeout 60 -r requirements-ci.txt
 
+      # ── Dead-file gate ────────────────────────────────────────────────────
+      # Scan root-level *.py files for STATUS: SUPERSEDED or
+      # TODO: Either wire ... or delete markers.  Fails the build immediately
+      # so the team is forced to either wire the file into production or
+      # delete it — no more silent accumulation of dead code in the root.
+      # Requires no dependencies — runs before the full install to fail fast.
+      - name: Dead-file detection (root *.py)
+        run: |
+          python3 - <<'PYEOF'
+          import re, sys
+          from pathlib import Path
+
+          DEAD_MARKERS = [
+              re.compile(r"STATUS:\s*SUPERSEDED", re.IGNORECASE),
+              re.compile(r"TODO:\s*Either\s+wire\b", re.IGNORECASE),
+          ]
+
+          # Files explicitly exempted — add with justification and target date.
+          EXEMPTIONS: set[str] = set()
+
+          dead: list[tuple[str, list[tuple[int, str]]]] = []
+          for py_file in sorted(Path(".").glob("*.py")):
+              if py_file.name in EXEMPTIONS:
+                  continue
+              content = py_file.read_text(encoding="utf-8", errors="replace")
+              hits = [
+                  (lineno, line.strip())
+                  for lineno, line in enumerate(content.splitlines(), 1)
+                  for pat in DEAD_MARKERS
+                  if pat.search(line)
+              ]
+              if hits:
+                  dead.append((py_file.name, hits))
+
+          if dead:
+              print(f"\nERROR: {len(dead)} dead/unresolved Python file(s) in project root.")
+              print("Resolution: wire into production, delete, or add to EXEMPTIONS")
+              print("in tests/test_dead_file_detection.py with a justification.\n")
+              for name, hits in dead:
+                  print(f"  {name}")
+                  for lineno, text in hits:
+                      print(f"    line {lineno:4d}: {text[:100]}")
+              sys.exit(1)
+
+          print(f"Dead-file check passed — no markers found in {len(list(Path('.').glob('*.py')))} root Python files.")
+          PYEOF
+
       - name: Alembic migration smoke test
         # Verify all migrations apply cleanly to a fresh schema.
         # Uses the sync postgresql:// driver (psycopg2-binary) so Alembic's
@@ -262,14 +309,25 @@ jobs:
             api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
             data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/ \
             || true
-          # Run again with --fail-under to block on new W1300 violations.
-          # --fail-under=9.0 allows the existing codebase score while blocking
-          # regressions; tighten as the backlog is cleared.
+          # Run again without --fail-under fallback to block on W1300 violations.
           pylint \
             --disable=all \
             --enable=W1300 \
             --rcfile=.pylintrc \
             --output-format=text \
+            api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
+            data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/
+
+      # flake8-bugbear: detects likely bugs and design problems not caught by
+      # ruff (mutable defaults, bare except, loop variable capture, etc.).
+      # Only B-series checks are enabled; E/W/F codes are handled by ruff.
+      # Config lives in .flake8 at the repo root.
+      - name: flake8-bugbear gate
+        run: |
+          pip install --retries 5 --timeout 60 \
+            "flake8>=7.0.0,<8.0.0" \
+            "flake8-bugbear>=24.0.0,<25.0.0"
+          flake8 \
             api/ auth/ brokers/ cache/ celery_app.py config/ core/ \
             data_feed/ execution/ kill_switch.py ml/ risk/ strategies/ utils/
 

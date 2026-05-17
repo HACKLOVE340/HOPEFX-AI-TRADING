@@ -182,7 +182,7 @@ const SecurityDashboard: React.FC = () => {
   }, {});
 
   return (
-    <div style={pageStyle}>
+    <div className="page-content">
       <PageHeader
         title="Security Operations"
         subtitle="HOPEFXBrain — 24/7 autonomous threat monitoring"

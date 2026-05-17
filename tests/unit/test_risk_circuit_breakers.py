@@ -246,7 +246,9 @@ class TestGetStatus:
         cb = _make_cb()
         s = cb.get_status()
         assert "state" in s
-        assert "current_drawdown" in s
+        # total_drawdown replaced the old current_drawdown key (more descriptive)
+        assert "total_drawdown" in s
+        assert "daily_drawdown" in s
         assert "daily_pnl" in s
         assert "consecutive_losses" in s
         assert "open_positions" in s
@@ -280,19 +282,22 @@ class TestGetStatus:
 class TestCheckRiskLimits:
     @pytest.mark.asyncio
     async def test_daily_drawdown_triggers_circuit(self):
-        broker = _make_broker(balance=97_000.0)  # 3% below peak
+        # Balance is 97k, day opened at 100k → 3% daily DD ≥ 3% limit
+        broker = _make_broker(balance=97_000.0)
         cb = CircuitBreaker(broker=broker, redis_client=None)
         cb.peak_balance = 100_000.0
-        cb.current_drawdown = 0.03  # at limit
+        cb.day_open_balance = 100_000.0  # today opened at peak
         await cb._check_risk_limits()
         assert cb.state == CircuitState.OPEN
 
     @pytest.mark.asyncio
     async def test_total_drawdown_triggers_circuit(self):
-        broker = _make_broker(balance=89_000.0)  # 11% below peak
+        # Balance is 89k, all-time peak 100k → 11% total DD > 10% limit.
+        # Today opened at 89k so daily DD = 0% (no daily breach).
+        broker = _make_broker(balance=89_000.0)
         cb = CircuitBreaker(broker=broker, redis_client=None)
         cb.peak_balance = 100_000.0
-        cb.current_drawdown = 0.11  # above total limit
+        cb.day_open_balance = 89_000.0  # today opened at current balance
         await cb._check_risk_limits()
         assert cb.state == CircuitState.OPEN
 
@@ -734,7 +739,8 @@ class TestCheckRecovery:
 
         cb = _make_cb()
         cb.state = CircuitState.HALF_OPEN
-        cb.current_drawdown = 0.001  # well below 50% of daily limit
+        # daily_drawdown well below 50% of daily limit (0.03 * 0.5 = 0.015)
+        cb.daily_drawdown = 0.001
         # Patch sleep to avoid waiting 5 minutes
         with patch("asyncio.sleep", return_value=None):
             await cb._check_recovery()
@@ -746,7 +752,8 @@ class TestCheckRecovery:
 
         cb = _make_cb()
         cb.state = CircuitState.HALF_OPEN
-        cb.current_drawdown = 0.05  # above 50% of daily limit (0.03 * 0.5 = 0.015)
+        # daily_drawdown above 50% of daily limit (0.03 * 0.5 = 0.015)
+        cb.daily_drawdown = 0.05
         with patch("asyncio.sleep", return_value=None):
             await cb._check_recovery()
         assert cb.state == CircuitState.OPEN
@@ -832,3 +839,135 @@ class TestRiskLimitsAdditional:
     def test_circuit_breaker_cooldown_default(self):
         rl = RiskLimits()
         assert rl.circuit_breaker_cooldown_minutes == 15
+
+
+# ---------------------------------------------------------------------------
+# Bug-fix regression tests
+# ---------------------------------------------------------------------------
+
+
+class TestZeroDivisionFix:
+    """Regression: _check_risk_limits must not raise ZeroDivisionError when
+    peak_balance is 0 (broker not yet connected or returns 0 on first call)."""
+
+    @pytest.mark.asyncio
+    async def test_no_zero_division_when_peak_balance_zero(self):
+        """Broker returns 0 — must not raise ZeroDivisionError."""
+        broker = _make_broker(balance=0.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        # peak_balance is 0 after init with zero balance
+        assert cb.peak_balance == 0.0
+        # Should not raise
+        await cb._check_risk_limits()
+        assert cb.current_drawdown == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_no_zero_division_when_day_open_balance_zero(self):
+        """day_open_balance is 0 — daily_drawdown must not raise."""
+        broker = _make_broker(balance=0.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        cb.day_open_balance = 0.0
+        await cb._check_risk_limits()
+        assert cb.daily_drawdown == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_drawdown_computed_correctly_after_loss(self):
+        """After a 5% loss, current_drawdown should be ~0.05."""
+        broker = _make_broker(balance=100_000.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        # Simulate a 5% loss
+        broker.get_balance.return_value = 95_000.0
+        await cb._check_risk_limits()
+        assert cb.current_drawdown == pytest.approx(0.05, abs=1e-6)
+
+    @pytest.mark.asyncio
+    async def test_peak_balance_never_decreases(self):
+        """peak_balance must only increase, never decrease."""
+        broker = _make_broker(balance=100_000.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        broker.get_balance.return_value = 110_000.0
+        await cb._check_risk_limits()
+        assert cb.peak_balance == pytest.approx(110_000.0)
+        # Balance drops — peak must stay at 110k
+        broker.get_balance.return_value = 90_000.0
+        await cb._check_risk_limits()
+        assert cb.peak_balance == pytest.approx(110_000.0)
+
+
+class TestDailyVsTotalDrawdownSeparation:
+    """Regression: daily and total drawdown must be measured independently.
+
+    Before the fix, both checks used the same ``current_drawdown`` value
+    (measured from the all-time peak), so a 3% total drawdown would
+    incorrectly trigger the daily limit even when today's session started
+    at the current balance.
+    """
+
+    @pytest.mark.asyncio
+    async def test_daily_drawdown_uses_day_open_not_peak(self):
+        """Daily drawdown is from day_open_balance, not all-time peak."""
+        broker = _make_broker(balance=100_000.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        # Simulate: account grew to 110k yesterday, today opened at 107k,
+        # now at 105k.  Total DD = (110k-105k)/110k ≈ 4.5%.
+        # Daily DD = (107k-105k)/107k ≈ 1.9% — below the 3% daily limit.
+        cb.peak_balance = 110_000.0
+        cb.day_open_balance = 107_000.0
+        broker.get_balance.return_value = 105_000.0
+        await cb._check_risk_limits()
+        assert cb.daily_drawdown == pytest.approx(2_000 / 107_000, abs=1e-6)
+        assert cb.current_drawdown == pytest.approx(5_000 / 110_000, abs=1e-6)
+        # Circuit should still be CLOSED (daily DD < 3%)
+        assert cb.state == CircuitState.CLOSED
+
+    @pytest.mark.asyncio
+    async def test_daily_limit_triggers_on_daily_drawdown(self):
+        """A 4% daily loss triggers DAILY_DRAWDOWN even if total DD is small."""
+        broker = _make_broker(balance=100_000.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        cb.limits.max_daily_drawdown_pct = 0.03
+        # Today opened at 100k, now at 96k → 4% daily DD
+        cb.day_open_balance = 100_000.0
+        cb.peak_balance = 100_000.0
+        broker.get_balance.return_value = 96_000.0
+        await cb._check_risk_limits()
+        assert cb.state == CircuitState.OPEN
+        assert cb.breach_history[-1]["reason"] == "DAILY_DRAWDOWN"
+
+    @pytest.mark.asyncio
+    async def test_total_limit_triggers_on_total_drawdown(self):
+        """A 12% total drawdown triggers TOTAL_DRAWDOWN even if today is flat."""
+        broker = _make_broker(balance=100_000.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        cb.limits.max_total_drawdown_pct = 0.10
+        # All-time peak was 100k, today opened at 88k (already down 12%),
+        # current balance also 88k → daily DD = 0%, total DD = 12%.
+        cb.peak_balance = 100_000.0
+        cb.day_open_balance = 88_000.0
+        broker.get_balance.return_value = 88_000.0
+        await cb._check_risk_limits()
+        assert cb.state == CircuitState.OPEN
+        assert cb.breach_history[-1]["reason"] == "TOTAL_DRAWDOWN"
+
+    @pytest.mark.asyncio
+    async def test_daily_checked_before_total(self):
+        """When both limits are breached, DAILY_DRAWDOWN is reported first."""
+        broker = _make_broker(balance=100_000.0)
+        cb = CircuitBreaker(broker=broker, redis_client=None)
+        cb.limits.max_daily_drawdown_pct = 0.03
+        cb.limits.max_total_drawdown_pct = 0.10
+        # 15% total DD and 5% daily DD — both breached
+        cb.peak_balance = 100_000.0
+        cb.day_open_balance = 90_000.0
+        broker.get_balance.return_value = 85_000.0
+        await cb._check_risk_limits()
+        assert cb.state == CircuitState.OPEN
+        assert cb.breach_history[-1]["reason"] == "DAILY_DRAWDOWN"
+
+    def test_get_status_exposes_both_drawdowns(self):
+        """get_status() must include both daily_drawdown and total_drawdown."""
+        cb = _make_cb(balance=100_000.0)
+        status = cb.get_status()
+        assert "daily_drawdown" in status
+        assert "total_drawdown" in status
+        assert "day_open_balance" in status

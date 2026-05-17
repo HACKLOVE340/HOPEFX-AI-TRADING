@@ -21,6 +21,7 @@ POST /api/settings/api-keys              — create API key
 DELETE /api/settings/api-keys/{key_id}   — revoke API key
 GET  /api/admin/settings/system          — get system settings (admin)
 POST /api/admin/settings/system          — save system settings (admin)
+GET  /api/admin/settings/performance     — live system performance metrics (admin)
 POST /api/admin/backup/trigger           — trigger manual backup (admin)
 POST /api/admin/kill-switch/global       — activate global kill switch (admin)
 POST /api/admin/settings/test-smtp       — test SMTP config (admin)
@@ -466,7 +467,7 @@ async def trigger_backup(user: TokenPayload = Depends(require_role("admin"))):
         _save_to_db("last_manual_backup", {"triggered_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
         return {"status": "started"}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Backup failed: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Backup failed.") from exc
 
 
 # ── Global kill switch (admin only) ──────────────────────────────────────────
@@ -524,9 +525,174 @@ async def test_smtp(payload: SmtpTestPayload, user: TokenPayload = Depends(requi
         server.quit()
         return {"status": "sent"}
     except smtplib.SMTPException as exc:
-        raise HTTPException(status_code=502, detail=f"SMTP error: {exc}") from exc
+        raise HTTPException(status_code=502, detail="SMTP error.") from exc
     except OSError as exc:
-        raise HTTPException(status_code=502, detail=f"Connection failed: {exc}") from exc
+        raise HTTPException(status_code=502, detail="Connection failed.") from exc
+
+
+# ── Performance metrics (admin only) ─────────────────────────────────────────
+
+
+@router.get("/api/admin/settings/performance", summary="Live system performance metrics")
+def get_performance_metrics(user: TokenPayload = Depends(require_role("admin"))) -> dict:
+    """
+    Return real-time system performance metrics for the Settings > Performance panel.
+
+    Collects: CPU, memory, disk, network I/O, open file descriptors, thread count,
+    process uptime, Redis latency, DB pool health, and per-component latencies from
+    the last health check.
+    """
+    import os as _os_perf
+    import time as _time_perf
+
+    result: dict = {
+        "cpu": {},
+        "memory": {},
+        "disk": {},
+        "network": {},
+        "process": {},
+        "redis": {},
+        "database": {},
+        "components": [],
+        "collected_at": _time_perf.time(),
+    }
+
+    # ── psutil metrics ────────────────────────────────────────────────────────
+    try:
+        import psutil
+
+        # CPU
+        cpu_pct = psutil.cpu_percent(interval=0.1)
+        cpu_count = psutil.cpu_count(logical=True)
+        cpu_freq = psutil.cpu_freq()
+        result["cpu"] = {
+            "percent": round(cpu_pct, 1),
+            "count_logical": cpu_count,
+            "count_physical": psutil.cpu_count(logical=False),
+            "freq_mhz": round(cpu_freq.current, 0) if cpu_freq else None,
+            "freq_max_mhz": round(cpu_freq.max, 0) if cpu_freq else None,
+            "load_avg_1m": round(psutil.getloadavg()[0], 2) if hasattr(psutil, "getloadavg") else None,
+            "load_avg_5m": round(psutil.getloadavg()[1], 2) if hasattr(psutil, "getloadavg") else None,
+        }
+
+        # Memory
+        vm = psutil.virtual_memory()
+        result["memory"] = {
+            "total_mb": round(vm.total / 1_048_576, 1),
+            "used_mb": round(vm.used / 1_048_576, 1),
+            "available_mb": round(vm.available / 1_048_576, 1),
+            "percent": round(vm.percent, 1),
+        }
+
+        # Process-level memory
+        proc = psutil.Process(_os_perf.getpid())
+        proc_mem = proc.memory_info()
+        result["process"] = {
+            "pid": _os_perf.getpid(),
+            "rss_mb": round(proc_mem.rss / 1_048_576, 1),
+            "vms_mb": round(proc_mem.vms / 1_048_576, 1),
+            "cpu_percent": round(proc.cpu_percent(interval=0.1), 1),
+            "threads": proc.num_threads(),
+            "open_files": len(proc.open_files()),
+            "uptime_seconds": round(_time_perf.time() - proc.create_time(), 0),
+        }
+
+        # Disk
+        disk = psutil.disk_usage("/")
+        result["disk"] = {
+            "total_gb": round(disk.total / 1_073_741_824, 1),
+            "used_gb": round(disk.used / 1_073_741_824, 1),
+            "free_gb": round(disk.free / 1_073_741_824, 1),
+            "percent": round(disk.percent, 1),
+        }
+        try:
+            disk_io = psutil.disk_io_counters()
+            if disk_io:
+                result["disk"]["read_mb"] = round(disk_io.read_bytes / 1_048_576, 1)
+                result["disk"]["write_mb"] = round(disk_io.write_bytes / 1_048_576, 1)
+        except Exception:  # nosec B110
+            pass
+
+        # Network
+        net = psutil.net_io_counters()
+        result["network"] = {
+            "bytes_sent_mb": round(net.bytes_sent / 1_048_576, 1),
+            "bytes_recv_mb": round(net.bytes_recv / 1_048_576, 1),
+            "packets_sent": net.packets_sent,
+            "packets_recv": net.packets_recv,
+            "errin": net.errin,
+            "errout": net.errout,
+            "dropin": net.dropin,
+            "dropout": net.dropout,
+        }
+    except Exception as exc:
+        logger.debug("performance metrics psutil error: %s", exc)
+
+    # ── Redis latency ─────────────────────────────────────────────────────────
+    try:
+        import redis as _redis_mod
+        import os as _os2
+
+        _t0 = _time_perf.perf_counter()
+        _rc = _redis_mod.Redis.from_url(
+            _os2.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+            socket_connect_timeout=1,
+            socket_timeout=1,
+        )
+        _rc.ping()
+        _redis_latency_ms = round((_time_perf.perf_counter() - _t0) * 1000, 2)
+        _info = _rc.info("server")
+        result["redis"] = {
+            "connected": True,
+            "latency_ms": _redis_latency_ms,
+            "version": _info.get("redis_version", "unknown"),
+            "used_memory_mb": round(int(_info.get("used_memory", 0)) / 1_048_576, 1),
+            "connected_clients": _info.get("connected_clients", 0),
+            "uptime_seconds": _info.get("uptime_in_seconds", 0),
+            "ops_per_sec": _info.get("instantaneous_ops_per_sec", 0),
+        }
+    except Exception as exc:
+        result["redis"] = {"connected": False, "error": str(exc)}
+
+    # ── DB pool health ────────────────────────────────────────────────────────
+    try:
+        from database.session import async_session_factory
+
+        pool = getattr(async_session_factory, "kw", {}).get("bind", None)
+        if pool is None:
+            from core.app_state import app_state as _as
+
+            pool = getattr(_as, "_db_engine", None)
+        if pool is not None:
+            raw_pool = getattr(pool, "pool", None)
+            if raw_pool:
+                result["database"] = {
+                    "pool_size": getattr(raw_pool, "size", lambda: None)(),
+                    "checked_out": getattr(raw_pool, "checkedout", lambda: None)(),
+                    "overflow": getattr(raw_pool, "overflow", lambda: None)(),
+                    "checked_in": getattr(raw_pool, "checkedin", lambda: None)(),
+                }
+    except Exception:  # nosec B110
+        pass
+
+    # ── Component latencies from last health check ────────────────────────────
+    try:
+        from health_check_service import _last_health_result  # type: ignore[attr-defined]
+
+        if _last_health_result:
+            result["components"] = [
+                {
+                    "name": c.get("name"),
+                    "status": c.get("status"),
+                    "latency_ms": c.get("latency_ms"),
+                    "critical": c.get("critical", False),
+                }
+                for c in _last_health_result.get("components", [])
+            ]
+    except Exception:  # nosec B110
+        pass
+
+    return result
 
 
 # NOTE: GET /api/admin/settings and POST /api/admin/settings are handled by

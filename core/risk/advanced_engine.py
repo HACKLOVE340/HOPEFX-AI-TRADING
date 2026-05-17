@@ -82,9 +82,9 @@ class GARCHModel:
                 neginf=1e-300,
             )
             log_likelihood = -np.sum(
-                np.log(
+                np.log(  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
                     np.where(pdf_vals > 0, pdf_vals, 1e-300)
-                )  # healer: ignore — pdf_vals guarded by np.nan_to_num + np.where above
+                )
             )
             return log_likelihood
 
@@ -112,14 +112,26 @@ class GARCHModel:
         return np.sqrt(np.nan_to_num(forecasts, nan=0.0, posinf=0.0))
 
     def simulate(self, n_sims: int = 10000, horizon: int = 5) -> np.ndarray:
-        """Simulate future paths."""
+        """Simulate future paths using GARCH(1,1)-t dynamics.
+
+        Bug fixed: at t=0 the previous code used simulated[:, t-1] which
+        resolves to simulated[:, -1] (the last column, all zeros at init).
+        This made the t=0 variance update use zero lagged returns regardless
+        of the unconditional variance, producing a degenerate first step.
+        Fix: seed a separate prev_return array from the unconditional variance
+        so the t=0 update is consistent with the GARCH recursion.
+        """
         simulated = np.zeros((n_sims, horizon))
-        variance = np.ones(n_sims) * self.omega / (1 - self.alpha - self.beta)
+        unconditional_var = self.omega / max(1 - self.alpha - self.beta, 1e-8)
+        variance = np.ones(n_sims) * unconditional_var
+        # Seed lagged return from unconditional std so t=0 is not degenerate.
+        prev_return = np.sqrt(unconditional_var) * stats.t.rvs(self.nu, size=n_sims)
 
         for t in range(horizon):
-            variance = self.omega + self.alpha * simulated[:, t - 1] ** 2 + self.beta * variance
+            variance = self.omega + self.alpha * prev_return**2 + self.beta * variance
             variance = np.nan_to_num(variance, nan=0.0, posinf=0.0)
             simulated[:, t] = np.sqrt(np.maximum(variance, 0.0)) * stats.t.rvs(self.nu, size=n_sims)
+            prev_return = simulated[:, t]
 
         return simulated
 
@@ -178,6 +190,21 @@ class MonteCarloRiskEngine:
 
     def calculate_portfolio_risk(self, weights: dict[str, float]) -> RiskMetrics:
         """Calculate full risk metrics via Monte Carlo."""
+        # Guard: copula needs at least one fitted marginal; return zero-risk
+        # metrics when no assets have been added rather than crashing inside
+        # np.random.multivariate_normal with an empty covariance matrix.
+        if not self.garch_models or not self.copula.marginals:
+            return RiskMetrics(
+                var_95=0.0,
+                var_99=0.0,
+                cvar_95=0.0,
+                cvar_99=0.0,
+                volatility=0.0,
+                max_drawdown=0.0,
+                tail_risk=0.0,
+                correlation_stress=0.0,
+            )
+
         copula_sims = self.copula.simulate(self.n_sims)
 
         scaled_returns = pd.DataFrame()
@@ -185,6 +212,20 @@ class MonteCarloRiskEngine:
             if col in self.garch_models:
                 vol = self.garch_models[col].forecast(len(copula_sims))
                 scaled_returns[col] = copula_sims[col] * vol[: len(copula_sims)]
+
+        # Guard: if no columns matched GARCH models, return zero-risk metrics
+        # rather than letting sum() return int 0 and crashing on .fillna().
+        if scaled_returns.empty:
+            return RiskMetrics(
+                var_95=0.0,
+                var_99=0.0,
+                cvar_95=0.0,
+                cvar_99=0.0,
+                volatility=0.0,
+                max_drawdown=0.0,
+                tail_risk=0.0,
+                correlation_stress=0.0,
+            )
 
         portfolio_returns = sum(scaled_returns[col] * weights.get(col, 0) for col in scaled_returns.columns)
         portfolio_returns = portfolio_returns.fillna(0.0)
@@ -210,7 +251,15 @@ class MonteCarloRiskEngine:
         )
 
     def _stress_correlation(self, weights: dict[str, float]) -> float:
-        """Calculate correlation under stress (tail dependence)."""
+        """Calculate mean pairwise correlation under stress (tail dependence).
+
+        Bug fixed: the previous implementation returned the mean of the full
+        correlation matrix including the diagonal (all 1.0). For a 2-asset
+        portfolio this gave (1 + rho + rho + 1) / 4 instead of rho, inflating
+        the stress correlation metric and causing false risk-limit breaches.
+        Fix: mask the diagonal before computing the mean so only off-diagonal
+        (pairwise) correlations are averaged.
+        """
         if len(self.historical_returns) < 100:
             return 0.5
 
@@ -220,7 +269,13 @@ class MonteCarloRiskEngine:
         if len(stress_data) < 10:
             return 0.5
 
-        return float(stress_data.corr().values.mean())
+        corr_matrix = stress_data.corr().fillna(0.0).values  # fillna guards NaN from constant columns
+        n = corr_matrix.shape[0]
+        if n < 2:
+            return 0.5
+        # Average off-diagonal elements only (exclude self-correlation = 1.0)
+        mask = ~np.eye(n, dtype=bool)
+        return float(corr_matrix[mask].mean())  # healer: ignore — fillna applied above
 
 
 class RealTimeRiskMonitor:
@@ -242,10 +297,30 @@ class RealTimeRiskMonitor:
         positions: dict[str, Decimal],
         prices: dict[str, Decimal],
     ):
-        """Recalculate risk with current positions."""
-        total_value = sum(positions[s] * prices[s] for s in positions)
+        """Recalculate risk with current positions.
 
-        weights = {s: float(positions[s] * prices[s] / total_value) if total_value > 0 else 0 for s in positions}
+        Handles three edge cases that previously caused crashes or silent errors:
+        1. Empty positions dict — returns [] without calling the risk engine
+           (which would fail with an empty copula model).
+        2. Symbol in positions but missing from prices — skipped rather than
+           raising KeyError.
+        3. total_value == 0 (all positions have zero price) — returns [] to
+           avoid ZeroDivisionError in the weight calculation.
+        """
+        if not positions:
+            return []
+
+        # Only include symbols present in both dicts to avoid KeyError
+        common = {s for s in positions if s in prices}
+        if not common:
+            return []
+
+        total_value = sum(positions[s] * prices[s] for s in common)
+
+        if total_value <= 0:
+            return []
+
+        weights = {s: float(positions[s] * prices[s] / total_value) for s in common}
 
         self.current_risk = self.risk_engine.calculate_portfolio_risk(weights)
         return self._check_limits()

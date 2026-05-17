@@ -64,8 +64,13 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 _APP_BASE_URL: str = os.getenv("APP_BASE_URL", "http://localhost:8000")
 _DIAG_HTTP_TIMEOUT: float = float(os.getenv("DIAG_HTTP_TIMEOUT", "10"))
-_DIAG_IMPORT_TIMEOUT: int = int(os.getenv("DIAG_IMPORT_TIMEOUT", "30"))
 _FRONTEND_MAX_AGE_HOURS: int = int(os.getenv("DIAG_FRONTEND_MAX_AGE_HOURS", "24"))
+
+
+def _diag_import_timeout() -> int:
+    """Read DIAG_IMPORT_TIMEOUT at call time so tests can override it via env."""
+    return int(os.getenv("DIAG_IMPORT_TIMEOUT", "30"))
+
 
 # SPA routes that must return 200 + HTML
 _SPA_ROUTES: list[str] = [
@@ -391,7 +396,7 @@ class DiagnosticsEngine:
                     cwd=str(PROJECT_ROOT),
                 )
                 try:
-                    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_DIAG_IMPORT_TIMEOUT)
+                    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=_diag_import_timeout())
                     if proc.returncode == 0:
                         return pkg, True, ""
                     return pkg, False, stderr.decode(errors="replace").strip()[:300]

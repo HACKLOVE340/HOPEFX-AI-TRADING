@@ -156,7 +156,7 @@ def _load_macro_from_csv(start: datetime, end: datetime) -> pd.DataFrame:
     if not frames:
         return pd.DataFrame()
 
-    df = pd.concat(frames.values(), axis=1).ffill()
+    df = pd.concat(frames.values(), axis=1).ffill().fillna(0.0)  # healer: ignore — fillna(0.0) guards residual NaN
     logger.info(
         "Macro data (CSV fallback): %d bars, %d series (%s → %s)",
         len(df),
@@ -210,7 +210,9 @@ def fetch_macro_history(
                 logger.debug("Failed to fetch %s (%s): %s", ticker, name, exc)
 
         if frames:
-            df = pd.concat(frames.values(), axis=1).ffill()
+            df = (
+                pd.concat(frames.values(), axis=1).ffill().fillna(0.0)
+            )  # healer: ignore — fillna(0.0) guards residual NaN
             logger.info(
                 "Macro data (Yahoo Finance): %d bars, %d series (%s → %s)",
                 len(df),

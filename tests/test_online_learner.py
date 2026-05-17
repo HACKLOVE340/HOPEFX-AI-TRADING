@@ -403,7 +403,11 @@ class TestGetOnlineLearner:
         joblib.dump(learner, str(path))
 
         ol_mod._online_learner = None
-        with patch("ml.online_learner.SklearnOnlineLearner", wraps=SklearnOnlineLearner):
+        # Bypass the path-confinement check so tmp_path is accepted in tests.
+        with (
+            patch("ml.online_learner.SklearnOnlineLearner", wraps=SklearnOnlineLearner),
+            patch("ml.online_learner._assert_safe_model_path", side_effect=lambda p: p),
+        ):
             loaded = get_online_learner(persist_path=str(path))
         assert loaded is not None
         ol_mod._online_learner = None

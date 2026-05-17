@@ -613,8 +613,6 @@ def get_sync_redis() -> Any | None:
         # fakeredis as an in-process drop-in so all cache-dependent code paths
         # work correctly without requiring a running Redis instance.
         try:
-            import fakeredis as _fakeredis  # type: ignore[import]  # noqa: F401
-
             _fake = _get_or_create_fakeredis()
             logger.info("Using fakeredis in-process Redis substitute (no real Redis available)")
             return _fake

@@ -49,11 +49,15 @@ def _make_mock_sklearn_model(prob=0.75, n_features=10):
 
 
 def _make_features(n_rows=1, n_cols=10):
+    # Use at least 5 rows so std(axis=0) is non-zero and the variance check
+    # in AdvancedPredictor.predict() does not fire before predict_proba.
+    actual_rows = max(n_rows, 5)
+    rng = np.random.default_rng(0)
     X = pd.DataFrame(
-        np.random.randn(n_rows, n_cols),
+        rng.standard_normal((actual_rows, n_cols)),
         columns=[f"f{i}" for i in range(n_cols)],
     )
-    y = pd.Series(np.random.randint(0, 2, n_rows))
+    y = pd.Series(rng.integers(0, 2, actual_rows))
     return X, y
 
 
@@ -251,7 +255,9 @@ class TestAdvancedPredictorEarlyExits:
                 pred._load()
 
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        # Use 10 rows so the per-feature variance check passes (std(axis=0) on
+        # a single row is always 0, triggering flat_market_low_variance instead).
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["direction"] == "neutral"
@@ -276,7 +282,7 @@ class TestAdvancedPredictorDirections:
     def test_long_direction(self, tmp_path):
         pred = self._setup_pred(tmp_path, prob=0.80)
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["direction"] == "long"
@@ -285,7 +291,7 @@ class TestAdvancedPredictorDirections:
     def test_short_direction(self, tmp_path):
         pred = self._setup_pred(tmp_path, prob=0.20)
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["direction"] == "short"
@@ -303,7 +309,7 @@ class TestAdvancedPredictorDirections:
     def test_high_confidence_flag(self, tmp_path):
         pred = self._setup_pred(tmp_path, prob=0.90)
         ohlcv = _make_ohlcv(200)
-        X, _ = _make_features(1, 10)
+        X, _ = _make_features(10, 10)
         with patch.object(pred, "_build_features", return_value=X):
             result = pred.predict(ohlcv)
         assert result["high_confidence"] is True

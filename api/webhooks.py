@@ -34,8 +34,6 @@ TradingView alert message format (JSON body)
 }
 """
 
-from __future__ import annotations
-
 import hashlib
 import hmac
 import logging
@@ -174,7 +172,7 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Invalid alert payload: {exc}",
+            detail="Invalid alert payload.",
         ) from exc
 
     direction = _action_to_direction(alert.action)
@@ -182,7 +180,7 @@ async def tradingview_webhook(request: Request) -> WebhookResponse:
 
     # Build signal payload compatible with RealTimeSignalService.ingest_engine_signal
     signal_payload: dict[str, Any] = {
-        "symbol": alert.symbol.upper().replace("/", ""),
+        "symbol": __import__("utils.symbol", fromlist=["canonical"]).canonical(alert.symbol),
         "direction": direction,
         "confidence": alert.confidence,
         "probability": alert.confidence,

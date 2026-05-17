@@ -73,8 +73,8 @@ def _minimal_schema() -> dict:
         tags.append({"name": tag, "description": f"Endpoints from api/{py_file.name}"})
         try:
             src = py_file.read_text(encoding="utf-8")
-            for line in src.splitlines():
-                line = line.strip()  # noqa: PLW2901
+            for _raw_line in src.splitlines():
+                line = _raw_line.strip()
                 for method in ("get", "post", "put", "patch", "delete"):
                     prefix = f'@router.{method}("'
                     if line.startswith(prefix):

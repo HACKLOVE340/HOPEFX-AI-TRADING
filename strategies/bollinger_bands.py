@@ -158,7 +158,11 @@ class BollingerBandsStrategy(BaseStrategy):
                 if len(std) >= 50
                 else current_std
             )
-            is_squeeze = current_std < avg_std * 0.75 if avg_std > 0 else False
+            is_squeeze = (
+                current_std < avg_std * 0.75
+                if avg_std > 0 and float("-inf") < current_std < float("inf") and float("-inf") < avg_std < float("inf")
+                else False
+            )
 
             signal_type = "HOLD"
             confidence = 0.0

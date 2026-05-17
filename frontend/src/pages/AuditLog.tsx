@@ -229,7 +229,7 @@ const AuditLog: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <PageHeader
         title="Audit Log"
         subtitle={`${total.toLocaleString()} events total${liveCount > 0 ? ` · ${liveCount} live` : ''}`}

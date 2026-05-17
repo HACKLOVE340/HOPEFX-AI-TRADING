@@ -168,8 +168,8 @@ function DashboardInner() {
 
   return (
     <div
-      className="flex flex-col h-screen bg-[#080c14] overflow-hidden"
-      style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0 }}
+      className="flex flex-col bg-[#080c14] overflow-hidden"
+      style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0, height: 0 }}
     >
       {/* ── Top: price ticker + account bar + quick actions ─────────────── */}
       <PanelErrorBoundary title="Price Ticker">

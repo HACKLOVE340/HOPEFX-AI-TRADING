@@ -601,7 +601,10 @@ def create_replay_router():
         from backtesting.replay_connector import create_replay_router
         app.include_router(create_replay_router())
     """
-    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"])
+    from fastapi import Depends
+    from api.auth import get_current_user
+
+    router = APIRouter(prefix="/api/replay", tags=["Replay Backtest"], dependencies=[Depends(get_current_user)])
     _jobs: dict[str, Any] = {}
 
     # ── Session-based bar-by-bar replay ──────────────────────────────────────
@@ -628,10 +631,10 @@ def create_replay_router():
         _SESSIONS[sess["session_id"]] = sess
         rc = _redis_client()
         if rc:
-            try:  # noqa: SIM105
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 rc.setex(f"hopefx:replay:{sess['session_id']}", 86400, _json.dumps(sess))
-            except Exception:  # nosec B110
-                pass
 
     def _load_session(sid: str) -> dict | None:
         if sid in _SESSIONS:
@@ -667,10 +670,10 @@ def create_replay_router():
         _SESSIONS.pop(sid, None)
         rc = _redis_client()
         if rc:
-            try:  # noqa: SIM105
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 rc.delete(f"hopefx:replay:{sid}")
-            except Exception:  # nosec B110
-                pass
 
     def _build_bars(symbol: str, timeframe: str, start_date: str, end_date: str) -> list[dict]:
         """Load OHLCV bars from the data layer or generate synthetic bars."""

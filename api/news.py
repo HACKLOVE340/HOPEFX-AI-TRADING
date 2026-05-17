@@ -50,7 +50,9 @@ _IMPACT_MAP: dict[str, str] = {
 
 
 def _get_search_terms(symbol: str) -> list[str]:
-    sym = symbol.upper().replace("/", "").replace("_", "")
+    from utils.symbol import canonical as _canonical
+
+    sym = _canonical(symbol)
     return _SYMBOL_TERMS.get(sym, [sym])
 
 
@@ -109,7 +111,10 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
         # Gold-specific score from geopolitical risk module
         gold_score = 0.0
         geo_score = 0.0
-        if "XAU" in symbol.upper():
+        from utils.symbol import canonical as _canonical
+
+        _sym_canonical = _canonical(symbol)
+        if "XAU" in _sym_canonical:
             try:
                 from news.geopolitical_risk import get_geopolitical_provider
 
@@ -120,7 +125,7 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
                 geo_score = round(raw_risk / 100.0, 4)
                 # High geopolitical risk → bullish gold
                 gold_score = min(geo_score * 0.8, 1.0)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
         return {
@@ -129,7 +134,7 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
             "confidence": round(confidence, 4),
             "sources": len(terms),  # min proxy when provider count unavailable
             "gold_score": round(gold_score, 4),
-            "usd_score": round(-polarity * 0.6, 4) if "XAU" in symbol.upper() else round(polarity, 4),
+            "usd_score": round(-polarity * 0.6, 4) if "XAU" in _sym_canonical else round(polarity, 4),
             "geopolitical_score": round(geo_score, 4),
             "updated_at": ts,
         }
@@ -145,7 +150,9 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
         provider = RSSFeedProvider()
         articles = provider.get_news(hours_back=4)
 
-        symbol.upper().replace("_", "")
+        from utils.symbol import canonical as _canonical
+
+        _canonical(symbol)
         relevant = [
             a for a in articles if any(t.lower() in (a.title + " " + (a.description or "")).lower() for t in terms)
         ]
@@ -221,7 +228,7 @@ async def get_news_for_symbol(symbol: str, limit: int = 15) -> list[dict[str, An
             try:
                 s = analyzer.analyze(f"{art.title} {art.description or ''}")
                 sentiment_score = round(float(getattr(s, "polarity", 0.0)), 4)
-            except Exception:
+            except Exception:  # nosec B110
                 pass
 
             items.append(
@@ -263,7 +270,7 @@ async def get_news_for_symbol(symbol: str, limit: int = 15) -> list[dict[str, An
                 try:
                     s = analyzer.analyze(f"{art.title} {art.description or ''}")
                     sentiment_score = round(float(getattr(s, "polarity", 0.0)), 4)
-                except Exception:
+                except Exception:  # nosec B110
                     pass
 
                 items.append(

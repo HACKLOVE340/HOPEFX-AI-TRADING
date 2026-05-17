@@ -368,7 +368,7 @@ const AdminPanel: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f1f5f9', fontFamily: 'Inter, system-ui, sans-serif', paddingBottom: 48 }}>
+    <div className="page-content">
       <PageHeader
         title="🔧 Admin Panel"
         subtitle="Platform operations, user management, and system health"

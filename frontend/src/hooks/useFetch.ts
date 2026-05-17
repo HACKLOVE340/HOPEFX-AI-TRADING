@@ -41,14 +41,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 // Probe .msg → .message → JSON.stringify before falling back to err.message.
 function extractFetchError(err: unknown): string {
   if (typeof err === 'object' && err !== null && 'response' in err) {
-    const data = (err as { response?: { data?: { detail?: unknown; message?: unknown } } })
-      .response?.data;
+    const response = (err as { response?: { status?: number; data?: { detail?: unknown; message?: unknown } } }).response;
+    const data = response?.data;
     const raw = data?.detail ?? data?.message;
     if (typeof raw === 'string') return raw;
     if (raw && typeof raw === 'object') {
       const d = raw as { msg?: string; message?: string };
       return d.msg ?? d.message ?? JSON.stringify(raw);
     }
+    // 404 with no body — return a generic message rather than the raw Axios string
+    if (response?.status === 404) return 'Resource not found.';
   }
   const msg = (err as { message?: unknown })?.message;
   return typeof msg === 'string' && msg.length > 0 ? msg : 'Request failed.';

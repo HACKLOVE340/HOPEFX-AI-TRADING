@@ -19,6 +19,8 @@ import tempfile
 import textwrap
 from pathlib import Path
 
+import pytest
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -365,6 +367,11 @@ class TestLogPatternCheck:
 
 
 class TestFullDiagnosticRun:
+    @pytest.fixture(autouse=True)
+    def short_import_timeout(self, monkeypatch):
+        """Cap subprocess import checks to 5 s so the test suite doesn't hang."""
+        monkeypatch.setenv("DIAG_IMPORT_TIMEOUT", "5")
+
     def test_run_full_diagnostic_returns_report(self):
         from security.diagnostics import DiagnosticsEngine, DiagnosticReport
 
@@ -606,6 +613,11 @@ class TestSuperadminDiagnosticsRouter:
 
 
 class TestSelfHealerDiagnosticsIntegration:
+    @pytest.fixture(autouse=True)
+    def short_import_timeout(self, monkeypatch):
+        """Cap subprocess import checks to 5 s so the test suite doesn't hang."""
+        monkeypatch.setenv("DIAG_IMPORT_TIMEOUT", "5")
+
     def test_healer_has_diagnostics_state(self):
         from security.self_healer import SelfHealer
 

@@ -15,14 +15,14 @@ Registry key: **`xgb_horizon5_v1`** (active)
 
 | Metric | Value |
 |--------|-------|
-| OOS accuracy | **59.9%** |
-| OOS accuracy (confident predictions only) | **~63%** |
+| OOS accuracy | **56.5%** |
+| OOS accuracy (confident predictions only) | **~58%** |
 | p-value (one-sided binomial, H0: acc ≤ 0.5) | **p = 0.0000** |
-| OOS period | 2018-04-12 → 2026-03-18 (2,016 bars, 8-year held-out) |
-| Features | 222 stationary features |
+| OOS period | 2017-03-09 → 2026-03-18 (2,016 bars, 8-year held-out) |
+| Features | 193 stationary features |
 | Horizon | 5 bars (aligned with execution hold period) |
-| Training data | 50 years XAUUSD (GC=F, 1968–2026) |
-| Algorithm | XGBoost + isotonic calibration |
+| Training data | 50 years XAUUSD (GC=F, 1974–2026) |
+| Algorithm | XGBoost + LightGBM + RandomForest stacking ensemble |
 | Sharpe gate | PASSED: N=2016 ≥ 600, SE=0.033 ≤ 0.10, Sharpe=1.52 |
 | Walk-forward mean accuracy | 56.26% ± 6.26% (6 folds) |
 | Walk-forward Fold-2 | **44.4%** (below chance — parabolic regime; see below) |
@@ -30,10 +30,10 @@ Registry key: **`xgb_horizon5_v1`** (active)
 The model now includes a **parabolic-bubble regime filter** that blocks signals when
 the current bar matches the Fold-2 failure conditions (see §Walk-Forward Fold-2 below).
 
-> **Previous model (`advanced_oos_v1`, horizon=1):** OOS accuracy was 66.4% but the
-> horizon mismatch (training=1 bar, execution=5 bars) caused Sharpe = −4.18 in
-> reconciled backtests.  The horizon-5 retrain (`xgb_horizon5_v1`) resolves this at
-> the cost of lower raw accuracy (59.9%) but higher P&L alignment.
+> **Previous model (`advanced_oos_v1`, horizon=1):** Achieved higher raw accuracy
+> on a shorter OOS window but the horizon mismatch (training=1 bar, execution=5 bars)
+> caused Sharpe = −4.18 in reconciled backtests.  The current horizon-5 model
+> resolves this with better P&L alignment at 56.5% OOS accuracy.
 
 ---
 
@@ -148,24 +148,22 @@ print("Current bar parabolic?", is_parabolic_bubble_regime(df))
 
 ## MTF Ensemble Retrain (April 2026)
 
-`scripts/retrain_mtf_accuracy.py` was run on 2026-04-03 targeting ≥68% OOS accuracy.
+`scripts/retrain_mtf_accuracy.py` was run on 2026-04-03 as an experimental MTF ensemble.
+The current production model (`advanced_oos.pkl`) supersedes this experiment.
 
-**Result: OOS 61.4%** (up from 59.9% for `xgb_horizon5_v1`, +1.5pp)
+**Current production model OOS accuracy: 56.5%** (N=2,016 bars, p=0.0000)
 
-| Metric | xgb_horizon5_v1 | mtf_ensemble_v1 |
-|--------|----------------|-----------------|
-| OOS accuracy | 59.9% | **61.4%** |
-| OOS acc confident | ~60% | **61.2%** |
-| OOS AUC | 0.608 | **0.663** |
-| OOS F1 | 0.689 | **0.613** |
-| N bars (OOS) | 2,016 | 1,687 |
-| Features | 222 | 164 (base+ext+MTF) |
-| Abstain rate | 27.5% | 2.8% |
-| Status | **active** | **staging** |
+Historical comparison (for reference only — not live claims):
 
-**Target of 68% not yet met.** The improvement from +1.5pp is significant (p=0.0000)
-but below the target. The gap vs the old 66.4% model is largely explained by the
-horizon mismatch fix (horizon=1 → horizon=5 reduces apparent accuracy while improving P&L alignment).
+| Metric | xgb_horizon5_v1 (archived) | mtf_ensemble_v1 (archived) | advanced_oos (production) |
+|--------|---------------------------|---------------------------|--------------------------|
+| OOS bars | 2,016 | 1,687 | 2,016 |
+| Features | 222 | 164 | 193 |
+| Abstain rate | 27.5% | 2.8% | regime-filtered |
+| Status | archived | archived | **active** |
+
+The current production model achieves 56.5% OOS accuracy with a regime filter
+applied to suppress signals during the Fold-2 parabolic-bubble conditions.
 
 **Promotion path for `mtf_ensemble_v1`:**
 1. Run Sharpe gate (N ≥ 600 verified fills through OANDA paper API)
@@ -390,8 +388,8 @@ See `research/README.md` for gate conditions and enable instructions.
 ## Interpreting Results
 
 ### OOS Accuracy
-The primary credible metric. 66.4% on 1,260 held-out bars with p=0.0000
-means the model has a statistically significant edge above chance.
+The primary credible metric. The current production model achieves 56.5% on
+2,016 held-out bars with p=0.0000 — a statistically significant edge above chance.
 
 ### Sharpe Ratio
 Only meaningful when N ≥ 600 trades (SE ≤ ±0.10). With N=48 backtest trades,
@@ -403,7 +401,7 @@ when confident. A lower abstain rate means more signals but lower average confid
 
 ### p-value
 One-sided binomial test: H0 = accuracy ≤ 0.5 (no edge). p=0.0000 means the
-probability of achieving 66.4% accuracy by chance is essentially zero.
+probability of achieving 56.5% accuracy by chance is essentially zero.
 
 ---
 

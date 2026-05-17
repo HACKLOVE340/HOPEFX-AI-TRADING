@@ -18,10 +18,11 @@ def create_nocode_router(builder: "NoCodeStrategyBuilder"):
     Returns:
         FastAPI APIRouter
     """
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from pydantic import BaseModel
+    from api.auth import get_current_user
 
-    router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
+    router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"], dependencies=[Depends(get_current_user)])
 
     class CreateStrategyRequest(BaseModel):
         name: str

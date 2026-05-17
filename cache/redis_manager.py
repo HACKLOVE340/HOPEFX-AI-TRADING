@@ -23,6 +23,7 @@ New in this version
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -356,10 +357,8 @@ class DistributedLock:
                     self._client.eval(self._RENEW_SCRIPT, 1, self._name, self._token, self._ttl_ms)
                 except Exception as exc:
                     # Fallback: extend TTL without ownership check
-                    try:  # noqa: SIM105
+                    with contextlib.suppress(Exception):
                         self._client.pexpire(self._name, self._ttl_ms)
-                    except Exception:  # nosec B110
-                        pass
                     logger.debug("DistributedLock renew eval error (used pexpire fallback): %s", exc)
 
         self._renew_thread = threading.Thread(target=_renew_loop, daemon=True, name=f"lock-renew:{self._name}")
@@ -455,10 +454,8 @@ class PubSubManager:
         """Stop the background listener thread."""
         self._stop_event.set()
         if self._pubsub:
-            try:  # noqa: SIM105
+            with contextlib.suppress(Exception):
                 self._pubsub.close()
-            except Exception:  # nosec B110
-                pass
         if self._thread:
             self._thread.join(timeout=3.0)
         logger.info("PubSubManager: listener stopped")

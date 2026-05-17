@@ -181,7 +181,7 @@ const KYCPage: React.FC = () => {
   const canSubmit = status === 'not_started' || status === 'rejected';
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 20px' }}>
+    <div className="page-content">
       <PageHeader
         title="Identity Verification (KYC)"
         icon="🪪"

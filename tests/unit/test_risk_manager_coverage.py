@@ -91,6 +91,76 @@ class TestPositionSizingResult:
     def test_take_profit_price_property(self):
         assert self._make().take_profit_price == pytest.approx(1970.0)
 
+    # ── _halt_reason_override regression tests ────────────────────────────────
+
+    def test_halt_reason_override_not_in_init(self):
+        """_halt_reason_override must be excluded from __init__ (init=False).
+
+        Before the fix, it was a regular dataclass field exposed in __init__,
+        meaning callers could accidentally pass it as a positional argument
+        and it appeared in generated __init__ signatures, breaking API stability.
+        """
+        import inspect
+        from risk.manager import PositionSizingResult
+
+        sig = inspect.signature(PositionSizingResult.__init__)
+        assert "_halt_reason_override" not in sig.parameters, (
+            "_halt_reason_override must not appear in __init__ (use init=False)"
+        )
+
+    def test_halt_reason_override_defaults_empty(self):
+        """Freshly constructed result has empty _halt_reason_override."""
+        r = self._make()
+        assert r._halt_reason_override == ""
+
+    def test_reason_returns_approved_when_no_override(self):
+        r = self._make(qty=1.0)
+        assert r.reason == "approved"
+
+    def test_reason_returns_override_when_set(self):
+        r = self._make(qty=1.0)
+        r._halt_reason_override = "kill_switch_active"
+        assert r.reason == "kill_switch_active"
+
+    def test_reason_returns_position_size_zero_when_qty_zero_no_override(self):
+        r = self._make(qty=0.0)
+        assert r.reason == "position_size_zero"
+
+    def test_override_takes_precedence_over_zero_qty(self):
+        """When both qty=0 and override is set, override wins."""
+        r = self._make(qty=0.0)
+        r._halt_reason_override = "daily_loss_limit"
+        assert r.reason == "daily_loss_limit"
+
+    def test_compare_false_excludes_override_from_equality(self):
+        """Two results with identical fields but different overrides must compare equal."""
+        from risk.manager import PositionSizingResult
+
+        shared_ts = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        r1 = PositionSizingResult(
+            symbol="XAUUSD",
+            direction="long",
+            quantity=1.0,
+            notional_usd=1950.0,
+            stop_loss_usd=1940.0,
+            take_profit_usd=1970.0,
+            risk_usd=10.0,
+            created_at=shared_ts,
+        )
+        r2 = PositionSizingResult(
+            symbol="XAUUSD",
+            direction="long",
+            quantity=1.0,
+            notional_usd=1950.0,
+            stop_loss_usd=1940.0,
+            take_profit_usd=1970.0,
+            risk_usd=10.0,
+            created_at=shared_ts,
+        )
+        r1._halt_reason_override = "reason_a"
+        r2._halt_reason_override = "reason_b"
+        assert r1 == r2, "compare=False: override must not affect equality"
+
 
 # ---------------------------------------------------------------------------
 # RiskConfig

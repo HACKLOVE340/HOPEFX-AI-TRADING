@@ -59,12 +59,13 @@ class DatabaseMetrics:
     pool_size: int = 0
     pool_overflow: int = 0
     pool_timeout_count: int = 0
-    # Latency tracking (rolling 100-sample window)
+    # Latency tracking (rolling window)
+    _LATENCY_WINDOW: int = 100
     _latency_samples: list = field(default_factory=list, repr=False, compare=False)
 
     def record_latency(self, ms: float) -> None:
         self._latency_samples.append(ms)
-        if len(self._latency_samples) > 100:  # noqa: PLR2004
+        if len(self._latency_samples) > self._LATENCY_WINDOW:
             self._latency_samples.pop(0)
 
     @property

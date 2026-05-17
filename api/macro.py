@@ -422,7 +422,7 @@ async def wgc_snapshot():
     "/wgc/refresh",
     summary="Force-refresh WGC gold demand data and inject into MacroStore",
 )
-async def wgc_refresh():
+async def wgc_refresh(_user: TokenPayload = Depends(require_role("admin"))):
     """
     Trigger an immediate WGC data fetch, bypassing the local cache TTL.
 

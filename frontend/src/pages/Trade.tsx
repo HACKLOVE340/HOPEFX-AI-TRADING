@@ -500,7 +500,7 @@ const Trade: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col gap-3 sm:gap-4 px-3 py-3 sm:px-4 sm:py-4 md:px-6 min-h-screen bg-[#0a0f1a]">
+    <div className="page-content gap-3 sm:gap-4">
 
       <PageHeader
         title="Trade"

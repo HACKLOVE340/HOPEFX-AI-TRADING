@@ -33,8 +33,6 @@ Register in core/router_registry.py::
     app.include_router(fixes_router)
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from datetime import datetime, timezone
@@ -42,12 +40,19 @@ from datetime import datetime, timezone
 UTC = timezone.utc
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from api.auth import require_role
+
+from api.auth import TokenPayload
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/security/fixes", tags=["security-fixes"])
+router = APIRouter(
+    prefix="/api/security/fixes",
+    tags=["security-fixes"],
+    dependencies=[Depends(require_role("admin"))],
+)
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────────
@@ -216,6 +221,7 @@ async def get_fix_stats(request: Request) -> dict[str, Any]:
 async def approve_fix(
     body: ApproveFixRequest,
     request: Request,
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """
     Approve an LLM-generated fix and trigger the GitHub PR pipeline.

@@ -247,7 +247,7 @@ class MarketDataCache:
         self,
         host: str | None = None,
         port: int | None = None,
-        db: int = 0,
+        db: int | None = None,
         password: str | None = None,
         socket_timeout: float = 1,
         socket_connect_timeout: float = 1,
@@ -259,17 +259,18 @@ class MarketDataCache:
         # Resolve connection parameters: explicit args > REDIS_URL env > defaults.
         # This ensures the cache honours the same REDIS_URL used by the rest of
         # the system rather than always connecting to localhost:6379.
+        # db=None means "not specified by caller" — use REDIS_URL db or fall back to 0.
         _url = os.environ.get("REDIS_URL", "").strip()
         if _url and (host is None or host == "localhost"):
             _parsed = _parse_redis_url(_url)
             host = host if host not in (None, "localhost") else _parsed["host"]
             port = port if port is not None else _parsed["port"]
-            db = db if db != 0 else _parsed["db"]
+            db = db if db is not None else _parsed["db"]
             password = password if password is not None else _parsed["password"]
 
         self.host = host or "localhost"
         self.port = port or 6379
-        self.db = db
+        self.db = db if db is not None else 0
         self.password = password or os.environ.get("REDIS_PASSWORD") or None
         self.socket_timeout = socket_timeout
         self.socket_connect_timeout = socket_connect_timeout
@@ -554,8 +555,6 @@ class MarketDataCache:
 
             # Try Redis first
             redis_client = self._get_redis()
-            cached = None
-
             cached = redis_client.get(key) if redis_client else self._fallback_store.get(key)
 
             # Update statistics
@@ -630,8 +629,6 @@ class MarketDataCache:
             key = self._build_tick_key(symbol)
 
             redis_client = self._get_redis()
-            cached = None
-
             cached = redis_client.get(key) if redis_client else self._fallback_store.get(key)
 
             with self._stats_lock:
@@ -805,7 +802,6 @@ class MarketDataCache:
         key = self._build_tick_key(symbol)
         try:
             redis_client = self._get_redis()
-            raw = None
             raw = redis_client.get(key) if redis_client else self._fallback_store.get(key)
             if raw is None:
                 with self._stats_lock:
@@ -835,7 +831,6 @@ class MarketDataCache:
             ttl = self.DEFAULT_TTL.get(timeframe, 86400)
         try:
             redis_client = self._get_redis()
-            raw = None
             raw = redis_client.get(key) if redis_client else self._fallback_store.get(key)
             if raw:
                 envelope = json.loads(raw)
@@ -881,7 +876,6 @@ class MarketDataCache:
         key = self._build_key(symbol, timeframe, "ohlcv")
         try:
             redis_client = self._get_redis()
-            deleted = False
             deleted = bool(redis_client.delete(key)) if redis_client else bool(self._fallback_store.delete(key))
             if deleted:
                 with self._stats_lock:
@@ -897,7 +891,6 @@ class MarketDataCache:
         key = self._build_tick_key(symbol)
         try:
             redis_client = self._get_redis()
-            deleted = False
             deleted = bool(redis_client.delete(key)) if redis_client else bool(self._fallback_store.delete(key))
             if deleted:
                 with self._stats_lock:

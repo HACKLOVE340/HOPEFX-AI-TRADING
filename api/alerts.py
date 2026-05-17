@@ -15,8 +15,6 @@ Registered in app.py as a static router (prefix /api/alerts) so it is always
 available even when the lifespan-registered alert_engine router is not.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 
@@ -163,6 +161,7 @@ async def create_alert(
         expires_in_hours=body.expires_in_hours,
         cooldown_minutes=body.cooldown_minutes,
         max_triggers=body.max_triggers,
+        user_id=user.sub,
     )
     return _serialise(alert)
 
@@ -184,7 +183,7 @@ async def list_alerts(
     except ValueError:
         status_enum = None
 
-    alerts = engine.get_alerts(symbol=symbol, status=status_enum)
+    alerts = engine.get_alerts(symbol=symbol, status=status_enum, user_id=user.sub)
     return [_serialise(a) for a in alerts]
 
 
@@ -198,7 +197,7 @@ async def get_trigger_history(
 ):
     """Return the last N alert trigger events. Requires: authenticated user."""
     engine = _get_engine(request)
-    history = engine.get_trigger_history(symbol, alert_id, limit)
+    history = engine.get_trigger_history(symbol, alert_id, limit, user_id=user.sub)
     # history items are plain dicts from the engine
     return history if isinstance(history, list) else []
 
@@ -211,8 +210,20 @@ async def get_active_alerts(
 ):
     """Return only active (non-paused, non-expired) alerts. Requires: authenticated user."""
     engine = _get_engine(request)
-    alerts = engine.get_active_alerts(symbol)
+    alerts = engine.get_active_alerts(symbol, user_id=user.sub)
     return [_serialise(a) for a in alerts]
+
+
+def _get_owned_alert(engine, alert_id: str, user_sub: str):
+    """Return the alert if it exists and belongs to the caller, else raise."""
+    alert = engine.get_alert(alert_id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    if alert.user_id is not None and alert.user_id != user_sub:
+        # Return 404 rather than 403 to avoid leaking alert existence to
+        # other users.
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
 
 
 @router.get("/{alert_id}")
@@ -223,9 +234,7 @@ async def get_alert(
 ):
     """Get a single alert by ID. Requires: authenticated user."""
     engine = _get_engine(request)
-    alert = engine.get_alert(alert_id)
-    if not alert:
-        raise HTTPException(status_code=404, detail="Alert not found")
+    alert = _get_owned_alert(engine, alert_id, user.sub)
     return _serialise(alert)
 
 
@@ -237,6 +246,7 @@ async def delete_alert(
 ):
     """Delete an alert. Requires: authenticated user."""
     engine = _get_engine(request)
+    _get_owned_alert(engine, alert_id, user.sub)  # ownership check
     if not engine.delete_alert(alert_id):
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"status": "deleted"}
@@ -250,6 +260,7 @@ async def pause_alert(
 ):
     """Pause an alert. Requires: authenticated user."""
     engine = _get_engine(request)
+    _get_owned_alert(engine, alert_id, user.sub)  # ownership check
     if not engine.pause_alert(alert_id):
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"status": "paused"}
@@ -263,6 +274,7 @@ async def resume_alert(
 ):
     """Resume a paused alert. Requires: authenticated user."""
     engine = _get_engine(request)
+    _get_owned_alert(engine, alert_id, user.sub)  # ownership check
     if not engine.resume_alert(alert_id):
         raise HTTPException(status_code=404, detail="Alert not found")
     return {"status": "resumed"}

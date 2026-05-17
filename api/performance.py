@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 import math
+from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
@@ -66,7 +67,7 @@ def _build_equity_points(equity_values: list[tuple], starting: float) -> list[Eq
         dd = (eq - peak) / peak if peak > 0 else 0.0  # negative fraction
         if hasattr(ts_raw, "isoformat"):
             ts_str = ts_raw.isoformat()
-        elif isinstance(ts_raw, (int, float)):
+        elif isinstance(ts_raw, int | float):
             ts_str = _dt.datetime.fromtimestamp(float(ts_raw), tz=_dt.timezone.utc).isoformat()
         else:
             ts_str = str(ts_raw)
@@ -140,7 +141,8 @@ def _load_equity_curve() -> list[EquityPoint]:
         if trades:
             equity = starting
             pairs = []
-            for t in sorted(trades, key=lambda x: getattr(x, "exit_time", None) or datetime.min):
+            _dt_min = datetime.min
+            for t in sorted(trades, key=lambda x: getattr(x, "exit_time", None) or _dt_min):
                 equity += float(getattr(t, "realized_pnl", 0) or 0.0)
                 pairs.append((getattr(t, "exit_time", None), equity))
             if pairs:

@@ -253,6 +253,29 @@ class MemoryMappedEventStore:
 # ─────────────────────────────────────────────────────────────────────────────
 # In-process fallback bus (active when Redis is unreachable)
 # ─────────────────────────────────────────────────────────────────────────────
+# Module-level constant so the maxsize is evaluated once at import time,
+# not re-read from the environment on every subscribe() call.
+_LOCAL_QUEUE_MAXSIZE: int = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
+
+# Prometheus counter for fallback queue drops (optional — degrades gracefully)
+try:
+    from prometheus_client import Counter as _PCounter
+
+    _EVENT_BUS_QUEUE_DROPS = _PCounter(
+        "hopefx_event_bus_queue_drops_total",
+        "Messages dropped from the in-process fallback queue when full",
+        ["channel"],
+    )
+except Exception:  # pragma: no cover
+
+    class _NoopCounter:  # type: ignore[no-redef]
+        def labels(self, **_kw):
+            return self
+
+        def inc(self, _n: float = 1) -> None:
+            pass
+
+    _EVENT_BUS_QUEUE_DROPS = _NoopCounter()  # type: ignore[assignment]
 
 
 class _LocalBus:
@@ -276,23 +299,40 @@ class _LocalBus:
 
     def unsubscribe_local(self, channel: str, handler: Callable[[dict], Any]) -> None:
         """Remove a previously registered handler. No-op if handler is not registered."""
-        try:  # noqa: SIM105
+        import contextlib
+
+        with contextlib.suppress(ValueError):
             self._handlers.get(channel, []).remove(handler)
-        except ValueError:
-            pass  # handler was not registered — safe to ignore
 
     def clear_channel(self, channel: str) -> None:
         """Remove all handlers for a channel (e.g. on reconnect to avoid duplicates)."""
         self._handlers[channel] = []
 
     async def publish_local(self, channel: str, message: dict) -> None:
+        """
+        Dispatch *message* to every handler registered on *channel*.
+
+        Per-handler isolation: an exception in one handler is caught, logged,
+        and does NOT prevent subsequent handlers from receiving the message.
+        This is the core guarantee — a misbehaving subscriber cannot kill the bus.
+        """
         for handler in list(self._handlers.get(channel, [])):
             try:
                 result = handler(message)
                 if asyncio.iscoroutine(result):
                     await result
+            except asyncio.CancelledError:
+                # Propagate cancellation — do not swallow it.
+                raise
             except Exception as exc:
-                logger.warning("LocalBus handler error on %s: %s", channel, exc)
+                # Log with full traceback so the root cause is visible in logs.
+                # The bus continues delivering to remaining handlers.
+                logger.exception(
+                    "LocalBus: handler %r raised on channel %s — skipping this handler. Error: %s",
+                    getattr(handler, "__qualname__", repr(handler)),
+                    channel,
+                    exc,
+                )
 
 
 _local_bus = _LocalBus()
@@ -524,8 +564,8 @@ class EventBus:
         """
         if self._degraded:
             # Local fallback: feed a bounded queue from _local_bus handlers.
-            # Maxsize prevents unbounded memory growth when consumers are slow.
-            _LOCAL_QUEUE_MAXSIZE = int(os.environ.get("EVENT_BUS_LOCAL_QUEUE_MAXSIZE", "10000"))
+            # _LOCAL_QUEUE_MAXSIZE is a module-level constant (default 10 000)
+            # so it is evaluated once at import time, not on every subscribe().
             queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=_LOCAL_QUEUE_MAXSIZE)
 
             async def _enqueue(msg: dict) -> None:
@@ -533,14 +573,20 @@ class EventBus:
                     queue.put_nowait(msg)
                 except asyncio.QueueFull:
                     # Drop oldest message to make room (LIFO-style eviction)
-                    try:  # noqa: SIM105
+                    import contextlib
+
+                    with contextlib.suppress(asyncio.QueueEmpty):
                         queue.get_nowait()
-                    except asyncio.QueueEmpty:  # nosec B110
-                        pass
                     try:
                         queue.put_nowait(msg)
                     except asyncio.QueueFull:
-                        logger.warning("EventBus local queue full — dropping message on %s", channels)
+                        ch_label = channels[0] if channels else "unknown"
+                        logger.warning(
+                            "EventBus local queue full (maxsize=%d) — dropping message on %s",
+                            _LOCAL_QUEUE_MAXSIZE,
+                            channels,
+                        )
+                        _EVENT_BUS_QUEUE_DROPS.labels(channel=ch_label).inc()
 
             for ch in channels:
                 _local_bus.subscribe_local(ch, _enqueue)
@@ -614,7 +660,24 @@ class EventBus:
                         except Exception as _exc:
                             logger.debug("Suppressed exception: %s", _exc)
                         self._metrics["delivered"] += 1
-                        yield msg
+                        # FIX: wrap yield in try/except so an exception thrown
+                        # into the generator by the caller (e.g. from inside an
+                        # `async for` body) does NOT crash the subscription loop.
+                        # GeneratorExit is re-raised so the generator can be
+                        # properly closed by the runtime.
+                        try:
+                            yield msg
+                        except GeneratorExit:
+                            raise
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as _caller_exc:
+                            logger.exception(
+                                "EventBus: caller raised inside async-for on channel %s — "
+                                "subscription loop continues. Error: %s",
+                                raw.get("channel"),
+                                _caller_exc,
+                            )
                     except json.JSONDecodeError as exc:
                         logger.warning("EventBus: bad JSON on %s: %s", raw.get("channel"), exc)
 
@@ -679,6 +742,77 @@ class EventBus:
     def clear_local_channel(self, channel: str) -> None:
         """Remove all local handlers for a channel (use on reconnect to prevent duplicates)."""
         _local_bus.clear_channel(channel)
+
+    async def dispatch_to_handlers(
+        self,
+        channel: str,
+        message: dict,
+        handlers: list[Callable[[dict], Any]],
+    ) -> None:
+        """
+        Fan out *message* to every handler in *handlers* with per-handler isolation.
+
+        An exception in one handler is caught and logged; remaining handlers
+        still receive the message.  This is the correct way to call multiple
+        subscribers from a single Redis message — it prevents one bad handler
+        from killing the entire bus.
+
+        Usage::
+
+            async for msg in bus.subscribe(CH_TICK):
+                await bus.dispatch_to_handlers(CH_TICK, msg, [handler_a, handler_b])
+
+        CancelledError and GeneratorExit are re-raised immediately so the
+        caller's cancellation is not swallowed.
+        """
+        for handler in handlers:
+            try:
+                result = handler(message)
+                if asyncio.iscoroutine(result):
+                    await result
+            except (asyncio.CancelledError, GeneratorExit):
+                raise
+            except Exception as exc:
+                logger.exception(
+                    "EventBus.dispatch_to_handlers: handler %r raised on channel %s — "
+                    "continuing with remaining handlers. Error: %s",
+                    getattr(handler, "__qualname__", repr(handler)),
+                    channel,
+                    exc,
+                )
+
+    async def run_subscriber(
+        self,
+        channel: str,
+        handler: Callable[[dict], Any],
+        *extra_channels: str,
+    ) -> None:
+        """
+        Long-running coroutine that subscribes to *channel* (and any
+        *extra_channels*) and dispatches every message to *handler* with
+        full exception isolation.
+
+        Designed to be run as an asyncio.Task::
+
+            task = asyncio.create_task(bus.run_subscriber(CH_TICK, on_tick))
+
+        The task runs until cancelled.  A handler exception is logged but
+        does NOT stop the subscription — the next message is delivered normally.
+        """
+        async for msg in self.subscribe(channel, *extra_channels):
+            try:
+                result = handler(msg)
+                if asyncio.iscoroutine(result):
+                    await result
+            except (asyncio.CancelledError, GeneratorExit):
+                raise
+            except Exception as exc:
+                logger.exception(
+                    "EventBus.run_subscriber: handler %r raised on channel %s — subscription continues. Error: %s",
+                    getattr(handler, "__qualname__", repr(handler)),
+                    channel,
+                    exc,
+                )
 
     # ── convenience publishers ────────────────────────────────────────────────
 

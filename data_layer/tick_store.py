@@ -929,10 +929,10 @@ def _patch_timescale_batch_insert() -> None:
             return len(rows)
         except Exception as exc:
             logger.warning("_TimescaleBackend.batch_insert failed: %s", exc)
-            try:  # noqa: SIM105
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 self._conn.rollback()
-            except Exception:  # nosec B110
-                pass
             return 0
 
     _TimescaleBackend.batch_insert = batch_insert  # type: ignore[attr-defined]

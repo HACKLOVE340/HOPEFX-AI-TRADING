@@ -312,6 +312,7 @@ class CFTCCOTFeed:
                 continue
             try:
                 df = pd.read_csv(path, parse_dates=["date"])
+                df["date"] = pd.to_datetime(df["date"], utc=True)
                 series = df.set_index("date")["value"].rename(name)
                 result[name] = series
                 logger.debug("COT: loaded %s from cache (%d obs)", name, len(series))

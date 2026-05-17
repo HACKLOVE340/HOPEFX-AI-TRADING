@@ -1,0 +1,110 @@
+name: Docker Compose Smoke Test
+
+on:
+  push:
+    branches: [ main, develop, claude/**, copilot/** ]
+    paths:
+      - "docker-compose.yml"
+      - "Dockerfile"
+      - "monitoring/**"
+      - ".env.example"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "docker-compose.yml"
+      - "Dockerfile"
+      - "monitoring/**"
+      - ".env.example"
+
+concurrency:
+  group: docker-smoke-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-test:
+    name: Stack smoke test (postgres + redis + app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          persist-credentials: false
+
+      - name: Create minimal .env for smoke test
+        # Only variables required to start the stack; no real credentials.
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=hopefx
+          POSTGRES_PASSWORD=ci-smoke-password
+          POSTGRES_DB=hopefx
+          REDIS_PASSWORD=ci-smoke-redis
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          CONFIG_SALT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          SECURITY_JWT_SECRET=ci-smoke-jwt-secret-minimum-32-chars!!
+          ANTHROPIC_API_KEY=ci-placeholder
+          OPENAI_API_KEY=ci-placeholder
+          APP_ENV=production
+          PAPER_TRADING=true
+          IS_FORCE_TLS=false
+          REDIS_FORCE_TLS=false
+          HOPEFX_DOMAIN=localhost
+          APP_BASE_URL=http://localhost
+          ALLOWED_ORIGINS=http://localhost
+          GRAFANA_ADMIN_PASSWORD=ci-smoke-grafana
+          ALERTMANAGER_SMTP_FROM=ci@localhost
+          ALERTMANAGER_SMTP_TO=ci@localhost
+          ALERTMANAGER_SMTP_HOST=localhost:587
+          ALERTMANAGER_SMTP_USERNAME=ci
+          ALERTMANAGER_SMTP_PASSWORD=ci-password
+          EOF
+
+      - name: Validate docker-compose config
+        run: docker compose config --quiet
+
+      - name: Pull base images (postgres + redis only for speed)
+        run: |
+          docker pull postgres:16 &
+          docker pull redis:7 &
+          wait
+
+      - name: Start postgres and redis
+        run: |
+          docker compose up -d postgres redis
+          echo "Waiting for postgres..."
+          for i in $(seq 1 30); do
+            docker compose exec -T postgres pg_isready -U hopefx && break
+            sleep 2
+          done
+          echo "Waiting for redis..."
+          for i in $(seq 1 30); do
+            docker compose exec -T redis redis-cli -a ci-smoke-redis ping | grep PONG && break
+            sleep 2
+          done
+
+      - name: Verify PAPER_TRADING defaults to true
+        run: |
+          PT=$(docker compose config | grep PAPER_TRADING | head -1 | awk '{print $2}')
+          echo "PAPER_TRADING resolved to: $PT"
+          [ "$PT" = "true" ] || (echo "FAIL: PAPER_TRADING is '$PT', expected 'true'"; exit 1)
+
+      - name: Verify IS_FORCE_TLS defaults to false
+        run: |
+          TLS=$(docker compose config | grep IS_FORCE_TLS | head -1 | awk '{print $2}')
+          echo "IS_FORCE_TLS resolved to: $TLS"
+          [ "$TLS" = "false" ] || (echo "FAIL: IS_FORCE_TLS is '$TLS', expected 'false'"; exit 1)
+
+      - name: Verify alertmanager uses build not image
+        run: |
+          docker compose config | grep -A5 'alertmanager:' | grep 'build:' \
+            || (echo "FAIL: alertmanager service must use build: not image:"; exit 1)
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --tail=50
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v --remove-orphans

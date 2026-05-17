@@ -326,6 +326,22 @@ class TradeExecutor:
         )
 
         if order.status.value in ("filled", "partial"):
+            if not order.average_fill_price or not (order.average_fill_price > 0):
+                logger.error(
+                    "TradeExecutor: order %s status=%s but average_fill_price=%s — skipping position open",
+                    order.id,
+                    order.status.value,
+                    order.average_fill_price,
+                )
+                return ExecutionResult(
+                    success=False,
+                    order_id=order.id,
+                    filled_quantity=order.filled_quantity,
+                    average_price=order.average_fill_price,
+                    commission=order.commission,
+                    status=OrderStatus(order.status.value),
+                    message="Invalid fill price — position not opened",
+                )
             from execution.position_tracker import Position
 
             position = Position(

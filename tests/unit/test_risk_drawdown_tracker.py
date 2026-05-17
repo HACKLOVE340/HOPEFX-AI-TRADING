@@ -196,15 +196,15 @@ class TestDayRollover:
     def test_day_rollover_resets_daily_open_equity_mode(self):
         t = _tracker(drawdown_mode="equity")
         t.update(equity=95_000.0)  # daily open stays at 100k
-        # Simulate day change
-        t._day = t._day - 1  # force rollover on next update
+        # Simulate day change — _day is a (year, month, day) tuple
+        t._day = (2000, 1, 1)  # force rollover on next update
         result = t.update(equity=95_000.0, balance=95_000.0)
         # After rollover, daily_open = equity = 95k → daily_dd = 0
         assert result.daily_drawdown_pct == pytest.approx(0.0, abs=1e-6)
 
     def test_day_rollover_resets_daily_open_balance_mode(self):
         t = _tracker(drawdown_mode="balance")
-        t._day = t._day - 1  # force rollover
+        t._day = (2000, 1, 1)  # force rollover
         result = t.update(equity=95_000.0, balance=93_000.0)
         # After rollover in balance mode, daily_open = balance = 93k → daily_dd = 0
         assert result.daily_drawdown_pct == pytest.approx(0.0, abs=1e-6)
@@ -213,7 +213,7 @@ class TestDayRollover:
         t = _tracker()
         t.record_fill(pnl=-500.0)
         assert t.daily_realised_pnl == pytest.approx(-500.0)
-        t._day = t._day - 1
+        t._day = (2000, 1, 1)
         t.update(equity=100_000.0)
         assert t.daily_realised_pnl == pytest.approx(0.0)
 
@@ -415,3 +415,44 @@ class TestStatus:
         assert s["last_equity"] == pytest.approx(95_000.0)
         assert s["total_hwm"] == pytest.approx(100_000.0)
         assert s["drawdown_mode"] == "equity"
+
+    def test_status_drawdown_pct_consistent(self):
+        """status() total_drawdown_pct must match the actual equity loss."""
+        t = _tracker(initial_balance=100_000.0)
+        t.update(equity=90_000.0)
+        s = t.status()
+        # 10% drawdown from 100k HWM
+        assert s["total_drawdown_pct"] == pytest.approx(10.0, abs=0.01)
+
+    def test_status_thread_safety(self):
+        """Concurrent update() and status() calls must not produce inconsistent
+        snapshots (e.g. drawdown_pct computed from a stale HWM)."""
+        import threading
+
+        t = _tracker(initial_balance=100_000.0)
+        errors: list[str] = []
+
+        def _updater():
+            for i in range(200):
+                equity = 100_000.0 - i * 10
+                t.update(equity=equity)
+
+        def _reader():
+            for _ in range(200):
+                s = t.status()
+                hwm = s["total_hwm"]
+                eq = s["last_equity"]
+                dd = s["total_drawdown_pct"]
+                # Recompute expected DD from the snapshot values
+                if hwm > 0:
+                    expected = round(max(0.0, (hwm - eq) / hwm) * 100, 4)
+                    if abs(dd - expected) > 0.01:
+                        errors.append(f"Inconsistent snapshot: hwm={hwm} eq={eq} dd={dd} expected={expected}")
+
+        t1 = threading.Thread(target=_updater)
+        t2 = threading.Thread(target=_reader)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+        assert errors == [], f"Thread-safety violations: {errors[:3]}"

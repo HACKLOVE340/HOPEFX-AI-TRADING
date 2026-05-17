@@ -299,7 +299,7 @@ const Performance: React.FC = () => {
   }, [publicQ, equityQ]);
 
   return (
-    <div className="max-w-5xl mx-auto px-3 py-3 sm:px-4 sm:py-6">
+    <div className="page-content gap-4 sm:gap-6">
       <PageHeader
         title="Performance"
         icon="🏆"

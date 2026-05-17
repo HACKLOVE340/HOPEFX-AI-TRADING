@@ -22,8 +22,6 @@ Endpoints:
   GET  /auth/me                — current user profile
 """
 
-from __future__ import annotations
-
 import asyncio
 import functools
 import hmac
@@ -307,7 +305,7 @@ async def _login_rate_limit_dep(request: Request) -> None:
 
 def _svc():
     if _auth_service is None:
-        raise HTTPException(status_code=503, detail="Auth service not initialised")
+        raise HTTPException(status_code=503, detail="Auth service not initialised") from None
     return _auth_service
 
 
@@ -400,7 +398,7 @@ def _get_current_user_id(
     try:
         import jwt
 
-        from auth.service import _get_secret
+        from auth.service import _get_secret, is_access_token_revoked
 
         secret = _get_secret()  # raises RuntimeError if unset or too short
         payload = jwt.decode(
@@ -411,6 +409,11 @@ def _get_current_user_id(
         )
         if payload.get("type") != "access":
             raise ValueError("Not an access token")
+        # Check JTI blacklist — tokens revoked via logout or token rotation
+        # must be rejected even if the signature and expiry are still valid.
+        jti = payload.get("jti")
+        if jti and is_access_token_revoked(jti):
+            raise ValueError("Token has been revoked")
         return payload["sub"]
     except RuntimeError as exc:
         # Misconfigured secret — do not mask as 401
@@ -449,7 +452,7 @@ async def register(body: RegisterRequest, request: Request):
         )
     )
     if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=400, detail=msg) from None
 
     if raw_verify_token:
         # Wrap the raw opaque token in a signed envelope so the link is
@@ -503,17 +506,17 @@ async def verify_email(token: str):
     # 1. Verify outer signature and expiry — fast, no DB hit
     payload = _verify_signed_token(token, _SALT_EMAIL_VERIFY, _EMAIL_VERIFY_TTL)
     if payload is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired verification link")
+        raise HTTPException(status_code=400, detail="Invalid or expired verification link") from None
 
     # 2. Extract the raw opaque token stored in the DB as a SHA-256 hash
     raw_token = payload.get("tok") if isinstance(payload, dict) else None
     if not raw_token:
-        raise HTTPException(status_code=400, detail="Malformed verification token")
+        raise HTTPException(status_code=400, detail="Malformed verification token") from None
 
     # 3. Service validates one-time-use hash and marks the account verified
     ok, msg = await asyncio.to_thread(_svc().verify_email, raw_token)
     if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=400, detail=msg) from None
     return {"message": msg}
 
 
@@ -522,7 +525,7 @@ async def resend_verification(body: ForgotPasswordRequest, request: Request):
     _check_ip_rate_limit(_get_client_ip(request))
     ok, msg, raw_verify_token = await asyncio.to_thread(_svc().resend_verification, body.email)
     if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=400, detail=msg) from None
     if raw_verify_token:
         signed_verify_token = _make_signed_token(
             {"tok": raw_verify_token, "email": body.email},
@@ -579,7 +582,7 @@ async def login(
                 resolved_email = user_obj.email
             else:
                 # Unknown username — return generic 401 (no user enumeration)
-                raise HTTPException(status_code=401, detail="Invalid credentials")
+                raise HTTPException(status_code=401, detail="Invalid credentials") from None
         except HTTPException:
             raise
         except Exception as _exc:
@@ -628,10 +631,11 @@ async def login(
     _secure = os.getenv("APP_ENV", "development").lower() in ("production", "staging")
 
     if access_token:
-        # Cookie max_age must match the token TTL — read the same env var the
-        # service uses (default 60 min, not 15) so the cookie doesn't expire
-        # before the token does, which would force unnecessary re-logins.
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
+        # Cookie max_age must match the JWT TTL exactly — use the canonical
+        # function so both always read the same env var with the same default.
+        from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
+
+        _max_age = _jwt_expire_min() * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=access_token,
@@ -666,6 +670,10 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
     The refresh token is read from the request body (``refresh_token`` field)
     or, as a fallback, from the ``hopefx_refresh_token`` cookie so that
     cookie-only clients (e.g. server-side rendering) work without JS.
+
+    The current access token (Authorization header or hopefx_access_token
+    cookie) is blacklisted immediately after rotation so it cannot be reused
+    even within its remaining TTL.
     """
     _check_ip_rate_limit(_get_client_ip(request))
     # Resolve token: body → cookie → 401
@@ -675,18 +683,32 @@ async def refresh(body: RefreshRequest, request: Request, response: Response):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="refresh_token is required (body or cookie)",
         )
+    # Extract the old access token so service.refresh() can blacklist it.
+    # Try Authorization header first, then the access-token cookie.
+    old_access_token: str | None = None
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.lower().startswith("bearer "):
+        old_access_token = auth_header[7:].strip() or None
+    if not old_access_token:
+        old_access_token = request.cookies.get("hopefx_access_token") or None
+
     ok, msg, tokens = await asyncio.to_thread(
-        functools.partial(_svc().refresh, refresh_token, ip_address=_client_ip(request))
+        functools.partial(
+            _svc().refresh,
+            refresh_token,
+            ip_address=_client_ip(request),
+            old_access_token=old_access_token,
+        )
     )
     if not ok:
-        raise HTTPException(status_code=401, detail=msg)
-    # Rotate the access token cookie to match the new token.
-    # Use the same env var and default (60 min) as /login so the cookie
-    # lifetime is always consistent with the token TTL.
+        raise HTTPException(status_code=401, detail=msg) from None
+    # Rotate the access token cookie to match the new token TTL exactly.
     new_access = tokens.get("access_token", "")
     if new_access:
         _secure = os.getenv("ENVIRONMENT", "development").lower() in ("production", "staging")
-        _max_age = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")) * 60
+        from auth.jwt import _get_access_token_expire_minutes as _jwt_expire_min
+
+        _max_age = _jwt_expire_min() * 60
         response.set_cookie(
             key="hopefx_access_token",
             value=new_access,
@@ -852,17 +874,17 @@ async def reset_password(body: ResetPasswordRequest, request: Request):
     # 1. Verify outer signature and expiry
     payload = _verify_signed_token(body.token, _SALT_PASSWORD_RESET, _PASSWORD_RESET_TTL)
     if payload is None:
-        raise HTTPException(status_code=400, detail="Invalid or expired reset link")
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link") from None
 
     # 2. Extract raw token for DB one-time-use check
     raw_token = payload.get("tok") if isinstance(payload, dict) else None
     if not raw_token:
-        raise HTTPException(status_code=400, detail="Malformed reset token")
+        raise HTTPException(status_code=400, detail="Malformed reset token") from None
 
     # 3. Service validates hash, updates password, revokes all sessions
     ok, msg = await asyncio.to_thread(functools.partial(_svc().reset_password, raw_token, body.new_password))
     if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=400, detail=msg) from None
     return {"message": msg}
 
 
@@ -871,7 +893,7 @@ async def setup_2fa(user_id: str = Depends(_get_current_user_id)):
     """Generate TOTP secret and QR code URI. Call /2fa/confirm to activate."""
     ok, uri_or_msg, secret = await asyncio.to_thread(_svc().setup_2fa, user_id)
     if not ok:
-        raise HTTPException(status_code=400, detail=uri_or_msg)
+        raise HTTPException(status_code=400, detail=uri_or_msg) from None
     return {
         "provisioning_uri": uri_or_msg,
         "secret": secret,
@@ -887,7 +909,7 @@ async def confirm_2fa(
     """Confirm 2FA setup with a valid TOTP code to activate it."""
     ok, msg = await asyncio.to_thread(_svc().confirm_2fa, user_id, body.code)
     if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=400, detail=msg) from None
     return {"message": msg}
 
 
@@ -899,7 +921,7 @@ async def disable_2fa(
     """Disable 2FA. Requires a valid TOTP code to confirm."""
     ok, msg = await asyncio.to_thread(_svc().disable_2fa, user_id, body.code)
     if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=400, detail=msg) from None
     return {"message": msg}
 
 
@@ -908,7 +930,7 @@ async def get_me(user_id: str = Depends(_get_current_user_id)):
     """Return current user profile."""
     user = await asyncio.to_thread(_svc().get_user_by_id, user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found") from None
     return {
         "id": user.id,
         "email": user.email,

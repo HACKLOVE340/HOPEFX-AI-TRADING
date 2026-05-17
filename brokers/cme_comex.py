@@ -133,6 +133,16 @@ _DEFAULT_CONTRACTS = int(os.getenv("CME_DEFAULT_CONTRACTS", "1"))
 _LATENCY_WARN_MS = float(os.getenv("CME_LATENCY_WARN_MS", "50"))
 
 
+def _resolve_fill_price(filled_price: float | None, limit_price: float | None, order_id: str) -> float:
+    """Return the best available fill price; raise if neither is valid."""
+    price = filled_price if filled_price and filled_price > 0 else limit_price
+    if not price or price <= 0:
+        raise RuntimeError(
+            f"CME fill for order {order_id} has no valid price: filled_price={filled_price}, limit_price={limit_price}"
+        )
+    return float(price)
+
+
 # ── Data structures ───────────────────────────────────────────────────────────
 
 
@@ -494,7 +504,7 @@ class CMEComexConnector(BrokerConnector):
             symbol=symbol,
             side=side.value,
             contracts=order.filled_quantity or quantity,
-            avg_price=order.filled_price or (price or 0.0),
+            avg_price=_resolve_fill_price(order.filled_price, price, order.order_id),
             commission=self._estimate_commission(quantity),
             latency_ms=latency_ms,
             source="ibkr",

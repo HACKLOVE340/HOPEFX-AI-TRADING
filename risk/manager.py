@@ -151,7 +151,10 @@ class PositionSizingResult:
 
     # Internal field for injecting a halt reason into the result.
     # Set by size_order() when trading is halted.
-    _halt_reason_override: str = field(default="", repr=False, compare=False)
+    # init=False: excluded from __init__ so callers cannot accidentally pass it
+    # as a positional argument, and so dataclass-generated __init__ signatures
+    # remain stable across refactors.
+    _halt_reason_override: str = field(default="", repr=False, compare=False, init=False)
 
 
 @dataclass

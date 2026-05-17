@@ -417,10 +417,42 @@ class BrokerManager:
     # ------------------------------------------------------------------
 
     def get_positions(self) -> list[Position]:
-        """Return all open positions from the active broker."""
+        """Return all open positions from the active broker.
+
+        Handles both sync and async broker implementations: if the underlying
+        broker's get_positions() returns a coroutine (async broker), it is
+        resolved in a dedicated thread so it never blocks the caller's event
+        loop.
+        """
+        import asyncio
+        import inspect
+        import threading
+
         broker = self._require_connected_broker()
         try:
-            positions = broker.get_positions()
+            result = broker.get_positions()
+            if inspect.isawaitable(result):
+                # Run the coroutine in a dedicated thread with its own event
+                # loop.  This avoids deadlocking the caller's running loop
+                # (run_coroutine_threadsafe would block waiting for the same
+                # loop that is already blocked waiting for us).
+                positions_holder: list = []
+                exc_holder: list = []
+
+                def _run():
+                    try:
+                        positions_holder.extend(asyncio.run(result))
+                    except Exception as _e:  # nosec B110
+                        exc_holder.append(_e)
+
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=10)
+                if exc_holder:
+                    raise exc_holder[0]
+                positions = positions_holder
+            else:
+                positions = result
             self._reset_failures()
             return positions
         except Exception as exc:
@@ -441,11 +473,33 @@ class BrokerManager:
 
     def close_all_positions(self) -> dict[str, bool]:
         """Close all open positions. Returns {symbol: success}."""
+        import asyncio
+        import inspect
+        import threading
+
         self._check_kill_switch("close_all_positions")
         broker = self._require_connected_broker()
         results: dict[str, bool] = {}
         try:
-            positions = broker.get_positions()
+            raw = broker.get_positions()
+            if inspect.isawaitable(raw):
+                positions_holder: list = []
+                exc_holder: list = []
+
+                def _run():
+                    try:
+                        positions_holder.extend(asyncio.run(raw))
+                    except Exception as _e:  # nosec B110
+                        exc_holder.append(_e)
+
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=10)
+                if exc_holder:
+                    raise exc_holder[0]
+                positions = positions_holder
+            else:
+                positions = raw
         except Exception as exc:
             logger.error("BrokerManager.close_all_positions: get_positions failed: %s", exc)
             self._capture_sentry(exc)
@@ -471,10 +525,35 @@ class BrokerManager:
     # ------------------------------------------------------------------
 
     def get_account_info(self) -> AccountInfo:
-        """Return account info from the active broker."""
+        """Return account info from the active broker.
+
+        Handles both sync and async broker implementations.
+        """
+        import asyncio
+        import inspect
+        import threading
+
         broker = self._require_connected_broker()
         try:
-            info = broker.get_account_info()
+            result = broker.get_account_info()
+            if inspect.isawaitable(result):
+                result_holder: list = []
+                exc_holder: list = []
+
+                def _run():
+                    try:
+                        result_holder.append(asyncio.run(result))
+                    except Exception as _e:  # nosec B110
+                        exc_holder.append(_e)
+
+                t = threading.Thread(target=_run, daemon=True)
+                t.start()
+                t.join(timeout=10)
+                if exc_holder:
+                    raise exc_holder[0]
+                info = result_holder[0]
+            else:
+                info = result
             self._reset_failures()
             return info
         except Exception as exc:

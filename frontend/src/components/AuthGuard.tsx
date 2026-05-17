@@ -58,11 +58,17 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
   // synced tracks the token value that was last verified so re-login within
   // the same session (new token) always triggers a fresh /me fetch.
   const syncedToken = useRef<string | null | undefined>(undefined);
-  const [syncing, setSyncing] = useState(isAuth);
+
+  // A returning session is detected by a persisted user in the store even
+  // when isAuth=false (isAuthenticated is reset to false on rehydration so
+  // no component trusts it before the silent-refresh round-trip completes).
+  // Start syncing if we have a persisted user OR if isAuth is already true
+  // (covers the case where setAuth was called before this component mounts).
+  const [syncing, setSyncing] = useState(isAuth || user !== null);
 
   useEffect(() => {
-    if (!isAuth) {
-      // Reset so the next login triggers a fresh /me fetch.
+    // No session at all — nothing to sync.
+    if (!isAuth && user === null) {
       syncedToken.current = undefined;
       setSyncing(false);
       return;
@@ -70,7 +76,7 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
 
     // Token is present but has expired → clear session immediately.
     // token=null is NOT expired — it means the access token hasn't been
-    // restored from the refresh cookie yet.
+    // restored from the refresh cookie yet (silent refresh in flight).
     if (token && isTokenExpired(token)) {
       clearAuth();
       setSyncing(false);

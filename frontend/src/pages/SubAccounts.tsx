@@ -351,7 +351,7 @@ const SubAccounts: React.FC = () => {
   const currentMembers = selectedTeam?.members ?? [];
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <PageHeader
         title="Sub-Accounts & Teams"
         subtitle="Manage trading accounts and team access"

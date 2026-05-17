@@ -173,7 +173,7 @@ const PriceAlerts: React.FC = () => {
   };
 
   return (
-    <div style={s.page}>
+    <div className="page-content">
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Price Alerts</h1>

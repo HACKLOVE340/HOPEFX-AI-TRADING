@@ -11,9 +11,9 @@ Complete SQLAlchemy models for all entities
 import enum
 import json
 import logging
-from typing import Any
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
 UTC = timezone.utc
 
@@ -186,8 +186,10 @@ class Order(Base):
     # Idempotency key — UNIQUE constraint prevents duplicate broker submissions.
     # Set by the trading engine before the first submission attempt.
     client_order_id = Column(String(100), unique=True, nullable=True, index=True)
-    account_id = Column(Integer, nullable=True, index=True)
-    trade_id = Column(String(50), ForeignKey("trades.trade_id"), nullable=True, index=True)
+    # FIX: add FK + ondelete so orphaned orders are cleaned up when Account is deleted.
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    # FIX: add ondelete so orphaned orders are cleaned up when Trade is deleted.
+    trade_id = Column(String(50), ForeignKey("trades.trade_id", ondelete="SET NULL"), nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
 
     # Order details
@@ -271,7 +273,8 @@ class Signal(Base):
 
     # Execution
     executed = Column(Boolean, default=False)
-    trade_id = Column(String(50), ForeignKey("trades.trade_id"), nullable=True)
+    # FIX: add ondelete so orphaned signals are cleaned up when Trade is deleted.
+    trade_id = Column(String(50), ForeignKey("trades.trade_id", ondelete="SET NULL"), nullable=True)
     execution_time = Column(DateTime, nullable=True)
 
     # Timing
@@ -419,7 +422,8 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # FIX: cascade delete — when a User is deleted, their Accounts are deleted too.
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     account_name = Column(String(100), nullable=True)
     broker = Column(String(50), nullable=True)
     account_id = Column(String(100), nullable=True)
@@ -458,7 +462,8 @@ class Position(Base):
     __tablename__ = "positions"
 
     id = Column(String(50), primary_key=True, default=lambda: str(uuid.uuid4()))
-    account_id = Column(Integer, nullable=True, index=True)
+    # FIX: add FK + ondelete so orphaned positions are cleaned up when Account is deleted.
+    account_id = Column(Integer, ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True, index=True)
     symbol = Column(String(20), nullable=False, index=True)
     side = Column(String(10), nullable=True)
     quantity = Column(Float, nullable=True)
@@ -471,7 +476,8 @@ class Position(Base):
     stop_loss = Column(Float, nullable=True)
     take_profit = Column(Float, nullable=True)
     broker = Column(String(50), nullable=True)
-    user_id = Column(String(50), nullable=True, index=True)
+    # FIX: user_id type aligned to users.id (String(36) UUID); FK added for referential integrity.
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     opened_at = Column(DateTime, default=_utcnow)
     closed_at = Column(DateTime, nullable=True)
     status = Column(String(20), default="open")
@@ -822,6 +828,31 @@ Index(
     "idx_perf_metric_type_name_ts", PerformanceMetric.metric_type, PerformanceMetric.name, PerformanceMetric.timestamp
 )
 Index("idx_perf_metric_symbol_ts", PerformanceMetric.symbol, PerformanceMetric.timestamp)
+
+# ---------------------------------------------------------------------------
+# Additional indexes for hot query paths identified during audit
+# ---------------------------------------------------------------------------
+
+# Trade exit_time — range queries for closed-trade history (e.g. P&L reports)
+Index("idx_trades_exit_time", Trade.exit_time)
+# Trade user+exit_time — paginated closed-trade history per user
+Index("idx_trades_user_exit_time", Trade.user_id, Trade.exit_time)
+
+# Order fill timing — used by post-trade latency analysis and fill-rate dashboards
+Index("idx_orders_filled_at", Order.filled_at)
+# Order broker — used by broker-level fill reports
+Index("idx_orders_broker", Order.broker)
+
+# Position open/closed filter — the most common position query is status='open'
+Index("idx_positions_status", Position.status)
+# Position symbol+status — used by risk engine to find open positions per symbol
+Index("idx_positions_symbol_status", Position.symbol, Position.status)
+
+# Signal confidence — used by signal quality dashboards (filter high-confidence)
+Index("idx_signals_confidence", Signal.confidence)
+
+# WalletTransaction reference — idempotency lookups by payment reference
+Index("idx_wallet_reference", WalletTransaction.reference)
 
 
 def create_tables(engine):
@@ -1588,10 +1619,10 @@ if SQLALCHEMY_AVAILABLE:
             import json as _json
 
             tags_val: list = []
-            try:  # noqa: SIM105
+            import contextlib
+
+            with contextlib.suppress(Exception):  # nosec B110
                 tags_val = _json.loads(self.tags or "[]")
-            except Exception:  # nosec B110
-                pass
             return {
                 "id": self.id,
                 "user_id": self.user_id,
@@ -1821,16 +1852,14 @@ if SQLALCHEMY_AVAILABLE:
         def to_dict(self) -> dict:
             import json as _json
 
+            import contextlib
+
             prefs: dict = {}
             instruments: list = []
-            try:  # noqa: SIM105
+            with contextlib.suppress(Exception):  # nosec B110
                 prefs = _json.loads(self.notification_prefs or "{}")
-            except Exception:  # nosec B110
-                pass
-            try:  # noqa: SIM105
+            with contextlib.suppress(Exception):  # nosec B110
                 instruments = _json.loads(self.preferred_instruments or "[]")
-            except Exception:  # nosec B110
-                pass
             return {
                 "user_id": self.user_id,
                 "display_name": self.display_name,

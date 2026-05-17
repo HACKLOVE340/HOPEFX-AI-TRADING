@@ -409,6 +409,11 @@ export const useStore = create<AppStore>()(
           // the httpOnly refresh-token cookie to obtain a new access token
           // before the first authenticated request fires.
           user:               state.user,
+          // isAuthenticated is persisted so AuthGuard knows to attempt a
+          // silent refresh rather than immediately redirecting to /login.
+          // IMPORTANT: on rehydration isAuthenticated is reset to false in
+          // onRehydrateStorage so the value is never trusted without a live
+          // token. AuthGuard re-sets it to true after /me succeeds.
           isAuthenticated:    state.isAuthenticated,
           // Persist plan/trial so SubscriptionGate doesn't flash the upgrade
           // wall on every page load while usePlan waits for the billing API.
@@ -417,10 +422,21 @@ export const useStore = create<AppStore>()(
           trial:              state.trial,
           trialDaysRemaining: state.trialDaysRemaining,
         }),
-        onRehydrateStorage: () => () => {
+        onRehydrateStorage: () => (rehydratedState) => {
           // Called once localStorage rehydration is complete.
           // Any hook reading token/isAuthenticated after this point is safe.
           _hasHydrated = true;
+
+          // After rehydration token is always null (not persisted). Reset
+          // isAuthenticated to false so no component treats the user as
+          // authenticated before the silent-refresh round-trip completes.
+          // AuthGuard will set isAuthenticated=true again after /me succeeds.
+          // Without this reset, a user whose refresh cookie has expired would
+          // see isAuthenticated=true indefinitely (stale localStorage value)
+          // until AuthGuard's /me call fails and calls clearAuth().
+          if (rehydratedState) {
+            rehydratedState.isAuthenticated = false;
+          }
         },
       },
     ),

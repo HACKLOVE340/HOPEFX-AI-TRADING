@@ -16,8 +16,6 @@ GET  /superadmin/health-engine/history         — last N reports from Redis
 POST /superadmin/health-engine/register        — register a custom probe URL
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import time

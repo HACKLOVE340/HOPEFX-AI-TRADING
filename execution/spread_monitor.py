@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections import defaultdict, deque
+from collections import Counter as _Counter, defaultdict, deque
 from typing import NamedTuple
 
 logger = logging.getLogger(__name__)
@@ -107,7 +107,7 @@ class SpreadMonitor:
 
         # Per-symbol state
         self._spreads: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=self._baseline_window))
-        self._tick_counts: dict[str, int] = defaultdict(int)
+        self._tick_counts: _Counter[str] = _Counter()
         self._ema: dict[str, float] = {}  # EMA of spread per symbol
 
     # ── Tick ingestion ────────────────────────────────────────────────────────

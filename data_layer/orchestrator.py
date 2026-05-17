@@ -65,7 +65,15 @@ import asyncio
 import logging
 import os
 import time
-from datetime import datetime, timezone as _tz
+import sys
+from datetime import datetime
+
+if sys.version_info >= (3, 11):
+    from datetime import UTC
+else:
+    from datetime import timezone
+
+    UTC = timezone.utc
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -141,10 +149,9 @@ class CircuitBreaker:
 
     @property
     def state(self) -> _CircuitState:
-        if self._state == _CircuitState.OPEN:  # noqa: SIM102
-            if time.monotonic() - self._last_failure_ts >= self._recovery_timeout:
-                self._state = _CircuitState.HALF_OPEN
-                logger.info("CircuitBreaker[%s]: OPEN → HALF_OPEN (probe allowed)", self.name)
+        if self._state == _CircuitState.OPEN and time.monotonic() - self._last_failure_ts >= self._recovery_timeout:
+            self._state = _CircuitState.HALF_OPEN
+            logger.info("CircuitBreaker[%s]: OPEN → HALF_OPEN (probe allowed)", self.name)
         return self._state
 
     def is_open(self) -> bool:
@@ -153,11 +160,7 @@ class CircuitBreaker:
     def allow_call(self) -> bool:
         """Return True if the call should be allowed through."""
         s = self.state
-        if s == _CircuitState.CLOSED:
-            return True
-        if s == _CircuitState.HALF_OPEN:  # noqa: SIM103
-            return True  # Allow one probe
-        return False  # OPEN — reject
+        return s in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN)
 
     def record_success(self) -> None:
         self._total_calls += 1
@@ -174,15 +177,14 @@ class CircuitBreaker:
         self._total_failures += 1
         self._failure_count += 1
         self._last_failure_ts = time.monotonic()
-        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN):  # noqa: SIM102
-            if self._failure_count >= self._threshold:
-                self._state = _CircuitState.OPEN
-                logger.warning(
-                    "CircuitBreaker[%s]: → OPEN after %d failures (last: %s)",
-                    self.name,
-                    self._failure_count,
-                    exc,
-                )
+        if self._state in (_CircuitState.CLOSED, _CircuitState.HALF_OPEN) and self._failure_count >= self._threshold:
+            self._state = _CircuitState.OPEN
+            logger.warning(
+                "CircuitBreaker[%s]: → OPEN after %d failures (last: %s)",
+                self.name,
+                self._failure_count,
+                exc,
+            )
 
     def reset(self) -> None:
         self._state = _CircuitState.CLOSED
@@ -892,7 +894,7 @@ class MarketDataOrchestrator:
         # 6. Temporal features — session_time and day_of_week
         # These are causal: computed from the as_of timestamp (or now).
         try:
-            ref_time = as_of if as_of is not None else datetime.now(_tz.utc)
+            ref_time = as_of if as_of is not None else datetime.now(UTC)
             # session_time: fraction of the 24h UTC day elapsed [0, 1)
             # Used by the ML model to capture intraday seasonality
             # (gold is most liquid during London/NY overlap 13:00-17:00 UTC)
@@ -1322,18 +1324,16 @@ class MarketDataOrchestrator:
         score = 0.0
 
         # Gold feed: score proportional to active source count (max 5 sources)
-        try:
+        import contextlib
+
+        with contextlib.suppress(Exception):  # nosec B110
             gold = h.get("gold_feed", {})
             active = len(gold.get("active_sources", []))
             score += 0.30 * min(active / 3.0, 1.0)  # 3+ sources = full score
-        except Exception:  # nosec B110
-            pass
 
         # Redis
-        try:  # noqa: SIM105
+        with contextlib.suppress(Exception):  # nosec B110
             score += 0.20 if h.get("redis_healthy", False) else 0.0
-        except Exception:  # nosec B110
-            pass
 
         # DQE source confidence — average across all sources
         try:

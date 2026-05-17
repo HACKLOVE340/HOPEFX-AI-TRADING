@@ -185,7 +185,9 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
 
             broker = getattr(app_state, "broker", None)
             if broker and hasattr(broker, "get_market_data"):
-                raw = broker.get_market_data(symbol.upper().replace("_", ""), "1h", lookback)
+                from utils.symbol import canonical as _canonical
+
+                raw = broker.get_market_data(_canonical(symbol), "1h", lookback)
                 if raw:
                     df = pd.DataFrame(raw)
                     df["time"] = pd.to_datetime(df["timestamp"], unit="s", utc=True)
@@ -249,7 +251,7 @@ def _load_ohlcv_for_symbol(symbol: str, lookback: int = 200) -> pd.DataFrame:
         "(checked price_engine, CSV files, paper broker, MarketDataRepository). "
         "Ensure the data layer is running or place a CSV in data/%s_H1.csv.",
         symbol,
-        symbol.upper().replace("/", "_").replace("-", "_"),
+        __import__("utils.symbol", fromlist=["to_oanda"]).to_oanda(symbol),
     )
     return pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
@@ -531,7 +533,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                                     win_rate = accuracy
                                     total_signals = total
                                     note = note or "Accuracy derived from live predict/fallback ratio"
-                            except (TimeoutError, Exception) as _exc:
+                            except Exception as _exc:
                                 logger.debug("InferenceEngine health timed out or failed: %s", _exc)
                     except Exception as _exc:
                         logger.debug("Suppressed exception: %s", _exc)
@@ -584,7 +586,7 @@ async def get_accuracy(user: TokenPayload = Depends(get_current_user)):
                         evaluated_at=datetime.now(UTC).isoformat(),
                         note=f"Live ratio: {total - fallback}/{total} non-fallback predictions",
                     )
-            except (TimeoutError, Exception) as _exc:
+            except Exception as _exc:
                 logger.debug("InferenceEngine health fallback timed out: %s", _exc)
     except Exception as _exc:
         logger.debug("Suppressed exception: %s", _exc)
@@ -733,7 +735,9 @@ async def predict(
                 )
         except ImportError:
             ...  # nosec B110
-    symbol_upper = symbol.upper().replace("-", "/")
+    from utils.symbol import canonical as _canonical
+
+    symbol_upper = _canonical(symbol)
     now_iso = datetime.now(UTC).isoformat()
     predictor = _get_predictor()
 
@@ -1968,6 +1972,7 @@ async def create_ab_test(
     traffic_split: float = 0.20,
     control_model: str = "advanced_oos",
     name: str | None = None,
+    _user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
     """
     Start a new A/B test comparing challenger_model against control_model.
@@ -1994,6 +1999,7 @@ async def record_ab_result(
     test_id: str,
     arm: str,
     correct: bool,
+    _user: TokenPayload = Depends(require_role("admin")),
 ) -> dict:
     """Record whether the ``arm`` prediction was correct."""
     from ml.ab_testing import get_ab_test_manager
@@ -2008,7 +2014,9 @@ async def record_ab_result(
     summary="Stop an A/B test",
     tags=["ML Models"],
 )
-async def stop_ab_test(test_id: str, winner: str | None = None) -> dict:
+async def stop_ab_test(
+    test_id: str, winner: str | None = None, _user: TokenPayload = Depends(require_role("admin"))
+) -> dict:
     """Stop a running A/B test and optionally declare a winner."""
     from ml.ab_testing import get_ab_test_manager
 
@@ -2037,7 +2045,7 @@ async def list_training_jobs() -> dict:
     tags=["ML Models"],
     status_code=202,
 )
-async def start_training_job(model: str) -> dict:
+async def start_training_job(model: str, _user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """
     Dispatch a background training job for the named model.
 
@@ -2055,7 +2063,7 @@ async def start_training_job(model: str) -> dict:
     summary="Cancel a running training job",
     tags=["ML Models"],
 )
-async def cancel_training_job(job_id: str) -> dict:
+async def cancel_training_job(job_id: str, _user: TokenPayload = Depends(require_role("admin"))) -> dict:
     """Cancel a background training job by ID."""
     from ml.training_manager import get_training_manager
 

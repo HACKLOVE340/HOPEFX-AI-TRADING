@@ -243,7 +243,6 @@ def _score_technical_consensus(
         bb = BollingerBands(c, 20)
         bb_pct = float(bb.bollinger_pband().iloc[-1])
         stoch = float(StochasticOscillator(h, l, c).stoch().iloc[-1])
-        float(c.iloc[-1])
         mom5 = float((c.iloc[-1] - c.iloc[-6]) / (c.iloc[-6] + 1e-9)) if len(c) >= 6 else 0.0
 
         is_long = direction.upper() in ("BUY", "LONG")

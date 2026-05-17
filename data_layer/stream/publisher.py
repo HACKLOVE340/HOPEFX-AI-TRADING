@@ -183,7 +183,7 @@ class TickPublisher:
         """
         fields: dict[str, str] = {"symbol": symbol}
         for k, v in tick.items():
-            if isinstance(v, (dict, list)):
+            if isinstance(v, dict | list):
                 fields[k] = json.dumps(v)
             elif v is None:
                 fields[k] = ""

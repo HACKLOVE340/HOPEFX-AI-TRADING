@@ -508,7 +508,8 @@ class HOPEFXBrain:
 
         if self._strategy_manager is not None:
             try:
-                available = set(getattr(self._strategy_manager, "list_strategies", list)())
+                _list_fn = getattr(self._strategy_manager, "list_strategies", lambda: [])
+                available = set(_list_fn())
                 for name in candidates:
                     if name in available:
                         return name

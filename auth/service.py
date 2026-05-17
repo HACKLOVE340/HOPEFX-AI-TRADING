@@ -161,8 +161,8 @@ def _get_secret() -> str:
 
     Delegates to ``auth.jwt._get_secret()`` — the single source of truth for
     env-var fallback order (SECURITY_JWT_SECRET → JWT_SECRET_KEY) and
-    validation (length, CHANGE_ME guard).  Previously this function only read
-    SECURITY_JWT_SECRET with no fallback, diverging from auth/jwt.py.
+    validation (length and placeholder guard).  Previously this function only
+    read SECURITY_JWT_SECRET with no fallback, diverging from auth/jwt.py.
     """
     from auth.jwt import _get_secret as _jwt_get_secret
 
@@ -443,18 +443,29 @@ class AuthService:
             _FAILURES_KEY = f"hopefx:auth:failures:{user.id}"
             _LOCKOUT_TTL_SECS = LOCKOUT_MINUTES * 60
             _redis_locked = False
+            # _rc is only set when a live, ping-verified Redis connection exists.
+            # from_url() is lazy — it does not connect until the first command,
+            # so we must call ping() to confirm reachability before trusting _rc.
             _rc = None
             try:
                 import redis as _redis_sync
 
-                _rc = _redis_sync.from_url(
+                _rc_candidate = _redis_sync.from_url(
                     os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                     decode_responses=True,
+                    socket_connect_timeout=1,
                     socket_timeout=1,
                 )
+                _rc_candidate.ping()  # raises if Redis is unreachable
+                _rc = _rc_candidate
                 _redis_locked = bool(_rc.exists(_LOCKOUT_KEY))
-            except Exception:  # nosec B110
-                pass  # Redis unavailable — fall through to DB check
+            except Exception as _redis_exc:
+                logger.warning(
+                    "auth: Redis unavailable for lockout check (user=%s) — falling back to DB: %s",
+                    user.id,
+                    _redis_exc,
+                )
+                _rc = None  # ensure _rc is None so mirror guards below are correct
 
             if _redis_locked:
                 _record(False, "account_locked")
@@ -482,8 +493,17 @@ class AuthService:
                         _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
                         # Reset the failures counter — lockout key is now authoritative.
                         _rc.delete(_FAILURES_KEY)
-                    except Exception:  # nosec B110
-                        pass
+                        logger.info(
+                            "auth: lockout mirrored to Redis for user=%s (TTL=%ds)",
+                            user.id,
+                            _LOCKOUT_TTL_SECS,
+                        )
+                    except Exception as _mirror_exc:
+                        logger.warning(
+                            "auth: failed to mirror lockout to Redis for user=%s: %s",
+                            user.id,
+                            _mirror_exc,
+                        )
                 _record(False, "account_locked")
                 return (
                     False,
@@ -500,13 +520,29 @@ class AuthService:
                         # Set/refresh TTL on the failures counter so it expires
                         # after the lockout window even if no further attempts occur.
                         pipe.expire(_FAILURES_KEY, _LOCKOUT_TTL_SECS)
-                        results = pipe.execute()
+                        pipe_results = pipe.execute()
+                        new_count = pipe_results[0] if pipe_results else 0
+                        logger.info(
+                            "auth: failure mirrored to Redis for user=%s (count=%d/%d)",
+                            user.id,
+                            new_count,
+                            MAX_LOGIN_ATTEMPTS,
+                        )
                         # If the counter just reached the threshold, set the lockout key.
-                        if results and results[0] >= MAX_LOGIN_ATTEMPTS:
+                        if new_count >= MAX_LOGIN_ATTEMPTS:
                             _rc.setex(_LOCKOUT_KEY, _LOCKOUT_TTL_SECS, "1")
                             _rc.delete(_FAILURES_KEY)
-                    except Exception:  # nosec B110
-                        pass
+                            logger.warning(
+                                "auth: Redis lockout key set for user=%s after %d failures",
+                                user.id,
+                                new_count,
+                            )
+                    except Exception as _mirror_exc:
+                        logger.warning(
+                            "auth: failed to mirror failure count to Redis for user=%s: %s",
+                            user.id,
+                            _mirror_exc,
+                        )
                 _record(False, "wrong_password")
                 return False, "Invalid credentials", None
 
@@ -542,23 +578,32 @@ class AuthService:
             _record(True)
 
             # Clear Redis lockout and failures keys on successful login.
-            # _rc may already be set from the lockout check above; if not,
-            # create a fresh connection.
+            # _rc is already ping-verified from the lockout check above.
+            # If it was None (Redis was down at login time), attempt a fresh
+            # verified connection so a recovered Redis gets cleaned up.
             try:
-                if _rc is None:
+                _clear_rc = _rc
+                if _clear_rc is None:
                     import redis as _redis_sync
 
-                    _rc = _redis_sync.from_url(
+                    _clear_rc = _redis_sync.from_url(
                         os.getenv("REDIS_URL", "redis://localhost:6379/0"),
                         decode_responses=True,
+                        socket_connect_timeout=1,
                         socket_timeout=1,
                     )
-                _rc.delete(
+                    _clear_rc.ping()  # validate before use
+                _clear_rc.delete(
                     f"hopefx:auth:lockout:{user.id}",
                     f"hopefx:auth:failures:{user.id}",
                 )
-            except Exception:  # nosec B110
-                pass
+                logger.info("auth: Redis lockout/failures keys cleared for user=%s", user.id)
+            except Exception as _clear_exc:
+                logger.warning(
+                    "auth: could not clear Redis lockout keys for user=%s (non-fatal): %s",
+                    user.id,
+                    _clear_exc,
+                )
 
             return (
                 True,
@@ -587,9 +632,15 @@ class AuthService:
         self,
         raw_refresh_token: str,
         ip_address: str = "unknown",
+        old_access_token: str | None = None,
     ) -> tuple[bool, str, dict | None]:
         """
-        Rotate refresh token. Old token is revoked, new pair issued.
+        Rotate refresh token. Old refresh session is revoked, new pair issued.
+
+        ``old_access_token`` — the caller's current access token (from the
+        Authorization header).  When supplied, it is immediately blacklisted so
+        it cannot be reused after the rotation.  Without this, a stolen access
+        token would remain valid for its full TTL even after the owner refreshed.
         """
         from database.user_models import User, UserSession
 
@@ -629,16 +680,35 @@ class AuthService:
             )
             session.commit()
 
-            return (
-                True,
-                "Token refreshed",
-                {
-                    "access_token": access_token,
-                    "refresh_token": raw_new,
-                    "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
-                    "expires_in": _access_token_expire_minutes() * 60,
-                },
-            )
+        # Blacklist the old access token *after* the DB transaction commits so
+        # the new session is durable before we invalidate the old credential.
+        # This is the same pattern used by logout().
+        if old_access_token:
+            try:
+                payload = jwt.decode(
+                    old_access_token,
+                    _get_secret(),
+                    algorithms=[ALGORITHM],
+                )
+                jti = payload.get("jti")
+                exp = payload.get("exp", 0)
+                if jti:
+                    ttl = max(0, exp - int(_now().timestamp()))
+                    revoke_access_token(jti, ttl + 60)  # +60s buffer
+            except Exception as _exc:
+                # Expired or invalid — already unusable, no need to blacklist.
+                logger.debug("refresh: old access token not blacklisted: %s", _exc)
+
+        return (
+            True,
+            "Token refreshed",
+            {
+                "access_token": access_token,
+                "refresh_token": raw_new,
+                "token_type": "bearer",  # nosec B105 - OAuth2 token_type value, not a credential
+                "expires_in": _access_token_expire_minutes() * 60,
+            },
+        )
 
     # ── Logout ────────────────────────────────────────────────────────────────
 
