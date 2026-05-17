@@ -17,6 +17,29 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def flush_sharpe_cb_redis():
+    """Flush persisted Sharpe circuit-breaker state from Redis before each test.
+
+    SharpeCircuitBreaker.__init__ calls _restore_all() which loads persisted
+    state from Redis. Without this flush, state left by other test modules
+    causes fresh instances to be non-empty.
+    """
+    import ml.sharpe_circuit_breaker as scb
+    scb._sharpe_cb = None  # also reset the module-level singleton
+    try:
+        import os
+        import redis as _redis_lib
+        url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        r = _redis_lib.from_url(url, socket_connect_timeout=1)
+        keys = r.keys("sharpe_cb:state:*")
+        if keys:
+            r.delete(*keys)
+    except Exception:
+        pass
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 

@@ -20,6 +20,26 @@ import pytest
 from brokers.base import OrderSide, OrderType
 from brokers.paper_trading import PaperTradingBroker
 
+
+@pytest.fixture(autouse=True)
+def flush_broker_redis_state():
+    """Flush persisted broker positions/orders from Redis before each test.
+
+    Prevents stale state written by other test modules from leaking into
+    fresh PaperTradingBroker instances via _restore_state_from_redis().
+    """
+    try:
+        import redis as _redis_lib
+        import os
+        url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+        r = _redis_lib.from_url(url, socket_connect_timeout=1)
+        for pattern in ("hopefx:positions:*", "hopefx:orders:*"):
+            keys = r.keys(pattern)
+            if keys:
+                r.delete(*keys)
+    except Exception:
+        pass  # Redis unavailable — no state to flush
+
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 

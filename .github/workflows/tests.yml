@@ -442,6 +442,7 @@ jobs:
       - name: Run dead file detection gate
         run: |
           pytest tests/test_dead_file_detection.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
