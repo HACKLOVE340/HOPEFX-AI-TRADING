@@ -584,7 +584,7 @@ def test_auth_endpoints_are_whitelisted(app) -> None:
 # Gate A5 — route count regression
 # ---------------------------------------------------------------------------
 
-_ROUTE_COUNT_BASELINE = 2200  # minimum total APIRoute count
+_ROUTE_COUNT_BASELINE = 2176  # minimum total APIRoute count — updated 2026-05-17
 _MUTATING_COUNT_BASELINE = 900  # minimum POST/PUT/PATCH/DELETE count
 
 

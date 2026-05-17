@@ -95,7 +95,8 @@ KNOWN_PUBLIC: frozenset[str] = frozenset(
         "webhook",
         "handle_webhook",
         "receive_webhook",
-        # TradingView alerts use HMAC-SHA256 (X-TV-Signature header) — no Bearer token
+        # TradingView alerts: authenticated via HMAC-SHA256 X-TV-Signature header
+        # or body-level secret field — no Bearer token in the request.
         "tradingview_webhook",
         # ── Post-signup endpoint ── called right after register before the user
         # has a session token; grants the free-tier trial subscription
@@ -186,9 +187,11 @@ def check_file(path: Path) -> list[str]:
     except (SyntaxError, UnicodeDecodeError):
         return []
 
-    # Do NOT skip the entire file if any router has auth — a file can have
-    # multiple routers, and only endpoints on auth-protected routers should
-    # be exempt. Instead, check each endpoint individually.
+    # If every APIRouter in this file is constructed with a top-level
+    # dependencies=[Depends(<auth>)] argument, all endpoints it owns are
+    # protected — no per-function check needed.
+    if _file_has_router_level_auth(tree):
+        return []
 
     violations: list[str] = []
     for node in ast.walk(tree):

@@ -40,8 +40,7 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _create_index_if_missing(index_name, table_name, *args, **kwargs):
-        if table_name not in existing_tables:
-            return  # table was just created above — index was created with it
+        # Re-inspect after any table creation so newly created tables are included.
         existing_indexes = {idx["name"] for idx in inspector.get_indexes(table_name)}
         if index_name not in existing_indexes:
             op.create_index(index_name, table_name, *args, **kwargs)
