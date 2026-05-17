@@ -247,7 +247,7 @@ class MarketDataCache:
         self,
         host: str | None = None,
         port: int | None = None,
-        db: int = 0,
+        db: int | None = None,
         password: str | None = None,
         socket_timeout: float = 1,
         socket_connect_timeout: float = 1,
@@ -259,17 +259,18 @@ class MarketDataCache:
         # Resolve connection parameters: explicit args > REDIS_URL env > defaults.
         # This ensures the cache honours the same REDIS_URL used by the rest of
         # the system rather than always connecting to localhost:6379.
+        # db=None means "not specified by caller" — use REDIS_URL db or fall back to 0.
         _url = os.environ.get("REDIS_URL", "").strip()
         if _url and (host is None or host == "localhost"):
             _parsed = _parse_redis_url(_url)
             host = host if host not in (None, "localhost") else _parsed["host"]
             port = port if port is not None else _parsed["port"]
-            db = db if db != 0 else _parsed["db"]
+            db = db if db is not None else _parsed["db"]
             password = password if password is not None else _parsed["password"]
 
         self.host = host or "localhost"
         self.port = port or 6379
-        self.db = db
+        self.db = db if db is not None else 0
         self.password = password or os.environ.get("REDIS_PASSWORD") or None
         self.socket_timeout = socket_timeout
         self.socket_connect_timeout = socket_connect_timeout
