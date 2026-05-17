@@ -89,6 +89,7 @@ jobs:
         STRATEGY_MIN_BARS: "100"
         STRATEGY_TICKS_PER_BAR: "10"
         FIX_CONFIG_FILE: fix.cfg
+        SHARPE_CB_RESTORE: "false"
       run: |
         pytest tests/ \
           -m "not slow" \
@@ -399,6 +400,7 @@ jobs:
       - name: Run model accuracy gate
         run: |
           pytest tests/test_model_accuracy_assertion.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
@@ -455,6 +457,7 @@ jobs:
       - name: Run dead file detection gate
         run: |
           pytest tests/test_dead_file_detection.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \

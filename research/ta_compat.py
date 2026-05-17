@@ -381,16 +381,10 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     # rows; instead the denominator is always at least 2e-12 which is negligible
     # relative to real ATR values (typically >> 0.01 for any traded instrument).
     atr_safe = atr.fillna(1e-12)
-    pdi = (
-        100
-        * plus_dm.ewm(com=period - 1, min_periods=period).mean()
-        / (atr_safe + 1e-12)
-    )
-    mdi = (
-        100
-        * minus_dm.ewm(com=period - 1, min_periods=period).mean()
-        / (atr_safe + 1e-12)
-    )
+    plus_dm_ewm = plus_dm.ewm(com=period - 1, min_periods=period).mean().fillna(0.0)
+    minus_dm_ewm = minus_dm.ewm(com=period - 1, min_periods=period).mean().fillna(0.0)
+    pdi = 100 * plus_dm_ewm / (atr_safe + 1e-12)
+    mdi = 100 * minus_dm_ewm / (atr_safe + 1e-12)
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-12)
     return (
         dx.ewm(com=period - 1, min_periods=period)

@@ -36,7 +36,7 @@ from typing import Any
 
 UTC = timezone.utc
 
-from core.event_bus import CH_BREACH, CH_ORDER, bus
+from core.event_bus import CH_BREACH, CH_ORDER, _local_bus, bus
 from execution.fix_adapter import (
     FIXAdapter,
     FIXExecType,
@@ -527,6 +527,11 @@ class FIXRouter:
             fill.get("units", 0),
             fill.get("source"),
         )
+
+        # Always deliver to in-process subscribers immediately (tests/local).
+        await _local_bus.publish_local(CH_ORDER, fill)
+
+        # Keep Redis-backed distribution for cross-process consumers.
         await bus.publish_order(fill)
 
     # ── fill logger ───────────────────────────────────────────────────────────
