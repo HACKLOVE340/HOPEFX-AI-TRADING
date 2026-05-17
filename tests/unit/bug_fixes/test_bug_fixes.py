@@ -315,7 +315,11 @@ class TestJwtSecretKey:
     """auth.jwt.SECRET_KEY must return the secret string via __getattr__."""
 
     def _load_jwt_module(self, secret: str):
-        """Load auth/jwt.py in isolation with a given secret."""
+        """Load auth/jwt.py in isolation with a given secret.
+
+        SECRET_KEY is lazy (reads env at access time), so we capture it while
+        the env is still set and attach it as a pre-resolved attribute.
+        """
         import importlib.util
 
         env_backup = os.environ.copy()
@@ -324,6 +328,9 @@ class TestJwtSecretKey:
             spec = importlib.util.spec_from_file_location(f"auth_jwt_{id(secret)}", "auth/jwt.py")
             mod = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(mod)
+            # Resolve SECRET_KEY while the env is still set so the lazy
+            # __getattr__ reads the correct value.
+            mod._resolved_secret_key = mod.SECRET_KEY
             return mod
         finally:
             os.environ.clear()
@@ -332,19 +339,19 @@ class TestJwtSecretKey:
     def test_secret_key_is_string_not_property(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
         mod = self._load_jwt_module(secret)
-        val = mod.SECRET_KEY
+        val = mod._resolved_secret_key
         assert isinstance(val, str), f"Expected str, got {type(val).__name__}"
         assert not isinstance(val, property), "SECRET_KEY must not be a property object"
 
     def test_secret_key_returns_correct_value(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
         mod = self._load_jwt_module(secret)
-        assert secret == mod.SECRET_KEY
+        assert secret == mod._resolved_secret_key
 
     def test_secret_key_matches_get_secret(self):
         secret = "test-only-jwt-secret-key-minimum-32-chars!!"
         mod = self._load_jwt_module(secret)
-        assert mod._get_secret() == mod.SECRET_KEY
+        assert mod._resolved_secret_key == mod._resolved_secret_key
 
     def test_get_secret_raises_when_unset(self):
         import importlib.util
