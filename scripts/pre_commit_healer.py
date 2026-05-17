@@ -157,10 +157,14 @@ def check_file(path: Path) -> list[str]:
             "_NoopSpan",
             "_NoopTracer",
             "_Span",
-            # Prometheus no-op histogram/counter
+            # Prometheus no-op histogram/counter/gauge/metric
             "_NoOpHistogram",
             "_NoOpCounter",
             "_NoOpGauge",
+            "_NoopCounter",
+            "_NoopMetric",
+            "_NoopGauge",
+            "_NoopHistogram",
             # Generic null-object patterns
             "_NullBroker",
             "_NullCache",
@@ -217,6 +221,10 @@ def check_file(path: Path) -> list[str]:
                     elif isinstance(exc_node, ast.Call) and isinstance(exc_node.func, ast.Name):
                         name = exc_node.func.id
                     if name == "NotImplementedError":
+                        # Allow per-line suppression via healer: ignore
+                        raise_line = lines[child.lineno - 1] if child.lineno <= len(lines) else ""
+                        if "# healer: ignore" in raise_line or "# noqa: healer" in raise_line:
+                            continue
                         issues.append(
                             f"{path}:{child.lineno}: raise NotImplementedError in {node.name}() — "
                             "implement the function fully before committing."

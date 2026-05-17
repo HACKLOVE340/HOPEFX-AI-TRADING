@@ -465,7 +465,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._macro_bridge.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: MacroStoreBridge started")
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: MacroStoreBridge timed out after %.0fs "
                 "— macro features degraded (FRED unreachable, neutral series injected)",
@@ -478,7 +478,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._cot_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: CFTCCOTFeed started")
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: CFTCCOTFeed timed out after %.0fs "
                 "— COT features zero-filled (CFTC unreachable)",
@@ -491,7 +491,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._imf_feed.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: IMFGoldFeed started")
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: IMFGoldFeed timed out after %.0fs "
                 "— IMF features zero-filled (dataservices.imf.org unreachable)",
@@ -504,7 +504,7 @@ class MarketDataOrchestrator:
         try:
             await asyncio.wait_for(self._yahoo_macro.start(), timeout=_FEED_TIMEOUT)
             logger.info("MarketDataOrchestrator: YahooMacroFeed started")
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             logger.info(
                 "MarketDataOrchestrator: YahooMacroFeed timed out after %.0fs "
                 "— Yahoo macro features zero-filled (Yahoo Finance unreachable)",

@@ -39,6 +39,7 @@ class _StaticPriceFeed(PriceFeedBase):
         super().__init__(symbols=[symbol], config={})
         mid = (bid + ask) / 2.0
         import time
+
         tick = Tick(
             symbol=symbol,
             timestamp=time.time(),

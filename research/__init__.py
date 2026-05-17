@@ -594,7 +594,9 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         content: str = ""
 
     @router.get("/notebooks")
-    async def list_notebooks(query: str | None = None, author: str | None = None, user: TokenPayload = Depends(require_role("trader"))):
+    async def list_notebooks(
+        query: str | None = None, author: str | None = None, user: TokenPayload = Depends(require_role("trader"))
+    ):
         """List all research notebooks (excluding templates)."""
         notebooks = engine.search_notebooks(query=query, author=author)
         # Enrich with status field expected by the frontend
@@ -776,7 +778,9 @@ def create_research_router(engine: "ResearchNotebookEngine"):
         return {"templates": engine.get_templates()}
 
     @router.post("/notebooks/from-template/{template_id}")
-    async def create_from_template(template_id: str, req: CreateNotebookRequest, user: TokenPayload = Depends(require_role("trader"))):
+    async def create_from_template(
+        template_id: str, req: CreateNotebookRequest, user: TokenPayload = Depends(require_role("trader"))
+    ):
         """Create a notebook from a template."""
         nb = engine.create_from_template(template_id, req.title, req.author)
         if nb is None:

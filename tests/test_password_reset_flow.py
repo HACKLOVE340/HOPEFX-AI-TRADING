@@ -291,6 +291,7 @@ class TestPasswordResetRouter:
         self._mock_svc.reset_password.return_value = (True, "Password reset successfully.")
         # Build a properly signed token so the router's signature check passes.
         from auth.router import _make_signed_token, _SALT_PASSWORD_RESET, _PASSWORD_RESET_TTL
+
         signed = _make_signed_token(
             {"tok": "rawtoken123", "email": "user@example.com"},
             salt=_SALT_PASSWORD_RESET,

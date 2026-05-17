@@ -153,7 +153,9 @@ class EMAIndicator:
         if _TALIB_OK:
             arr = _talib.EMA(_to_np(self._close), timeperiod=self._window)
         else:
-            arr = self._close.ewm(span=self._window, adjust=False).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour; callers use _wrap
+            arr = (
+                self._close.ewm(span=self._window, adjust=False).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour; callers use _wrap
+            )
         return _wrap(arr, self._close.index)
 
 
@@ -294,8 +296,12 @@ def _rsi_numpy(close: pd.Series, period: int) -> np.ndarray:
     delta = close.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.ewm(com=period - 1, min_periods=period).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    avg_loss = loss.ewm(com=period - 1, min_periods=period).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    avg_gain = gain.ewm(
+        com=period - 1, min_periods=period
+    ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    avg_loss = loss.ewm(
+        com=period - 1, min_periods=period
+    ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     rs = avg_gain / (avg_loss + 1e-12)
     return (100.0 - 100.0 / (1.0 + rs)).values
 
@@ -313,8 +319,12 @@ def _stoch_signal_numpy(high, low, close, k_period=14, d_period=3) -> np.ndarray
 
 
 def _macd_numpy(close, fast=12, slow=26, signal=9):
-    ema_fast = close.ewm(span=fast, adjust=False).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    ema_slow = close.ewm(span=slow, adjust=False).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    ema_fast = close.ewm(
+        span=fast, adjust=False
+    ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    ema_slow = close.ewm(
+        span=slow, adjust=False
+    ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     macd = ema_fast - ema_slow
     sig = macd.ewm(span=signal, adjust=False).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     hist = macd - sig
@@ -338,7 +348,9 @@ def _atr_numpy(high, low, close, period=14) -> np.ndarray:
         ],
         axis=1,
     ).max(axis=1)
-    return tr.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    return (
+        tr.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    )
 
 
 def _adx_numpy(high, low, close, period=14) -> np.ndarray:
@@ -356,11 +368,19 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     plus_dm[mask] = 0.0
     mask2 = minus_dm < plus_dm
     minus_dm[mask2] = 0.0
-    atr = tr.ewm(com=period - 1, min_periods=period).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    pdi = 100 * plus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    mdi = 100 * minus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    atr = tr.ewm(
+        com=period - 1, min_periods=period
+    ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    pdi = (
+        100 * plus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    )
+    mdi = (
+        100 * minus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    )
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-12)
-    return dx.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    return (
+        dx.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
+    )
 
 
 # ── Module assembly ───────────────────────────────────────────────────────────

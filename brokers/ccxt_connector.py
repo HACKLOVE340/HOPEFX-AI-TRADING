@@ -167,7 +167,11 @@ class CCXTConnector(BrokerConnector):
         except Exception as exc:
             logger.error(
                 "CCXTConnector.place_order failed: symbol=%s side=%s qty=%s price=%s: %s",
-                symbol, ccxt_side, quantity, price, exc,
+                symbol,
+                ccxt_side,
+                quantity,
+                price,
+                exc,
             )
             raise
         return self._parse_order(raw)

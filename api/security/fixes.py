@@ -44,7 +44,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from api.auth import require_role
 
-from api.auth import TokenPayload, require_role
+from api.auth import TokenPayload
 
 logger = logging.getLogger(__name__)
 

@@ -16,6 +16,7 @@ from pathlib import Path
 
 try:
     import yaml  # PyYAML
+
     _HAVE_YAML = True
 except ImportError:
     _HAVE_YAML = False
@@ -50,10 +51,7 @@ def _check_yaml(content: str) -> list[str]:
         if pt and ":-" in pt:
             default = re.search(r"\$\{[^}]+:-([^}]*)\}", pt)
             if default and default.group(1).lower() not in ("true", "1"):
-                failures.append(
-                    f"services.{svc_name}: PAPER_TRADING default is "
-                    f"'{default.group(1)}', must be 'true'"
-                )
+                failures.append(f"services.{svc_name}: PAPER_TRADING default is '{default.group(1)}', must be 'true'")
 
         # Check IS_FORCE_TLS default
         tls = env.get("IS_FORCE_TLS", "")
@@ -71,19 +69,17 @@ def _check_yaml(content: str) -> list[str]:
             default = re.search(r"\$\{[^}]+:-([^}]*)\}", rtls)
             if default and default.group(1).lower() not in ("false", "0", ""):
                 failures.append(
-                    f"services.{svc_name}: REDIS_FORCE_TLS default is "
-                    f"'{default.group(1)}', must be 'false'"
+                    f"services.{svc_name}: REDIS_FORCE_TLS default is '{default.group(1)}', must be 'false'"
                 )
 
     # Alertmanager must use build: not image: (so envsubst entrypoint runs)
     alertmanager = services.get("alertmanager", {})
-    if alertmanager:
-        if "image" in alertmanager and "build" not in alertmanager:
-            failures.append(
-                "services.alertmanager: uses image: without build: — "
-                "env vars in alertmanager.yml.tmpl won't be substituted. "
-                "Use build: ./monitoring/alertmanager with the envsubst entrypoint."
-            )
+    if alertmanager and "image" in alertmanager and "build" not in alertmanager:
+        failures.append(
+            "services.alertmanager: uses image: without build: — "
+            "env vars in alertmanager.yml.tmpl won't be substituted. "
+            "Use build: ./monitoring/alertmanager with the envsubst entrypoint."
+        )
 
     return failures
 
@@ -104,8 +100,7 @@ def _check_regex(content: str) -> list[str]:
         if m.group(1).lower() not in ("false", "0", ""):
             failures.append(f"REDIS_FORCE_TLS default is '{m.group(1)}', must be 'false'")
 
-    if re.search(r"alertmanager:\s*\n\s+image:", content) and \
-            not re.search(r"alertmanager:\s*\n\s+build:", content):
+    if re.search(r"alertmanager:\s*\n\s+image:", content) and not re.search(r"alertmanager:\s*\n\s+build:", content):
         failures.append("alertmanager uses image: without build: — envsubst won't run")
 
     return failures
@@ -118,10 +113,7 @@ def main() -> int:
 
     content = DOCKER_COMPOSE.read_text(encoding="utf-8")
 
-    if _HAVE_YAML:
-        failures = _check_yaml(content)
-    else:
-        failures = _check_regex(content)
+    failures = _check_yaml(content) if _HAVE_YAML else _check_regex(content)
 
     if failures:
         print(f"Gate C FAILED — {len(failures)} structural issue(s) in docker-compose.yml:")

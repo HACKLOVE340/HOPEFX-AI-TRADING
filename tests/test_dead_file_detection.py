@@ -104,50 +104,43 @@ ROOT_FILE_COUNT_CEILING: int = 30  # established 2026-05-15; 30 files at gate in
 ROOT_KNOWN_FILES: frozenset[str] = frozenset(
     {
         # ── Package / project infrastructure ──────────────────────────────────
-        "__init__.py",          # makes the root a namespace package
-        "setup.py",             # legacy setuptools entry point (pyproject.toml preferred)
-        "conftest.py",          # pytest root conftest — must be at root for test discovery
-        "validation.py",        # pydantic/marshmallow schema validation helpers (shared)
-
+        "__init__.py",  # makes the root a namespace package
+        "setup.py",  # legacy setuptools entry point (pyproject.toml preferred)
+        "conftest.py",  # pytest root conftest — must be at root for test discovery
+        "validation.py",  # pydantic/marshmallow schema validation helpers (shared)
         # ── Application entry points ───────────────────────────────────────────
-        "app.py",               # FastAPI application factory — imported by uvicorn
-        "run.py",               # CLI entry point: python run.py
-        "cli.py",               # Click CLI: hopefx <command>
-        "quickstart.py",        # Interactive quickstart wizard for new operators
-        "celery_app.py",        # Celery application instance — imported by workers
-
+        "app.py",  # FastAPI application factory — imported by uvicorn
+        "run.py",  # CLI entry point: python run.py
+        "cli.py",  # Click CLI: hopefx <command>
+        "quickstart.py",  # Interactive quickstart wizard for new operators
+        "celery_app.py",  # Celery application instance — imported by workers
         # ── Trading engine entry points ────────────────────────────────────────
-        "hopefx_engine.py",     # Legacy engine entry point (superseded by core/main_loop.py)
-        "trader_full.py",       # Full trader bootstrap (used by docker CMD)
-        "kill_switch.py",       # Kill switch singleton — imported by app.py and trading engine
-        "forward_test.py",      # Walk-forward test runner (run manually, not in CI)
-        "real_data_backtest.py",# Real-data backtest runner (run manually)
-
+        "hopefx_engine.py",  # Legacy engine entry point (superseded by core/main_loop.py)
+        "trader_full.py",  # Full trader bootstrap (used by docker CMD)
+        "kill_switch.py",  # Kill switch singleton — imported by app.py and trading engine
+        "forward_test.py",  # Walk-forward test runner (run manually, not in CI)
+        "real_data_backtest.py",  # Real-data backtest runner (run manually)
         # ── ML / model management ─────────────────────────────────────────────
         "ml_model_trainer.py",  # Model training entry point (run by retrain CI job)
         "enhanced_ml_predictor.py",  # Enhanced predictor (used by ml_model_trainer)
         "enhanced_backtest_engine.py",  # Enhanced backtest (used by real_data_backtest)
-
         # ── Infrastructure / deployment ────────────────────────────────────────
-        "deploy.py",            # Deployment automation script
-        "database_init.py",     # One-time DB initialisation (run by entrypoint.sh)
+        "deploy.py",  # Deployment automation script
+        "database_init.py",  # One-time DB initialisation (run by entrypoint.sh)
         "update_artifacts.py",  # CI artifact update script
-
         # ── Monitoring / health ────────────────────────────────────────────────
-        "health_check_service.py",   # Health check service (imported by app.py)
-        "heartbeat_monitor.py",      # Heartbeat monitor (run as sidecar)
+        "health_check_service.py",  # Health check service (imported by app.py)
+        "heartbeat_monitor.py",  # Heartbeat monitor (run as sidecar)
         "prometheus_monitoring.py",  # Prometheus metrics exporter
-
         # ── Integrations ──────────────────────────────────────────────────────
-        "connect_to_life.py",        # Live data connection bootstrap
-        "news_filter_integration.py",# News filter integration (wired into data pipeline)
+        "connect_to_life.py",  # Live data connection bootstrap
+        "news_filter_integration.py",  # News filter integration (wired into data pipeline)
         "rate_limiting_configuration.py",  # Rate limiting config (imported by app.py)
-        "security_service.py",       # Security service (imported by app.py)
-
+        "security_service.py",  # Security service (imported by app.py)
         # ── Documentation / tooling ───────────────────────────────────────────
         "api_documentation_generator.py",  # Generates OpenAPI docs
-        "comprehensive_test_framework.py", # Test framework utilities
-        "deployment_guide.py",             # Interactive deployment guide
+        "comprehensive_test_framework.py",  # Test framework utilities
+        "deployment_guide.py",  # Interactive deployment guide
     }
 )
 
@@ -163,10 +156,7 @@ def _root_python_files() -> list[Path]:
     not production code, and should not be subject to the dead-file or
     root-count gates.
     """
-    return sorted(
-        f for f in REPO_ROOT.glob("*.py")
-        if not f.name.startswith(".")
-    )
+    return sorted(f for f in REPO_ROOT.glob("*.py") if not f.name.startswith("."))
 
 
 def _scan_root_python_files() -> list[tuple[Path, list[tuple[str, int]]]]:
@@ -249,8 +239,7 @@ def test_exemptions_are_still_present() -> None:
     if stale:
         pytest.fail(
             f"\n{len(stale)} DEAD_FILE_EXEMPTIONS entry/entries refer to files that "
-            "no longer exist.\nRemove them from DEAD_FILE_EXEMPTIONS:\n"
-            + "\n".join(f"  {f}" for f in stale)
+            "no longer exist.\nRemove them from DEAD_FILE_EXEMPTIONS:\n" + "\n".join(f"  {f}" for f in stale)
         )
 
 
@@ -292,8 +281,7 @@ def test_root_python_file_count_has_not_grown() -> None:
         "Move them into the appropriate package directory, or if they genuinely\n"
         "belong at the root, increment ROOT_FILE_COUNT_CEILING in\n"
         "tests/test_dead_file_detection.py with a justification comment.\n\n"
-        "Current root .py files:\n"
-        + "\n".join(f"  {f.name}" for f in py_files)
+        "Current root .py files:\n" + "\n".join(f"  {f.name}" for f in py_files)
     )
 
 
@@ -319,8 +307,7 @@ def test_root_python_files_are_known() -> None:
             "Either move them into a package directory or add them to\n"
             "ROOT_KNOWN_FILES in tests/test_dead_file_detection.py with a\n"
             "justification comment explaining why they belong at the root.\n\n"
-            "Unknown files:\n"
-            + "\n".join(f"  {f}" for f in sorted(unknown))
+            "Unknown files:\n" + "\n".join(f"  {f}" for f in sorted(unknown))
         )
 
     # Also report files in ROOT_KNOWN_FILES that no longer exist (stale entries)
@@ -328,8 +315,7 @@ def test_root_python_files_are_known() -> None:
     if stale:
         print(
             f"\n[INFO] {len(stale)} ROOT_KNOWN_FILES entry/entries no longer exist "
-            "(file was deleted or moved — remove from ROOT_KNOWN_FILES):\n"
-            + "\n".join(f"  {f}" for f in sorted(stale))
+            "(file was deleted or moved — remove from ROOT_KNOWN_FILES):\n" + "\n".join(f"  {f}" for f in sorted(stale))
         )
 
 
@@ -343,8 +329,17 @@ def test_dead_markers_not_in_subdirectory_modules() -> None:
     is printed to the CI log so the team can track and resolve them.
     """
     subdirs = [
-        "api", "core", "execution", "brokers", "data", "data_feed",
-        "ml", "risk", "strategy", "strategies", "utils",
+        "api",
+        "core",
+        "execution",
+        "brokers",
+        "data",
+        "data_feed",
+        "ml",
+        "risk",
+        "strategy",
+        "strategies",
+        "utils",
     ]
 
     found: list[str] = []

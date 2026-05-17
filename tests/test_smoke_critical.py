@@ -17,8 +17,6 @@ Each test:
 from __future__ import annotations
 
 import asyncio
-import pathlib
-import tempfile
 from decimal import Decimal
 from brokers.base import AccountInfo as _AccountInfo
 
@@ -40,6 +38,7 @@ class TestPositionSizer:
 
     def test_atr_size_correct(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="atr", risk_pct=0.01)
         size = ps.calculate_size(self._account(), Decimal("2000"), atr=Decimal("10"))
         # risk=1000, atr=10 -> size=100 (hits max_lots cap)
@@ -48,6 +47,7 @@ class TestPositionSizer:
     def test_atr_size_near_zero_atr_returns_zero(self):
         """ATR below 0.01% of price triggers illiquid-market guard → size=0."""
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="atr", risk_pct=0.01)
         # min_atr = 2000 * 0.0001 = 0.2; pass atr=0.1 which is below the guard
         size = ps.calculate_size(self._account(), Decimal("2000"), atr=Decimal("0.1"))
@@ -55,6 +55,7 @@ class TestPositionSizer:
 
     def test_atr_size_tiny_atr_returns_zero(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="atr", risk_pct=0.01)
         # atr=0.00001 is far below min_atr threshold
         size = ps.calculate_size(self._account(), Decimal("2000"), atr=Decimal("0.00001"))
@@ -62,6 +63,7 @@ class TestPositionSizer:
 
     def test_kelly_positive_edge(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="kelly", risk_pct=0.01, max_lots=200.0)
         size = ps.calculate_size(self._account(), Decimal("2000"), win_rate=0.6, payoff_ratio=2.0)
         # half-kelly=0.2; risk=20000; size=20000/2000=10
@@ -69,12 +71,14 @@ class TestPositionSizer:
 
     def test_kelly_negative_edge_returns_zero(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="kelly", risk_pct=0.01)
         size = ps.calculate_size(self._account(), Decimal("2000"), win_rate=0.3, payoff_ratio=0.5)
         assert size == Decimal("0")
 
     def test_percent_size_correct(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="percent", risk_pct=0.01)
         size = ps.calculate_size(self._account(), Decimal("2000"), stop_distance=Decimal("20"))
         # risk=1000; size=1000/20=50
@@ -83,18 +87,21 @@ class TestPositionSizer:
     def test_percent_negative_stop_returns_zero(self):
         """Negative stop_distance hits the <= 0 guard in _percent_size."""
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="percent", risk_pct=0.01)
         size = ps.calculate_size(self._account(), Decimal("2000"), stop_distance=Decimal("-1"))
         assert size == Decimal("0")
 
     def test_fixed_always_one(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="fixed")
         size = ps.calculate_size(self._account(), Decimal("2000"))
         assert size == Decimal("1")
 
     def test_max_lots_cap_enforced(self):
         from risk.position_sizing import PositionSizer
+
         ps = PositionSizer(method="atr", risk_pct=0.5, max_lots=5.0)
         size = ps.calculate_size(self._account(), Decimal("2000"), atr=Decimal("1"))
         assert size <= Decimal("5")
@@ -106,6 +113,7 @@ class TestPositionSizer:
 class TestDrawdownTracker:
     def _tracker(self, **kw):
         from risk.drawdown_tracker import DrawdownTracker
+
         return DrawdownTracker(initial_balance=100_000.0, max_total_dd_pct=0.10, max_daily_dd_pct=0.05, **kw)
 
     def test_no_breach_small_loss(self):
@@ -130,6 +138,7 @@ class TestDrawdownTracker:
 
     def test_zero_initial_balance_raises(self):
         from risk.drawdown_tracker import DrawdownTracker
+
         with pytest.raises(ValueError):
             DrawdownTracker(initial_balance=0.0)
 
@@ -145,6 +154,7 @@ class TestDrawdownTracker:
 class TestTCARecorder:
     def _rec(self):
         from execution.tca_recorder import TCARecorder
+
         return TCARecorder()
 
     def test_signal_fill_round_trip(self):
@@ -175,7 +185,13 @@ class TestTCARecorder:
         r.record_signal("req4", "XAU_USD", "BUY", 2000.0, 1.0, "v1")
         r.record_fill("req4", 2000.5, 1.0, "oanda", 8.0)
         rpt = r.get_report(broker="oanda")
-        for field in ("mean_slippage_bps", "p95_slippage_bps", "mean_latency_ms", "adverse_fill_rate", "alert_triggered"):
+        for field in (
+            "mean_slippage_bps",
+            "p95_slippage_bps",
+            "mean_latency_ms",
+            "adverse_fill_rate",
+            "alert_triggered",
+        ):
             assert hasattr(rpt, field)
 
     def test_fill_without_signal_ignored(self):
@@ -200,6 +216,7 @@ class TestTCARecorder:
 class TestLeaderboardManager:
     def _mgr(self):
         from social.leaderboards import LeaderboardManager
+
         return LeaderboardManager()
 
     def test_update_and_get(self):
@@ -251,6 +268,7 @@ class TestLeaderboardManager:
 class TestKillSwitchBehavioral:
     def _ks(self, tmp_path):
         from kill_switch import KillSwitch
+
         return KillSwitch(flag_file=tmp_path / "ks.flag", poll_interval_sec=0.05, deactivation_token="secure-tok")
 
     def test_initial_inactive(self, tmp_path):
@@ -315,6 +333,7 @@ class TestKillSwitchBehavioral:
 class TestMacroStore:
     def test_update_and_snapshot(self):
         from ml.macro_store import MacroStore
+
         ms = MacroStore()
         ms.update("dxy", "2026-01-02", 103.5)
         snap = ms.snapshot()
@@ -323,6 +342,7 @@ class TestMacroStore:
 
     def test_snapshot_contains_date(self):
         from ml.macro_store import MacroStore
+
         ms = MacroStore()
         ms.update("us10y", "2026-01-03", 4.25)
         snap = ms.snapshot()
@@ -330,6 +350,7 @@ class TestMacroStore:
 
     def test_update_overwrites_value(self):
         from ml.macro_store import MacroStore
+
         ms = MacroStore()
         ms.update("vix", "2026-01-01", 18.0)
         ms.update("vix", "2026-01-02", 22.5)
@@ -339,6 +360,7 @@ class TestMacroStore:
     def test_align_to_hourly_forward_fills(self):
         import pandas as pd
         from ml.macro_store import MacroStore
+
         ms = MacroStore()
         ms.update("dxy", "2026-01-01", 103.0)
         idx = pd.date_range("2026-01-01 00:00", periods=24, freq="h", tz="UTC")
@@ -350,6 +372,7 @@ class TestMacroStore:
     def test_missing_series_fills_zero(self):
         import pandas as pd
         from ml.macro_store import MacroStore
+
         ms = MacroStore()
         idx = pd.date_range("2026-01-01", periods=5, freq="h", tz="UTC")
         ohlcv = pd.DataFrame({"close": 2000.0}, index=idx)
@@ -359,6 +382,7 @@ class TestMacroStore:
 
     def test_singleton_importable(self):
         from ml.macro_store import MacroStore, macro_store
+
         assert isinstance(macro_store, MacroStore)
 
 
@@ -368,6 +392,7 @@ class TestMacroStore:
 class TestAMLGate:
     def _gate(self):
         from compliance.aml import AMLGate
+
         return AMLGate()
 
     def test_small_approved_allowed(self):
@@ -400,10 +425,12 @@ class TestAMLGate:
 class TestImmutableAuditLog:
     def _log(self, tmp_path):
         from compliance.auditor import ImmutableAuditLog
+
         return ImmutableAuditLog(log_path=str(tmp_path) + "/")
 
     def test_append_returns_record(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         rec = log.append(AuditLevel.COMPLIANCE, "ORDER", "system", "place_order", {"symbol": "XAU_USD"})
         assert rec.sequence_number == 1
@@ -411,6 +438,7 @@ class TestImmutableAuditLog:
 
     def test_sequence_increments(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         r1 = log.append(AuditLevel.INFO, "ORDER", "sys", "a1", {})
         r2 = log.append(AuditLevel.INFO, "ORDER", "sys", "a2", {})
@@ -418,6 +446,7 @@ class TestImmutableAuditLog:
 
     def test_hash_chain_links_records(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         r1 = log.append(AuditLevel.INFO, "ORDER", "sys", "a1", {})
         r2 = log.append(AuditLevel.INFO, "ORDER", "sys", "a2", {})
@@ -426,6 +455,7 @@ class TestImmutableAuditLog:
 
     def test_verify_integrity_passes(self, tmp_path):
         from compliance.auditor import AuditLevel
+
         log = self._log(tmp_path)
         log.append(AuditLevel.COMPLIANCE, "RISK", "sys", "breach", {"dd": 0.11})
         assert log.verify_integrity() is True
@@ -437,10 +467,12 @@ class TestImmutableAuditLog:
 class TestComplianceManager:
     def _cm(self):
         from compliance.compliance_manager import ComplianceManager
+
         return ComplianceManager()
 
     def test_kyc_submit_pending(self):
         from compliance.compliance_manager import KYCStatus
+
         cm = self._cm()
         cm.submit_kyc("u1", "passport")
         assert cm.get_kyc_status("u1") == KYCStatus.PENDING
@@ -453,6 +485,7 @@ class TestComplianceManager:
 
     def test_kyc_reject(self):
         from compliance.compliance_manager import KYCStatus
+
         cm = self._cm()
         cm.submit_kyc("u1", "passport")
         cm.reject_kyc("u1", "fraud")
@@ -476,6 +509,7 @@ class TestComplianceManager:
 class TestAlmgrenChriss:
     def test_estimate_basic(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(order_size=100.0, adv=10_000.0, volatility_daily=0.012, spread_bps=3.0, price=2000.0)
         assert impact.total_impact_bps > 0
@@ -485,18 +519,21 @@ class TestAlmgrenChriss:
 
     def test_buy_fill_price_above_signal(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 10_000.0, 0.012, 3.0, 2000.0)
         assert impact.fill_price("BUY") > 2000.0
 
     def test_sell_fill_price_below_signal(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 10_000.0, 0.012, 3.0, 2000.0)
         assert impact.fill_price("SELL") < 2000.0
 
     def test_zero_adv_spread_only(self):
         from execution.market_impact import AlmgrenChrissModel
+
         model = AlmgrenChrissModel()
         impact = model.estimate(100.0, 0.0, 0.012, 3.0, 2000.0)
         assert impact.temporary_impact_bps == 0.0
@@ -505,22 +542,34 @@ class TestAlmgrenChriss:
 
     def test_fill_simulator_partial_fill(self):
         from execution.market_impact import FillSimulator
+
         sim = FillSimulator()
         fill = sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=1000.0,
-            bar_high=2002.0, bar_low=1998.0, bar_volume=100.0,
-            adv=10_000.0, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=1000.0,
+            bar_high=2002.0,
+            bar_low=1998.0,
+            bar_volume=100.0,
+            adv=10_000.0,
+            volatility_daily=0.012,
         )
         assert fill.partial_fill
         assert fill.fill_quantity < 1000.0
 
     def test_fill_price_clamped_to_bar(self):
         from execution.market_impact import FillSimulator
+
         sim = FillSimulator()
         fill = sim.simulate_fill(
-            signal_price=2000.0, side="BUY", quantity=1.0,
-            bar_high=2001.0, bar_low=1999.0, bar_volume=5000.0,
-            adv=10_000.0, volatility_daily=0.012,
+            signal_price=2000.0,
+            side="BUY",
+            quantity=1.0,
+            bar_high=2001.0,
+            bar_low=1999.0,
+            bar_volume=5000.0,
+            adv=10_000.0,
+            volatility_daily=0.012,
         )
         assert fill.fill_price <= 2001.0
 
@@ -531,42 +580,50 @@ class TestAlmgrenChriss:
 class TestMonteCarloEngine:
     def _pnls(self, n=200):
         import numpy as np
+
         rng = np.random.default_rng(42)
         return list(rng.normal(50, 200, n))
 
     def test_run_returns_result(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         result = MonteCarloEngine(n_paths=100).run(self._pnls())
         assert result.n_paths == 100
         assert result.n_trades == 200
 
     def test_sharpe_ci_ordered(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         result = MonteCarloEngine(n_paths=100).run(self._pnls())
         assert result.sharpe_ci_95[0] <= result.sharpe_ci_95[1]
 
     def test_max_dd_ci_ordered(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         result = MonteCarloEngine(n_paths=100).run(self._pnls())
         assert result.max_dd_ci_95[0] <= result.max_dd_ci_95[1]
 
     def test_ruin_probability_in_range(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         result = MonteCarloEngine(n_paths=200).run(self._pnls())
         assert 0.0 <= result.ruin_probability <= 1.0
 
     def test_empty_pnls_returns_zero_paths(self):
         from analytics.monte_carlo import MonteCarloEngine
+
         result = MonteCarloEngine(n_paths=100).run([])
         assert result.n_paths == 0
 
     def test_run_bootstrap_convenience(self):
         from analytics.monte_carlo import run_bootstrap
+
         result = run_bootstrap(self._pnls(), n_paths=100)
         assert result.n_trades == 200
 
     def test_summary_dict_keys(self):
         from analytics.monte_carlo import run_bootstrap
+
         summary = run_bootstrap(self._pnls(), n_paths=50).summary()
         for key in ("sharpe_ci_95", "max_dd_ci_95", "ruin_probability", "sharpe_se"):
             assert key in summary
@@ -578,6 +635,7 @@ class TestMonteCarloEngine:
 class TestSharpeCircuitBreaker:
     def test_closed_initially(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker()
         assert not cb.is_open("model_v1")
 
@@ -585,6 +643,7 @@ class TestSharpeCircuitBreaker:
     async def test_trips_on_sustained_losses(self):
         """Circuit opens after CONSECUTIVE_WINDOWS bad evaluations."""
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker, CONSECUTIVE_WINDOWS
+
         cb = SharpeCircuitBreaker(redis_client=None)
         # Fill the window with losses then force evaluation CONSECUTIVE_WINDOWS times
         for _ in range(50):
@@ -598,6 +657,7 @@ class TestSharpeCircuitBreaker:
     async def test_stays_closed_on_profits(self):
         """Circuit stays closed when Sharpe is positive."""
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker(redis_client=None)
         for _ in range(50):
             cb.record_trade(pnl=100.0, model_version="good_model")
@@ -607,6 +667,7 @@ class TestSharpeCircuitBreaker:
 
     def test_manual_reset(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker()
         for _ in range(60):
             cb.record_trade(pnl=-100.0, model_version="bad_v3")
@@ -618,6 +679,7 @@ class TestSharpeCircuitBreaker:
 
     def test_get_status_structure(self):
         from ml.sharpe_circuit_breaker import SharpeCircuitBreaker
+
         cb = SharpeCircuitBreaker()
         cb.record_trade(pnl=10.0, model_version="good_v1")
         status = cb.get_status()
@@ -632,14 +694,21 @@ class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_twap_completes(self):
         from execution.algo_orders import TWAPOrder
+
         fills = []
 
         async def submit(**kw):
             fills.append(kw["quantity"])
             return {"success": True, "fill_price": 2000.0, "filled_quantity": kw["quantity"]}
 
-        order = TWAPOrder(symbol="XAU_USD", side="BUY", total_quantity=10.0,
-                          duration_seconds=0.5, num_slices=5, broker_submit_fn=submit)
+        order = TWAPOrder(
+            symbol="XAU_USD",
+            side="BUY",
+            total_quantity=10.0,
+            duration_seconds=0.5,
+            num_slices=5,
+            broker_submit_fn=submit,
+        )
         report = await order.run()
         assert report.filled_quantity == pytest.approx(10.0, abs=0.01)
         assert len(fills) == 5
@@ -647,14 +716,21 @@ class TestAlgoOrders:
     @pytest.mark.asyncio
     async def test_iceberg_completes(self):
         from execution.algo_orders import IcebergOrder
+
         fills = []
 
         async def submit(**kw):
             fills.append(kw["quantity"])
             return {"success": True, "fill_price": 2000.0, "filled_quantity": kw["quantity"]}
 
-        order = IcebergOrder(symbol="XAU_USD", side="SELL", total_quantity=5.0,
-                             peak_size=1.0, refill_delay_seconds=0.01, broker_submit_fn=submit)
+        order = IcebergOrder(
+            symbol="XAU_USD",
+            side="SELL",
+            total_quantity=5.0,
+            peak_size=1.0,
+            refill_delay_seconds=0.01,
+            broker_submit_fn=submit,
+        )
         report = await order.run()
         assert report.filled_quantity == pytest.approx(5.0, abs=0.01)
         assert len(fills) == 5
@@ -665,6 +741,7 @@ class TestAlgoOrders:
 
 def test_macro_store_singleton_importable():
     from ml.macro_store import MacroStore, macro_store
+
     assert isinstance(macro_store, MacroStore)
     macro_store.update("test_series", "2026-01-02", 1.0)
     snap = macro_store.snapshot()
@@ -677,13 +754,8 @@ def test_macro_store_singleton_importable():
 def test_aml_gate_velocity_check():
     """Multiple rapid withdrawals should trigger velocity flag."""
     from compliance.aml import AMLGate
-    from datetime import datetime, timezone
+
     gate = AMLGate()
-    # Simulate 6 withdrawals in history (above MAX_WITHDRAWALS_PER_DAY=5)
-    history = [
-        {"amount": 500, "timestamp": datetime.now(timezone.utc).isoformat()}
-        for _ in range(6)
-    ]
     # The gate checks DB history; without DB it falls back to allow.
     # Verify the gate at least returns a valid AMLDecision.
     result = gate.check_withdrawal("u_velocity", Decimal("500"), kyc_status="approved")
@@ -697,6 +769,7 @@ def test_aml_gate_velocity_check():
 
 def test_drawdown_tracker_record_fill():
     from risk.drawdown_tracker import DrawdownTracker
+
     dt = DrawdownTracker(initial_balance=100_000.0)
     dt.record_fill(pnl=-500.0)
     # After recording a fill, update should reflect the loss
@@ -710,6 +783,7 @@ def test_drawdown_tracker_record_fill():
 def test_position_sizer_small_equity_produces_small_size():
     """Tiny equity produces a proportionally tiny position size."""
     from risk.position_sizing import PositionSizer
+
     ps = PositionSizer(method="atr", risk_pct=0.01, max_lots=200.0)
     acct = _AccountInfo(
         balance=1000.0,
@@ -728,6 +802,7 @@ def test_position_sizer_small_equity_produces_small_size():
 
 def test_tca_recorder_aggregates_multiple_fills():
     from execution.tca_recorder import TCARecorder
+
     r = TCARecorder()
     for i in range(5):
         r.record_signal(f"req{i}", "XAU_USD", "BUY", 2000.0, 1.0, "v1")
@@ -743,6 +818,7 @@ def test_tca_recorder_aggregates_multiple_fills():
 @pytest.mark.asyncio
 async def test_kill_switch_async_poll_detects_flag(tmp_path):
     from kill_switch import KillSwitch
+
     ks = KillSwitch(flag_file=tmp_path / "ks.flag", poll_interval_sec=0.05)
     await ks.start()
     flag = tmp_path / "ks.flag"

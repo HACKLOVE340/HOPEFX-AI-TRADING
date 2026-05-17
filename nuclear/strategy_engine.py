@@ -198,7 +198,7 @@ class SMCICTEngine:
 
         # OB: price near EMA21 (institutional re-entry zone)
         _ema21_dist = abs(price - entry_feat.ema_21) / (price + 1e-9)
-        ob_zone_long = _ema21_dist < 0.003   # within 0.3% of EMA21 — valid long OB
+        ob_zone_long = _ema21_dist < 0.003  # within 0.3% of EMA21 — valid long OB
         ob_zone_short = _ema21_dist < 0.003  # within 0.3% of EMA21 — valid short OB
 
         # FVG: BB pct_b at extremes signals imbalance

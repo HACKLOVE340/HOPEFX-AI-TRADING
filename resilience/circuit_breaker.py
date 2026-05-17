@@ -191,5 +191,5 @@ class TimeoutManager:
 
         try:
             return await asyncio.wait_for(func(*args, **kwargs), timeout=timeout)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             raise TimeoutError(f"Operation '{operation}' timed out after {timeout}s") from None

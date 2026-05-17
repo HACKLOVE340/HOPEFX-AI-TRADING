@@ -329,7 +329,9 @@ class TradeExecutor:
             if not order.average_fill_price or not (order.average_fill_price > 0):
                 logger.error(
                     "TradeExecutor: order %s status=%s but average_fill_price=%s — skipping position open",
-                    order.id, order.status.value, order.average_fill_price,
+                    order.id,
+                    order.status.value,
+                    order.average_fill_price,
                 )
                 return ExecutionResult(
                     success=False,

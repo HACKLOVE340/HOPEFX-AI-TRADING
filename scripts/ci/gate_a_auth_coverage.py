@@ -31,64 +31,88 @@ MUTATING_HTTP_METHODS = {"post", "put", "patch", "delete"}
 # the parameter is an auth dependency.  This covers both direct calls
 # (require_role, get_current_user) and module-level aliases used across
 # api/superadmin/, api/whitelabel_admin.py, api/platform.py, etc.
-AUTH_DEPENDS_MARKERS: frozenset[str] = frozenset({
-    # Direct auth functions
-    "require_role",
-    "get_current_user",
-    "require_kyc",
-    "get_optional_user",
-    # Subscription-gated auth (monetization/subscription.py)
-    "require_plan",
-    "_require_plan",
-    # Module-level aliases (api/superadmin/_shared.py, api/platform.py, etc.)
-    "_require_superadmin",
-    "_require_admin",
-    "_require_admin_dep",
-    "_require_trader",
-    "_superadmin",
-    "_get_current_user",
-    # Generic auth sentinel names used in dynamic builders (api/server.py)
-    "_require_auth",
-    "_auth",
-    # Dynamic builder alias for Depends() (api/signals.py uses _Depends)
-    "_Depends",
-    # HTTPBearer / OAuth2 security (api/gateway.py uses Depends(self.security))
-    "self.security",
-    "HTTPBearer",
-    "OAuth2",
-    "security",
-})
+AUTH_DEPENDS_MARKERS: frozenset[str] = frozenset(
+    {
+        # Direct auth functions
+        "require_role",
+        "get_current_user",
+        "require_kyc",
+        "get_optional_user",
+        # Subscription-gated auth (monetization/subscription.py)
+        "require_plan",
+        "_require_plan",
+        # Module-level aliases (api/superadmin/_shared.py, api/platform.py, etc.)
+        "_require_superadmin",
+        "_require_admin",
+        "_require_admin_dep",
+        "_require_trader",
+        "_superadmin",
+        "_get_current_user",
+        # Generic auth sentinel names used in dynamic builders (api/server.py)
+        "_require_auth",
+        "_auth",
+        # Dynamic builder alias for Depends() (api/signals.py uses _Depends)
+        "_Depends",
+        # HTTPBearer / OAuth2 security (api/gateway.py uses Depends(self.security))
+        "self.security",
+        "HTTPBearer",
+        "OAuth2",
+        "security",
+    }
+)
 
 # Functions that are intentionally public — no token required.
 # Keep this list minimal and justified.
-KNOWN_PUBLIC: frozenset[str] = frozenset({
-    # ── Auth flow ── creates / invalidates tokens; can't require one
-    "login", "register", "refresh_token", "logout",
-    "request_password_reset", "reset_password",
-    "verify_email", "confirm_email", "resend_verification",
-    "change_password",
-    # ── Health / liveness probes ── must be reachable without auth
-    "health", "health_live", "health_ready", "liveness", "readiness",
-    "ping", "live", "ready",
-    # ── External webhooks ── token is the URL path secret, not a Bearer header
-    "stripe_webhook", "paypal_webhook", "telegram_webhook",
-    "sumsub_webhook", "onfido_webhook", "payment_webhook",
-    "webhook", "handle_webhook", "receive_webhook",
-    # ── Post-signup endpoint ── called right after register before the user
-    # has a session token; grants the free-tier trial subscription
-    "activate_free_tier",
-    # ── Public pricing calculator ── shown on the marketing/pricing page
-    # to unauthenticated visitors; returns no personal data
-    "estimate_cost",
-    # ── Explicitly internal / demo stubs ──
-    "paper_trading_gate_record_fill",  # internal fill recorder, no user context
-})
+KNOWN_PUBLIC: frozenset[str] = frozenset(
+    {
+        # ── Auth flow ── creates / invalidates tokens; can't require one
+        "login",
+        "register",
+        "refresh_token",
+        "logout",
+        "request_password_reset",
+        "reset_password",
+        "verify_email",
+        "confirm_email",
+        "resend_verification",
+        "change_password",
+        # ── Health / liveness probes ── must be reachable without auth
+        "health",
+        "health_live",
+        "health_ready",
+        "liveness",
+        "readiness",
+        "ping",
+        "live",
+        "ready",
+        # ── External webhooks ── token is the URL path secret, not a Bearer header
+        "stripe_webhook",
+        "paypal_webhook",
+        "telegram_webhook",
+        "sumsub_webhook",
+        "onfido_webhook",
+        "payment_webhook",
+        "webhook",
+        "handle_webhook",
+        "receive_webhook",
+        # ── Post-signup endpoint ── called right after register before the user
+        # has a session token; grants the free-tier trial subscription
+        "activate_free_tier",
+        # ── Public pricing calculator ── shown on the marketing/pricing page
+        # to unauthenticated visitors; returns no personal data
+        "estimate_cost",
+        # ── Explicitly internal / demo stubs ──
+        "paper_trading_gate_record_fill",  # internal fill recorder, no user context
+    }
+)
 
 # Files whose routes are covered by the dynamic auth builder pattern
 # (api/server.py builds auth deps at runtime from JWT secrets).
-SKIP_FILES: frozenset[str] = frozenset({
-    "server.py",          # auth injected via _register_trading_routes()
-})
+SKIP_FILES: frozenset[str] = frozenset(
+    {
+        "server.py",  # auth injected via _register_trading_routes()
+    }
+)
 
 
 def _file_has_router_level_auth(tree: ast.Module) -> bool:
@@ -122,9 +146,7 @@ def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
           that raises on failure — used in files that predate the Depends pattern.
     """
     # (a) parameter default check
-    all_defaults = list(node.args.defaults) + [
-        d for d in node.args.kw_defaults if d is not None
-    ]
+    all_defaults = list(node.args.defaults) + [d for d in node.args.kw_defaults if d is not None]
     for default in all_defaults:
         src = ast.unparse(default)
         if any(marker in src for marker in AUTH_DEPENDS_MARKERS):
@@ -133,13 +155,14 @@ def _has_auth_depends(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     # (b) body-level imperative auth call
     body_src = " ".join(ast.unparse(stmt) for stmt in node.body[:10])  # first 10 stmts
     BODY_AUTH_MARKERS = {
-        "_require_admin(", "_require_superadmin(", "_require_auth(",
-        "_require_trader(", "require_role(", "get_current_user(",
+        "_require_admin(",
+        "_require_superadmin(",
+        "_require_auth(",
+        "_require_trader(",
+        "require_role(",
+        "get_current_user(",
     }
-    if any(m in body_src for m in BODY_AUTH_MARKERS):
-        return True
-
-    return False
+    return any(m in body_src for m in BODY_AUTH_MARKERS)
 
 
 def _is_mutating_endpoint(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
@@ -167,7 +190,7 @@ def check_file(path: Path) -> list[str]:
 
     violations: list[str] = []
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             continue
         if node.name in KNOWN_PUBLIC:
             continue

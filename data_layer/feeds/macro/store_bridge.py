@@ -149,9 +149,7 @@ class MacroStoreBridge:
         # Load WGC demand data (non-blocking — failure is non-fatal)
         await self._load_wgc_into_store()
 
-        self._refresh_task = asyncio.create_task(
-            self._daily_refresh_loop(), name="macro_store_bridge_refresh"
-        )
+        self._refresh_task = asyncio.create_task(self._daily_refresh_loop(), name="macro_store_bridge_refresh")
 
     async def stop(self) -> None:
         """Close FRED HTTP session and stop refresh loop."""

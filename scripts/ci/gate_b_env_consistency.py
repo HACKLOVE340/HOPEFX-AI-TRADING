@@ -17,25 +17,27 @@ DOCKER_COMPOSE = REPO_ROOT / "docker-compose.yml"
 
 # Vars set directly by docker-compose internals or well-known tooling;
 # they don't need a .env.example entry.
-COMPOSE_INTERNAL: frozenset[str] = frozenset({
-    "DATABASE_URL",   # composed from individual DB vars
-    "REDIS_URL",      # composed from REDIS_HOST + REDIS_PASSWORD
-    "REDIS_HOST",     # set to the redis service name
-    "REDIS_PORT",     # set to the redis service port
-    "API_HOST",       # hardcoded to 0.0.0.0
-    "API_PORT",       # hardcoded to 8000
-    "ALLOWED_ORIGINS",  # derived from HOPEFX_DOMAIN in compose
-})
+COMPOSE_INTERNAL: frozenset[str] = frozenset(
+    {
+        "DATABASE_URL",  # composed from individual DB vars
+        "REDIS_URL",  # composed from REDIS_HOST + REDIS_PASSWORD
+        "REDIS_HOST",  # set to the redis service name
+        "REDIS_PORT",  # set to the redis service port
+        "API_HOST",  # hardcoded to 0.0.0.0
+        "API_PORT",  # hardcoded to 8000
+        "ALLOWED_ORIGINS",  # derived from HOPEFX_DOMAIN in compose
+    }
+)
 
 
 def _parse_env_example(path: Path) -> set[str]:
     """Return all KEY names from .env.example (lines matching KEY=...)."""
     keys: set[str] = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
             continue
-        m = re.match(r"^([A-Z][A-Z0-9_]*)=", line)
+        m = re.match(r"^([A-Z][A-Z0-9_]*)=", stripped)
         if m:
             keys.add(m.group(1))
     return keys
@@ -99,8 +101,7 @@ def main() -> int:
     missing_from_env = (compose_keys - env_keys) - COMPOSE_INTERNAL
 
     if missing_from_env:
-        print(f"Gate B FAILED — {len(missing_from_env)} var(s) in docker-compose.yml "
-              f"have no entry in .env.example:")
+        print(f"Gate B FAILED — {len(missing_from_env)} var(s) in docker-compose.yml have no entry in .env.example:")
         for k in sorted(missing_from_env):
             print(f"  {k}")
         print()

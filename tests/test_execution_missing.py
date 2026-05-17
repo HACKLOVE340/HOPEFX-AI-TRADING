@@ -345,6 +345,7 @@ class TestTWAPExecutor:
     async def test_with_router_filled(self):
         class _FilledRouter:
             """Real router that always returns a filled result."""
+
             async def route(self, order_req: dict) -> dict:
                 return {"status": "filled", "fill_price": order_req.get("mid_price", 2000.0)}
 
@@ -365,6 +366,7 @@ class TestTWAPExecutor:
     async def test_router_failure_counted(self):
         class _FailingRouter:
             """Real router that always raises to simulate broker failure."""
+
             async def route(self, order_req: dict) -> dict:
                 raise RuntimeError("broker down")
 

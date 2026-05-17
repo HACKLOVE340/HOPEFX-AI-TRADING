@@ -474,9 +474,7 @@ class AsyncExecutionEngine:
         async with self.order_locks[order.id]:
             prev_qty = order.filled_qty
             order.filled_qty += fill.quantity
-            order.avg_fill_price = (
-                order.avg_fill_price * prev_qty + fill.price * fill.quantity
-            ) / order.filled_qty
+            order.avg_fill_price = (order.avg_fill_price * prev_qty + fill.price * fill.quantity) / order.filled_qty
 
             if order.filled_qty >= order.quantity * 0.99:
                 order.status = OrderStatus.FILLED

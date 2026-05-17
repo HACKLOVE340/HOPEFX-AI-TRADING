@@ -114,10 +114,10 @@ COMPOSE_EXEMPTIONS: frozenset[str] = frozenset(
         "FIX_USERNAME",
         "FIX_PASSWORD",
         # Paper-trading knobs — safe defaults; operators override in .env
-        "PAPER_TRADING",          # default false; compose passes via env_file
+        "PAPER_TRADING",  # default false; compose passes via env_file
         "PAPER_INITIAL_BALANCE",  # default 10000; compose passes via env_file
-        "PAPER_SLIPPAGE_MODEL",   # default gaussian; compose passes via env_file
-        "PAPER_STARTING_BALANCE", # alias; compose passes via env_file
+        "PAPER_SLIPPAGE_MODEL",  # default gaussian; compose passes via env_file
+        "PAPER_STARTING_BALANCE",  # alias; compose passes via env_file
         # FIX protocol — only used by trading engine, passed via env_file
         "FIX_CONFIG_FILE",
         "FIX_SENDER_COMP_ID",
@@ -178,7 +178,7 @@ CI_SECRET_EXEMPTIONS: frozenset[str] = frozenset(
         "NPM_TOKEN",
         "SLACK_WEBHOOK_URL",
         "SENTRY_AUTH_TOKEN",
-        "SENTRY_DSN",          # also in .env.example but may be set as CI secret
+        "SENTRY_DSN",  # also in .env.example but may be set as CI secret
         "FORTIFY_TOKEN",
         "FORTIFY_TENANT",
         "FORTIFY_URL",
@@ -235,17 +235,17 @@ CI_SECRET_EXEMPTIONS: frozenset[str] = frozenset(
         "FORTIFY_REMEDIATION_WEBINSPECT_PROXY_BYPASS_HOSTS_AND_PORTS_AND_SUBNETS",
         "FORTIFY_REMEDIATION_WEBINSPECT_PROXY_BYPASS_HOSTS_AND_PORTS_AND_ADDRESSES",
         # CI test-runner variables (set inline in workflow steps, not app secrets)
-        "DB_URL",                  # SQLite/Postgres URL used only during CI test runs
-        "ML_CI_MODE",              # disables GPU-heavy ML paths in CI
-        "PLAYWRIGHT_BASE_URL",     # base URL for Playwright e2e tests in CI
-        "COVERAGE_TOTAL",          # coverage threshold checked by tests.yml
-        "EXEMPTIONS",              # pip-audit CVE exemption list in ci.yml
-        "QLTY_COVERAGE_TOKEN",     # Qlty.sh coverage upload token (CI secret)
+        "DB_URL",  # SQLite/Postgres URL used only during CI test runs
+        "ML_CI_MODE",  # disables GPU-heavy ML paths in CI
+        "PLAYWRIGHT_BASE_URL",  # base URL for Playwright e2e tests in CI
+        "COVERAGE_TOTAL",  # coverage threshold checked by tests.yml
+        "EXEMPTIONS",  # pip-audit CVE exemption list in ci.yml
+        "QLTY_COVERAGE_TOKEN",  # Qlty.sh coverage upload token (CI secret)
         # Docker BuildKit / Buildx cache variables (CI build system, not app)
-        "BUILDX_CACHE_FROM",       # BuildKit cache source for layer caching
-        "BUILDX_CACHE_TO",         # BuildKit cache destination for layer caching
-        "COMPOSE_DOCKER_CLI_BUILD", # enables Docker CLI BuildKit integration
-        "DOCKER_BUILDKIT",         # enables BuildKit for docker build commands
+        "BUILDX_CACHE_FROM",  # BuildKit cache source for layer caching
+        "BUILDX_CACHE_TO",  # BuildKit cache destination for layer caching
+        "COMPOSE_DOCKER_CLI_BUILD",  # enables Docker CLI BuildKit integration
+        "DOCKER_BUILDKIT",  # enables BuildKit for docker build commands
     }
 )
 
@@ -256,20 +256,20 @@ CI_SECRET_EXEMPTIONS: frozenset[str] = frozenset(
 
 class EnvRef(NamedTuple):
     name: str
-    has_default: bool   # True when os.getenv("X", "default") — non-empty default
+    has_default: bool  # True when os.getenv("X", "default") — non-empty default
     source_file: str
     line: int
 
 
 _GETENV_RE = re.compile(
     r'os\.(?:environ\.get|getenv)\(\s*["\']([A-Z][A-Z0-9_]*)["\']'
-    r'(?:\s*,\s*(?P<default>[^)]+))?',
+    r"(?:\s*,\s*(?P<default>[^)]+))?",
 )
 
 # CI workflow env var references: ${{ env.VAR }} or ${{ secrets.VAR }} or
 # bare VAR: value under env: blocks
-_CI_ENV_RE = re.compile(r'\$\{\{\s*(?:env|secrets|vars)\s*\.\s*([A-Z][A-Z0-9_]*)\s*\}\}')
-_CI_BARE_RE = re.compile(r'^\s{6,}([A-Z][A-Z0-9_]*):\s')
+_CI_ENV_RE = re.compile(r"\$\{\{\s*(?:env|secrets|vars)\s*\.\s*([A-Z][A-Z0-9_]*)\s*\}\}")
+_CI_BARE_RE = re.compile(r"^\s{6,}([A-Z][A-Z0-9_]*):\s")
 
 
 def _extract_env_refs(path: Path) -> list[EnvRef]:
@@ -283,12 +283,14 @@ def _extract_env_refs(path: Path) -> list[EnvRef]:
         for m in _GETENV_RE.finditer(line):
             name = m.group(1)
             has_default = bool(m.group("default"))
-            refs.append(EnvRef(
-                name=name,
-                has_default=has_default,
-                source_file=str(path.relative_to(REPO_ROOT)),
-                line=lineno,
-            ))
+            refs.append(
+                EnvRef(
+                    name=name,
+                    has_default=has_default,
+                    source_file=str(path.relative_to(REPO_ROOT)),
+                    line=lineno,
+                )
+            )
     return refs
 
 
@@ -385,16 +387,14 @@ def test_primary_files_env_vars_declared_in_env_example() -> None:
         for ref in _extract_env_refs(path):
             if ref.name not in env_keys:
                 violations.append(
-                    f"  {ref.source_file}:{ref.line}  {ref.name}"
-                    + (" (no default)" if not ref.has_default else "")
+                    f"  {ref.source_file}:{ref.line}  {ref.name}" + (" (no default)" if not ref.has_default else "")
                 )
 
     if violations:
         pytest.fail(
             f"\n{len(violations)} env var(s) referenced in primary source files "
             f"but missing from .env.example.\n"
-            "Add each variable to .env.example with a description and safe default:\n\n"
-            + "\n".join(violations)
+            "Add each variable to .env.example with a description and safe default:\n\n" + "\n".join(violations)
         )
 
 
@@ -426,16 +426,13 @@ def test_required_env_vars_forwarded_in_compose() -> None:
                 continue
             if ref.name in compose_keys:
                 continue
-            violations.append(
-                f"  {ref.source_file}:{ref.line}  {ref.name}  (no default, not in compose)"
-            )
+            violations.append(f"  {ref.source_file}:{ref.line}  {ref.name}  (no default, not in compose)")
 
     if violations:
         pytest.fail(
             f"\n{len(violations)} required env var(s) not forwarded in docker-compose.yml.\n"
             "Either add them to the relevant service's environment: block in docker-compose.yml,\n"
-            "or add them to COMPOSE_EXEMPTIONS with a justification comment.\n\n"
-            + "\n".join(violations)
+            "or add them to COMPOSE_EXEMPTIONS with a justification comment.\n\n" + "\n".join(violations)
         )
 
 
@@ -462,16 +459,14 @@ def test_extended_files_env_vars_declared_in_env_example() -> None:
         for ref in _extract_env_refs(path):
             if ref.name not in env_keys:
                 violations.append(
-                    f"  {ref.source_file}:{ref.line}  {ref.name}"
-                    + (" (no default)" if not ref.has_default else "")
+                    f"  {ref.source_file}:{ref.line}  {ref.name}" + (" (no default)" if not ref.has_default else "")
                 )
 
     if violations:
         pytest.fail(
             f"\n{len(violations)} env var(s) referenced in extended source files "
             f"but missing from .env.example.\n"
-            "Add each variable to .env.example with a description and safe default:\n\n"
-            + "\n".join(violations)
+            "Add each variable to .env.example with a description and safe default:\n\n" + "\n".join(violations)
         )
 
 
@@ -509,8 +504,7 @@ def test_ci_workflow_env_vars_are_documented() -> None:
             f"\n{len(violations)} CI workflow env var(s) not in .env.example or "
             f"CI_SECRET_EXEMPTIONS.\n"
             "Either add the variable to .env.example with a description, or add it\n"
-            "to CI_SECRET_EXEMPTIONS with a justification comment:\n\n"
-            + "\n".join(violations)
+            "to CI_SECRET_EXEMPTIONS with a justification comment:\n\n" + "\n".join(violations)
         )
 
 
@@ -574,7 +568,12 @@ def test_security_jwt_secret_documented() -> None:
     for line in content.splitlines():
         if line.startswith("SECURITY_JWT_SECRET="):
             value = line.split("=", 1)[1].strip()
-            assert len(value) < 64 or "change" in value.lower() or "placeholder" in value.lower() or "your" in value.lower(), (
+            assert (
+                len(value) < 64
+                or "change" in value.lower()
+                or "placeholder" in value.lower()
+                or "your" in value.lower()
+            ), (
                 "SECURITY_JWT_SECRET in .env.example looks like a real secret.\n"
                 "Replace it with a placeholder value like 'change-me-in-production-min-32-chars'."
             )
@@ -600,17 +599,14 @@ def test_no_duplicate_env_var_declarations_in_env_example() -> None:
         if m:
             name = m.group(1)
             if name in seen:
-                duplicates.append(
-                    f"  {name}  (first at line {seen[name]}, duplicate at line {lineno})"
-                )
+                duplicates.append(f"  {name}  (first at line {seen[name]}, duplicate at line {lineno})")
             else:
                 seen[name] = lineno
 
     if duplicates:
         pytest.fail(
             f"\n{len(duplicates)} duplicate active declaration(s) in .env.example.\n"
-            "Remove or comment out the earlier occurrence:\n\n"
-            + "\n".join(duplicates)
+            "Remove or comment out the earlier occurrence:\n\n" + "\n".join(duplicates)
         )
 
 
@@ -624,7 +620,8 @@ def test_env_example_has_section_comments() -> None:
     """
     content = ENV_EXAMPLE.read_text(encoding="utf-8")
     section_headers = [
-        line for line in content.splitlines()
+        line
+        for line in content.splitlines()
         if line.startswith("# ===") or line.startswith("# ---") or line.startswith("# ──")
     ]
     assert len(section_headers) >= 3, (
@@ -638,8 +635,7 @@ def test_env_example_documents_app_env() -> None:
     """APP_ENV must be documented in .env.example with the allowed values."""
     content = ENV_EXAMPLE.read_text(encoding="utf-8")
     assert "APP_ENV" in content, (
-        "APP_ENV is missing from .env.example.\n"
-        "Add it with allowed values: development, test, staging, production"
+        "APP_ENV is missing from .env.example.\nAdd it with allowed values: development, test, staging, production"
     )
 
 
@@ -715,15 +711,12 @@ def test_env_example_documents_broker_sync_requirement() -> None:
     content = ENV_EXAMPLE.read_text(encoding="utf-8")
     # The note must mention both vars in proximity — check for the canonical
     # phrasing added when the split-brain bug was fixed.
-    has_sync_note = (
-        ("PAPER_TRADING" in content and "BROKER_TYPE" in content)
-        and (
-            "set BOTH" in content
-            or "set both" in content
-            or "keep them in sync" in content
-            or "same purpose" in content
-            or "api/trading.py uses BROKER_TYPE" in content
-        )
+    has_sync_note = ("PAPER_TRADING" in content and "BROKER_TYPE" in content) and (
+        "set BOTH" in content
+        or "set both" in content
+        or "keep them in sync" in content
+        or "same purpose" in content
+        or "api/trading.py uses BROKER_TYPE" in content
     )
     assert has_sync_note, (
         ".env.example does not document the PAPER_TRADING / BROKER_TYPE sync requirement.\n"
@@ -761,10 +754,7 @@ def test_broker_alias_vars_forwarded_in_compose() -> None:
 
     # env_file: .env forwards ALL variables — no need to list them individually
     env_file = trading_svc.get("env_file", "")
-    if isinstance(env_file, list):
-        env_file_str = " ".join(str(e) for e in env_file)
-    else:
-        env_file_str = str(env_file)
+    env_file_str = " ".join(str(e) for e in env_file) if isinstance(env_file, list) else str(env_file)
 
     if ".env" in env_file_str:
         # env_file covers everything — pass

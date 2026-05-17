@@ -21,7 +21,6 @@ Covers:
 
 from __future__ import annotations
 
-import os
 
 import pytest
 from fastapi import FastAPI
@@ -35,9 +34,7 @@ def _make_auth_headers() -> dict[str, str]:
     """Return Authorization headers with a valid test JWT."""
     from auth.jwt import create_access_token
 
-    token = create_access_token(
-        {"sub": "test-user@hopefx.io", "role": "trader", "user_id": "test-uid-001"}
-    )
+    token = create_access_token({"sub": "test-user@hopefx.io", "role": "trader", "user_id": "test-uid-001"})
     return {"Authorization": f"Bearer {token}"}
 
 

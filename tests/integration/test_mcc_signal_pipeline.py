@@ -227,6 +227,7 @@ class TestMCCKillSwitch:
             mcc.trigger_kill_switch("test_kill")
             # Yield to the event loop so the async close task can complete
             import asyncio
+
             await asyncio.sleep(0)
             await asyncio.sleep(0)
 

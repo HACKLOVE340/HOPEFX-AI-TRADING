@@ -74,7 +74,7 @@ try:
     from api.auth import get_current_user, require_kyc, require_role
 
     _import_error: Exception | None = None
-except Exception as _exc:  # noqa: BLE001
+except Exception as _exc:
     _import_error = _exc
 
 if _import_error is not None:
@@ -93,7 +93,7 @@ _app = None  # set by the autouse _bind_app fixture below
 
 
 @pytest.fixture(autouse=True, scope="module")
-def _bind_app(app):  # noqa: F811  — 'app' is the conftest session fixture
+def _bind_app(app):
     """Bind the session-scoped app fixture to the module-level _app reference.
 
     This lets helper functions reference _app without receiving it as a
@@ -105,6 +105,7 @@ def _bind_app(app):  # noqa: F811  — 'app' is the conftest session fixture
     yield
     _app = None
 
+
 # ---------------------------------------------------------------------------
 # WHITELIST — mutating routes that are intentionally public.
 # Each entry must have a comment explaining why it is public.
@@ -112,15 +113,15 @@ def _bind_app(app):  # noqa: F811  — 'app' is the conftest session fixture
 WHITELIST: frozenset[str] = frozenset(
     {
         # ── Authentication (unauthenticated by design) ──────────────────────
-        "/api/auth/login",               # issues the token — cannot require one
-        "/api/auth/register",            # new-user registration
-        "/api/auth/refresh",             # token refresh (uses refresh token, not access)
-        "/api/auth/logout",              # stateless logout — token may already be expired
-        "/api/auth/verify-email",        # email verification link
-        "/api/auth/2fa/setup",           # 2FA setup — some flows allow pre-auth setup
-        "/api/auth/forgot-password",     # user has no token (forgot it)
-        "/api/auth/reset-password",      # uses emailed reset token, not JWT
-        "/api/auth/resend-verification", # user may not be logged in yet
+        "/api/auth/login",  # issues the token — cannot require one
+        "/api/auth/register",  # new-user registration
+        "/api/auth/refresh",  # token refresh (uses refresh token, not access)
+        "/api/auth/logout",  # stateless logout — token may already be expired
+        "/api/auth/verify-email",  # email verification link
+        "/api/auth/2fa/setup",  # 2FA setup — some flows allow pre-auth setup
+        "/api/auth/forgot-password",  # user has no token (forgot it)
+        "/api/auth/reset-password",  # uses emailed reset token, not JWT
+        "/api/auth/resend-verification",  # user may not be logged in yet
         "/api/auth/activate-free-tier",  # called immediately after registration
         # ── Health / readiness probes (called by load-balancers, no auth) ───
         "/api/health",
@@ -129,8 +130,8 @@ WHITELIST: frozenset[str] = frozenset(
         "/api/health/ready",
         "/api/health/startup",
         # ── Kill switch (uses its own HOPEFX_KILL_SWITCH_TOKEN header) ───────
-        "/api/kill-switch/activate",     # uses HOPEFX_KILL_SWITCH_TOKEN header
-        "/api/kill-switch/deactivate",   # uses HOPEFX_KILL_SWITCH_TOKEN header
+        "/api/kill-switch/activate",  # uses HOPEFX_KILL_SWITCH_TOKEN header
+        "/api/kill-switch/deactivate",  # uses HOPEFX_KILL_SWITCH_TOKEN header
         # ── Webhook receivers (use HMAC/ECDSA signature verification) ────────
         "/api/webhooks/tradingview",
         "/api/v1/webhooks/tradingview",
@@ -247,8 +248,8 @@ PRIVILEGED_GET_PATHS: frozenset[str] = frozenset(
 # ---------------------------------------------------------------------------
 WS_PUBLIC_WHITELIST: frozenset[str] = frozenset(
     {
-        "/ws/public",                # public market-data feed — no user data, read-only
-        "/api/stream/{symbol}/ws",   # public tick stream — rate-limited by IP, no user data
+        "/ws/public",  # public market-data feed — no user data, read-only
+        "/api/stream/{symbol}/ws",  # public tick stream — rate-limited by IP, no user data
         # Strawberry GraphQL WebSocket (subscriptions) — in-band auth via
         # subscription context.  The _get_current_user(info) helper validates
         # the Bearer token from ws.headers on every subscription resolver.
@@ -345,10 +346,7 @@ def _is_auth_dep(dep) -> bool:
     if module in _AUTH_MODULES and any(kw in name.lower() for kw in _AUTH_KEYWORDS):
         return True
 
-    if "require_role" in qualname or "require_plan" in qualname or "require_kyc" in qualname:
-        return True
-
-    return False
+    return "require_role" in qualname or "require_plan" in qualname or "require_kyc" in qualname
 
 
 def _ws_endpoint_has_auth(route) -> bool:
@@ -385,7 +383,7 @@ def _ws_endpoint_has_auth(route) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def test_all_mutating_routes_require_auth(app) -> None:  # noqa: F811
+def test_all_mutating_routes_require_auth(app) -> None:
     """
     Every POST/PUT/PATCH/DELETE route must have an auth dependency unless
     explicitly whitelisted.
@@ -424,8 +422,7 @@ def test_all_mutating_routes_require_auth(app) -> None:  # noqa: F811
             "Add Depends(get_current_user) or Depends(require_role(...)) to each,\n"
             "or add the path to WHITELIST with a justification comment.\n\n"
             "  METHODS                          PATH\n"
-            "  " + "-" * 60 + "\n"
-            + "\n".join(violations)
+            "  " + "-" * 60 + "\n" + "\n".join(violations)
         )
 
 
@@ -434,7 +431,7 @@ def test_all_mutating_routes_require_auth(app) -> None:  # noqa: F811
 # ---------------------------------------------------------------------------
 
 
-def test_privileged_get_routes_require_auth(app) -> None:  # noqa: F811
+def test_privileged_get_routes_require_auth(app) -> None:
     """
     GET routes in PRIVILEGED_GET_PATHS must carry an auth dependency.
 
@@ -449,9 +446,7 @@ def test_privileged_get_routes_require_auth(app) -> None:  # noqa: F811
     from fastapi.routing import APIRoute
 
     registered = {
-        route.path: route
-        for route in app.routes
-        if isinstance(route, APIRoute) and "GET" in (route.methods or set())
+        route.path: route for route in app.routes if isinstance(route, APIRoute) and "GET" in (route.methods or set())
     }
 
     violations: list[str] = []
@@ -470,8 +465,7 @@ def test_privileged_get_routes_require_auth(app) -> None:  # noqa: F811
         pytest.fail(
             f"\n{len(violations)} privileged GET route(s) have no auth dependency.\n"
             "These endpoints return user-specific or admin-only data.\n"
-            "Add Depends(get_current_user) or Depends(require_role(...)):\n\n"
-            + "\n".join(violations)
+            "Add Depends(get_current_user) or Depends(require_role(...)):\n\n" + "\n".join(violations)
         )
 
     # Missing paths are reported as a warning (not a failure) — the route may
@@ -479,8 +473,7 @@ def test_privileged_get_routes_require_auth(app) -> None:  # noqa: F811
     if missing:
         print(
             f"\n[auth-coverage] {len(missing)} PRIVILEGED_GET_PATHS not registered "
-            f"in this app instance (may be feature-flagged off):\n"
-            + "\n".join(f"  {p}" for p in missing)
+            f"in this app instance (may be feature-flagged off):\n" + "\n".join(f"  {p}" for p in missing)
         )
 
 
@@ -489,7 +482,7 @@ def test_privileged_get_routes_require_auth(app) -> None:  # noqa: F811
 # ---------------------------------------------------------------------------
 
 
-def test_websocket_endpoints_implement_auth(app) -> None:  # noqa: F811
+def test_websocket_endpoints_implement_auth(app) -> None:
     """
     Every WebSocket endpoint must implement in-band JWT authentication unless
     it is explicitly listed in WS_PUBLIC_WHITELIST.
@@ -515,8 +508,7 @@ def test_websocket_endpoints_implement_auth(app) -> None:  # noqa: F811
             f"\n{len(violations)} WebSocket endpoint(s) have no auth implementation.\n"
             "Add an in-band JWT auth handshake (call _ws_auth_gate or implement\n"
             "the token-in-query-param pattern), or add to WS_PUBLIC_WHITELIST\n"
-            "with a justification comment:\n\n"
-            + "\n".join(violations)
+            "with a justification comment:\n\n" + "\n".join(violations)
         )
 
 
@@ -562,7 +554,7 @@ def test_ws_auth_required_false_blocked_in_production() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_whitelist_entries_are_registered(app) -> None:  # noqa: F811
+def test_whitelist_entries_are_registered(app) -> None:
     """Every path in WHITELIST must correspond to at least one registered route."""
     from fastapi.routing import APIRoute
 
@@ -572,12 +564,11 @@ def test_whitelist_entries_are_registered(app) -> None:  # noqa: F811
     if stale:
         pytest.fail(
             f"\n{len(stale)} WHITELIST path(s) are not registered in the app.\n"
-            "Remove them from WHITELIST or re-register the route:\n"
-            + "\n".join(f"  {p}" for p in sorted(stale))
+            "Remove them from WHITELIST or re-register the route:\n" + "\n".join(f"  {p}" for p in sorted(stale))
         )
 
 
-def test_auth_endpoints_are_whitelisted(app) -> None:  # noqa: F811
+def test_auth_endpoints_are_whitelisted(app) -> None:
     """Core auth endpoints that must be public are in both WHITELIST and the app."""
     from fastapi.routing import APIRoute
 
@@ -593,11 +584,11 @@ def test_auth_endpoints_are_whitelisted(app) -> None:  # noqa: F811
 # Gate A5 — route count regression
 # ---------------------------------------------------------------------------
 
-_ROUTE_COUNT_BASELINE = 2200    # minimum total APIRoute count
+_ROUTE_COUNT_BASELINE = 2200  # minimum total APIRoute count
 _MUTATING_COUNT_BASELINE = 900  # minimum POST/PUT/PATCH/DELETE count
 
 
-def test_route_count_has_not_regressed(app) -> None:  # noqa: F811
+def test_route_count_has_not_regressed(app) -> None:
     """
     Total route count must not drop below the baseline.
 
@@ -609,8 +600,7 @@ def test_route_count_has_not_regressed(app) -> None:  # noqa: F811
 
     total = sum(1 for r in app.routes if isinstance(r, APIRoute))
     mutating = sum(
-        1 for r in app.routes
-        if isinstance(r, APIRoute) and (r.methods or set()) & {"POST", "PUT", "PATCH", "DELETE"}
+        1 for r in app.routes if isinstance(r, APIRoute) and (r.methods or set()) & {"POST", "PUT", "PATCH", "DELETE"}
     )
 
     print(
@@ -635,7 +625,7 @@ def test_route_count_has_not_regressed(app) -> None:  # noqa: F811
 # ---------------------------------------------------------------------------
 
 
-def test_csrf_token_endpoint_is_registered(app) -> None:  # noqa: F811
+def test_csrf_token_endpoint_is_registered(app) -> None:
     """The CSRF token issuance endpoint must be registered in the app."""
     from fastapi.routing import APIRoute
 
@@ -651,7 +641,7 @@ def test_csrf_token_endpoint_is_registered(app) -> None:  # noqa: F811
     )
 
 
-def test_health_endpoints_are_public(app) -> None:  # noqa: F811
+def test_health_endpoints_are_public(app) -> None:
     """Health probe endpoints must NOT require authentication."""
     from fastapi.routing import APIRoute
 

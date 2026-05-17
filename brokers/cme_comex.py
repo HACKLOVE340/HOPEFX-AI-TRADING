@@ -138,8 +138,7 @@ def _resolve_fill_price(filled_price: float | None, limit_price: float | None, o
     price = filled_price if filled_price and filled_price > 0 else limit_price
     if not price or price <= 0:
         raise RuntimeError(
-            f"CME fill for order {order_id} has no valid price: "
-            f"filled_price={filled_price}, limit_price={limit_price}"
+            f"CME fill for order {order_id} has no valid price: filled_price={filled_price}, limit_price={limit_price}"
         )
     return float(price)
 

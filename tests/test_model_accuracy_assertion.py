@@ -89,7 +89,7 @@ _OOS_ACCURACY_RE = re.compile(
     r"|out.of.sample\s+accuracy"
     r"|oos_accuracy"
     r"|walk.forward\s+validated"
-    r"|approximately\s+\d"          # "approximately 56.5%"
+    r"|approximately\s+\d"  # "approximately 56.5%"
     r"|accuracy\s+is\s+approximately"
     r")"
     r"[^%\n]{0,80}?(\d{2,3}(?:\.\d+)?)\s*%",
@@ -172,8 +172,7 @@ def _check_figures(
 def test_oos_meta_exists() -> None:
     """advanced_oos_meta.json must exist before any accuracy assertion can run."""
     assert OOS_META_PATH.exists(), (
-        f"OOS meta file not found: {OOS_META_PATH}\n"
-        "Run scripts/train_advanced.py to generate it."
+        f"OOS meta file not found: {OOS_META_PATH}\nRun scripts/train_advanced.py to generate it."
     )
 
 
@@ -181,12 +180,10 @@ def test_oos_meta_has_required_fields() -> None:
     """The meta file must contain oos_accuracy and sharpe_gate."""
     meta = _load_oos_meta()
     assert "oos_accuracy" in meta, (
-        "advanced_oos_meta.json is missing 'oos_accuracy'.\n"
-        "Re-run the training script to regenerate the file."
+        "advanced_oos_meta.json is missing 'oos_accuracy'.\nRe-run the training script to regenerate the file."
     )
     assert "sharpe_gate" in meta, (
-        "advanced_oos_meta.json is missing 'sharpe_gate'.\n"
-        "Re-run the training script to regenerate the file."
+        "advanced_oos_meta.json is missing 'sharpe_gate'.\nRe-run the training script to regenerate the file."
     )
     assert "gate_passed" in meta.get("sharpe_gate", {}), (
         "advanced_oos_meta.json['sharpe_gate'] is missing 'gate_passed'."
@@ -252,8 +249,7 @@ def test_readme_accuracy_within_tolerance() -> None:
         pytest.fail(
             f"\nREADME.md accuracy figure(s) are more than {TOLERANCE_PP}pp "
             f"from advanced_oos_meta.json (oos_accuracy={ground_truth:.2f}%).\n"
-            "Update README.md to reflect the current model's accuracy:\n\n"
-            + "\n".join(violations)
+            "Update README.md to reflect the current model's accuracy:\n\n" + "\n".join(violations)
         )
 
 
@@ -283,8 +279,7 @@ def test_signals_disclaimer_accuracy_within_tolerance() -> None:
             f"\napi/signals.py SIGNAL_DISCLAIMER accuracy figure(s) are more than "
             f"{TOLERANCE_PP}pp from advanced_oos_meta.json "
             f"(oos_accuracy={ground_truth:.2f}%).\n"
-            "Update SIGNAL_DISCLAIMER in api/signals.py to reflect the current model:\n\n"
-            + "\n".join(violations)
+            "Update SIGNAL_DISCLAIMER in api/signals.py to reflect the current model:\n\n" + "\n".join(violations)
         )
 
 
@@ -305,7 +300,7 @@ def test_model_performance_doc_accuracy_within_tolerance() -> None:
     docs/model_performance.md to match advanced_oos_meta.json.
     """
     if not MODEL_PERF_DOC_PATH.exists():
-        pytest.skip(f"docs/model_performance.md not found — skipping")
+        pytest.skip("docs/model_performance.md not found — skipping")
 
     meta = _load_oos_meta()
     ground_truth = _accuracy_pct_from_meta(meta)
@@ -321,8 +316,7 @@ def test_model_performance_doc_accuracy_within_tolerance() -> None:
             f"\ndocs/model_performance.md accuracy figure(s) are more than "
             f"{TOLERANCE_PP}pp from advanced_oos_meta.json "
             f"(oos_accuracy={ground_truth:.2f}%).\n"
-            "Update docs/model_performance.md after each model retrain:\n\n"
-            + "\n".join(violations)
+            "Update docs/model_performance.md after each model retrain:\n\n" + "\n".join(violations)
         )
 
 
@@ -367,8 +361,7 @@ def test_docs_directory_accuracy_within_tolerance() -> None:
             f"\n{len(violations)} OOS accuracy figure(s) in docs/ are more than "
             f"{TOLERANCE_PP}pp from advanced_oos_meta.json "
             f"(oos_accuracy={ground_truth:.2f}%).\n"
-            "Update each file after a model retrain:\n\n"
-            + "\n".join(violations)
+            "Update each file after a model retrain:\n\n" + "\n".join(violations)
         )
 
 
@@ -401,8 +394,7 @@ def test_changelog_current_model_accuracy_within_tolerance() -> None:
             f"\nCHANGELOG.md current-model accuracy claim(s) are more than "
             f"{TOLERANCE_PP}pp from advanced_oos_meta.json "
             f"(oos_accuracy={ground_truth:.2f}%).\n"
-            "Update the current-version entry in CHANGELOG.md:\n\n"
-            + "\n".join(violations)
+            "Update the current-version entry in CHANGELOG.md:\n\n" + "\n".join(violations)
         )
 
 
@@ -441,9 +433,9 @@ def test_all_live_accuracy_claims_consistent() -> None:
     readme_figs = _collect(README_PATH, _OOS_ACCURACY_RE)
     signals_figs = _collect(SIGNALS_PY_PATH, _DISCLAIMER_RE)
     doc_figs = (
-        _collect(MODEL_PERF_DOC_PATH, _TABLE_ACCURACY_RE)
-        + _collect(MODEL_PERF_DOC_PATH, _INLINE_ACCURACY_RE)
-        if MODEL_PERF_DOC_PATH.exists() else []
+        _collect(MODEL_PERF_DOC_PATH, _TABLE_ACCURACY_RE) + _collect(MODEL_PERF_DOC_PATH, _INLINE_ACCURACY_RE)
+        if MODEL_PERF_DOC_PATH.exists()
+        else []
     )
 
     all_figs = readme_figs + signals_figs + doc_figs
@@ -452,21 +444,17 @@ def test_all_live_accuracy_claims_consistent() -> None:
 
     violations: list[str] = []
     for i, (val_a, loc_a) in enumerate(all_figs):
-        for val_b, loc_b in all_figs[i + 1:]:
+        for val_b, loc_b in all_figs[i + 1 :]:
             delta = abs(val_a - val_b)
             if delta > TOLERANCE_PP:
-                violations.append(
-                    f"  {loc_a} = {val_a:.2f}%  vs  {loc_b} = {val_b:.2f}%  "
-                    f"(delta={delta:.1f}pp)"
-                )
+                violations.append(f"  {loc_a} = {val_a:.2f}%  vs  {loc_b} = {val_b:.2f}%  (delta={delta:.1f}pp)")
 
     if violations:
         pytest.fail(
             f"\nAccuracy figures across live-claim files differ by more than "
             f"{TOLERANCE_PP}pp from each other.\n"
             f"Ground truth (advanced_oos_meta.json): {ground_truth:.2f}%\n"
-            "Update all files to match the JSON after each model retrain:\n\n"
-            + "\n".join(violations)
+            "Update all files to match the JSON after each model retrain:\n\n" + "\n".join(violations)
         )
 
 
@@ -485,13 +473,13 @@ def test_oos_meta_sidecar_completeness() -> None:
     """
     meta = _load_oos_meta()
     REQUIRED_FIELDS = {
-        "oos_accuracy",       # primary accuracy figure (0–1 scale)
-        "sharpe_gate",        # gate result dict with gate_passed key
-        "oos_n",              # number of OOS bars used for evaluation
-        "feature_count",      # number of features in the trained model
-        "model_file",         # filename of the serialised model
-        "trained_at",         # ISO-8601 timestamp of training run
-        "ci_mode",            # False for production models
+        "oos_accuracy",  # primary accuracy figure (0–1 scale)
+        "sharpe_gate",  # gate result dict with gate_passed key
+        "oos_n",  # number of OOS bars used for evaluation
+        "feature_count",  # number of features in the trained model
+        "model_file",  # filename of the serialised model
+        "trained_at",  # ISO-8601 timestamp of training run
+        "ci_mode",  # False for production models
     }
     missing = REQUIRED_FIELDS - set(meta.keys())
     assert not missing, (

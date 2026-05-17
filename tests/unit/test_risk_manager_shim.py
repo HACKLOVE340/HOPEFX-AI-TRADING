@@ -5,6 +5,7 @@
 tests/unit/test_risk_manager_shim.py
 Coverage tests for risk/risk_manager.py — the backwards-compat shim.
 """
+
 from __future__ import annotations
 
 
@@ -55,6 +56,7 @@ class TestRiskManagerShim:
     def test_activate_no_app_module(self, monkeypatch):
         """Covers the branch where app module is not in sys.modules."""
         import sys
+
         monkeypatch.delitem(sys.modules, "app", raising=False)
         monkeypatch.delitem(sys.modules, "run", raising=False)
         rm = RiskManager()
@@ -62,4 +64,5 @@ class TestRiskManagerShim:
 
     def test_is_subclass_of_base(self):
         from risk.manager import RiskManager as Base
+
         assert issubclass(RiskManager, Base)

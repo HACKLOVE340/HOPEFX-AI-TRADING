@@ -14,7 +14,7 @@ import asyncio
 
 import pytest
 
-from brokers.base import Order, OrderSide, OrderStatus, OrderType
+from brokers.base import OrderStatus
 from brokers.paper_trading import PaperTradingBroker
 from execution.engine import (
     EngineCircuitBreaker,
@@ -146,6 +146,7 @@ class _ConnectedPaperBroker(PaperTradingBroker):
         self.connected = True  # PaperTradingBroker uses self.connected
         self.market_prices["XAUUSD"] = 1950.0
         import time
+
         self._price_timestamps["XAUUSD"] = time.time()
         self._forced_status = order_status
 
@@ -160,6 +161,7 @@ class _ConnectedPaperBroker(PaperTradingBroker):
 
     def get_account_info(self):
         from brokers.base import AccountInfo
+
         return AccountInfo(
             balance=self.balance,
             equity=self.balance,
@@ -241,6 +243,7 @@ class TestExecutionEngine:
     async def test_circuit_breaker_blocks_after_failures(self):
         class _FailingBroker(_ConnectedPaperBroker):
             """Real broker that always raises on place_order to trigger circuit breaker."""
+
             def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
                 raise RuntimeError("broker down")
 
@@ -311,6 +314,7 @@ class TestExecutionEngine:
     async def test_broker_error_returns_error_report(self):
         class _ErrorBroker(_ConnectedPaperBroker):
             """Real broker that raises on place_order to test error handling."""
+
             def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
                 raise RuntimeError("connection lost")
 
@@ -329,8 +333,10 @@ class TestExecutionEngine:
     @pytest.mark.asyncio
     async def test_never_raises_to_caller(self):
         """ExecutionEngine.execute() must never raise — always returns a report."""
+
         class _CatastrophicBroker(_ConnectedPaperBroker):
             """Real broker that raises an unexpected exception."""
+
             def place_order(self, symbol, side, order_type, quantity, price=None, stop_price=None, **kwargs):
                 raise Exception("catastrophic failure")
 
