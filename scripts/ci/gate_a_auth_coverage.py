@@ -95,6 +95,8 @@ KNOWN_PUBLIC: frozenset[str] = frozenset(
         "webhook",
         "handle_webhook",
         "receive_webhook",
+        # TradingView alerts use HMAC-SHA256 (X-TV-Signature header) — no Bearer token
+        "tradingview_webhook",
         # ── Post-signup endpoint ── called right after register before the user
         # has a session token; grants the free-tier trial subscription
         "activate_free_tier",
