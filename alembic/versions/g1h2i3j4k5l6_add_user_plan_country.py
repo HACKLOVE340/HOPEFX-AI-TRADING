@@ -63,5 +63,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("users", "country")
-    op.drop_column("users", "plan")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    def _col_exists(table: str, col: str) -> bool:
+        try:
+            return col in {c["name"] for c in inspector.get_columns(table)}
+        except Exception:
+            return False
+
+    if _col_exists("users", "country"):
+        op.drop_column("users", "country")
+    if _col_exists("users", "plan"):
+        op.drop_column("users", "plan")

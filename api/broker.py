@@ -26,7 +26,7 @@ UTC = timezone.utc
 from http import HTTPStatus
 
 from fastapi import APIRouter, Depends
-from api.auth import get_current_user
+from api.auth import get_current_user, require_role
 from pydantic import BaseModel
 
 _HTTP_OK = HTTPStatus.OK.value
@@ -58,7 +58,10 @@ class BrokerTestResponse(BaseModel):
 
 
 @router.post("/test-connection", response_model=BrokerTestResponse)
-async def test_broker_connection(req: BrokerTestRequest) -> BrokerTestResponse:
+async def test_broker_connection(
+    req: BrokerTestRequest,
+    _user=Depends(get_current_user),
+) -> BrokerTestResponse:
     """
     Test broker credentials and return connection status, latency, and balance.
 
@@ -532,7 +535,10 @@ class StampOandaRequest(BaseModel):
     "/stamp-oanda",
     summary="Stamp real OANDA account_id into the paper trading clock (admin)",
 )
-async def stamp_oanda_clock(req: StampOandaRequest):
+async def stamp_oanda_clock(
+    req: StampOandaRequest,
+    _user=Depends(require_role("admin")),
+):
     """
     Manually stamp a real OANDA account_id into the paper trading clock.
 
@@ -547,7 +553,6 @@ async def stamp_oanda_clock(req: StampOandaRequest):
 
     Requires: admin role.
     """
-    # Inline auth check — admin only
     if not req.account_id:
         from fastapi import HTTPException
 
