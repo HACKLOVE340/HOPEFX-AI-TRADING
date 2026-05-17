@@ -154,7 +154,9 @@ class EMAIndicator:
             arr = _talib.EMA(_to_np(self._close), timeperiod=self._window)
         else:
             arr = (
-                self._close.ewm(span=self._window, adjust=False).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour; callers use _wrap
+                self._close.ewm(span=self._window, adjust=False)
+                .mean()
+                .values  # healer: ignore — NaN for warmup bars is expected TA behaviour; callers use _wrap
             )
         return _wrap(arr, self._close.index)
 
@@ -349,7 +351,9 @@ def _atr_numpy(high, low, close, period=14) -> np.ndarray:
         axis=1,
     ).max(axis=1)
     return (
-        tr.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
+        tr.ewm(com=period - 1, min_periods=period)
+        .mean()
+        .values  # healer: ignore — NaN for warmup bars is expected TA behaviour
     )
 
 
@@ -372,14 +376,20 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
         com=period - 1, min_periods=period
     ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     pdi = (
-        100 * plus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+        100
+        * plus_dm.ewm(com=period - 1, min_periods=period).mean()
+        / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
     )
     mdi = (
-        100 * minus_dm.ewm(com=period - 1, min_periods=period).mean() / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
+        100
+        * minus_dm.ewm(com=period - 1, min_periods=period).mean()
+        / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
     )
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-12)
     return (
-        dx.ewm(com=period - 1, min_periods=period).mean().values  # healer: ignore — NaN for warmup bars is expected TA behaviour
+        dx.ewm(com=period - 1, min_periods=period)
+        .mean()
+        .values  # healer: ignore — NaN for warmup bars is expected TA behaviour
     )
 
 

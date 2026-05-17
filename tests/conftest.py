@@ -31,7 +31,6 @@ from datetime import datetime, timezone
 
 UTC = timezone.utc
 
-import numpy as np
 import pytest
 
 # Register shared fixture modules — makes db_engine, async_db_session, db_user,
@@ -233,6 +232,8 @@ AsyncMock = _AsyncCallable
 # Test data generators
 def generate_price_series(start: float, volatility: float, n: int = 100) -> list:
     """Generate synthetic price series"""
+    import numpy as np
+
     prices = [start]
     for _ in range(n - 1):
         change = np.random.normal(0, volatility)
@@ -242,6 +243,8 @@ def generate_price_series(start: float, volatility: float, n: int = 100) -> list
 
 def generate_ohlcv_from_close(closes: list) -> list:
     """Generate OHLCV from close prices"""
+    import numpy as np
+
     ohlcv = []
     for i, close in enumerate(closes):
         high = close * (1 + abs(np.random.normal(0, 0.001)))
@@ -423,6 +426,7 @@ def mock_strategy():
 @pytest.fixture
 def sample_market_data():
     """Multi-asset OHLCV dict for portfolio tests."""
+    import numpy as np
     import pandas as pd
 
     rng = np.random.default_rng(42)
