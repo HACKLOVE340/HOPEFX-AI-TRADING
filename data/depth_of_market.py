@@ -754,4 +754,10 @@ def get_dom_service() -> DepthOfMarketService:
 
 
 # Module-level router — imported by core.router_registry
-router = create_dom_router(get_dom_service())
+try:
+    router = create_dom_router(get_dom_service())
+except ModuleNotFoundError as exc:
+    if exc.name != "fastapi":
+        raise
+    logger.debug("FastAPI not installed; depth-of-market router disabled.")
+    router = None
