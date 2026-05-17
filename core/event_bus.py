@@ -743,6 +743,10 @@ class EventBus:
         """Remove all local handlers for a channel (use on reconnect to prevent duplicates)."""
         _local_bus.clear_channel(channel)
 
+    async def publish_local(self, channel: str, message: dict) -> None:
+        """Publish directly to in-process handlers without Redis transport."""
+        await _local_bus.publish_local(channel, message)
+
     async def dispatch_to_handlers(
         self,
         channel: str,
