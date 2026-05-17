@@ -31,6 +31,7 @@ def flush_broker_redis_state():
     try:
         import redis as _redis_lib
         import os
+
         url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
         r = _redis_lib.from_url(url, socket_connect_timeout=1)
         for pattern in ("hopefx:positions:*", "hopefx:orders:*"):
@@ -39,6 +40,7 @@ def flush_broker_redis_state():
                 r.delete(*keys)
     except Exception:
         pass  # Redis unavailable — no state to flush
+
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
