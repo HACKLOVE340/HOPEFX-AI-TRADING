@@ -1220,11 +1220,12 @@ async def _account_update_broadcaster() -> None:
 
             # Normalise to the AccountMetrics shape the frontend store expects.
             # acct_raw may be an AccountInfo dataclass or a dict — handle both.
-            def _acct_get(key: str, default=0.0):
-                if hasattr(acct_raw, key):
-                    return getattr(acct_raw, key) or default
-                if isinstance(acct_raw, dict):
-                    return acct_raw.get(key, default) or default
+            # _acct_raw=acct_raw binds the loop variable at definition time (B023).
+            def _acct_get(key: str, default=0.0, _acct_raw=acct_raw):
+                if hasattr(_acct_raw, key):
+                    return getattr(_acct_raw, key) or default
+                if isinstance(_acct_raw, dict):
+                    return _acct_raw.get(key, default) or default
                 return default
 
             balance = float(_acct_get("balance", 0.0))
