@@ -757,7 +757,7 @@ def get_dom_service() -> DepthOfMarketService:
 try:
     router = create_dom_router(get_dom_service())
 except ModuleNotFoundError as exc:
-    if exc.name != "fastapi":
+    if getattr(exc, "name", None) != "fastapi":
         raise
     logger.debug("FastAPI not installed; depth-of-market router disabled.")
     router = None
