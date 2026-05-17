@@ -89,7 +89,9 @@ class TestMarketDataCacheInit:
     """Test MarketDataCache initialisation scenarios."""
 
     @patch.object(MarketDataCache, "_connect_with_retry")
-    def test_init_defaults(self, mock_connect):
+    def test_init_defaults(self, mock_connect, monkeypatch):
+        # Clear REDIS_URL so defaults are not overridden by the test environment.
+        monkeypatch.delenv("REDIS_URL", raising=False)
         mock_connect.return_value = _make_redis_mock()
         cache = MarketDataCache()
         assert cache.host == "localhost"
