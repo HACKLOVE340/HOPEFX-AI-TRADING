@@ -146,6 +146,7 @@ sendgrid>=6.11.0
 
 # ── Templating ────────────────────────────────────────────────────────────────
 jinja2>=3.1.6
+mako>=1.3.12 # not directly required, pinned by Snyk to avoid a vulnerability
 
 # ── PDF generation ────────────────────────────────────────────────────────────
 reportlab>=4.0.0
@@ -186,4 +187,3 @@ zipp>=3.19.1
 # pylint: W1300 (bad-format-string) catches %-format mismatches that ruff/mypy
 # do not detect.  Pinned to a minor range to avoid unexpected rule changes.
 pylint>=3.2.0,<4.0.0
-mako>=1.3.12 # not directly required, pinned by Snyk to avoid a vulnerability
