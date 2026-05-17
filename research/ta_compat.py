@@ -377,7 +377,10 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
     # Replace NaN ATR (warmup period) with a near-zero safe denominator so the
     # division below does not silently propagate NaN through valid data rows.
-    atr_safe = atr.fillna(0.0)
+    # Use 1e-12 (not 0.0) to avoid computing 100*dm / (0+1e-12) ≈ 1e14 for warmup
+    # rows; instead the denominator is always at least 2e-12 which is negligible
+    # relative to real ATR values (typically >> 0.01 for any traded instrument).
+    atr_safe = atr.fillna(1e-12)
     pdi = (
         100
         * plus_dm.ewm(com=period - 1, min_periods=period).mean()
