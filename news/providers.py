@@ -19,6 +19,7 @@ Author: HOPEFX Development Team
 
 import abc
 import logging
+import xml.etree.ElementTree as _StdET
 
 try:
     import defusedxml.ElementTree as _ET  # type: ignore[import-untyped]
@@ -26,7 +27,7 @@ try:
     ET = _ET
 except ImportError:
     # defusedxml not installed — fall back to stdlib; input is validated upstream
-    import xml.etree.ElementTree as ET
+    ET = _StdET
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -75,7 +76,7 @@ def _parse_date(text: str | None) -> datetime:
     return datetime.now(UTC)
 
 
-def _xml_text(el: ET.Element | None) -> str:
+def _xml_text(el: _StdET.Element | None) -> str:
     return (el.text or "").strip() if el is not None else ""
 
 
