@@ -80,24 +80,33 @@ jobs:
           # Strip comments and blank lines; replace CHANGE_ME placeholders with
           # safe CI values.  The smoke override (docker-compose.smoke.yml) will
           # override the security-sensitive vars at container start time.
-          grep -v '^#' .env.example \
-            | grep -v '^$' \
-            | sed 's/=CHANGE_ME.*/=ci-placeholder/' \
-            | sed 's/=YOUR_DOMAIN/=localhost/' \
-            > .env
+          awk -F= '
+            BEGIN { OFS = "=" }
+            /^[[:space:]]*#/ || /^[[:space:]]*$/ { next }
+            {
+              key = $1
+              value = substr($0, length($1) + 2)
+              gsub(/CHANGE_ME.*/, "ci-placeholder", value)
+              gsub(/YOUR_DOMAIN/, "localhost", value)
+              if (value ~ /[[:space:]]/ && value !~ /^".*"$/ && value !~ /^'\''.*'\''$/) {
+                value = "\"" value "\""
+              }
+              print key, value
+            }
+          ' .env.example > .env
 
           # Ensure the vars that docker-compose.yml marks as :?required are set
           # (they will be overridden by docker-compose.smoke.yml at runtime).
           cat >> .env <<'ENVEOF'
-          POSTGRES_PASSWORD=ci_smoke_password
-          REDIS_PASSWORD=ci-smoke-redis-password
-          SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
-          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!
+          POSTGRES_PASSWORD=ci_smoke_password # pragma: allowlist secret
+          REDIS_PASSWORD=ci-smoke-redis-password # pragma: allowlist secret
+          SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!! # pragma: allowlist secret
+          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa # pragma: allowlist secret
+          HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!! # pragma: allowlist secret
           HOPEFX_DOMAIN=localhost
-          BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw
-          BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw
-          BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw
+          BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw # pragma: allowlist secret
+          BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw # pragma: allowlist secret
+          BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw # pragma: allowlist secret
           ENVEOF
 
       # ── Start the minimal stack ────────────────────────────────────────────

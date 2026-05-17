@@ -78,12 +78,15 @@ def upgrade() -> None:
                 ondelete="CASCADE",
             )
     else:
-        # Drop any existing unnamed FK on account_id first (PostgreSQL names it
-        # automatically; MySQL may have named it differently).
-        try:
-            op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
-        except Exception as _exc:  # nosec B110
-            import logging as _log; _log.getLogger(__name__).debug("drop_constraint skipped (did not exist): %s", _exc)  # noqa: E702
+        # Drop any existing FK(s) on account_id first.
+        # For PostgreSQL this avoids aborting the transaction when the expected
+        # name is absent, and it handles auto-generated constraint names.
+        inspector = sa.inspect(conn)
+        for fk in inspector.get_foreign_keys("trades"):
+            constrained = fk.get("constrained_columns") or []
+            fk_name = fk.get("name")
+            if fk_name and constrained == ["account_id"]:
+                op.drop_constraint(fk_name, "trades", type_="foreignkey")
         op.create_foreign_key(
             "fk_trades_account_id",
             "trades",
