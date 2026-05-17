@@ -265,22 +265,25 @@ jobs:
           # Key on Python version + the exact packages installed so the cache
           # is invalidated when either changes.  No requirements file needed —
           # these lightweight gates install a fixed minimal set.
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-fastapi-timeout
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
         # Needs pyyaml and pytest for config parsing.
-        # fastapi is required because brokers/factory.py and data/depth_of_market.py
-        # import it at module level.  pytest-timeout is required by --timeout=30.
+        # pytest-timeout is required by --timeout=30.
+        # FastAPI is NOT needed here: --noconftest skips the root conftest.py
+        # whose import chain pulls in FastAPI.  The gate itself only uses
+        # stdlib + pytest + pyyaml.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-timeout pyyaml fastapi
+          pip install pytest pytest-timeout pyyaml
 
       - name: Run env-var consistency gate
         run: |
           pytest tests/test_env_consistency.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
@@ -322,22 +325,25 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-fastapi-timeout
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Needs pyyaml and pytest for config/compose parsing.
-        # fastapi is required because brokers/factory.py and data/depth_of_market.py
-        # import it at module level.  pytest-timeout is required by --timeout=30.
+        # Needs pyyaml and pytest for compose file parsing.
+        # pytest-timeout is required by --timeout=30.
+        # FastAPI is NOT needed here: --noconftest skips the root conftest.py
+        # whose import chain pulls in FastAPI.  The gate itself only uses
+        # stdlib + pytest + pyyaml.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-timeout pyyaml fastapi
+          pip install pytest pytest-timeout pyyaml
 
       - name: Run docker-compose structural gate
         run: |
           pytest tests/test_docker_smoke.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \

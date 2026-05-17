@@ -13,8 +13,10 @@ Changes
                           automatically removed when the parent Account is deleted.
 
 The backfill uses safe defaults that preserve existing rows without data loss.
-'buy' is chosen for trades.side because it is a universally valid value in the
-``orderside`` enum and represents the most common default trade direction.
+'BUY' is chosen for trades.side because it matches the uppercase label used
+when the ``orderside`` PostgreSQL enum type was first created in migration
+1b0666c43575_initial_schema.py (``sa.Enum("BUY", "SELL", name="orderside")``).
+Lowercase 'buy' would also be rejected by Postgres as an invalid enum value.
 """
 
 from __future__ import annotations
@@ -33,11 +35,14 @@ def upgrade() -> None:
     dialect = conn.dialect.name  # "postgresql" | "sqlite" | "mysql"
 
     # ── 1. Backfill NULLs before tightening constraints ───────────────────────
-    # Use 'buy' — a valid value in the orderside enum — for the side backfill.
-    # 'unknown' is not a member of the enum and causes an invalid-input error on
-    # PostgreSQL.  Rows with a NULL side represent legacy data where the direction
-    # was not recorded; 'buy' is the safest neutral default.
-    op.execute("UPDATE trades SET side = 'buy' WHERE side IS NULL")
+    # Use 'BUY' — a valid value in the orderside enum — for the side backfill.
+    # The PostgreSQL enum type `orderside` was created with uppercase labels
+    # ('BUY', 'SELL') in migration 1b0666c43575_initial_schema.py so the
+    # backfill value must match that case exactly.
+    # 'unknown' is not a member of the enum (causes invalid-input-value error)
+    # and lowercase 'buy' is also rejected.  'BUY' is the safest neutral default
+    # for legacy rows where the direction was not recorded.
+    op.execute("UPDATE trades SET side = 'BUY' WHERE side IS NULL")
     op.execute("UPDATE trades SET entry_price = 0.0 WHERE entry_price IS NULL")
     op.execute("UPDATE trades SET entry_quantity = 0.0 WHERE entry_quantity IS NULL")
 

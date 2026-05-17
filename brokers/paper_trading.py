@@ -226,11 +226,21 @@ class PaperTradingBroker(BrokerConnector):
             is desired.  Pass an integer for deterministic replay or tests.
         namespace : str | None
             Redis key namespace that scopes this broker's persisted state.
-            Provide a stable identifier (e.g. user_id, "prod_paper") for
-            production deployments so state persists across restarts.
-            If None (default), a UUID is generated per instance — each new
-            instance therefore gets a clean slate, which prevents tests and
-            short-lived instances from inheriting state from prior runs.
+            When ``None`` (default), a UUID is generated for this instance.
+            UUID default gives every new instance a clean slate — no inherited
+            state from previous runs — which is the correct behavior when you
+            want an isolated, fresh paper-trading session.
+
+            For **production deployments that need crash recovery**, pass a
+            stable identifier (e.g. user ID, ``"paper-user-42"``) so that
+            Redis state (open positions, orders) survives process restarts.
+            Example::
+
+                broker = PaperTradingBroker(user_id="user-42", namespace="user-42")
+
+            All instances sharing the same namespace will load each other's
+            persisted state on ``connect()``, so each persistent session
+            should use a unique, stable identifier.
         """
         if config is None:
             config = {}
