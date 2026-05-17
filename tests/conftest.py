@@ -478,10 +478,10 @@ def app():
       CSRF_PROTECTION=false  (set by test_auth_coverage.py before import)
     """
     try:
-        from app import app as _fastapi_app  # noqa: PLC0415
+        from app import app as _fastapi_app
 
         return _fastapi_app
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(
             f"app fixture: FastAPI app could not be imported — {exc}\n"
             "Install the full requirements-ci.txt to run auth-coverage tests."

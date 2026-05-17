@@ -15,14 +15,15 @@ Targeted coverage for kill_switch.py uncovered branches:
 - _check_broker_cod branches
 - _broker_cancel_all branches
 """
+
 from __future__ import annotations
 
 import asyncio
 
 
-
 def _fresh_ks(**kwargs):
     from kill_switch import KillSwitch
+
     ks = KillSwitch(**kwargs)
     ks.reset_for_testing()
     return ks
@@ -35,6 +36,7 @@ class TestEnvVarActivation:
     def test_env_var_activates_on_construction(self, monkeypatch, tmp_path):
         monkeypatch.setenv("HOPEFX_KILL_SWITCH", "1")
         from kill_switch import KillSwitch
+
         ks = KillSwitch(flag_file=tmp_path / "ks.flag")
         assert ks.is_active() is True
         ks.reset_for_testing()
@@ -42,6 +44,7 @@ class TestEnvVarActivation:
     def test_env_var_0_does_not_activate(self, monkeypatch, tmp_path):
         monkeypatch.setenv("HOPEFX_KILL_SWITCH", "0")
         from kill_switch import KillSwitch
+
         ks = KillSwitch(flag_file=tmp_path / "ks.flag")
         ks.reset_for_testing()
         assert ks.is_active() is False
@@ -73,6 +76,7 @@ class TestFlagFile:
     def test_flag_file_written_on_activate(self, tmp_path):
         flag = tmp_path / "ks.flag"
         from kill_switch import KillSwitch
+
         ks = KillSwitch(flag_file=flag)
         ks.reset_for_testing()
         ks.activate("flag test")
@@ -82,6 +86,7 @@ class TestFlagFile:
     def test_flag_file_removed_on_deactivate(self, tmp_path):
         flag = tmp_path / "ks.flag"
         from kill_switch import KillSwitch
+
         ks = KillSwitch(flag_file=flag, deactivation_token="tok")
         ks.reset_for_testing()
         ks.activate("flag test")
@@ -120,6 +125,7 @@ class TestPersistRestore:
         state_file.write_text(json.dumps({"active": True, "reason": "old", "activated_at": old_time}))
 
         from kill_switch import KillSwitch
+
         ks = KillSwitch(flag_file=flag)
         # Stale flag in dev should not activate
         assert ks.is_active() is False
@@ -209,6 +215,7 @@ class TestTriggerNuclearMode:
 class TestCreateRouter:
     def test_returns_router_or_none(self):
         from kill_switch import create_kill_switch_router
+
         ks = _fresh_ks()
         result = create_kill_switch_router(ks)
         # Either a FastAPI router or None (if FastAPI not available)
@@ -238,8 +245,10 @@ class TestCheckBrokerCod:
 
         async def _run():
             import sys
+
             # Patch execution.engine to return our fake broker
             import types
+
             mod = types.ModuleType("execution.engine")
             mod.get_active_broker = lambda: FakeBroker()
             sys.modules["execution.engine"] = mod
@@ -259,6 +268,7 @@ class TestCheckBrokerCod:
         async def _run():
             import sys
             import types
+
             mod = types.ModuleType("execution.engine")
             mod.get_active_broker = lambda: FakeBroker()
             sys.modules["execution.engine"] = mod
@@ -291,6 +301,7 @@ class TestBrokerCancelAll:
 
         import sys
         import types
+
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod
@@ -308,6 +319,7 @@ class TestBrokerCancelAll:
 
         import sys
         import types
+
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod
@@ -333,6 +345,7 @@ class TestCheckBrokerCodFallbacks:
         async def _run():
             import sys
             import types
+
             # engine raises, router succeeds
             eng = types.ModuleType("execution.engine")
             eng.get_active_broker = lambda: (_ for _ in ()).throw(ImportError("no engine"))
@@ -360,6 +373,7 @@ class TestCheckBrokerCodFallbacks:
         async def _run():
             import sys
             import types
+
             eng = types.ModuleType("execution.engine")
             eng.get_active_broker = lambda: FakeBroker()
             sys.modules["execution.engine"] = eng
@@ -389,6 +403,7 @@ class TestBrokerCancelAllAsync:
 
         import sys
         import types
+
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod
@@ -409,6 +424,7 @@ class TestBrokerCancelAllAsync:
 
         import sys
         import types
+
         mod = types.ModuleType("execution.engine")
         mod.get_active_broker = lambda: FakeBroker()
         sys.modules["execution.engine"] = mod

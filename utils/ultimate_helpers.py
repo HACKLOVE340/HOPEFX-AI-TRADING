@@ -18,6 +18,7 @@ import logging
 
 try:
     import psutil as _psutil
+
     _PSUTIL_OK = True
 except ImportError:
     _psutil = None  # type: ignore[assignment]

@@ -5,6 +5,7 @@
 tests/unit/test_risk_advanced_analytics_cov.py
 Coverage tests for risk/advanced_analytics.py — all major branches.
 """
+
 from __future__ import annotations
 
 import os
@@ -66,8 +67,12 @@ class TestVaRResult:
 
     def test_to_dict_with_scaling(self):
         r = VaRResult(
-            var_value=0.03, confidence_level=0.99, time_horizon=5,
-            method="historical", scaling_approximate=True, scaling_note="test note"
+            var_value=0.03,
+            confidence_level=0.99,
+            time_horizon=5,
+            method="historical",
+            scaling_approximate=True,
+            scaling_note="test note",
         )
         d = r.to_dict()
         assert d["scaling_approximate"] is True
@@ -112,6 +117,7 @@ class TestVarHistorical:
 
     def test_multiday_with_enough_data(self, analytics, rets):
         import risk.advanced_analytics as _mod
+
         orig = _mod.ENFORCE_MULTIDAY_VAR
         _mod.ENFORCE_MULTIDAY_VAR = False
         try:
@@ -122,6 +128,7 @@ class TestVarHistorical:
 
     def test_multiday_sqrt_fallback(self, analytics):
         import risk.advanced_analytics as _mod
+
         orig = _mod.ENFORCE_MULTIDAY_VAR
         _mod.ENFORCE_MULTIDAY_VAR = False
         try:
@@ -137,6 +144,7 @@ class TestVarHistorical:
     def test_enforce_multiday_raises(self, rets):
         a = AdvancedRiskAnalytics()
         import risk.advanced_analytics as _mod
+
         orig = _mod.ENFORCE_MULTIDAY_VAR
         _mod.ENFORCE_MULTIDAY_VAR = True
         try:
@@ -163,6 +171,7 @@ class TestVarParametric:
 
     def test_multiday(self, analytics, rets):
         import risk.advanced_analytics as _mod
+
         orig = _mod.ENFORCE_MULTIDAY_VAR
         _mod.ENFORCE_MULTIDAY_VAR = False
         try:
@@ -185,6 +194,7 @@ class TestVarParametric:
     def test_enforce_multiday_raises(self, rets):
         a = AdvancedRiskAnalytics()
         import risk.advanced_analytics as _mod
+
         orig = _mod.ENFORCE_MULTIDAY_VAR
         _mod.ENFORCE_MULTIDAY_VAR = True
         try:
@@ -217,7 +227,9 @@ class TestVarMonteCarlo:
         short = _returns(3)
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            r = analytics.calculate_var_monte_carlo(short, time_horizon=10, use_historical_bootstrap=True, num_simulations=100)
+            r = analytics.calculate_var_monte_carlo(
+                short, time_horizon=10, use_historical_bootstrap=True, num_simulations=100
+            )
         assert r.method == "monte_carlo_gaussian"
         assert any("bootstrap" in str(x.message).lower() for x in w)
 
@@ -339,11 +351,15 @@ class TestMonteCarloSimulation:
         assert r.num_simulations == 200
 
     def test_return_paths(self, analytics):
-        r = analytics.run_monte_carlo_simulation(10_000, 0.10, 0.20, time_horizon=10, num_simulations=100, return_paths=True)
+        r = analytics.run_monte_carlo_simulation(
+            10_000, 0.10, 0.20, time_horizon=10, num_simulations=100, return_paths=True
+        )
         assert r.simulated_paths is not None
 
     def test_no_paths(self, analytics):
-        r = analytics.run_monte_carlo_simulation(10_000, 0.10, 0.20, time_horizon=10, num_simulations=100, return_paths=False)
+        r = analytics.run_monte_carlo_simulation(
+            10_000, 0.10, 0.20, time_horizon=10, num_simulations=100, return_paths=False
+        )
         assert r.simulated_paths is None
 
     def test_to_dict(self, analytics):
@@ -371,7 +387,9 @@ class TestPortfolioScenarios:
             "b": {"value": 70_000, "expected_return": 0.10, "volatility": 0.18},
         }
         corr = np.array([[1.0, 0.3], [0.3, 1.0]])
-        result = analytics.simulate_portfolio_scenarios(positions, correlations=corr, time_horizon=5, num_simulations=100)
+        result = analytics.simulate_portfolio_scenarios(
+            positions, correlations=corr, time_horizon=5, num_simulations=100
+        )
         assert "var_95" in result
 
 

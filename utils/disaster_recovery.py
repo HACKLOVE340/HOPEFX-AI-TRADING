@@ -24,6 +24,7 @@ import logging
 
 try:
     import aiofiles as _aiofiles
+
     _AIOFILES_OK = True
 except ImportError:
     _aiofiles = None  # type: ignore[assignment]

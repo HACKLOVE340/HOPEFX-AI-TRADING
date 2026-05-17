@@ -161,8 +161,8 @@ def _get_secret() -> str:
 
     Delegates to ``auth.jwt._get_secret()`` — the single source of truth for
     env-var fallback order (SECURITY_JWT_SECRET → JWT_SECRET_KEY) and
-    validation (length, CHANGE_ME guard).  Previously this function only read
-    SECURITY_JWT_SECRET with no fallback, diverging from auth/jwt.py.
+    validation (length and placeholder guard).  Previously this function only
+    read SECURITY_JWT_SECRET with no fallback, diverging from auth/jwt.py.
     """
     from auth.jwt import _get_secret as _jwt_get_secret
 

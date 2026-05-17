@@ -84,12 +84,12 @@ class _StaticFeed:
     def __init__(self, price: float = 2000.0) -> None:
         self._price = price
 
-    def get_last_price(self, symbol: str) -> SimpleNamespace:  # noqa: ARG002
+    def get_last_price(self, symbol: str) -> SimpleNamespace:
         p = self._price
         return SimpleNamespace(ask=p * 1.0001, bid=p * 0.9999, mid=p)
 
 
-def _make_price_feed(symbol: str = "XAUUSD", price: float = 2000.0) -> _StaticFeed:  # noqa: ARG001
+def _make_price_feed(symbol: str = "XAUUSD", price: float = 2000.0) -> _StaticFeed:
     return _StaticFeed(price)
 
 

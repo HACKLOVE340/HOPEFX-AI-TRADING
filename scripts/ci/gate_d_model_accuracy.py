@@ -27,7 +27,8 @@ def main() -> int:
         [sys.executable, "-m", "ml.verify_model"],
         cwd=str(REPO_ROOT),
         env=env,
-        capture_output=False,  # let output flow to stdout/stderr
+        capture_output=False,
+        check=False,  # let output flow to stdout/stderr
     )
 
     if result.returncode != 0:

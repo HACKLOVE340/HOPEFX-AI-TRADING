@@ -80,7 +80,7 @@ NUCLEAR_ALERT_SEVERITY: int = 7
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def _validate_ws_token(token: str) -> "dict | None":
+def _validate_ws_token(token: str) -> dict | None:
     """Validate a Bearer token from a WS auth message. Returns payload or None."""
     token = token.removeprefix("Bearer ")
     try:
@@ -233,7 +233,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
         try:
             raw = await asyncio.wait_for(ws.receive_text(), timeout=10.0)
             auth_msg = json.loads(raw)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             await ws.send_text(json.dumps({"type": "error", "code": "AUTH_TIMEOUT"}))
             await ws.close(code=4001)
             await limiter.release(client_ip)
@@ -277,7 +277,7 @@ def mount_nuclear_routes(app: Any, engine: NuclearAIChartEngine | None = None) -
                     raw = await asyncio.wait_for(ws.receive_text(), timeout=60.0)
                     msg = json.loads(raw)
                     await _handle_client_message(ws, msg, chart_engine)
-                except (TimeoutError, asyncio.TimeoutError):
+                except TimeoutError:
                     # Client silent for 60s — send ping
                     await _manager.send_to(ws, {"type": "ping", "ts": int(time.time() * 1000)})
                 except WebSocketDisconnect:

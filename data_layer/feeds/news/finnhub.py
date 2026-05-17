@@ -22,7 +22,6 @@ import uuid
 from datetime import datetime, timezone
 
 UTC = timezone.utc
-from typing import ClassVar
 
 from data_layer.feeds.news.base import NewsFeedBase
 from data_layer.types import NewsArticle, NewsSource

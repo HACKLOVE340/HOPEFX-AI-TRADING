@@ -216,7 +216,7 @@ class _RealShadowValidator:
         pass
 
 
-def _make_router(direction: str = "long", fill_price: float = 2000.0, status: str = "filled") -> _RealRouter:  # noqa: ARG001
+def _make_router(direction: str = "long", fill_price: float = 2000.0, status: str = "filled") -> _RealRouter:
     """Convenience alias — returns a real _RealRouter with the given fill config."""
     return _RealRouter(fill_price=fill_price, status=status)
 

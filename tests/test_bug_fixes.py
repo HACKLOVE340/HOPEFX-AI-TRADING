@@ -90,6 +90,7 @@ class TestDbStoreSessionLeak:
 
         class _RealSession:
             """Minimal real session that tracks close() calls."""
+
             def close(self):
                 closed.append(True)
 

@@ -137,7 +137,7 @@ async def _check_redis() -> ComponentStatus:
         )
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="PONG")
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -163,7 +163,7 @@ async def _check_database() -> ComponentStatus:
         await asyncio.wait_for(_query(), timeout=_TIMEOUT_S)
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="SELECT 1 OK")
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -243,7 +243,7 @@ async def _check_broker() -> ComponentStatus:
             latency_ms=round(latency, 2),
             detail=f"balance={balance}" if balance is not None else "account info OK",
         )
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:
@@ -263,7 +263,7 @@ async def _check_event_bus() -> ComponentStatus:
         )
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="ok", latency_ms=round(latency, 2), detail="heartbeat published")
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         latency = (time.monotonic() - t0) * 1000
         return ComponentStatus(status="error", latency_ms=round(latency, 2), detail=f"Timeout after {_TIMEOUT_S}s")
     except Exception as exc:

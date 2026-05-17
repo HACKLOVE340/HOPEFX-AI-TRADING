@@ -7,7 +7,6 @@ All exchange communication is delegated to CCXTConnector — mocked here.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 import pytest
 
 from brokers.base import AccountInfo, Order, OrderSide, OrderStatus, OrderType, Position
@@ -46,9 +45,7 @@ class _Callable:
         return self.call_args_list[-1]
 
     def assert_called_once_with(self, *args, **kwargs) -> None:
-        assert len(self.call_args_list) == 1, (
-            f"Expected exactly 1 call, got {len(self.call_args_list)}"
-        )
+        assert len(self.call_args_list) == 1, f"Expected exactly 1 call, got {len(self.call_args_list)}"
         actual_args, actual_kwargs = self.call_args_list[0]
         assert actual_args == args, f"Args mismatch: {actual_args!r} != {args!r}"
         assert actual_kwargs == kwargs, f"Kwargs mismatch: {actual_kwargs!r} != {kwargs!r}"
@@ -68,16 +65,18 @@ class _FakeCCXT:
         # Configurable methods — tests set .return_value / .side_effect
         self.connect = _Callable(return_value=True)
         self.disconnect = _Callable(return_value=None)
-        self.place_order = _Callable(return_value={
-            "id": "ord1",
-            "symbol": "XAUUSDT",
-            "side": "buy",
-            "type": "market",
-            "quantity": 0.01,
-            "status": "filled",
-            "filled_quantity": 0.01,
-            "average_price": 2000.0,
-        })
+        self.place_order = _Callable(
+            return_value={
+                "id": "ord1",
+                "symbol": "XAUUSDT",
+                "side": "buy",
+                "type": "market",
+                "quantity": 0.01,
+                "status": "filled",
+                "filled_quantity": 0.01,
+                "average_price": 2000.0,
+            }
+        )
         self.cancel_order = _Callable(return_value=True)
         self.cancel_all_orders = _Callable(return_value=["all"])
         self.get_order = _Callable(return_value=None)
@@ -85,12 +84,14 @@ class _FakeCCXT:
         self.get_open_orders = _Callable(return_value=[])
         self.close_position = _Callable(return_value=True)
         self.get_exchange_info = _Callable(return_value={})
-        self.get_account_info = _Callable(return_value={
-            "balance": 100_000.0,
-            "equity": 100_000.0,
-            "margin_used": 0.0,
-            "margin_available": 100_000.0,
-        })
+        self.get_account_info = _Callable(
+            return_value={
+                "balance": 100_000.0,
+                "equity": 100_000.0,
+                "margin_used": 0.0,
+                "margin_available": 100_000.0,
+            }
+        )
         self.get_market_data = _Callable(return_value=[])
         self.get_current_price = _Callable(return_value=2000.0)
 

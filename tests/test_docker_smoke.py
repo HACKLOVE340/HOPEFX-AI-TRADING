@@ -123,9 +123,7 @@ def _service_has_healthcheck(service_name: str, base: dict, override: dict) -> b
     # A healthcheck in the override takes precedence
     if override_svc.get("healthcheck"):
         return True
-    if base_svc.get("healthcheck"):
-        return True
-    return False
+    return bool(base_svc.get("healthcheck"))
 
 
 def _service_is_disabled(service_name: str, override: dict) -> bool:
@@ -213,7 +211,7 @@ def test_smoke_healthy_services_have_healthchecks() -> None:
             missing.append(svc)
 
     assert not missing, (
-        f"Services required to be healthy in smoke test have no healthcheck:\n"
+        "Services required to be healthy in smoke test have no healthcheck:\n"
         + "\n".join(f"  {s}" for s in missing)
         + "\nAdd a healthcheck: block to docker-compose.yml or docker-compose.smoke.yml."
     )
@@ -241,8 +239,8 @@ def test_smoke_override_disables_ci_incompatible_services() -> None:
             not_disabled.append(svc)
 
     assert not not_disabled, (
-        f"Services that cannot reach healthy in CI are not disabled in "
-        f"docker-compose.smoke.yml:\n"
+        "Services that cannot reach healthy in CI are not disabled in "
+        "docker-compose.smoke.yml:\n"
         + "\n".join(f"  {s}" for s in not_disabled)
         + "\nAdd 'profiles: [disabled]' to each service in docker-compose.smoke.yml."
     )
@@ -389,10 +387,7 @@ def test_app_healthcheck_uses_liveness_probe() -> None:
     test_cmd = hc.get("test", [])
 
     # test_cmd is either a list ["CMD", ...] or a string
-    if isinstance(test_cmd, list):
-        test_str = " ".join(str(t) for t in test_cmd)
-    else:
-        test_str = str(test_cmd)
+    test_str = " ".join(str(t) for t in test_cmd) if isinstance(test_cmd, list) else str(test_cmd)
 
     assert "/api/health/live" in test_str, (
         f"app healthcheck does not use /api/health/live.\n"
@@ -475,8 +470,6 @@ def test_env_example_has_smoke_required_vars() -> None:
     assert ENV_EXAMPLE.exists(), pytest.skip(".env.example not found")
 
     env_text = ENV_EXAMPLE.read_text(encoding="utf-8")
-    override = _load_yaml(COMPOSE_SMOKE)
-    smoke_vars = _smoke_override_env_vars(override)
 
     # These are the security-critical vars that must be documented
     critical_smoke_vars = {
@@ -599,9 +592,7 @@ def test_compose_base_references_dockerfile() -> None:
 
     if isinstance(build, str):
         # build: . shorthand
-        assert build in (".", "./"), (
-            f"app build context is {build!r}, expected '.' (project root)."
-        )
+        assert build in (".", "./"), f"app build context is {build!r}, expected '.' (project root)."
         return
 
     context = build.get("context", "")

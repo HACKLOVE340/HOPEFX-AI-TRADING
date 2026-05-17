@@ -94,7 +94,6 @@ def session_factory(db_engine):
     return sessionmaker(bind=db_engine, autocommit=False, autoflush=False)
 
 
-
 @pytest.fixture()
 def client(session_factory):
     """Per-test TestClient with a fully isolated auth stack.

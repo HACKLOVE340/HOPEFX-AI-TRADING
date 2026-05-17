@@ -74,9 +74,9 @@ repos:
           - ".secrets.baseline"
           # Exclude files that legitimately contain placeholder/example values.
           - "--exclude-files"
-          - "(frontend/package-lock\\.json|\\.env\\.example|data/.*\\.csv|ml/saved_models/.*|docs/.*\\.md|docs/archive/.*|DEPLOYMENT\\.md|dashboard/dist/.*|.*\\.ipynb)"
+          - "(frontend/package-lock\\.json|\\.env\\.example|data/.*\\.csv|ml/saved_models/.*|docs/.*\\.md|docs/archive/.*|DEPLOYMENT\\.md|dashboard/dist/.*|.*\\.ipynb|test-results\\.xml)"
         # Jupyter notebooks, lock files, markdown docs, and build artifacts are excluded.
-        exclude: (\.ipynb$|package-lock\.json$|\.md$|dashboard/dist/)
+        exclude: (\.ipynb$|package-lock\.json$|\.md$|dashboard/dist/|test-results\.xml$)
 
 # ── Local hooks ───────────────────────────────────────────────────────────────
 # These run scripts from the repository itself (no external repo required).

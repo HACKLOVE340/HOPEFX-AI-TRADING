@@ -397,6 +397,7 @@ class ItosConeEngine:
 
         # Weighted drift and vol — nan_to_num guards against cones with NaN params
         import math as _math
+
         mu_merged = sum(
             (c.drift_annual if _math.isfinite(c.drift_annual) else 0.0) * weights.get(tf, 1.0) / total_w
             for tf, c in cones.items()

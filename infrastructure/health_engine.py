@@ -165,7 +165,7 @@ class HealthEngine:
             detail = raw.get("detail", "")
             extra = {k: v for k, v in raw.items() if k not in ("status", "detail")}
             return ProbeResult(name=name, label=label, status=status, latency_ms=latency_ms, detail=detail, extra=extra)
-        except (TimeoutError, asyncio.TimeoutError):
+        except TimeoutError:
             return ProbeResult(
                 name=name,
                 label=label,
