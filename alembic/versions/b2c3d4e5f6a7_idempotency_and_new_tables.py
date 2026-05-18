@@ -52,9 +52,11 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _idx(index_name, table_name, *args, **kwargs):
-        """Create index only if it does not already exist."""
-        if table_name not in _existing_tables:
-            return
+        """Create index only if it does not already exist.
+
+        Re-inspects the live schema so indexes on tables created earlier in
+        this same upgrade() call are handled correctly.
+        """
         try:
             existing = {i["name"] for i in inspector.get_indexes(table_name)}
         except Exception:
@@ -185,29 +187,92 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Revert schema changes."""
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _tables = set(inspector.get_table_names())
 
-    # Drop new tables
-    op.drop_index("ix_config_store_key", table_name="config_store")
-    op.drop_table("config_store")
+    def _drop_idx(name, table):
+        if table not in _tables:
+            return
+        if name in {i["name"] for i in inspector.get_indexes(table)}:
+            op.drop_index(name, table_name=table)
 
-    op.drop_index("idx_outbox_unpublished", table_name="outbox_events")
-    op.drop_index("ix_outbox_event_type", table_name="outbox_events")
-    op.drop_table("outbox_events")
+    def _drop_tbl(name):
+        if name in _tables:
+            op.drop_table(name)
 
-    op.drop_index("ix_crypto_payments_created_at", table_name="crypto_payments")
-    op.drop_index("ix_crypto_payments_status", table_name="crypto_payments")
-    op.drop_index("ix_crypto_payments_user_id", table_name="crypto_payments")
-    op.drop_index("ix_crypto_payments_payment_id", table_name="crypto_payments")
-    op.drop_table("crypto_payments")
+    _drop_idx("ix_config_store_key", "config_store")
+    _drop_tbl("config_store")
 
-    # Remove client_order_id from orders
-    with op.batch_alter_table("orders", schema=None) as batch_op:
-        batch_op.drop_index("ix_orders_client_order_id")
-        batch_op.drop_constraint("uq_orders_client_order_id", type_="unique")
-        batch_op.drop_column("client_order_id")
+    _drop_idx("idx_outbox_unpublished", "outbox_events")
+    _drop_idx("ix_outbox_event_type", "outbox_events")
+    _drop_tbl("outbox_events")
 
-    # Remove client_order_id from trades
-    with op.batch_alter_table("trades", schema=None) as batch_op:
-        batch_op.drop_index("ix_trades_client_order_id")
-        batch_op.drop_constraint("uq_trades_client_order_id", type_="unique")
-        batch_op.drop_column("client_order_id")
+    _drop_idx("ix_crypto_payments_created_at", "crypto_payments")
+    _drop_idx("ix_crypto_payments_status", "crypto_payments")
+    _drop_idx("ix_crypto_payments_user_id", "crypto_payments")
+    _drop_idx("ix_crypto_payments_payment_id", "crypto_payments")
+    _drop_tbl("crypto_payments")
+
+    def _live_cols(table: str) -> set:
+        """Return current column names, bypassing SQLAlchemy's inspector cache."""
+        if bind.dialect.name == "sqlite":
+            rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
+            return {row[1] for row in rows}
+        rows = bind.execute(
+            sa.text("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = :t"), {"t": table}
+        ).fetchall()
+        return {row[0] for row in rows}
+
+    def _drop_col_sqlite(table: str, col: str) -> None:
+        """Drop a column on SQLite via manual table rebuild, skipping indexes on the dropped col."""
+        live = _live_cols(table)
+        if col not in live:
+            return
+        keep_cols = [c for c in live if c != col]
+        cols_sql = ", ".join(keep_cols)
+        tmp = f"_tmp_{table}"
+        # Reflect column types from PRAGMA
+        pragma = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
+        col_defs = []
+        pk_cols = []
+        for row in pragma:
+            cname, ctype, notnull, dflt, pk = row[1], row[2], row[3], row[4], row[5]
+            if cname == col:
+                continue
+            defn = f'"{cname}" {ctype or "TEXT"}'
+            if notnull:
+                defn += " NOT NULL"
+            if dflt is not None:
+                defn += f" DEFAULT {dflt}"
+            if pk:
+                pk_cols.append(cname)
+            col_defs.append(defn)
+        if len(pk_cols) == 1:
+            # Mark single PK inline
+            col_defs = [
+                d + " PRIMARY KEY" if d.startswith(f'"{pk_cols[0]}"') else d
+                for d in col_defs
+            ]
+        create_sql = f'CREATE TABLE "{tmp}" ({", ".join(col_defs)})'
+        bind.execute(sa.text(create_sql))
+        bind.execute(sa.text(f'INSERT INTO "{tmp}" ({cols_sql}) SELECT {cols_sql} FROM "{table}"'))
+        bind.execute(sa.text(f'DROP TABLE "{table}"'))
+        bind.execute(sa.text(f'ALTER TABLE "{tmp}" RENAME TO "{table}"'))
+
+    # Remove client_order_id from orders — only if the column exists.
+    if "orders" in _tables and "client_order_id" in _live_cols("orders"):
+        if bind.dialect.name == "sqlite":
+            _drop_col_sqlite("orders", "client_order_id")
+        else:
+            with op.batch_alter_table("orders", schema=None) as batch_op:
+                batch_op.drop_column("client_order_id")
+
+    # Remove client_order_id from trades — only if the column exists.
+    if "trades" in _tables and "client_order_id" in _live_cols("trades"):
+        if bind.dialect.name == "sqlite":
+            _drop_col_sqlite("trades", "client_order_id")
+        else:
+            with op.batch_alter_table("trades", schema=None) as batch_op:
+                batch_op.drop_column("client_order_id")

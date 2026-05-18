@@ -196,7 +196,11 @@ class TestResetPassword:
         assert user.password_reset_token is None  # one-time use: token cleared
 
     def test_invalid_token_returns_error(self):
+<<<<<<< HEAD
+        self._user_with_token("correcttoken")
+=======
         _user = self._user_with_token("correcttoken")
+>>>>>>> origin/main
         svc = _make_service(user=None)  # no matching user for wrong token
         ok, msg = svc.reset_password("wrongtoken", "NewSecurePass1!")
         assert ok is False

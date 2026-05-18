@@ -498,7 +498,11 @@ class AutoRollbackManager:
             # validation.  The self-healer stores paths using os.sep which is
             # '\\' on Windows; git always accepts forward slashes on all
             # platforms, so we normalise unconditionally.
+<<<<<<< HEAD
+            rel_path = str(rel_path).replace("\\", "/")  # noqa: PLW2901
+=======
             rel_path = str(_raw_path).replace("\\", "/")
+>>>>>>> origin/main
 
             # Validate path is a safe relative file path before passing to subprocess.
             # Allowed: letters, digits, dot, underscore, forward-slash, hyphen, space.

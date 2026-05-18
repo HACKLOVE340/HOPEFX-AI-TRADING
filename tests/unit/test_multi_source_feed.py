@@ -432,7 +432,11 @@ class TestMultiSourceTickFeedPolling:
         )
         feed._running = True
         # Run one poll cycle manually.
+<<<<<<< HEAD
+        feed._states["XAUUSD"]
+=======
         _state = feed._states["XAUUSD"]
+>>>>>>> origin/main
         sym_cfg = feed._symbol_cfgs.get("XAUUSD", {})
         price = await feed._fetch_with_retry("XAUUSD", "yfinance", sym_cfg)
         assert price == pytest.approx(1950.0)
@@ -634,7 +638,11 @@ class TestGetFeedStatus:
         assert s["symbols"] == {}
 
     def test_get_feed_status_after_init(self):
+<<<<<<< HEAD
+        get_multi_source_feed(config_path=_CFG, symbols=["XAUUSD"])
+=======
         _feed = get_multi_source_feed(config_path=_CFG, symbols=["XAUUSD"])
+>>>>>>> origin/main
         s = get_feed_status()
         assert "XAUUSD" in s["symbols"]
 
