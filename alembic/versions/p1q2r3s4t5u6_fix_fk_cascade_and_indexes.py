@@ -61,7 +61,6 @@ def upgrade() -> None:
         existing_order_columns = {col["name"] for col in inspector.get_columns("orders")}
         if "account_id" not in existing_order_columns:
             op.add_column("orders", sa.Column("account_id", sa.Integer(), nullable=True))
-            inspector = sa.inspect(bind)
 
         with op.batch_alter_table("orders") as batch_op:
             # Drop old FK only when present (batch ops execute on context exit).
