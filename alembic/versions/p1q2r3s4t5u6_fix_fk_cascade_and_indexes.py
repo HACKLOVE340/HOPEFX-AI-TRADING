@@ -69,10 +69,9 @@ def upgrade() -> None:
 
         # Use op.create_foreign_key directly (not batch_alter_table) so that
         # the just-added column is guaranteed to be visible to the DDL.
-        current_order_fks = {
-            fk["name"] for fk in sa.inspect(bind).get_foreign_keys("orders")
-        }
-        if "fk_orders_account_id" not in current_order_fks:
+        if "fk_orders_account_id" not in {
+            fk["name"] for fk in inspector.get_foreign_keys("orders")
+        }:
             op.create_foreign_key(
                 "fk_orders_account_id",
                 "orders",
