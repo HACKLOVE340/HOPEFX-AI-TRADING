@@ -42,6 +42,19 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
     dialect = bind.dialect.name
 
+    def _matching_fk_names(
+        table: str,
+        constrained_columns: list[str],
+        referred_table: str,
+    ) -> set[str]:
+        return {
+            fk["name"]
+            for fk in sa.inspect(bind).get_foreign_keys(table)
+            if fk.get("name")
+            and fk.get("constrained_columns") == constrained_columns
+            and fk.get("referred_table") == referred_table
+        }
+
     # ── orders.account_id — add FK ────────────────────────────────────────────
     # SQLite does not support ADD CONSTRAINT; skip FK DDL on SQLite.
     if dialect != "sqlite":
@@ -52,11 +65,8 @@ def upgrade() -> None:
 
         with op.batch_alter_table("orders") as batch_op:
             # Drop old FK only when present (batch ops execute on context exit).
-            existing_order_fks = {
-                fk["name"] for fk in inspector.get_foreign_keys("orders") if fk.get("name")
-            }
-            if "fk_orders_account_id" in existing_order_fks:
-                batch_op.drop_constraint("fk_orders_account_id", type_="foreignkey")
+            for fk_name in _matching_fk_names("orders", ["account_id"], "accounts"):
+                batch_op.drop_constraint(fk_name, type_="foreignkey")
             batch_op.create_foreign_key(
                 "fk_orders_account_id",
                 "accounts",
@@ -67,10 +77,8 @@ def upgrade() -> None:
 
         # orders.trade_id — recreate FK with ondelete
         with op.batch_alter_table("orders") as batch_op:
-            try:
-                batch_op.drop_constraint("fk_orders_trade_id", type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
+            for fk_name in _matching_fk_names("orders", ["trade_id"], "trades"):
+                batch_op.drop_constraint(fk_name, type_="foreignkey")
             batch_op.create_foreign_key(
                 "fk_orders_trade_id",
                 "trades",
@@ -81,10 +89,8 @@ def upgrade() -> None:
 
         # signals.trade_id — recreate FK with ondelete
         with op.batch_alter_table("signals") as batch_op:
-            try:
-                batch_op.drop_constraint("fk_signals_trade_id", type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
+            for fk_name in _matching_fk_names("signals", ["trade_id"], "trades"):
+                batch_op.drop_constraint(fk_name, type_="foreignkey")
             batch_op.create_foreign_key(
                 "fk_signals_trade_id",
                 "trades",
@@ -95,10 +101,8 @@ def upgrade() -> None:
 
         # accounts.user_id — recreate FK with CASCADE
         with op.batch_alter_table("accounts") as batch_op:
-            try:
-                batch_op.drop_constraint("fk_accounts_user_id", type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
+            for fk_name in _matching_fk_names("accounts", ["user_id"], "users"):
+                batch_op.drop_constraint(fk_name, type_="foreignkey")
             batch_op.create_foreign_key(
                 "fk_accounts_user_id",
                 "users",
@@ -109,10 +113,8 @@ def upgrade() -> None:
 
         # positions.account_id — add FK
         with op.batch_alter_table("positions") as batch_op:
-            try:
-                batch_op.drop_constraint("fk_positions_account_id", type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
+            for fk_name in _matching_fk_names("positions", ["account_id"], "accounts"):
+                batch_op.drop_constraint(fk_name, type_="foreignkey")
             batch_op.create_foreign_key(
                 "fk_positions_account_id",
                 "accounts",
@@ -129,10 +131,8 @@ def upgrade() -> None:
                 type_=sa.String(36),
                 existing_nullable=True,
             )
-            try:
-                batch_op.drop_constraint("fk_positions_user_id", type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
+            for fk_name in _matching_fk_names("positions", ["user_id"], "users"):
+                batch_op.drop_constraint(fk_name, type_="foreignkey")
             batch_op.create_foreign_key(
                 "fk_positions_user_id",
                 "users",
