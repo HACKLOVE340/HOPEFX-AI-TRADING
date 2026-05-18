@@ -79,9 +79,23 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_trades_account_id", table_name="trades")
-    with op.batch_alter_table("trades") as batch_op:
-        batch_op.drop_column("timestamp")
-        batch_op.drop_column("size")
-        batch_op.drop_column("trade_type")
-        batch_op.drop_column("account_id")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_idx = {i["name"] for i in inspector.get_indexes("trades")}
+    if "ix_trades_account_id" in existing_idx:
+        op.drop_index("ix_trades_account_id", table_name="trades")
+    # Use PRAGMA to bypass inspector column cache
+    if bind.dialect.name == "sqlite":
+        rows = bind.execute(sa.text("PRAGMA table_info(trades)")).fetchall()
+        existing_cols = {row[1] for row in rows}
+    else:
+        rows = bind.execute(
+            sa.text("SELECT column_name FROM information_schema.columns WHERE table_name='trades'")
+        ).fetchall()
+        existing_cols = {row[0] for row in rows}
+    cols_to_drop = [c for c in ("timestamp", "size", "trade_type", "account_id")
+                    if c in existing_cols]
+    if cols_to_drop:
+        with op.batch_alter_table("trades") as batch_op:
+            for col in cols_to_drop:
+                batch_op.drop_column(col)
