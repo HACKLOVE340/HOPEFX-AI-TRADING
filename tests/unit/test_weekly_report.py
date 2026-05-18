@@ -33,15 +33,26 @@ except ImportError:
 
 UTC = timezone.utc
 
+try:
+    from reports.weekly_report import TradeRecord
+except ImportError:
+    TradeRecord = None  # type: ignore[assignment,misc]
+
 
 _WEEK_START = datetime(2025, 1, 6, 0, 0, tzinfo=UTC)
 _WEEK_END = datetime(2025, 1, 12, 23, 59, tzinfo=UTC)
 
 
 def _make_trade(pnl: float, symbol: str = "XAUUSD") -> TradeRecord:
+<<<<<<< HEAD
+    from reports.weekly_report import TradeRecord
+
+    return TradeRecord(
+=======
     from reports.weekly_report import TradeRecord as _TR
 
     return _TR(
+>>>>>>> origin/main
         trade_id=str(uuid.uuid4()),
         symbol=symbol,
         side="BUY" if pnl >= 0 else "SELL",

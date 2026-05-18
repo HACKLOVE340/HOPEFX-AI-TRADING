@@ -342,7 +342,11 @@ def _bbands_numpy(close, window=20, dev=2):
 
 
 def _atr_numpy(high, low, close, period=14) -> np.ndarray:
+<<<<<<< HEAD
+    tr = pd.concat(
+=======
     tr = pd.concat(  # healer: ignore — NaN for warmup bars is expected TA behaviour
+>>>>>>> origin/main
         [
             high - low,
             (high - close.shift(1)).abs(),
@@ -350,6 +354,13 @@ def _atr_numpy(high, low, close, period=14) -> np.ndarray:
         ],
         axis=1,
     ).max(axis=1)
+<<<<<<< HEAD
+    return tr.ewm(com=period - 1, min_periods=period).mean().values
+
+
+def _adx_numpy(high, low, close, period=14) -> np.ndarray:
+    tr = pd.concat(
+=======
     return (
         tr.ewm(com=period - 1, min_periods=period)
         .mean()
@@ -359,6 +370,7 @@ def _atr_numpy(high, low, close, period=14) -> np.ndarray:
 
 def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     tr = pd.concat(  # healer: ignore — NaN for warmup bars is expected TA behaviour
+>>>>>>> origin/main
         [
             high - low,
             (high - close.shift(1)).abs(),
