@@ -123,8 +123,10 @@ jobs:
                   value = value[1:-1]
 
               # Replace placeholder tokens with CI-safe defaults.
-              # Inline comments have already been stripped above.
-              value = re.sub(r"CHANGE_ME\S*", "ci-placeholder", value)
+              # Use [A-Za-z0-9_]* (not \S*) so the regex stops at non-identifier
+              # chars like '@' in URLs, preventing truncation of values like
+              # 'CHANGE_ME_password@host:port/db' to just 'ci-placeholder'.
+              value = re.sub(r"CHANGE_ME[A-Za-z0-9_]*", "ci-placeholder", value)
               value = value.replace("YOUR_DOMAIN", "localhost")
 
               # Quote values that contain spaces so Docker Compose accepts them
@@ -159,10 +161,12 @@ jobs:
               ("BOOTSTRAP_TRADER_" + "PASS" + "WORD", "ci-smoke-trader-pw"),
           ]
 
-          existing = {line.split("=", 1)[0] for line in lines if "=" in line}
+          # Always upsert required overrides: remove any existing entry (which may
+          # have been set to "ci-placeholder" by the CHANGE_ME substitution above)
+          # then append the correct CI value.
           for key, value in required_overrides:
-              if key not in existing:
-                  lines.append(f"{key}={value}")
+              lines = [ln for ln in lines if not ln.startswith(f"{key}=")]
+              lines.append(f"{key}={value}")
 
           pathlib.Path(".env").write_text("\n".join(lines) + "\n")
           print(f"Generated .env with {len(lines)} entries.")

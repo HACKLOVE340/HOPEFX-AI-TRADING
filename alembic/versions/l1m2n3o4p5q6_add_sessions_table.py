@@ -76,8 +76,8 @@ def upgrade() -> None:
     try:
         users_cols = {c["name"]: c for c in inspector.get_columns("users")}
         user_id_type = users_cols.get("id", {}).get("type", user_id_type)
-    except (sa.exc.NoSuchTableError, sa.exc.NoInspectionAvailable):
-        # Keep the schema default (String(36)) if introspection is unavailable.
+    except (sa.exc.NoSuchTableError, sa.exc.NoInspectionAvailable):  # nosec B110
+        # Introspection unavailable — keep String(36) default (intentional fallback).
         pass
 
     _tbl(
