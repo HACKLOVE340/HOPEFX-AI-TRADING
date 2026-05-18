@@ -39,17 +39,19 @@ depends_on = None
 
 def upgrade() -> None:
     bind = op.get_bind()
+    inspector = sa.inspect(bind)
     dialect = bind.dialect.name
 
     # ── orders.account_id — add FK ────────────────────────────────────────────
     # SQLite does not support ADD CONSTRAINT; skip FK DDL on SQLite.
     if dialect != "sqlite":
         with op.batch_alter_table("orders") as batch_op:
-            # Drop old index if it exists (will be recreated by the FK)
-            try:
+            # Drop old FK only when present (batch ops execute on context exit).
+            existing_order_fks = {
+                fk["name"] for fk in inspector.get_foreign_keys("orders") if fk.get("name")
+            }
+            if "fk_orders_account_id" in existing_order_fks:
                 batch_op.drop_constraint("fk_orders_account_id", type_="foreignkey")
-            except Exception:  # nosec B110 — constraint may not exist yet
-                pass
             batch_op.create_foreign_key(
                 "fk_orders_account_id",
                 "accounts",
