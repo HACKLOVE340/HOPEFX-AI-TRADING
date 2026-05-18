@@ -54,9 +54,11 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _idx(index_name, table_name, *args, **kwargs):
-        """Create index only if it does not already exist."""
-        if table_name not in _existing_tables:
-            return
+        """Create index only if it does not already exist.
+
+        Re-inspects the live schema so indexes on tables created earlier in
+        this same upgrade() call are handled correctly.
+        """
         try:
             existing = {i["name"] for i in inspector.get_indexes(table_name)}
         except Exception:
@@ -250,28 +252,42 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop tables added in this migration (reverse order of creation)."""
-    op.drop_index("idx_broker_conn_name", table_name="broker_connections")
-    op.drop_table("broker_connections")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _tables = set(inspector.get_table_names())
 
-    op.drop_index("idx_aml_alerts_severity", table_name="aml_alerts")
-    op.drop_index("idx_aml_alerts_status", table_name="aml_alerts")
-    op.drop_index("idx_aml_alerts_user", table_name="aml_alerts")
-    op.drop_table("aml_alerts")
+    def _drop_idx(name, table):
+        if table not in _tables:
+            return
+        if name in {i["name"] for i in inspector.get_indexes(table)}:
+            op.drop_index(name, table_name=table)
 
-    op.drop_index("idx_api_keys_hash", table_name="api_keys")
-    op.drop_index("idx_api_keys_user", table_name="api_keys")
-    op.drop_table("api_keys")
+    def _drop_tbl(name):
+        if name in _tables:
+            op.drop_table(name)
 
-    op.drop_index("ix_recon_records_status", table_name="reconciliation_records")
-    op.drop_index("ix_recon_records_recon_id", table_name="reconciliation_records")
-    op.drop_table("reconciliation_records")
+    _drop_idx("idx_broker_conn_name", "broker_connections")
+    _drop_tbl("broker_connections")
 
-    op.drop_index("ix_tax_reports_status", table_name="tax_reports")
-    op.drop_index("ix_tax_reports_report_id", table_name="tax_reports")
-    op.drop_table("tax_reports")
+    _drop_idx("idx_aml_alerts_severity", "aml_alerts")
+    _drop_idx("idx_aml_alerts_status", "aml_alerts")
+    _drop_idx("idx_aml_alerts_user", "aml_alerts")
+    _drop_tbl("aml_alerts")
 
-    op.drop_index("ix_chargebacks_status", table_name="chargebacks")
-    op.drop_index("ix_chargebacks_user_id", table_name="chargebacks")
-    op.drop_index("ix_chargebacks_payment_id", table_name="chargebacks")
-    op.drop_index("ix_chargebacks_chargeback_id", table_name="chargebacks")
-    op.drop_table("chargebacks")
+    _drop_idx("idx_api_keys_hash", "api_keys")
+    _drop_idx("idx_api_keys_user", "api_keys")
+    _drop_tbl("api_keys")
+
+    _drop_idx("ix_recon_records_status", "reconciliation_records")
+    _drop_idx("ix_recon_records_recon_id", "reconciliation_records")
+    _drop_tbl("reconciliation_records")
+
+    _drop_idx("ix_tax_reports_status", "tax_reports")
+    _drop_idx("ix_tax_reports_report_id", "tax_reports")
+    _drop_tbl("tax_reports")
+
+    _drop_idx("ix_chargebacks_status", "chargebacks")
+    _drop_idx("ix_chargebacks_user_id", "chargebacks")
+    _drop_idx("ix_chargebacks_payment_id", "chargebacks")
+    _drop_idx("ix_chargebacks_chargeback_id", "chargebacks")
+    _drop_tbl("chargebacks")
