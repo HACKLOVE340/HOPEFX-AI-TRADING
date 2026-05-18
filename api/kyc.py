@@ -34,6 +34,8 @@ router = APIRouter(prefix="/kyc", tags=["kyc"])
 
 # Safe filename characters for KYC upload local storage
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]")
+# Maximum length for sanitized filenames stored locally
+_MAX_FILENAME_LENGTH = 100
 
 
 class CreateApplicantRequest(BaseModel):
@@ -379,12 +381,12 @@ async def kyc_upload_document_alias(
 
         # Local filesystem fallback
         if file_url is None:
-            # Sanitize user.sub (JWT sub claim) before using in path
-            _safe_sub = _SAFE_FILENAME_RE.sub("_", os.path.basename(user.sub))[:64] or "unknown"
+            # Sanitize user.sub (JWT sub claim): replace all path separators and unsafe chars
+            _safe_sub = _SAFE_FILENAME_RE.sub("_", user.sub.replace("\\", "/").replace("/", "_"))[:64] or "unknown"
             upload_dir = _os.path.join("data", "kyc_uploads", _safe_sub)
             _os.makedirs(upload_dir, exist_ok=True)
             # Sanitize: truncate first, then strip directory components and replace unsafe chars
-            _raw_name = os.path.basename((file.filename or "document")[:100])
+            _raw_name = os.path.basename((file.filename or "document")[:_MAX_FILENAME_LENGTH])
             _safe_name = _SAFE_FILENAME_RE.sub("_", _raw_name) or "document"
             local_path = _os.path.join(upload_dir, f"{doc_id}_{_safe_name}")
             with open(local_path, "wb") as fh:

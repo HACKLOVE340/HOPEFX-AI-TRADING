@@ -4,6 +4,7 @@
 """SuperAdmin ML/AI sub-router."""
 
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -406,8 +407,6 @@ async def get_model_explainability(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """SHAP / feature importance for a deployed model."""
-    import re
-
     # Validate model name: only alphanumeric + underscore, max 64 chars
     if not re.fullmatch(r"[A-Za-z0-9_]{1,64}", model):
         raise HTTPException(status_code=400, detail="Invalid model name")
