@@ -47,17 +47,17 @@ jobs:
           --health-retries 5
 
     steps:
-    - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       with:
         persist-credentials: false
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
       with:
         python-version: ${{ matrix.python-version }}
 
     - name: Cache pip packages
-      uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-ci-${{ matrix.python-version }}-${{ hashFiles('requirements-ci.txt') }}
@@ -89,6 +89,7 @@ jobs:
         STRATEGY_MIN_BARS: "100"
         STRATEGY_TICKS_PER_BAR: "10"
         FIX_CONFIG_FILE: fix.cfg
+        SHARPE_CB_RESTORE: "false"
       run: |
         pytest tests/ \
           -m "not slow" \
@@ -121,7 +122,7 @@ jobs:
       run: coverage report --rcfile=.coveragerc --include="core/*" --fail-under=80
 
     - name: Publish test results
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
       if: always()
       with:
         name: test-results-${{ matrix.python-version }}
@@ -147,7 +148,7 @@ jobs:
         files: coverage.xml
 
     - name: Upload coverage artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
       if: always()
       with:
         name: coverage-${{ matrix.python-version }}
@@ -183,16 +184,16 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-ci-3.12-${{ hashFiles('requirements-ci.txt') }}
@@ -228,7 +229,7 @@ jobs:
             --junitxml=auth-coverage-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: auth-coverage-results
@@ -250,42 +251,47 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           # Key on Python version + the exact packages installed so the cache
           # is invalidated when either changes.  No requirements file needed —
           # these lightweight gates install a fixed minimal set.
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Only needs pyyaml and pytest — no heavy ML stack required.
+        # Needs pyyaml and pytest for config parsing.
+        # pytest-timeout is required by --timeout=30.
+        # FastAPI is NOT needed here: --noconftest skips the root conftest.py
+        # whose import chain pulls in FastAPI.  The gate itself only uses
+        # stdlib + pytest + pyyaml.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install pytest pytest-timeout pyyaml
 
       - name: Run env-var consistency gate
         run: |
           pytest tests/test_env_consistency.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
             --junitxml=env-consistency-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: env-consistency-results
@@ -308,38 +314,44 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
+        # Needs pyyaml and pytest for compose file parsing.
+        # pytest-timeout is required by --timeout=30.
+        # FastAPI is NOT needed here: --noconftest skips the root conftest.py
+        # whose import chain pulls in FastAPI.  The gate itself only uses
+        # stdlib + pytest + pyyaml.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install pytest pytest-timeout pyyaml
 
       - name: Run docker-compose structural gate
         run: |
           pytest tests/test_docker_smoke.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
             --junitxml=docker-smoke-structural-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: docker-smoke-structural-results
@@ -361,39 +373,41 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-only
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Only needs pytest — reads JSON and text files, no ML stack required.
+        # Reads JSON and text files; no ML stack required.
+        # pytest-timeout is required by --timeout=30.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest pytest-timeout
 
       - name: Run model accuracy gate
         run: |
           pytest tests/test_model_accuracy_assertion.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
             --junitxml=model-accuracy-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: model-accuracy-results
@@ -416,39 +430,41 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.12"
 
       - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-only
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Only needs pytest — pure filesystem scan, no imports required.
+        # Pure filesystem scan; no heavy imports required.
+        # pytest-timeout is required by --timeout=30.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest pytest-timeout
 
       - name: Run dead file detection gate
         run: |
           pytest tests/test_dead_file_detection.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
             --junitxml=dead-file-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: dead-file-results
@@ -465,7 +481,7 @@ jobs:
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
@@ -496,7 +512,7 @@ jobs:
 
       - name: Post coverage comment on PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         env:
           COVERAGE_TOTAL: ${{ steps.coverage.outputs.total }}
         with:
@@ -564,10 +580,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       - name: Run Gate A
@@ -580,10 +596,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       - name: Run Gate B
@@ -596,10 +612,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       - name: Install PyYAML
@@ -614,14 +630,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       - name: Cache pip packages
-        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-ci-3.11-${{ hashFiles('requirements-ci.txt') }}
@@ -640,10 +656,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5.6.0
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
       - name: Run Gate E
