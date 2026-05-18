@@ -122,7 +122,7 @@ jobs:
       run: coverage report --rcfile=.coveragerc --include="core/*" --fail-under=80
 
     - name: Publish test results
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
       if: always()
       with:
         name: test-results-${{ matrix.python-version }}
@@ -148,7 +148,7 @@ jobs:
         files: coverage.xml
 
     - name: Upload coverage artifact
-      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
       if: always()
       with:
         name: coverage-${{ matrix.python-version }}
@@ -229,7 +229,7 @@ jobs:
             --junitxml=auth-coverage-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: auth-coverage-results
@@ -291,7 +291,7 @@ jobs:
             --junitxml=env-consistency-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: env-consistency-results
@@ -351,7 +351,7 @@ jobs:
             --junitxml=docker-smoke-structural-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: docker-smoke-structural-results
@@ -407,7 +407,7 @@ jobs:
             --junitxml=model-accuracy-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: model-accuracy-results
@@ -464,7 +464,7 @@ jobs:
             --junitxml=dead-file-results.xml
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.4.3
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v4.4.3
         if: always()
         with:
           name: dead-file-results
