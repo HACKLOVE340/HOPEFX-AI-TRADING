@@ -161,6 +161,13 @@ class SharpeCircuitBreaker:
         # Optional Redis client for state persistence across restarts.
         # Accepts any redis.Redis / redis.asyncio.Redis compatible client.
         self._redis = redis_client
+        restore_setting = os.environ.get("SHARPE_CB_RESTORE")
+        if restore_setting is None:
+            env = os.environ.get("ENVIRONMENT", "").strip().lower()
+            restore_enabled = env not in {"test", "testing"}
+        else:
+            restore_enabled = restore_setting.strip().lower() in {"1", "true", "yes", "on"}
+
         if self._redis is None:
             try:
                 import redis as _redis_lib
@@ -170,8 +177,9 @@ class SharpeCircuitBreaker:
             except Exception as _e:
                 logger.debug("SharpeCircuitBreaker: Redis unavailable, state not persisted: %s", _e)
                 self._redis = None
-        # Restore any previously persisted state on startup.
-        self._restore_all()
+        # Restore any previously persisted state on startup (opt-out for tests).
+        if restore_enabled:
+            self._restore_all()
 
     # ── Public API ────────────────────────────────────────────────────────────
 

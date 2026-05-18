@@ -527,6 +527,11 @@ class FIXRouter:
             fill.get("units", 0),
             fill.get("source"),
         )
+
+        # Always deliver to in-process subscribers immediately (tests/local).
+        await bus.publish_local(CH_ORDER, fill)
+
+        # Keep Redis-backed distribution for cross-process consumers.
         await bus.publish_order(fill)
 
     # ── fill logger ───────────────────────────────────────────────────────────

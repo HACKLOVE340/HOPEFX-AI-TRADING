@@ -69,36 +69,49 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # ── Generate minimal .env from .env.example ────────────────────────────
-      # docker-compose.smoke.yml injects all required overrides via the
-      # environment: block, but docker compose still needs a .env file present
-      # (for the env_file: .env directive on the app service) so it does not
-      # abort with "file not found".  We generate a minimal .env that satisfies
-      # the :?required variable checks not covered by the smoke override.
-      - name: Generate minimal CI .env from .env.example
+      # ── Generate minimal .env for smoke test ──────────────────────────────
+      # Satisfies the :?required variable checks in docker-compose.yml so
+      # Docker Compose can interpolate the config before the smoke override
+      # environment: block takes effect (e.g. REDIS_PASSWORD in redis.command).
+      - name: Generate minimal CI .env
         run: |
-          # Strip comments and blank lines; replace CHANGE_ME placeholders with
-          # safe CI values.  The smoke override (docker-compose.smoke.yml) will
-          # override the security-sensitive vars at container start time.
-          grep -v '^#' .env.example \
-            | grep -v '^$' \
-            | sed 's/=CHANGE_ME.*/=ci-placeholder/' \
-            | sed 's/=YOUR_DOMAIN/=localhost/' \
-            > .env
-
-          # Ensure the vars that docker-compose.yml marks as :?required are set
-          # (they will be overridden by docker-compose.smoke.yml at runtime).
-          cat >> .env <<'ENVEOF'
+          cat > .env <<'EOF'
+          POSTGRES_USER=hopefx
           POSTGRES_PASSWORD=ci_smoke_password
-          REDIS_PASSWORD=
+          POSTGRES_DB=hopefx
+          REDIS_PASSWORD=ci-smoke-redis-password
           SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
           CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          CONFIG_SALT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!
           HOPEFX_DOMAIN=localhost
+          APP_BASE_URL=http://localhost
+          APP_ENV=production
+          PAPER_TRADING=true
+          IS_FORCE_TLS=false
+          REDIS_FORCE_TLS=false
+          ALLOWED_ORIGINS=http://localhost,http://127.0.0.1
           BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw
           BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw
           BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw
-          ENVEOF
+          GRAFANA_ADMIN_PASSWORD=ci-smoke-grafana-placeholder
+          ALERTMANAGER_SMTP_FROM=ci@localhost
+          ALERTMANAGER_SMTP_TO=ci@localhost
+          ALERTMANAGER_SMTP_HOST=localhost:587
+          ALERTMANAGER_SMTP_USERNAME=ci
+          ALERTMANAGER_SMTP_PASSWORD=ci-placeholder
+          ANTHROPIC_API_KEY=ci-placeholder
+          OPENAI_API_KEY=ci-placeholder
+          SENTRY_DSN=
+          BROKER_TYPE=paper
+          BRAIN_SEMANTIC_ENCODER=false
+          CME_ENABLED=false
+          CPP_SHIM_ENABLED=false
+          STARTUP_GATE=false
+          EOF
+          # Strip leading whitespace added by the heredoc indentation
+          sed -i 's/^[[:space:]]*//' .env
+          echo "Generated .env with $(wc -l < .env) entries."
 
       # ── Start the minimal stack ────────────────────────────────────────────
       # --wait: block until all non-disabled services report healthy, or until

@@ -279,6 +279,7 @@ class TestFIXRouter:
                 with patch("execution.fix_router.bus") as mock_bus:
                     mock_bus.publish = AsyncMock()
                     mock_bus.publish_order = AsyncMock()
+                    mock_bus.publish_local = AsyncMock()
                     await router._route({"symbol": "XAUUSD", "direction": "BUY", "units": 1000})
                 mock_send.assert_called_once()
 
