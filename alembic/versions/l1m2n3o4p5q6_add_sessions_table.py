@@ -41,6 +41,9 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     _existing_tables = set(inspector.get_table_names())
+    # users.id is String(36) in the canonical base schema; use that as
+    # fallback when introspection is unavailable.
+    user_id_type: sa.types.TypeEngine = sa.String(length=36)
 
     def _tbl(name, *args, **kwargs):
         """Create table only if it does not already exist."""
@@ -48,9 +51,10 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _idx(index_name, table_name, *args, **kwargs):
-        """Create index only if it does not already exist."""
-        if table_name not in _existing_tables:
-            return
+        """Create index only if it does not already exist.
+
+        Re-inspect after table creation so newly created tables are visible.
+        """
         try:
             existing = {i["name"] for i in inspector.get_indexes(table_name)}
         except Exception:
@@ -68,11 +72,19 @@ def upgrade() -> None:
             op.add_column(table_name, *args, **kwargs)
 
     # ── End idempotency helpers ───────────────────────────────────────────────
+    # Align sessions.user_id type with users.id to avoid FK type mismatches
+    # (e.g. integer -> varchar incompatibility on PostgreSQL).
+    try:
+        users_cols = {c["name"]: c for c in inspector.get_columns("users")}
+        user_id_type = users_cols.get("id", {}).get("type", user_id_type)
+    except (sa.exc.NoSuchTableError, sa.exc.NoInspectionAvailable):  # nosec B110
+        # Introspection unavailable — keep String(36) default (intentional fallback).
+        pass
 
     _tbl(
         _TABLE,
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("user_id", user_id_type, sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("token", sa.String(512), nullable=False),
         sa.Column("expires_at", sa.DateTime(), nullable=False),
         sa.Column("created_at", sa.DateTime(), nullable=True, server_default=sa.func.now()),
@@ -84,6 +96,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_sessions_expires_at", table_name=_TABLE)
-    op.drop_index("ix_sessions_user_id", table_name=_TABLE)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = set(inspector.get_table_names())
+    if _TABLE not in existing_tables:
+        return
+    existing_idx = {i["name"] for i in inspector.get_indexes(_TABLE)}
+    if "ix_sessions_expires_at" in existing_idx:
+        op.drop_index("ix_sessions_expires_at", table_name=_TABLE)
+    if "ix_sessions_user_id" in existing_idx:
+        op.drop_index("ix_sessions_user_id", table_name=_TABLE)
     op.drop_table(_TABLE)

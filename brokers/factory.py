@@ -21,7 +21,10 @@ import os
 from pathlib import Path
 from typing import ClassVar
 
-import yaml
+try:
+    import yaml
+except ImportError:  # optional dependency for YAML-backed broker loading
+    yaml = None
 
 logger = logging.getLogger(__name__)
 
@@ -359,6 +362,10 @@ class BrokerFactory:
     @staticmethod
     def _load_yaml_config(path: str) -> dict | None:
         """Load and return the YAML config, or None if the file is missing."""
+        if yaml is None:
+            logger.error("PyYAML is not installed. Add pyyaml to your dependencies to load YAML broker configs.")
+            return None
+
         config_path = Path(path)
         if not config_path.exists():
             logger.error("Broker config not found: %s", config_path.resolve())
