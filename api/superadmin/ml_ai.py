@@ -426,7 +426,10 @@ async def get_model_explainability(
         _model_dir = Path("ml/saved_models").resolve()
         model_path = (_model_dir / f"{model}.pkl").resolve()
         # Confine path to the model directory to prevent traversal
-        model_path.relative_to(_model_dir)
+        try:
+            model_path.relative_to(_model_dir)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid model name") from None
         if model_path.exists():
             with open(model_path, "rb") as f:
                 clf = pickle.load(f)  # nosec B301 — path-confined local model file

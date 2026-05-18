@@ -36,7 +36,8 @@ _HTTP_NOT_FOUND = HTTPStatus.NOT_FOUND.value
 _HTTP_FORBIDDEN = HTTPStatus.FORBIDDEN.value
 # Minimum broker name length for validation
 _MIN_BROKER_NAME_LEN = 4
-# OANDA account ID format: NNN-NNN-NNNNNNN-NNN (all digit groups separated by hyphens)
+# OANDA account ID format: NNN-NNN-N..N-NNN (digits only, separated by hyphens,
+# third group length is variable)
 _OANDA_ACCOUNT_ID_RE = re.compile(r"^\d{3}-\d{3}-\d+-\d{3}$")
 
 logger = logging.getLogger(__name__)
