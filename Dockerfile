@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1 — Build the React frontend
 # ─────────────────────────────────────────────────────────────────────────────
-FROM node:22-alpine AS frontend-builder
+FROM node:26-alpine AS frontend-builder
 
 WORKDIR /build/frontend
 
@@ -17,7 +17,7 @@ RUN npm run build
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — Python runtime
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 

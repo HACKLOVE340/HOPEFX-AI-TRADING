@@ -349,7 +349,7 @@ class TestFIXRouterPaperMode:
 
         received: list[dict] = []
 
-        from core.event_bus import CH_ORDER, _local_bus
+        from core.event_bus import CH_ORDER, _local_bus, bus
 
         def _capture(msg: dict) -> None:
             if msg.get("type") == "fill_confirmation":
@@ -357,18 +357,26 @@ class TestFIXRouterPaperMode:
 
         _local_bus.subscribe_local(CH_ORDER, _capture)
 
-        await router._route(
-            {
-                "type": "order_request",
-                "symbol": "XAU/USD",
-                "direction": "BUY",
-                "units": 1000.0,
-                "mid": 3300.0,
-            }
-        )
+        # When Redis is connected, bus.publish() routes to Redis pub/sub and
+        # bypasses _local_bus.  Force local-only mode so _capture receives it.
+        original_redis = bus._redis
+        bus._redis = None
+        try:
+            await router._route(
+                {
+                    "type": "order_request",
+                    "symbol": "XAU/USD",
+                    "direction": "BUY",
+                    "units": 1000.0,
+                    "mid": 3300.0,
+                }
+            )
+            # Give the local bus a tick to deliver
+            await asyncio.sleep(0.05)
+        finally:
+            bus._redis = original_redis
+            _local_bus.unsubscribe_local(CH_ORDER, _capture)
 
-        # Give the local bus a tick to deliver
-        await asyncio.sleep(0.05)
         assert len(received) >= 1, "Expected fill_confirmation on hopefx:order"
         assert received[0]["source"] == "paper_trading"
 
