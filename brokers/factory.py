@@ -363,9 +363,7 @@ class BrokerFactory:
     def _load_yaml_config(path: str) -> dict | None:
         """Load and return the YAML config, or None if the file is missing."""
         if yaml is None:
-            logger.error(
-                "PyYAML is not installed. Add pyyaml to your dependencies to load YAML broker configs."
-            )
+            logger.error("PyYAML is not installed. Add pyyaml to your dependencies to load YAML broker configs.")
             return None
 
         config_path = Path(path)

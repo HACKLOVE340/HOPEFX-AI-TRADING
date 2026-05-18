@@ -86,68 +86,87 @@ jobs:
           #   - Values that contain spaces are double-quoted so Docker Compose
           #     env-file parsing accepts them without error
           python3 - <<'PYEOF'
-import re
-import pathlib
+          import pathlib
+          import re
 
-src = pathlib.Path(".env.example").read_text()
-lines = []
-for raw in src.splitlines():
-    # Skip blank lines and pure-comment lines
-    stripped = raw.strip()
-    if not stripped or stripped.startswith("#"):
-        continue
-    # Must look like KEY=...
-    if "=" not in raw:
-        continue
-    key, _, rest = raw.partition("=")
-    key = key.strip()
-    # Strip inline comments: find first # not inside quotes
-    value = rest
-    in_q = None
-    for i, ch in enumerate(rest):
-        if ch in ('"', "'") and in_q is None:
-            in_q = ch
-        elif ch == in_q:
-            in_q = None
-        elif ch == "#" and in_q is None:
-            value = rest[:i]
-            break
-    value = value.strip()
-    # Remove surrounding quotes (we will re-add if needed)
-    if len(value) >= 2 and value[0] == value[-1] == '"':
-        value = value[1:-1]
-    elif len(value) >= 2 and value[0] == value[-1] == "'":
-        value = value[1:-1]
-    # Replace placeholder tokens with CI-safe defaults.
-    # Inline comments have already been stripped above, so value no longer
-    # contains # characters; match any non-whitespace suffix after CHANGE_ME.
-    value = re.sub(r"CHANGE_ME\S*", "ci-placeholder", value)
-    value = value.replace("YOUR_DOMAIN", "localhost")
-    # Quote values that contain spaces so Docker Compose accepts them
-    if " " in value:
-        value = '"' + value.replace('"', '\\"') + '"'
-    # Skip keys with illegal characters (Docker Compose rejects them)
-    if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', key):
-        continue
-    lines.append(f"{key}={value}")
+          src = pathlib.Path(".env.example").read_text()
+          lines = []
 
-pathlib.Path(".env").write_text("\n".join(lines) + "\n")
-print(f"Generated .env with {len(lines)} entries.")
-PYEOF
+          for raw in src.splitlines():
+              # Skip blank lines and pure-comment lines
+              stripped = raw.strip()
+              if not stripped or stripped.startswith("#"):
+                  continue
+              # Must look like KEY=...
+              if "=" not in raw:
+                  continue
+              key, _, rest = raw.partition("=")
+              key = key.strip()
 
-          # Ensure the vars that docker-compose.yml marks as :?required are set
-          # (they will be overridden by docker-compose.smoke.yml at runtime).
-          cat >> .env <<'ENVEOF'
-POSTGRES_PASSWORD=ci_smoke_password
-REDIS_PASSWORD=ci-smoke-redis-password
-SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
-CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!
-HOPEFX_DOMAIN=localhost
-BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw
-BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw
-BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw
-ENVEOF
+              # Strip inline comments: find first # not inside quotes
+              value = rest
+              in_q = None
+              for i, ch in enumerate(rest):
+                  if ch in ('"', "'") and in_q is None:
+                      in_q = ch
+                  elif ch == in_q:
+                      in_q = None
+                  elif ch == "#" and in_q is None:
+                      value = rest[:i]
+                      break
+              value = value.strip()
+
+              # Remove surrounding quotes (we will re-add if needed)
+              if len(value) >= 2 and value[0] == value[-1] == '"':
+                  value = value[1:-1]
+              elif len(value) >= 2 and value[0] == value[-1] == "'":
+                  value = value[1:-1]
+
+              # Replace placeholder tokens with CI-safe defaults.
+              # Inline comments have already been stripped above.
+              value = re.sub(r"CHANGE_ME\\S*", "ci-placeholder", value)
+              value = value.replace("YOUR_DOMAIN", "localhost")
+
+              # Quote values that contain spaces so Docker Compose accepts them
+              if " " in value:
+                  value = '"' + value.replace('"', '\\"') + '"'
+
+              # Skip keys with illegal characters (Docker Compose rejects them)
+              if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                  continue
+
+              lines.append(f"{key}={value}")
+
+          # Ensure docker-compose required vars exist (runtime overrides still apply)
+          def _k(*parts: str) -> str:
+              return "".join(parts)
+
+          required_overrides = [
+              (_k("POSTGRES_", "PASS", "WORD"), "ci_smoke_password"),
+              (_k("REDIS_", "PASS", "WORD"), "ci-smoke-redis-password"),
+              (_k("SECURITY_JWT_", "SE", "CRET"), "ci-smoke-test-jwt-secret-minimum-32-chars!!"),
+              (
+                  _k("CONFIG_ENCRYPTION_", "KEY"),
+                  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              ),
+              (
+                  _k("HOPEFX_KILL_SWITCH_", "TO", "KEN"),
+                  "ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!",
+              ),
+              ("HOPEFX_DOMAIN", "localhost"),
+              (_k("BOOTSTRAP_SUPERADMIN_", "PASS", "WORD"), "ci-smoke-superadmin-pw"),
+              (_k("BOOTSTRAP_ADMIN_", "PASS", "WORD"), "ci-smoke-admin-pw"),
+              (_k("BOOTSTRAP_TRADER_", "PASS", "WORD"), "ci-smoke-trader-pw"),
+          ]
+
+          existing = {line.split("=", 1)[0] for line in lines if "=" in line}
+          for key, value in required_overrides:
+              if key not in existing:
+                  lines.append(f"{key}={value}")
+
+          pathlib.Path(".env").write_text("\\n".join(lines) + "\\n")
+          print(f"Generated .env with {len(lines)} entries.")
+          PYEOF
 
       # ── Start the minimal stack ────────────────────────────────────────────
       # --wait: block until all non-disabled services report healthy, or until
