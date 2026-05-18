@@ -87,7 +87,13 @@ def _load_model(model_name: str) -> Any | None:
             logger.debug("explainability._load_model via predictor: %s", exc)
 
     # Generic: try joblib first (scikit-learn / XGBoost standard), then pickle
-    pkl_path = _MODEL_DIR / f"{model_name}.pkl"
+    pkl_path = (_MODEL_DIR / f"{model_name}.pkl").resolve()
+    # Path confinement: reject any name that escapes the model directory
+    try:
+        pkl_path.relative_to(_MODEL_DIR.resolve())
+    except ValueError:
+        logger.warning("explainability._load_model: model_name %r escapes model dir", model_name)
+        return None
     if not pkl_path.exists():
         return None
 

@@ -406,6 +406,12 @@ async def get_model_explainability(
     user: TokenPayload = Depends(_require_superadmin),
 ) -> dict:
     """SHAP / feature importance for a deployed model."""
+    import re
+
+    # Validate model name: only alphanumeric + underscore, max 64 chars
+    if not re.fullmatch(r"[A-Za-z0-9_]{1,64}", model):
+        raise HTTPException(status_code=400, detail="Invalid model name")
+
     try:
         from ml.explainability import get_shap_values  # type: ignore[import]
 
@@ -417,7 +423,10 @@ async def get_model_explainability(
         import pickle
         from pathlib import Path
 
-        model_path = Path("ml/saved_models") / f"{model}.pkl"
+        _model_dir = Path("ml/saved_models").resolve()
+        model_path = (_model_dir / f"{model}.pkl").resolve()
+        # Confine path to the model directory to prevent traversal
+        model_path.relative_to(_model_dir)
         if model_path.exists():
             with open(model_path, "rb") as f:
                 clf = pickle.load(f)  # nosec B301 — path-confined local model file
