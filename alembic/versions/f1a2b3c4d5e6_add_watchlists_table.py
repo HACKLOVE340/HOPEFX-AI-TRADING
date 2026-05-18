@@ -46,9 +46,11 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _idx(index_name, table_name, *args, **kwargs):
-        """Create index only if it does not already exist."""
-        if table_name not in _existing_tables:
-            return
+        """Create index only if it does not already exist.
+
+        Re-inspects the live schema so indexes on tables created earlier in
+        this same upgrade() call are handled correctly.
+        """
         try:
             existing = {i["name"] for i in inspector.get_indexes(table_name)}
         except Exception:
@@ -94,5 +96,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop the watchlists table."""
-    op.drop_index("ix_watchlists_user_id", table_name="watchlists")
-    op.drop_table("watchlists")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _tables = set(inspector.get_table_names())
+    if "watchlists" in _tables:
+        existing_idx = {i["name"] for i in inspector.get_indexes("watchlists")}
+        if "ix_watchlists_user_id" in existing_idx:
+            op.drop_index("ix_watchlists_user_id", table_name="watchlists")
+        op.drop_table("watchlists")

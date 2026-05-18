@@ -15,14 +15,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           persist-credentials: false
 
       - name: Run AI inference
         id: inference
         # Pinned to SHA for supply-chain safety (tag: v1)
-        uses: actions/ai-inference@b81b2afb8390ee6839b494a404766bef6493c7d9  # v1
+        uses: actions/ai-inference@17ff458cb182449bbb2e43701fcd98f6af8f6570  # v2.1.0
         with:
           # Issue title/body are untrusted - the prompt instructs the model to
           # only summarise and not follow any embedded instructions.
