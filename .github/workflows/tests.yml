@@ -89,6 +89,7 @@ jobs:
         STRATEGY_MIN_BARS: "100"
         STRATEGY_TICKS_PER_BAR: "10"
         FIX_CONFIG_FILE: fix.cfg
+        SHARPE_CB_RESTORE: "false"
       run: |
         pytest tests/ \
           -m "not slow" \
@@ -265,20 +266,25 @@ jobs:
           # Key on Python version + the exact packages installed so the cache
           # is invalidated when either changes.  No requirements file needed —
           # these lightweight gates install a fixed minimal set.
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Only needs pyyaml and pytest — no heavy ML stack required.
+        # Needs pyyaml and pytest for config parsing.
+        # pytest-timeout is required by --timeout=30.
+        # FastAPI is NOT needed here: --noconftest skips the root conftest.py
+        # whose import chain pulls in FastAPI.  The gate itself only uses
+        # stdlib + pytest + pyyaml.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install pytest pytest-timeout pyyaml
 
       - name: Run env-var consistency gate
         run: |
           pytest tests/test_env_consistency.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
@@ -320,19 +326,25 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-pyyaml-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
+        # Needs pyyaml and pytest for compose file parsing.
+        # pytest-timeout is required by --timeout=30.
+        # FastAPI is NOT needed here: --noconftest skips the root conftest.py
+        # whose import chain pulls in FastAPI.  The gate itself only uses
+        # stdlib + pytest + pyyaml.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pyyaml
+          pip install pytest pytest-timeout pyyaml
 
       - name: Run docker-compose structural gate
         run: |
           pytest tests/test_docker_smoke.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
@@ -373,20 +385,22 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-only
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Only needs pytest — reads JSON and text files, no ML stack required.
+        # Reads JSON and text files; no ML stack required.
+        # pytest-timeout is required by --timeout=30.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest pytest-timeout
 
       - name: Run model accuracy gate
         run: |
           pytest tests/test_model_accuracy_assertion.py \
+            --noconftest \
             --timeout=30 \
             -v \
             --tb=short \
@@ -428,16 +442,17 @@ jobs:
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7  # v5.0.4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-only
+          key: ${{ runner.os }}-pip-gate-minimal-3.12-pytest-timeout
           restore-keys: |
             ${{ runner.os }}-pip-gate-minimal-3.12-
             ${{ runner.os }}-pip-gate-minimal-
 
       - name: Install minimal dependencies
-        # Only needs pytest — pure filesystem scan, no imports required.
+        # Pure filesystem scan; no heavy imports required.
+        # pytest-timeout is required by --timeout=30.
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest pytest-timeout
 
       - name: Run dead file detection gate
         run: |

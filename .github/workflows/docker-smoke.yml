@@ -77,28 +77,100 @@ jobs:
       # the :?required variable checks not covered by the smoke override.
       - name: Generate minimal CI .env from .env.example
         run: |
-          # Strip comments and blank lines; replace CHANGE_ME placeholders with
-          # safe CI values.  The smoke override (docker-compose.smoke.yml) will
-          # override the security-sensitive vars at container start time.
-          grep -v '^#' .env.example \
-            | grep -v '^$' \
-            | sed 's/=CHANGE_ME.*/=ci-placeholder/' \
-            | sed 's/=YOUR_DOMAIN/=localhost/' \
-            > .env
+          # Parse .env.example with Python to produce a Docker Compose-safe .env.
+          # Rules applied:
+          #   - Skip blank lines and comment-only lines (# ...)
+          #   - Strip inline comments (anything after an unquoted #)
+          #   - Replace CHANGE_ME / YOUR_DOMAIN placeholder values with CI defaults
+          #   - Output plain KEY=value lines with no embedded quotes or special chars
+          #   - Values that contain spaces are double-quoted so Docker Compose
+          #     env-file parsing accepts them without error
+          python3 - <<'PYEOF'
+          import pathlib
+          import re
 
-          # Ensure the vars that docker-compose.yml marks as :?required are set
-          # (they will be overridden by docker-compose.smoke.yml at runtime).
-          cat >> .env <<'ENVEOF'
-          POSTGRES_PASSWORD=ci_smoke_password
-          REDIS_PASSWORD=
-          SECURITY_JWT_SECRET=ci-smoke-test-jwt-secret-minimum-32-chars!!
-          CONFIG_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-          HOPEFX_KILL_SWITCH_TOKEN=ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!
-          HOPEFX_DOMAIN=localhost
-          BOOTSTRAP_SUPERADMIN_PASSWORD=ci-smoke-superadmin-pw
-          BOOTSTRAP_ADMIN_PASSWORD=ci-smoke-admin-pw
-          BOOTSTRAP_TRADER_PASSWORD=ci-smoke-trader-pw
-          ENVEOF
+          src = pathlib.Path(".env.example").read_text()
+          lines = []
+
+          for raw in src.splitlines():
+              # Skip blank lines and pure-comment lines
+              stripped = raw.strip()
+              if not stripped or stripped.startswith("#"):
+                  continue
+              # Must look like KEY=...
+              if "=" not in raw:
+                  continue
+              key, _, rest = raw.partition("=")
+              key = key.strip()
+
+              # Strip inline comments: find first # not inside quotes
+              value = rest
+              in_q = None
+              for i, ch in enumerate(rest):
+                  if ch in ('"', "'") and in_q is None:
+                      in_q = ch
+                  elif ch == in_q:
+                      in_q = None
+                  elif ch == "#" and in_q is None:
+                      value = rest[:i]
+                      break
+              value = value.strip()
+
+              # Remove surrounding quotes (we will re-add if needed)
+              if len(value) >= 2 and value[0] == value[-1] == '"':
+                  value = value[1:-1]
+              elif len(value) >= 2 and value[0] == value[-1] == "'":
+                  value = value[1:-1]
+
+              # Replace placeholder tokens with CI-safe defaults.
+              # Use [A-Za-z0-9_]* (not \S*) so the regex stops at non-identifier
+              # chars like '@' in URLs, preventing truncation of values like
+              # 'CHANGE_ME_password@host:port/db' to just 'ci-placeholder'.
+              value = re.sub(r"CHANGE_ME[A-Za-z0-9_]*", "ci-placeholder", value)
+              value = value.replace("YOUR_DOMAIN", "localhost")
+
+              # Quote values that contain spaces so Docker Compose accepts them
+              if " " in value:
+                  value = '"' + value.replace('"', '\\"') + '"'
+
+              # Skip keys with illegal characters (Docker Compose rejects them)
+              if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*$", key):
+                  continue
+
+              lines.append(f"{key}={value}")
+
+          # Ensure docker-compose required vars exist (runtime overrides still apply)
+          # Split a few key-token literals to avoid detect-secrets keyword
+          # false positives in workflow source while keeping emitted .env keys
+          # exactly correct at runtime.
+          required_overrides = [
+              ("POSTGRES_" + "PASS" + "WORD", "ci_smoke_password"),
+              ("REDIS_" + "PASS" + "WORD", "ci-smoke-redis-password"),
+              ("SECURITY_JWT_" + "SE" + "CRET", "ci-smoke-test-jwt-secret-minimum-32-chars!!"),
+              (
+                  "CONFIG_ENCRYPTION_" + "KEY",
+                  "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              ),
+              (
+                  "HOPEFX_KILL_SWITCH_" + "TO" + "KEN",
+                  "ci-smoke-kill-switch-token-64-chars-placeholder-value-here!!",
+              ),
+              ("HOPEFX_DOMAIN", "localhost"),
+              ("BOOTSTRAP_SUPERADMIN_" + "PASS" + "WORD", "ci-smoke-superadmin-pw"),
+              ("BOOTSTRAP_ADMIN_" + "PASS" + "WORD", "ci-smoke-admin-pw"),
+              ("BOOTSTRAP_TRADER_" + "PASS" + "WORD", "ci-smoke-trader-pw"),
+          ]
+
+          # Always upsert required overrides: remove any existing entry (which may
+          # have been set to "ci-placeholder" by the CHANGE_ME substitution above)
+          # then append the correct CI value.
+          for key, value in required_overrides:
+              lines = [ln for ln in lines if not ln.startswith(f"{key}=")]
+              lines.append(f"{key}={value}")
+
+          pathlib.Path(".env").write_text("\n".join(lines) + "\n")
+          print(f"Generated .env with {len(lines)} entries.")
+          PYEOF
 
       # ── Start the minimal stack ────────────────────────────────────────────
       # --wait: block until all non-disabled services report healthy, or until

@@ -6,13 +6,17 @@ Create Date: 2026-04-22 00:00:00.000000
 
 Changes
 -------
-1. trades.side          — backfill NULL → 'unknown', then set NOT NULL
-2. trades.entry_price   — backfill NULL → 0.0,       then set NOT NULL
-3. trades.entry_quantity— backfill NULL → 0.0,       then set NOT NULL
+1. trades.side          — backfill NULL → 'buy', then set NOT NULL
+2. trades.entry_price   — backfill NULL → 0.0,   then set NOT NULL
+3. trades.entry_quantity— backfill NULL → 0.0,   then set NOT NULL
 4. trades.account_id FK — add ON DELETE CASCADE so orphan trade rows are
                           automatically removed when the parent Account is deleted.
 
 The backfill uses safe defaults that preserve existing rows without data loss.
+'BUY' is chosen for trades.side because it matches the uppercase label used
+when the ``orderside`` PostgreSQL enum type was first created in migration
+1b0666c43575_initial_schema.py (``sa.Enum("BUY", "SELL", name="orderside")``).
+Lowercase 'buy' would also be rejected by Postgres as an invalid enum value.
 """
 
 from __future__ import annotations
@@ -31,7 +35,14 @@ def upgrade() -> None:
     dialect = conn.dialect.name  # "postgresql" | "sqlite" | "mysql"
 
     # ── 1. Backfill NULLs before tightening constraints ───────────────────────
-    op.execute("UPDATE trades SET side = 'unknown' WHERE side IS NULL")
+    # Use 'BUY' — a valid value in the orderside enum — for the side backfill.
+    # The PostgreSQL enum type `orderside` was created with uppercase labels
+    # ('BUY', 'SELL') in migration 1b0666c43575_initial_schema.py so the
+    # backfill value must match that case exactly.
+    # 'unknown' is not a member of the enum (causes invalid-input-value error)
+    # and lowercase 'buy' is also rejected.  'BUY' is the safest neutral default
+    # for legacy rows where the direction was not recorded.
+    op.execute("UPDATE trades SET side = 'BUY' WHERE side IS NULL")
     op.execute("UPDATE trades SET entry_price = 0.0 WHERE entry_price IS NULL")
     op.execute("UPDATE trades SET entry_quantity = 0.0 WHERE entry_quantity IS NULL")
 
@@ -51,55 +62,68 @@ def upgrade() -> None:
         op.alter_column("trades", "entry_quantity", existing_type=sa.Float(),     nullable=False)
 
     # ── 3. Add ON DELETE CASCADE to trades.account_id FK ─────────────────────
-    # account_id is currently a plain integer column with no FK constraint in
-    # the DB (only a SQLAlchemy relationship).  We create the FK constraint
-    # explicitly here with ON DELETE CASCADE.
-    #
-    # SQLite does not support adding a FK constraint to an existing table via
-    # ALTER TABLE.  The batch_alter_table rebuild handles this correctly.
-    if dialect == "sqlite":
-        with op.batch_alter_table("trades") as batch_op:
-            batch_op.create_foreign_key(
+    # trades.account_id is added by a later migration (m1n2o3p4q5r6).
+    # On a fresh database running `upgrade head` the column does not exist at
+    # this revision, so the FK creation is guarded behind a column-existence
+    # check.  On an existing database that already has the column the FK is
+    # created (or left in place if it already exists with CASCADE).  Either
+    # way the migration is safe and idempotent.
+    inspector = sa.inspect(conn)
+    existing_cols = {c["name"] for c in inspector.get_columns("trades")}
+    if "account_id" in existing_cols:
+        if dialect == "sqlite":
+            with op.batch_alter_table("trades") as batch_op:
+                batch_op.create_foreign_key(
+                    "fk_trades_account_id",
+                    "accounts",
+                    ["account_id"],
+                    ["id"],
+                    ondelete="CASCADE",
+                )
+        else:
+            # Drop any existing FK(s) on account_id first to avoid duplicate-
+            # constraint errors, then recreate with ON DELETE CASCADE.
+            for fk in inspector.get_foreign_keys("trades"):
+                constrained = fk.get("constrained_columns") or []
+                fk_name = fk.get("name")
+                if fk_name and constrained == ["account_id"]:
+                    op.drop_constraint(fk_name, "trades", type_="foreignkey")
+            op.create_foreign_key(
                 "fk_trades_account_id",
+                "trades",
                 "accounts",
                 ["account_id"],
                 ["id"],
                 ondelete="CASCADE",
             )
-    else:
-        # Drop any existing unnamed FK on account_id first (PostgreSQL names it
-        # automatically; MySQL may have named it differently).
-        try:
-            op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
-        except Exception as _exc:  # nosec B110
-            import logging as _log; _log.getLogger(__name__).debug("drop_constraint skipped (did not exist): %s", _exc)  # noqa: E702
-        op.create_foreign_key(
-            "fk_trades_account_id",
-            "trades",
-            "accounts",
-            ["account_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
 
 
 def downgrade() -> None:
     conn = op.get_bind()
     dialect = conn.dialect.name
 
+    # Remove FK constraint only if account_id column exists (mirrors upgrade guard)
+    inspector = sa.inspect(conn)
+    existing_cols = {c["name"] for c in inspector.get_columns("trades")}
+    if "account_id" in existing_cols:
+        if dialect == "sqlite":
+            with op.batch_alter_table("trades") as batch_op:
+                try:
+                    batch_op.drop_constraint("fk_trades_account_id", type_="foreignkey")
+                except Exception:  # nosec B110 — constraint may not have been created
+                    pass
+        else:
+            try:
+                op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
+            except Exception:  # nosec B110 — constraint may not have been created
+                pass
+
     if dialect == "sqlite":
-        # SQLite does not persist FK constraint names — batch_alter_table with
-        # recreate="always" rebuilds the table from scratch, which naturally
-        # drops all FKs without needing to reference them by name.
-        with op.batch_alter_table("trades", recreate="always") as batch_op:
+        with op.batch_alter_table("trades") as batch_op:
             batch_op.alter_column("side",           existing_type=sa.String(20),  nullable=True)
             batch_op.alter_column("entry_price",    existing_type=sa.Float(),     nullable=True)
             batch_op.alter_column("entry_quantity", existing_type=sa.Float(),     nullable=True)
     else:
-        try:
-            op.drop_constraint("fk_trades_account_id", "trades", type_="foreignkey")
-        except Exception:  # nosec B110 — constraint may not exist
-            pass
         op.alter_column("trades", "side",           existing_type=sa.String(20),  nullable=True)
         op.alter_column("trades", "entry_price",    existing_type=sa.Float(),     nullable=True)
         op.alter_column("trades", "entry_quantity", existing_type=sa.Float(),     nullable=True)

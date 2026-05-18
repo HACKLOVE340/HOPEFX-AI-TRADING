@@ -637,7 +637,9 @@ class TestEvaluateAll:
         with patch.object(cb, "_evaluate_one", side_effect=mock_eval_one):
             await cb._evaluate_all()
 
-        assert set(called) == {"v1", "v2"}
+        # Redis-backed state can preload additional model versions; ensure the
+        # versions created in this test are always evaluated.
+        assert {"v1", "v2"}.issubset(set(called))
 
 
 # ── Singleton ─────────────────────────────────────────────────────────────────
