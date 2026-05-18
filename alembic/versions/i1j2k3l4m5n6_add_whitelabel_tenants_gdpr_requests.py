@@ -34,9 +34,11 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _idx(index_name, table_name, *args, **kwargs):
-        """Create index only if it does not already exist."""
-        if table_name not in _existing_tables:
-            return
+        """Create index only if it does not already exist.
+
+        Re-inspects the live schema so indexes on tables created earlier in
+        this same upgrade() call are handled correctly.
+        """
         try:
             existing = {i["name"] for i in inspector.get_indexes(table_name)}
         except Exception:
@@ -99,11 +101,24 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("idx_gdpr_type", table_name="gdpr_requests")
-    op.drop_index("idx_gdpr_status", table_name="gdpr_requests")
-    op.drop_index("idx_gdpr_user", table_name="gdpr_requests")
-    op.drop_table("gdpr_requests")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = set(inspector.get_table_names())
 
-    op.drop_index("idx_wl_tenant_owner", table_name="whitelabel_tenants")
-    op.drop_index("idx_wl_tenant_status", table_name="whitelabel_tenants")
-    op.drop_table("whitelabel_tenants")
+    def _drop_index_if_exists(index_name: str, table_name: str) -> None:
+        if table_name not in existing_tables:
+            return
+        existing_idx = {i["name"] for i in inspector.get_indexes(table_name)}
+        if index_name in existing_idx:
+            op.drop_index(index_name, table_name=table_name)
+
+    _drop_index_if_exists("idx_gdpr_type", "gdpr_requests")
+    _drop_index_if_exists("idx_gdpr_status", "gdpr_requests")
+    _drop_index_if_exists("idx_gdpr_user", "gdpr_requests")
+    if "gdpr_requests" in existing_tables:
+        op.drop_table("gdpr_requests")
+
+    _drop_index_if_exists("idx_wl_tenant_owner", "whitelabel_tenants")
+    _drop_index_if_exists("idx_wl_tenant_status", "whitelabel_tenants")
+    if "whitelabel_tenants" in existing_tables:
+        op.drop_table("whitelabel_tenants")

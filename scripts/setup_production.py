@@ -314,7 +314,7 @@ def _section_security(
 
 
 def _section_database(db_password: str, domain: str) -> list[str]:
-    db_url = f"postgresql+asyncpg://hopefx:{db_password}@db:5432/hopefx"
+    db_url = f"postgresql+asyncpg://hopefx:{db_password}@postgres:5432/hopefx"
     return [
         "",
         "# ── Database ─────────────────────────────────────────────────────────",
@@ -322,7 +322,7 @@ def _section_database(db_password: str, domain: str) -> list[str]:
         "POSTGRES_USER=hopefx",
         f"POSTGRES_PASSWORD={db_password}",
         "POSTGRES_DB=hopefx",
-        "DB_HOST=db",
+        "DB_HOST=postgres",
         f"DB_PASSWORD={db_password}",
     ]
 

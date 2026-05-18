@@ -37,11 +37,11 @@ test.describe('Landing page', () => {
 test.describe('Login page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/login');
-    await page.waitForSelector('input[type="email"]');
+    await page.waitForSelector('input#identifier');
   });
 
   test('renders email and password fields', async ({ page }) => {
-    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.locator('input#identifier')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toBeVisible();
     await expect(page.locator('button[type="submit"]')).toBeVisible();
   });
@@ -60,7 +60,7 @@ test.describe('Login page', () => {
   });
 
   test('shows error on wrong credentials', async ({ page }) => {
-    await page.fill('input[type="email"]',    'wrong@example.com');
+    await page.fill('input#identifier',    'wrong@example.com');
     await page.fill('input[type="password"]', 'wrongpassword');
     await page.click('button[type="submit"]');
 

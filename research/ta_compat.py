@@ -375,16 +375,18 @@ def _adx_numpy(high, low, close, period=14) -> np.ndarray:
     atr = tr.ewm(
         com=period - 1, min_periods=period
     ).mean()  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    pdi = (
-        100
-        * plus_dm.ewm(com=period - 1, min_periods=period).mean()
-        / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    )
-    mdi = (
-        100
-        * minus_dm.ewm(com=period - 1, min_periods=period).mean()
-        / (atr + 1e-12)  # healer: ignore — NaN for warmup bars is expected TA behaviour
-    )
+    # Replace NaN ATR (warmup period) with a near-zero safe denominator so the
+    # division below does not silently propagate NaN through valid data rows.
+    # Use 1e-12 (not 0.0) to avoid computing 100*dm / (0+1e-12) ≈ 1e14 for warmup
+    # rows; instead the denominator is always at least 2e-12 which is negligible
+    # relative to real ATR values (typically >> 0.01 for any traded instrument).
+    atr_safe = atr.fillna(1e-12)
+    # Warmup rows in EWM means are NaN until min_periods is reached; coerce to
+    # 0.0 before division so NaNs do not leak into pdi/mdi calculations.
+    plus_dm_ewm = plus_dm.ewm(com=period - 1, min_periods=period).mean().fillna(0.0)
+    minus_dm_ewm = minus_dm.ewm(com=period - 1, min_periods=period).mean().fillna(0.0)
+    pdi = 100 * plus_dm_ewm / (atr_safe + 1e-12)
+    mdi = 100 * minus_dm_ewm / (atr_safe + 1e-12)
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi + 1e-12)
     return (
         dx.ewm(com=period - 1, min_periods=period)

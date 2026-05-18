@@ -66,7 +66,31 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_column("positions", "market_value")
-    op.drop_column("positions", "size")
-    op.drop_index("ix_positions_account_id", table_name="positions")
-    op.drop_column("positions", "account_id")
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    _tables = set(inspector.get_table_names())
+
+    def _drop_idx(name, table):
+        if table not in _tables:
+            return
+        if name in {i["name"] for i in inspector.get_indexes(table)}:
+            op.drop_index(name, table_name=table)
+
+    def _live_cols(table: str) -> set:
+        if bind.dialect.name == "sqlite":
+            rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
+            return {row[1] for row in rows}
+        rows = bind.execute(
+            sa.text("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = :t"), {"t": table}
+        ).fetchall()
+        return {row[0] for row in rows}
+
+    _drop_idx("ix_positions_account_id", "positions")
+    if "positions" in _tables:
+        cols_to_drop = [c for c in ("market_value", "size", "account_id")
+                        if c in _live_cols("positions")]
+        if cols_to_drop:
+            with op.batch_alter_table("positions") as batch_op:
+                for col in cols_to_drop:
+                    batch_op.drop_column(col)
