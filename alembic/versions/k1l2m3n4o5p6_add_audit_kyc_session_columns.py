@@ -39,9 +39,11 @@ def upgrade() -> None:
             op.create_table(name, *args, **kwargs)
 
     def _idx(index_name, table_name, *args, **kwargs):
-        """Create index only if it does not already exist."""
-        if table_name not in _existing_tables:
-            return
+        """Create index only if it does not already exist.
+
+        Re-inspects the live schema so indexes on tables created earlier in
+        this same upgrade() call are handled correctly.
+        """
         try:
             existing = {i["name"] for i in inspector.get_indexes(table_name)}
         except Exception:
@@ -77,7 +79,8 @@ def upgrade() -> None:
     _batch_add_col("audit_log", "ip_address", sa.Column("ip_address", sa.String(45), nullable=True))
 
     # Back-fill created_at from timestamp for existing rows.
-    op.execute("UPDATE audit_log SET created_at = timestamp WHERE created_at IS NULL")
+    # "timestamp" is a reserved word in PostgreSQL — must be double-quoted.
+    op.execute('UPDATE audit_log SET created_at = "timestamp" WHERE created_at IS NULL')
 
     # Create indexes for the new columns.
     _idx("idx_audit_event_type", "audit_log", ["event_type"])
@@ -96,26 +99,41 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
+    def _live_cols(table: str) -> set:
+        """Return current column names, bypassing SQLAlchemy inspector cache."""
+        if bind.dialect.name == "sqlite":
+            rows = bind.execute(sa.text(f"PRAGMA table_info({table})")).fetchall()
+            return {row[1] for row in rows}
+        rows = bind.execute(
+            sa.text("SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name = :t"), {"t": table}
+        ).fetchall()
+        return {row[0] for row in rows}
+
+    def _batch_drop_cols(table: str, cols: list) -> None:
+        """Drop columns that exist; skip missing ones (idempotent)."""
+        to_drop = [c for c in cols if c in _live_cols(table)]
+        if to_drop:
+            with op.batch_alter_table(table) as batch_op:
+                for col in to_drop:
+                    batch_op.drop_column(col)
+
     # ── user_sessions ─────────────────────────────────────────────────────────
-    with op.batch_alter_table("user_sessions") as batch_op:
-        batch_op.drop_column("last_active_at")
+    _batch_drop_cols("user_sessions", ["last_active_at"])
 
     # ── users ─────────────────────────────────────────────────────────────────
-    with op.batch_alter_table("users") as batch_op:
-        batch_op.drop_column("kyc_document_type")
-        batch_op.drop_column("kyc_rejection_reason")
-        batch_op.drop_column("kyc_reviewer_id")
-        batch_op.drop_column("kyc_reviewed_at")
-        batch_op.drop_column("kyc_submitted_at")
+    _batch_drop_cols("users", [
+        "kyc_document_type", "kyc_rejection_reason", "kyc_reviewer_id",
+        "kyc_reviewed_at", "kyc_submitted_at",
+    ])
 
     # ── audit_log ─────────────────────────────────────────────────────────────
-    op.drop_index("idx_audit_created_at", table_name="audit_log")
-    op.drop_index("idx_audit_user_id", table_name="audit_log")
-    op.drop_index("idx_audit_event_type", table_name="audit_log")
+    _audit_idx = {i["name"] for i in inspector.get_indexes("audit_log")}
+    for idx in ("idx_audit_created_at", "idx_audit_user_id", "idx_audit_event_type"):
+        if idx in _audit_idx:
+            op.drop_index(idx, table_name="audit_log")
 
-    with op.batch_alter_table("audit_log") as batch_op:
-        batch_op.drop_column("ip_address")
-        batch_op.drop_column("detail")
-        batch_op.drop_column("user_id")
-        batch_op.drop_column("event_type")
-        batch_op.drop_column("created_at")
+    _batch_drop_cols("audit_log", ["ip_address", "detail", "user_id", "event_type", "created_at"])

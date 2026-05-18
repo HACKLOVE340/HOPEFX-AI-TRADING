@@ -21,9 +21,9 @@ export const ADMIN_USER = {
  */
 export async function loginAs(page: Page, user = TEST_USER): Promise<void> {
   await page.goto('/login');
-  await page.waitForSelector('input[type="email"]', { timeout: 10_000 });
+  await page.waitForSelector('input#identifier', { timeout: 10_000 });
 
-  await page.fill('input[type="email"]',    user.email);
+  await page.fill('input#identifier',    user.email);
   await page.fill('input[type="password"]', user.password);
   await page.click('button[type="submit"]');
 

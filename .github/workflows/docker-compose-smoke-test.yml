@@ -86,13 +86,13 @@ jobs:
 
       - name: Verify PAPER_TRADING defaults to true
         run: |
-          PT=$(docker compose config | grep PAPER_TRADING | head -1 | awk '{print $2}')
+          PT=$(docker compose config | grep PAPER_TRADING | head -1 | awk '{gsub(/"/, ""); print $2}')
           echo "PAPER_TRADING resolved to: $PT"
           [ "$PT" = "true" ] || (echo "FAIL: PAPER_TRADING is '$PT', expected 'true'"; exit 1)
 
       - name: Verify IS_FORCE_TLS defaults to false
         run: |
-          TLS=$(docker compose config | grep IS_FORCE_TLS | head -1 | awk '{print $2}')
+          TLS=$(docker compose config | grep IS_FORCE_TLS | head -1 | awk '{gsub(/"/, ""); print $2}')
           echo "IS_FORCE_TLS resolved to: $TLS"
           [ "$TLS" = "false" ] || (echo "FAIL: IS_FORCE_TLS is '$TLS', expected 'false'"; exit 1)
 
