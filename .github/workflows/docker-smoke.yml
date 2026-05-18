@@ -86,7 +86,8 @@ jobs:
           #   - Values that contain spaces are double-quoted so Docker Compose
           #     env-file parsing accepts them without error
           python3 - <<'PYEOF'
-import re, pathlib
+import re
+import pathlib
 
 src = pathlib.Path(".env.example").read_text()
 lines = []
@@ -117,8 +118,10 @@ for raw in src.splitlines():
         value = value[1:-1]
     elif len(value) >= 2 and value[0] == value[-1] == "'":
         value = value[1:-1]
-    # Replace placeholder tokens with CI-safe defaults
-    value = re.sub(r"CHANGE_ME[^#\s]*", "ci-placeholder", value)
+    # Replace placeholder tokens with CI-safe defaults.
+    # Inline comments have already been stripped above, so value no longer
+    # contains # characters; match any non-whitespace suffix after CHANGE_ME.
+    value = re.sub(r"CHANGE_ME\S*", "ci-placeholder", value)
     value = value.replace("YOUR_DOMAIN", "localhost")
     # Quote values that contain spaces so Docker Compose accepts them
     if " " in value:
