@@ -41,6 +41,8 @@ def upgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     _existing_tables = set(inspector.get_table_names())
+    # users.id is String(36) in the canonical base schema; use that as
+    # fallback when introspection is unavailable.
     user_id_type: sa.types.TypeEngine = sa.String(length=36)
 
     def _tbl(name, *args, **kwargs):
@@ -73,10 +75,8 @@ def upgrade() -> None:
     # (e.g. integer -> varchar incompatibility on PostgreSQL).
     try:
         users_cols = {c["name"]: c for c in inspector.get_columns("users")}
-        users_id_type = users_cols.get("id", {}).get("type")
-        if users_id_type is not None:
-            user_id_type = users_id_type
-    except Exception:
+        user_id_type = users_cols.get("id", {}).get("type", user_id_type)
+    except (sa.exc.NoSuchTableError, sa.exc.NoInspectionAvailable):
         # Keep the schema default (String(36)) if introspection is unavailable.
         pass
 
