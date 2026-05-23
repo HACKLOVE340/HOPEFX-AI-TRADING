@@ -94,6 +94,57 @@ Trained via `ml/train_rl_nuclear.py`. Powers `brain/nuclear_supervisor.py`.
 
 ---
 
+## WORDMAP.json — Nuclear/Geopolitical Risk Scorer
+
+`WORDMAP.json` is **gitignored** (contains tuned severity weights). The nuclear
+strategy system (`news/nuclear_wordmap_scorer.py`, `brain/nuclear_supervisor.py`)
+loads it at startup to score geopolitical and macro events on a 0–10 severity
+scale.
+
+**The scorer works without the file.** If `WORDMAP.json` is absent, built-in
+default keywords are used automatically. You only need the file to override or
+extend the default weights.
+
+### Setting up WORDMAP.json for development
+
+```bash
+cp WORDMAP.json.example WORDMAP.json
+```
+
+The example file is a fully functional starting point. It contains the same
+structure as the production file with representative severity weights across
+eight risk categories: `nuclear_military`, `geopolitical_conflict`,
+`financial_crisis`, `central_bank`, `commodity_supply`, `cyber_warfare`,
+`pandemic`, and `sanctions`.
+
+### Customising weights
+
+Edit `WORDMAP.json` — the `nuclear_risk` section is merged with built-in
+defaults. Keys present in the file override built-in values; keys absent fall
+back to built-in values. Severity scores are floats from 0.0 (no impact) to
+10.0 (maximum impact).
+
+```json
+{
+  "nuclear_risk": {
+    "geopolitical_conflict": {
+      "my custom event phrase": 7.5
+    }
+  }
+}
+```
+
+### Verifying the scorer
+
+```python
+from news.nuclear_wordmap_scorer import NuclearWordmapScorer
+scorer = NuclearWordmapScorer()
+result = scorer.score("Central bank raises rates amid geopolitical tensions")
+print(result.severity, result.categories)
+```
+
+---
+
 ## Environment Variables — Key Flags
 
 | Variable | Default | Effect |
