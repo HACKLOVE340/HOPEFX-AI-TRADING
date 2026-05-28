@@ -19,7 +19,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 import math
-from datetime import datetime
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
