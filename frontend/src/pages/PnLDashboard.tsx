@@ -12,7 +12,7 @@
  *   GET /api/pnl/open-positions  — current open positions
  */
 
-import React, { useCallback, useEffect, useId, useState } from 'react';
+import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, CrossLinkBar } from '../components';
 import { useFlashHighlight } from '../hooks/useFlashHighlight';
@@ -21,10 +21,8 @@ import {
   TrendingUp, TrendingDown, Activity, Shield,
   Clock, RefreshCw, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, ReferenceLine,
-} from 'recharts';
+import { createChart, AreaSeries } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { pnlApi } from '../hooks/useApi';
 import { useStore, useHasHydrated, selectIsAuth } from '../store';
 import { fmtPrice, fmtPctRaw, fmtDateTime, extractApiError } from '../lib/utils';
@@ -140,65 +138,141 @@ function StatCard({
   );
 }
 
-// ── Recharts equity sparkline ─────────────────────────────────────────────────
+// ── LWC time helper ───────────────────────────────────────────────────────────
 
-function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
-  if (data.length < 2) return (
-    <div className="flex items-center justify-center h-32 text-slate-600 text-sm">Not enough data</div>
-  );
-  const up = data[data.length - 1].v >= data[0].v;
-  const color = up ? '#00e676' : '#ff1744';
-  return (
-    <ResponsiveContainer width="100%" height={128}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="eq-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor={color} stopOpacity={0.3} />
-            <stop offset="95%" stopColor={color} stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e2d3d" />
-        <XAxis dataKey="ts" hide />
-        <YAxis domain={['auto', 'auto']} hide />
-        <Tooltip
-          contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-          formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, 'Equity']}
-          labelFormatter={() => ''}
-        />
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={1.5} fill="url(#eq-grad)" dot={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
+function toUT(ts: string | number): UTCTimestamp {
+  if (typeof ts === 'number') return Math.floor(ts > 1e12 ? ts / 1000 : ts) as UTCTimestamp;
+  return Math.floor(new Date(ts).getTime() / 1000) as UTCTimestamp;
 }
 
-// ── Recharts drawdown chart ───────────────────────────────────────────────────
+// ── Equity sparkline (LWC AreaSeries) ─────────────────────────────────────────
 
-function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
+function EquitySparkline({ data }: { data: { ts: string; v: number }[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
+  const rafRef       = useRef<number>(0);
+
+  const up    = data.length >= 2 && data[data.length - 1].v >= data[0].v;
+  const color = up ? '#00e676' : '#ff1744';
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      layout:    { background: { color: '#0d1421' }, textColor: '#64748b' },
+      grid:      { vertLines: { color: '#1e2d3d' }, horzLines: { color: '#1e2d3d' } },
+      rightPriceScale: { borderColor: '#1e2d3d', visible: false },
+      leftPriceScale:  { visible: false },
+      timeScale: { borderColor: '#1e2d3d', visible: false },
+      crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
+      handleScroll: false,
+      handleScale:  false,
+      height: 128,
+      width:  containerRef.current.clientWidth,
+    });
+    const series = chart.addSeries(AreaSeries, {
+      lineColor:   color,
+      topColor:    `${color}4d`,
+      bottomColor: `${color}05`,
+      lineWidth:   2,
+      lastValueVisible:  false,
+      priceLineVisible:  false,
+    });
+    chartApiRef.current = chart;
+    seriesRef.current   = series;
+
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartApiRef.current = null;
+      seriesRef.current   = null;
+    };
+  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!seriesRef.current || data.length < 2) return;
+    seriesRef.current.setData(data.map(d => ({ time: toUT(d.ts), value: d.v })));
+    chartApiRef.current?.timeScale().fitContent();
+  }, [data]);
+
   if (data.length < 2) return (
     <div className="flex items-center justify-center h-32 text-slate-600 text-sm">Not enough data</div>
   );
-  return (
-    <ResponsiveContainer width="100%" height={128}>
-      <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id="dd-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#ff1744" stopOpacity={0.35} />
-            <stop offset="95%" stopColor="#ff1744" stopOpacity={0.02} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e2d3d" />
-        <XAxis dataKey="ts" hide />
-        <YAxis domain={['auto', 0]} hide />
-        <ReferenceLine y={0} stroke="#334155" strokeDasharray="3 3" />
-        <Tooltip
-          contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-          formatter={(v: unknown) => [`${Number(v).toFixed(2)}%`, 'Drawdown']}
-          labelFormatter={() => ''}
-        />
-        <Area type="monotone" dataKey="dd" stroke="#ff1744" strokeWidth={1.5} fill="url(#dd-grad)" dot={false} />
-      </AreaChart>
-    </ResponsiveContainer>
+  return <div ref={containerRef} style={{ width: '100%', height: 128 }} />;
+}
+
+// ── Drawdown chart (LWC AreaSeries) ───────────────────────────────────────────
+
+function DrawdownChart({ data }: { data: { ts: string; dd: number }[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
+  const rafRef       = useRef<number>(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      layout:    { background: { color: '#0d1421' }, textColor: '#64748b' },
+      grid:      { vertLines: { color: '#1e2d3d' }, horzLines: { color: '#1e2d3d' } },
+      rightPriceScale: { borderColor: '#1e2d3d', visible: false },
+      leftPriceScale:  { visible: false },
+      timeScale: { borderColor: '#1e2d3d', visible: false },
+      crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
+      handleScroll: false,
+      handleScale:  false,
+      height: 128,
+      width:  containerRef.current.clientWidth,
+    });
+    const series = chart.addSeries(AreaSeries, {
+      lineColor:   '#ff1744',
+      topColor:    'rgba(255,23,68,0.35)',
+      bottomColor: 'rgba(255,23,68,0.02)',
+      lineWidth:   2,
+      lastValueVisible:  false,
+      priceLineVisible:  false,
+    });
+    series.createPriceLine({ price: 0, color: '#334155', lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
+    chartApiRef.current = chart;
+    seriesRef.current   = series;
+
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartApiRef.current = null;
+      seriesRef.current   = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!seriesRef.current || data.length < 2) return;
+    seriesRef.current.setData(data.map(d => ({ time: toUT(d.ts), value: d.dd })));
+    chartApiRef.current?.timeScale().fitContent();
+  }, [data]);
+
+  if (data.length < 2) return (
+    <div className="flex items-center justify-center h-32 text-slate-600 text-sm">Not enough data</div>
   );
+  return <div ref={containerRef} style={{ width: '100%', height: 128 }} />;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────

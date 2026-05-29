@@ -2,19 +2,18 @@
  * EquityCurve.tsx
  * Advanced equity curve with dynamic drawdown shading, Sharpe/Sortino
  * overlays, zoom/pan, and intelligent annotations.
- * Built on Recharts for smooth SVG rendering with custom components.
+ * Built on lightweight-charts v5 — imperative DOM API, no recharts.
  */
 
-import React, { useState, useMemo, memo, useCallback } from 'react';
+import React, { useState, useMemo, memo, useCallback, useEffect, useRef } from 'react';
 import {
-  AreaChart, Area, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceArea,
-  ComposedChart, Bar,
-} from 'recharts';
+  createChart, createSeriesMarkers, AreaSeries, LineSeries, HistogramSeries,
+} from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, UTCTimestamp, SeriesMarker } from 'lightweight-charts';
 import { useEquityCurve } from '../hooks/useChartData';
 import { useChartBotStore } from '../store/chart-bot-store';
 import { COLORS, CHART_DIMS } from '../utils/design-tokens';
-import { formatPnl, formatPct, formatDateTime, formatPrice } from '../utils/formatters';
+import { formatPnl, formatPct, formatDateTime } from '../utils/formatters';
 import type { EquityPoint } from '../types';
 
 // ─── Period selector ──────────────────────────────────────────────────────────
@@ -27,50 +26,6 @@ const PERIODS = [
   { label: '1Y',  days: 365 },
   { label: 'ALL', days: 0   },
 ];
-
-// ─── Custom Tooltip ───────────────────────────────────────────────────────────
-
-interface TooltipPayload {
-  payload?: EquityPoint;
-}
-
-const EquityTooltip = memo(({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) => {
-  if (!active || !payload?.length || !payload[0].payload) return null;
-  const d = payload[0].payload;
-  const isDrawdown = d.drawdown < -0.5;
-
-  return (
-    <div style={styles.tooltip}>
-      <div style={styles.ttDate}>{formatDateTime(d.time)}</div>
-      <div style={styles.ttRow}>
-        <span style={styles.ttLabel}>Equity</span>
-        <span style={{ ...styles.ttVal, color: COLORS.neon.cyan }}>{formatPnl(d.equity)}</span>
-      </div>
-      <div style={styles.ttRow}>
-        <span style={styles.ttLabel}>Drawdown</span>
-        <span style={{ ...styles.ttVal, color: isDrawdown ? COLORS.loss.base : COLORS.text.secondary }}>
-          {formatPct(d.drawdown)}
-        </span>
-      </div>
-      <div style={styles.ttRow}>
-        <span style={styles.ttLabel}>Sharpe</span>
-        <span style={{ ...styles.ttVal, color: d.sharpe >= 1 ? COLORS.profit.base : d.sharpe >= 0 ? COLORS.neon.gold : COLORS.loss.base }}>
-          {d.sharpe.toFixed(2)}
-        </span>
-      </div>
-      <div style={styles.ttRow}>
-        <span style={styles.ttLabel}>Sortino</span>
-        <span style={{ ...styles.ttVal, color: d.sortino >= 1.5 ? COLORS.profit.base : d.sortino >= 0 ? COLORS.neon.gold : COLORS.loss.base }}>
-          {d.sortino.toFixed(2)}
-        </span>
-      </div>
-      {d.annotation && (
-        <div style={styles.ttAnnotation}>{d.annotation}</div>
-      )}
-    </div>
-  );
-});
-EquityTooltip.displayName = 'EquityTooltip';
 
 // ─── Stats Bar ────────────────────────────────────────────────────────────────
 
@@ -86,6 +41,14 @@ interface Stats {
   peakEquity: number;
 }
 
+const StatPill = memo(({ label, value, color }: { label: string; value: string; color: string }) => (
+  <div style={styles.statPill}>
+    <span style={styles.statLabel}>{label}</span>
+    <span style={{ ...styles.statValue, color }}>{value}</span>
+  </div>
+));
+StatPill.displayName = 'StatPill';
+
 const StatsBar = memo(({ stats }: { stats: Stats }) => (
   <div style={styles.statsBar}>
     <StatPill label="Total Return" value={formatPnl(stats.totalReturn)} color={stats.totalReturn >= 0 ? COLORS.profit.base : COLORS.loss.base} />
@@ -99,13 +62,15 @@ const StatsBar = memo(({ stats }: { stats: Stats }) => (
 ));
 StatsBar.displayName = 'StatsBar';
 
-const StatPill = memo(({ label, value, color }: { label: string; value: string; color: string }) => (
-  <div style={styles.statPill}>
-    <span style={styles.statLabel}>{label}</span>
-    <span style={{ ...styles.statValue, color }}>{value}</span>
+// ─── Legend ───────────────────────────────────────────────────────────────────
+
+const LegendItem = memo(({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) => (
+  <div style={styles.legendItem}>
+    <div style={{ ...styles.legendLine, background: dashed ? 'transparent' : color, borderTop: dashed ? `1px dashed ${color}` : 'none', width: 20 }} />
+    <span style={{ ...styles.legendLabel, color: COLORS.text.muted }}>{label}</span>
   </div>
 ));
-StatPill.displayName = 'StatPill';
+LegendItem.displayName = 'LegendItem';
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -113,6 +78,17 @@ const EquityCurve: React.FC = () => {
   const [period, setPeriod] = useState(90);
   const { data: rawPoints, isLoading } = useEquityCurve(period || 365);
   const livePoints = useChartBotStore((s) => s.equityCurve);
+
+  // Chart refs
+  const mainContainerRef = useRef<HTMLDivElement>(null);
+  const ddContainerRef   = useRef<HTMLDivElement>(null);
+  const mainChartRef     = useRef<IChartApi | null>(null);
+  const ddChartRef       = useRef<IChartApi | null>(null);
+  const equitySerRef     = useRef<ISeriesApi<'Area'> | null>(null);
+  const sharpeSerRef     = useRef<ISeriesApi<'Line'> | null>(null);
+  const sortinoSerRef    = useRef<ISeriesApi<'Line'> | null>(null);
+  const ddSerRef         = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const rafRef           = useRef<number>(0);
 
   // Merge fetched + live streaming points
   const points: EquityPoint[] = useMemo(() => {
@@ -125,7 +101,11 @@ const EquityCurve: React.FC = () => {
 
   // Compute stats
   const stats = useMemo<Stats>(() => {
-    if (!points.length) return { totalReturn: 0, totalReturnPct: 0, maxDrawdown: 0, avgSharpe: 0, avgSortino: 0, winDays: 0, lossDays: 0, currentEquity: 0, peakEquity: 0 };
+    if (!points.length) return {
+      totalReturn: 0, totalReturnPct: 0, maxDrawdown: 0,
+      avgSharpe: 0, avgSortino: 0, winDays: 0, lossDays: 0,
+      currentEquity: 0, peakEquity: 0,
+    };
     const first = points[0].equity;
     const last  = points[points.length - 1].equity;
     const peak  = Math.max(...points.map((p) => p.equity));
@@ -138,44 +118,157 @@ const EquityCurve: React.FC = () => {
       totalReturn:    last - first,
       totalReturnPct: ((last - first) / first) * 100,
       maxDrawdown:    maxDD,
-      avgSharpe,
-      avgSortino,
-      winDays,
-      lossDays,
-      currentEquity: last,
-      peakEquity:    peak,
+      avgSharpe, avgSortino, winDays, lossDays,
+      currentEquity: last, peakEquity: peak,
     };
   }, [points]);
 
-  // Find drawdown regions for shading
-  const drawdownRegions = useMemo(() => {
-    const regions: { start: number; end: number; depth: number }[] = [];
-    let inDD = false;
-    let ddStart = 0;
-    let maxDepth = 0;
-    for (const pt of points) {
-      if (pt.drawdown < -1 && !inDD) {
-        inDD = true;
-        ddStart = pt.time;
-        maxDepth = pt.drawdown;
-      } else if (pt.drawdown < -1 && inDD) {
-        maxDepth = Math.min(maxDepth, pt.drawdown);
-      } else if (pt.drawdown >= -1 && inDD) {
-        regions.push({ start: ddStart, end: pt.time, depth: maxDepth });
-        inDD = false;
-        maxDepth = 0;
-      }
-    }
-    if (inDD && points.length) {
-      regions.push({ start: ddStart, end: points[points.length - 1].time, depth: maxDepth });
-    }
-    return regions;
-  }, [points]);
+  // ── Main chart init ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!mainContainerRef.current) return;
+    const chart = createChart(mainContainerRef.current, {
+      layout:    { background: { color: 'transparent' }, textColor: COLORS.text.muted },
+      grid:      { vertLines: { color: COLORS.bg.surface }, horzLines: { color: COLORS.bg.surface } },
+      rightPriceScale: { borderColor: COLORS.bg.border },
+      leftPriceScale:  { borderColor: COLORS.bg.border, visible: true, scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: COLORS.bg.border, timeVisible: true, secondsVisible: false },
+      height: CHART_DIMS.equityCurveHeight,
+      width:  mainContainerRef.current.clientWidth,
+    });
 
-  // Annotations
-  const annotations = useMemo(() =>
-    points.filter((p) => p.annotation),
-  [points]);
+    const equitySeries = chart.addSeries(AreaSeries, {
+      lineColor:   COLORS.neon.cyan,
+      topColor:    `${COLORS.neon.cyan}40`,
+      bottomColor: `${COLORS.neon.cyan}03`,
+      lineWidth:   2,
+      priceScaleId: 'right',
+      lastValueVisible: true,
+      priceLineVisible: false,
+    });
+    const sharpeSeries = chart.addSeries(LineSeries, {
+      color:    COLORS.neon.gold,
+      lineWidth: 1,
+      lineStyle: 2, // dashed
+      priceScaleId: 'left',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    const sortinoSeries = chart.addSeries(LineSeries, {
+      color:    COLORS.neon.purple,
+      lineWidth: 1,
+      lineStyle: 3, // dotted
+      priceScaleId: 'left',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    // Zero and Sharpe=1 reference lines
+    sharpeSeries.createPriceLine({ price: 0, color: COLORS.bg.divider,   lineWidth: 1, lineStyle: 2, axisLabelVisible: false, title: '' });
+    sharpeSeries.createPriceLine({ price: 1, color: `${COLORS.neon.gold}66`, lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: 'SR=1' });
+
+    mainChartRef.current    = chart;
+    equitySerRef.current    = equitySeries;
+    sharpeSerRef.current    = sharpeSeries;
+    sortinoSerRef.current   = sortinoSeries;
+
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (mainContainerRef.current && mainChartRef.current) {
+          mainChartRef.current.applyOptions({ width: mainContainerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(mainContainerRef.current);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      mainChartRef.current  = null;
+      equitySerRef.current  = null;
+      sharpeSerRef.current  = null;
+      sortinoSerRef.current = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Drawdown sub-chart init ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!ddContainerRef.current) return;
+    const chart = createChart(ddContainerRef.current, {
+      layout:    { background: { color: 'transparent' }, textColor: COLORS.text.muted },
+      grid:      { vertLines: { color: COLORS.bg.surface }, horzLines: { color: COLORS.bg.surface } },
+      rightPriceScale: { borderColor: COLORS.bg.border },
+      timeScale: { borderColor: COLORS.bg.border, visible: false },
+      height: 60,
+      width:  ddContainerRef.current.clientWidth,
+    });
+    const ddSeries = chart.addSeries(HistogramSeries, {
+      color:    `${COLORS.loss.base}80`,
+      priceScaleId: 'right',
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    ddChartRef.current = chart;
+    ddSerRef.current   = ddSeries;
+
+    const ro = new ResizeObserver(() => {
+      if (ddContainerRef.current && ddChartRef.current) {
+        ddChartRef.current.applyOptions({ width: ddContainerRef.current.clientWidth });
+      }
+    });
+    ro.observe(ddContainerRef.current);
+
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      ddChartRef.current = null;
+      ddSerRef.current   = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Data update ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!equitySerRef.current || !sharpeSerRef.current || !sortinoSerRef.current || !ddSerRef.current) return;
+    if (!points.length) return;
+
+    // Deduplicate by time
+    const seen = new Set<number>();
+    const sorted: EquityPoint[] = [...points]
+      .sort((a, b) => a.time - b.time)
+      .filter((p) => { if (seen.has(p.time)) return false; seen.add(p.time); return true; });
+
+    equitySerRef.current.setData(
+      sorted.map(p => ({ time: p.time as UTCTimestamp, value: p.equity })),
+    );
+    sharpeSerRef.current.setData(
+      sorted.map(p => ({ time: p.time as UTCTimestamp, value: p.sharpe })),
+    );
+    sortinoSerRef.current.setData(
+      sorted.map(p => ({ time: p.time as UTCTimestamp, value: p.sortino })),
+    );
+    ddSerRef.current.setData(
+      sorted.map(p => ({
+        time:  p.time as UTCTimestamp,
+        value: p.drawdown,
+        color: p.drawdown < -5 ? `${COLORS.loss.base}cc` : `${COLORS.loss.base}66`,
+      })),
+    );
+
+    // Annotation markers on equity series
+    const markers: SeriesMarker<UTCTimestamp>[] = sorted
+      .filter(p => p.annotation)
+      .map(p => ({
+        time:     p.time as UTCTimestamp,
+        position: 'aboveBar' as const,
+        color:    COLORS.neon.amber,
+        shape:    'circle' as const,
+        text:     p.annotation!.slice(0, 24),
+      }));
+    createSeriesMarkers(equitySerRef.current, markers);
+
+    mainChartRef.current?.timeScale().fitContent();
+    ddChartRef.current?.timeScale().fitContent();
+  }, [points]);
 
   const handlePeriod = useCallback((days: number) => setPeriod(days), []);
 
@@ -213,161 +306,15 @@ const EquityCurve: React.FC = () => {
       {/* Stats */}
       <StatsBar stats={stats} />
 
-      {/* Main equity area chart */}
+      {/* Main equity chart */}
       <div style={{ padding: '0 4px' }}>
-        <ResponsiveContainer width="100%" height={CHART_DIMS.equityCurveHeight}>
-          <ComposedChart data={points} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="equityGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={COLORS.neon.cyan} stopOpacity={0.25} />
-                <stop offset="95%" stopColor={COLORS.neon.cyan} stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="ddGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={COLORS.loss.base} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={COLORS.loss.base} stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
-
-            <CartesianGrid
-              strokeDasharray="2 4"
-              stroke={COLORS.bg.surface}
-              vertical={false}
-            />
-
-            <XAxis
-              dataKey="time"
-              tickFormatter={(t) => formatDateTime(t)}
-              tick={{ fill: COLORS.text.muted, fontSize: 9, fontFamily: '"JetBrains Mono", monospace' }}
-              axisLine={{ stroke: COLORS.bg.border }}
-              tickLine={false}
-              interval="preserveStartEnd"
-            />
-
-            <YAxis
-              yAxisId="equity"
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-              tick={{ fill: COLORS.text.muted, fontSize: 9, fontFamily: '"JetBrains Mono", monospace' }}
-              axisLine={false}
-              tickLine={false}
-              width={48}
-            />
-
-            <YAxis
-              yAxisId="ratio"
-              orientation="right"
-              domain={[-2, 4]}
-              tickFormatter={(v) => v.toFixed(1)}
-              tick={{ fill: COLORS.text.muted, fontSize: 9, fontFamily: '"JetBrains Mono", monospace' }}
-              axisLine={false}
-              tickLine={false}
-              width={32}
-            />
-
-            <Tooltip content={<EquityTooltip />} />
-
-            {/* Drawdown shading regions */}
-            {drawdownRegions.map((r, i) => (
-              <ReferenceArea
-                key={i}
-                yAxisId="equity"
-                x1={r.start}
-                x2={r.end}
-                fill={COLORS.loss.base}
-                fillOpacity={Math.min(0.15, Math.abs(r.depth) / 100)}
-                stroke="none"
-              />
-            ))}
-
-            {/* Zero line */}
-            <ReferenceLine yAxisId="ratio" y={0} stroke={COLORS.bg.divider} strokeDasharray="3 3" />
-            <ReferenceLine yAxisId="ratio" y={1} stroke={COLORS.neon.gold} strokeDasharray="2 4" strokeOpacity={0.4} />
-
-            {/* Equity area */}
-            <Area
-              yAxisId="equity"
-              type="monotone"
-              dataKey="equity"
-              stroke={COLORS.neon.cyan}
-              strokeWidth={2}
-              fill="url(#equityGrad)"
-              dot={false}
-              activeDot={{ r: 4, fill: COLORS.neon.cyan, stroke: COLORS.bg.void, strokeWidth: 2 }}
-            />
-
-            {/* Sharpe ratio line */}
-            <Line
-              yAxisId="ratio"
-              type="monotone"
-              dataKey="sharpe"
-              stroke={COLORS.neon.gold}
-              strokeWidth={1}
-              dot={false}
-              strokeDasharray="4 2"
-              opacity={0.7}
-            />
-
-            {/* Sortino ratio line */}
-            <Line
-              yAxisId="ratio"
-              type="monotone"
-              dataKey="sortino"
-              stroke={COLORS.neon.purple}
-              strokeWidth={1}
-              dot={false}
-              strokeDasharray="2 3"
-              opacity={0.7}
-            />
-
-            {/* Annotation markers */}
-            {annotations.map((a) => (
-              <ReferenceLine
-                key={a.time}
-                yAxisId="equity"
-                x={a.time}
-                stroke={COLORS.neon.amber}
-                strokeWidth={1}
-                strokeDasharray="3 2"
-                label={{
-                  value: '●',
-                  fill: COLORS.neon.amber,
-                  fontSize: 8,
-                  position: 'top',
-                }}
-              />
-            ))}
-          </ComposedChart>
-        </ResponsiveContainer>
+        <div ref={mainContainerRef} style={{ width: '100%', height: CHART_DIMS.equityCurveHeight }} />
       </div>
 
       {/* Drawdown sub-chart */}
       <div style={{ padding: '0 4px', marginTop: 2 }}>
         <div style={styles.ddLabel}>DRAWDOWN</div>
-        <ResponsiveContainer width="100%" height={60}>
-          <AreaChart data={points} margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
-            <defs>
-              <linearGradient id="ddAreaGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={COLORS.loss.base} stopOpacity={0.5} />
-                <stop offset="95%" stopColor={COLORS.loss.base} stopOpacity={0.05} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="time" hide />
-            <YAxis
-              tickFormatter={(v) => `${v.toFixed(0)}%`}
-              tick={{ fill: COLORS.text.muted, fontSize: 8, fontFamily: '"JetBrains Mono", monospace' }}
-              axisLine={false}
-              tickLine={false}
-              width={36}
-            />
-            <Area
-              type="monotone"
-              dataKey="drawdown"
-              stroke={COLORS.loss.base}
-              strokeWidth={1}
-              fill="url(#ddAreaGrad)"
-              dot={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        <div ref={ddContainerRef} style={{ width: '100%', height: 60 }} />
       </div>
 
       {/* Legend */}
@@ -381,16 +328,7 @@ const EquityCurve: React.FC = () => {
   );
 };
 
-const LegendItem = memo(({ color, label, dashed }: { color: string; label: string; dashed?: boolean }) => (
-  <div style={styles.legendItem}>
-    <div style={{ ...styles.legendLine, background: dashed ? 'transparent' : color, borderTop: dashed ? `1px dashed ${color}` : 'none', width: 20 }} />
-    <span style={{ ...styles.legendLabel, color: COLORS.text.muted }}>{label}</span>
-  </div>
-));
-LegendItem.displayName = 'LegendItem';
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
-
 const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     background: COLORS.bg.surface,
