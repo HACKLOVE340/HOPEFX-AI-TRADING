@@ -54,17 +54,30 @@ def _build_csp(allowed_origins: list[str]) -> str:
     connect_src = " ".join(connect_srcs)
 
     # In production avoid unsafe-inline for scripts; React is bundled so it
-    # doesn't need it.  Keep unsafe-inline for styles (Tailwind inline styles).
+    # doesn't need it.  Keep unsafe-inline for styles (Tailwind + LWC inline styles).
     script_src = "'self'" if _is_production() else "'self' 'unsafe-inline'"
 
+    # Production adds upgrade-insecure-requests to force HTTPS sub-resources
+    upgrade = "upgrade-insecure-requests; " if _is_production() else ""
+
     return (
+        f"{upgrade}"
         f"default-src 'self'; "
         f"script-src {script_src}; "
-        f"style-src 'self' 'unsafe-inline'; "
-        # QR code images for 2FA setup (api.qrserver.com) + data URIs for charts
-        f"img-src 'self' data: https://api.qrserver.com; "
-        f"font-src 'self'; "
+        f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        # QR code images for 2FA setup (api.qrserver.com) + data URIs for LWC charts
+        f"img-src 'self' data: blob: https://api.qrserver.com; "
+        # Google Fonts CDN + self-hosted fonts
+        f"font-src 'self' https://fonts.gstatic.com; "
         f"connect-src {connect_src}; "
+        # PWA service worker must run from same origin
+        f"worker-src 'self'; "
+        # PWA web app manifest
+        f"manifest-src 'self'; "
+        # Blob URLs needed for chart image export and file downloads
+        f"media-src 'none'; "
+        f"object-src 'none'; "
+        f"frame-src 'none'; "
         f"frame-ancestors 'none'; "
         f"base-uri 'self'; "
         f"form-action 'self';"
@@ -169,8 +182,21 @@ def setup_security_headers(app: FastAPI) -> None:
         "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
-        "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
+        # Disable unused browser features and hardware APIs
+        "Permissions-Policy": (
+            "geolocation=(), microphone=(), camera=(), payment=(), "
+            "autoplay=(), fullscreen=(self), gyroscope=(), magnetometer=(), "
+            "accelerometer=(), ambient-light-sensor=(), battery=(), "
+            "display-capture=(), document-domain=(), encrypted-media=(), "
+            "execution-while-not-rendered=(), execution-while-out-of-viewport=(), "
+            "publickey-credentials-get=(), screen-wake-lock=(), serial=(), "
+            "sync-xhr=(), usb=(), xr-spatial-tracking=()"
+        ),
         "Content-Security-Policy": _csp,
+        # Prevent cross-origin pop-ups from retaining a reference to the opener
+        "Cross-Origin-Opener-Policy": "same-origin",
+        # Prevent other origins from embedding our resources
+        "Cross-Origin-Resource-Policy": "same-origin",
     }
     # HSTS only makes sense over TLS — skip in dev to avoid breaking http://
     if _is_production():
