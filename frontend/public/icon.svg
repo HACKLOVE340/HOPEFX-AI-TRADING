@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="80" fill="#080c14"/>
+  <rect width="512" height="512" rx="80" fill="url(#grad)"/>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e3a5f;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#0f1f3d;stop-opacity:1"/>
+    </linearGradient>
+  </defs>
+  <!-- Chart bars representing trading -->
+  <rect x="90"  y="340" width="48" height="90"  rx="4" fill="#3b82f6" opacity="0.9"/>
+  <rect x="162" y="280" width="48" height="150" rx="4" fill="#3b82f6" opacity="0.9"/>
+  <rect x="234" y="200" width="48" height="230" rx="4" fill="#60a5fa" opacity="0.9"/>
+  <rect x="306" y="240" width="48" height="190" rx="4" fill="#3b82f6" opacity="0.9"/>
+  <rect x="378" y="140" width="48" height="290" rx="4" fill="#93c5fd" opacity="0.9"/>
+  <!-- Gold accent line -->
+  <polyline points="114,320 186,260 258,180 330,220 402,120"
+            fill="none" stroke="#fbbf24" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- HFX text -->
+  <text x="256" y="88" font-family="'Arial Black',Arial,sans-serif" font-weight="900"
+        font-size="52" fill="#f1f5f9" text-anchor="middle" letter-spacing="4">HOPEFX</text>
+</svg>
