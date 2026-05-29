@@ -44,6 +44,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 
 from database.models import Base
+from database.encryption import EncryptedString
 
 
 class UserRole(StrEnum):
@@ -82,7 +83,7 @@ class User(Base):
     password_reset_expires = Column(DateTime, nullable=True)
 
     # 2FA
-    totp_secret = Column(String(64), nullable=True)  # encrypted TOTP secret
+    totp_secret = Column(EncryptedString(64), nullable=True)  # AES-256-GCM encrypted TOTP secret
     totp_enabled = Column(Boolean, default=False)
 
     # KYC
