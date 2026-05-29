@@ -16,7 +16,7 @@
  *   - Admin: flush records
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api as sharedApi } from '../hooks/useApi';
 import {
@@ -24,13 +24,8 @@ import {
   useMutation,
   useQueryClient,
 } from '@tanstack/react-query';
-import {
-  AreaChart, Area,
-  LineChart, Line,
-  XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
-  ReferenceLine,
-} from 'recharts';
+import { createChart, AreaSeries, LineSeries } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { MetricCard } from '../components/MetricCard';
 import { PageHeader } from '../components/PageHeader';
 import { useStore, selectUser } from '../store';
@@ -195,7 +190,7 @@ function exportCSV(records: TCARecord[]): void {
 
 // ── Slippage trend chart ──────────────────────────────────────────────────────
 
-interface TrendPoint { t: string; slippage: number; latency: number }
+interface TrendPoint { t: string; slippage: number; latency: number; rawMs: number }
 
 function buildTrendPoints(records: TCARecord[]): TrendPoint[] {
   return [...records]
@@ -205,48 +200,129 @@ function buildTrendPoints(records: TCARecord[]): TrendPoint[] {
       t:        new Date(r.fill_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       slippage: parseFloat(r.slippage_bps.toFixed(2)),
       latency:  parseFloat(r.latency_ms.toFixed(1)),
+      rawMs:    new Date(r.fill_time).getTime(),
     }));
 }
 
-const SlippageTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
-  <ResponsiveContainer width="100%" height={140}>
-    <AreaChart data={points} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-      <defs>
-        <linearGradient id="slipGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="5%"  stopColor="#f97316" stopOpacity={0.35} />
-          <stop offset="95%" stopColor="#f97316" stopOpacity={0}    />
-        </linearGradient>
-      </defs>
-      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-      <XAxis dataKey="t" tick={{ fill: '#64748b', fontSize: 10 }} interval="preserveStartEnd" />
-      <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-      <Tooltip
-        contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
-        labelStyle={{ color: '#94a3b8' }}
-        formatter={(v) => [`${v} bps`, 'Slippage']}
-      />
-      <ReferenceLine y={5} stroke="#ef4444" strokeDasharray="4 2" label={{ value: '5 bps', fill: '#ef4444', fontSize: 10 }} />
-      <Area type="monotone" dataKey="slippage" stroke="#f97316" fill="url(#slipGrad)" strokeWidth={1.5} dot={false} />
-    </AreaChart>
-  </ResponsiveContainer>
-);
+// ── LWC helper ────────────────────────────────────────────────────────────────
 
-const LatencyTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => (
-  <ResponsiveContainer width="100%" height={140}>
-    <LineChart data={points} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-      <XAxis dataKey="t" tick={{ fill: '#64748b', fontSize: 10 }} interval="preserveStartEnd" />
-      <YAxis tick={{ fill: '#64748b', fontSize: 10 }} />
-      <Tooltip
-        contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, fontSize: 11 }}
-        labelStyle={{ color: '#94a3b8' }}
-        formatter={(v) => [`${v} ms`, 'Latency']}
-      />
-      <ReferenceLine y={100} stroke="#facc15" strokeDasharray="4 2" label={{ value: '100ms', fill: '#facc15', fontSize: 10 }} />
-      <Line type="monotone" dataKey="latency" stroke="#3b82f6" strokeWidth={1.5} dot={false} />
-    </LineChart>
-  </ResponsiveContainer>
-);
+function toUT(ms: number): UTCTimestamp {
+  return Math.floor(ms / 1000) as UTCTimestamp;
+}
+
+// ── Slippage trend chart (AreaSeries) ─────────────────────────────────────────
+
+const SlippageTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
+  const rafRef       = useRef<number>(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      layout:    { background: { color: '#0f172a' }, textColor: '#64748b' },
+      grid:      { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      rightPriceScale: { borderColor: '#1e293b' },
+      timeScale: { borderColor: '#1e293b', timeVisible: true, secondsVisible: false },
+      height: 140,
+      width:  containerRef.current.clientWidth,
+    });
+    const series = chart.addSeries(AreaSeries, {
+      lineColor:    '#f97316',
+      topColor:     'rgba(249,115,22,0.35)',
+      bottomColor:  'rgba(249,115,22,0)',
+      lineWidth:    2,
+      priceFormat:  { type: 'price', precision: 2 },
+    });
+    // Reference line at 5 bps
+    series.createPriceLine({ price: 5, color: '#ef4444', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '5 bps' });
+    chartApiRef.current = chart;
+    seriesRef.current   = series;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartApiRef.current = null;
+      seriesRef.current   = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!seriesRef.current || !points.length) return;
+    seriesRef.current.setData(
+      points.map(p => ({ time: toUT(p.rawMs), value: p.slippage })),
+    );
+    chartApiRef.current?.timeScale().fitContent();
+  }, [points]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: 140 }} />;
+};
+
+// ── Latency trend chart (LineSeries) ──────────────────────────────────────────
+
+const LatencyTrendChart: React.FC<{ points: TrendPoint[] }> = ({ points }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesRef    = useRef<ISeriesApi<'Line'> | null>(null);
+  const rafRef       = useRef<number>(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      layout:    { background: { color: '#0f172a' }, textColor: '#64748b' },
+      grid:      { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      rightPriceScale: { borderColor: '#1e293b' },
+      timeScale: { borderColor: '#1e293b', timeVisible: true, secondsVisible: false },
+      height: 140,
+      width:  containerRef.current.clientWidth,
+    });
+    const series = chart.addSeries(LineSeries, {
+      color:    '#3b82f6',
+      lineWidth: 2,
+      priceFormat: { type: 'price', precision: 1 },
+    });
+    // Reference line at 100 ms
+    series.createPriceLine({ price: 100, color: '#facc15', lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: '100ms' });
+    chartApiRef.current = chart;
+    seriesRef.current   = series;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartApiRef.current = null;
+      seriesRef.current   = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!seriesRef.current || !points.length) return;
+    seriesRef.current.setData(
+      points.map(p => ({ time: toUT(p.rawMs), value: p.latency })),
+    );
+    chartApiRef.current?.timeScale().fitContent();
+  }, [points]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: 140 }} />;
+};
 
 // ── Main component ────────────────────────────────────────────────────────────
 

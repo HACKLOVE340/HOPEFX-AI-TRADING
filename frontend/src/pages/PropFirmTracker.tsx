@@ -7,12 +7,11 @@
  * deduplication) and usePolling to pause polling when the tab is hidden.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts';
+import { createChart, HistogramSeries } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, Time } from 'lightweight-charts';
 import { propFirmExtApi } from '../hooks/useApi';
 import { usePolling } from '../hooks/usePolling';
 import { useStore, selectIsAuth, useHasHydrated } from '../store';
@@ -61,6 +60,68 @@ interface DailyStat {
   trades: number;
   drawdown_pct: number;
 }
+
+// ── Daily P&L histogram (lightweight-charts) ──────────────────────────────────
+
+const DailyPnlChart: React.FC<{ data: DailyStat[] }> = ({ data }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesRef    = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const rafRef       = useRef<number>(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      layout:    { background: { color: '#0d1421' }, textColor: '#64748b' },
+      grid:      { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+      rightPriceScale: { borderColor: '#1e293b' },
+      timeScale: { borderColor: '#1e293b', timeVisible: false },
+      height: 200,
+      width:  containerRef.current.clientWidth,
+    });
+
+    const series = chart.addSeries(HistogramSeries, {
+      color: '#4ade80',
+      priceFormat: { type: 'price', precision: 2, minMove: 0.01 },
+    });
+
+    chartApiRef.current = chart;
+    seriesRef.current   = series;
+
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartApiRef.current = null;
+      seriesRef.current   = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!seriesRef.current || !data.length) return;
+    const barData = [...data]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map(d => ({
+        time:  d.date as Time,
+        value: d.pnl,
+        color: d.pnl >= 0 ? '#4ade80' : '#f87171',
+      }));
+    seriesRef.current.setData(barData);
+    chartApiRef.current?.timeScale().fitContent();
+  }, [data]);
+
+  return <div ref={containerRef} style={{ width: '100%', height: 200 }} />;
+};
 
 // ── Progress bar ──────────────────────────────────────────────────────────────
 
@@ -290,20 +351,7 @@ const PropFirmTracker: React.FC = () => {
             </div>
           )}
           {(dailyQ.data ?? []).length > 0 && (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={dailyQ.data} margin={{ top: 4, right: 8, left: 0, bottom: 40 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                <XAxis dataKey="date" tick={{ fill: '#64748b', fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
-                <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-                <Tooltip contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-                  formatter={(v: unknown) => [`$${Number(v).toFixed(2)}`, 'P&L']} />
-                <Bar dataKey="pnl" radius={[4, 4, 0, 0]}>
-                  {(dailyQ.data ?? []).map((d, i) => (
-                    <Cell key={i} fill={d.pnl >= 0 ? '#4ade80' : '#f87171'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <DailyPnlChart data={dailyQ.data ?? []} />
           )}
           {(dailyQ.data ?? []).map(d => (
             <div key={d.date} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #1e293b', fontSize: 13 }}>

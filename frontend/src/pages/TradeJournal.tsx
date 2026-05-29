@@ -14,9 +14,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from 'recharts';
 import { journalApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 
@@ -328,26 +325,26 @@ const TradeJournal: React.FC = () => {
           <h3 style={s.sectionTitle}>Win Rate by Emotion</h3>
           {(stats.by_emotion ?? []).length > 0 && (
             <div style={{ marginBottom: 20 }}>
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={(stats.by_emotion ?? []).map(e => ({
-                  name: `${EMOTION_EMOJI[e.tag] ?? ''} ${e.tag}`,
-                  win_rate: e.win_rate,
-                  avg_pnl: e.avg_pnl,
-                }))} margin={{ top: 4, right: 8, left: 0, bottom: 40 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} domain={[0, 100]} unit="%" />
-                  <Tooltip
-                    contentStyle={{ background: '#0d1421', border: '1px solid #1e2d3d', borderRadius: 6, fontSize: 11 }}
-                    formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, 'Win Rate']}
-                  />
-                  <Bar dataKey="win_rate" radius={[4, 4, 0, 0]}>
-                    {(stats.by_emotion ?? []).map((e, i) => (
-                      <Cell key={i} fill={e.win_rate >= 50 ? '#4ade80' : '#f87171'} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {/* CSS bar chart — categorical emotion data */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {(stats.by_emotion ?? []).map((e) => {
+                  const pct = Math.min(Math.max(e.win_rate, 0), 100);
+                  const color = pct >= 50 ? '#4ade80' : '#f87171';
+                  return (
+                    <div key={e.tag} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 110, fontSize: 11, color: '#94a3b8', textAlign: 'right', flexShrink: 0 }}>
+                        {EMOTION_EMOJI[e.tag] ?? ''} {e.tag}
+                      </span>
+                      <div style={{ flex: 1, height: 14, background: '#1e293b', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.4s ease' }} />
+                      </div>
+                      <span style={{ width: 42, fontSize: 11, color, fontFamily: 'monospace', textAlign: 'right', flexShrink: 0 }}>
+                        {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
           {(stats.by_emotion ?? []).map((e) => <TagRow key={e.tag} stat={e} emoji={EMOTION_EMOJI[e.tag]} />)}

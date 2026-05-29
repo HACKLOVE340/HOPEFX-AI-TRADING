@@ -4,44 +4,48 @@
  * cumulative delta, buy/sell pressure bars, VWAP deviation.
  */
 
-import React from 'react';
-import {
-  RadialBarChart,
-  RadialBar,
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from 'recharts';
+import React, { useEffect, useRef } from 'react';
+import { createChart, AreaSeries } from 'lightweight-charts';
+import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { useStore } from '../../store';
 import { Panel } from '../ui/Panel';
 import { fmtPrice, cn } from '../../lib/utils';
 
-// ── Pressure gauge (radial) ───────────────────────────────────────────────────
+// ── Pressure gauge (SVG arc rings) ────────────────────────────────────────────
 
 function PressureGauge({ buy, sell }: { buy: number; sell: number }) {
-  const data = [
-    { name: 'Buy',  value: buy  * 100, fill: '#00e676' },
-    { name: 'Sell', value: sell * 100, fill: '#ff1744' },
-  ];
+  const R = 28, CX = 40, CY = 40, SW = 7;
+  const circ = 2 * Math.PI * R;
+  // Each arc starts at 12-o'clock (offset = circ * 0.25) going clockwise.
+  // Buy arc covers buy*circ; sell arc starts where buy arc ends.
+  const buyLen  = circ * Math.min(Math.max(buy, 0), 1);
+  const sellLen = circ * Math.min(Math.max(sell, 0), 1);
+  const OFFSET  = circ * 0.25; // rotate start point to top
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="w-20 h-20">
-        <ResponsiveContainer width="100%" height="100%">
-          <RadialBarChart
-            cx="50%" cy="50%"
-            innerRadius="55%" outerRadius="90%"
-            startAngle={90} endAngle={-270}
-            data={data}
-            barSize={6}
-          >
-            <RadialBar dataKey="value" cornerRadius={3} background={{ fill: '#1e2d3d' }} />
-          </RadialBarChart>
-        </ResponsiveContainer>
-      </div>
+      <svg width="80" height="80" viewBox="0 0 80 80" style={{ overflow: 'visible' }}>
+        {/* Background ring */}
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke="#1e2d3d" strokeWidth={SW} />
+        {/* Sell arc (red) — drawn first so buy overlaps visually on top */}
+        <circle
+          cx={CX} cy={CY} r={R} fill="none"
+          stroke="#ff1744" strokeWidth={SW}
+          strokeDasharray={`${sellLen} ${circ}`}
+          strokeDashoffset={OFFSET - buyLen}
+          style={{ transform: 'rotate(-90deg)', transformOrigin: `${CX}px ${CY}px` }}
+          strokeLinecap="round"
+        />
+        {/* Buy arc (green) */}
+        <circle
+          cx={CX} cy={CY} r={R} fill="none"
+          stroke="#00e676" strokeWidth={SW}
+          strokeDasharray={`${buyLen} ${circ}`}
+          strokeDashoffset={OFFSET}
+          style={{ transform: 'rotate(-90deg)', transformOrigin: `${CX}px ${CY}px` }}
+          strokeLinecap="round"
+        />
+      </svg>
       <div className="flex items-center gap-3 text-[10px] font-mono">
         <span className="text-[#00e676]">B {(buy * 100).toFixed(0)}%</span>
         <span className="text-[#ff1744]">S {(sell * 100).toFixed(0)}%</span>
@@ -88,48 +92,72 @@ function MicroRow({
   );
 }
 
-// ── Delta history mini-chart ──────────────────────────────────────────────────
+// ── Delta history mini-chart (LWC AreaSeries) ─────────────────────────────────
 
 function DeltaChart({ history }: { history: number[] }) {
-  if (history.length < 2) return null;
-  const data = history.map((v, i) => ({ i, v }));
-  const isPos = (history[history.length - 1] ?? 0) >= 0;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const chartApiRef  = useRef<IChartApi | null>(null);
+  const seriesRef    = useRef<ISeriesApi<'Area'> | null>(null);
+  const rafRef       = useRef<number>(0);
 
-  return (
-    <div className="h-14">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 2, right: 0, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id="deltaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor={isPos ? '#00e676' : '#ff1744'} stopOpacity={0.3} />
-              <stop offset="95%" stopColor={isPos ? '#00e676' : '#ff1744'} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <XAxis dataKey="i" hide />
-          <YAxis hide />
-          <Tooltip
-            content={({ active, payload }) =>
-              active && payload?.length ? (
-                <div className="bg-[#111827] border border-[#1e2d3d] rounded px-2 py-1 text-[10px] font-mono">
-                  <span style={{ color: isPos ? '#00e676' : '#ff1744' }}>
-                    Δ {(payload[0].value as number).toFixed(0)}
-                  </span>
-                </div>
-              ) : null
-            }
-          />
-          <Area
-            type="monotone"
-            dataKey="v"
-            stroke={isPos ? '#00e676' : '#ff1744'}
-            strokeWidth={1.5}
-            fill="url(#deltaGrad)"
-            dot={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
+  const isPos = (history[history.length - 1] ?? 0) >= 0;
+  const color  = isPos ? '#00e676' : '#ff1744';
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const chart = createChart(containerRef.current, {
+      layout:    { background: { color: 'transparent' }, textColor: '#64748b' },
+      grid:      { vertLines: { color: 'transparent' }, horzLines: { color: 'transparent' } },
+      rightPriceScale: { visible: false },
+      leftPriceScale:  { visible: false },
+      timeScale: { visible: false },
+      crosshair: { vertLine: { visible: false }, horzLine: { visible: false } },
+      handleScroll: false,
+      handleScale:  false,
+      height: 56,
+      width:  containerRef.current.clientWidth || 200,
+    });
+    const series = chart.addSeries(AreaSeries, {
+      lineColor:   color,
+      topColor:    `${color}4d`,
+      bottomColor: `${color}00`,
+      lineWidth:   2,
+      lastValueVisible: false,
+      priceLineVisible: false,
+    });
+    chartApiRef.current = chart;
+    seriesRef.current   = series;
+
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        if (containerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      ro.disconnect();
+      chart.remove();
+      chartApiRef.current = null;
+      seriesRef.current   = null;
+    };
+  }, [color]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!seriesRef.current || history.length < 2) return;
+    // Use synthetic timestamps (1-second increments from epoch) for indexed data.
+    const base = 1_000_000_000 as UTCTimestamp;
+    seriesRef.current.setData(
+      history.map((v, i) => ({ time: (base + i) as UTCTimestamp, value: v })),
+    );
+    chartApiRef.current?.timeScale().fitContent();
+  }, [history]);
+
+  if (history.length < 2) return null;
+  return <div ref={containerRef} style={{ width: '100%', height: 56 }} />;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
