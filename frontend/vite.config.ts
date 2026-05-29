@@ -1,10 +1,78 @@
 /// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Inject the SW registration script into index.html automatically
+      injectRegister: 'auto',
+      // Work-box (the SW generator) strategy: cache app shell, network-first for API
+      workbox: {
+        // Cache the app shell and all static assets
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Network-first for API routes — never serve stale financial data from cache
+        runtimeCaching: [
+          {
+            urlPattern: /^\/api\/.*/i,
+            handler: 'NetworkOnly',
+          },
+          {
+            urlPattern: /^\/ws\/.*/i,
+            handler: 'NetworkOnly',
+          },
+        ],
+        // Keep the SW small by excluding source maps
+        globIgnores: ['**/*.map'],
+        // Clean up old caches on SW activation
+        cleanupOutdatedCaches: true,
+        // Skip waiting so the new SW takes over immediately
+        skipWaiting: true,
+        clientsClaim: true,
+      },
+      manifest: {
+        name: 'HOPEFX — AI-Powered Gold & Forex Trading',
+        short_name: 'HOPEFX',
+        description: 'Institutional-grade AI trading signals for gold (XAUUSD) and forex. LSTM + XGBoost models, live macro data, risk management, and strategy marketplace.',
+        theme_color: '#080c14',
+        background_color: '#080c14',
+        display: 'standalone',
+        orientation: 'any',
+        scope: '/',
+        start_url: '/',
+        icons: [
+          {
+            src: '/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any maskable',
+          },
+          {
+            src: '/icon.svg',
+            sizes: 'any',
+            type: 'image/svg+xml',
+            purpose: 'any',
+          },
+        ],
+        categories: ['finance', 'business'],
+        screenshots: [],
+      },
+      // Dev mode: enable SW in development for testing
+      devOptions: {
+        enabled: false,
+      },
+    }),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -82,12 +150,6 @@ export default defineConfig({
           if (id.includes('@tanstack/react-query')) return 'vendor-query';
           // ── Vendor: Zustand ────────────────────────────────────────────────
           if (id.includes('node_modules/zustand')) return 'vendor-state';
-          // ── Vendor: Recharts + D3 (heavy) ──────────────────────────────────
-          if (id.includes('node_modules/recharts') ||
-              id.includes('node_modules/d3-') ||
-              id.includes('node_modules/victory-')) {
-            return 'vendor-recharts';
-          }
           // ── Vendor: Lightweight Charts (TradingView) ───────────────────────
           if (id.includes('node_modules/lightweight-charts')) return 'vendor-lwcharts';
           // ── Vendor: Leaflet (only GlobalAttackMap) ─────────────────────────
