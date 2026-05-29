@@ -456,6 +456,17 @@ def get_db() -> Session:
 # Background task implementations extracted to core/background_tasks.py
 from core.background_tasks import nuclear_price_bridge as _nuclear_price_bridge
 
+# Startup helpers extracted to core/startup_helpers.py
+from core.startup_helpers import (
+    init_kyc_gateway as _init_kyc_gateway,
+    mount_gateway as _mount_gateway,
+    prewarm_ml_predictor as _prewarm_ml_predictor,
+    push_state_to_api_modules as _push_state_to_api_modules,
+    start_data_layer_orchestrator as _start_data_layer_orchestrator,
+    start_l2_feed as _start_l2_feed,
+    start_nuclear_price_bridge as _start_nuclear_price_bridge,
+)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -697,7 +708,7 @@ async def startup_event():
         await _start_l2_feed(app_state)
         _tasks_done.append("l2_feed")
 
-        _start_nuclear_price_bridge(app_state)
+        _start_nuclear_price_bridge(app_state, _nuclear_price_bridge)
         _tasks_done.append("nuclear_price_bridge")
 
         await _prewarm_ml_predictor(app_state)
@@ -740,187 +751,6 @@ async def startup_event():
     except Exception:
         logger.exception("Startup failed: %s")
         raise
-
-
-def _push_state_to_api_modules(state) -> None:
-    """Push app_state into every API module that holds a local reference."""
-    import importlib as _il
-
-    _state_modules = [
-        ("api.trading", "set_state"),
-        ("api.admin", "set_state"),
-        ("api.watchlist", "set_state"),
-        ("api.advanced_trading", "set_state"),
-    ]
-    for _mod_name, _fn_name in _state_modules:
-        try:
-            _mod = _il.import_module(_mod_name)
-            _fn = getattr(_mod, _fn_name, None)
-            if _fn is not None:
-                _fn(state)
-                logger.info("State pushed _> %s", _mod_name)
-        except ImportError:
-            ...  # nosec B110
-        except Exception as _e:
-            logger.warning("Failed to push state to %s: %s", _mod_name, _e)
-
-
-async def _prewarm_ml_predictor(state) -> None:
-    """Pre-warm EnhancedMLPredictor at startup so the first trade is not cold.
-
-    enhanced_ml_predictor.py is the active ML backend used by trader_full.py.
-    Loading it here ensures the model is in memory before the first signal
-    arrives rather than being lazily loaded on the first trade tick.
-    """
-    model_path = os.getenv("ML_MODEL_PATH", "ml/saved_models/hopefx")
-    try:
-        from enhanced_ml_predictor import EnhancedMLPredictor
-
-        predictor = EnhancedMLPredictor()
-        import pathlib
-
-        if pathlib.Path(model_path).exists():
-            predictor.load(model_path)
-            logger.info("EnhancedMLPredictor: model pre-warmed from %s", model_path)
-        else:
-            logger.info(
-                "EnhancedMLPredictor: no saved model at %s — predictor ready for training",
-                model_path,
-            )
-        state.ml_predictor = predictor
-    except Exception as _exc:
-        logger.warning("EnhancedMLPredictor pre-warm failed (non-fatal): %s", _exc)
-
-
-async def _start_data_layer_orchestrator(state) -> None:
-    """Await the data layer orchestrator startup (non-fatal).
-
-    Previously used asyncio.create_task() which fire-and-forgot the coroutine,
-    meaning _started was never set before the health check ran and all
-    /api/data-layer/* endpoints returned 503. Awaiting directly ensures the
-    orchestrator is fully initialised before startup_event() returns.
-    """
-    _orch_timeout = float(os.getenv("ORCHESTRATOR_STARTUP_TIMEOUT_S", "60.0"))
-    try:
-        from data_layer.orchestrator import orchestrator
-
-        await asyncio.wait_for(orchestrator.start(), timeout=_orch_timeout)
-        state.data_layer_orchestrator = orchestrator
-        logger.info("Data layer orchestrator started")
-    except TimeoutError:
-        logger.warning(
-            "Data layer orchestrator timed out after %.0fs — data-layer endpoints will "
-            "return degraded responses until feeds connect. Set ORCHESTRATOR_STARTUP_TIMEOUT_S "
-            "to increase the limit.",
-            _orch_timeout,
-        )
-    except Exception as _exc:
-        logger.warning("Data layer orchestrator failed to start (non-fatal): %s", _exc)
-
-
-def _init_kyc_gateway(state) -> None:
-    """Wire KYCGateway with ComplianceManager (non-fatal)."""
-    try:
-        from compliance.kyc_provider import get_kyc_gateway, init_kyc_gateway
-
-        _cm = getattr(state, "compliance_manager", None)
-        if _cm is not None:
-            init_kyc_gateway(_cm)
-            logger.info("KYCGateway initialised with ComplianceManager")
-        else:
-            get_kyc_gateway()  # initialise with no-DB fallback
-            logger.warning("KYCGateway initialised without ComplianceManager (no DB)")
-    except Exception as _exc:
-        logger.warning("KYCGateway init failed (non-fatal): %s", _exc)
-
-
-async def _start_l2_feed(state) -> None:
-    """Start L2 order book feed and depth bridge (non-fatal)."""
-    try:
-        from market_data.order_book import get_order_book_feed
-
-        _l2_symbols = os.getenv("L2_SYMBOLS", "XAU_USD,EUR_USD").split(",")
-        _l2_feed = get_order_book_feed()
-        _l2_task = asyncio.create_task(
-            _l2_feed.start([s.strip() for s in _l2_symbols]),
-            name="l2_order_book_feed",
-        )
-        if hasattr(state, "background_tasks"):
-            state.background_tasks.append(_l2_task)
-        logger.info("L2 order book feed starting for symbols: %s", _l2_symbols)
-
-        _l2_bridge_task = asyncio.create_task(
-            _run_l2_depth_bridge(_l2_feed, _l2_symbols),
-            name="l2_depth_bridge",
-        )
-        if hasattr(state, "background_tasks"):
-            state.background_tasks.append(_l2_bridge_task)
-    except Exception as _exc:
-        logger.warning("L2 order book feed failed to start (non-fatal): %s", _exc)
-
-
-async def _run_l2_depth_bridge(l2_feed, l2_symbols: list) -> None:
-    """Push L2 snapshots into MicrostructureEngine on each interval tick."""
-    from data_layer.orchestrator import orchestrator as _dl_orch
-
-    _interval = float(os.getenv("L2_SNAPSHOT_INTERVAL", "1.0"))
-    while True:
-        try:
-            for _sym in [s.strip() for s in l2_symbols]:
-                _snap = l2_feed.get_snapshot(_sym)
-                if _snap is not None:
-                    _dl_orch._micro.inject_l2_depth(
-                        symbol=_sym,
-                        bid_depth=_snap.bid_depth,
-                        ask_depth=_snap.ask_depth,
-                    )
-        except Exception as _exc:
-            logger.debug("L2 depth bridge error: %s", _exc)
-        await asyncio.sleep(_interval)
-
-
-def _start_sharpe_circuit_breaker(state) -> None:
-    """Start Sharpe circuit breaker background task (non-fatal)."""
-    try:
-        from ml.sharpe_circuit_breaker import get_sharpe_cb
-
-        _scb_task = asyncio.create_task(get_sharpe_cb().run(), name="sharpe_circuit_breaker")
-        if hasattr(state, "background_tasks"):
-            state.background_tasks.append(_scb_task)
-        logger.info("Sharpe circuit breaker started")
-    except Exception as _exc:
-        logger.warning("Sharpe circuit breaker failed to start (non-fatal): %s", _exc)
-
-
-def _start_nuclear_price_bridge(state) -> None:
-    """Start NuclearStreamer price bridge background task (non-fatal)."""
-    try:
-        _bridge_task = asyncio.create_task(_nuclear_price_bridge(state), name="nuclear_price_bridge")
-        if hasattr(state, "background_tasks"):
-            state.background_tasks.append(_bridge_task)
-        logger.info("nuclear_price_bridge task started")
-    except Exception as _exc:
-        logger.warning("nuclear_price_bridge failed to start (non-fatal): %s", _exc)
-
-
-def _mount_gateway(fastapi_app) -> None:
-    """Mount the APIGateway sub-application at /gateway (non-fatal).
-
-    Called after startup_event so app_state is fully populated.
-    Only mounts when ENABLE_GATEWAY=true is set — off by default to avoid
-    exposing the extra surface area unless explicitly opted in.
-    """
-    if os.getenv("ENABLE_GATEWAY", "false").lower() != "true":
-        return
-    try:
-        from api.gateway import build_gateway_app
-
-        _gw_app = build_gateway_app()
-        if _gw_app is not None:
-            fastapi_app.mount("/gateway", _gw_app)
-            logger.info("APIGateway mounted at /gateway")
-    except Exception as _exc:
-        logger.warning("APIGateway mount failed (non-fatal): %s", _exc)
 
 
 async def shutdown_event():
@@ -997,131 +827,11 @@ _register_health_routes(app, app_state, kill_switch)
 # /metrics is registered by setup_prometheus_monitoring(app) above — no duplicate here.
 
 # ── Convenience alias endpoints ───────────────────────────────────────────────
-# These lightweight endpoints provide the standard API paths expected by
-# external clients, dashboards, and integration tests. Each delegates to the
-# canonical API layer or returns structured data for endpoints without a
-# canonical equivalent (e.g. /api/dashboard/stats aggregates from trading data).
-# All endpoints that return data require authentication.
-# Redirect-only endpoints rely on the target endpoint's own auth guards.
+# Extracted to core/compat_router.py. Each alias delegates to the canonical
+# API layer via 307 redirect — no synthetic data is returned here.
+from core.compat_router import compat_router as _compat_router
 
-from api.auth import TokenPayload
-from api.auth import get_current_user as _get_current_user
-from api.auth import require_role as _require_role
-
-compat_router = _APIRouter(prefix="/api", tags=["Convenience Aliases"])
-
-
-@compat_router.get("/dashboard/stats", summary="Trading dashboard summary stats")
-async def _dashboard_stats(user: TokenPayload = Depends(_get_current_user)):
-    """Aggregate stats for the main trading dashboard — delegates to canonical endpoints."""
-    # Redirect to the canonical performance metrics endpoint which computes
-    # all values from real trade history and broker account data.
-    return RedirectResponse(url="/api/performance/metrics", status_code=307)
-
-
-@compat_router.get("/trades", summary="Recent trade history (alias for /trading/trades)")
-async def _trades_alias(limit: int = 50, user: TokenPayload = Depends(_get_current_user)):
-    """Return recent closed trades — delegates to /api/trading/trades."""
-    return RedirectResponse(url=f"/api/trading/trades?limit={limit}", status_code=307)
-
-
-@compat_router.get("/market-data/live", summary="Live XAU/USD market data")
-async def _market_data_live(user: TokenPayload = Depends(_get_current_user)):
-    """Return live or last-known XAU/USD price data — delegates to canonical price endpoint."""
-    return RedirectResponse(url="/api/trading/price/XAUUSD", status_code=307)
-
-
-@compat_router.get("/ai/signals", summary="AI trading signals (alias for /trading/signals)")
-async def _ai_signals_alias(user: TokenPayload = Depends(_get_current_user)):
-    """Return active AI trading signals — delegates to /api/trading/signals."""
-    return RedirectResponse(url="/api/trading/signals", status_code=307)
-
-
-@compat_router.get("/nuclear/status", summary="Nuclear AI engine status")
-async def _nuclear_status(user: TokenPayload = Depends(_get_current_user)):
-    """Return Nuclear AI engine status — delegates to canonical nuclear endpoint."""
-    return RedirectResponse(url="/api/nuclear/status", status_code=307)
-
-
-@compat_router.get("/system/health", summary="System health overview (alias for /api/health/live)")
-async def _system_health_alias():
-    """Return system health status — delegates to /api/health/live (public)."""
-    return RedirectResponse(url="/api/health/live", status_code=307)
-
-
-@compat_router.get("/risk/metrics", summary="Risk metrics snapshot (alias for /trading/risk)")
-async def _risk_metrics_alias(user: TokenPayload = Depends(_get_current_user)):
-    """Return current risk metrics — delegates to /api/trading/risk."""
-    return RedirectResponse(url="/api/trading/risk", status_code=307)
-
-
-@compat_router.get("/performance/metrics", summary="Performance metrics (alias for /performance/metrics)")
-async def _perf_metrics_alias(user: TokenPayload = Depends(_get_current_user)):
-    """Return performance metrics — delegates to /api/performance/metrics."""
-    return RedirectResponse(url="/api/performance/metrics", status_code=307)
-
-
-@compat_router.get("/calendar/events", summary="Economic calendar events (alias for /calendar)")
-async def _calendar_events_alias(user: TokenPayload = Depends(_get_current_user)):
-    """Return upcoming economic calendar events — delegates to /api/calendar."""
-    return RedirectResponse(url="/api/calendar", status_code=307)
-
-
-@compat_router.get("/marketplace/items", summary="Marketplace strategies and items")
-async def _marketplace_items(user: TokenPayload = Depends(_get_current_user)):
-    """Return featured marketplace items — delegates to /api/monetization/marketplace/featured."""
-    return RedirectResponse(url="/api/monetization/marketplace/featured", status_code=307)
-
-
-@compat_router.get("/prop-firm/status", summary="Prop firm challenge status")
-async def _prop_firm_status(user: TokenPayload = Depends(_get_current_user)):
-    """Return active prop firm challenge status — requires authentication."""
-    return {
-        "user_id": user.sub,
-        "active_challenge": True,
-        "firm": "FTMO",
-        "account_size": 100_000,
-        "current_balance": 102_450.00,
-        "profit_target": 10_000,
-        "max_daily_loss": 5_000,
-        "max_total_loss": 10_000,
-        "daily_drawdown": 220.00,
-        "total_drawdown": 1_540.00,
-        "days_remaining": 18,
-        "phase": "evaluation",
-        "status": "passing",
-        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
-    }
-
-
-@compat_router.get("/copy-trading/status", summary="Copy trading status")
-async def _copy_trading_status(user: TokenPayload = Depends(_get_current_user)):
-    """Return copy trading configuration and status — requires authentication."""
-    return {
-        "user_id": user.sub,
-        "enabled": False,
-        "copying_from": None,
-        "followers": 0,
-        "total_copied_trades": 0,
-        "performance_7d": 0.0,
-        "status": "inactive",
-        "timestamp": dt.datetime.utcnow().isoformat() + "Z",
-    }
-
-
-@compat_router.get("/admin/users", summary="Admin: list users (alias for /admin/all-users)")
-async def _admin_users_alias(_user: TokenPayload = Depends(_require_role("admin"))):
-    """Return user list — admin role required; delegates to /api/admin/all-users."""
-    return RedirectResponse(url="/api/admin/all-users", status_code=307)
-
-
-@compat_router.get("/superadmin/overview", summary="Super-admin platform overview")
-async def _superadmin_overview_alias(_user: TokenPayload = Depends(_require_role("superadmin"))):
-    """Return platform overview for super-admin — superadmin role required."""
-    return RedirectResponse(url="/api/superadmin/overview", status_code=307)
-
-
-app.include_router(compat_router)
+app.include_router(_compat_router)
 
 # GET /status is registered by api/status.py (system status page).
 # Do not add duplicate registrations here.
