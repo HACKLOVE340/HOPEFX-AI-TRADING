@@ -202,7 +202,20 @@ Full list: `.env.example`
 | `docker-smoke.yml` | Docker build + smoke test |
 | `quarterly_retrain.yml` | Scheduled ML model retrain |
 
-CI skips `e2e` and `slow` markers automatically.
+CI skips `e2e` and `slow` markers automatically (`-m "not slow and not e2e"`).
+
+`tests.yml` also runs structural quality gates:
+
+| Gate | Script | What it enforces |
+|------|--------|-----------------|
+| Gate A | `gate_a_auth_coverage.py` | Every mutating route has auth |
+| Gate B | `gate_b_env_consistency.py` | `.env.example` matches code expectations |
+| Gate C | `gate_c_docker_compose.py` | Compose files are structurally valid |
+| Gate D | `gate_d_model_accuracy.py` | ML model meets minimum accuracy threshold |
+| Gate E | `gate_e_dead_files.py` | No dead/unreferenced files in guarded packages |
+| Gate F | `gate_f_doc_consistency.py` | Class/function names in docs exist in code |
+| Gate G | `gate_g_import_discipline.py` | No imports from legacy directories |
+| Gate H | `gate_h_wordmap_schema.py` | `WORDMAP.json.example` schema is valid |
 
 ---
 

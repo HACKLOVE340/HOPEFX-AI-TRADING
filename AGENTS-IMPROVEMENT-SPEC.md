@@ -101,8 +101,10 @@ confuse agents reasoning about model quality.
 
 ### 10. No `WORDMAP.json` documentation
 `WORDMAP.json` is gitignored (correctly) but there is no documentation on how
-to obtain or regenerate it. Agents setting up a fresh environment will hit
-import errors from `nuclear/` without knowing why.
+to obtain or regenerate it. Agents setting up a fresh environment will use
+built-in keyword defaults automatically — `WORDMAP.json` is optional and only
+needed for custom weight overrides; the scorer never raises import errors when
+the file is absent.
 
 ---
 

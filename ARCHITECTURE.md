@@ -114,8 +114,8 @@ cp WORDMAP.json.example WORDMAP.json
 The example file is a fully functional starting point. It contains the same
 structure as the production file with representative severity weights across
 eight risk categories: `nuclear_military`, `geopolitical_conflict`,
-`financial_crisis`, `central_bank`, `commodity_supply`, `cyber_warfare`,
-`pandemic`, and `sanctions`.
+`financial_crisis`, `central_bank`, `commodity_supply`, `pandemic_disaster`,
+`political_instability`, and `sanctions_trade`.
 
 ### Customising weights
 
@@ -137,10 +137,10 @@ back to built-in values. Severity scores are floats from 0.0 (no impact) to
 ### Verifying the scorer
 
 ```python
-from news.nuclear_wordmap_scorer import NuclearWordmapScorer
-scorer = NuclearWordmapScorer()
-result = scorer.score("Central bank raises rates amid geopolitical tensions")
-print(result.severity, result.categories)
+from news.nuclear_wordmap_scorer import NuclearWordMapScorer
+scorer = NuclearWordMapScorer()
+severity, action, score, meta = scorer.score_event("Central bank raises rates amid geopolitical tensions")
+print(severity, meta["category_scores"])
 ```
 
 ---
