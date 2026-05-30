@@ -151,8 +151,12 @@ def _satisfies_lower_bound(locked_ver: str, spec: VersionSpec) -> bool:
             return locked[: len(prefix)] == prefix
         return locked == bound
     if spec.op == "~=":
-        # Compatible release: ~=1.2.3 means >=1.2.3, <1.3
-        return locked >= bound and locked[0] == bound[0]
+        # Compatible release: ~=1.2.3 means >=1.2.3, <1.3.0 (next minor).
+        # The N-1 leading components of the locked version must match.
+        if len(bound) < 2:
+            return locked >= bound  # ~=1 is degenerate; treat as >=
+        prefix = bound[:-1]  # e.g. (1, 2) for ~=1.2.3
+        return locked >= bound and locked[: len(prefix)] == prefix
     # For <=, <, != — not a lower bound, always OK
     return True
 

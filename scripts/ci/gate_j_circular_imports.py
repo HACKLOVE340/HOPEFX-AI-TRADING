@@ -181,11 +181,13 @@ def _build_graph(
                 if node.level and node.level > 0:
                     base_parts = mod.split(".")
                     up = node.level
-                    if up <= len(base_parts):
-                        base = ".".join(base_parts[:-up])
-                        abs_module = f"{base}.{node.module}" if base else node.module
-                    else:
-                        abs_module = node.module
+                    if up > len(base_parts):
+                        # Invalid relative import — goes beyond package root.
+                        # This is a Python error at runtime; skip the edge to
+                        # avoid masking real cycles with a bad resolution.
+                        continue
+                    base = ".".join(base_parts[:-up])
+                    abs_module = f"{base}.{node.module}" if base else node.module
                 else:
                     abs_module = node.module
 

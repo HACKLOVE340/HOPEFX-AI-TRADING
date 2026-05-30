@@ -103,7 +103,112 @@ def _detect_cycle(
     return None
 
 
-def main() -> int:  # noqa: C901
+def _check_duplicate_revisions(versions_dir: Path) -> list[str]:
+    """Rule 1: no duplicate revision IDs across all migration files."""
+    all_rev_ids: list[str] = []
+    for py_file in sorted(versions_dir.glob("*.py")):
+        text = py_file.read_text(encoding="utf-8")
+        for m in _REVISION_RE.finditer(text):
+            all_rev_ids.append(m.group(1).strip())
+    seen: set[str] = set()
+    failures: list[str] = []
+    for rid in all_rev_ids:
+        if rid in seen:
+            failures.append(f"Duplicate revision ID: {rid!r}")
+        seen.add(rid)
+    return failures
+
+
+def _check_broken_links(migrations: dict[str, set[str] | None]) -> list[str]:
+    """Rule 2: every down_revision must reference an existing revision."""
+    failures: list[str] = []
+    for rev_id, parents in migrations.items():
+        if parents is None:
+            continue
+        for parent in parents:
+            if parent not in migrations:
+                failures.append(
+                    f"Revision {rev_id!r} references unknown parent {parent!r}"
+                )
+    return failures
+
+
+def _check_single_root(migrations: dict[str, set[str] | None]) -> tuple[list[str], list[str]]:
+    """Rule 3: exactly one root (down_revision is None). Returns (failures, roots)."""
+    roots = [rid for rid, parents in migrations.items() if parents is None]
+    failures: list[str] = []
+    if len(roots) == 0:
+        failures.append("No root migration found (every revision has a down_revision).")
+    elif len(roots) > 1:
+        failures.append(
+            f"Multiple root migrations found (expected 1, got {len(roots)}): "
+            + ", ".join(sorted(roots))
+        )
+    return failures, roots
+
+
+def _check_single_head(migrations: dict[str, set[str] | None]) -> tuple[list[str], list[str]]:
+    """Rule 4: exactly one head (revision not referenced by any down_revision). Returns (failures, heads)."""
+    all_parents: set[str] = set()
+    for parents in migrations.values():
+        if parents:
+            all_parents.update(parents)
+    heads = [rid for rid in migrations if rid not in all_parents]
+    failures: list[str] = []
+    if len(heads) == 0:
+        failures.append("No head migration found — possible cycle or empty chain.")
+    elif len(heads) > 1:
+        failures.append(
+            "Multiple heads found (merge migrations not yet supported): "
+            + ", ".join(sorted(heads))
+            + "\n  Run `alembic merge heads` to create a merge migration."
+        )
+    return failures, heads
+
+
+def _check_cycles(migrations: dict[str, set[str] | None]) -> list[str]:
+    """Rule 5: no cycles in the revision graph."""
+    failures: list[str] = []
+    visited: set[str] = set()
+    for rev_id in migrations:
+        cycle = _detect_cycle(rev_id, migrations, visited, set())
+        if cycle:
+            failures.append(f"Cycle detected in migration chain: {' → '.join(cycle)}")
+            break  # one cycle report is enough
+    return failures
+
+
+def _check_reachability(
+    migrations: dict[str, set[str] | None],
+    root: str,
+) -> list[str]:
+    """Rule 6: all nodes must be reachable from the root via forward traversal."""
+    children: dict[str, list[str]] = {rid: [] for rid in migrations}
+    for rev_id, parents in migrations.items():
+        if parents:
+            for parent in parents:
+                if parent in children:
+                    children[parent].append(rev_id)
+
+    reachable: set[str] = set()
+    stack = [root]
+    while stack:
+        node = stack.pop()
+        if node in reachable:
+            continue
+        reachable.add(node)
+        stack.extend(children.get(node, []))
+
+    unreachable = set(migrations) - reachable
+    if unreachable:
+        return [
+            f"{len(unreachable)} migration(s) unreachable from root: "
+            + ", ".join(sorted(unreachable))
+        ]
+    return []
+
+
+def main() -> int:
     if not VERSIONS_DIR.exists():
         print(f"[gate-i] SKIP  {VERSIONS_DIR} not found — no Alembic migrations to validate.")
         return 0
@@ -116,88 +221,19 @@ def main() -> int:  # noqa: C901
 
     failures: list[str] = []
 
-    # ── 1. Duplicate revision IDs ─────────────────────────────────────────────
-    # _collect_migrations already uses a dict so duplicates would silently
-    # overwrite. Re-scan for them explicitly.
-    all_rev_ids: list[str] = []
-    for py_file in sorted(VERSIONS_DIR.glob("*.py")):
-        text = py_file.read_text(encoding="utf-8")
-        for m in _REVISION_RE.finditer(text):
-            all_rev_ids.append(m.group(1).strip())
-    seen: set[str] = set()
-    for rid in all_rev_ids:
-        if rid in seen:
-            failures.append(f"Duplicate revision ID: {rid}")
-        seen.add(rid)
+    failures.extend(_check_duplicate_revisions(VERSIONS_DIR))
+    failures.extend(_check_broken_links(migrations))
 
-    # ── 2. Broken down_revision links ─────────────────────────────────────────
-    for rev_id, parents in migrations.items():
-        if parents is None:
-            continue
-        for parent in parents:
-            if parent not in migrations:
-                failures.append(
-                    f"Revision {rev_id!r} references unknown parent {parent!r}"
-                )
+    root_failures, roots = _check_single_root(migrations)
+    failures.extend(root_failures)
 
-    # ── 3. Exactly one root ───────────────────────────────────────────────────
-    roots = [rid for rid, parents in migrations.items() if parents is None]
-    if len(roots) == 0:
-        failures.append("No root migration found (every revision has a down_revision).")
-    elif len(roots) > 1:
-        failures.append(
-            f"Multiple root migrations found (expected 1, got {len(roots)}): "
-            + ", ".join(sorted(roots))
-        )
+    head_failures, heads = _check_single_head(migrations)
+    failures.extend(head_failures)
 
-    # ── 4. Exactly one head ───────────────────────────────────────────────────
-    all_parents: set[str] = set()
-    for parents in migrations.values():
-        if parents:
-            all_parents.update(parents)
-    heads = [rid for rid in migrations if rid not in all_parents]
-    if len(heads) == 0:
-        failures.append("No head migration found — possible cycle or empty chain.")
-    elif len(heads) > 1:
-        failures.append(
-            f"Multiple heads found (merge migrations not yet supported): "
-            + ", ".join(sorted(heads))
-            + "\n  Run `alembic merge heads` to create a merge migration."
-        )
+    failures.extend(_check_cycles(migrations))
 
-    # ── 5. Cycle detection ────────────────────────────────────────────────────
-    visited: set[str] = set()
-    for rev_id in migrations:
-        cycle = _detect_cycle(rev_id, migrations, visited, set())
-        if cycle:
-            failures.append(f"Cycle detected in migration chain: {' → '.join(cycle)}")
-            break  # one cycle report is enough
-
-    # ── 6. All nodes reachable from root ──────────────────────────────────────
     if len(roots) == 1:
-        # Build child graph for forward traversal
-        children: dict[str, list[str]] = {rid: [] for rid in migrations}
-        for rev_id, parents in migrations.items():
-            if parents:
-                for parent in parents:
-                    if parent in children:
-                        children[parent].append(rev_id)
-
-        reachable: set[str] = set()
-        stack = [roots[0]]
-        while stack:
-            node = stack.pop()
-            if node in reachable:
-                continue
-            reachable.add(node)
-            stack.extend(children.get(node, []))
-
-        unreachable = set(migrations) - reachable
-        if unreachable:
-            failures.append(
-                f"{len(unreachable)} migration(s) unreachable from root: "
-                + ", ".join(sorted(unreachable))
-            )
+        failures.extend(_check_reachability(migrations, roots[0]))
 
     if failures:
         print(f"Gate I FAILED — {len(failures)} migration chain issue(s):")
