@@ -92,7 +92,7 @@ jobs:
         SHARPE_CB_RESTORE: "false"
       run: |
         pytest tests/ \
-          -m "not slow" \
+          -m "not slow and not e2e" \
           --cov --cov-config=.coveragerc \
           --cov-report=xml --cov-report=term-missing \
           --cov-fail-under=70 \
@@ -664,3 +664,51 @@ jobs:
           python-version: "3.11"
       - name: Run Gate E
         run: python scripts/ci/gate_e_dead_files.py
+
+  gate-f-doc-consistency:
+    name: Gate F — documentation/code consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Run Gate F
+        run: python scripts/ci/gate_f_doc_consistency.py
+
+  gate-g-import-discipline:
+    name: Gate G — import discipline (no legacy package imports)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Run Gate G
+        run: python scripts/ci/gate_g_import_discipline.py
+
+  gate-h-wordmap-schema:
+    name: Gate H — WORDMAP.json.example schema validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Run Gate H
+        run: python scripts/ci/gate_h_wordmap_schema.py

@@ -18,4 +18,4 @@
 - [ ] `ARCHITECTURE.md` updated if canonical module map changed
 - [ ] `AGENTS.md` updated if conventions or workflows changed
 - [ ] No secrets, credentials, or `.env` values committed
-- [ ] `e2e` / `slow` tests skipped in CI (marked correctly)
+- [ ] `e2e` / `slow` tests skipped in CI (marked correctly — CI runs `pytest -m "not slow and not e2e"`)

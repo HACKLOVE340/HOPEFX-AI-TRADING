@@ -360,7 +360,7 @@ jobs:
           FIX_CONFIG_FILE: fix.cfg
         run: |
           pytest tests/ \
-            -m "not slow" \
+            -m "not slow and not e2e" \
             --cov --cov-config=.coveragerc \
             --cov-report=xml \
             --cov-report=term-missing \
@@ -385,6 +385,15 @@ jobs:
 
       - name: Coverage gate - compliance/ (80% required)
         run: coverage report --rcfile=.coveragerc --include="compliance/*" --fail-under=80
+
+      - name: Coverage gate - brain/ (70% required)
+        run: coverage report --rcfile=.coveragerc --include="brain/*" --fail-under=70
+
+      - name: Coverage gate - ml/ (70% required)
+        run: coverage report --rcfile=.coveragerc --include="ml/*" --fail-under=70
+
+      - name: Coverage gate - news/ (70% required)
+        run: coverage report --rcfile=.coveragerc --include="news/*" --fail-under=70
 
       - name: Security scan (bandit)
         run: |
