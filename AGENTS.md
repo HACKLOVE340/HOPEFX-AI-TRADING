@@ -216,6 +216,9 @@ CI skips `e2e` and `slow` markers automatically (`-m "not slow and not e2e"`).
 | Gate F | `gate_f_doc_consistency.py` | Class/function names in docs exist in code |
 | Gate G | `gate_g_import_discipline.py` | No imports from legacy directories |
 | Gate H | `gate_h_wordmap_schema.py` | `WORDMAP.json.example` schema is valid |
+| Gate I | `gate_i_migration_chain.py` | Alembic chain is linear with one root and one head |
+| Gate J | `gate_j_circular_imports.py` | No module-level circular imports in guarded packages |
+| Gate K | `gate_k_requirements_consistency.py` | Lock file covers all direct deps; no CI version downgrades |
 
 ---
 
