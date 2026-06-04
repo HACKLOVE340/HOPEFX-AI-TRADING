@@ -423,7 +423,7 @@ class Account(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     # FIX: cascade delete — when a User is deleted, their Accounts are deleted too.
-    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
     account_name = Column(String(100), nullable=True)
     broker = Column(String(50), nullable=True)
     account_id = Column(String(100), nullable=True)

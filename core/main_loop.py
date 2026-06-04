@@ -13,7 +13,7 @@ Start order
 1. EventBus          — Redis pub/sub backbone (core/event_bus.py)
 2. FaultGuard        — circuit-breaker heartbeat monitor (utils/fault_guard.py)
 3. MarketIngest      — XAUUSD tick stream (data/market_ingest.py)
-4. StrategyEngine    — ML signal producer (strategy/engine.py)
+4. StrategyEngine    — ML signal producer (core/strategy_engine.py)
 5. Gatekeeper        — prop-firm risk filter (risk/gatekeeper.py)
 6. FIXRouter         — order execution (execution/fix_router.py)
 
@@ -52,7 +52,7 @@ from data.market_ingest import MarketIngest
 from data.news_calendar_feed import NewsCalendarFeed
 from execution.fix_router import FIXRouter
 from risk.gatekeeper import Gatekeeper
-from strategy.engine import StrategyEngine
+from core.strategy_engine import StrategyEngine
 from utils.fault_guard import FaultGuard
 
 logger = logging.getLogger(__name__)

@@ -72,11 +72,7 @@ DATA_LAYER_PUBLIC: frozenset[str] = frozenset(
 # Format: "relative/path/to/file.py:lineno"
 # These are reported as warnings, not failures.
 # Remove entries here when the underlying import is fixed.
-KNOWN_VIOLATIONS: frozenset[str] = frozenset(
-    {
-        "core/main_loop.py:55",  # from strategy.engine import StrategyEngine
-    }
-)
+KNOWN_VIOLATIONS: frozenset[str] = frozenset()
 
 
 def _is_legacy_import(node: ast.Import | ast.ImportFrom) -> tuple[bool, str]:
