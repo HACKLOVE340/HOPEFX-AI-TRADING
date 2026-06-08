@@ -211,7 +211,7 @@ def _learn_meta_weight(
         combined = w * deep_probs_val + (1 - w) * ens_probs_val
         try:
             auc = roc_auc_score(y_val, combined)
-        except Exception:  # nosec B112 - skip weight if AUC computation fails
+        except Exception:  # nosec B112 - skip weight if AUC computation fails  # noqa: S112
             continue
         if auc > best_auc:
             best_auc = auc

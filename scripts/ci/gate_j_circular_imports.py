@@ -68,8 +68,7 @@ _KNOWN_EXTERNAL_PREFIXES: frozenset[str] = frozenset(
         "unittest", "urllib", "uuid", "warnings", "weakref", "xml", "zlib",
         # common third-party
         "aiohttp", "aioredis", "alembic", "anthropic", "anyio", "arrow",
-        "attr", "attrs", "backoff", "bcrypt", "boto3", "botocore", "cachetools",
-        "celery", "certifi", "cffi", "charset_normalizer", "click", "cryptography",
+        "attr", "attrs", "backoff", "bcrypt", "boto3", "botocore", "celery", "certifi", "cffi", "charset_normalizer", "click", "cryptography",
         "dateutil", "dotenv", "exceptiongroup", "fastapi", "flower", "google",
         "gzip", "httpx", "httpcore", "idna", "jinja2", "jose", "jwt",
         "kombu", "loguru", "lxml", "mako", "markupsafe", "matplotlib",

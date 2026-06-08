@@ -1,6 +1,6 @@
 # Deployment Guide
 
-> Current version: **v1.17** — Python 3.12 required (matches `python:3.12-slim` Docker image). API server listens on port **8000**.
+> Current version: **v11.0.0** — Python 3.12 required (matches `python:3.12-slim` Docker image). API server listens on port **8000**.
 
 ## Prerequisites
 

@@ -81,7 +81,7 @@ def _load_cb_states() -> list[dict]:
                 raw = rc.get(_CB_STATE_KEY)
                 if raw:
                     states = json.loads(raw)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     if not states:
@@ -147,7 +147,7 @@ def _persist_cb_states(states: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_CB_STATE_KEY, json.dumps(states), ex=3600)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
 
@@ -182,7 +182,7 @@ async def reset_circuit_breaker(
 
         if name in _GLOBAL_REGISTRY:
             _GLOBAL_REGISTRY[name].reset()
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     _log_superadmin_action(user, "circuit_breaker_reset", {"name": name})
     return {"ok": True, "name": name, "new_state": "closed"}
@@ -209,7 +209,7 @@ async def force_open_circuit_breaker(
 
         if name in _GLOBAL_REGISTRY:
             _GLOBAL_REGISTRY[name].force_open()
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     _log_superadmin_action(user, "circuit_breaker_force_open", {"name": name})
     return {"ok": True, "name": name, "new_state": "open"}
@@ -247,7 +247,7 @@ async def get_var_metrics(
                 cached = json.loads(raw)
                 metrics.update(cached)
                 return metrics
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # Compute from DB trade history
@@ -313,7 +313,7 @@ async def get_var_metrics(
                     rc = get_sync_redis_client()
                     if rc:
                         rc.set("risk:var:latest", json.dumps(metrics), ex=300)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
         finally:
             db.close()
@@ -339,7 +339,7 @@ async def get_stress_test_results(
             raw = rc.get(_STRESS_KEY)
             if raw:
                 results = json.loads(raw)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return {"results": results, "total": len(results)}
 
@@ -363,7 +363,7 @@ async def run_stress_test(
             portfolio_value = sum(float(t.entry_price or 0) * float(t.quantity or 0) for t in open_trades) or 100_000.0
         finally:
             db.close()
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # Run real stress test
@@ -398,7 +398,7 @@ async def run_stress_test(
             rc = get_sync_redis_client()
             if rc:
                 rc.set(_STRESS_KEY, json.dumps(results_list), ex=3600)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         _log_superadmin_action(user, "stress_test_run", {"scenario": scenario})
@@ -435,7 +435,7 @@ async def get_prop_breaches(
             raw = rc.get(_BREACH_KEY)
             if raw:
                 breaches = json.loads(raw)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # Pull from DB audit log for real breach events

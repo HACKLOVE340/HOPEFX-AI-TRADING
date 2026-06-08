@@ -40,18 +40,20 @@ The legacy directory is kept as a compatibility shim and must not receive new co
 
 ## ML Model Facts
 
-Source of truth: `ml/saved_models/advanced_oos_meta.json` (trained 2026-04-14).
+Source of truth: `ml/saved_models/advanced_oos_meta.json` (trained 2026-05-08, validated 2026-05-13).
 
 | Metric | Value | Notes |
 |--------|-------|-------|
-| OOS accuracy | **null** | Trained with `--years 2 --oos-years 0`; no held-out OOS split. See `oos_accuracy_note` in meta.json. Retrain with `--years 50 --oos-years 4 --stacking` to populate. |
-| OOS AUC | **0.714** | From walk-forward CV folds (756 bars, 2022-03-02 → 2026-04-08) |
+| OOS accuracy | **56.5%** (SE=0.011) | Held-out OOS set, 2017-03-09 → 2026-03-18 |
+| OOS F1 | **0.6885** | |
+| OOS AUC | **0.5427** | Held-out OOS (2016 bars) |
 | p-value | 0.0000 | One-sided binomial H0: accuracy ≤ 0.5 |
-| OOS bars (N) | 756 | |
-| Sharpe | 1.52 | SE=0.053; gate PASSED (N=756 ≥ 600, SE ≤ 0.10) |
+| OOS bars (N) | 2016 | 8 OOS years, 50 total years of data |
+| Walk-forward AUC | 0.5936 (mean) | 6 folds; fold 2 below-chance — see `docs/FOLD2_REGIME_ANALYSIS.md` |
+| Sharpe | 1.52 | SE=0.033; gate PASSED (N=2016 ≥ 600, SE ≤ 0.10) |
 | Features | 193 | Stationary-tested (ADF + KPSS) |
 | Horizon | 5 bars | Matches execution engine hold period |
-| Trained | 2026-04-14 | `advanced_oos.pkl` (3.5 MB) |
+| Trained | 2026-05-08 | `advanced_oos.pkl` — `--years 50 --oos-years 8 --stacking` |
 
 **Nuclear RL model** (`ml/rl_models/nuclear_decision_ppo.zip`, 449 KB):
 Trained via `ml/train_rl_nuclear.py`. Powers `brain/nuclear_supervisor.py`.
@@ -70,7 +72,7 @@ Trained via `ml/train_rl_nuclear.py`. Powers `brain/nuclear_supervisor.py`.
 | TimeGAN synthetic data | ⚙️ Architecture complete, never run | Full WGAN-GP implementation in `research/pipeline/synthetic.py`. Run `RegimeSynthesizer.fit()` on rare-regime bars to generate augmentation data |
 | C++ execution shim | ⚙️ Source complete, not compiled | ZMQ + FIX 4.4, CPU affinity, SO_BUSY_POLL in `execution/cpp_shim/hopefx_shim.cpp`. Build: `apt-get install -y cmake libzmq3-dev && cd execution/cpp_shim && make`. Enable: `CPP_SHIM_ENABLED=true` |
 | Live broker credentials | ❌ Not configured | `BROKER_TYPE=paper` by default. Set `BROKER_TYPE=oanda` + `OANDA_API_KEY` + `OANDA_ACCOUNT_ID` to go live |
-| OOS accuracy (full retrain) | ❌ Not yet run | Current model trained on 2 years only. Run `python ml/train_advanced.py --years 50 --oos-years 4 --stacking` for production-grade OOS accuracy figure |
+| OOS accuracy (full retrain) | ✅ 56.5% (N=2016) | Retrained 2026-05-08: `python ml/train_advanced.py --years 50 --oos-years 8 --stacking`. See `advanced_oos_meta.json` for full metrics. |
 
 ---
 

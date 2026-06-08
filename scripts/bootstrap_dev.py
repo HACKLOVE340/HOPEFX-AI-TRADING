@@ -47,15 +47,15 @@ _DB_URL_PATH = DB_PATH.as_posix() if platform.system() == "Windows" else str(DB_
 # ── Seed user config ──────────────────────────────────────────────────────────
 DEFAULT_SUPERADMIN_EMAIL = "superadmin@hopefx.io"
 DEFAULT_SUPERADMIN_USERNAME = "superadmin"
-_SUPERADMIN_PASSWORD_KEY = "BOOTSTRAP_SUPERADMIN_PASSWORD"  # nosec B105
+_SUPERADMIN_PASSWORD_KEY = "BOOTSTRAP_SUPERADMIN_PASSWORD"  # nosec B105  # noqa: S105
 
 DEFAULT_ADMIN_EMAIL = "admin@hopefx.io"
 DEFAULT_ADMIN_USERNAME = "admin"
-_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"  # nosec B105
+_ADMIN_PASSWORD_KEY = "BOOTSTRAP_ADMIN_PASSWORD"  # nosec B105  # noqa: S105
 
 DEFAULT_TRADER_EMAIL = "trader@hopefx.io"
 DEFAULT_TRADER_USERNAME = "trader"
-_TRADER_PASSWORD_KEY = "BOOTSTRAP_TRADER_PASSWORD"  # nosec B105
+_TRADER_PASSWORD_KEY = "BOOTSTRAP_TRADER_PASSWORD"  # nosec B105  # noqa: S105
 
 
 # ── Secret generators ─────────────────────────────────────────────────────────

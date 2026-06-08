@@ -202,14 +202,14 @@ class AsyncRepository(Generic[ModelT]):
             engine = session.bind
             if engine is not None:
                 return engine.dialect.name
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
         try:
             # Fallback: inspect the engine URL from the session's sync session
             sync_session = session.sync_session
             if sync_session.bind is not None:
                 return sync_session.bind.dialect.name
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
         return "unknown"
 

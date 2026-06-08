@@ -33,7 +33,7 @@ CATEGORY_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 MAX_KEYWORD_LENGTH = 200
 
 
-def main() -> int:  # noqa: C901
+def main() -> int:
     violations: list[str] = []
 
     if not EXAMPLE_PATH.exists():

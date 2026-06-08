@@ -190,7 +190,7 @@ async def _check_data_feed() -> ComponentStatus:
                 tick = source.get_last_price(sym)
                 if tick is not None:
                     break
-            except Exception:
+            except Exception:  # noqa: S112
                 continue
 
         if tick is None:

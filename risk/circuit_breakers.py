@@ -377,7 +377,7 @@ class CircuitBreaker:
                         "broker": type(self.broker).__name__,
                     },
                 )
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
             # Phase 2c: Send emergency Telegram/notification alert

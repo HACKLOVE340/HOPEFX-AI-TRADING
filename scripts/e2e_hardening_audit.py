@@ -118,7 +118,7 @@ for path in sorted(pathlib.Path().rglob("*.py")):
         continue
     try:
         src = path.read_text()
-    except Exception:  # nosec B112 - skip unreadable file in audit scan
+    except Exception:  # nosec B112 - skip unreadable file in audit scan  # noqa: S112
         continue
     for line in src.splitlines():
         stripped = line.strip()
@@ -509,7 +509,7 @@ for path in sorted(pathlib.Path().rglob("*.py")):
         continue
     try:
         src = path.read_text()
-    except Exception:  # nosec B112 - skip unreadable file in audit scan
+    except Exception:  # nosec B112 - skip unreadable file in audit scan  # noqa: S112
         continue
     for i, line in enumerate(src.splitlines(), 1):
         if re.match(r"\s*except\s*:\s*pass\s*$", line):
@@ -540,7 +540,7 @@ for path in sorted(pathlib.Path().rglob("*.py")):
         continue
     try:
         src = path.read_text()
-    except Exception:  # nosec B112 - skip unreadable file in audit scan
+    except Exception:  # nosec B112 - skip unreadable file in audit scan  # noqa: S112
         continue
     for i, line in enumerate(src.splitlines(), 1):
         stripped = line.strip()

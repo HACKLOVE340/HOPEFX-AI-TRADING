@@ -472,7 +472,7 @@ def run_backtest(
             weekday: int | None = None
             try:  # noqa: SIM105
                 weekday = int(_ts.weekday())
-            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap
+            except Exception:  # nosec B110 — non-fatal; fall back to no triple-swap  # noqa: S110
                 pass
             overnight_cost = (
                 abs(_swap.cost_usd_per_night(_swap_ticker, lots=lots, side=side, weekday=weekday)) / _BARS_PER_DAY_H1

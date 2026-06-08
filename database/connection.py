@@ -426,7 +426,7 @@ class DatabaseManager:
                     self._metrics.active_connections = self._engine.pool.checkedout()
                     self._metrics.idle_connections = self._engine.pool.checkedin()
                     self._metrics.pool_overflow = self._engine.pool.overflow()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
             return self._metrics.to_dict()
 
@@ -939,7 +939,7 @@ if SQLALCHEMY_AVAILABLE:
                     from resilience.service_circuit_breakers import db_breaker as _db_cb
 
                     _db_cb.record_success()
-                except Exception:  # nosec B110 — circuit breaker is non-fatal
+                except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
                     pass
                 yield db
         except Exception as _db_exc:
@@ -948,7 +948,7 @@ if SQLALCHEMY_AVAILABLE:
                 from resilience.service_circuit_breakers import db_breaker as _db_cb
 
                 _db_cb.record_failure(_db_exc)
-            except Exception:  # nosec B110 — circuit breaker is non-fatal
+            except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
                 pass
             raise
 
@@ -980,7 +980,7 @@ if SQLALCHEMY_AVAILABLE:
                     from resilience.service_circuit_breakers import db_breaker as _cb
 
                     _cb.record_success()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
                 yield session
         except Exception as _exc:
@@ -988,7 +988,7 @@ if SQLALCHEMY_AVAILABLE:
                 from resilience.service_circuit_breakers import db_breaker as _cb
 
                 _cb.record_failure(_exc)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
             raise
 

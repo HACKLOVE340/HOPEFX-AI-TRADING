@@ -70,13 +70,13 @@ def _parse_date(text: str | None) -> datetime:
         return datetime.now(UTC)
     try:
         return parsedate_to_datetime(text).astimezone(UTC)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     for fmt in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d"):
         try:
             dt = datetime.strptime(text[: len(fmt) + 5], fmt)
             return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
-        except Exception:
+        except Exception:  # noqa: S112
             continue
     return datetime.now(UTC)
 

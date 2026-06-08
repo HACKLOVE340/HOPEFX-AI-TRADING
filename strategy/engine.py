@@ -17,7 +17,7 @@ from __future__ import annotations
 
 # Re-export everything from the canonical module so both old and new import
 # paths resolve to the same objects.
-from core.strategy_engine import (  # noqa: F401
+from core.strategy_engine import (
     EMA_FAST,
     EMA_SLOW,
     BUFFER_SIZE,

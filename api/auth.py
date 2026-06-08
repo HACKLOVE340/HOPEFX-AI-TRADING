@@ -243,7 +243,7 @@ def get_current_user(
 
             request.state.background_tasks = _BT()
         request.state.background_tasks.add_task(_update_session_activity, payload.sub)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return payload

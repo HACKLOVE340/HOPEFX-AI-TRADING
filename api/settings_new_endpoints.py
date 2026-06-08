@@ -610,7 +610,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
             if disk_io:
                 result["disk"]["read_mb"] = round(disk_io.read_bytes / 1_048_576, 1)
                 result["disk"]["write_mb"] = round(disk_io.write_bytes / 1_048_576, 1)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         # Network
@@ -672,7 +672,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
                     "overflow": getattr(raw_pool, "overflow", lambda: None)(),
                     "checked_in": getattr(raw_pool, "checkedin", lambda: None)(),
                 }
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # ── Component latencies from last health check ────────────────────────────
@@ -689,7 +689,7 @@ def get_performance_metrics(user: TokenPayload = Depends(require_role("admin")))
                 }
                 for c in _last_health_result.get("components", [])
             ]
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return result
