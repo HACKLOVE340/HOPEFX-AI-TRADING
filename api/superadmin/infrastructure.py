@@ -177,21 +177,21 @@ async def get_db_stats(user: TokenPayload = Depends(_require_superadmin)) -> dic
             try:
                 result = db.execute(_sa_text("SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"))
                 active_conns = result.scalar() or 0
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
             size_mb = 0.0
             try:
                 result = db.execute(_sa_text("SELECT pg_database_size(current_database()) / 1048576.0"))
                 size_mb = round(float(result.scalar() or 0), 2)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
             slow_queries = 0
             try:
                 result = db.execute(_sa_text("SELECT count(*) FROM pg_stat_statements WHERE mean_exec_time > 1000"))
                 slow_queries = result.scalar() or 0
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
             pool = engine.pool
@@ -237,7 +237,7 @@ async def get_queue_stats(user: TokenPayload = Depends(_require_superadmin)) -> 
                         "workers": 0,
                     }
                 )
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     if not queues:

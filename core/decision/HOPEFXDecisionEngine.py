@@ -384,7 +384,7 @@ class HOPEFXDecisionEngine:
                 fn = getattr(mod, fn_name)
                 ohlcv_df = self._build_ohlcv_df(ctx.data)
                 prob = float(fn(prob, ohlcv_df, ctx.symbol))
-            except Exception:  # nosec B110 — signal engine plugin is optional; keep prior prob on failure
+            except Exception:  # nosec B110 — signal engine plugin is optional; keep prior prob on failure  # noqa: S110
                 pass
         return prob
 

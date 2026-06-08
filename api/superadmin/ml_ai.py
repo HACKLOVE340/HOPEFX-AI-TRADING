@@ -110,7 +110,7 @@ async def list_ml_models(user: TokenPayload = Depends(_require_superadmin)) -> d
             from ml.inference_engine import get_inference_engine
 
             predict_count_today = get_inference_engine()._predict_count
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         for name, info in versions.items():
@@ -300,7 +300,7 @@ async def list_training_jobs(user: TokenPayload = Depends(_require_superadmin)) 
 
         mgr = get_training_manager()
         return {"jobs": mgr.list_jobs()}
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     # Fallback: read from DB or return empty
     try:
@@ -343,7 +343,7 @@ async def list_ab_tests(user: TokenPayload = Depends(_require_superadmin)) -> di
 
         mgr = get_ab_test_manager()
         return {"tests": mgr.list_tests()}
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     try:
         from database.connection import get_db_manager
@@ -387,7 +387,7 @@ async def get_model_drift(user: TokenPayload = Depends(_require_superadmin)) -> 
 
         detector = get_drift_detector()
         return detector.get_all_drift()
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     # No drift detector available and no real metrics to return.
     # Return an empty list rather than synthetic data — callers must handle
@@ -410,7 +410,7 @@ async def get_model_explainability(
         from ml.explainability import get_shap_values  # type: ignore[import]
 
         return get_shap_values(model)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     # Fallback: load model and compute basic feature importance
     try:

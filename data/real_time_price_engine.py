@@ -963,7 +963,7 @@ class RealTimePriceEngine:
                     mid=round(price, 5),
                     volume=0.0,
                 )
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         return None
 

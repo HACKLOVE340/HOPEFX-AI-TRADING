@@ -294,9 +294,9 @@ class ServiceCircuitBreaker:
                     ),
                 )
                 _rc.ltrim("alerts:critical", -1000, -1)
-            except Exception:  # nosec B110 — Redis may be unavailable
+            except Exception:  # nosec B110 — Redis may be unavailable  # noqa: S110
                 pass
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     def _update_prom_state(self, state: CircuitState) -> None:
@@ -319,7 +319,7 @@ class ServiceCircuitBreaker:
             g = self._prom_state_gauge
             if g is not None:
                 g.set({"closed": 0, "half_open": 1, "open": 2}.get(state.value, 0))
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     def _seconds_until_probe(self) -> float:

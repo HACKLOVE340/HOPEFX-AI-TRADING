@@ -125,7 +125,7 @@ async def get_sentiment_for_symbol(symbol: str) -> dict[str, Any]:
                 geo_score = round(raw_risk / 100.0, 4)
                 # High geopolitical risk → bullish gold
                 gold_score = min(geo_score * 0.8, 1.0)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
         return {
@@ -228,7 +228,7 @@ async def get_news_for_symbol(symbol: str, limit: int = 15) -> list[dict[str, An
             try:
                 s = analyzer.analyze(f"{art.title} {art.description or ''}")
                 sentiment_score = round(float(getattr(s, "polarity", 0.0)), 4)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
             items.append(
@@ -270,7 +270,7 @@ async def get_news_for_symbol(symbol: str, limit: int = 15) -> list[dict[str, An
                 try:
                     s = analyzer.analyze(f"{art.title} {art.description or ''}")
                     sentiment_score = round(float(getattr(s, "polarity", 0.0)), 4)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
 
                 items.append(

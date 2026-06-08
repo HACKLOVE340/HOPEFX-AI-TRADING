@@ -19,7 +19,7 @@ try:
     from utils.yfinance_compat import suppress_yfinance_warnings as _suppress_yf
 
     _suppress_yf()
-except Exception:  # nosec B110 — non-fatal; yfinance may not be installed
+except Exception:  # nosec B110 — non-fatal; yfinance may not be installed  # noqa: S110
     pass
 
 """
@@ -38,7 +38,6 @@ Provides endpoints for:
 
 import asyncio
 import concurrent.futures as concurrent_futures
-import datetime as dt
 import logging
 import os
 import platform
@@ -107,8 +106,8 @@ except Exception as _log_setup_err:
     logging.getLogger(__name__).warning("HOPEFXLogger setup failed (using basicConfig fallback): %s", _log_setup_err)
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRouter as _APIRouter
 from pydantic import BaseModel
 from sqlalchemy.orm import Session

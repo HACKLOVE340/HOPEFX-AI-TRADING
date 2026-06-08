@@ -65,7 +65,7 @@ class AuthToken(BaseModel):
     access_token: str
     refresh_token: str
     expires_in: int
-    token_type: str = "Bearer"
+    token_type: str = "Bearer"  # noqa: S105
 
 
 class Account(BaseModel):
@@ -465,7 +465,7 @@ class MobileAPIServer:
                                     last_update=datetime.now(UTC),
                                     spread=float(tick.ask) - float(tick.bid),
                                 )
-                    except Exception:  # nosec B110
+                    except Exception:  # nosec B110  # noqa: S110
                         pass
                     raise HTTPException(status_code=503, detail="Quote unavailable")
 
@@ -617,7 +617,7 @@ class MobileAPIServer:
                                 spread=float(td.get("spread", 0)),
                             )
                         )
-                    except Exception:  # nosec B110
+                    except Exception:  # nosec B110  # noqa: S110
                         pass
                 return result
 

@@ -1956,7 +1956,7 @@ async def get_account(
         try:
             _ks = _get_kill_switch()
             _ks_active = bool(_ks and _ks.is_active())
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         return {
@@ -2101,7 +2101,7 @@ async def get_account(
     try:
         _ks = _get_kill_switch()
         kill_switch_active = bool(_ks and _ks.is_active())
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return {
@@ -2239,7 +2239,7 @@ async def get_prices(
                     "last": round(price, 5),
                     "timestamp": now,
                 }
-            except Exception:
+            except Exception:  # noqa: S112
                 continue
         if prices:
             return prices
@@ -2472,7 +2472,7 @@ async def get_brain_state(
                         if not isinstance(strats, list)
                         else [s if isinstance(s, str) else getattr(s, "name", str(s)) for s in strats]
                     )
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
             # Derive confidence from performance metrics
             confidence = 0.0
@@ -2481,7 +2481,7 @@ async def get_brain_state(
                 # Use inverse of latency as a proxy for confidence when no ML score
                 lat = perf.get("latency_ms", 0)
                 confidence = max(0.0, min(1.0, 1.0 - lat / 1000.0)) if lat > 0 else 0.75
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
             return {
                 **raw,
@@ -2652,7 +2652,7 @@ def _trade_to_dict(t) -> dict:
         )
         if _e and _x:
             duration_minutes = max(0, int((_x - _e).total_seconds() / 60))
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return {
@@ -3103,7 +3103,7 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
                     peak = max(peak, v)
                     dd = (peak - v) / peak if peak > 0 else 0.0
                     max_dd = max(max_dd, dd)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         _pos_coro = broker.get_positions() if hasattr(broker, "get_positions") else []
@@ -3113,7 +3113,7 @@ async def get_risk_alias(user: TokenPayload = Depends(get_current_user)):
         try:
             ks = _get_kill_switch()
             kill_switch = bool(ks and ks.is_active())
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         return {
@@ -3508,7 +3508,7 @@ async def get_regime_status(
                     "description": description,
                     "data_source": "regime_router",
                 }
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return {
@@ -3832,7 +3832,7 @@ async def get_microstructure_alias(
         norm = _normalise_symbol(symbol)
         snap = await get_microstructure_snapshot(norm)
         return snap
-    except Exception:  # nosec B110 — data-layer microstructure unavailable; build from tick data below
+    except Exception:  # nosec B110 — data-layer microstructure unavailable; build from tick data below  # noqa: S110
         pass
 
     # Fallback: build from price engine tick data

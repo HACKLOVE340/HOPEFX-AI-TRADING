@@ -396,7 +396,7 @@ class AutoRollbackManager:
                     _ROLLBACK_TRIGGER_TOTAL.labels(trigger=trigger_name).inc()
                 if not result.success and _ROLLBACK_FAILED_TOTAL is not None:
                     _ROLLBACK_FAILED_TOTAL.inc()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
         return result
@@ -484,7 +484,7 @@ class AutoRollbackManager:
 
                 h = get_healer()
                 target_files = [e["path"] for e in h._drift_events[-10:] if e.get("type") == "modified"]
-            except Exception:  # nosec B110 — healer may not be running; target_files stays empty
+            except Exception:  # nosec B110 — healer may not be running; target_files stays empty  # noqa: S110
                 pass
 
         if not target_files:
@@ -607,7 +607,7 @@ class AutoRollbackManager:
             )
             _rc.rpush("rollback:history", json.dumps(result.to_dict()))
             _rc.ltrim("rollback:history", -100, -1)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     def _load_history(self) -> None:
@@ -642,7 +642,7 @@ class AutoRollbackManager:
                 ),
             )
             _rc.ltrim("alerts:critical", -1000, -1)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     # ── Status ────────────────────────────────────────────────────────────────

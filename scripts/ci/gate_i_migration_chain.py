@@ -70,10 +70,7 @@ def _collect_migrations(versions_dir: Path) -> dict[str, set[str] | None]:
         rev_id = rev_m.group(1).strip()
 
         down_m = _DOWN_RE.search(text)
-        if down_m:
-            parents = _parse_down_revision(down_m.group(1))
-        else:
-            parents = None  # treat missing down_revision as root
+        parents = _parse_down_revision(down_m.group(1)) if down_m else None
 
         migrations[rev_id] = parents
 

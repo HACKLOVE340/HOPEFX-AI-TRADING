@@ -475,7 +475,7 @@ class DataValidator:
                     ),
                 )
                 rc.ltrim("alerts:critical", -1000, -1)
-        except Exception:  # nosec B110 — alert publishing is non-fatal
+        except Exception:  # nosec B110 — alert publishing is non-fatal  # noqa: S110
             pass
 
     def get_status(self) -> dict[str, Any]:

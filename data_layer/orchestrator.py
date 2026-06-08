@@ -1137,7 +1137,7 @@ class MarketDataOrchestrator:
                             lineage_id=r.get("lineage_id", ""),
                         )
                     )
-                except Exception:  # nosec B112 - skip malformed tick record during replay
+                except Exception:  # nosec B112 - skip malformed tick record during replay  # noqa: S112
                     continue
 
             if len(ticks) < 2:
@@ -1342,21 +1342,21 @@ class MarketDataOrchestrator:
                 confs = [v.get("confidence", 0.0) for v in dqe.values() if isinstance(v, dict)]
                 if confs:
                     score += 0.20 * (sum(confs) / len(confs))
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         # Microstructure has data
         try:
             micro_h = h.get("micro_health", {})
             score += 0.15 if micro_h.get("has_data", False) else 0.0
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         # Sentiment engine alive
         try:
             sent = h.get("sentiment", {})
             score += 0.10 if sent.get("running", False) or sent.get("article_count_1h", 0) > 0 else 0.05
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         # Calendar engine alive

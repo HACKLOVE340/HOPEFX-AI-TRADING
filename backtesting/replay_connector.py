@@ -647,7 +647,7 @@ def create_replay_router():
                     sess = _json.loads(raw)
                     _SESSIONS[sid] = sess
                     return sess
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
         return None
 
@@ -662,7 +662,7 @@ def create_replay_router():
                     if raw:
                         sessions.append(_json.loads(raw))
                 return sessions
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
         return list(_SESSIONS.values())
 
@@ -699,7 +699,7 @@ def create_replay_router():
                     }
                     for b in bars_raw
                 ]
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         # Synthetic fallback — realistic random walk

@@ -1595,7 +1595,7 @@ async def create_crypto_order(
         orders.append(order)
         db_set(f"crypto_orders:{user.sub}", orders)
         db_set(f"crypto_order:{order_id}", order)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return order

@@ -49,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 # ── Lazy import guard for SQLAlchemy ──────────────────────────────────────────
 try:
-    from sqlalchemy import String, Text
+    from sqlalchemy import Text
     from sqlalchemy.types import TypeDecorator
 
     _SQLA_AVAILABLE = True
@@ -59,6 +59,7 @@ except ImportError:
 # ── Key bootstrap ──────────────────────────────────────────────────────────────
 _NONCE_BYTES = 12   # 96 bits — standard for AES-GCM
 _TAG_BYTES   = 16   # 128-bit authentication tag (GCM default)
+_AES_KEY_BYTES = 32  # AES-256: 256 bits = 32 bytes
 
 
 def _load_key() -> bytes | None:
@@ -73,11 +74,12 @@ def _load_key() -> bytes | None:
         return None
     try:
         key = base64.urlsafe_b64decode(raw + "==")  # pad to multiple of 4
-        if len(key) != 32:
+        if len(key) != _AES_KEY_BYTES:
             logger.error(
-                "DB_ENCRYPTION_KEY decoded to %d bytes; must be exactly 32. "
+                "DB_ENCRYPTION_KEY decoded to %d bytes; must be exactly %d. "
                 "Field-level encryption disabled.",
                 len(key),
+                _AES_KEY_BYTES,
             )
             return None
         return key
@@ -88,7 +90,7 @@ def _load_key() -> bytes | None:
 
 def _get_aesgcm():  # type: ignore[return]
     """Return a fresh AESGCM cipher object, or None if key is unavailable."""
-    from cryptography.hazmat.primitives.ciphers.aead import AESGCM  # noqa: PLC0415
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     key = _load_key()
     if key is None:
@@ -129,7 +131,7 @@ if _SQLA_AVAILABLE:
                 # No key configured — store plaintext (dev / CI fallback)
                 return value
 
-            import os  # noqa: PLC0415 (local import keeps module-level clean)
+            import os
             nonce = os.urandom(_NONCE_BYTES)
             ciphertext_and_tag = cipher.encrypt(nonce, value.encode(), None)
             blob = nonce + ciphertext_and_tag  # nonce ‖ ciphertext ‖ tag

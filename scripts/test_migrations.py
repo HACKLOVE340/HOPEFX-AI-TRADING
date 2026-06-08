@@ -52,7 +52,7 @@ except ImportError:
     ...  # nosec B110
 
 PROJECT_ROOT = Path(__file__).parent.parent
-_PASS = "  ✓"  # nosec B105 — status symbol, not a password
+_PASS = "  ✓"  # nosec B105 — status symbol, not a password  # noqa: S105
 _FAIL = "  ✗"
 
 

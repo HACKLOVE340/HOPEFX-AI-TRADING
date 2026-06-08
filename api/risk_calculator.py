@@ -52,7 +52,7 @@ def _get_live_price(symbol: str) -> float | None:
             tick = state.latest_tick
             if hasattr(tick, "mid") and tick.mid:
                 return float(tick.mid)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # 2. Try the data layer orchestrator
@@ -63,7 +63,7 @@ def _get_live_price(symbol: str) -> float | None:
         tick = orch.get_latest_tick(sym)
         if tick and hasattr(tick, "mid"):
             return float(tick.mid)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # 3. Try yfinance as a last resort
@@ -76,7 +76,7 @@ def _get_live_price(symbol: str) -> float | None:
         price = getattr(info, "last_price", None) or getattr(info, "regularMarketPrice", None)
         if price:
             return float(price)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return None
@@ -100,7 +100,7 @@ def _save_history(user_id: str, history: list[dict]) -> None:
         from api.db_store import db_set
 
         db_set(_calc_store_key(user_id), history[-100:])  # keep last 100
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
 

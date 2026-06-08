@@ -68,16 +68,6 @@ if not _AUTH_OK:
 _SECRET = "test-only-jwt-secret-key-minimum-32-chars!!"
 os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
-<<<<<<< HEAD
-# Patch _REQUIRE_EMAIL_VERIFICATION at module level (after import) so that
-# register() always returns a token regardless of APP_ENV defaults.
-import auth.service as _auth_svc_mod
-
-_auth_svc_mod._REQUIRE_EMAIL_VERIFICATION = True
-
-=======
->>>>>>> origin/main
-
 # ── App + DB fixtures ─────────────────────────────────────────────────────────
 
 

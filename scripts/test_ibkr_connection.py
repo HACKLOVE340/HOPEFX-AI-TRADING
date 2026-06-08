@@ -61,7 +61,7 @@ TIMEOUT = float(os.environ.get("IBKR_CONNECT_TIMEOUT", "10"))
 PAPER_PORTS = {7497, 4002}
 LIVE_PORTS = {7496, 4001}
 
-_PASS = "  ✓"  # nosec B105 — status symbol, not a password
+_PASS = "  ✓"  # nosec B105 — status symbol, not a password  # noqa: S105
 _FAIL = "  ✗"
 _WARN = "  ⚠"
 

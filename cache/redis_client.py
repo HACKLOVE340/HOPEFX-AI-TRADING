@@ -333,7 +333,7 @@ async def get_redis(
                 "get_redis: Redis circuit breaker OPEN — returning None. Retry in %.0fs.", _rb._seconds_until_probe()
             )
             return None
-    except Exception:  # nosec B110 — circuit breaker is non-fatal
+    except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
         pass
 
     if _redis_instance is not None:
@@ -414,7 +414,7 @@ async def _ping_or_reset() -> None:
             from resilience.service_circuit_breakers import redis_breaker as _rb
 
             _rb.record_success()
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
     except Exception as exc:
         logger.warning("Redis health check failed (%s) — will reconnect on next call", exc)
@@ -426,7 +426,7 @@ async def _ping_or_reset() -> None:
             from resilience.service_circuit_breakers import redis_breaker as _rb
 
             _rb.record_failure(exc)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
 
@@ -810,7 +810,7 @@ async def eval_script(script_name: str, keys: list[str], args: list[str]) -> Any
         try:
             sha = await client.script_load(script_body)
             _script_shas[script_name] = sha
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass  # SHA caching is best-effort
         return result
     except Exception as exc:

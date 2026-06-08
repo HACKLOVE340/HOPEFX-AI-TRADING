@@ -373,7 +373,7 @@ class KillSwitch:
             from execution.engine import get_active_broker
 
             broker = get_active_broker()
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
         if broker is None:
@@ -383,7 +383,7 @@ class KillSwitch:
                 router = get_router()
                 if router is not None:
                     broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
         if broker is None:
@@ -391,7 +391,7 @@ class KillSwitch:
                 from core.app_state import app_state as _app_state
 
                 broker = getattr(_app_state, "broker", None)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
         if broker is None:
@@ -608,7 +608,7 @@ class KillSwitch:
                 from execution.engine import get_active_broker
 
                 broker = get_active_broker()
-            except Exception:  # nosec B110 — execution engine may not be initialised; try fallback
+            except Exception:  # nosec B110 — execution engine may not be initialised; try fallback  # noqa: S110
                 pass
 
             # Fallback: try the smart router's primary broker
@@ -619,7 +619,7 @@ class KillSwitch:
                     router = get_router()
                     if router is not None:
                         broker = getattr(router, "_primary_broker", None) or getattr(router, "broker", None)
-                except Exception:  # nosec B110 — smart router may not be initialised; logged below
+                except Exception:  # nosec B110 — smart router may not be initialised; logged below  # noqa: S110
                     pass
 
             if broker is None:

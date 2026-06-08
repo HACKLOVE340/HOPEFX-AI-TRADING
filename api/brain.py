@@ -729,7 +729,7 @@ async def get_insights(
             age_s = (datetime.now(_tz.utc) - stored_dt).total_seconds()
             if age_s < 300:
                 return cached
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     strategies = _load_strategies(user.sub)
