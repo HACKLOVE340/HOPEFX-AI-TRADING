@@ -302,9 +302,15 @@ class GoldFeedManager:
             # Fallback: typical gold spread ~$0.30 (0.015% of $2000)
             half_spread = max(consensus_mid * 0.00015, 0.10)
 
+        # Stamp the consensus with the newest contributing source's timestamp,
+        # NOT now(): otherwise downstream staleness checks (DQE is_stale, the
+        # orchestrator age gates) always see the consensus as fresh even if
+        # every source froze. `live` is non-empty (checked above).
+        newest_ts = max(t.timestamp for t in live.values())
+
         self._consensus_tick = GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(UTC),
+            timestamp=newest_ts,
             bid=round(consensus_mid - half_spread, 4),
             ask=round(consensus_mid + half_spread, 4),
             mid=round(consensus_mid, 4),
