@@ -335,8 +335,12 @@ def require_kyc(
     Admin and superadmin roles are exempt — platform operators are not
     required to submit identity documents to trade on their own platform.
 
-    Checks app_state.compliance_manager if available on the request's app state.
-    If compliance_manager is not wired (tests / paper trading), passes through.
+    Enforcement is gated on whether a compliance_manager is actually wired —
+    NOT on app identity. The previous code skipped KYC for any app instance that
+    was not the app.py singleton, which silently let a second app (e.g.
+    api/server.py's app, which exposes real order routes) trade without KYC.
+    Test / embedded apps wire no compliance_manager (it stays None), so they
+    still pass through.
 
     Usage:
         @router.post("/order")
@@ -348,14 +352,15 @@ def require_kyc(
         return user
 
     try:
-        # Resolve compliance_manager from the request's app state so that
-        # test apps (which have no compliance_manager) bypass the check.
-        from app import app as _main_app
-        from core.app_state import app_state
+        from core.app_state import app_state as _global_app_state
 
-        if request.app is not _main_app:
-            return user  # not the main app — skip KYC (test / embedded app)
-        if app_state.compliance_manager is not None and not app_state.compliance_manager.is_kyc_approved(user.sub):
+        # Prefer the compliance_manager wired onto THIS request's app state
+        # (app.py exposes app_state at app.state.app_state); fall back to the
+        # process-wide singleton. Enforce only when a manager is present.
+        _state = getattr(getattr(request, "app", None), "state", None)
+        _app_state = getattr(_state, "app_state", None) or _global_app_state
+        cm = getattr(_app_state, "compliance_manager", None)
+        if cm is not None and not cm.is_kyc_approved(user.sub):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="KYC verification required before trading. Please complete identity verification.",
