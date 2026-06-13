@@ -419,19 +419,26 @@ class HOPEFXDecisionEngine:
         try:
             broker = getattr(self._executor, "broker", None)
             if broker is None:
-                account_info: dict[str, Any] = {"equity": 100_000.0, "balance": 100_000.0}
-                positions: list[dict] = []
-            else:
-                account_info = await broker.get_account_info()
-                raw_positions = await broker.get_positions()
-                positions = [
-                    {
-                        "symbol": p.symbol,
-                        "quantity": p.quantity,
-                        "current_price": getattr(p, "current_price", 0),
-                    }
-                    for p in raw_positions
-                ]
+                # No broker → no real account info. Do NOT fabricate a $100k
+                # account and size against it; block the trade instead.
+                logger.warning(
+                    "Phase3: no broker/account info available — blocking trade "
+                    "(refusing to size against a fabricated account)."
+                )
+                result.outcome = DecisionOutcome.RISK_BLOCKED
+                result.gate_reason = "account_info_unavailable: no broker connected"
+                return None
+
+            account_info: dict[str, Any] = await broker.get_account_info()
+            raw_positions = await broker.get_positions()
+            positions: list[dict] = [
+                {
+                    "symbol": p.symbol,
+                    "quantity": p.quantity,
+                    "current_price": getattr(p, "current_price", 0),
+                }
+                for p in raw_positions
+            ]
 
             assessment = self._risk.assess_risk(account_info, positions)
             if not assessment.can_trade:

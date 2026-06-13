@@ -1054,13 +1054,15 @@ class RiskManager:
     # ── Equity / position updates ─────────────────────────────────────────────
 
     def on_fill(self, symbol: str, direction: str, quantity: float, fill_price: float) -> None:
-        self._state.open_positions += 1
+        with self._state_lock:
+            self._state.open_positions += 1
 
     def on_close(self, symbol: str, pnl: float) -> None:
-        self._state.open_positions = max(0, self._state.open_positions - 1)
-        self._state.daily_pnl += pnl
-        self._state.total_pnl += pnl
-        self._pnl_history.append(pnl)
+        with self._state_lock:
+            self._state.open_positions = max(0, self._state.open_positions - 1)
+            self._state.daily_pnl += pnl
+            self._state.total_pnl += pnl
+            self._pnl_history.append(pnl)
 
     def update_equity(self, equity: float) -> None:
         with self._state_lock:
@@ -2071,8 +2073,9 @@ class RiskManager:
 
     def register_position(self, position: dict[str, Any]) -> None:
         """Register an open position in the internal list."""
-        self._open_positions_list.append(position)
-        self._state.open_positions = len(self._open_positions_list)
+        with self._state_lock:
+            self._open_positions_list.append(position)
+            self._state.open_positions = len(self._open_positions_list)
 
     def close_position(self, position_id: str, pnl: float = 0.0) -> None:
         """Remove a position by id and record its P&L."""
