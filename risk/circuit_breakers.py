@@ -118,6 +118,9 @@ class CircuitBreaker:
         self.broker = broker
         self.redis = redis_client
         self.limits = RiskLimits()
+        # Configured baseline — used to set/restore the half-open position cap
+        # idempotently, so repeated open/recover cycles never drift the limit.
+        self._original_max_position_size_pct = self.limits.max_position_size_pct
 
         # State management
         self.state = CircuitState.CLOSED
@@ -467,8 +470,10 @@ class CircuitBreaker:
                 "🟡 Circuit breaker entering HALF_OPEN state - testing with reduced size",
             )
 
-            # Reduce position sizes for testing
-            self.limits.max_position_size_pct *= 0.5
+            # Reduce position sizes for testing. Set from the configured
+            # baseline (not the current value) so re-entering HALF_OPEN after a
+            # failed recovery does not compound the reduction.
+            self.limits.max_position_size_pct = self._original_max_position_size_pct * 0.5
 
             # Schedule full recovery check
             _t = asyncio.create_task(self._check_recovery())
@@ -485,7 +490,9 @@ class CircuitBreaker:
             # Check if daily drawdown has recovered below 50% of the daily limit
             if self.daily_drawdown < self.limits.max_daily_drawdown_pct * 0.5:
                 self.state = CircuitState.CLOSED
-                self.limits.max_position_size_pct /= 0.5  # Restore limits
+                # Restore the exact configured baseline (idempotent) rather than
+                # arithmetically doubling, which drifts over repeated cycles.
+                self.limits.max_position_size_pct = self._original_max_position_size_pct
                 logger.info("🟢 Circuit breaker CLOSED - normal trading resumed")
                 self._persist_state()
             else:

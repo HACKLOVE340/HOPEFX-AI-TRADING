@@ -928,7 +928,7 @@ class InferenceEngine:
         if learner is not None:
             try:
                 online_prob = learner.predict_proba(ohlcv)
-                if online_prob is not None:
+                if online_prob is not None and np.isfinite(online_prob) and 0.0 <= online_prob <= 1.0:
                     base_before = raw_prob
                     # Blend: 70% base model, 30% online learner
                     raw_prob = 0.70 * raw_prob + 0.30 * online_prob
@@ -938,6 +938,13 @@ class InferenceEngine:
                         base_before,
                         online_prob,
                         raw_prob,
+                    )
+                elif online_prob is not None:
+                    # Out-of-range / NaN probability would corrupt the signal —
+                    # skip the blend rather than poison raw_prob.
+                    logger.warning(
+                        "Online learner returned invalid probability %r; skipping blend.",
+                        online_prob,
                     )
             except Exception as exc:
                 logger.debug("Online learner blend failed: %s", exc)
