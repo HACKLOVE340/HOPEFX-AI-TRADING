@@ -52,34 +52,47 @@ class CircuitBreaker:
         self.half_open_calls = 0
         self.total_calls = 0
         self.total_failures = 0
+        # Serializes the admission decision and the success/failure bookkeeping.
+        # Without it, concurrent coroutines could all observe OPEN, all pass the
+        # timeout check, all flip to HALF_OPEN and increment past
+        # half_open_max_calls before any completes — flooding a service the
+        # breaker believes is down. Held only for fast state transitions, never
+        # across the wrapped call, so it does not serialize execution.
+        self._lock = asyncio.Lock()
 
     async def call(self, func: Callable, *args, **kwargs):
         """Execute function with circuit breaker protection"""
 
-        if self.state == CircuitState.OPEN and self.last_failure_time:
-            # Check if we should try half-open
-            elapsed = (datetime.now(UTC) - self.last_failure_time).total_seconds()
-            if elapsed > self.config.timeout_seconds:
-                self.state = CircuitState.HALF_OPEN
-                self.half_open_calls = 0
-                logger.info("🔌 Circuit %s: HALF_OPEN (testing recovery)", self.name)
-            else:
-                raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
+        async with self._lock:
+            if self.state == CircuitState.OPEN and self.last_failure_time:
+                # Check if we should try half-open
+                elapsed = (datetime.now(UTC) - self.last_failure_time).total_seconds()
+                if elapsed > self.config.timeout_seconds:
+                    self.state = CircuitState.HALF_OPEN
+                    self.half_open_calls = 0
+                    # Reset stale successes from a prior probe window so a single
+                    # leftover success cannot prematurely close the circuit.
+                    self.successes = 0
+                    logger.info("🔌 Circuit %s: HALF_OPEN (testing recovery)", self.name)
+                else:
+                    raise CircuitBreakerOpenError(f"Circuit {self.name} is OPEN")
 
-        if self.state == CircuitState.HALF_OPEN:
-            if self.half_open_calls >= self.config.half_open_max_calls:
-                raise CircuitBreakerOpenError(f"Circuit {self.name} half-open limit reached")
-            self.half_open_calls += 1
+            if self.state == CircuitState.HALF_OPEN:
+                if self.half_open_calls >= self.config.half_open_max_calls:
+                    raise CircuitBreakerOpenError(f"Circuit {self.name} half-open limit reached")
+                self.half_open_calls += 1
 
-        # Execute
+        # Execute OUTSIDE the lock so concurrent healthy calls are not serialized.
         try:
             result = await func(*args, **kwargs)
-            self._on_success()
-            return result
-
         except Exception:
-            self._on_failure()
+            async with self._lock:
+                self._on_failure()
             raise
+
+        async with self._lock:
+            self._on_success()
+        return result
 
     def _on_success(self):
         """Handle successful call"""
