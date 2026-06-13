@@ -468,8 +468,10 @@ class TradeExecutor:
         if success and closed_position:
             realized_pnl = closed_position.realized_pnl
 
-            # Update risk manager equity
-            self.risk_manager.update_equity(self.risk_manager.daily_starting_equity + realized_pnl)
+            # Update risk manager equity. Increment from CURRENT equity, not the
+            # day's starting equity — otherwise each close clobbers the realised
+            # P&L of every earlier close on the same day.
+            self.risk_manager.update_equity(self.risk_manager.current_balance + realized_pnl)
 
             # ── Streak tracking (executor + risk manager) ────────────────
             self._update_streak(realized_pnl)
