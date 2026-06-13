@@ -157,12 +157,12 @@ class OrderLifecycleManager:
         # ── Kill switch: defense-in-depth gate ───────────────────────────────
         # Check unconditionally so direct OMS callers cannot bypass the halt.
         try:
-            # Use the shared module-level singleton, not a throwaway instance.
-            # is_active() returns the in-memory _active flag, which only the
-            # singleton keeps current (its pollers + live activate() calls); a
-            # fresh KillSwitch() would miss an in-process activation.
-            from kill_switch import kill_switch as _ks
+            from kill_switch import KillSwitch as _KillSwitch
 
+            # A fresh instance restores persisted state in __init__ (state file +
+            # HOPEFX_KILL_SWITCH env), so it detects activations that were
+            # persisted by activate(). Fails closed below if the check raises.
+            _ks = _KillSwitch()
             if _ks.is_active():
                 logger.critical(
                     "OMS.submit_order BLOCKED by kill switch (order=%s reason=%r)",
