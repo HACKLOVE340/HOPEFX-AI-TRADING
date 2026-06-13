@@ -299,8 +299,7 @@ class GoldFeedManager:
         _min_quorum = int(os.getenv("MIN_FEED_QUORUM", "1"))
         if len(live) < _min_quorum:
             logger.warning(
-                "Feed quorum not met: %d live source(s) < MIN_FEED_QUORUM=%d; "
-                "withholding consensus update",
+                "Feed quorum not met: %d live source(s) < MIN_FEED_QUORUM=%d; withholding consensus update",
                 len(live),
                 _min_quorum,
             )
