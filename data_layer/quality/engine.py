@@ -323,8 +323,15 @@ class DataQualityEngine:
         if spread_pct > MAX_SPREAD_PCT:
             return self._reject(tick, state, "excessive_spread", seq)
 
-        # ── 4. Price jump detection ────────────────────────────────────────
-        if state.last_mid > 0:
+        # Evaluate staleness up-front: a source recovering from a silence gap has
+        # a last_mid from BEFORE the gap (possibly hours old). The jump check
+        # below must NOT run against that unreliable baseline — it would either
+        # spuriously reject (price legitimately moved during the gap) or silently
+        # accept while the gap goes unflagged.
+        _is_stale = state.is_stale()
+
+        # ── 4. Price jump detection (skipped for the first post-gap tick) ──
+        if state.last_mid > 0 and not _is_stale:
             jump_pct = abs(tick.mid - state.last_mid) / state.last_mid
             if jump_pct > MAX_JUMP_PCT:
                 state.jump_count += 1
@@ -345,7 +352,7 @@ class DataQualityEngine:
                 return self._reject(tick, state, "price_jump", seq)
 
         # ── 5. Stale detection ─────────────────────────────────────────────
-        if state.is_stale():
+        if _is_stale:
             state.stale_count += 1
             state.update_confidence(-0.02)
             quality = TickQuality.STALE
