@@ -516,7 +516,7 @@ def test_ws_auth_required_env_var_documented() -> None:
     """WS_AUTH_REQUIRED must be documented in .env.example."""
     from pathlib import Path
 
-    env_example = Path(__file__).parent.parent / ".env.example"
+    env_example = Path(__file__).resolve().parents[2] / ".env.example"
     if not env_example.exists():
         pytest.skip(".env.example not found")
 
@@ -532,7 +532,7 @@ def test_ws_auth_required_false_blocked_in_production() -> None:
     """api/ws_live.py must raise when WS_AUTH_REQUIRED=false in production."""
     from pathlib import Path
 
-    ws_live_path = Path(__file__).parent.parent / "api" / "ws_live.py"
+    ws_live_path = Path(__file__).resolve().parents[2] / "api" / "ws_live.py"
     if not ws_live_path.exists():
         pytest.skip("api/ws_live.py not found")
 
