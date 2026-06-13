@@ -36,6 +36,7 @@ Online-learning wiring
 
 import asyncio
 import logging
+import math
 import os
 import time
 from collections.abc import Callable
@@ -360,6 +361,21 @@ class TradeExecutor:
             )
             await self.position_tracker.add_position(position)
 
+            # A market order that only partially filled leaves an unfilled
+            # remainder that is NOT resubmitted here. Surface it explicitly so
+            # the shortfall is observable rather than silently dropped.
+            if order.status.value == "partial":
+                _remainder = size - order.filled_quantity
+                logger.warning(
+                    "TradeExecutor: PARTIAL fill on %s — requested=%s filled=%s "
+                    "remainder=%s NOT resubmitted (order_id=%s)",
+                    symbol,
+                    size,
+                    order.filled_quantity,
+                    _remainder,
+                    order.id,
+                )
+
         return ExecutionResult(
             success=order.status.value in ("filled", "partial"),
             order_id=order.id,
@@ -425,12 +441,25 @@ class TradeExecutor:
             )
         self._closing_positions.add(position_id)
         closed_position = None
+        # Default to the last cached mark; replaced with the broker's actual
+        # executed close fill below when the broker reports one.
+        close_fill_price = position.current_price
         try:
             success = await self.broker.close_position(position_id)
             if success:
+                # Prefer the broker's real executed fill price over the cached
+                # mark so realised P&L is booked at what actually filled.
+                _getter = getattr(self.broker, "get_last_close_fill_price", None)
+                if callable(_getter):
+                    try:
+                        _actual = _getter(position_id)
+                        if _actual is not None and math.isfinite(_actual) and _actual > 0:
+                            close_fill_price = _actual
+                    except Exception as _fp_exc:
+                        logger.debug("get_last_close_fill_price failed (non-fatal): %s", _fp_exc)
                 closed_position = await self.position_tracker.close_position(
                     position_id,
-                    position.current_price,
+                    close_fill_price,
                     commission=position.commission,
                 )
         finally:
@@ -492,7 +521,7 @@ class TradeExecutor:
             success=success,
             order_id=position_id,
             filled_quantity=position.quantity if success else 0,
-            average_price=position.current_price if success else 0,
+            average_price=close_fill_price if success else 0,
             commission=position.commission,
             status=OrderStatus.FILLED if success else OrderStatus.ERROR,
             message="Position closed" if success else "Close failed",

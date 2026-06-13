@@ -371,6 +371,18 @@ class BrokerConnector(ABC):
     async def close_position(self, symbol: str) -> bool:
         """Close the open position for *symbol*. Returns True on success."""
 
+    def get_last_close_fill_price(self, position_ref: str) -> float | None:
+        """Actual fill price of the most recent close for *position_ref*.
+
+        ``position_ref`` is whatever identifier was passed to
+        :meth:`close_position` (symbol or position id). Returns ``None`` when
+        the broker does not record close fills — callers must then fall back to
+        the last known mark price. This default keeps existing adapters
+        unchanged; brokers that know the real close fill (e.g. paper, and
+        eventually the live adapters) override it so realised P&L is booked at
+        the executed price rather than a stale cached mark."""
+        return None
+
     @abstractmethod
     async def get_account_info(self) -> AccountInfo:
         """Return current account balance, equity, and margin details."""
