@@ -124,6 +124,24 @@ def test_compute_cvar_value(rm):
     assert abs(cvar - expected) < 0.001, f"CVaR={cvar:.4f}, expected≈{expected:.4f}"
 
 
+def test_compute_cvar_zero_on_all_positive_returns(rm):
+    """A winning streak (all-positive returns) has no expected shortfall.
+
+    Regression: abs(mean(tail)) used to return the magnitude of the smallest
+    GAINS, which could exceed the daily limit and falsely block a profitable
+    account. CVaR of an all-gains distribution must be 0.
+    """
+    rm._returns_history.clear()
+    for _ in range(50):
+        rm._returns_history.append(0.03)  # consistent 3% gains, above the 1% limit
+
+    cvar = rm._compute_cvar(confidence=0.95)
+    assert cvar == pytest.approx(0.0)
+
+    allowed, reason = rm.check_cvar_pre_trade()
+    assert allowed is True, f"profitable account wrongly blocked: {reason}"
+
+
 # ── Integration: assess_risk also blocks on CVaR ─────────────────────────────
 
 

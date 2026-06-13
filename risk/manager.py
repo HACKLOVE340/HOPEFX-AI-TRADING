@@ -1976,7 +1976,14 @@ class RiskManager:
         tail = arr[arr <= cutoff]
         if len(tail) == 0:
             return 0.0
-        return float(abs(np.mean(tail)))
+        # CVaR (expected shortfall) is a LOSS magnitude. Returns are signed
+        # fractions (losses negative), so the shortfall is -mean(tail) only when
+        # the worst-case tail is actually a loss. Using abs() was wrong: on a
+        # winning streak (all-positive returns) the worst 5% are the smallest
+        # GAINS, and abs(mean) of those could exceed the daily limit and falsely
+        # block a profitable account. Clamp to 0 when the tail mean is a gain.
+        mean_tail = float(np.mean(tail))
+        return max(0.0, -mean_tail)
 
     def check_cvar_pre_trade(self, confidence: float = 0.95) -> tuple:
         """Pre-trade CVaR gate.  Returns (allowed: bool, reason: str).
