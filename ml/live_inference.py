@@ -189,12 +189,68 @@ class AdvancedModelPredictor:
 
     # ── Model loading ─────────────────────────────────────────────────────────
 
+    def _verify_model_integrity(self) -> bool:
+        """Verify the model file's SHA-256 against ml/saved_models/registry.json.
+
+        Fail CLOSED (return False) only when the resolved path is a
+        registry-tracked artifact whose checksum does not match — that indicates
+        tampering or a corrupt deploy, and joblib.load on a pickle is arbitrary
+        code execution. Untracked paths (dev/test models absent from the
+        registry) and an unreadable registry are allowed with a warning so local
+        workflows are not broken; the genuine tamper case is the only hard block.
+        """
+        try:
+            import json
+            from pathlib import Path
+
+            registry_path = Path(__file__).parent / "saved_models" / "registry.json"
+            if not registry_path.exists():
+                return True  # no registry available (dev) — cannot verify, allow
+
+            resolved = Path(self.model_path).resolve()
+            repo_root = Path(__file__).resolve().parents[1]
+            reg = json.loads(registry_path.read_text())
+            tracked: dict[Path, str] = {}
+            for v in reg.get("versions", {}).values():
+                f, s = v.get("file"), v.get("sha256")
+                if f and s:
+                    tracked[(repo_root / f).resolve()] = s
+
+            expected = tracked.get(resolved)
+            if expected is None:
+                logger.warning(
+                    "Model %s is not registry-tracked — loading without checksum verification",
+                    resolved.name,
+                )
+                return True
+
+            from ml.verify_model import _sha256
+
+            actual = _sha256(resolved)
+            if actual != expected:
+                logger.error(
+                    "REFUSING to load %s: SHA-256 mismatch (registry=%s actual=%s) — possible tampering",
+                    resolved.name,
+                    expected[:12],
+                    actual[:12],
+                )
+                return False
+            return True
+        except Exception as exc:
+            # Infrastructure error (unreadable registry, etc.) — do not crash a
+            # dev environment; the genuine mismatch above already fails closed.
+            logger.warning("Model integrity check could not complete for %s: %s", self.model_path, exc)
+            return True
+
     def _load(self) -> bool:
         """Lazy-load the model on first call. Returns True if successful."""
         if self._model is not None:
             return True
         try:
             import joblib
+
+            if not self._verify_model_integrity():
+                return False
 
             payload = joblib.load(self.model_path)
             # advanced_oos.pkl is a sklearn Pipeline (scaler + calibrated XGB)
