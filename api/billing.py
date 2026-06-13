@@ -487,7 +487,10 @@ async def activate_free_tier(body: FreeTierBody):
 
 
 class FlutterwaveInitBody(BaseModel):
-    amount: float = Field(..., gt=0)
+    # Defensive upper bound on the client-supplied charge amount. Rejects
+    # absurd / overflow inputs before they reach the payment provider; the
+    # generous default does not constrain real subscription charges.
+    amount: float = Field(..., gt=0, le=float(os.getenv("MAX_CHECKOUT_AMOUNT_USD", "1_000_000")))
     currency: str = Field("USD", max_length=3)
     plan: str = Field("professional", description="Subscription plan name")
 

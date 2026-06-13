@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -45,6 +46,13 @@ UTC = timezone.utc
 
 # Per-user async lock to serialize concurrent sub-account balance mutations.
 _TRANSFER_LOCKS: dict[str, asyncio.Lock] = {}
+
+# Upper bounds for user-supplied monetary values. These are defensive caps:
+# they reject absurd / overflow-inducing inputs (e.g. 1e308) before they ever
+# reach balance arithmetic or persistence. Generous by default so legitimate
+# accounts are unaffected; tunable per-deployment via env.
+MAX_ACCOUNT_BALANCE = float(os.getenv("MAX_ACCOUNT_BALANCE", "1_000_000_000"))  # 1B
+MAX_TRANSFER_AMOUNT = float(os.getenv("MAX_TRANSFER_AMOUNT", "1_000_000_000"))  # 1B
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
@@ -278,9 +286,9 @@ class CreateSubAccountRequest(BaseModel):
     description: str | None = None
     account_type: str = Field(default="personal", pattern="^(personal|prop_firm|team|managed)$")
     currency: str = Field(default="USD", max_length=10)
-    initial_balance: float | None = Field(default=None, ge=0)
+    initial_balance: float | None = Field(default=None, ge=0, le=MAX_ACCOUNT_BALANCE)
     max_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
-    daily_loss_limit: float | None = Field(default=None, ge=0)
+    daily_loss_limit: float | None = Field(default=None, ge=0, le=MAX_ACCOUNT_BALANCE)
     broker: str | None = None
     broker_account_id: str | None = None
 
@@ -302,7 +310,7 @@ class UpdateSubAccountRequest(BaseModel):
     active: bool | None = None
     is_active: bool | None = None
     max_drawdown_pct: float | None = Field(default=None, ge=0, le=100)
-    daily_loss_limit: float | None = Field(default=None, ge=0)
+    daily_loss_limit: float | None = Field(default=None, ge=0, le=MAX_ACCOUNT_BALANCE)
     broker: str | None = None
     broker_account_id: str | None = None
 
@@ -332,7 +340,7 @@ class UpdateMemberRoleRequest(BaseModel):
 
 class TransferRequest(BaseModel):
     to_account_id: str
-    amount: float = Field(..., gt=0)
+    amount: float = Field(..., gt=0, le=MAX_TRANSFER_AMOUNT)
     note: str = Field("", max_length=200)
 
 

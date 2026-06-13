@@ -29,7 +29,7 @@ UTC = timezone.utc
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from api.auth import TokenPayload, get_current_user
+from api.auth import TokenPayload, get_current_user, require_kyc
 
 # ── Withdrawal rate limit ─────────────────────────────────────────────────────
 # Enforced via Depends() on the /withdraw route so it appears in OpenAPI docs
@@ -60,6 +60,11 @@ _CONFIRMATIONS_REQUIRED: dict[str, int] = {
 }
 
 ADDRESS_TTL_MINUTES = int(os.getenv("CRYPTO_ADDRESS_TTL_MINUTES", "30"))
+
+# Defensive upper bound on a single fiat deposit/withdrawal request (USD).
+# Rejects absurd / overflow inputs before they reach disbursement or ledger
+# arithmetic. Tunable per-deployment; generous default leaves real flows intact.
+MAX_FIAT_AMOUNT_USD = float(os.getenv("MAX_FIAT_AMOUNT_USD", "1_000_000"))
 
 # Webhook HMAC secret — set CRYPTO_WEBHOOK_SECRET in env
 _WEBHOOK_SECRET = os.getenv("CRYPTO_WEBHOOK_SECRET", "")
@@ -482,12 +487,12 @@ def _generate_address(currency: str, user_id: str, network: str) -> str:
 
 
 class FiatDepositRequest(BaseModel):
-    amount: float = Field(..., gt=0, description="Amount in USD to deposit")
+    amount: float = Field(..., gt=0, le=MAX_FIAT_AMOUNT_USD, description="Amount in USD to deposit")
     method: str = Field("bank_transfer", description="Payment method: bank_transfer | card")
 
 
 class FiatWithdrawRequest(BaseModel):
-    amount: float = Field(..., gt=0, description="Amount in USD to withdraw")
+    amount: float = Field(..., gt=0, le=MAX_FIAT_AMOUNT_USD, description="Amount in USD to withdraw")
     destination: str = Field("bank_account", description="Destination: bank_account | card")
     bank_reference: str = Field("", description="Optional bank reference / account last-4")
 
@@ -566,7 +571,7 @@ async def _fiat_deposit_impl(req: FiatDepositRequest) -> dict:
 )
 async def fiat_withdraw(
     req: FiatWithdrawRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_kyc),
     _rl: None = Depends(_withdraw_rate_limit),
 ):
     """
