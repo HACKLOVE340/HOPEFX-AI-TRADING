@@ -305,6 +305,16 @@ class DataQualityEngine:
         if tick.mid < MIN_GOLD_PRICE or tick.mid > MAX_GOLD_PRICE:
             return self._reject(tick, state, "price_out_of_bounds", seq)
 
+        # ── 2b. Future-timestamp / clock-skew rejection ────────────────────
+        # A timestamp implausibly far in the future signals feed clock skew or a
+        # ms/epoch parse error. Such a tick would clamp its measured latency to 0
+        # (latency_ms_raw = max(0, received_at - tick_epoch)), making it look like
+        # the freshest source and inflating its confidence-weighted consensus
+        # contribution. Reject it outright.
+        _skew_tol_s = float(os.getenv("TICK_FUTURE_SKEW_TOLERANCE_S", "5.0"))
+        if tick.timestamp.timestamp() - received_at > _skew_tol_s:
+            return self._reject(tick, state, "future_timestamp", seq)
+
         # ── 3. Spread validation ───────────────────────────────────────────
         if tick.bid > tick.ask:
             return self._reject(tick, state, "inverted_spread", seq)

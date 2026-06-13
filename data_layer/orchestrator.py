@@ -679,17 +679,23 @@ class MarketDataOrchestrator:
                         spread=cached.get("spread", 0.0),
                         lineage_id=cached.get("lineage_id", ""),
                     )
-                    # Freshness gate: never serve a stale cached tick as the live
-                    # price. If it is older than the stale threshold, fall through
-                    # to the in-memory feed (or None) instead of returning it.
-                    _max_age_s = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0")) * 2.0
+                    # Freshness gate: never serve a stale OR future-dated cached
+                    # tick as the live price. Match the DQE stale threshold (the
+                    # previous 2x buffer re-served as "good" a tick the quality
+                    # engine would mark STALE). A future timestamp (negative age
+                    # beyond a small clock-skew tolerance) signals upstream clock
+                    # skew or a parse error and must never be treated as live —
+                    # otherwise its negative age trivially passes the upper bound.
+                    _max_age_s = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0"))
+                    _skew_tol_s = float(os.getenv("TICK_FUTURE_SKEW_TOLERANCE_S", "5.0"))
                     _age_s = (datetime.now(UTC) - tick.timestamp).total_seconds()
-                    if _age_s <= _max_age_s:
+                    if -_skew_tol_s <= _age_s <= _max_age_s:
                         return tick
                     logger.debug(
-                        "Orchestrator: cached tick for %s is %.1fs old (> %.1fs) — discarding",
+                        "Orchestrator: cached tick for %s age=%.1fs outside [%.1f, %.1f]s — discarding",
                         symbol,
                         _age_s,
+                        -_skew_tol_s,
                         _max_age_s,
                     )
                 except Exception as exc:
