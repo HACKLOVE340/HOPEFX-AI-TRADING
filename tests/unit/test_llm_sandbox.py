@@ -12,6 +12,8 @@ checker.  If any test fails it means a bypass vector has been re-introduced.
 
 import ast
 
+import pytest
+
 from brain.llm_agent import _ast_sandbox_check, _compile_strategy
 
 
@@ -145,6 +147,12 @@ class TestBypassVectors:
 
 
 class TestSafeCode:
+    @pytest.fixture(autouse=True)
+    def _enable_code_exec(self, monkeypatch):
+        # _compile_strategy fails closed unless LLM_CODE_EXECUTION_ENABLED is set.
+        # These tests exercise the compile path itself, so enable it explicitly.
+        monkeypatch.setattr("brain.llm_agent._LLM_CODE_EXEC_ENABLED", True)
+
     def test_numpy_allowed(self):
         code = (
             "import numpy as np\n"
@@ -192,3 +200,19 @@ class TestSafeCode:
         instance, err = _compile_strategy(code)
         assert instance is None
         assert "SyntaxError" in err
+
+
+# ---------------------------------------------------------------------------
+# The execution gate must fail closed by default
+# ---------------------------------------------------------------------------
+
+
+class TestCodeExecutionGate:
+    def test_disabled_by_default(self, monkeypatch):
+        """With the flag unset, even trivially-safe code must not execute."""
+        monkeypatch.setattr("brain.llm_agent._LLM_CODE_EXEC_ENABLED", False)
+        code = "class GeneratedStrategy:\n    def signal(self, data):\n        return 1.0\n"
+        instance, err = _compile_strategy(code)
+        assert instance is None
+        assert err is not None
+        assert "disabled" in err.lower()

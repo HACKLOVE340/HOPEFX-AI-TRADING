@@ -80,6 +80,21 @@ _OPENAI_REASONING_MODELS: frozenset[str] = frozenset({"o1", "o1-mini", "o3", "o3
 _LLM_MAX_RETRIES: int = int(os.getenv("LLM_MAX_RETRIES", "3"))
 _LLM_RETRY_BASE_DELAY: float = float(os.getenv("LLM_RETRY_BASE_DELAY", "1.0"))  # seconds
 
+# Hard opt-in gate for executing LLM-generated strategy code.
+#
+# _compile_strategy ultimately exec()s model-produced Python *in this parent
+# process* (the subprocess step only smoke-tests instantiation; the strategy
+# object is needed in-process for backtesting). The AST denylist is the parent's
+# only protection and a denylist cannot stop dunder-traversal escapes
+# (e.g. ().__class__.__bases__[0].__subclasses__() reaching os without importing
+# it). In a money-moving system this path must be OFF by default and only enabled
+# deliberately in an isolated research/dev context.
+_LLM_CODE_EXEC_ENABLED: bool = os.getenv("LLM_CODE_EXECUTION_ENABLED", "false").lower() in (
+    "1",
+    "true",
+    "yes",
+)
+
 
 def _load_recent_candles_from_csv(
     symbol: str = "XAU_USD",
@@ -438,7 +453,22 @@ def _compile_strategy(code: str) -> tuple[Any | None, str | None]:
        no broker credentials) and a 30-second wall-clock timeout.
        The parent process receives only a JSON result dict over stdout —
        no shared memory, no shared file descriptors beyond stdio.
+
+    Note: the subprocess only smoke-tests instantiation. On success the parent
+    re-imports and executes the same code in-process (the strategy instance is
+    required here for backtesting), so the AST check — not the subprocess — is
+    the parent's real protection. Because an AST denylist cannot guarantee
+    isolation, this entire path is gated behind LLM_CODE_EXECUTION_ENABLED and
+    fails closed when the flag is unset.
     """
+    if not _LLM_CODE_EXEC_ENABLED:
+        return (
+            None,
+            "LLM code execution is disabled. Executing model-generated Python in "
+            "the trading process is off by default; set LLM_CODE_EXECUTION_ENABLED=true "
+            "in an isolated research environment to enable it.",
+        )
+
     try:
         tree = ast.parse(code)
     except SyntaxError as exc:
