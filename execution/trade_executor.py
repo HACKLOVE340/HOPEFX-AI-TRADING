@@ -729,22 +729,30 @@ class TradeExecutor:
             label = 1 if pnl > 0 else 0
             _confidence = float(signal.get("confidence", 0.0))
             _action = signal.get("action", "buy")
+            predicted_direction = 1 if _action == "buy" else 0
 
             import pandas as _pd
 
-            features = _pd.DataFrame(
-                [
-                    {
-                        "entry_price": result.average_price,
-                        "filled_qty": result.filled_quantity,
-                        "commission": result.commission,
-                        "latency_ms": result.latency_ms,
-                        "confidence": _confidence,
-                        "direction_long": 1 if _action == "buy" else 0,
-                    }
-                ]
-            )
-            engine.update_online(features, label)
+            # The online learner derives its features from OHLCV bars; pass the
+            # real signal window when available so partial_fit actually learns.
+            ohlcv = signal.get("ohlcv")
+            if not isinstance(ohlcv, _pd.DataFrame) or ohlcv.empty:
+                ohlcv = _pd.DataFrame(
+                    [
+                        {
+                            "entry_price": result.average_price,
+                            "filled_qty": result.filled_quantity,
+                            "commission": result.commission,
+                            "latency_ms": result.latency_ms,
+                            "confidence": _confidence,
+                            "direction_long": predicted_direction,
+                        }
+                    ]
+                )
+            # Pass predicted_direction so the live-accuracy degradation monitor
+            # (_check_live_accuracy_degradation) actually accumulates and fires —
+            # previously it was never given a prediction and silently never ran.
+            engine.update_online(ohlcv, label, predicted_direction=predicted_direction)
             logger.debug(
                 "InferenceEngine fill notify: symbol=%s pnl=%.4f label=%d",
                 signal.get("symbol", "?"),
