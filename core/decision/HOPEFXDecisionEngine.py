@@ -350,15 +350,40 @@ class HOPEFXDecisionEngine:
         prob: float = signal_info["confidence"]
 
         if self._ml is not None:
+            raw: Any = None
             try:
                 ohlcv_df = self._build_ohlcv_df(ctx.data)
                 raw = self._ml.predict(ohlcv_df)
-                if isinstance(raw, int | float):
-                    prob = float(raw)
-                elif hasattr(raw, "__len__") and len(raw) > 0:
-                    prob = float(raw[-1])
+            except RuntimeError as exc:
+                # The inference engine raises RuntimeError to BLOCK inference on a
+                # known-bad state (stale model / drift) when STALE_MODEL_BLOCK is
+                # enabled — the production default. This is a hard stop: filter
+                # the signal rather than swallowing the error and trading on base
+                # confidence, which would silently bypass the staleness gate.
+                logger.warning(
+                    "Phase2 ML blocked (stale/drift) — filtering signal for %s: %s",
+                    ctx.symbol,
+                    exc,
+                )
+                return None
             except Exception as exc:
-                logger.debug("Phase2 ML predict failed (using base confidence): %s", exc)
+                logger.warning("Phase2 ML predict failed (using base confidence) for %s: %s", ctx.symbol, exc)
+                raw = None
+
+            # InferenceEngine.predict() returns a dict (calibrated confidence in
+            # [0,1]); legacy predictors may return a scalar or array. The previous
+            # code only handled scalar/array, so on the dict path it hit
+            # float(raw[-1]) -> KeyError and silently discarded every ML output.
+            if isinstance(raw, dict):
+                # Only override base confidence with a REAL prediction; on the
+                # deterministic fallback (no model / too few bars) keep the base
+                # confidence instead of forcing the signal to a 0.0 confidence.
+                if not raw.get("fallback", False):
+                    prob = float(raw.get("confidence", raw.get("probability", prob)))
+            elif isinstance(raw, int | float):
+                prob = float(raw)
+            elif raw is not None and hasattr(raw, "__len__") and len(raw) > 0:
+                prob = float(raw[-1])
 
         prob = self._apply_phase_stores(prob, ctx)
         result.ml_probability = prob
