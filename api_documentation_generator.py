@@ -85,7 +85,7 @@ def _minimal_schema() -> dict:
                             "summary": path_part,
                             "responses": {"200": {"description": "OK"}},
                         }
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     return {

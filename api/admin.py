@@ -1021,7 +1021,7 @@ def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dic
                     "resolved": False,
                 }
             )
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # Check engine health
@@ -1040,7 +1040,7 @@ def get_admin_alerts(user: TokenPayload = Depends(require_role("admin"))) -> dic
                     "resolved": False,
                 }
             )
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     # Check DB
@@ -1418,7 +1418,7 @@ def _load_system_settings() -> dict:
         stored = _cs.get(_SYSTEM_SETTINGS_KEY)
         if stored:
             return {**_SYSTEM_SETTINGS_DEFAULTS, **stored}
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return dict(_SYSTEM_SETTINGS_DEFAULTS)
 
@@ -1428,7 +1428,7 @@ def _save_system_settings(data: dict) -> None:
         from core.config_store import config_store as _cs
 
         _cs.set(_SYSTEM_SETTINGS_KEY, data)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
 
@@ -1468,7 +1468,7 @@ def get_maintenance(user: TokenPayload = Depends(require_role("admin"))) -> dict
         stored = _cs.get("admin:maintenance")
         if stored:
             return stored
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return dict(_maintenance_state)
 
@@ -1487,7 +1487,7 @@ def set_maintenance(
         from core.config_store import config_store as _cs
 
         _cs.set("admin:maintenance", state)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     try:
         import redis as _redis
@@ -1496,7 +1496,7 @@ def set_maintenance(
         import json as _json
 
         rc.set("platform:maintenance", _json.dumps(state))
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     log_activity(f"Maintenance mode {'enabled' if enabled else 'disabled'} by {user.sub}")
     return {"ok": True, **state}

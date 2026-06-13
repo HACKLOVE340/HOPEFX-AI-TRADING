@@ -68,7 +68,6 @@ if not _AUTH_OK:
 _SECRET = "test-only-jwt-secret-key-minimum-32-chars!!"
 os.environ["SECURITY_JWT_SECRET"] = _SECRET
 
-
 # ── App + DB fixtures ─────────────────────────────────────────────────────────
 
 

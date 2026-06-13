@@ -167,7 +167,7 @@ class SpreadMonitor:
                 _spread_baseline_gauge.labels(symbol=symbol).set(baseline)
                 if spiking:
                     _spread_spike_counter.labels(symbol=symbol).inc()
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
         if spiking:

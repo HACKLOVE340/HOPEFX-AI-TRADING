@@ -219,7 +219,7 @@ async def _probe_trading_engine() -> dict[str, Any]:
                         f"open_positions={snap.get('open_positions', 0)} "
                         f"broker={snap.get('broker', 'unknown')}"
                     )
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
             return {
                 "status": "ok" if running else "warning",
@@ -501,7 +501,7 @@ async def _probe_decision_engine() -> dict[str, Any]:
                             ),
                             **{k: v for k, v in de_status.items() if not isinstance(v, dict)},
                         }
-                    except Exception:  # nosec B110
+                    except Exception:  # nosec B110  # noqa: S110
                         pass
                 return {
                     "status": "ok",

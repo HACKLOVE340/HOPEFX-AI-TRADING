@@ -235,7 +235,7 @@ class LiveConnectionManager:
             from api.social_feed import _social_feed_broadcast as _sf_broadcast
 
             await _sf_broadcast(signal)
-        except Exception:  # nosec B110
+        except Exception:  # nosec B110  # noqa: S110
             pass
 
     async def send_to_user(self, user_id: str, channel: str, msg: dict) -> None:
@@ -564,7 +564,7 @@ async def _eventbus_tick_broadcaster() -> None:
                     _rc = await _get_redis()
                     if _rc is not None:
                         await _rc.setex(f"tick:{symbol}", 60, json.dumps(tick_data))
-                except Exception:  # nosec B110 — non-fatal, fallback chain degrades gracefully
+                except Exception:  # nosec B110 — non-fatal, fallback chain degrades gracefully  # noqa: S110
                     pass
         except Exception as exc:
             delay = _retry_delays[min(attempt, len(_retry_delays) - 1)]
@@ -1586,7 +1586,7 @@ async def push_signal(signal: dict) -> None:
         from api.social_feed import _social_feed_broadcast as _sf_broadcast
 
         await _sf_broadcast(signal)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
 
@@ -1896,7 +1896,7 @@ async def ws_notifications(websocket: WebSocket) -> None:
                         try:
                             data = json.loads(message["data"])
                             await websocket.send_text(json.dumps({"type": "notification", "data": data}))
-                        except Exception:  # nosec B110
+                        except Exception:  # nosec B110  # noqa: S110
                             pass
                 except TimeoutError:  # nosec B110
                     pass
@@ -2018,7 +2018,7 @@ async def ws_audit_events(websocket: WebSocket) -> None:
                         try:
                             data = json.loads(message["data"])
                             await websocket.send_text(json.dumps({"type": "audit_event", "data": data}))
-                        except Exception:  # nosec B110
+                        except Exception:  # nosec B110  # noqa: S110
                             pass
                 except TimeoutError:  # nosec B110
                     pass

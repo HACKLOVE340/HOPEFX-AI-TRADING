@@ -56,11 +56,6 @@ ignore = [
     "S310",
     "S301",
     "S311",
-    "S105",
-    "S106",
-    "S108",
-    "S110",
-    "S112",
     "S102",
     "PLR0913",
     "PLR0912",
@@ -113,10 +108,9 @@ ignore = [
 # Allowed public surface: data_layer.orchestrator (orchestrator singleton),
 #                         data_layer.tick_store    (TickStore),
 #                         data_layer.feeds.*       (FeedRegistry public API).
-# Add TID rules here when ruff TID support for custom bans lands; for now
-# the violations are tracked via the "forbidden-import" comments below.
-# TODO(#enforcement): enable TID251 or a custom pre-commit hook once ruff
-#   supports per-package import bans without pyproject.toml fragmentation.
+# Cross-module import discipline is enforced by Gate G (scripts/ci/gate_g_import_discipline.py)
+# which runs in CI and blocks imports from legacy directories (backtest/, strategy/) with an
+# explicit KNOWN_VIOLATIONS allowlist.  No additional ruff TID rule is required.
 
 [lint.per-file-ignores]
 # PLR2004: HTTP status codes and small numeric literals are acceptable in tests

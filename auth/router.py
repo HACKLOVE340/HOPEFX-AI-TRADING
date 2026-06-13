@@ -112,7 +112,7 @@ def _verify_signed_token(
 
 # Salt constants — distinct per token type so tokens cannot be cross-used.
 _SALT_EMAIL_VERIFY = "hopefx-email-verify-v1"
-_SALT_PASSWORD_RESET = "hopefx-password-reset-v1"
+_SALT_PASSWORD_RESET = "hopefx-password-reset-v1"  # noqa: S105
 
 # Token TTLs
 _EMAIL_VERIFY_TTL = int(os.getenv("EMAIL_VERIFY_TTL_SECONDS", str(24 * 3600)))  # 24 h

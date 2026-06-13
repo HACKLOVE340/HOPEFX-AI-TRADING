@@ -86,7 +86,7 @@ def mark_startup_complete(tasks_done: list[str] | None = None, tasks_failed: lis
         from resilience.auto_rollback import _STARTUP_COMPLETE  # type: ignore[import]
 
         _STARTUP_COMPLETE.set(1)
-    except Exception:  # nosec B110 — non-fatal
+    except Exception:  # nosec B110 — non-fatal  # noqa: S110
         pass
 
 
@@ -495,7 +495,7 @@ def _check_ready_sync() -> bool:
         if db_breaker.is_open:
             return False
         # broker and ml are non-critical for readiness (paper trading can run without them)
-    except Exception:  # nosec B110 — circuit breaker import is non-fatal
+    except Exception:  # nosec B110 — circuit breaker import is non-fatal  # noqa: S110
         pass
 
     # Check kill switch
@@ -505,7 +505,7 @@ def _check_ready_sync() -> bool:
         ks = KillSwitch.get_instance()
         if ks and ks.is_active():
             return False
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
     return True
@@ -607,7 +607,7 @@ async def _check_master_control() -> ComponentStatus:
                 from core.mcc import master_control as _mc_mod  # type: ignore[import]
 
                 mcc = getattr(_mc_mod, "_mcc_instance", None)
-            except Exception:  # nosec B110
+            except Exception:  # nosec B110  # noqa: S110
                 pass
 
         latency_ms = round((time.perf_counter() - t0) * 1000, 2)
@@ -914,7 +914,7 @@ async def prometheus_metrics() -> str:
             total_failures = status.get("total_failures", 0)
             lines.append(f'hopefx_circuit_breaker_state{{breaker="{name}"}} {state_val}')
             lines.append(f'hopefx_circuit_breaker_failures_total{{breaker="{name}"}} {total_failures}')
-    except Exception:  # nosec B110 — circuit breaker metrics are non-fatal
+    except Exception:  # nosec B110 — circuit breaker metrics are non-fatal  # noqa: S110
         pass
 
     # Auto-rollback status
@@ -929,7 +929,7 @@ async def prometheus_metrics() -> str:
             "# TYPE hopefx_rollback_total counter",
             f'hopefx_rollback_total{{service="{_SERVICE_NAME}"}} {rollback_count}',
         ]
-    except Exception:  # nosec B110 — rollback metrics are non-fatal
+    except Exception:  # nosec B110 — rollback metrics are non-fatal  # noqa: S110
         pass
 
     lines.append("")

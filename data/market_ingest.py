@@ -329,7 +329,7 @@ class MarketIngest:
         except (FutureTimestampError, StaleDataError) as _guard_err:
             logger.warning("market_ingest: tick rejected by LiveTradingGuard: %s", _guard_err)
             return
-        except Exception:  # nosec B110 — guard is non-fatal if unavailable
+        except Exception:  # nosec B110 — guard is non-fatal if unavailable  # noqa: S110
             pass
 
         self._staleness.touch()

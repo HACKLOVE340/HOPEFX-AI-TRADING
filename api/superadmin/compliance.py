@@ -158,7 +158,7 @@ def _load_aml_alerts() -> list[dict]:
             raw = rc.get(_AML_ALERTS_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return []
 
@@ -170,7 +170,7 @@ def _save_aml_alerts(alerts: list[dict]) -> None:
         rc = get_sync_redis_client()
         if rc:
             rc.set(_AML_ALERTS_KEY, json.dumps(alerts), ex=86400 * 30)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
 
 
@@ -275,7 +275,7 @@ def _load_sanctions() -> list[dict]:
             raw = rc.get(_SANCTIONS_KEY)
             if raw:
                 return json.loads(raw)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return []
 
@@ -345,7 +345,7 @@ async def clear_sanctions_hit(
         rc = get_sync_redis_client()
         if rc:
             rc.set(_SANCTIONS_KEY, json.dumps(hits), ex=86400 * 30)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     _log_superadmin_action(user, "sanctions_clear", {"hit_id": hit_id})
     return {"ok": True}
@@ -369,7 +369,7 @@ async def get_regulatory_reports(
             raw = rc.get(_REG_REPORTS_KEY)
             if raw:
                 reports = json.loads(raw)
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return {"reports": reports}
 

@@ -121,7 +121,7 @@ def _kv_set(key: str, data: dict, ttl: int | None = None) -> None:
             else:
                 r.set(key, raw)
             return
-        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal  # noqa: S110
             pass
 
 
@@ -131,7 +131,7 @@ def _kv_get(key: str) -> dict | None:
         try:
             raw = r.get(key)
             return _json.loads(raw) if raw else None
-        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal  # noqa: S110
             pass
     return None
 
@@ -142,7 +142,7 @@ def _kv_del(key: str) -> None:
         try:
             r.delete(key)
             return
-        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal  # noqa: S110
             pass
 
 
@@ -157,7 +157,7 @@ def _kv_scan(pattern: str) -> list[dict]:
                 if raw:
                     result.append(_json.loads(raw))
             return result
-        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal
+        except Exception:  # nosec B110 — Redis cache is optional; failure is non-fatal  # noqa: S110
             pass
     return []
 
@@ -1000,7 +1000,7 @@ async def get_cot_gold(user: TokenPayload = Depends(require_plan("professional")
                 raw = r.get(_cot_cache_key)
                 if raw:
                     return _json.loads(raw)
-        except Exception:  # nosec B110 — Redis unavailable; fall through to in-process cache
+        except Exception:  # nosec B110 — Redis unavailable; fall through to in-process cache  # noqa: S110
             pass
         return _cot_cache
 
@@ -1011,7 +1011,7 @@ async def get_cot_gold(user: TokenPayload = Depends(require_plan("professional")
             r = _get_sync_redis()
             if r:
                 r.setex(_cot_cache_key, _COT_CACHE_TTL, _json.dumps(data))
-        except Exception:  # nosec B110 — Redis write failure is non-fatal; in-process cache updated above
+        except Exception:  # nosec B110 — Redis write failure is non-fatal; in-process cache updated above  # noqa: S110
             pass
 
     try:

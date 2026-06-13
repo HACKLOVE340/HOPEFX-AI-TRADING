@@ -981,7 +981,7 @@ class MacroCalendarEngine:
                         end_dt = end_dt.replace(tzinfo=UTC)
                     if now <= end_dt:
                         active.append(w)
-                except Exception:
+                except Exception:  # noqa: S112
                     continue
             return active
         except Exception as exc:

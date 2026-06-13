@@ -462,7 +462,7 @@ class ExecutionEngine:
                 _guard_err,
             )
             return  # Do not update last tick with invalid data
-        except Exception:  # nosec B110 — guard is non-fatal if unavailable
+        except Exception:  # nosec B110 — guard is non-fatal if unavailable  # noqa: S110
             pass
 
         self._last_ticks[symbol] = tick
@@ -471,7 +471,7 @@ class ExecutionEngine:
             from execution.spread_monitor import get_spread_monitor
 
             get_spread_monitor().on_tick_obj(symbol, tick)
-        except Exception:  # nosec B110 — spread monitor is non-fatal
+        except Exception:  # nosec B110 — spread monitor is non-fatal  # noqa: S110
             pass
 
     def get_last_tick(self, symbol: str) -> Any | None:

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class RiskControlStatus(Enum):
-    PASS = "pass"  # nosec B105 — enum value, not a password
+    PASS = "pass"  # nosec B105 — enum value, not a password  # noqa: S105
     WARNING = "warning"
     BLOCK = "block"
     KILL_SWITCH = "kill_switch"

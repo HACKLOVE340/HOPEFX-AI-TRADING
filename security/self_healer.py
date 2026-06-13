@@ -1917,7 +1917,7 @@ Return the complete fixed file:"""
             from security.test_scanner import record_test_run
 
             record_test_run(passed, failed, status)
-        except Exception:  # nosec B110 — test_scanner is optional telemetry; failure is non-fatal
+        except Exception:  # nosec B110 — test_scanner is optional telemetry; failure is non-fatal  # noqa: S110
             pass
 
     # ── Endpoint → file resolver ──────────────────────────────────────────────

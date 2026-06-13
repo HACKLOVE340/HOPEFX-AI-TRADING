@@ -145,7 +145,7 @@ def _initialize_provider() -> None:
             _provider_initialized = True
             logger.debug("api/tracing: deferred to tracing/setup.py provider — skipping duplicate init")
             return
-    except Exception:  # nosec B110 — tracing/setup.py may not be importable
+    except Exception:  # nosec B110 — tracing/setup.py may not be importable  # noqa: S110
         pass
 
     _provider_initialized = True

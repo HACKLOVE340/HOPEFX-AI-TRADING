@@ -707,7 +707,7 @@ class BrokerManager:
             from resilience.service_circuit_breakers import broker_breaker as _bb
 
             _bb.record_failure(exc)
-        except Exception:  # nosec B110 — circuit breaker is non-fatal
+        except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
             pass
 
         # Auto-failover using the ordered failover chain (primary → live secondary → paper)
@@ -775,7 +775,7 @@ class BrokerManager:
             from resilience.service_circuit_breakers import broker_breaker as _bb
 
             _bb.record_success()
-        except Exception:  # nosec B110 — circuit breaker is non-fatal
+        except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
             pass
 
     @staticmethod

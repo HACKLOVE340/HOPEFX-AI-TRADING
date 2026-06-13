@@ -222,13 +222,13 @@ def _get_db_session():
         sf = getattr(_app_state_pnl, "db_session_factory", None)
         if sf is not None:
             return sf(), sf
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     try:
         from database.connection import SessionLocal
 
         return SessionLocal(), SessionLocal
-    except Exception:  # nosec B110
+    except Exception:  # nosec B110  # noqa: S110
         pass
     return None, None
 

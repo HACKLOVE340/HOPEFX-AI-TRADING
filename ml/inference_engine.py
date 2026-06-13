@@ -907,7 +907,7 @@ class InferenceEngine:
                     from resilience.service_circuit_breakers import ml_breaker as _ml_cb
 
                     _ml_cb.record_success()
-                except Exception:  # nosec B110 — circuit breaker is non-fatal
+                except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
                     pass
             except Exception as exc:
                 logger.warning("Predictor failed: %s", exc)
@@ -917,7 +917,7 @@ class InferenceEngine:
                     from resilience.service_circuit_breakers import ml_breaker as _ml_cb
 
                     _ml_cb.record_failure(exc)
-                except Exception:  # nosec B110 — circuit breaker is non-fatal
+                except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
                     pass
 
         # Step 5: Online learner blend

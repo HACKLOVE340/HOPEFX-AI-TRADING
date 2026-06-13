@@ -384,7 +384,7 @@ class MarketDataCache:
                 self._using_fallback = True
                 logger.debug("MarketDataCache: Redis circuit breaker OPEN — using in-memory fallback.")
                 return None
-        except Exception:  # nosec B110 — circuit breaker is non-fatal
+        except Exception:  # nosec B110 — circuit breaker is non-fatal  # noqa: S110
             pass
 
         if self._connection_failed and not self.enable_fallback:
@@ -399,7 +399,7 @@ class MarketDataCache:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
 
                     _rb.record_success()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
                 return self._redis_client
             except Exception as _exc:
@@ -409,7 +409,7 @@ class MarketDataCache:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
 
                     _rb.record_failure(_exc)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
 
         # Reconnect attempt
@@ -437,7 +437,7 @@ class MarketDataCache:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
 
                     _rb.record_success()
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
                 return client
             except Exception as exc:
@@ -445,7 +445,7 @@ class MarketDataCache:
                     from resilience.service_circuit_breakers import redis_breaker as _rb
 
                     _rb.record_failure(exc)
-                except Exception:  # nosec B110
+                except Exception:  # nosec B110  # noqa: S110
                     pass
                 if attempt < self.max_retries - 1:
                     # threading.Event.wait() releases the GIL during the sleep so

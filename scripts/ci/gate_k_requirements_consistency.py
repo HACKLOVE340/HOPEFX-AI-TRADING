@@ -122,8 +122,8 @@ def _parse_requirements(path: Path) -> dict[str, list[VersionSpec]]:
 
         # Parse comma-separated specifiers
         for part in spec_str.split(","):
-            part = part.strip()
-            sm = re.match(r"^([><=!~]{1,2})\s*(.+)$", part)
+            part_stripped = part.strip()
+            sm = re.match(r"^([><=!~]{1,2})\s*(.+)$", part_stripped)
             if sm:
                 result[pkg].append(VersionSpec(pkg, sm.group(1), sm.group(2).strip()))
 

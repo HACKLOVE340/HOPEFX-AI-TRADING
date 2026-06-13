@@ -21,8 +21,39 @@ Components:
 - Model versioning and storage
 """
 
-from .features import TechnicalFeatureEngineer
-from .models import BaseMLModel, LSTMPricePredictor, RandomForestTradingClassifier
+try:
+    from .features import TechnicalFeatureEngineer
+    from .models import BaseMLModel, LSTMPricePredictor, RandomForestTradingClassifier
+except ImportError as _ml_import_err:
+    # Heavy ML dependencies (numpy, pandas, etc.) may be absent in minimal
+    # environments such as the CI Gate D run, which only exercises the model
+    # registry checks in ml/verify_model.py and does not need these classes.
+    # Stub classes raise a clear ImportError on instantiation so the failure
+    # mode is explicit rather than a confusing AttributeError on None.
+    _msg = (
+        f"ML feature/model classes unavailable — missing dependencies: {_ml_import_err}. "
+        "Install requirements.txt to enable full ML functionality."
+    )
+
+    class _MissingMLClass:
+        """Placeholder raised when required ML deps are not installed."""
+
+        _error_msg: str = _msg
+
+        def __init__(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            raise ImportError(self._error_msg)
+
+    class TechnicalFeatureEngineer(_MissingMLClass):  # type: ignore[no-redef]
+        pass
+
+    class BaseMLModel(_MissingMLClass):  # type: ignore[no-redef]
+        pass
+
+    class LSTMPricePredictor(_MissingMLClass):  # type: ignore[no-redef]
+        pass
+
+    class RandomForestTradingClassifier(_MissingMLClass):  # type: ignore[no-redef]
+        pass
 
 # RL nuclear decision agent path constant — used by NuclearHopeFXSupervisor
 RL_NUCLEAR_MODEL_PATH: str = "ml/rl_models/nuclear_decision_ppo.zip"

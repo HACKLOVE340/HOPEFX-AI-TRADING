@@ -1486,7 +1486,7 @@ async def rl_status(user: TokenPayload = Depends(get_current_user)) -> dict:
             raw = rc.get("rl:agent:status")
             if raw:
                 agent_state = _json.loads(raw)
-    except Exception:  # nosec B110 — Redis optional
+    except Exception:  # nosec B110 — Redis optional  # noqa: S110
         pass
 
     # ── Build response with guaranteed fields ─────────────────────────────────

@@ -216,12 +216,12 @@ def check_doc(md_path: Path) -> list[str]:
 
             defined = _top_level_names(py_file)
             for name in imported_names:
-                name = name.strip()
-                if not name or name == "*" or name in SKIP_NAMES:
+                name_stripped = name.strip()
+                if not name_stripped or name_stripped == "*" or name_stripped in SKIP_NAMES:
                     continue
-                if name not in defined:
+                if name_stripped not in defined:
                     violations.append(
-                        f"{md_path.name}:{block_line}: `{name}` not found in "
+                        f"{md_path.name}:{block_line}: `{name_stripped}` not found in "
                         f"`{module}` ({py_file.relative_to(REPO_ROOT)})"
                     )
 

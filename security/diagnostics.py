@@ -614,7 +614,7 @@ class DiagnosticsEngine:
                             routes_to_test.append(("GET", path))
                         elif m == "POST" and not any(path.startswith(p) for p in _PROBE_GET_ONLY_PREFIXES):
                             routes_to_test.append(("POST", path))
-        except Exception:  # nosec B110 — app not initialised yet; route list stays empty
+        except Exception:  # nosec B110 — app not initialised yet; route list stays empty  # noqa: S110
             pass
         routes_to_test = list(dict.fromkeys(routes_to_test))[:50]
         try:
