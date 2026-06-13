@@ -667,7 +667,7 @@ class MarketDataOrchestrator:
                     raw_source = cached.get("source")
                     if not raw_source:
                         raise ValueError(f"Cached tick for {symbol} has no 'source' field")
-                    return GoldTick(
+                    tick = GoldTick(
                         symbol=cached["symbol"],
                         timestamp=datetime.fromisoformat(cached["timestamp"]),
                         bid=cached["bid"],
@@ -678,6 +678,19 @@ class MarketDataOrchestrator:
                         confidence=cached.get("confidence", 1.0),
                         spread=cached.get("spread", 0.0),
                         lineage_id=cached.get("lineage_id", ""),
+                    )
+                    # Freshness gate: never serve a stale cached tick as the live
+                    # price. If it is older than the stale threshold, fall through
+                    # to the in-memory feed (or None) instead of returning it.
+                    _max_age_s = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0")) * 2.0
+                    _age_s = (datetime.now(UTC) - tick.timestamp).total_seconds()
+                    if _age_s <= _max_age_s:
+                        return tick
+                    logger.debug(
+                        "Orchestrator: cached tick for %s is %.1fs old (> %.1fs) — discarding",
+                        symbol,
+                        _age_s,
+                        _max_age_s,
                     )
                 except Exception as exc:
                     logger.debug(

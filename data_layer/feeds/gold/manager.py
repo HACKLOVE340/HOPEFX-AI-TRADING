@@ -32,7 +32,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import timezone
 
 UTC = timezone.utc
 
