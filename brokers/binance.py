@@ -144,6 +144,7 @@ class BinanceConnector(BrokerConnector):
         order_type: OrderType = OrderType.MARKET,
         price: float | None = None,
         stop_price: float | None = None,
+        client_order_id: str | None = None,
     ) -> Order | None:
         """
         Place an order with Binance.
@@ -177,6 +178,13 @@ class BinanceConnector(BrokerConnector):
                 "timestamp": timestamp,
             }
 
+            # Idempotency: a caller-supplied client_order_id is sent as
+            # newClientOrderId so a retried submission is deduplicated by Binance
+            # (the same id maps to the existing order, never a second fill)
+            # instead of creating a brand-new order on every retry.
+            if client_order_id:
+                params["newClientOrderId"] = str(client_order_id)[:36]
+
             # Add price for limit orders
             if order_type == OrderType.LIMIT and price:
                 params["timeInForce"] = "GTC"  # Good Till Cancel
@@ -194,9 +202,25 @@ class BinanceConnector(BrokerConnector):
 
             # Send order
             response = self.session.post(f"{self.base_url}/api/v3/order", params=params)
-            response.raise_for_status()
 
-            result = response.json()
+            try:
+                result = response.json()
+            except Exception:  # nosec B110 - non-JSON body handled by raise_for_status below
+                result = {}
+
+            # Binance returns HTTP 400 with code -2010 for a duplicate
+            # newClientOrderId. With idempotency the order was already accepted on
+            # a prior attempt — do NOT resubmit (that would defeat the purpose and
+            # risk a second fill); surface it as "already submitted".
+            if getattr(response, "status_code", 200) >= 400:
+                code = result.get("code") if isinstance(result, dict) else None
+                if code == -2010 and client_order_id:
+                    logger.warning(
+                        "Binance duplicate order clientOrderId=%s — already submitted, not resubmitting",
+                        client_order_id,
+                    )
+                    return None
+                response.raise_for_status()
 
             # Parse response
             order = Order(
