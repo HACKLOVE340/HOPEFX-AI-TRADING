@@ -231,7 +231,8 @@ class CCXTConnector(BrokerConnector):
             for pos in positions:
                 if pos.symbol == symbol:
                     side = OrderSide.SELL if pos.side == "LONG" else OrderSide.BUY
-                    self.place_order(symbol, side, abs(pos.quantity), OrderType.MARKET)
+                    # place_order signature is (symbol, side, order_type, quantity).
+                    self.place_order(symbol, side, OrderType.MARKET, abs(pos.quantity))
                     return True
             return False
         except Exception as exc:
