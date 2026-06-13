@@ -56,6 +56,7 @@ Usage
 from __future__ import annotations
 
 import logging
+import math
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -155,6 +156,37 @@ class DrawdownTracker:
         """
         if balance is None:
             balance = equity
+
+        # Fail CLOSED: a non-finite (NaN/inf) or non-positive equity must never
+        # reach the drawdown math. NaN silently defeats every `dd >= limit`
+        # comparison and corrupts the trailing HWM via max(). Treat it as a
+        # breach so the caller halts, and do NOT mutate tracker state.
+        if (
+            equity is None
+            or balance is None
+            or not math.isfinite(equity)
+            or not math.isfinite(balance)
+            or equity <= 0
+        ):
+            logger.critical(
+                "DrawdownTracker.update: invalid equity=%r balance=%r — failing CLOSED (breach).",
+                equity,
+                balance,
+            )
+            with self._lock:
+                return DrawdownResult(
+                    equity=self._last_equity,
+                    balance=self._last_balance,
+                    total_drawdown_pct=1.0,
+                    total_hwm=self._total_hwm,
+                    total_breach=True,
+                    total_alert=True,
+                    daily_drawdown_pct=1.0,
+                    daily_open=self._daily_open,
+                    daily_breach=True,
+                    daily_alert=True,
+                    drawdown_mode=self.drawdown_mode,
+                )
 
         with self._lock:
             self._last_equity = equity

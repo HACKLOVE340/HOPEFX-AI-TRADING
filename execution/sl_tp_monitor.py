@@ -199,6 +199,13 @@ class SLTPMonitor:
                 continue
             reason = self._check_breach(pos, mid)
             if reason:
+                # Mark as closing synchronously BEFORE scheduling the task. The
+                # poll loop runs every poll_seconds and create_task() only
+                # defers execution, so without this a subsequent poll cycle
+                # would re-pass the `in self._closing` check above and spawn a
+                # duplicate close (double market order). The add() inside
+                # _close_position is now redundant but kept as defense-in-depth.
+                self._closing.add(pos.position_id)
                 asyncio.create_task(
                     self._close_position(pos, reason, mid),
                     name=f"sltp_close_{pos.position_id}",

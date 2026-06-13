@@ -12,6 +12,7 @@ drawdown monitoring, and automated trading halts.
 import asyncio
 import json
 import logging
+import os
 import threading
 from collections import deque
 from collections.abc import Callable
@@ -24,6 +25,12 @@ from enum import Enum
 import redis
 
 logger = logging.getLogger(__name__)
+
+# Number of consecutive monitoring-loop failures (e.g. a broker disconnect that
+# makes get_balance() raise every cycle) after which the breaker trips. Fail
+# CLOSED: trading must never be left silently unguarded when risk limits cannot
+# be evaluated.
+_MONITOR_MAX_CONSECUTIVE_FAILURES = int(os.getenv("CB_MONITOR_MAX_FAILURES", "5"))
 
 
 def _send_circuit_breaker_telegram(reason: str, message: str) -> None:
@@ -170,13 +177,35 @@ class CircuitBreaker:
 
     async def _monitoring_loop(self):
         """Continuous risk monitoring"""
+        consecutive_failures = 0
         while not self._shutdown:
             try:
                 await self._check_risk_limits()
+                consecutive_failures = 0
                 await asyncio.sleep(1)  # Check every second
             except Exception as e:
-                logger.error("Risk monitoring error: %s", e)
-
+                consecutive_failures += 1
+                logger.error(
+                    "Risk monitoring error (%d consecutive): %s",
+                    consecutive_failures,
+                    e,
+                )
+                # Fail CLOSED: if risk limits cannot be evaluated for several
+                # consecutive cycles, trip the breaker rather than silently
+                # leaving trading unguarded.
+                if consecutive_failures >= _MONITOR_MAX_CONSECUTIVE_FAILURES:
+                    try:
+                        await self._trigger_circuit_breaker(
+                            "MONITOR_FAILURE",
+                            f"Risk monitoring failed {consecutive_failures} "
+                            f"consecutive cycles; halting as a safety measure: {e}",
+                            severity="CRITICAL",
+                        )
+                    except Exception as trip_exc:
+                        logger.critical(
+                            "Failed to trip circuit breaker after monitoring failures: %s",
+                            trip_exc,
+                        )
                 await asyncio.sleep(5)
 
     async def _check_risk_limits(self):

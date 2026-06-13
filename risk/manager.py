@@ -1696,8 +1696,13 @@ class RiskManager:
                 threshold=max_pct,
             )
         except Exception as exc:
-            logger.debug("check_position_size error: %s", exc)
-            return RiskCheckResult(passed=True, risk_level=RiskLevel.LOW, message="check_skipped")
+            # Fail CLOSED: a position-size check that errors must block, not pass.
+            logger.error("check_position_size error; failing CLOSED: %s", exc)
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message="check_error: position-size check failed closed",
+            )
 
     def check_price_tolerance(
         self,
@@ -1747,8 +1752,13 @@ class RiskManager:
                 threshold=tolerance,
             )
         except Exception as exc:
-            logger.debug("check_price_tolerance error: %s", exc)
-            return RiskCheckResult(passed=True, message="check_skipped")
+            # Fail CLOSED: a price-tolerance check that errors must block, not pass.
+            logger.error("check_price_tolerance error; failing CLOSED: %s", exc)
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message="check_error: price-tolerance check failed closed",
+            )
 
     def check_kill_switch(
         self,
@@ -1939,8 +1949,13 @@ class RiskManager:
                 threshold=max_single,
             )
         except Exception as exc:
-            logger.debug("check_concentration error: %s", exc)
-            return RiskCheckResult(passed=True, message="check_skipped")
+            # Fail CLOSED: a concentration check that errors must block, not pass.
+            logger.error("check_concentration error; failing CLOSED: %s", exc)
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message="check_error: concentration check failed closed",
+            )
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 

@@ -111,6 +111,9 @@ class TradeExecutor:
         self._pending_orders: dict[str, dict[str, Any]] = {}
         self._execution_callbacks: list[Callable[..., Any]] = []
         self._lock = asyncio.Lock()
+        # position_ids whose close is currently in-flight — idempotency guard
+        # against concurrent/duplicate close_position() calls (double close).
+        self._closing_positions: set[str] = set()
 
         # ── Streak tracking ───────────────────────────────────────────────────
         self._consecutive_losses: int = 0
@@ -403,66 +406,87 @@ class TradeExecutor:
                 latency_ms=0,
             )
 
-        success = await self.broker.close_position(position_id)
-
-        if success:
-            closed_position = await self.position_tracker.close_position(
-                position_id,
-                position.current_price,
-                commission=position.commission,
+        # Idempotency guard: prevent a concurrent/duplicate close of the same
+        # position. The check-and-add is synchronous (no await between the
+        # get_position check above and here), so in asyncio it is atomic — a
+        # second caller cannot slip past before this id is marked in-flight.
+        # Previously two broker.close_position() calls could race across the
+        # await below and double-close the position.
+        if position_id in self._closing_positions:
+            return ExecutionResult(
+                success=False,
+                order_id=position_id,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.ERROR,
+                message=f"Close already in progress: {position_id}",
+                latency_ms=0,
             )
+        self._closing_positions.add(position_id)
+        closed_position = None
+        try:
+            success = await self.broker.close_position(position_id)
+            if success:
+                closed_position = await self.position_tracker.close_position(
+                    position_id,
+                    position.current_price,
+                    commission=position.commission,
+                )
+        finally:
+            self._closing_positions.discard(position_id)
 
-            if closed_position:
-                realized_pnl = closed_position.realized_pnl
+        if success and closed_position:
+            realized_pnl = closed_position.realized_pnl
 
-                # Update risk manager equity
-                self.risk_manager.update_equity(self.risk_manager.daily_starting_equity + realized_pnl)
+            # Update risk manager equity
+            self.risk_manager.update_equity(self.risk_manager.daily_starting_equity + realized_pnl)
 
-                # ── Streak tracking (executor + risk manager) ────────────────
-                self._update_streak(realized_pnl)
-                # Keep risk manager streak state in sync so PreTradeGate
-                # can enforce the halt even via alternative order paths.
-                try:
-                    if hasattr(self.risk_manager, "record_trade_outcome"):
-                        self.risk_manager.record_trade_outcome(
-                            realized_pnl=realized_pnl,
-                            symbol=getattr(closed_position, "symbol", position_id),
-                        )
-                except (RuntimeError, AttributeError, TypeError) as _rm_exc:
-                    logger.debug(
-                        "RiskManager.record_trade_outcome failed (non-fatal): %s",
-                        _rm_exc,
+            # ── Streak tracking (executor + risk manager) ────────────────
+            self._update_streak(realized_pnl)
+            # Keep risk manager streak state in sync so PreTradeGate
+            # can enforce the halt even via alternative order paths.
+            try:
+                if hasattr(self.risk_manager, "record_trade_outcome"):
+                    self.risk_manager.record_trade_outcome(
+                        realized_pnl=realized_pnl,
+                        symbol=getattr(closed_position, "symbol", position_id),
                     )
+            except (RuntimeError, AttributeError, TypeError) as _rm_exc:
+                logger.debug(
+                    "RiskManager.record_trade_outcome failed (non-fatal): %s",
+                    _rm_exc,
+                )
 
-                # ── Post-close drawdown check ─────────────────────────────────
-                self._trigger_drawdown_halt_if_needed()
+            # ── Post-close drawdown check ─────────────────────────────────
+            self._trigger_drawdown_halt_if_needed()
 
-                # ── SignalFilter EV update ────────────────────────────────────
-                try:
-                    from ml.signal_filter import get_signal_filter
+            # ── SignalFilter EV update ────────────────────────────────────
+            try:
+                from ml.signal_filter import get_signal_filter
 
-                    _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
-                    _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
-                    _side = getattr(closed_position, "side", "buy")
-                    _direction = 1 if str(_side).lower() in ("buy", "long") else -1
-                    _conf = float(getattr(closed_position, "signal_confidence", 0.6))
-                    _sym = getattr(closed_position, "symbol", position_id)
+                _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
+                _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
+                _side = getattr(closed_position, "side", "buy")
+                _direction = 1 if str(_side).lower() in ("buy", "long") else -1
+                _conf = float(getattr(closed_position, "signal_confidence", 0.6))
+                _sym = getattr(closed_position, "symbol", position_id)
 
-                    get_signal_filter().record_outcome(
-                        symbol=_sym,
-                        pnl_pct=_pnl_pct,
-                        direction=_direction,
-                        confidence=_conf,
-                    )
-                    logger.debug(
-                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
-                        _sym,
-                        _pnl_pct,
-                        _direction,
-                        _conf,
-                    )
-                except (ImportError, RuntimeError, AttributeError) as _sf_exc:
-                    logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
+                get_signal_filter().record_outcome(
+                    symbol=_sym,
+                    pnl_pct=_pnl_pct,
+                    direction=_direction,
+                    confidence=_conf,
+                )
+                logger.debug(
+                    "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
+                    _sym,
+                    _pnl_pct,
+                    _direction,
+                    _conf,
+                )
+            except (ImportError, RuntimeError, AttributeError) as _sf_exc:
+                logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
 
         return ExecutionResult(
             success=success,
