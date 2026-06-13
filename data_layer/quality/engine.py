@@ -544,6 +544,21 @@ class DataQualityEngine:
 
         conf = sum(self._sources[s].confidence * norm_w2[s] for s in inliers)
 
+        # Single-source consensus has had NO cross-validation: an erroneous or
+        # compromised lone feed silently becomes the "consensus" at full
+        # confidence. Degrade the confidence so downstream gates (is_safe_to_trade
+        # requires >= 0.30, risk sizing) can react. This is the DQE-level
+        # complement to the MIN_FEED_QUORUM gate in the gold feed manager.
+        if len(inliers) < 2:
+            _single_factor = float(os.getenv("DQE_SINGLE_SOURCE_CONF_FACTOR", "0.5"))
+            conf *= _single_factor
+            logger.warning(
+                "DQE consensus from a single source %s — confidence degraded to %.3f "
+                "(no cross-validation)",
+                next(iter(inliers)).value if inliers else "?",
+                conf,
+            )
+
         if self._prom_consensus:
             try:
                 self._prom_consensus.set(consensus)
