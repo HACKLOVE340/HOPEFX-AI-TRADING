@@ -740,8 +740,11 @@ class LLMAgent:
             except (OSError, ValueError, RuntimeError, AttributeError) as exc:
                 logger.warning("Candle fetch failed: %s — backtesting disabled", exc)
 
-        # reset conversation
-        self._history = [{"role": "system", "content": _SYSTEM_PROMPT}]
+        # reset conversation — preserve the bounded deque (clear+append). Do NOT
+        # reassign to a plain list: that drops the maxlen overflow protection
+        # and lets history grow unbounded across reflection iterations.
+        self._history.clear()
+        self._history.append({"role": "system", "content": _SYSTEM_PROMPT})
         self._history.append({"role": "user", "content": prompt})
 
         best_result: AgentResult | None = None

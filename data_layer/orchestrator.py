@@ -998,9 +998,12 @@ class MarketDataOrchestrator:
         if self.is_blackout_window():
             return False
 
-        # Check tick quality
+        # Check tick quality. No tick means no live price — fail CLOSED: a
+        # missing tick must NOT be treated as safe to trade.
         tick = self.get_latest_tick()
-        if tick is not None and tick.confidence < 0.30:
+        if tick is None:
+            return False
+        if tick.confidence < 0.30:
             return False
 
         # No active sources — but only block if we've been running > 30s
