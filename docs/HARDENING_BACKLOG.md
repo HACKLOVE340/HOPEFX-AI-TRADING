@@ -71,24 +71,24 @@ future-date acceptance — were fixed this pass.)
 
 ### HIGH
 
-| ID | Area | File:line | Issue | Recommended fix |
-|----|------|-----------|-------|-----------------|
-| H1 | resilience | `resilience/circuit_breaker.py:59-82` | Generic `CircuitBreaker.call()` has **no lock**: concurrent coroutines all flip OPEN→HALF_OPEN and exceed `half_open_max_calls`; `successes` not reset on entering HALF_OPEN (stale count can prematurely close). | Guard `call()` with `asyncio.Lock` (as `ServiceCircuitBreaker` does); reset `successes=0` on HALF_OPEN entry. |
-| H2 | data integrity | `data_layer/quality/engine.py:463-543` | `cross_source_consensus` with a single live source returns that source's price at **full confidence** — no cross-validation, no `source_count` flag. | Return degraded confidence (or expose `source_count`) when `len(inliers) < 2` so risk gates can react. Pairs with `MIN_FEED_QUORUM`. |
-| H3 | brokers | `brokers/binance.py:139-218` | No `newClientOrderId`; a retried submit becomes a **new order** → duplicate fills on transient network errors. | Thread a deterministic `client_order_id` through the broker interface; map Binance `-2010`/duplicate to "already submitted". **Requires interface change — see §4.** |
-| H4 | ml supply-chain | `ml/live_inference.py:199`, `ml/inference_engine.py:1433` | `joblib.load` of model artifacts with **no checksum at load time** (registry/CI verifies separately; arbitrary `model_path` is unverified) → pickle RCE on tampered artifact. | Compute SHA-256 of resolved path, compare to `registry.json` when a tracked entry exists; refuse on mismatch, warn (not fail) when untracked (dev/test). |
+| ID | Status | Area | Issue | Resolution |
+|----|--------|------|-------|------------|
+| H1 | ✅ FIXED | resilience | `CircuitBreaker.call()` unlocked: concurrent probes exceed `half_open_max_calls`; stale `successes`. | `asyncio.Lock` around admission + bookkeeping (not the call); `successes=0` on HALF_OPEN entry. |
+| H2 | ✅ FIXED | data integrity | Single-source `cross_source_consensus` returned full confidence (no cross-validation). | Multiply confidence by `DQE_SINGLE_SOURCE_CONF_FACTOR` (0.5) when `< 2` inliers; complements `MIN_FEED_QUORUM`. |
+| H3 | ◑ PARTIAL | brokers | No `newClientOrderId` → retried submit = duplicate fill. | Adapter now accepts `client_order_id`→`newClientOrderId` + handles `-2010`. **Remaining:** wire OMS id through the heterogeneous dispatch (see §4). |
+| H4 | ✅ FIXED | ml supply-chain | `joblib.load` with no checksum at load → pickle RCE on tampered artifact. | `_verify_model_integrity` checks SHA-256 vs `registry.json`; refuse on mismatch, warn when untracked. |
 
-### MEDIUM
+### MEDIUM — all fixed this pass
 
-| ID | Area | File:line | Issue | Recommended fix |
-|----|------|-----------|-------|-----------------|
-| M1 | data integrity | `data_layer/quality/engine.py:197,317-343` | Post-silence recovery: first tick after a >stale gap is only marked STALE; jump check runs against a stale `last_mid` (spurious reject or silent accept). | Reset jump baseline (`last_mid`) when `is_stale()` is true before jump check. |
-| M2 | look-ahead | `data_layer/orchestrator.py:839-905,1116-1165` | `get_ml_features(as_of=...)` forwards `as_of` only to sentiment/calendar; tick/micro/OHLCV ignore it → look-ahead bias in any causal/backtest use. | Thread `as_of` into tick/micro/OHLCV accessors, or document that `as_of` is non-causal for those and forbid in training pipelines. |
-| M3 | persistence | `data_layer/tick_store.py:373-434` | Redis zset member keyed by `ts_ms:bid|ask|vol|src`; same-ms identical ticks collapse (silent loss); unbounded read returns oldest-first window. | Include `ts_ns`/monotonic counter in member; use `zrevrangebyscore` for newest-first bounded reads. |
-| M4 | ml monitor | `execution/trade_executor.py:735-747` → `ml/inference_engine.py:472-518` | Online-learning/`update_online` fed a feature schema it doesn't consume (`close` guard no-ops) → live-accuracy degradation monitor never fires. | Pass real OHLCV window + `predicted_direction`, or align `update_online` to the outcome schema the executor sends. |
-| M5 | brokers | `brokers/mt5.py:251-272` | MT5 `place_order` reports requested price/qty on degenerate `order_send` results; partial fills shown as FILLED; no `volume>0`/`price>0` guard. | Validate `result.volume>0 and result.price>0`; set `PARTIAL` when `volume<quantity`; reject degenerate results (mirror OANDA `_parse_fill`). |
-| M6 | auth/compliance | `api/auth.py:356-357` | `require_kyc` bypasses for any app instance ≠ the `app.py` singleton; `api/server.py`'s separate app (real order routes) would skip KYC if served. | Gate on whether `compliance_manager` is wired (resolve via `request.app.state`/global), not app identity — **carefully**, to preserve test isolation. |
-| M7 | UI/transport | `data_layer/orchestrator.py:220-267` | `_WebSocketBroadcaster._connections` mutated without a lock; `enqueue` may cross threads onto an asyncio.Queue (single-loop contract). Monitoring path only. | Use `loop.call_soon_threadsafe` if cross-thread; guard the set with a lock. |
+| ID | Status | Area | Resolution |
+|----|--------|------|------------|
+| M1 | ✅ FIXED | data integrity | Evaluate staleness before the jump check; skip jump on the first post-gap tick (stale baseline). |
+| M2 | ✅ FIXED | look-ahead | Documented exact `as_of` causal scope + warn when supplied (micro/tick/macro are live, non-causal). |
+| M3 | ✅ FIXED | persistence | zset member keyed by `ts_ns` (no same-ms collapse); `zrevrangebyscore` returns newest N. |
+| M4 | ✅ FIXED | ml monitor | Pass `predicted_direction` (decay monitor now fires) + real OHLCV window when available. |
+| M5 | ✅ FIXED | brokers | MT5 market fills validated (reject degenerate, flag PARTIAL); pending orders rest correctly. |
+| M6 | ✅ FIXED | auth/compliance | `require_kyc` gates on a wired `compliance_manager` (via app.state/global), not app identity. |
+| M7 | ✅ FIXED | UI/transport | WS `enqueue` routes off-loop puts via `call_soon_threadsafe`. |
 
 ### Investigated, intentionally NOT changed (rationale recorded)
 
@@ -153,12 +153,16 @@ These are valid but are ops deliverables, tracked here for completeness:
 
 ---
 
-## 6. Suggested execution order
+## 6. Status
 
-1. **H1** circuit-breaker lock (small, isolated, fail-fast correctness).
-2. **H2** single-source consensus confidence (pairs with `MIN_FEED_QUORUM`).
-3. **H4** model checksum at load (supply-chain; guard untracked paths to avoid
-   breaking dev).
-4. **H3** broker idempotency (interface change; §4).
-5. **M1–M7** as capacity allows; **§3** gate-widening in parallel (cheap wins).
+All HIGH and MEDIUM findings are resolved except the **broad half of H3** —
+wiring the OMS `client_order_id` through the heterogeneous broker dispatch to
+each adapter (the Binance adapter already accepts and honours it; see §4). That
+remains deferred as a dedicated change with full caller analysis + adapter tests,
+to avoid an unverified rewrite across ~15 adapters.
+
+Remaining (non-blocking, low-risk):
+- **§3 gate-widening**: extend mypy-strict scope incrementally; add a legacy-import
+  discipline CI check (only after confirming no current code trips it).
+- **§5 operational** items (observability/SLO/playbooks/governance): process/infra.
 </content>
