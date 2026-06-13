@@ -276,7 +276,7 @@ async def update_pod_metrics(
 )
 async def append_pod_return(
     body: ReturnAppendRequest,
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ) -> dict[str, Any]:
     """
     Append a daily P&L return to a strategy pod's return history.
