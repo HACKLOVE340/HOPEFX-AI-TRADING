@@ -331,8 +331,17 @@ class PreTradeGate:
 
     def _check_kill_switch(self) -> None:
         """Block if the system-wide kill switch is active."""
-        # KillSwitch may be wired via the risk manager or standalone
+        # KillSwitch may be wired via the risk manager; RiskManager does not
+        # currently set ``_kill_switch``, so without the fallback below this
+        # mandatory check would be a permanent no-op. Fall back to the
+        # process-wide module singleton so an activated kill switch always
+        # blocks the gate (fail closed).
         ks = getattr(self._rm, "_kill_switch", None)
+        if ks is None:
+            try:
+                from kill_switch import kill_switch as ks
+            except Exception:  # pragma: no cover - import should never fail
+                ks = None
         if ks is not None and ks.is_active():
             reason = getattr(ks, "_reason", "kill switch active")
             logger.warning("PRE-TRADE BLOCKED [KILL_SWITCH_ACTIVE] reason=%s", reason)

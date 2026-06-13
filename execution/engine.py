@@ -306,7 +306,18 @@ class ExecutionEngine:
     ) -> None:
         self._broker = broker_manager
         self._risk = risk_manager
+        # Default to the process-wide kill-switch singleton when a caller does
+        # not inject one. Without this, callers that omit kill_switch (e.g. the
+        # standalone engine) leave self._kill_switch = None and the pre-submit
+        # guard at _check_pre_submission_guards becomes a silent no-op.
         self._kill_switch = kill_switch
+        if self._kill_switch is None:
+            try:
+                from kill_switch import kill_switch as _ks_singleton
+
+                self._kill_switch = _ks_singleton
+            except Exception:  # pragma: no cover - import should never fail
+                self._kill_switch = None
         self._redis = redis_client
         self._tca = tca_recorder
         self._max_latency_ms = max_latency_ms
