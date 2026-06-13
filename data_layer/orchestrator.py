@@ -858,15 +858,31 @@ class MarketDataOrchestrator:
         symbol : Instrument symbol (default "XAU_USD"). Currently only
                  XAU_USD is supported; parameter accepted for API compatibility.
 
-        Causal guarantee: as_of parameter is passed to every sub-component
-        that supports it (sentiment, calendar). Microstructure features are
-        always computed from past ticks only.
+        Causal guarantee (IMPORTANT — partial):
+          - HONORED by `as_of`: sentiment, macro calendar, temporal features.
+          - NOT honored (always reflect CURRENT live state): microstructure,
+            tick-quality, and FRED macro features. These read the live rolling
+            window / latest tick and are NOT point-in-time reconstructed.
+
+        Consequently, calling this with a PAST `as_of` (replay / training-row
+        construction) leaks present-time micro/tick/macro data into a row labeled
+        causal — look-ahead bias. Do NOT use the micro/tick/macro features in a
+        causal training or walk-forward pipeline. A warning is emitted whenever
+        `as_of` is supplied so such misuse is not silent.
 
         Returns empty dict on error — never raises.
         """
         features: dict[str, float] = {}
 
-        # 1. Microstructure (16 features)
+        if as_of is not None:
+            logger.warning(
+                "get_ml_features(as_of=%s): microstructure, tick-quality and FRED "
+                "macro features are LIVE (not causally filtered) — do not use them "
+                "in causal training/backtest rows (look-ahead bias).",
+                as_of,
+            )
+
+        # 1. Microstructure (16 features) — NOTE: live window, not causal.
         try:
             features.update(self._micro.get_ml_features())
         except Exception as exc:
