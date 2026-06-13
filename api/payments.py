@@ -225,7 +225,9 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
     expires_at = (now + timedelta(minutes=ADDRESS_TTL_MINUTES)).isoformat()
 
     try:
-        address = _generate_address(currency, req.user_id, network)
+        # Use the AUTHENTICATED user id, never the client-supplied req.user_id
+        # (IDOR: a caller could mint deposit/credit records against any account).
+        address = _generate_address(currency, user.sub, network)
     except Exception as exc:
         logger.warning("Address generation failed: %s", exc)
         raise HTTPException(
@@ -245,7 +247,7 @@ async def generate_deposit_address(req: AddressRequest, user: TokenPayload = Dep
         "amount_usd": req.amount_usd,
         "rate_usd": rate_usd,
         "plan_id": req.plan_id,
-        "user_id": req.user_id,
+        "user_id": user.sub,
         "status": "pending",
         "confirmations": 0,
         "confirmations_required": _CONFIRMATIONS_REQUIRED[currency],
