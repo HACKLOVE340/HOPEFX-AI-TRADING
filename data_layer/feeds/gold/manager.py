@@ -288,6 +288,24 @@ class GoldFeedManager:
         if not live:
             return
 
+        # Feed quorum: require at least MIN_FEED_QUORUM independent live sources
+        # before publishing a consensus price. A single source has no
+        # cross-validation — a compromised or malfunctioning feed could move the
+        # consensus unchecked. Default 1 preserves prior single-feed behaviour;
+        # operators handling live capital should raise this to >= 2 so a lone
+        # source can never drive execution. When quorum is not met we leave the
+        # previous consensus tick in place; it ages out via the staleness gates
+        # and downstream consumers fail closed.
+        _min_quorum = int(os.getenv("MIN_FEED_QUORUM", "1"))
+        if len(live) < _min_quorum:
+            logger.warning(
+                "Feed quorum not met: %d live source(s) < MIN_FEED_QUORUM=%d; "
+                "withholding consensus update",
+                len(live),
+                _min_quorum,
+            )
+            return
+
         consensus_mid, confidence, _ = dqe.cross_source_consensus(live)
         if consensus_mid <= 0:
             return
