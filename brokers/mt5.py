@@ -253,6 +253,30 @@ class MT5Connector(BrokerConnector):
             if result.retcode != mt5.TRADE_RETCODE_DONE:
                 raise RuntimeError(f"Order failed: {result.comment}")
 
+            # Use the EXECUTED fill, never the requested values. For a market
+            # order a DONE retcode with zero/absent volume or price is degenerate
+            # and must be rejected rather than booked as a clean fill (mirrors the
+            # OANDA adapter). A partial fill must not be reported as fully FILLED.
+            # Pending (limit/stop) orders rest with no fill — volume/price 0 is
+            # legitimate there, so the fill validation applies to market orders.
+            filled_vol = float(getattr(result, "volume", 0) or 0)
+            fill_price = float(getattr(result, "price", 0) or 0)
+
+            if order_type == OrderType.MARKET:
+                if filled_vol <= 0 or fill_price <= 0:
+                    raise RuntimeError(
+                        f"Degenerate MT5 market fill: volume={filled_vol} price={fill_price} "
+                        f"comment={getattr(result, 'comment', '')}"
+                    )
+                _status = OrderStatus.FILLED if filled_vol >= float(quantity) else OrderStatus.PARTIAL
+                _filled_qty = filled_vol
+                _avg_price = fill_price
+            else:
+                # Pending order accepted but not yet filled.
+                _status = OrderStatus.PENDING
+                _filled_qty = filled_vol
+                _avg_price = fill_price if fill_price > 0 else price
+
             # Create Order object
             order = Order(
                 id=str(result.order),
@@ -261,9 +285,9 @@ class MT5Connector(BrokerConnector):
                 type=order_type,
                 quantity=quantity,
                 price=price,
-                status=OrderStatus.FILLED if result.retcode == mt5.TRADE_RETCODE_DONE else OrderStatus.PENDING,
-                filled_quantity=result.volume if hasattr(result, "volume") else quantity,
-                average_price=result.price if hasattr(result, "price") else price,
+                status=_status,
+                filled_quantity=_filled_qty,
+                average_price=_avg_price,
                 timestamp=datetime.now(UTC),
                 metadata={
                     "mt5_order": result.order,
