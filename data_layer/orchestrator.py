@@ -220,6 +220,7 @@ class _WebSocketBroadcaster:
         self._connections: set = set()
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self._task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._dropped = 0
         self._sent = 0
 
@@ -232,13 +233,34 @@ class _WebSocketBroadcaster:
         logger.debug("WebSocketBroadcaster: connection removed (%d total)", len(self._connections))
 
     def enqueue(self, message: str) -> None:
-        """Non-blocking enqueue from sync context. Drops if queue is full."""
+        """Non-blocking enqueue from sync context. Drops if queue is full.
+
+        asyncio.Queue is bound to a single event loop and is NOT thread-safe.
+        _on_tick may run on a feed/executor thread, so when called off the loop
+        thread we hand the put_nowait to the loop via call_soon_threadsafe rather
+        than mutating the queue directly (which can corrupt its internal state).
+        """
+        loop = self._loop
+        if loop is not None:
+            try:
+                running = asyncio.get_running_loop()
+            except RuntimeError:
+                running = None
+            if running is not loop:
+                # Called from another thread (or no running loop) — schedule on
+                # the broadcaster's loop thread.
+                loop.call_soon_threadsafe(self._enqueue_on_loop, message)
+                return
+        self._enqueue_on_loop(message)
+
+    def _enqueue_on_loop(self, message: str) -> None:
         try:
             self._queue.put_nowait(message)
         except asyncio.QueueFull:
             self._dropped += 1
 
     async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
         self._task = asyncio.create_task(self._broadcast_loop(), name="ws_broadcast")
 
     async def stop(self) -> None:
