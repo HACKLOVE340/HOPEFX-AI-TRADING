@@ -399,6 +399,48 @@ export default function SuperAdminDashboard() {
             badge="live"
             badgeColor="bg-green-500/20 text-green-400 border-green-500/30"
           />
+          <QuickLink
+            icon={Eye}
+            label="Observability Center"
+            description="Distributed tracing, latency histograms, service health, alerts"
+            href="/observability"
+            badge="live"
+            badgeColor="bg-green-500/20 text-green-400 border-green-500/30"
+          />
+          <QuickLink
+            icon={Cpu}
+            label="ML Operations Center"
+            description="Model health, retraining pipeline, shadow deployment, drift detection"
+            href="/ml-dashboard"
+            badge="ml"
+            badgeColor="bg-blue-500/20 text-blue-400 border-blue-500/30"
+          />
+          <QuickLink
+            icon={FileText}
+            label="Trade Transparency"
+            description="Decision logs, factor breakdowns, AI reasoning chain, audit trail"
+            href="/transparency"
+          />
+          <QuickLink
+            icon={Zap}
+            label="Strategy Builder"
+            description="No-code strategy creation, state machines, ML nodes, backtesting"
+            href="/strategy-builder"
+            badge="new"
+            badgeColor="bg-cyan-500/20 text-cyan-400 border-cyan-500/30"
+          />
+          <QuickLink
+            icon={Users}
+            label="Copy Trading"
+            description="Master traders, copy subscriptions, risk management, performance"
+            href="/copy-trading"
+          />
+          <QuickLink
+            icon={TrendingUp}
+            label="News & Sentiment"
+            description="Nuclear wordmap scorer, sentiment analysis, economic calendar"
+            href="/news-sentiment"
+          />
         </div>
       </div>
 
