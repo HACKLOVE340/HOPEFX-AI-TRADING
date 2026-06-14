@@ -11,10 +11,8 @@ Connected to: social/advanced_copy_trading.py
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +137,7 @@ async def get_copy_performance(copy_id: str):
 
 @router.get("/masters")
 async def get_master_traders(
-    sort_by: str = Query("profit", regex="^(profit|win_rate|followers|drawdown)$"),
+    sort_by: str = Query("profit", pattern="^(profit|win_rate|followers|drawdown)$"),
     limit: int = Query(20, ge=1, le=100),
 ):
     """

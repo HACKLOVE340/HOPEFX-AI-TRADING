@@ -250,12 +250,14 @@ export const transparencyApi = {
 // ─── ML Ops ───────────────────────────────────────────────────────────────────
 
 export const mlOpsApi = {
-  status:         ()                            => api.get('/ml-ops/status'),
-  triggerRetrain: (payload: object)             => api.post('/ml-ops/retrain', payload),
-  shadowStatus:   ()                            => api.get('/ml-ops/shadow/status'),
-  promoteShadow:  (modelId: string)             => api.post(`/ml-ops/shadow/${modelId}/promote`),
-  retrainHistory: ()                            => api.get('/ml-ops/retrain/history'),
-  modelMetrics:   (modelId: string)             => api.get(`/ml-ops/models/${modelId}/metrics`),
+  // Backend router prefix is /api/mlops (see api/ml_ops.py). The earlier
+  // /ml-ops/* paths and /shadow/status + /shadow/{id}/promote variants 404'd.
+  status:         ()                            => api.get('/mlops/health'),
+  triggerRetrain: (payload: object)             => api.post('/mlops/retrain', payload),
+  shadowStatus:   ()                            => api.get('/mlops/shadow'),
+  promoteShadow:  (modelId: string)             => api.post(`/mlops/promote/${modelId}`),
+  retrainHistory: ()                            => api.get('/mlops/retrain/history'),
+  modelMetrics:   (modelId: string)             => api.get(`/mlops/models/${modelId}/metrics`),
 };
 
 // ─── Observability ────────────────────────────────────────────────────────────

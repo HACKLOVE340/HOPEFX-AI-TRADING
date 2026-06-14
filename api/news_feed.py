@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +53,8 @@ def _get_nuclear_scorer():
 @router.get("/feed")
 async def get_news_feed(
     limit: int = Query(50, ge=1, le=200),
-    symbol: Optional[str] = Query(None),
-    impact: Optional[str] = Query(None, regex="^(high|medium|low)$"),
+    symbol: str | None = Query(None),
+    impact: str | None = Query(None, pattern="^(high|medium|low)$"),
 ):
     """
     Retrieve the latest news articles with sentiment scoring.
@@ -104,7 +103,7 @@ async def get_news_feed(
 
 @router.get("/nuclear-score")
 async def get_nuclear_score(
-    symbol: Optional[str] = Query("XAUUSD"),
+    symbol: str | None = Query("XAUUSD"),
 ):
     """
     Get the current nuclear wordmap score for a symbol.
@@ -173,7 +172,7 @@ sentiment_router = APIRouter(prefix="/api/sentiment", tags=["Sentiment"])
 
 @sentiment_router.get("/latest")
 async def get_sentiment_latest(
-    symbol: Optional[str] = Query("XAUUSD"),
+    symbol: str | None = Query("XAUUSD"),
 ):
     """
     Get the latest aggregated sentiment overview for a symbol.

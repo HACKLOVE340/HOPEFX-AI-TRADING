@@ -19,7 +19,6 @@ Endpoints:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -161,3 +160,32 @@ async def promote_model(version_id: str):
             status_code=400,
             detail=f"Model '{version_id}' does not meet promotion criteria.",
         )
+
+
+@router.get("/retrain/history", response_model=dict)
+async def get_retrain_history():
+    """Return the history of model retrains / promotions for the MLOps dashboard."""
+    from ml.continuous_learning import get_continuous_learning_pipeline
+
+    pipeline = get_continuous_learning_pipeline()
+    health = pipeline.health()
+    return {
+        "history": health.get("promotion_history", []) or [],
+        "retraining_state": health.get("retraining_state"),
+        "can_retrain": health.get("can_retrain"),
+    }
+
+
+@router.get("/models/{version_id}/metrics", response_model=dict)
+async def get_model_metrics(version_id: str):
+    """Return metrics for a specific model version (from shadow-deployment results)."""
+    from ml.continuous_learning import get_continuous_learning_pipeline
+
+    pipeline = get_continuous_learning_pipeline()
+    shadows = pipeline.health().get("shadow_models", {}) or {}
+    metrics = shadows.get(version_id)
+    return {
+        "version_id": version_id,
+        "available": metrics is not None,
+        "metrics": metrics or {},
+    }

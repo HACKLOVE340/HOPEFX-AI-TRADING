@@ -14,9 +14,8 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Query
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +34,8 @@ def _get_telemetry():
 @router.get("/traces")
 async def get_traces(
     limit: int = Query(50, ge=1, le=500),
-    service: Optional[str] = Query(None),
-    min_duration_ms: Optional[int] = Query(None),
+    service: str | None = Query(None),
+    min_duration_ms: int | None = Query(None),
 ):
     """
     Retrieve recent distributed traces across all services.
@@ -65,7 +64,7 @@ async def get_traces(
 
 @router.get("/metrics")
 async def get_metrics(
-    period: str = Query("1h", regex="^(5m|15m|1h|4h|1d|7d)$"),
+    period: str = Query("1h", pattern="^(5m|15m|1h|4h|1d|7d)$"),
 ):
     """
     Retrieve system metrics for the specified period.
@@ -107,7 +106,7 @@ async def get_metrics(
 @router.get("/alerts")
 async def get_observability_alerts(
     limit: int = Query(50, ge=1, le=200),
-    severity: Optional[str] = Query(None, regex="^(critical|warning|info)$"),
+    severity: str | None = Query(None, pattern="^(critical|warning|info)$"),
 ):
     """
     Retrieve active observability alerts (latency spikes, error bursts, etc.).
@@ -175,8 +174,8 @@ async def get_services():
 
 @router.get("/latency-histogram")
 async def get_latency_histogram(
-    service: Optional[str] = Query(None),
-    period: str = Query("1h", regex="^(5m|15m|1h|4h|1d)$"),
+    service: str | None = Query(None),
+    period: str = Query("1h", pattern="^(5m|15m|1h|4h|1d)$"),
 ):
     """
     Get latency distribution histogram for request processing.
