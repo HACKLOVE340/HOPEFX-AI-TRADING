@@ -26,9 +26,29 @@ const BrokerSection: React.FC = () => {
   const [brokerStatus, setBrokerStatus] = useState<{
     connected: boolean; balance?: number; currency?: string; broker?: string;
   } | null>(null);
+  // Last-4 of the API key already saved server-side ('' = none). The full key
+  // is never sent to the client.
+  const [keyOnFile, setKeyOnFile] = useState<string | null>(null);
 
   useEffect(() => {
-    // Load current broker status from live endpoint
+    // Hydrate the SAVED broker config so non-secret fields (type/account_id/
+    // practice) survive a reload instead of resetting to defaults. The API key
+    // is never returned raw — the field stays blank and the user re-enters it
+    // only to change it (a blank save keeps the stored key, server-side).
+    api.get<{ type: string; account_id: string; practice: boolean; api_key_set: boolean; api_key_last4: string }>(
+      '/settings/broker')
+      .then((r) => {
+        setForm((prev) => ({
+          ...prev,
+          type: (r.data.type as BrokerSettings['type']) ?? prev.type,
+          account_id: r.data.account_id ?? prev.account_id,
+          practice: r.data.practice ?? prev.practice,
+        }));
+        if (r.data.api_key_set) setKeyOnFile(r.data.api_key_last4 || '••••');
+      })
+      .catch(() => { /* no saved config yet — keep defaults */ });
+
+    // Load live connection status from the broker endpoint.
     api.get<{ connected: boolean; balance?: number; currency?: string; broker?: string }>('/broker/status')
       .then((r) => {
         setBrokerStatus(r.data);
@@ -136,9 +156,14 @@ const BrokerSection: React.FC = () => {
                 type="password"
                 value={form.api_key}
                 onChange={(e) => update({ api_key: e.target.value })}
-                placeholder="Enter your API key"
+                placeholder={keyOnFile ? `Saved key on file (••••${keyOnFile}) — leave blank to keep` : 'Enter your API key'}
                 autoComplete="off"
               />
+              {keyOnFile && !form.api_key && (
+                <div style={{ fontSize: 11, color: '#4ade80', marginTop: 4 }}>
+                  ✓ API key saved — leave blank to keep it, or enter a new key to replace.
+                </div>
+              )}
             </Field>
 
             {form.type === 'oanda' && (

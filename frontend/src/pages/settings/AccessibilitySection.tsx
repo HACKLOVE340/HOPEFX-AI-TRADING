@@ -40,6 +40,16 @@ const AccessibilitySection: React.FC = () => {
   // Apply on mount and on change
   useEffect(() => { applyAccessibility(form); }, [form]);
 
+  // Hydrate from the server so settings saved on another device load here too
+  // (localStorage was the only source before, so server-saved prefs were ignored).
+  useEffect(() => {
+    let alive = true;
+    api.get<AccessibilitySettings>('/settings/accessibility')
+      .then((r) => { if (alive && r.data) setForm((prev) => ({ ...prev, ...r.data })); })
+      .catch(() => { /* keep localStorage/defaults if unavailable */ });
+    return () => { alive = false; };
+  }, []);
+
   const update = useCallback((patch: Partial<AccessibilitySettings>) =>
     setForm((prev) => ({ ...prev, ...patch })), []);
 
@@ -47,7 +57,9 @@ const AccessibilitySection: React.FC = () => {
     setSaving(true); setError('');
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
-      await api.post('/settings/accessibility', form).catch(() => {/* non-fatal */});
+      // Surface backend failures instead of silently swallowing them — otherwise
+      // the UI shows "saved" while the server never stored anything.
+      await api.post('/settings/accessibility', form);
       applyAccessibility(form);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
