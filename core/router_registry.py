@@ -749,6 +749,40 @@ def register_routers(
     except Exception as _mlops_err:
         logger.warning("ML Ops router not registered: %s", _mlops_err)
 
+    # ── Transparency Router (/api/transparency) ──────────────────────────────────
+    try:
+        from api.transparency import router as transparency_router
+        _include_router_deduped(app, transparency_router)
+        logger.info("Transparency router registered (/api/transparency)")
+    except Exception as _trans_err:
+        logger.warning("Transparency router not registered: %s", _trans_err)
+
+    # ── News Feed & Sentiment Router (/api/news, /api/sentiment) ─────────────────
+    try:
+        from api.news_feed import router as news_feed_router
+        from api.news_feed import sentiment_router
+        _include_router_deduped(app, news_feed_router)
+        _include_router_deduped(app, sentiment_router)
+        logger.info("News Feed & Sentiment routers registered (/api/news, /api/sentiment)")
+    except Exception as _news_err:
+        logger.warning("News Feed router not registered: %s", _news_err)
+
+    # ── Observability Router (/api/observability) ─────────────────────────────────
+    try:
+        from api.observability import router as observability_router
+        _include_router_deduped(app, observability_router)
+        logger.info("Observability router registered (/api/observability)")
+    except Exception as _obs_err:
+        logger.warning("Observability router not registered: %s", _obs_err)
+
+    # ── Copy Trading Router (/api/copy-trading) ──────────────────────────────────
+    try:
+        from api.copy_trading import router as copy_trading_router
+        _include_router_deduped(app, copy_trading_router)
+        logger.info("Copy Trading router registered (/api/copy-trading)")
+    except Exception as _copy_err:
+        logger.warning("Copy Trading router not registered: %s", _copy_err)
+
     # ── API v1 versioned prefix ────────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
     # New clients should use /api/v1/; existing /api/* routes remain unchanged
