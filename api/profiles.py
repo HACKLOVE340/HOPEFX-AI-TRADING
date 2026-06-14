@@ -16,9 +16,14 @@ Endpoints:
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import os
+import re
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from api.auth import TokenPayload, get_current_user
@@ -28,6 +33,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/profiles", tags=["Profiles"])
 
 _manager = TraderProfileManager()
+
+# Persistent avatar storage (outside the gitignored static/ build dir, which is
+# wiped on every deploy). Served back via GET /api/profiles/avatar/{name}.
+_AVATAR_DIR = Path(os.getenv("AVATAR_UPLOAD_DIR", "data/uploads/avatars"))
+_AVATAR_MAX_BYTES = int(os.getenv("AVATAR_MAX_BYTES", str(2 * 1024 * 1024)))  # 2 MiB
+_AVATAR_EXT = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif"}
+_AVATAR_NAME_RE = re.compile(r"^[a-f0-9]{32}\.(png|jpg|webp|gif)$")
 
 
 # ── Models ────────────────────────────────────────────────────────────────────
@@ -254,11 +266,57 @@ async def get_trader_stats(trader_id: str):
 
 
 @router.post("/me/avatar")
-async def upload_avatar(user: TokenPayload = Depends(get_current_user)):
-    """Avatar upload — returns a generated avatar URL."""
-    import hashlib
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user: TokenPayload = Depends(get_current_user),
+):
+    """Store the uploaded avatar image and return its served URL.
 
-    avatar_hash = hashlib.md5(user.sub.encode()).hexdigest()  # nosec B324
-    avatar_url = f"https://www.gravatar.com/avatar/{avatar_hash}?d=identicon&s=200"
+    Previously this ignored the uploaded file and returned a Gravatar — the
+    user's chosen image was silently discarded. Now the file is validated and
+    persisted, and a stable served URL is returned.
+    """
+    ext = _AVATAR_EXT.get((file.content_type or "").lower())
+    if ext is None:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Avatar must be a PNG, JPEG, WebP or GIF image",
+        )
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    if len(data) > _AVATAR_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Avatar exceeds the {_AVATAR_MAX_BYTES // (1024 * 1024)} MiB limit",
+        )
+
+    # Deterministic per-user filename → one avatar per user, bounded growth,
+    # no user-controlled path component (no traversal).
+    name = f"{hashlib.sha256(user.sub.encode()).hexdigest()[:32]}.{ext}"
+    try:
+        _AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+        # Remove any prior avatar with a different extension for this user.
+        stem = name.split(".")[0]
+        for old in _AVATAR_DIR.glob(f"{stem}.*"):
+            if old.name != name:
+                old.unlink(missing_ok=True)
+        (_AVATAR_DIR / name).write_bytes(data)
+    except OSError as exc:
+        logger.error("avatar store failed for %s: %s", user.sub, exc)
+        raise HTTPException(status_code=500, detail="Could not store avatar") from exc
+
+    avatar_url = f"/api/profiles/avatar/{name}"
     _manager.update_profile(user.sub, avatar_url=avatar_url)
     return {"success": True, "avatar_url": avatar_url}
+
+
+@router.get("/avatar/{name}")
+async def get_avatar(name: str):
+    """Serve a previously-uploaded avatar image by its stored filename."""
+    if not _AVATAR_NAME_RE.match(name):
+        raise HTTPException(status_code=404, detail="Not found")
+    path = _AVATAR_DIR / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(str(path))
