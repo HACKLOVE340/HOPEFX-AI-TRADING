@@ -178,6 +178,58 @@ async def deactivate_strategy(request: DeactivateStrategyRequest):
         raise HTTPException(status_code=500, detail="Internal error during deactivation") from exc
 
 
+@router.get("/list", response_model=dict)
+async def list_all_strategies():
+    """List all registered strategies (active + inactive) for the frontend."""
+    from strategies.dynamic_registry import get_dynamic_registry
+
+    registry = get_dynamic_registry()
+    all_versions = registry.get_all_versions()
+    active = registry.get_active_strategies()
+    strategies = []
+    for v in all_versions:
+        d = v.to_dict()
+        d["is_active"] = v.name in active
+        strategies.append(d)
+    return {
+        "count": len(strategies),
+        "strategies": strategies,
+    }
+
+
+@router.post("/{name}/{action_type}", response_model=dict)
+async def strategy_action(name: str, action_type: str):
+    """
+    Perform an action on a strategy by name.
+    Supported actions: activate, deactivate, pause, resume.
+    Used by the frontend StrategyBuilder page.
+    """
+    from strategies.dynamic_registry import get_dynamic_registry
+
+    registry = get_dynamic_registry()
+
+    if action_type == "activate":
+        # Find latest version of this strategy and activate it
+        versions = registry.get_all_versions(name=name)
+        if not versions:
+            raise HTTPException(status_code=404, detail=f"No versions found for '{name}'")
+        latest = versions[-1]
+        await registry.activate_strategy(latest.version_id)
+        return {"status": "success", "message": f"Strategy '{name}' activated."}
+    elif action_type in ("deactivate", "pause"):
+        await registry.deactivate_strategy(name)
+        return {"status": "success", "message": f"Strategy '{name}' deactivated."}
+    elif action_type == "resume":
+        versions = registry.get_all_versions(name=name)
+        if not versions:
+            raise HTTPException(status_code=404, detail=f"No versions found for '{name}'")
+        latest = versions[-1]
+        await registry.activate_strategy(latest.version_id)
+        return {"status": "success", "message": f"Strategy '{name}' resumed."}
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {action_type}")
+
+
 @router.get("/active", response_model=dict)
 async def list_active_strategies():
     """List all currently active dynamic strategies."""
