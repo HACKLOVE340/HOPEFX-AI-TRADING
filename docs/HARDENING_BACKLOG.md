@@ -11,6 +11,42 @@ risk to the critical path: **signal → risk → execution → broker**.
 
 ---
 
+## Round 2 — deep audit of previously-untouched areas (all fixed/verified)
+
+Money/compliance, real-time transport, order-routing/exit, secrets:
+
+| Sev | Area | Issue | Resolution |
+|-----|------|-------|------------|
+| CRITICAL | payments | AML withdrawal gate failed OPEN (`except: (allowing)`) | Fail closed on compliance error |
+| CRITICAL | payments | KYC status read from a non-existent Wallet field → always "unverified" | Resolve real status via `compliance_manager.is_kyc_approved` |
+| HIGH | monetization | Affiliate self-referral + arbitrary `referred_user_id` from body | Reject self-referral; bind referred user to authed caller |
+| HIGH | monetization | Stripe webhook had no replay/idempotency → free end_date extends | Dedup by event id (bounded FIFO) |
+| HIGH | api/ws | Private channels (account/equity/risk) delivered via empty-sub firehose | Private channels require explicit subscribe |
+| HIGH | api/ws | `/ws/notifications` + `/ws/audit-events` bypassed Redis TLS enforcement | Route via `cache.redis_client.get_redis` |
+| CRITICAL | execution | SL/TP monitor could close the WRONG same-symbol position | Verify position_id before PM close |
+| CRITICAL | execution | SL/TP partial fills booked as full flat (naked remainder) | Detect + CRITICAL alert on partial |
+| HIGH | execution | SL/TP booked P&L at trigger price, not actual fill | Use broker fill price |
+| HIGH | execution | SL/TP `_get_mid` acted on stale ticks (feed stall → blind net) | Reject stale ticks (`SLTP_MAX_TICK_AGE_S`) |
+| HIGH | routing | Both smart routers failed over on TIMEOUT → duplicate fills | Treat timeout as unknown; no re-route |
+| MEDIUM | execution | FIX-fallback rounded OANDA units to 0 (silent no-op order) | Reject zero-unit orders |
+| MEDIUM | config | Vault `_derive_key` used PBKDF2 despite advertising Argon2id | Switch to Argon2id |
+| n/a | prop_firms | Daily DD == total DD | Confirmed conservative/fail-safe (over-blocks); dead `drawdown_mode` removed; precise daily DD needs a rollover snapshot hook (documented) |
+| n/a | tests | More `parent.parent` repo-root path bugs (paper_runner, ml_training_pipeline, k6) | Fixed to `parents[2]`; resurrected dormant tests |
+
+Open (lower-priority, documented for next pass):
+- **Sentry scrub gaps** (`monitoring/sentry_config.py`): also scrub `logentry`/
+  `breadcrumbs`/`contexts`; broaden OANDA-token regex.
+- **redis_state crash-recovery** (`execution/redis_state.py`): reconcile restored
+  orders/positions against live broker state on boot; prune orphan index members.
+- **Persistent audit log** for subscription/affiliate money actions; back the
+  in-memory monetization managers with a DB.
+- **Affiliate payout atomicity**: per-referral partial settlement + per-affiliate
+  lock to remove the TOCTOU double-pay window.
+- **WS query-string token** on notifications/audit endpoints (leaks into logs):
+  move to in-band auth handshake — deferred (client-contract change).
+
+---
+
 ## 0. Plan assessment (what already exists — do not rebuild)
 
 The proposed staged plan is sound, but **Phase 2 (quality gates) is largely
