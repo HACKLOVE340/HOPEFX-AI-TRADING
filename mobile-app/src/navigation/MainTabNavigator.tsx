@@ -19,6 +19,7 @@ import { SignalsScreen }    from '../screens/SignalsScreen';
 import { RiskScreen }       from '../screens/risk/RiskScreen';
 import { SettingsNavigator } from './SettingsNavigator';
 import { TradingNavigator } from './TradingNavigator';
+import { MoreNavigator } from './MoreNavigator';
 
 import { useTradingStore }  from '../store/tradingStore';
 import { COLORS, SPACING, RADIUS, TEXT } from '../utils/theme';
@@ -33,6 +34,7 @@ const TAB_CONFIG: Record<keyof MainTabParamList, { icon: TabIconName; activeIcon
   Trading:   { icon: 'swap-horizontal-outline', activeIcon: 'swap-horizontal', label: 'Trade' },
   Risk:      { icon: 'shield-outline',     activeIcon: 'shield',          label: 'Risk' },
   Signals:   { icon: 'pulse-outline',      activeIcon: 'pulse',           label: 'Signals' },
+  More:      { icon: 'apps-outline',       activeIcon: 'apps',            label: 'More' },
   Settings:  { icon: 'settings-outline',   activeIcon: 'settings',        label: 'Settings' },
 };
 
@@ -129,6 +131,11 @@ export function MainTabNavigator() {
         name="Signals"
         component={SignalsScreen}
         options={{ title: 'Signals' }}
+      />
+      <Tab.Screen
+        name="More"
+        component={MoreNavigator}
+        options={{ title: 'More' }}
       />
       <Tab.Screen
         name="Settings"

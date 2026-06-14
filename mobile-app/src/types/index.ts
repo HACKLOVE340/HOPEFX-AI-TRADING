@@ -314,6 +314,7 @@ export type MainTabParamList = {
   Trading: undefined;
   Risk: undefined;
   Signals: undefined;
+  More: undefined;
   Settings: undefined;
 };
 
