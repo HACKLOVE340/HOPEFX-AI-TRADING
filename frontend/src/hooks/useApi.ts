@@ -830,6 +830,16 @@ export const transparencyApi = {
   summary:          ()                         => api.get('/transparency/summary'),
 };
 
+// ── Observability (roadmap) ─────────────────────────────────────────────────
+// Backend: api/observability.py (prefix /api/observability)
+export const observabilityApi = {
+  metrics:   (period = '1h')        => api.get('/observability/metrics', { params: { period } }),
+  services:  ()                     => api.get('/observability/services'),
+  alerts:    (severity?: string)    => api.get('/observability/alerts', { params: severity ? { severity } : {} }),
+  traces:    (limit = 50)           => api.get('/observability/traces', { params: { limit } }),
+  latency:   (period = '1h')        => api.get('/observability/latency-histogram', { params: { period } }),
+};
+
 // ── AI Brain ──────────────────────────────────────────────────────────────────
 
 export const brainApi = {

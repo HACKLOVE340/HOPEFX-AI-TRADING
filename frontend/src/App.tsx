@@ -112,6 +112,7 @@ const AdminPanel        = React.lazy(() => import('./pages/AdminPanel'));
 const AuditLog          = React.lazy(() => import('./pages/AuditLog'));
 const SecurityDashboard = React.lazy(() => import('./pages/SecurityDashboard'));
 const AutoHealDashboard = React.lazy(() => import('./pages/AutoHealDashboard'));
+const Observability = React.lazy(() => import('./pages/Observability'));
 const WhitelabelAdmin   = React.lazy(() => import('./pages/WhitelabelAdmin'));
 
 // ── Superadmin-only ───────────────────────────────────────────────────────────
@@ -586,6 +587,7 @@ const AppShell: React.FC = () => {
             <Route path="/backtest"     element={<Navigate to="/ai-strategy" replace />} />
             <Route path="/security"     element={wrap(adminOnly(<SecurityDashboard />))} />
             <Route path="/auto-heal"    element={wrap(adminOnly(<AutoHealDashboard />))} />
+            <Route path="/observability" element={wrap(adminOnly(<Observability />))} />
             <Route path="/whitelabel"   element={wrap(adminOnly(<WhitelabelAdmin />))} />
 
             {/* Superadmin-only — /master-control canonical; /superadmin kept as alias */}
