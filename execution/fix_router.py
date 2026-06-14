@@ -104,6 +104,15 @@ class _OandaFallback:
 
         # OANDA uses negative units for SELL
         oanda_units = units if direction == "BUY" else -units
+        # OANDA requires integer units. Reject an order whose size rounds to zero
+        # rather than silently sending a no-op "0" order that looks routed but
+        # places nothing.
+        rounded_units = round(oanda_units)
+        if rounded_units == 0:
+            raise ValueError(
+                f"_OandaFallback: order size {units} rounds to 0 units — rejected "
+                "(below OANDA's 1-unit minimum)"
+            )
         instrument = symbol.replace("/", "_")
         url = f"{self._base_url}/v3/accounts/{self._account_id}/orders"
         headers = {
@@ -114,7 +123,7 @@ class _OandaFallback:
             "order": {
                 "type": "MARKET",
                 "instrument": instrument,
-                "units": str(round(oanda_units)),
+                "units": str(rounded_units),
             }
         }
 
