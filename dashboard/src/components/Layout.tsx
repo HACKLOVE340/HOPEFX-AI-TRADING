@@ -30,6 +30,12 @@ import {
   LineChart,
   Newspaper,
   User,
+  MessageCircle,
+  CreditCard,
+  Eye,
+  Blocks,
+  Radio,
+  Gauge,
 } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme'
 import { useWebSocket } from '../hooks/useWebSocket'
@@ -54,19 +60,27 @@ const BASE_NAV = [
   { path: '/correlation',  icon: Activity,        label: 'Correlation',     minRole: 'trader'     as UserRole, group: 'analysis' },
   { path: '/indicators',   icon: FlaskConical,    label: 'Indicators',      minRole: 'trader'     as UserRole, group: 'analysis' },
   { path: '/walk-forward', icon: GitBranch,       label: 'Walk Forward',    minRole: 'trader'     as UserRole, group: 'analysis' },
+  { path: '/strategy-builder', icon: Blocks,      label: 'Strategy Builder', minRole: 'trader'    as UserRole, group: 'analysis' },
+  { path: '/news',         icon: Radio,           label: 'News & Sentiment', minRole: 'user'      as UserRole, group: 'analysis' },
+  { path: '/transparency', icon: Eye,             label: 'Trade Explain',    minRole: 'trader'    as UserRole, group: 'analysis' },
   // ── Social / community ────────────────────────────────────────────────────
   { path: '/copy-trading', icon: Users,           label: 'Copy Trading',    minRole: 'trader'     as UserRole, group: 'social' },
   { path: '/leaderboard',  icon: Trophy,          label: 'Leaderboard',     minRole: 'user'       as UserRole, group: 'social' },
   { path: '/feed',         icon: Newspaper,       label: 'Social Feed',     minRole: 'user'       as UserRole, group: 'social' },
+  { path: '/chat',         icon: MessageCircle,   label: 'Community Chat',  minRole: 'user'       as UserRole, group: 'social' },
   // ── Account ───────────────────────────────────────────────────────────────
   { path: '/journal',      icon: BookOpen,        label: 'Trade Journal',   minRole: 'user'       as UserRole, group: 'account' },
   { path: '/prop-firm',    icon: Shield,          label: 'Prop Firm',       minRole: 'trader'     as UserRole, group: 'account' },
   { path: '/wallet',       icon: Wallet,          label: 'Wallet',          minRole: 'user'       as UserRole, group: 'account' },
+  { path: '/billing',      icon: CreditCard,      label: 'Billing',         minRole: 'user'       as UserRole, group: 'account' },
+  { path: '/notifications',icon: Bell,            label: 'Notifications',   minRole: 'user'       as UserRole, group: 'account' },
   { path: '/profile',      icon: User,            label: 'Profile',         minRole: 'user'       as UserRole, group: 'account' },
   { path: '/settings',     icon: Settings,        label: 'Settings',        minRole: 'user'       as UserRole, group: 'account' },
   // ── Admin ─────────────────────────────────────────────────────────────────
   { path: '/admin',        icon: Shield,          label: 'Admin Panel',     minRole: 'admin'      as UserRole, group: 'admin' },
   { path: '/superadmin',   icon: Crown,           label: 'SuperAdmin',      minRole: 'superadmin' as UserRole, group: 'admin' },
+  { path: '/superadmin/ml',icon: Brain,           label: 'ML Operations',   minRole: 'superadmin' as UserRole, group: 'admin' },
+  { path: '/superadmin/observability', icon: Gauge, label: 'Observability', minRole: 'superadmin' as UserRole, group: 'admin' },
   { path: '/whitelabel',   icon: Globe,           label: 'Whitelabel',      minRole: 'superadmin' as UserRole, group: 'admin' },
 ]
 
