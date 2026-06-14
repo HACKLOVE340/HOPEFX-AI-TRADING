@@ -108,6 +108,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/security',   label: 'Security Operations', icon: '🛡️', group: 'admin', adminOnly: true },
   { path: '/auto-heal',  label: 'Auto-Heal',       icon: '🩺', group: 'admin', adminOnly: true },
   { path: '/observability', label: 'Observability', icon: '📡', group: 'admin', adminOnly: true },
+  { path: '/ml-ops',        label: 'ML-Ops',        icon: '🤖', group: 'admin', adminOnly: true },
   { path: '/whitelabel', label: 'Whitelabel',      icon: '🏷️', group: 'admin', adminOnly: true },
 
   // ── Super Admin (superadmin only) ─────────────────────────────────────────

@@ -830,6 +830,18 @@ export const transparencyApi = {
   stats:     ()                       => api.get('/transparency/stats'),
 };
 
+// ── ML-Ops (roadmap) ─────────────────────────────────────────────────────────
+// Backend: api/ml_ops.py (prefix /api/mlops)
+export const mlOpsApi = {
+  health:        ()                  => api.get('/mlops/health'),
+  drift:         ()                  => api.get('/mlops/drift'),
+  shadow:        ()                  => api.get('/mlops/shadow'),
+  retrainHistory:()                  => api.get('/mlops/retrain/history'),
+  modelMetrics:  (versionId: string) => api.get(`/mlops/models/${versionId}/metrics`),
+  triggerRetrain:(reason = 'manual') => api.post('/mlops/retrain', { reason }),
+  promote:       (versionId: string) => api.post(`/mlops/promote/${versionId}`),
+};
+
 // ── Observability (roadmap) ─────────────────────────────────────────────────
 // Backend: api/observability.py (prefix /api/observability)
 export const observabilityApi = {
