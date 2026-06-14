@@ -821,13 +821,13 @@ export const nocodeApi = {
 
 // ── Execution Transparency ────────────────────────────────────────────────────
 
+// Backend: api/transparency.py (prefix /api/transparency). The previous paths
+// (orders/{id}, best-execution, slippage, venues, summary) did not exist.
 export const transparencyApi = {
-  executionReport:  (orderId: string)          => api.get(`/transparency/orders/${orderId}`),
-  bestExecution:    (params?: object)          => api.get('/transparency/best-execution', { params }),
-  slippageReport:   (params?: object)          => api.get('/transparency/slippage', { params }),
-  venueAnalysis:    ()                         => api.get('/transparency/venues'),
-  auditTrail:       (orderId: string)          => api.get(`/transparency/audit/${orderId}`),
-  summary:          ()                         => api.get('/transparency/summary'),
+  decisions: (params?: object)        => api.get('/transparency/decisions', { params }),
+  explain:   (tradeId: string)        => api.get(`/transparency/explain/${tradeId}`),
+  auditLog:  (params?: object)        => api.get('/transparency/audit-log', { params }),
+  stats:     ()                       => api.get('/transparency/stats'),
 };
 
 // ── Observability (roadmap) ─────────────────────────────────────────────────

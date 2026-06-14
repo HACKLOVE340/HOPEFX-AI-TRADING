@@ -70,6 +70,7 @@ export const NAV_ITEMS: NavItem[] = [
   // ── Analytics ─────────────────────────────────────────────────────────────
   { path: '/performance',  label: 'Performance',    icon: '🏆', group: 'analytics', plan: 'free',         featureKey: 'performance'  },
   { path: '/pnl',          label: 'P&L Dashboard',  icon: '💹', group: 'analytics', plan: 'starter',      featureKey: 'performance'  },
+  { path: '/transparency', label: 'Transparency',   icon: '🔍', group: 'analytics', plan: 'free'  },
   { path: '/ai-strategy',  label: 'AI Strategy',    icon: '🤖', group: 'analytics', plan: 'professional', featureKey: 'ai-strategy'  },
   { path: '/correlation',  label: 'Correlation',    icon: '🔗', group: 'analytics', plan: 'professional', featureKey: 'correlation'  },
   { path: '/indicators',   label: 'Indicators',     icon: '📐', group: 'analytics', plan: 'professional', featureKey: 'indicators'   },
