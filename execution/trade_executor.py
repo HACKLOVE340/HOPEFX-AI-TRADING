@@ -36,6 +36,7 @@ Online-learning wiring
 
 import asyncio
 import logging
+import math
 import os
 import time
 from collections.abc import Callable
@@ -111,6 +112,9 @@ class TradeExecutor:
         self._pending_orders: dict[str, dict[str, Any]] = {}
         self._execution_callbacks: list[Callable[..., Any]] = []
         self._lock = asyncio.Lock()
+        # position_ids whose close is currently in-flight — idempotency guard
+        # against concurrent/duplicate close_position() calls (double close).
+        self._closing_positions: set[str] = set()
 
         # ── Streak tracking ───────────────────────────────────────────────────
         self._consecutive_losses: int = 0
@@ -357,6 +361,21 @@ class TradeExecutor:
             )
             await self.position_tracker.add_position(position)
 
+            # A market order that only partially filled leaves an unfilled
+            # remainder that is NOT resubmitted here. Surface it explicitly so
+            # the shortfall is observable rather than silently dropped.
+            if order.status.value == "partial":
+                _remainder = size - order.filled_quantity
+                logger.warning(
+                    "TradeExecutor: PARTIAL fill on %s — requested=%s filled=%s "
+                    "remainder=%s NOT resubmitted (order_id=%s)",
+                    symbol,
+                    size,
+                    order.filled_quantity,
+                    _remainder,
+                    order.id,
+                )
+
         return ExecutionResult(
             success=order.status.value in ("filled", "partial"),
             order_id=order.id,
@@ -403,72 +422,108 @@ class TradeExecutor:
                 latency_ms=0,
             )
 
-        success = await self.broker.close_position(position_id)
-
-        if success:
-            closed_position = await self.position_tracker.close_position(
-                position_id,
-                position.current_price,
-                commission=position.commission,
+        # Idempotency guard: prevent a concurrent/duplicate close of the same
+        # position. The check-and-add is synchronous (no await between the
+        # get_position check above and here), so in asyncio it is atomic — a
+        # second caller cannot slip past before this id is marked in-flight.
+        # Previously two broker.close_position() calls could race across the
+        # await below and double-close the position.
+        if position_id in self._closing_positions:
+            return ExecutionResult(
+                success=False,
+                order_id=position_id,
+                filled_quantity=0,
+                average_price=0,
+                commission=0,
+                status=OrderStatus.ERROR,
+                message=f"Close already in progress: {position_id}",
+                latency_ms=0,
             )
+        self._closing_positions.add(position_id)
+        closed_position = None
+        # Default to the last cached mark; replaced with the broker's actual
+        # executed close fill below when the broker reports one.
+        close_fill_price = position.current_price
+        try:
+            success = await self.broker.close_position(position_id)
+            if success:
+                # Prefer the broker's real executed fill price over the cached
+                # mark so realised P&L is booked at what actually filled.
+                _getter = getattr(self.broker, "get_last_close_fill_price", None)
+                if callable(_getter):
+                    try:
+                        _actual = _getter(position_id)
+                        if _actual is not None and math.isfinite(_actual) and _actual > 0:
+                            close_fill_price = _actual
+                    except Exception as _fp_exc:
+                        logger.debug("get_last_close_fill_price failed (non-fatal): %s", _fp_exc)
+                closed_position = await self.position_tracker.close_position(
+                    position_id,
+                    close_fill_price,
+                    commission=position.commission,
+                )
+        finally:
+            self._closing_positions.discard(position_id)
 
-            if closed_position:
-                realized_pnl = closed_position.realized_pnl
+        if success and closed_position:
+            realized_pnl = closed_position.realized_pnl
 
-                # Update risk manager equity
-                self.risk_manager.update_equity(self.risk_manager.daily_starting_equity + realized_pnl)
+            # Update risk manager equity. Increment from CURRENT equity, not the
+            # day's starting equity — otherwise each close clobbers the realised
+            # P&L of every earlier close on the same day.
+            self.risk_manager.update_equity(self.risk_manager.current_balance + realized_pnl)
 
-                # ── Streak tracking (executor + risk manager) ────────────────
-                self._update_streak(realized_pnl)
-                # Keep risk manager streak state in sync so PreTradeGate
-                # can enforce the halt even via alternative order paths.
-                try:
-                    if hasattr(self.risk_manager, "record_trade_outcome"):
-                        self.risk_manager.record_trade_outcome(
-                            realized_pnl=realized_pnl,
-                            symbol=getattr(closed_position, "symbol", position_id),
-                        )
-                except (RuntimeError, AttributeError, TypeError) as _rm_exc:
-                    logger.debug(
-                        "RiskManager.record_trade_outcome failed (non-fatal): %s",
-                        _rm_exc,
+            # ── Streak tracking (executor + risk manager) ────────────────
+            self._update_streak(realized_pnl)
+            # Keep risk manager streak state in sync so PreTradeGate
+            # can enforce the halt even via alternative order paths.
+            try:
+                if hasattr(self.risk_manager, "record_trade_outcome"):
+                    self.risk_manager.record_trade_outcome(
+                        realized_pnl=realized_pnl,
+                        symbol=getattr(closed_position, "symbol", position_id),
                     )
+            except (RuntimeError, AttributeError, TypeError) as _rm_exc:
+                logger.debug(
+                    "RiskManager.record_trade_outcome failed (non-fatal): %s",
+                    _rm_exc,
+                )
 
-                # ── Post-close drawdown check ─────────────────────────────────
-                self._trigger_drawdown_halt_if_needed()
+            # ── Post-close drawdown check ─────────────────────────────────
+            self._trigger_drawdown_halt_if_needed()
 
-                # ── SignalFilter EV update ────────────────────────────────────
-                try:
-                    from ml.signal_filter import get_signal_filter
+            # ── SignalFilter EV update ────────────────────────────────────
+            try:
+                from ml.signal_filter import get_signal_filter
 
-                    _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
-                    _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
-                    _side = getattr(closed_position, "side", "buy")
-                    _direction = 1 if str(_side).lower() in ("buy", "long") else -1
-                    _conf = float(getattr(closed_position, "signal_confidence", 0.6))
-                    _sym = getattr(closed_position, "symbol", position_id)
+                _entry_px = getattr(closed_position, "entry_price", None) or position.current_price
+                _pnl_pct = realized_pnl / _entry_px if _entry_px > 0 else 0.0
+                _side = getattr(closed_position, "side", "buy")
+                _direction = 1 if str(_side).lower() in ("buy", "long") else -1
+                _conf = float(getattr(closed_position, "signal_confidence", 0.6))
+                _sym = getattr(closed_position, "symbol", position_id)
 
-                    get_signal_filter().record_outcome(
-                        symbol=_sym,
-                        pnl_pct=_pnl_pct,
-                        direction=_direction,
-                        confidence=_conf,
-                    )
-                    logger.debug(
-                        "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
-                        _sym,
-                        _pnl_pct,
-                        _direction,
-                        _conf,
-                    )
-                except (ImportError, RuntimeError, AttributeError) as _sf_exc:
-                    logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
+                get_signal_filter().record_outcome(
+                    symbol=_sym,
+                    pnl_pct=_pnl_pct,
+                    direction=_direction,
+                    confidence=_conf,
+                )
+                logger.debug(
+                    "SignalFilter close outcome: symbol=%s pnl_pct=%.5f dir=%d conf=%.3f",
+                    _sym,
+                    _pnl_pct,
+                    _direction,
+                    _conf,
+                )
+            except (ImportError, RuntimeError, AttributeError) as _sf_exc:
+                logger.debug("SignalFilter close record failed (non-fatal): %s", _sf_exc)
 
         return ExecutionResult(
             success=success,
             order_id=position_id,
             filled_quantity=position.quantity if success else 0,
-            average_price=position.current_price if success else 0,
+            average_price=close_fill_price if success else 0,
             commission=position.commission,
             status=OrderStatus.FILLED if success else OrderStatus.ERROR,
             message="Position closed" if success else "Close failed",
@@ -674,22 +729,30 @@ class TradeExecutor:
             label = 1 if pnl > 0 else 0
             _confidence = float(signal.get("confidence", 0.0))
             _action = signal.get("action", "buy")
+            predicted_direction = 1 if _action == "buy" else 0
 
             import pandas as _pd
 
-            features = _pd.DataFrame(
-                [
-                    {
-                        "entry_price": result.average_price,
-                        "filled_qty": result.filled_quantity,
-                        "commission": result.commission,
-                        "latency_ms": result.latency_ms,
-                        "confidence": _confidence,
-                        "direction_long": 1 if _action == "buy" else 0,
-                    }
-                ]
-            )
-            engine.update_online(features, label)
+            # The online learner derives its features from OHLCV bars; pass the
+            # real signal window when available so partial_fit actually learns.
+            ohlcv = signal.get("ohlcv")
+            if not isinstance(ohlcv, _pd.DataFrame) or ohlcv.empty:
+                ohlcv = _pd.DataFrame(
+                    [
+                        {
+                            "entry_price": result.average_price,
+                            "filled_qty": result.filled_quantity,
+                            "commission": result.commission,
+                            "latency_ms": result.latency_ms,
+                            "confidence": _confidence,
+                            "direction_long": predicted_direction,
+                        }
+                    ]
+                )
+            # Pass predicted_direction so the live-accuracy degradation monitor
+            # (_check_live_accuracy_degradation) actually accumulates and fires —
+            # previously it was never given a prediction and silently never ran.
+            engine.update_online(ohlcv, label, predicted_direction=predicted_direction)
             logger.debug(
                 "InferenceEngine fill notify: symbol=%s pnl=%.4f label=%d",
                 signal.get("symbol", "?"),

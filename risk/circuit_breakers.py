@@ -12,6 +12,8 @@ drawdown monitoring, and automated trading halts.
 import asyncio
 import json
 import logging
+import math
+import os
 import threading
 from collections import deque
 from collections.abc import Callable
@@ -24,6 +26,12 @@ from enum import Enum
 import redis
 
 logger = logging.getLogger(__name__)
+
+# Number of consecutive monitoring-loop failures (e.g. a broker disconnect that
+# makes get_balance() raise every cycle) after which the breaker trips. Fail
+# CLOSED: trading must never be left silently unguarded when risk limits cannot
+# be evaluated.
+_MONITOR_MAX_CONSECUTIVE_FAILURES = int(os.getenv("CB_MONITOR_MAX_FAILURES", "5"))
 
 
 def _send_circuit_breaker_telegram(reason: str, message: str) -> None:
@@ -111,6 +119,9 @@ class CircuitBreaker:
         self.broker = broker
         self.redis = redis_client
         self.limits = RiskLimits()
+        # Configured baseline — used to set/restore the half-open position cap
+        # idempotently, so repeated open/recover cycles never drift the limit.
+        self._original_max_position_size_pct = self.limits.max_position_size_pct
 
         # State management
         self.state = CircuitState.CLOSED
@@ -170,13 +181,35 @@ class CircuitBreaker:
 
     async def _monitoring_loop(self):
         """Continuous risk monitoring"""
+        consecutive_failures = 0
         while not self._shutdown:
             try:
                 await self._check_risk_limits()
+                consecutive_failures = 0
                 await asyncio.sleep(1)  # Check every second
             except Exception as e:
-                logger.error("Risk monitoring error: %s", e)
-
+                consecutive_failures += 1
+                logger.error(
+                    "Risk monitoring error (%d consecutive): %s",
+                    consecutive_failures,
+                    e,
+                )
+                # Fail CLOSED: if risk limits cannot be evaluated for several
+                # consecutive cycles, trip the breaker rather than silently
+                # leaving trading unguarded.
+                if consecutive_failures >= _MONITOR_MAX_CONSECUTIVE_FAILURES:
+                    try:
+                        await self._trigger_circuit_breaker(
+                            "MONITOR_FAILURE",
+                            f"Risk monitoring failed {consecutive_failures} "
+                            f"consecutive cycles; halting as a safety measure: {e}",
+                            severity="CRITICAL",
+                        )
+                    except Exception as trip_exc:
+                        logger.critical(
+                            "Failed to trip circuit breaker after monitoring failures: %s",
+                            trip_exc,
+                        )
                 await asyncio.sleep(5)
 
     async def _check_risk_limits(self):
@@ -438,8 +471,10 @@ class CircuitBreaker:
                 "🟡 Circuit breaker entering HALF_OPEN state - testing with reduced size",
             )
 
-            # Reduce position sizes for testing
-            self.limits.max_position_size_pct *= 0.5
+            # Reduce position sizes for testing. Set from the configured
+            # baseline (not the current value) so re-entering HALF_OPEN after a
+            # failed recovery does not compound the reduction.
+            self.limits.max_position_size_pct = self._original_max_position_size_pct * 0.5
 
             # Schedule full recovery check
             _t = asyncio.create_task(self._check_recovery())
@@ -456,7 +491,9 @@ class CircuitBreaker:
             # Check if daily drawdown has recovered below 50% of the daily limit
             if self.daily_drawdown < self.limits.max_daily_drawdown_pct * 0.5:
                 self.state = CircuitState.CLOSED
-                self.limits.max_position_size_pct /= 0.5  # Restore limits
+                # Restore the exact configured baseline (idempotent) rather than
+                # arithmetically doubling, which drifts over repeated cycles.
+                self.limits.max_position_size_pct = self._original_max_position_size_pct
                 logger.info("🟢 Circuit breaker CLOSED - normal trading resumed")
                 self._persist_state()
             else:
@@ -475,6 +512,34 @@ class CircuitBreaker:
             if self.state == CircuitState.OPEN:
                 return False, f"Circuit breaker OPEN: {self._get_last_breach_reason()}"
 
+            # Fresh balance read — reused for the inline drawdown and exposure
+            # checks below. Fail CLOSED if it cannot be read.
+            try:
+                balance = self.broker.get_balance()
+            except Exception as exc:
+                logger.error("pre_trade_check: get_balance failed; rejecting (fail-closed): %s", exc)
+                return False, "cannot verify account balance"
+            if balance is None or not math.isfinite(balance) or balance <= 0:
+                return False, "invalid account balance"
+
+            # Inline drawdown check: the async monitor only samples ~1/s, so an
+            # order arriving between ticks could otherwise slip past a fresh
+            # breach that has not yet tripped the breaker.
+            if self.peak_balance > 0:
+                total_dd = (self.peak_balance - balance) / self.peak_balance
+                if total_dd >= self.limits.max_total_drawdown_pct:
+                    return (
+                        False,
+                        f"Total drawdown {total_dd:.2%} >= limit {self.limits.max_total_drawdown_pct:.2%}",
+                    )
+            if self.day_open_balance > 0:
+                daily_dd = (self.day_open_balance - balance) / self.day_open_balance
+                if daily_dd >= self.limits.max_daily_drawdown_pct:
+                    return (
+                        False,
+                        f"Daily drawdown {daily_dd:.2%} >= limit {self.limits.max_daily_drawdown_pct:.2%}",
+                    )
+
             # Check order size
             notional = order.get("size", 0) * order.get("price", 0)
             if notional > self.limits.max_order_size:
@@ -486,7 +551,7 @@ class CircuitBreaker:
             # Check exposure
             current_exposure = self._calculate_total_exposure()
             new_exposure = current_exposure + notional
-            max_exposure = self.broker.get_balance() * self.limits.max_total_exposure_pct
+            max_exposure = balance * self.limits.max_total_exposure_pct
 
             if new_exposure > max_exposure:
                 return (

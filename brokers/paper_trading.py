@@ -272,6 +272,11 @@ class PaperTradingBroker(BrokerConnector):
 
         self.orders: dict[str, Order] = {}
         self.positions: dict[str, Position] = {}
+        # Actual slippage-adjusted fill price of the most recent close, keyed by
+        # the reference passed to close_position (symbol and/or position id).
+        # Consumed via get_last_close_fill_price() so callers book realised P&L
+        # at the executed price rather than a stale mark.
+        self._last_close_fills: dict[str, float] = {}
 
         # ── Redis namespace ───────────────────────────────────────────────────
         # Resolve the Redis namespace used to scope this instance's keys.
@@ -885,7 +890,18 @@ class PaperTradingBroker(BrokerConnector):
         # Snapshot equity after close so the equity curve reflects realised P&L
         self._snapshot_equity()
 
+        # Record the executed close fill price so callers (e.g. TradeExecutor)
+        # can book realised P&L at the real fill rather than a cached mark.
+        # Key by both the original ref and the resolved symbol.
+        self._last_close_fills[symbol_or_id] = exit_price
+        self._last_close_fills[symbol] = exit_price
+
         return True
+
+    def get_last_close_fill_price(self, position_ref: str) -> float | None:
+        """Return the slippage-adjusted fill price of the most recent close for
+        *position_ref* (symbol or position id), or None if not recorded."""
+        return self._last_close_fills.get(position_ref)
 
     def _persist_trade(
         self,

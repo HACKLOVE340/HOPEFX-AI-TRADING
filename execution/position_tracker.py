@@ -142,7 +142,9 @@ class PositionTracker:
 
     def get_positions_by_symbol(self, symbol: str) -> list[Position]:
         """Get all positions for a symbol"""
-        return [pos for pos in self.positions.values() if pos.symbol == symbol]
+        # Snapshot first: iterating the live dict while an async writer mutates
+        # it (at an await point) raises "dict changed size during iteration".
+        return [pos for pos in list(self.positions.values()) if pos.symbol == symbol]
 
     def get_all_positions(self) -> list[Position]:
         """Get all positions"""
@@ -157,8 +159,10 @@ class PositionTracker:
                 "short": sum(p.quantity for p in positions if p.side == "short"),
                 "net": sum(p.quantity if p.side == "long" else -p.quantity for p in positions),
             }
-        total_long = sum(p.quantity for p in self.positions.values() if p.side == "long")
-        total_short = sum(p.quantity for p in self.positions.values() if p.side == "short")
+        # Snapshot once so totals are computed over a consistent view.
+        positions = list(self.positions.values())
+        total_long = sum(p.quantity for p in positions if p.side == "long")
+        total_short = sum(p.quantity for p in positions if p.side == "short")
         return {
             "long": total_long,
             "short": total_short,
@@ -167,9 +171,11 @@ class PositionTracker:
 
     def get_total_pnl(self) -> dict[str, float]:
         """Get total P&L across all positions"""
-        unrealized = sum(p.unrealized_pnl for p in self.positions.values())
-        realized = sum(p.realized_pnl for p in self.positions.values())
-        commission = sum(p.commission for p in self.positions.values())
+        # Snapshot once so all three sums see a consistent set of positions.
+        positions = list(self.positions.values())
+        unrealized = sum(p.unrealized_pnl for p in positions)
+        realized = sum(p.realized_pnl for p in positions)
+        commission = sum(p.commission for p in positions)
 
         return {
             "unrealized": unrealized,

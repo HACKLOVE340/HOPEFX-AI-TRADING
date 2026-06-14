@@ -402,7 +402,7 @@ const ResearchPage: React.FC = () => {
                         Signals ({selected.results.signals.length})
                       </div>
                       <button
-                        onClick={() => navigate('/ai-strategy')}
+                        onClick={() => navigate('/ai-strategy', { state: { signals: selected.results?.signals ?? [], source: 'research', title: selected.title } })}
                         style={{
                           padding: '4px 12px', borderRadius: 5, cursor: 'pointer',
                           background: 'rgba(139,92,246,0.1)', border: '1px solid rgba(139,92,246,0.3)',

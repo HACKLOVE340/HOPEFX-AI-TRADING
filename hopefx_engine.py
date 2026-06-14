@@ -643,6 +643,25 @@ class HopeFXEngine:
         Falls back to _execute_decision() if ExecutionEngine is unavailable.
         """
         try:
+            # Kill-switch gate (fail closed). The ExecutionEngine path enforces
+            # this too, but the fallback to direct broker calls below does not —
+            # so check here as well, mirroring _on_tick. Any error blocks.
+            try:
+                from kill_switch import kill_switch as _ks
+
+                if _ks.is_active():
+                    logger.warning(
+                        "Kill switch active (reason=%s) — nuclear signal dropped",
+                        _ks.reason,
+                    )
+                    return
+            except Exception as _ks_err:  # fail closed on any error
+                logger.error(
+                    "kill_switch check failed (%s) — dropping nuclear signal (fail-safe)",
+                    _ks_err,
+                )
+                return
+
             direction = getattr(signal, "direction", "long")
             side = "BUY" if direction == "long" else "SELL"
             symbol = getattr(signal, "symbol", self.primary_symbol).replace("_", "/")

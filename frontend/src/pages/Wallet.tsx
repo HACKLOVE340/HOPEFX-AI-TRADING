@@ -455,7 +455,18 @@ const Wallet: React.FC = () => {
                   Upgrade Plan
                 </Link>
                 {subscription.status === 'active' && (
-                  <button className="px-4 py-2 bg-transparent border border-red-900 text-red-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-red-950/40 transition-colors">
+                  <button
+                    onClick={async () => {
+                      if (!window.confirm('Cancel your subscription? You keep access until the end of the current billing period.')) return;
+                      try {
+                        await api.post('/billing/subscription/cancel');
+                        const r = await api.get<Subscription>('/billing/subscription');
+                        setSub(r.data ?? null);
+                      } catch (e) {
+                        setSubErr(extractApiError(e, 'Failed to cancel subscription.'));
+                      }
+                    }}
+                    className="px-4 py-2 bg-transparent border border-red-900 text-red-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-red-950/40 transition-colors">
                     Cancel Subscription
                   </button>
                 )}
@@ -502,9 +513,10 @@ const Wallet: React.FC = () => {
             </div>
           )}
           {!pmLoading && (
-            <button className="px-4 py-2.5 bg-blue-950 border border-blue-500/40 text-blue-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-900/40 transition-colors">
+            <Link to="/checkout"
+              className="inline-block px-4 py-2.5 bg-blue-950 border border-blue-500/40 text-blue-400 rounded-lg text-sm font-semibold cursor-pointer hover:bg-blue-900/40 transition-colors no-underline">
               + Add Payment Method
-            </button>
+            </Link>
           )}
         </div>
       )}

@@ -692,12 +692,17 @@ class RiskManager:
             count = self._state.open_positions
         logger.info("Position closed for %s — open_positions=%d", symbol, count)
 
-    def size_order(self, signal) -> PositionSizingResult:
+    def size_order(self, signal, equity_override: float | None = None) -> PositionSizingResult:
         """
         Compute position size for a signal.
 
         All scaling factors derived from orchestrator data.
         Returns PositionSizingResult with quantity=0 if any hard gate fails.
+
+        ``equity_override`` lets callers (e.g. calculate_position_size) size
+        against a supplied equity WITHOUT mutating shared state, which previously
+        caused a TOCTOU race where the temporary equity could be read or
+        clobbered by a concurrent update_equity/on_close.
         """
         symbol = getattr(signal, "symbol", "XAU_USD")
         direction = getattr(signal, "direction", "long")
@@ -707,23 +712,37 @@ class RiskManager:
         lineage_id = str(uuid.uuid4())
 
         # ── Hard gates (early returns) ─────────────────────────────────────
-        if self._halt:
-            return self._zero_sizing(symbol, direction, lineage_id, f"halted:{self._halt_reason}")
+        # Take a single consistent snapshot of all gate inputs under the lock.
+        # Reading them piecemeal raced with update_equity(): a sizing call could
+        # see halt=False with a sub-limit drawdown an instant before update_equity
+        # flipped both, then route an order that should have been blocked.
+        with self._state_lock:
+            halted = self._halt
+            halt_reason = self._halt_reason
+            daily_dd = self._state.daily_drawdown
+            current_dd = self._state.current_drawdown
+            open_pos = self._state.open_positions
+            equity = self._state.account_equity if equity_override is None else equity_override
 
-        if self._state.daily_drawdown >= _MAX_DAILY_LOSS_PCT:
+        if halted:
+            return self._zero_sizing(symbol, direction, lineage_id, f"halted:{halt_reason}")
+
+        # _halt_trading acquires _state_lock, so it must be called AFTER the
+        # snapshot block above (threading.Lock is non-reentrant).
+        if daily_dd >= _MAX_DAILY_LOSS_PCT:
             self._halt_trading("daily_drawdown_limit")
             return self._zero_sizing(symbol, direction, lineage_id, "daily_drawdown_limit")
 
-        if self._state.current_drawdown >= _MAX_DRAWDOWN_PCT:
+        if current_dd >= _MAX_DRAWDOWN_PCT:
             self._halt_trading("max_drawdown_limit")
             return self._zero_sizing(symbol, direction, lineage_id, "max_drawdown_limit")
 
-        if self._state.open_positions >= _MAX_OPEN_POSITIONS:
+        if open_pos >= _MAX_OPEN_POSITIONS:
             return self._zero_sizing(
                 symbol,
                 direction,
                 lineage_id,
-                f"max_open_positions:{self._state.open_positions}",
+                f"max_open_positions:{open_pos}",
             )
 
         data_quality = self._get_data_quality(signal)
@@ -747,7 +766,8 @@ class RiskManager:
         kelly_f = self._kelly(prob, conf)
 
         # ── Notional size ──────────────────────────────────────────────────
-        equity = self._state.account_equity
+        # `equity` was captured in the locked snapshot above (honors
+        # equity_override); do not re-read shared state here.
         base_notional = equity * kelly_f * _KELLY_FRACTION
         final_notional = base_notional * quality_f * sentiment_f * impact_f * dd_f
         final_notional = max(
@@ -1021,18 +1041,18 @@ class RiskManager:
             tick_mid=effective_entry,
         )
 
-        # Temporarily update equity so sizing reflects the supplied balance.
-        prev_equity = self._state.account_equity
-        with self._state_lock:
-            self._state.account_equity = equity
-        result = self.size_order(sig)
-        with self._state_lock:
-            self._state.account_equity = prev_equity
+        # Size against the supplied equity via equity_override — NO mutation of
+        # shared state. The previous temp-set/restore pattern raced: a concurrent
+        # update_equity/on_close (or a second calculate_position_size) could read
+        # or clobber account_equity while it held the temporary value, and the
+        # restore could write back a stale equity, corrupting it permanently.
+        true_equity = self._state.account_equity
+        result = self.size_order(sig, equity_override=equity)
 
         # Clamp result quantity so an inflated equity argument can't produce a
         # position larger than _MAX_POSITION_PCT of the true account equity.
-        if prev_equity > 0 and result.quantity > 0 and result.notional_usd > 0:
-            max_notional = prev_equity * _MAX_POSITION_PCT
+        if true_equity > 0 and result.quantity > 0 and result.notional_usd > 0:
+            max_notional = true_equity * _MAX_POSITION_PCT
             if result.notional_usd > max_notional:
                 scale = max_notional / result.notional_usd
                 result.quantity = result.quantity * scale
@@ -1054,13 +1074,15 @@ class RiskManager:
     # ── Equity / position updates ─────────────────────────────────────────────
 
     def on_fill(self, symbol: str, direction: str, quantity: float, fill_price: float) -> None:
-        self._state.open_positions += 1
+        with self._state_lock:
+            self._state.open_positions += 1
 
     def on_close(self, symbol: str, pnl: float) -> None:
-        self._state.open_positions = max(0, self._state.open_positions - 1)
-        self._state.daily_pnl += pnl
-        self._state.total_pnl += pnl
-        self._pnl_history.append(pnl)
+        with self._state_lock:
+            self._state.open_positions = max(0, self._state.open_positions - 1)
+            self._state.daily_pnl += pnl
+            self._state.total_pnl += pnl
+            self._pnl_history.append(pnl)
 
     def update_equity(self, equity: float) -> None:
         with self._state_lock:
@@ -1696,8 +1718,13 @@ class RiskManager:
                 threshold=max_pct,
             )
         except Exception as exc:
-            logger.debug("check_position_size error: %s", exc)
-            return RiskCheckResult(passed=True, risk_level=RiskLevel.LOW, message="check_skipped")
+            # Fail CLOSED: a position-size check that errors must block, not pass.
+            logger.error("check_position_size error; failing CLOSED: %s", exc)
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message="check_error: position-size check failed closed",
+            )
 
     def check_price_tolerance(
         self,
@@ -1747,8 +1774,13 @@ class RiskManager:
                 threshold=tolerance,
             )
         except Exception as exc:
-            logger.debug("check_price_tolerance error: %s", exc)
-            return RiskCheckResult(passed=True, message="check_skipped")
+            # Fail CLOSED: a price-tolerance check that errors must block, not pass.
+            logger.error("check_price_tolerance error; failing CLOSED: %s", exc)
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message="check_error: price-tolerance check failed closed",
+            )
 
     def check_kill_switch(
         self,
@@ -1939,8 +1971,13 @@ class RiskManager:
                 threshold=max_single,
             )
         except Exception as exc:
-            logger.debug("check_concentration error: %s", exc)
-            return RiskCheckResult(passed=True, message="check_skipped")
+            # Fail CLOSED: a concentration check that errors must block, not pass.
+            logger.error("check_concentration error; failing CLOSED: %s", exc)
+            return RiskCheckResult(
+                passed=False,
+                risk_level=RiskLevel.CRITICAL,
+                message="check_error: concentration check failed closed",
+            )
 
     # ── Diagnostics ───────────────────────────────────────────────────────────
 
@@ -1959,7 +1996,14 @@ class RiskManager:
         tail = arr[arr <= cutoff]
         if len(tail) == 0:
             return 0.0
-        return float(abs(np.mean(tail)))
+        # CVaR (expected shortfall) is a LOSS magnitude. Returns are signed
+        # fractions (losses negative), so the shortfall is -mean(tail) only when
+        # the worst-case tail is actually a loss. Using abs() was wrong: on a
+        # winning streak (all-positive returns) the worst 5% are the smallest
+        # GAINS, and abs(mean) of those could exceed the daily limit and falsely
+        # block a profitable account. Clamp to 0 when the tail mean is a gain.
+        mean_tail = float(np.mean(tail))
+        return max(0.0, -mean_tail)
 
     def check_cvar_pre_trade(self, confidence: float = 0.95) -> tuple:
         """Pre-trade CVaR gate.  Returns (allowed: bool, reason: str).
@@ -2056,8 +2100,9 @@ class RiskManager:
 
     def register_position(self, position: dict[str, Any]) -> None:
         """Register an open position in the internal list."""
-        self._open_positions_list.append(position)
-        self._state.open_positions = len(self._open_positions_list)
+        with self._state_lock:
+            self._open_positions_list.append(position)
+            self._state.open_positions = len(self._open_positions_list)
 
     def close_position(self, position_id: str, pnl: float = 0.0) -> None:
         """Remove a position by id and record its P&L."""

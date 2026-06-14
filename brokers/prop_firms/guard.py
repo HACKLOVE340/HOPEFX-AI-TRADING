@@ -90,15 +90,19 @@ def check_prop_firm_rules(account_info: object) -> None:
     drawdown_cfg = _firm_rules.get("drawdown", {})
     max_daily_pct: float = drawdown_cfg.get("max_daily_drawdown_pct", 5.0)
     max_total_pct: float = drawdown_cfg.get("max_total_drawdown_pct", 10.0)
-    drawdown_cfg.get("drawdown_mode", "equity")
 
     # Total drawdown: equity vs balance (initial capital proxy)
     total_dd_pct = (balance - equity) / balance * 100.0
 
-    # Daily drawdown: we use the same equity-vs-balance metric as a conservative
-    # proxy when we don't have a separate start-of-day snapshot.  A production
-    # deployment should store the daily open equity in Redis/DB and pass it in.
-    daily_dd_pct = total_dd_pct  # conservative: same as total when no daily snapshot
+    # Daily drawdown is measured against the same balance baseline. This is
+    # deliberately CONSERVATIVE for a pre-trade safety gate: it counts loss from
+    # initial capital, so it can only OVER-restrict (block earlier) the daily
+    # rule, never under-restrict. A precise daily rule needs the day's OPENING
+    # equity captured at the firm's daily rollover (a snapshot hook in the engine,
+    # persisted in Redis/DB); a naive in-process first-observation baseline would
+    # be unsafe (it could baseline at an already-lossy equity and MISS a breach),
+    # so we keep the conservative baseline until that hook exists.
+    daily_dd_pct = total_dd_pct
 
     alert_daily_threshold = (
         _enforcement.get("alert_at_pct_of_daily_limit", 80) / 100.0 * max_daily_pct

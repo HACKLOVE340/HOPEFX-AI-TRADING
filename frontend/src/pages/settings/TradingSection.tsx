@@ -69,7 +69,7 @@ const TradingSection: React.FC = () => {
       {/* Account snapshot */}
       {account && (
         <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20,
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, marginBottom: 20,
         }}>
           {[
             { label: 'Balance', value: `$${account.balance?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? '—'}` },

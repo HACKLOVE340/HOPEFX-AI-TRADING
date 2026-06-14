@@ -30,7 +30,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -167,60 +169,77 @@ class PartialFillAggregator:
     def __init__(self) -> None:
         self._states: dict[str, PartialFillState] = {}
         self._callbacks: list[Callable[[PartialFillState], None]] = []
+        # Broker fill callbacks may arrive concurrently; guard shared state.
+        self._lock = threading.RLock()
 
     def register(self, parent_id: str, symbol: str, side: str, target_lots: float) -> None:
-        self._states[parent_id] = PartialFillState(
-            parent_id=parent_id,
-            symbol=symbol,
-            side=side,
-            target_lots=target_lots,
-        )
+        with self._lock:
+            self._states[parent_id] = PartialFillState(
+                parent_id=parent_id,
+                symbol=symbol,
+                side=side,
+                target_lots=target_lots,
+            )
 
     def record_fill(self, parent_id: str, lots: float, price: float) -> PartialFillState | None:
-        state = self._states.get(parent_id)
-        if state is None:
-            logger.warning("PartialFillAggregator: unknown parent_id=%s", parent_id)
+        # Validate inputs — a NaN/negative lots or price would corrupt
+        # filled_lots/avg_price and the completion check.
+        if not (math.isfinite(lots) and lots > 0 and math.isfinite(price) and price > 0):
+            logger.warning(
+                "PartialFillAggregator: ignoring invalid fill parent=%s lots=%r price=%r",
+                parent_id,
+                lots,
+                price,
+            )
             return None
 
-        state.add_fill(lots, price)
-        if _PROM_OK:
-            _prom_partial_fills.inc()
+        # Mutate shared state under the lock; snapshot the callbacks to run
+        # after releasing it so user code never executes while locked.
+        with self._lock:
+            state = self._states.get(parent_id)
+            if state is None:
+                logger.warning("PartialFillAggregator: unknown parent_id=%s", parent_id)
+                return None
 
-        logger.debug(
-            "Partial fill: parent=%s filled=%.4f/%.4f (%.1f%%) avg=%.4f",
-            parent_id,
-            state.filled_lots,
-            state.target_lots,
-            state.fill_pct * 100,
-            state.avg_price,
-        )
+            state.add_fill(lots, price)
+            if _PROM_OK:
+                _prom_partial_fills.inc()
 
-        if state.is_complete:
-            logger.info(
-                "Fill COMPLETE: parent=%s lots=%.4f avg_price=%.4f",
+            logger.debug(
+                "Partial fill: parent=%s filled=%.4f/%.4f (%.1f%%) avg=%.4f",
                 parent_id,
                 state.filled_lots,
+                state.target_lots,
+                state.fill_pct * 100,
                 state.avg_price,
             )
-            for cb in self._callbacks:
-                try:
-                    cb(state)
-                except (RuntimeError, TypeError) as exc:
-                    logger.debug("PartialFillAggregator callback error: %s", exc)
-            del self._states[parent_id]
 
-        elif state.is_timed_out:
-            logger.warning(
-                "Fill TIMEOUT: parent=%s filled=%.1f%% — treating as complete",
-                parent_id,
-                state.fill_pct * 100,
-            )
-            for cb in self._callbacks:
-                try:
-                    cb(state)
-                except (RuntimeError, TypeError) as exc:
-                    logger.debug("PartialFillAggregator callback error: %s", exc)
-            del self._states[parent_id]
+            fire_callbacks = False
+            if state.is_complete:
+                logger.info(
+                    "Fill COMPLETE: parent=%s lots=%.4f avg_price=%.4f",
+                    parent_id,
+                    state.filled_lots,
+                    state.avg_price,
+                )
+                self._states.pop(parent_id, None)
+                fire_callbacks = True
+            elif state.is_timed_out:
+                logger.warning(
+                    "Fill TIMEOUT: parent=%s filled=%.1f%% — treating as complete",
+                    parent_id,
+                    state.fill_pct * 100,
+                )
+                self._states.pop(parent_id, None)
+                fire_callbacks = True
+
+            callbacks = list(self._callbacks) if fire_callbacks else []
+
+        for cb in callbacks:
+            try:
+                cb(state)
+            except (RuntimeError, TypeError) as exc:
+                logger.debug("PartialFillAggregator callback error: %s", exc)
 
         return state
 

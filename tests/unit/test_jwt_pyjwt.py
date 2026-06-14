@@ -23,7 +23,7 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-3
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 # Load auth/jwt.py directly to avoid auth/__init__.py pulling in EmailStr
-_spec = importlib.util.spec_from_file_location("auth_jwt", pathlib.Path(__file__).parent.parent / "auth" / "jwt.py")
+_spec = importlib.util.spec_from_file_location("auth_jwt", pathlib.Path(__file__).resolve().parents[2] / "auth" / "jwt.py")
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 
@@ -49,7 +49,7 @@ _CRED_EXC = _FakeExc("invalid credentials")
 def test_jose_not_imported():
     """python-jose must not be present in the module's imports."""
     # jose should not be importable (or at least not used by auth/jwt.py)
-    src = pathlib.Path(__file__).parent.parent / "auth" / "jwt.py"
+    src = pathlib.Path(__file__).resolve().parents[2] / "auth" / "jwt.py"
     content = src.read_text()
     assert "from jose" not in content, "auth/jwt.py still imports from jose"
     assert "import jose" not in content, "auth/jwt.py still imports jose"
@@ -57,7 +57,7 @@ def test_jose_not_imported():
 
 def test_pyjwt_used():
     """auth/jwt.py must import the PyJWT top-level 'jwt' package."""
-    src = pathlib.Path(__file__).parent.parent / "auth" / "jwt.py"
+    src = pathlib.Path(__file__).resolve().parents[2] / "auth" / "jwt.py"
     content = src.read_text()
     assert "import jwt" in content, "auth/jwt.py does not import PyJWT"
 

@@ -268,11 +268,38 @@ class BrokerSettingsBody(BaseModel):
     practice: bool = True
 
 
+@router.get("/api/settings/broker", summary="Get broker connection settings")
+async def get_broker_settings(user: TokenPayload = Depends(get_current_user)):
+    """Return saved broker settings so the UI can hydrate on revisit.
+
+    The API key is NEVER returned raw — only a key-set flag and last-4 — so the
+    secret is not exposed while non-secret fields (type/account_id/practice)
+    survive a page reload (previously they silently reset to defaults).
+    """
+    uid = user.sub
+    data = _load(uid, "broker", BrokerSettingsBody().model_dump())
+    key = str(data.get("api_key") or "")
+    return {
+        "type": data.get("type", "paper"),
+        "account_id": data.get("account_id", ""),
+        "practice": bool(data.get("practice", True)),
+        "api_key_set": bool(key),
+        "api_key_last4": key[-4:] if len(key) >= 4 else "",
+    }
+
+
 @router.post("/api/settings/broker", summary="Save broker connection settings")
 async def save_broker_settings(body: BrokerSettingsBody, user: TokenPayload = Depends(get_current_user)):
     """Persist broker connection settings. API key is stored server-side only."""
     uid = user.sub
-    _save(uid, "broker", body.model_dump())
+    payload = body.model_dump()
+    # The UI never prefills the secret API key (it shows a masked placeholder),
+    # so a blank api_key on re-save means "keep the existing one" — don't wipe it.
+    if not payload.get("api_key"):
+        existing = _load(uid, "broker", {"api_key": ""})
+        if existing.get("api_key"):
+            payload["api_key"] = existing["api_key"]
+    _save(uid, "broker", payload)
     logger.info("Broker settings saved for user %s (type=%s)", uid, body.type)
     return {"status": "saved", "broker": body.type}
 

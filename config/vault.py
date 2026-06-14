@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import base64
-import hashlib
 import json
 import os
 
@@ -29,6 +28,8 @@ except ImportError:
     _KEYRING_AVAILABLE = False
 from argon2 import PasswordHasher as _PasswordHasher
 from argon2.exceptions import VerifyMismatchError as _VerifyMismatchError
+from argon2.low_level import Type as _Argon2Type
+from argon2.low_level import hash_secret_raw as _argon2_hash_raw
 from cryptography.fernet import Fernet, InvalidToken
 
 from core.exceptions import AuthenticationError, VaultError
@@ -90,16 +91,28 @@ class SecureVault:
             raise VaultError(f"Vault initialization failed: {e}") from e
 
     def _derive_key(self, password: str) -> bytes:
-        """Derive Fernet key from password using PBKDF2."""
-        salt = hashlib.sha256(os.urandom(32)).digest()
-        kdf = hashlib.pbkdf2_hmac(
-            "sha256",
-            password.encode(),
-            salt[:16],
-            iterations=480000,
-            dklen=32,
+        """Derive a Fernet key from *password* using Argon2id.
+
+        Matches the vault's advertised KDF (the class previously derived with
+        PBKDF2 despite documenting Argon2id).
+
+        NOTE: a fresh random salt is used and is NOT persisted, so this is not a
+        password-recovery mechanism — the derived key is stored in the system
+        keyring, which is the source of truth. The password contributes entropy
+        to a one-time, high-entropy key. To make the password a true recovery
+        factor, persist the salt and re-derive (tracked as an enhancement).
+        """
+        salt = os.urandom(16)
+        raw = _argon2_hash_raw(
+            secret=password.encode(),
+            salt=salt,
+            time_cost=3,
+            memory_cost=65536,
+            parallelism=4,
+            hash_len=32,
+            type=_Argon2Type.ID,
         )
-        return base64.urlsafe_b64encode(kdf)
+        return base64.urlsafe_b64encode(raw)
 
     def encrypt(self, data: str | dict | bytes) -> str:
         """Encrypt data to base64 string."""

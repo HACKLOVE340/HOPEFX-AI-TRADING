@@ -282,7 +282,8 @@ class TestRiskManagerError:
         """Verify there is no code path that allows a trade when risk manager errors."""
         from pathlib import Path
 
-        source = (Path(__file__).parent.parent / "risk" / "pre_trade_gate.py").read_text()
+        # repo_root/risk/pre_trade_gate.py — test lives at repo_root/tests/unit/
+        source = (Path(__file__).resolve().parents[2] / "risk" / "pre_trade_gate.py").read_text()
         # Check the raw file — not lowercased inspect output
         assert "allow_anyway" not in source
         # The docstring mentions "allow anyway" as a concept to reject — that's fine.

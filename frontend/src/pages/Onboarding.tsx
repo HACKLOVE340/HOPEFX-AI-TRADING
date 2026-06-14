@@ -215,7 +215,7 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
       ) : (
         <div style={s.resultBox}>
           <div style={{ color: '#4ade80', fontWeight: 600, marginBottom: 12 }}>✓ Backtest complete</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, textAlign: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: '#f1f5f9' }}>{result.return_pct.toFixed(1)}%</div>
               <div style={{ fontSize: 12, color: '#64748b' }}>Return</div>
@@ -289,7 +289,26 @@ const Onboarding: React.FC = () => {
 
   const destination = resolvePostOnboardingPath(user?.role);
   const saveStep = (n: number) => { setStep(n); localStorage.setItem(STORAGE_KEY, String(n)); };
-  const finish   = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
+
+  // Persist the chosen risk level into the user's trading preferences so the
+  // onboarding selection actually takes effect (previously the wizard's choices
+  // were discarded on finish). Merge into existing prefs to avoid clobbering
+  // other settings; best-effort so completing onboarding is never blocked.
+  const RISK_MAP: Record<RiskLevel, { max_risk_per_trade: number; max_daily_drawdown: number }> = {
+    conservative: { max_risk_per_trade: 0.5, max_daily_drawdown: 2 },
+    moderate:     { max_risk_per_trade: 1,   max_daily_drawdown: 3 },
+    aggressive:   { max_risk_per_trade: 2,   max_daily_drawdown: 5 },
+  };
+  const persistOnboarding = async () => {
+    if (!state.riskLevel) return;
+    try {
+      const cur = await api.get('/settings/trading').then((r) => r.data).catch(() => ({}));
+      await api.post('/settings/trading', { ...(cur ?? {}), ...RISK_MAP[state.riskLevel] });
+    } catch { /* non-fatal — never block completing onboarding */ }
+  };
+
+  // Persist best-effort in the background — never block navigation on it.
+  const finish = () => { void persistOnboarding(); localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
   const skip     = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
 
   const canAdvance = () => {

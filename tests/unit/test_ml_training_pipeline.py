@@ -33,7 +33,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]  # repo root (test lives in tests/unit/)
 MODELS = ROOT / "ml" / "saved_models"
 sys.path.insert(0, str(ROOT))
 

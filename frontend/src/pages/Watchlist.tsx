@@ -193,7 +193,7 @@ const WatchlistPage: React.FC = () => {
             style={{ padding: '6px 13px', background: 'rgba(167,139,250,0.12)', border: '1px solid rgba(167,139,250,0.35)', borderRadius: 7, color: '#a78bfa', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             📡 Signals
           </button>
-          <button onClick={() => navigate('/price-alerts')}
+          <button onClick={() => navigate('/alerts')}
             style={{ padding: '6px 13px', background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.35)', borderRadius: 7, color: '#fbbf24', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
             🔔 Alerts
           </button>
@@ -232,7 +232,7 @@ const WatchlistPage: React.FC = () => {
             <div key={item.symbol} style={s.tableRow}>
               <span
                 style={{ flex: 1, fontWeight: 700, color: '#f1f5f9', cursor: 'pointer' }}
-                onClick={() => navigate('/ai-chart')}
+                onClick={() => navigate('/ai-chart', { state: { symbol: item.symbol } })}
                 title={`Open ${item.symbol} chart`}
               >
                 {item.symbol}
@@ -255,7 +255,7 @@ const WatchlistPage: React.FC = () => {
                   ⚡ Trade
                 </button>
                 <button
-                  onClick={() => navigate('/alerts')}
+                  onClick={() => navigate('/alerts', { state: { symbol: item.symbol } })}
                   style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: 14, cursor: 'pointer', padding: '0 2px' }}
                   title={`Set alert for ${item.symbol}`}
                 >

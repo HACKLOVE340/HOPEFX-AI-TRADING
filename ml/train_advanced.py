@@ -933,7 +933,9 @@ def oos_eval_advanced(
         auc = 0.5
 
     n = len(y_oos)
-    k = round(acc * n)
+    # Exact count of correct predictions. round(acc * n) can be off-by-one due
+    # to float error, and this binomial p-value gates production deployment.
+    k = int(np.sum(np.asarray(preds) == np.asarray(y_oos)))
     binom_result = binomtest(k, n, p=0.5, alternative="greater")
     p_value = float(binom_result.pvalue)
 

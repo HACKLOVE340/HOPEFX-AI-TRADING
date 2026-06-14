@@ -87,7 +87,14 @@ def _verify_signature(body: bytes, header_sig: str | None, secret: str) -> bool:
     if not header_sig:
         return False
     expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, header_sig.lower().lstrip("sha256="))
+    sig = header_sig.lower()
+    # Strip the literal "sha256=" prefix only. lstrip() strips a CHARACTER SET,
+    # so it would mangle any digest beginning with s/h/a/2/5/6/= and corrupt the
+    # comparison.
+    prefix = "sha256="
+    if sig.startswith(prefix):
+        sig = sig[len(prefix) :]
+    return hmac.compare_digest(expected, sig)
 
 
 def _action_to_direction(action: str) -> str:

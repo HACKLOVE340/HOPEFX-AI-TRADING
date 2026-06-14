@@ -449,6 +449,9 @@ async def register(body: RegisterRequest, request: Request):
             email=body.email,
             username=body.username,
             password=body.password,
+            # Public self-service signup must be least-privilege. Never inherit
+            # the service default ("trader"), which grants trade-execution.
+            role="user",
         )
     )
     if not ok:

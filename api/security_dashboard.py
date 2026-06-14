@@ -44,7 +44,7 @@ UTC = timezone.utc
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from api.auth import TokenPayload, get_current_user, require_role
+from api.auth import TokenPayload, require_role
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ _baseline_info: dict = {"last_built": None, "file_count": 0, "status": "unknown"
 @router.get("/attacks", response_model=None, summary="Attack / intrusion log")
 async def get_attack_log(
     limit: int = Query(100, ge=1, le=500),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
     Return recent attack events: brute-force attempts, rate-limit violations,
@@ -115,7 +115,7 @@ def record_attack_event(event_type: str, ip: str, details: dict | None = None) -
 
 @router.get("/alerts", response_model=None, summary="Active security alerts")
 async def get_security_alerts(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
     Return active (unresolved) security alerts.
@@ -182,7 +182,7 @@ async def get_security_alerts(
 
 @router.get("/lockdown", response_model=None, summary="Lockdown status")
 async def get_lockdown_status(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return whether the platform is in lockdown mode and why."""
     try:
@@ -310,7 +310,7 @@ async def clear_lockdown(
 
 @router.get("/blocked-ips", response_model=None, summary="List blocked IP addresses")
 async def list_blocked_ips(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """
     Return the current list of blocked IP addresses.
@@ -352,7 +352,7 @@ async def list_blocked_ips(
 
 @router.get("/heal/status", response_model=None, summary="Self-healer status")
 async def get_heal_status(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return the current status of the autonomous self-healing subsystem."""
     try:
@@ -377,7 +377,7 @@ async def get_heal_status(
 @router.get("/heal/drift", response_model=None, summary="Recent feature-drift events")
 async def get_heal_drift(
     limit: int = Query(50, ge=1, le=200),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return recent feature-drift events detected by the self-healer."""
     try:
@@ -396,7 +396,7 @@ async def get_heal_drift(
 async def get_heal_patches(
     limit: int = Query(50, ge=1, le=200),
     status_filter: str | None = Query(None, alias="status"),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return the patch records managed by the self-healer."""
     try:
@@ -484,7 +484,7 @@ async def rebuild_baseline(
 
 @router.get("/av/status", response_model=None, summary="Antivirus engine status")
 async def get_av_status(
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return the current status of the antivirus scanning engine."""
     try:
@@ -507,7 +507,7 @@ async def get_av_status(
 @router.get("/av/threats", response_model=None, summary="Detected threats")
 async def get_av_threats(
     limit: int = Query(50, ge=1, le=500),
-    user: TokenPayload = Depends(get_current_user),
+    user: TokenPayload = Depends(require_role("admin")),
 ):
     """Return detected threats, most recent first."""
     try:

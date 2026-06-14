@@ -111,16 +111,29 @@ class PropConfig:
             firm_cfg = firms.get(active, {}) if active else {}
             dd_cfg = firm_cfg.get("drawdown", {})
 
-            daily_dd = (
-                raw.get("daily_dd")
-                or enforcement.get("max_daily_drawdown_pct", 5.0) / 100
-                or dd_cfg.get("max_daily_drawdown_pct", 5.0) / 100
-            )
-            max_dd = (
-                raw.get("max_dd")
-                or enforcement.get("max_total_drawdown_pct", 10.0) / 100
-                or dd_cfg.get("max_total_drawdown_pct", 10.0) / 100
-            )
+            # Explicit precedence with `is not None` checks: a legitimately
+            # configured 0 must NOT be skipped (an `or` chain treats it as
+            # missing), and the firm-level dd_cfg must remain reachable (with
+            # the previous `or 5.0/100` middle default it was dead code because
+            # 0.05 is always truthy). Top-level `daily_dd`/`max_dd` are already
+            # fractions; the `*_pct` sources are percentages and need /100.
+            if raw.get("daily_dd") is not None:
+                daily_dd = float(raw["daily_dd"])
+            elif enforcement.get("max_daily_drawdown_pct") is not None:
+                daily_dd = float(enforcement["max_daily_drawdown_pct"]) / 100
+            elif dd_cfg.get("max_daily_drawdown_pct") is not None:
+                daily_dd = float(dd_cfg["max_daily_drawdown_pct"]) / 100
+            else:
+                daily_dd = 0.05
+
+            if raw.get("max_dd") is not None:
+                max_dd = float(raw["max_dd"])
+            elif enforcement.get("max_total_drawdown_pct") is not None:
+                max_dd = float(enforcement["max_total_drawdown_pct"]) / 100
+            elif dd_cfg.get("max_total_drawdown_pct") is not None:
+                max_dd = float(dd_cfg["max_total_drawdown_pct"]) / 100
+            else:
+                max_dd = 0.10
             news_blackout = int(
                 raw.get("news_blackout")
                 or firm_cfg.get("news_trading", {}).get("blackout_minutes_before_news", 5) * 60

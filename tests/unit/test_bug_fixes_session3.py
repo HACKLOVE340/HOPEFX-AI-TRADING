@@ -34,7 +34,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-ROOT = Path(__file__).parent.parent
+# repo root — this test lives at repo_root/tests/unit/
+ROOT = Path(__file__).resolve().parents[2]
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────

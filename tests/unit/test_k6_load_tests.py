@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]  # repo root (test lives in tests/unit/)
 K6_SCRIPT = ROOT / "k6" / "load_tests.js"
 K6_RUNNER = ROOT / "k6" / "run_load_test.sh"
 K6_RESULTS = ROOT / "k6" / "results"

@@ -159,6 +159,9 @@ class OrderLifecycleManager:
         try:
             from kill_switch import KillSwitch as _KillSwitch
 
+            # A fresh instance restores persisted state in __init__ (state file +
+            # HOPEFX_KILL_SWITCH env), so it detects activations that were
+            # persisted by activate(). Fails closed below if the check raises.
             _ks = _KillSwitch()
             if _ks.is_active():
                 logger.critical(
@@ -214,13 +217,35 @@ class OrderLifecycleManager:
                     "client_order_id": order.client_order_id,
                 }
             )
-            status = (result or {}).get("status", "")
-            if str(status).lower() in ("rejected", "error", "failed"):
-                reason = (result or {}).get("reason", "BROKER_REJECTED")
+            result = result or {}
+            status = str(result.get("status", "")).lower()
+            # Statuses that positively confirm the broker accepted the order.
+            _accepted = {
+                "filled",
+                "pending",
+                "new",
+                "open",
+                "accepted",
+                "submitted",
+                "created",
+                "ok",
+                "done",
+            }
+            if status in ("rejected", "error", "failed", "cancelled", "canceled"):
+                reason = result.get("reason", "BROKER_REJECTED")
                 self._transition(order, OrderStatus.REJECTED, reason=reason)
-            else:
+            elif status in _accepted or result.get("order_id") or result.get("id"):
                 self._transition(order, OrderStatus.NEW)
                 self.active_orders.add(order.id)
+            else:
+                # Fail closed: an empty/None result or an unrecognized status with
+                # no broker order id is NOT proof of acceptance. Treating it as NEW
+                # would create a phantom position the broker never opened.
+                self._transition(
+                    order,
+                    OrderStatus.REJECTED,
+                    reason=f"BROKER_UNCONFIRMED:status={status!r}",
+                )
         except (TimeoutError, RuntimeError, ConnectionError) as exc:
             logger.error("OMS broker submit failed for %s: %s", order.id, exc, exc_info=True)
             self._transition(order, OrderStatus.REJECTED, reason=str(exc))

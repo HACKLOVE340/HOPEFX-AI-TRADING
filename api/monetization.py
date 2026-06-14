@@ -516,9 +516,12 @@ async def create_referral(request: ReferralRequest, user: TokenPayload = Depends
     """
     Create referral tracking for a referred user.
     """
+    # The referred user is ALWAYS the authenticated caller — never an arbitrary
+    # user_id from the request body. Trusting the body let a caller pre-register
+    # referrals for users they don't control and hijack organic signups.
     referral = affiliate_manager.create_referral(
         affiliate_code=request.affiliate_code,
-        referred_user_id=request.referred_user_id,
+        referred_user_id=user.sub,
     )
 
     if not referral:

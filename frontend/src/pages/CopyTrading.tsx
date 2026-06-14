@@ -22,11 +22,29 @@ interface Leader {
   sharpe: number;
   max_dd: number;
   followers: number;
+  // These are not yet returned by GET /leaderboard — normalized with safe
+  // defaults on load so cards and allocation math never render NaN/undefined.
   aum: number;
   fee: number;
   win_rate: number;
   trades_per_week: number;
   avg_trade_duration: string;
+}
+
+function normalizeLeader(l: Partial<Leader> & { id: string; name: string }): Leader {
+  return {
+    id: l.id,
+    name: l.name,
+    return_3m: l.return_3m ?? 0,
+    sharpe: l.sharpe ?? 0,
+    max_dd: l.max_dd ?? 0,
+    followers: l.followers ?? 0,
+    aum: l.aum ?? 0,
+    fee: l.fee ?? 0,
+    win_rate: l.win_rate ?? 0,
+    trades_per_week: l.trades_per_week ?? 0,
+    avg_trade_duration: l.avg_trade_duration ?? '—',
+  };
 }
 
 interface ActiveSession {
@@ -126,7 +144,8 @@ const CopyTrading: React.FC = () => {
       const r = await copyTradingApi.leaders();
       if (!mountedRef.current) return;
       const d = r.data as Leader[] | { traders?: Leader[]; leaderboard?: Leader[] };
-      setLeaders(Array.isArray(d) ? d : (d.traders ?? d.leaderboard ?? []));
+      const raw = Array.isArray(d) ? d : (d.traders ?? d.leaderboard ?? []);
+      setLeaders(raw.map(normalizeLeader));
       setLoadErr('');
     } catch (err: unknown) {
       if (!mountedRef.current) return;

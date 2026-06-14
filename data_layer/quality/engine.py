@@ -305,6 +305,16 @@ class DataQualityEngine:
         if tick.mid < MIN_GOLD_PRICE or tick.mid > MAX_GOLD_PRICE:
             return self._reject(tick, state, "price_out_of_bounds", seq)
 
+        # ── 2b. Future-timestamp / clock-skew rejection ────────────────────
+        # A timestamp implausibly far in the future signals feed clock skew or a
+        # ms/epoch parse error. Such a tick would clamp its measured latency to 0
+        # (latency_ms_raw = max(0, received_at - tick_epoch)), making it look like
+        # the freshest source and inflating its confidence-weighted consensus
+        # contribution. Reject it outright.
+        _skew_tol_s = float(os.getenv("TICK_FUTURE_SKEW_TOLERANCE_S", "5.0"))
+        if tick.timestamp.timestamp() - received_at > _skew_tol_s:
+            return self._reject(tick, state, "future_timestamp", seq)
+
         # ── 3. Spread validation ───────────────────────────────────────────
         if tick.bid > tick.ask:
             return self._reject(tick, state, "inverted_spread", seq)
@@ -313,8 +323,15 @@ class DataQualityEngine:
         if spread_pct > MAX_SPREAD_PCT:
             return self._reject(tick, state, "excessive_spread", seq)
 
-        # ── 4. Price jump detection ────────────────────────────────────────
-        if state.last_mid > 0:
+        # Evaluate staleness up-front: a source recovering from a silence gap has
+        # a last_mid from BEFORE the gap (possibly hours old). The jump check
+        # below must NOT run against that unreliable baseline — it would either
+        # spuriously reject (price legitimately moved during the gap) or silently
+        # accept while the gap goes unflagged.
+        _is_stale = state.is_stale()
+
+        # ── 4. Price jump detection (skipped for the first post-gap tick) ──
+        if state.last_mid > 0 and not _is_stale:
             jump_pct = abs(tick.mid - state.last_mid) / state.last_mid
             if jump_pct > MAX_JUMP_PCT:
                 state.jump_count += 1
@@ -335,7 +352,7 @@ class DataQualityEngine:
                 return self._reject(tick, state, "price_jump", seq)
 
         # ── 5. Stale detection ─────────────────────────────────────────────
-        if state.is_stale():
+        if _is_stale:
             state.stale_count += 1
             state.update_confidence(-0.02)
             quality = TickQuality.STALE
@@ -533,6 +550,21 @@ class DataQualityEngine:
         consensus = sum(t.mid * norm_w2[s] for s, t in inliers.items())
 
         conf = sum(self._sources[s].confidence * norm_w2[s] for s in inliers)
+
+        # Single-source consensus has had NO cross-validation: an erroneous or
+        # compromised lone feed silently becomes the "consensus" at full
+        # confidence. Degrade the confidence so downstream gates (is_safe_to_trade
+        # requires >= 0.30, risk sizing) can react. This is the DQE-level
+        # complement to the MIN_FEED_QUORUM gate in the gold feed manager.
+        if len(inliers) < 2:
+            _single_factor = float(os.getenv("DQE_SINGLE_SOURCE_CONF_FACTOR", "0.5"))
+            conf *= _single_factor
+            logger.warning(
+                "DQE consensus from a single source %s — confidence degraded to %.3f "
+                "(no cross-validation)",
+                next(iter(inliers)).value if inliers else "?",
+                conf,
+            )
 
         if self._prom_consensus:
             try:

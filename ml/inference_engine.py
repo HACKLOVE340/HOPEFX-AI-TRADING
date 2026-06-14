@@ -589,9 +589,12 @@ class InferenceEngine:
                 )
             return self._model_stale
         except Exception as exc:
-            logger.debug("Staleness check failed: %s", exc)
-            self._model_stale = False
-            return False
+            # Fail CLOSED: if model age cannot be determined, treat the model as
+            # stale so the STALE_MODEL_BLOCK gate (when enabled) blocks rather
+            # than trading on a model of unknown freshness.
+            logger.warning("Staleness check failed; treating model as STALE: %s", exc)
+            self._model_stale = True
+            return True
 
     # ── Feature drift guard ───────────────────────────────────────────────────
 
@@ -685,8 +688,12 @@ class InferenceEngine:
             return self._drift_detected
 
         except Exception as exc:
-            logger.debug("Feature drift check failed: %s", exc)
-            return False
+            # Fail CLOSED: if drift cannot be computed, flag drift so the
+            # DRIFT_BLOCK gate (when enabled) abstains rather than trading on an
+            # unverified live feature distribution.
+            logger.warning("Feature drift check failed; flagging drift: %s", exc)
+            self._drift_detected = True
+            return True
 
     # ── Main predict ──────────────────────────────────────────────────────────
 
@@ -921,7 +928,7 @@ class InferenceEngine:
         if learner is not None:
             try:
                 online_prob = learner.predict_proba(ohlcv)
-                if online_prob is not None:
+                if online_prob is not None and np.isfinite(online_prob) and 0.0 <= online_prob <= 1.0:
                     base_before = raw_prob
                     # Blend: 70% base model, 30% online learner
                     raw_prob = 0.70 * raw_prob + 0.30 * online_prob
@@ -931,6 +938,13 @@ class InferenceEngine:
                         base_before,
                         online_prob,
                         raw_prob,
+                    )
+                elif online_prob is not None:
+                    # Out-of-range / NaN probability would corrupt the signal —
+                    # skip the blend rather than poison raw_prob.
+                    logger.warning(
+                        "Online learner returned invalid probability %r; skipping blend.",
+                        online_prob,
                     )
             except Exception as exc:
                 logger.debug("Online learner blend failed: %s", exc)
@@ -1122,7 +1136,12 @@ class InferenceEngine:
 
             return orchestrator.is_safe_to_trade()
         except Exception:
-            return True  # fail-open: don't block trading on orchestrator error
+            # fail-closed: block trading when the safety state cannot be determined
+            logger.warning(
+                "is_safe_to_trade: orchestrator unavailable; failing CLOSED (not safe).",
+                exc_info=True,
+            )
+            return False
 
     def _record_signal_lineage(
         self,

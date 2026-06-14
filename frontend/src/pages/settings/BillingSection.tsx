@@ -121,7 +121,7 @@ const BillingSection: React.FC = () => {
       {/* Plan comparison */}
       <Card>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
           {[
             { id: 'free',         name: 'Free',         price: '$0',      features: ['Paper trading', '5 signals/day', '3 backtests/mo', '1 strategy'] },
             { id: 'starter',      name: 'Starter',      price: '$1,800',  features: ['Live trading', '20 signals/day', '10 backtests/mo', '3 strategies'] },

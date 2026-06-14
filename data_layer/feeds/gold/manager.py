@@ -32,7 +32,7 @@ import logging
 import os
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import timezone
 
 UTC = timezone.utc
 
@@ -288,6 +288,23 @@ class GoldFeedManager:
         if not live:
             return
 
+        # Feed quorum: require at least MIN_FEED_QUORUM independent live sources
+        # before publishing a consensus price. A single source has no
+        # cross-validation — a compromised or malfunctioning feed could move the
+        # consensus unchecked. Default 1 preserves prior single-feed behaviour;
+        # operators handling live capital should raise this to >= 2 so a lone
+        # source can never drive execution. When quorum is not met we leave the
+        # previous consensus tick in place; it ages out via the staleness gates
+        # and downstream consumers fail closed.
+        _min_quorum = int(os.getenv("MIN_FEED_QUORUM", "1"))
+        if len(live) < _min_quorum:
+            logger.warning(
+                "Feed quorum not met: %d live source(s) < MIN_FEED_QUORUM=%d; withholding consensus update",
+                len(live),
+                _min_quorum,
+            )
+            return
+
         consensus_mid, confidence, _ = dqe.cross_source_consensus(live)
         if consensus_mid <= 0:
             return
@@ -302,9 +319,15 @@ class GoldFeedManager:
             # Fallback: typical gold spread ~$0.30 (0.015% of $2000)
             half_spread = max(consensus_mid * 0.00015, 0.10)
 
+        # Stamp the consensus with the newest contributing source's timestamp,
+        # NOT now(): otherwise downstream staleness checks (DQE is_stale, the
+        # orchestrator age gates) always see the consensus as fresh even if
+        # every source froze. `live` is non-empty (checked above).
+        newest_ts = max(t.timestamp for t in live.values())
+
         self._consensus_tick = GoldTick(
             symbol="XAU_USD",
-            timestamp=datetime.now(UTC),
+            timestamp=newest_ts,
             bid=round(consensus_mid - half_spread, 4),
             ask=round(consensus_mid + half_spread, 4),
             mid=round(consensus_mid, 4),

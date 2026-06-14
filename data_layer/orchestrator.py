@@ -220,6 +220,7 @@ class _WebSocketBroadcaster:
         self._connections: set = set()
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
         self._task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
         self._dropped = 0
         self._sent = 0
 
@@ -232,13 +233,34 @@ class _WebSocketBroadcaster:
         logger.debug("WebSocketBroadcaster: connection removed (%d total)", len(self._connections))
 
     def enqueue(self, message: str) -> None:
-        """Non-blocking enqueue from sync context. Drops if queue is full."""
+        """Non-blocking enqueue from sync context. Drops if queue is full.
+
+        asyncio.Queue is bound to a single event loop and is NOT thread-safe.
+        _on_tick may run on a feed/executor thread, so when called off the loop
+        thread we hand the put_nowait to the loop via call_soon_threadsafe rather
+        than mutating the queue directly (which can corrupt its internal state).
+        """
+        loop = self._loop
+        if loop is not None:
+            try:
+                running = asyncio.get_running_loop()
+            except RuntimeError:
+                running = None
+            if running is not loop:
+                # Called from another thread (or no running loop) — schedule on
+                # the broadcaster's loop thread.
+                loop.call_soon_threadsafe(self._enqueue_on_loop, message)
+                return
+        self._enqueue_on_loop(message)
+
+    def _enqueue_on_loop(self, message: str) -> None:
         try:
             self._queue.put_nowait(message)
         except asyncio.QueueFull:
             self._dropped += 1
 
     async def start(self) -> None:
+        self._loop = asyncio.get_running_loop()
         self._task = asyncio.create_task(self._broadcast_loop(), name="ws_broadcast")
 
     async def stop(self) -> None:
@@ -667,7 +689,7 @@ class MarketDataOrchestrator:
                     raw_source = cached.get("source")
                     if not raw_source:
                         raise ValueError(f"Cached tick for {symbol} has no 'source' field")
-                    return GoldTick(
+                    tick = GoldTick(
                         symbol=cached["symbol"],
                         timestamp=datetime.fromisoformat(cached["timestamp"]),
                         bid=cached["bid"],
@@ -678,6 +700,25 @@ class MarketDataOrchestrator:
                         confidence=cached.get("confidence", 1.0),
                         spread=cached.get("spread", 0.0),
                         lineage_id=cached.get("lineage_id", ""),
+                    )
+                    # Freshness gate: never serve a stale OR future-dated cached
+                    # tick as the live price. Match the DQE stale threshold (the
+                    # previous 2x buffer re-served as "good" a tick the quality
+                    # engine would mark STALE). A future timestamp (negative age
+                    # beyond a small clock-skew tolerance) signals upstream clock
+                    # skew or a parse error and must never be treated as live —
+                    # otherwise its negative age trivially passes the upper bound.
+                    _max_age_s = float(os.getenv("DQE_STALE_THRESHOLD_S", "30.0"))
+                    _skew_tol_s = float(os.getenv("TICK_FUTURE_SKEW_TOLERANCE_S", "5.0"))
+                    _age_s = (datetime.now(UTC) - tick.timestamp).total_seconds()
+                    if -_skew_tol_s <= _age_s <= _max_age_s:
+                        return tick
+                    logger.debug(
+                        "Orchestrator: cached tick for %s age=%.1fs outside [%.1f, %.1f]s — discarding",
+                        symbol,
+                        _age_s,
+                        -_skew_tol_s,
+                        _max_age_s,
                     )
                 except Exception as exc:
                     logger.debug(
@@ -839,15 +880,31 @@ class MarketDataOrchestrator:
         symbol : Instrument symbol (default "XAU_USD"). Currently only
                  XAU_USD is supported; parameter accepted for API compatibility.
 
-        Causal guarantee: as_of parameter is passed to every sub-component
-        that supports it (sentiment, calendar). Microstructure features are
-        always computed from past ticks only.
+        Causal guarantee (IMPORTANT — partial):
+          - HONORED by `as_of`: sentiment, macro calendar, temporal features.
+          - NOT honored (always reflect CURRENT live state): microstructure,
+            tick-quality, and FRED macro features. These read the live rolling
+            window / latest tick and are NOT point-in-time reconstructed.
+
+        Consequently, calling this with a PAST `as_of` (replay / training-row
+        construction) leaks present-time micro/tick/macro data into a row labeled
+        causal — look-ahead bias. Do NOT use the micro/tick/macro features in a
+        causal training or walk-forward pipeline. A warning is emitted whenever
+        `as_of` is supplied so such misuse is not silent.
 
         Returns empty dict on error — never raises.
         """
         features: dict[str, float] = {}
 
-        # 1. Microstructure (16 features)
+        if as_of is not None:
+            logger.warning(
+                "get_ml_features(as_of=%s): microstructure, tick-quality and FRED "
+                "macro features are LIVE (not causally filtered) — do not use them "
+                "in causal training/backtest rows (look-ahead bias).",
+                as_of,
+            )
+
+        # 1. Microstructure (16 features) — NOTE: live window, not causal.
         try:
             features.update(self._micro.get_ml_features())
         except Exception as exc:
@@ -998,9 +1055,12 @@ class MarketDataOrchestrator:
         if self.is_blackout_window():
             return False
 
-        # Check tick quality
+        # Check tick quality. No tick means no live price — fail CLOSED: a
+        # missing tick must NOT be treated as safe to trade.
         tick = self.get_latest_tick()
-        if tick is not None and tick.confidence < 0.30:
+        if tick is None:
+            return False
+        if tick.confidence < 0.30:
             return False
 
         # No active sources — but only block if we've been running > 30s

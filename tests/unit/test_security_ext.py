@@ -24,7 +24,7 @@ import pytest
 class TestAuthRoutesDeleted:
     def test_routes_py_does_not_exist(self):
         """auth/routes.py must be deleted — it contained a hardcoded JWT secret."""
-        routes_path = Path(__file__).parent.parent / "auth" / "routes.py"
+        routes_path = Path(__file__).resolve().parents[2] / "auth" / "routes.py"
         assert not routes_path.exists(), (
             "auth/routes.py still exists. It contains SECRET_KEY='your_secret_key' "  # pragma: allowlist secret
             "and fake_hash_password backdoor. Delete it immediately."
@@ -32,7 +32,7 @@ class TestAuthRoutesDeleted:
 
     def test_no_hardcoded_secret_in_auth_jwt(self):
         """auth/jwt.py must not contain a hardcoded production secret."""
-        jwt_path = Path(__file__).parent.parent / "auth" / "jwt.py"
+        jwt_path = Path(__file__).resolve().parents[2] / "auth" / "jwt.py"
         if not jwt_path.exists():
             pytest.skip("auth/jwt.py not found")
         content = jwt_path.read_text()
@@ -48,7 +48,7 @@ class TestAuthRoutesDeleted:
 
 class TestCORSConfiguration:
     def _read_file(self, rel_path: str) -> str:
-        p = Path(__file__).parent.parent / rel_path
+        p = Path(__file__).resolve().parents[2] / rel_path
         if not p.exists():
             pytest.skip(f"{rel_path} not found")
         return p.read_text()

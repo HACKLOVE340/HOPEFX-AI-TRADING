@@ -370,10 +370,15 @@ class _RedisTimeSeriesBackend:
                 except Exception as exc:
                     logger.debug("TickStore: TS.ADD %s %s: %s", key, ts_ms, exc)
         else:
-            # Sorted-set fallback: score = ts_ms, value = "bid|ask|volume|source"
+            # Sorted-set fallback: score = ts_ms, member = "ts_ns:bid|ask|volume|source"
+            # Use ts_ns (not ts_ms) in the member so two ticks in the same
+            # millisecond with identical bid/ask/volume/source do not collapse to
+            # one zset entry (members are unique by value) — that silently dropped
+            # ticks. Reads derive the timestamp from the score, not the member, so
+            # the finer prefix does not affect parsing.
             key = f"{self._TS_PREFIX}:{symbol}:ticks"
             val_str = f"{bid}|{ask}|{volume}|{source}"
-            self._client.zadd(key, {f"{ts_ms}:{val_str}": ts_ms})
+            self._client.zadd(key, {f"{ts_ns}:{val_str}": ts_ms})
             # Trim to retention window
             cutoff = ts_ms - self._retention_ms
             self._client.zremrangebyscore(key, "-inf", cutoff)
@@ -418,15 +423,19 @@ class _RedisTimeSeriesBackend:
             key = f"{self._TS_PREFIX}:{symbol}:ticks"
             since_score = (since_ns // 1_000_000) if since_ns else "-inf"
             until_score = (until_ns // 1_000_000) if until_ns else "+inf"
-            raw = self._client.zrangebyscore(
+            # Fetch the NEWEST `limit` ticks in range. zrangebyscore with
+            # start=0/num=limit returns the OLDEST limit, so when more than limit
+            # ticks exist in range it silently excluded the most recent ones.
+            # zrevrangebyscore (max, min order) returns newest-first directly.
+            raw = self._client.zrevrangebyscore(
                 key,
-                since_score,
                 until_score,
+                since_score,
                 start=0,
                 num=limit,
                 withscores=True,
             )
-            for member, score in reversed(raw):
+            for member, score in raw:
                 parts = str(member).split("|", 3)
                 if len(parts) >= 2:
                     bid = float(parts[0].split(":")[-1])

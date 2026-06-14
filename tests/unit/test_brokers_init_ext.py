@@ -41,7 +41,7 @@ def _load_init_module() -> ModuleType:
     try:
         spec = importlib.util.spec_from_file_location(
             "_brokers_init_isolated",
-            pathlib.Path(__file__).parent.parent / "brokers" / "__init__.py",
+            pathlib.Path(__file__).resolve().parents[2] / "brokers" / "__init__.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)  # type: ignore[union-attr]

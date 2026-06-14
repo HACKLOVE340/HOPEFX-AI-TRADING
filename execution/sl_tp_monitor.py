@@ -47,6 +47,11 @@ UTC = timezone.utc
 _POLL_INTERVAL_MS = int(os.getenv("SLTP_POLL_INTERVAL_MS", "200"))
 _MAX_RETRIES = int(os.getenv("SLTP_MAX_RETRIES", "3"))
 _RETRY_DELAY_S = float(os.getenv("SLTP_RETRY_DELAY_S", "1.0"))
+# Max age of a cached tick before the SL/TP monitor refuses to act on it. On a
+# feed stall the tick cache keeps the last good tick forever; triggering a stop
+# against a frozen price fires at the wrong time (or never). Treat stale as
+# no-data and alert instead.
+_MAX_TICK_AGE_S = float(os.getenv("SLTP_MAX_TICK_AGE_S", "10.0"))
 
 # ── Optional Prometheus metrics ───────────────────────────────────────────────
 try:
@@ -199,16 +204,53 @@ class SLTPMonitor:
                 continue
             reason = self._check_breach(pos, mid)
             if reason:
+                # Mark as closing synchronously BEFORE scheduling the task. The
+                # poll loop runs every poll_seconds and create_task() only
+                # defers execution, so without this a subsequent poll cycle
+                # would re-pass the `in self._closing` check above and spawn a
+                # duplicate close (double market order). The add() inside
+                # _close_position is now redundant but kept as defense-in-depth.
+                self._closing.add(pos.position_id)
                 asyncio.create_task(
                     self._close_position(pos, reason, mid),
                     name=f"sltp_close_{pos.position_id}",
                 )
 
+    @staticmethod
+    def _tick_age_seconds(ts: Any) -> float | None:
+        """Age in seconds of a tick timestamp (datetime or epoch), or None."""
+        import time as _t
+
+        try:
+            if hasattr(ts, "timestamp") and callable(ts.timestamp):
+                return float(_t.time() - ts.timestamp())
+            return float(_t.time() - float(ts))
+        except (TypeError, ValueError):
+            # Unparseable timestamp (e.g. a Mock in tests) — cannot determine
+            # age; caller treats None as "no staleness info" and proceeds.
+            return None
+
     def _get_mid(self, symbol: str) -> float | None:
-        """Return the latest mid-price for *symbol* from the tick cache."""
+        """Return the latest mid-price for *symbol* from the tick cache.
+
+        Returns None for a stale tick (feed stall) so the monitor never triggers
+        a stop against a frozen price.
+        """
         tick = self._ticks.get(symbol)
         if tick is None:
             return None
+        ts = getattr(tick, "timestamp", None)
+        if ts is not None:
+            age = self._tick_age_seconds(ts)
+            if age is not None and age > _MAX_TICK_AGE_S:
+                logger.warning(
+                    "SLTPMonitor: %s tick is %.1fs stale (> %.1fs) — skipping SL/TP "
+                    "check; the safety net is blind until a fresh price arrives",
+                    symbol,
+                    age,
+                    _MAX_TICK_AGE_S,
+                )
+                return None
         if hasattr(tick, "mid"):
             return float(tick.mid)
         if hasattr(tick, "price"):
@@ -289,19 +331,64 @@ class SLTPMonitor:
                         ),
                     )
                     if order is not None:
+                        # Book the ACTUAL executed fill price, not the trigger
+                        # mid — on a gap/slippage stop the real fill can be much
+                        # worse, and using the trigger price understates the loss
+                        # feeding equity / drawdown circuit-breaker / Kelly.
+                        actual_fill = (
+                            getattr(order, "average_price", None)
+                            or getattr(order, "average_fill_price", None)
+                            or trigger_price
+                        )
+                        filled_qty = float(getattr(order, "filled_quantity", 0) or 0)
+                        # Partial fill → the remainder is naked exposure. The PM
+                        # close below books the symbol flat, so surface the
+                        # residual loudly for follow-up rather than hiding it.
+                        if 0 < filled_qty < qty:
+                            logger.critical(
+                                "SLTPMonitor: PARTIAL close pos=%s — filled %.4f/%.4f; "
+                                "%.4f REMAINS OPEN at broker — manual follow-up required",
+                                pos_id,
+                                filled_qty,
+                                qty,
+                                qty - filled_qty,
+                            )
+                            _send_alert(
+                                "PARTIAL STOP FILL — RESIDUAL EXPOSURE",
+                                f"{symbol}: filled {filled_qty}/{qty}, {qty - filled_qty} still open",
+                            )
                         logger.info(
-                            "SLTPMonitor: closed pos=%s reason=%s attempt=%d order_id=%s",
+                            "SLTPMonitor: closed pos=%s reason=%s attempt=%d order_id=%s fill=%.5f",
                             pos_id,
                             reason,
                             attempt,
                             getattr(order, "id", "?"),
+                            float(actual_fill),
                         )
-                        # Remove from position manager
+                        # Close in the position manager ONLY if it still holds the
+                        # same position we triggered on. close_position is keyed by
+                        # symbol, so without this check a new same-symbol position
+                        # opened in the interim would be closed instead.
                         try:
-                            await self._pm.close_position(
-                                symbol=symbol,
-                                fill_price=trigger_price,
-                            )
+                            current = self._pm.get_position(symbol)
+                            if current is None:
+                                logger.info(
+                                    "SLTPMonitor: pos %s already absent from PM — broker close sent",
+                                    pos_id,
+                                )
+                            elif getattr(current, "position_id", pos_id) != pos_id:
+                                logger.warning(
+                                    "SLTPMonitor: PM position for %s changed (%s != %s) — "
+                                    "skipping PM close to avoid closing the wrong position",
+                                    symbol,
+                                    getattr(current, "position_id", "?"),
+                                    pos_id,
+                                )
+                            else:
+                                await self._pm.close_position(
+                                    symbol=symbol,
+                                    fill_price=float(actual_fill),
+                                )
                         except Exception as pm_exc:
                             logger.warning("SLTPMonitor: pm.close_position error: %s", pm_exc)
 
@@ -309,7 +396,7 @@ class SLTPMonitor:
                             _sltp_closes.labels(reason=reason).inc()
                         _send_alert(
                             f"{reason.upper()} HIT",
-                            f"Closed {side} {qty} {symbol} @ {trigger_price:.5f} "
+                            f"Closed {side} {qty} {symbol} @ {float(actual_fill):.5f} "
                             f"| SL={getattr(pos, 'stop_loss', None)} "
                             f"TP={getattr(pos, 'take_profit', None)}",
                         )
