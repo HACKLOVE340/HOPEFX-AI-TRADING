@@ -725,6 +725,30 @@ def register_routers(
 
     # Legacy /ws endpoint removed — all WebSocket traffic uses /ws/live (ws_live.py)
 
+    # ── Dynamic Strategy Registry (/api/strategies/dynamic) ───────────────────
+    try:
+        from api.dynamic_strategies import router as dynamic_strategies_router
+        _include_router_deduped(app, dynamic_strategies_router)
+        logger.info("Dynamic Strategy Registry router registered (/api/strategies/dynamic)")
+    except Exception as _dsr_err:
+        logger.warning("Dynamic Strategy Registry router not registered: %s", _dsr_err)
+
+    # ── Advanced Orders (/api/orders/advanced) ────────────────────────────────
+    try:
+        from api.advanced_orders import router as advanced_orders_router
+        _include_router_deduped(app, advanced_orders_router)
+        logger.info("Advanced Orders router registered (/api/orders/advanced)")
+    except Exception as _ao_err:
+        logger.warning("Advanced Orders router not registered: %s", _ao_err)
+
+    # ── ML Ops Continuous Learning (/api/ml-ops) ──────────────────────────────
+    try:
+        from api.ml_ops import router as ml_ops_router
+        _include_router_deduped(app, ml_ops_router)
+        logger.info("ML Ops router registered (/api/ml-ops)")
+    except Exception as _mlops_err:
+        logger.warning("ML Ops router not registered: %s", _mlops_err)
+
     # ── API v1 versioned prefix ────────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
     # New clients should use /api/v1/; existing /api/* routes remain unchanged

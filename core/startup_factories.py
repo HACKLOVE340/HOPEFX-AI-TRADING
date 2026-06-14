@@ -2699,6 +2699,43 @@ def build_component_registry(app, feature_flags):
             required=False,
             deps=["broker", "risk_manager", "brain", "signal_engine"],
         )
+        # ── Roadmap additions ─────────────────────────────────────────────────
+        .register(
+            "secrets_vault",
+            F.init_secrets_vault,
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "telemetry",
+            F.init_telemetry,
+            required=False,
+            deps=["config"],
+        )
+        .register(
+            "dynamic_strategy_registry",
+            F.init_dynamic_strategy_registry,
+            required=False,
+            deps=["config", "event_bus"],
+        )
+        .register(
+            "advanced_order_manager",
+            F.init_advanced_order_manager,
+            required=False,
+            deps=["broker", "trade_executor"],
+        )
+        .register(
+            "continuous_learning",
+            F.init_continuous_learning,
+            required=False,
+            deps=["inference_engine", "model_registry"],
+        )
+        .register(
+            "tenant_isolation",
+            F.init_tenant_isolation,
+            required=False,
+            deps=["database", "cache"],
+        )
     )
 
     return registry
@@ -3487,4 +3524,116 @@ async def init_decision_engine(s: Any) -> Any:
         return engine
     except Exception as exc:
         logger.exception("init_decision_engine failed: %s", exc)
+        return None
+
+
+# ── Roadmap Factory Functions ─────────────────────────────────────────────────
+
+
+async def init_secrets_vault(s: Any) -> Any | None:
+    """Initialise the production Secrets Manager (Vault/AWS/Env)."""
+    try:
+        from core.secrets_vault import get_secrets_manager
+
+        manager = get_secrets_manager()
+        success = await manager.initialize()
+        if success:
+            s.secrets_vault = manager
+            logger.info(
+                "SecretsManager initialised (provider=%s)", manager.provider_name
+            )
+            return manager
+        else:
+            logger.warning("SecretsManager initialisation returned False")
+            return None
+    except Exception as exc:
+        logger.warning("init_secrets_vault failed: %s", exc)
+        return None
+
+
+async def init_telemetry(s: Any) -> bool:
+    """Initialise OpenTelemetry tracing and metrics."""
+    try:
+        from tracing.opentelemetry_setup import init_telemetry as _init_otel
+
+        success = await _init_otel()
+        if success:
+            logger.info("OpenTelemetry initialised")
+        else:
+            logger.info("OpenTelemetry not available (packages not installed)")
+        return success
+    except Exception as exc:
+        logger.warning("init_telemetry failed: %s", exc)
+        return False
+
+
+async def init_dynamic_strategy_registry(s: Any) -> Any | None:
+    """Initialise the Dynamic Strategy Registry."""
+    try:
+        from strategies.dynamic_registry import DynamicStrategyRegistry
+
+        registry = DynamicStrategyRegistry()
+        await registry.start()
+        s.dynamic_strategy_registry = registry
+        logger.info(
+            "DynamicStrategyRegistry initialised (%d strategies loaded)",
+            len(registry.list_strategies()),
+        )
+        return registry
+    except Exception as exc:
+        logger.warning("init_dynamic_strategy_registry failed: %s", exc)
+        return None
+
+
+async def init_advanced_order_manager(s: Any) -> Any | None:
+    """Initialise the Advanced Order Manager (OCO, Trailing Stop, etc.)."""
+    try:
+        from execution.advanced_orders import AdvancedOrderManager
+
+        broker = getattr(s, "broker", None)
+        trade_executor = getattr(s, "trade_executor", None)
+        manager = AdvancedOrderManager(broker=broker, trade_executor=trade_executor)
+        await manager.start()
+        s.advanced_order_manager = manager
+        logger.info("AdvancedOrderManager initialised")
+        return manager
+    except Exception as exc:
+        logger.warning("init_advanced_order_manager failed: %s", exc)
+        return None
+
+
+async def init_continuous_learning(s: Any) -> Any | None:
+    """Initialise the ML Continuous Learning Pipeline."""
+    try:
+        from ml.continuous_learning import ContinuousLearningPipeline
+
+        inference_engine = getattr(s, "inference_engine", None)
+        model_registry = getattr(s, "model_registry", None)
+        pipeline = ContinuousLearningPipeline(
+            inference_engine=inference_engine,
+            model_registry=model_registry,
+        )
+        await pipeline.start()
+        s.continuous_learning = pipeline
+        logger.info("ContinuousLearningPipeline initialised")
+        return pipeline
+    except Exception as exc:
+        logger.warning("init_continuous_learning failed: %s", exc)
+        return None
+
+
+async def init_tenant_isolation(s: Any) -> Any | None:
+    """Initialise the Cross-Tenant Data Isolation layer."""
+    try:
+        from whitelabel.tenant_isolation import TenantIsolationManager
+
+        db_engine = getattr(s, "db_engine", None)
+        cache = getattr(s, "cache", None)
+        manager = TenantIsolationManager(db_engine=db_engine, cache=cache)
+        await manager.initialize()
+        s.tenant_isolation = manager
+        logger.info("TenantIsolationManager initialised")
+        return manager
+    except Exception as exc:
+        logger.warning("init_tenant_isolation failed: %s", exc)
         return None
