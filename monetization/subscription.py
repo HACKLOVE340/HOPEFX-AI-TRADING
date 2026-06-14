@@ -305,6 +305,14 @@ class SubscriptionManager:
     def __init__(self):
         self._subscriptions: dict[str, Subscription] = {}
         self._user_subscriptions: dict[str, str] = {}  # user_id -> subscription_id
+        # Processed Stripe webhook event ids for idempotency. Stripe delivers
+        # at-least-once and retries; without dedup a replayed
+        # checkout.session.completed re-extends end_date for free. Bounded FIFO.
+        # NOTE: in-memory — persist this in a shared store for multi-instance.
+        from collections import OrderedDict
+
+        self._processed_webhook_events: OrderedDict[str, None] = OrderedDict()
+        self._max_processed_webhook_events = 10000
 
     def _create_subscription_base(
         self,
@@ -572,6 +580,16 @@ class SubscriptionManager:
         except _stripe.error.SignatureVerificationError as exc:
             logger.warning("stripe.webhook.invalid_signature: %s", exc)
             raise ValueError("Invalid Stripe webhook signature") from exc
+
+        # Idempotency: skip events already processed (Stripe retries/replays).
+        event_id = event.get("id")
+        if event_id:
+            if event_id in self._processed_webhook_events:
+                logger.info("stripe.webhook.duplicate event_id=%s — skipping", event_id)
+                return {"status": "duplicate", "event_type": event["type"]}
+            self._processed_webhook_events[event_id] = None
+            while len(self._processed_webhook_events) > self._max_processed_webhook_events:
+                self._processed_webhook_events.popitem(last=False)
 
         event_type = event["type"]
         data = event["data"]["object"]
