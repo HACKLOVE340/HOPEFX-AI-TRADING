@@ -75,7 +75,7 @@ future-date acceptance — were fixed this pass.)
 |----|--------|------|-------|------------|
 | H1 | ✅ FIXED | resilience | `CircuitBreaker.call()` unlocked: concurrent probes exceed `half_open_max_calls`; stale `successes`. | `asyncio.Lock` around admission + bookkeeping (not the call); `successes=0` on HALF_OPEN entry. |
 | H2 | ✅ FIXED | data integrity | Single-source `cross_source_consensus` returned full confidence (no cross-validation). | Multiply confidence by `DQE_SINGLE_SOURCE_CONF_FACTOR` (0.5) when `< 2` inliers; complements `MIN_FEED_QUORUM`. |
-| H3 | ◑ PARTIAL | brokers | No `newClientOrderId` → retried submit = duplicate fill. | Adapter now accepts `client_order_id`→`newClientOrderId` + handles `-2010`. **Remaining:** wire OMS id through the heterogeneous dispatch (see §4). |
+| H3 | ✅ FIXED | brokers | No `newClientOrderId` → retried submit = duplicate fill. | Binance adapter accepts `client_order_id`→`newClientOrderId` + handles `-2010`; ExecutionEngine forwards `request_id` as `client_order_id` to any broker whose signature accepts it (others unaffected). |
 | H4 | ✅ FIXED | ml supply-chain | `joblib.load` with no checksum at load → pickle RCE on tampered artifact. | `_verify_model_integrity` checks SHA-256 vs `registry.json`; refuse on mismatch, warn when untracked. |
 
 ### MEDIUM — all fixed this pass
@@ -155,14 +155,18 @@ These are valid but are ops deliverables, tracked here for completeness:
 
 ## 6. Status
 
-All HIGH and MEDIUM findings are resolved except the **broad half of H3** —
-wiring the OMS `client_order_id` through the heterogeneous broker dispatch to
-each adapter (the Binance adapter already accepts and honours it; see §4). That
-remains deferred as a dedicated change with full caller analysis + adapter tests,
-to avoid an unverified rewrite across ~15 adapters.
+**All HIGH and MEDIUM findings are resolved.** H3 now wires `client_order_id`
+on the canonical ExecutionEngine path (forwarded only to brokers whose signature
+accepts it) in addition to the Binance adapter's `newClientOrderId` handling.
 
-Remaining (non-blocking, low-risk):
+Verified: full fast unit suite (`pytest -m "not slow and not e2e"`, excluding two
+files that need `matplotlib`) passes with all declared deps installed.
+
+Remaining (non-blocking, low-risk — not defects):
 - **§3 gate-widening**: extend mypy-strict scope incrementally; add a legacy-import
   discipline CI check (only after confirming no current code trips it).
 - **§5 operational** items (observability/SLO/playbooks/governance): process/infra.
+- **Data note**: `ml/saved_models/stacking_ensemble.pkl` SHA-256 does not match its
+  `registry.json` entry (stale registry vs artifact) — reconcile via the retrain
+  pipeline; the active `advanced_oos.pkl` matches and loads fine.
 </content>
