@@ -289,7 +289,25 @@ const Onboarding: React.FC = () => {
 
   const destination = resolvePostOnboardingPath(user?.role);
   const saveStep = (n: number) => { setStep(n); localStorage.setItem(STORAGE_KEY, String(n)); };
-  const finish   = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
+
+  // Persist the chosen risk level into the user's trading preferences so the
+  // onboarding selection actually takes effect (previously the wizard's choices
+  // were discarded on finish). Merge into existing prefs to avoid clobbering
+  // other settings; best-effort so completing onboarding is never blocked.
+  const RISK_MAP: Record<RiskLevel, { max_risk_per_trade: number; max_daily_drawdown: number }> = {
+    conservative: { max_risk_per_trade: 0.5, max_daily_drawdown: 2 },
+    moderate:     { max_risk_per_trade: 1,   max_daily_drawdown: 3 },
+    aggressive:   { max_risk_per_trade: 2,   max_daily_drawdown: 5 },
+  };
+  const persistOnboarding = async () => {
+    if (!state.riskLevel) return;
+    try {
+      const cur = await api.get('/settings/trading').then((r) => r.data).catch(() => ({}));
+      await api.post('/settings/trading', { ...(cur ?? {}), ...RISK_MAP[state.riskLevel] });
+    } catch { /* non-fatal — never block completing onboarding */ }
+  };
+
+  const finish = async () => { await persistOnboarding(); localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
   const skip     = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
 
   const canAdvance = () => {

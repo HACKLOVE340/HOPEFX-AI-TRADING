@@ -280,9 +280,19 @@ const Performance: React.FC = () => {
 
   const pub    = publicQ.data;
   // Both equity-curve endpoints return { time: number, value: number }.
-  // Filter out any points with zero time or value (e.g. missing data).
+  // Filter out any points with zero time or value (e.g. missing data), then
+  // apply the selected period window so the period toggle actually affects the
+  // chart (weekly=7d, monthly=30d, yearly=365d, all=no limit).
+  const _nowSec = Date.now() / 1000;
+  const _periodWindowSec: Record<Period, number> = {
+    weekly: 7 * 86400,
+    monthly: 30 * 86400,
+    yearly: 365 * 86400,
+    all: Number.POSITIVE_INFINITY,
+  };
+  const _cutoff = _nowSec - _periodWindowSec[period];
   const equity = (equityQ.data ?? [])
-    .filter((p) => p.time > 0 && p.value > 0)
+    .filter((p) => p.time > 0 && p.value > 0 && p.time >= _cutoff)
     .map((p) => ({ t: p.time, v: p.value }));
   const trades = tradesQ.data?.trades ?? [];
   const filteredTrades = trades.filter((t) => {
