@@ -407,6 +407,14 @@ class AffiliateManager:
 
             return None
 
+        # Reject self-referral — an affiliate must not earn commission on their
+        # own subscription.
+        if affiliate.user_id == referred_user_id:
+            logger.warning(
+                "Self-referral rejected: affiliate %s == referred user", affiliate.affiliate_id
+            )
+            return None
+
         # Check if user was already referred
         for referral in self._referrals.values():
             if referral.referred_user_id == referred_user_id:
