@@ -104,7 +104,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
       </div>
 
       {/* Price levels */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 8, marginBottom: 14 }}>
         <div style={s.priceCell}>
           <span style={s.priceLabel}>Entry</span>
           <span style={{ ...s.priceVal, color: '#f1f5f9' }}>{fmtPrice(pattern.entry_price)}</span>

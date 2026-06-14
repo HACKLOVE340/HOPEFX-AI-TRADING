@@ -239,7 +239,7 @@ const PerformanceSection: React.FC = () => {
 
       {/* Top stat tiles */}
       {cpu && mem && proc && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, marginBottom: 16 }}>
           <StatTile label="CPU" value={`${cpu.percent}%`} color={pctColor(cpu.percent)} />
           <StatTile label="Memory" value={`${mem.percent}%`} color={pctColor(mem.percent)} />
           <StatTile label="Process RSS" value={`${proc.rss_mb} MB`} />

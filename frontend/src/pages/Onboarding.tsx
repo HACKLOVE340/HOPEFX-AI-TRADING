@@ -215,7 +215,7 @@ const Step4Backtest: React.FC<{ state: WizardState; setState: (s: WizardState) =
       ) : (
         <div style={s.resultBox}>
           <div style={{ color: '#4ade80', fontWeight: 600, marginBottom: 12 }}>✓ Backtest complete</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, textAlign: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, textAlign: 'center' }}>
             <div>
               <div style={{ fontSize: 24, fontWeight: 700, color: '#f1f5f9' }}>{result.return_pct.toFixed(1)}%</div>
               <div style={{ fontSize: 12, color: '#64748b' }}>Return</div>

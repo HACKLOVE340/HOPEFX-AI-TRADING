@@ -161,7 +161,7 @@ const PreviewPanel: React.FC<{ tenant: Tenant; onClose: () => void }> = ({ tenan
           </div>
           {/* Theme preview — shows how the tenant's brand colours apply to the dashboard */}
           <div style={{ padding: 20 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 16 }}>
               {(['Balance', 'P&L', 'Win Rate'] as const).map((label) => (
                 <div key={label} style={{ background: '#1e293b', borderRadius: 8, padding: '12px 14px', borderTop: `3px solid ${color}` }}>
                   <div style={{ fontSize: 12, color: '#94a3b8' }}>{label}</div>

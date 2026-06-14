@@ -308,7 +308,7 @@ const ReplayPage: React.FC = () => {
         <div style={{ background: '#1e293b', border: '1px solid #3b82f644', borderRadius: 12,
           padding: 20, marginBottom: 20 }}>
           <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600, color: '#e2e8f0' }}>New Replay Session</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 12 }}>
             <label style={{ fontSize: 12, color: '#94a3b8' }}>
               Symbol
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
