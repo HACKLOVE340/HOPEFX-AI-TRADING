@@ -339,7 +339,21 @@ class WalletManager:
             try:
                 from compliance.aml import get_aml_gate
 
-                kyc_status = getattr(wallet, "kyc_status", "unverified")
+                # Resolve the REAL KYC status from the authoritative compliance
+                # manager. Wallet has no kyc_status field, so the previous
+                # getattr() always yielded "unverified", making the gate's KYC
+                # check operate on hardcoded data. Default to "unverified"
+                # (fail closed) when the manager is unavailable.
+                kyc_status = "unverified"
+                try:
+                    from core.app_state import app_state as _app_state
+
+                    _cm = getattr(_app_state, "compliance_manager", None)
+                    if _cm is not None:
+                        kyc_status = "approved" if _cm.is_kyc_approved(user_id) else "unverified"
+                except Exception:  # nosec B110 - fail closed: treat as unverified
+                    kyc_status = "unverified"
+
                 decision = get_aml_gate().check_withdrawal(
                     user_id=user_id,
                     amount=amount,
@@ -353,7 +367,15 @@ class WalletManager:
                     )
                     return False, f"Withdrawal blocked: {decision.reason}", None
             except Exception as _aml_err:
-                logger.warning("AML check error (allowing): %s", _aml_err)
+                # Fail CLOSED: never allow a money movement when the compliance
+                # gate itself errors. A blocked withdrawal is recoverable; an
+                # unscreened one is a regulatory violation.
+                logger.error(
+                    "AML check error — BLOCKING withdrawal (fail-closed) for user %s: %s",
+                    user_id,
+                    _aml_err,
+                )
+                return False, "Withdrawal temporarily unavailable (compliance check failed)", None
 
         # Check sufficient balance
         if wallet_type == WalletType.SUBSCRIPTION:
