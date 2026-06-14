@@ -11,10 +11,8 @@ Connected to: transparency/engine.py, core/decision/HOPEFXDecisionEngine.py
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +48,8 @@ def _get_decision_store():
 @router.get("/decisions")
 async def get_decisions(
     limit: int = Query(30, ge=1, le=200),
-    symbol: Optional[str] = Query(None),
-    outcome: Optional[str] = Query(None),
+    symbol: str | None = Query(None),
+    outcome: str | None = Query(None),
 ):
     """
     Retrieve recent trade decisions with full factor breakdowns.
@@ -111,7 +109,7 @@ async def explain_trade(trade_id: str):
 @router.get("/audit-log")
 async def get_audit_log(
     limit: int = Query(50, ge=1, le=500),
-    action_type: Optional[str] = Query(None),
+    action_type: str | None = Query(None),
 ):
     """
     Retrieve the audit log of all system actions (trades, config changes, risk events).

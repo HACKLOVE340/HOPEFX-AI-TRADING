@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query
+import contextlib
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +73,10 @@ async def get_news_feed(
                 # Score each article with nuclear wordmap
                 nuclear_score = 0
                 if scorer and article.get("title"):
-                    try:
+                    with contextlib.suppress(Exception):
                         nuclear_score = scorer.score_text(
                             article.get("title", "") + " " + article.get("summary", "")
                         )
-                    except Exception:
-                        pass
 
                 articles.append({
                     "id": article.get("id", ""),
@@ -118,10 +117,8 @@ async def get_nuclear_score(
     # Get recent articles for scoring
     articles = []
     if mgr:
-        try:
+        with contextlib.suppress(Exception):
             articles = await mgr.get_latest(limit=20, symbol=symbol)
-        except Exception:
-            pass
 
     # Aggregate nuclear score
     scores = []
@@ -130,7 +127,8 @@ async def get_nuclear_score(
             text = article.get("title", "") + " " + article.get("summary", "")
             score = scorer.score_text(text)
             scores.append(score)
-        except Exception:
+        except Exception as _exc:
+            logger.debug("news sentiment scoring failed for item: %s", _exc)
             continue
 
     avg_score = sum(scores) / len(scores) if scores else 0
@@ -184,10 +182,8 @@ async def get_sentiment_latest(
     # Fetch recent articles
     articles = []
     if mgr:
-        try:
+        with contextlib.suppress(Exception):
             articles = await mgr.get_latest(limit=50, symbol=symbol)
-        except Exception:
-            pass
 
     # Calculate sentiment distribution
     bullish = sum(1 for a in articles if a.get("sentiment") == "bullish")
@@ -205,7 +201,8 @@ async def get_sentiment_latest(
                 text = article.get("title", "") + " " + article.get("summary", "")
                 score = scorer.score_text(text)
                 scores.append(score)
-            except Exception:
+            except Exception as _exc:
+                logger.debug("news sentiment scoring failed for item: %s", _exc)
                 continue
         if scores:
             overall_score = sum(scores) / len(scores)

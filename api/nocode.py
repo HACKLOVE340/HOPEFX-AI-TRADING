@@ -11,7 +11,6 @@ Connected to: nocode/builder.py, nocode/state_machine.py, nocode/ml_nodes.py
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -43,7 +42,7 @@ class ValidateRequest(BaseModel):
 
 @router.get("/templates")
 async def list_templates(
-    category: Optional[str] = Query(None, description="Filter by category"),
+    category: str | None = Query(None, description="Filter by category"),
 ):
     """
     List available no-code strategy templates.
@@ -144,10 +143,10 @@ async def deploy_template(request: DeployRequest):
             "message": f"Template '{request.template_id}' deployed and activated.",
         }
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Template deployment failed: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Deployment failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Deployment failed: {e}") from e
 
 
 @router.post("/validate")

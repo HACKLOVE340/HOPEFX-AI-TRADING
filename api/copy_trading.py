@@ -63,9 +63,9 @@ async def pause_copy(copy_id: str):
         result = await engine.pause_copy(copy_id)
         return {"status": "paused", "copy_id": copy_id, **result}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to pause: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to pause: {e}") from e
 
 
 @router.post("/copies/{copy_id}/resume")
@@ -79,9 +79,9 @@ async def resume_copy(copy_id: str):
         result = await engine.resume_copy(copy_id)
         return {"status": "active", "copy_id": copy_id, **result}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to resume: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to resume: {e}") from e
 
 
 @router.post("/copies/{copy_id}/stop")
@@ -95,9 +95,9 @@ async def stop_copy(copy_id: str):
         result = await engine.stop_copy(copy_id)
         return {"status": "stopped", "copy_id": copy_id, **result}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to stop: {e}") from e
 
 
 @router.patch("/copies/{copy_id}/risk")
@@ -114,9 +114,9 @@ async def adjust_copy_risk(copy_id: str, payload: dict):
         result = await engine.adjust_risk(copy_id, payload)
         return {"status": "updated", "copy_id": copy_id, "settings": result}
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to adjust risk: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to adjust risk: {e}") from e
 
 
 @router.get("/copies/{copy_id}/performance")
@@ -130,9 +130,9 @@ async def get_copy_performance(copy_id: str):
         perf = await engine.get_copy_performance(copy_id)
         return perf
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get performance: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get performance: {e}") from e
 
 
 @router.get("/masters")

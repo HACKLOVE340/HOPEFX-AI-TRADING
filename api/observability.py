@@ -186,8 +186,8 @@ async def get_latency_histogram(
             histogram = await telemetry.get_latency_histogram(service=service, period=period)
             if histogram:
                 return histogram
-        except Exception:
-            pass
+        except Exception as _exc:
+            logger.debug("latency histogram fetch failed: %s", _exc)
 
     return {
         "buckets": [],
