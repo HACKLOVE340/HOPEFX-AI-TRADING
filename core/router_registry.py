@@ -783,6 +783,14 @@ def register_routers(
     except Exception as _copy_err:
         logger.warning("Copy Trading router not registered: %s", _copy_err)
 
+    # ── No-Code Builder Router (/api/nocode) ─────────────────────────────────────
+    try:
+        from api.nocode import router as nocode_router
+        _include_router_deduped(app, nocode_router)
+        logger.info("No-Code Builder router registered (/api/nocode)")
+    except Exception as _nocode_err:
+        logger.warning("No-Code Builder router not registered: %s", _nocode_err)
+
     # ── API v1 versioned prefix ────────────────────────────────────────────────
     # Mount a thin /api/v1/* prefix that re-exports the existing /api/* routes.
     # New clients should use /api/v1/; existing /api/* routes remain unchanged
