@@ -80,8 +80,11 @@ const AIStrategyGenerator: React.FC = () => {
   useEffect(() => {
     llmApi.health()
       .then((res) => {
-        const d = res.data as { status?: string; backend?: string };
-        setLlmStatus(d?.status === 'ok' ? 'ok' : 'unavailable');
+        // GET /brain/health returns { available, backend, model, detail } — there
+        // is no `status` field, so the old `status === 'ok'` check was always
+        // false and the page was permanently stuck on "AI not configured".
+        const d = res.data as { available?: boolean; backend?: string };
+        setLlmStatus(d?.available === true ? 'ok' : 'unavailable');
         setLlmBackend(d?.backend ?? '');
       })
       .catch(() => setLlmStatus('unavailable'));

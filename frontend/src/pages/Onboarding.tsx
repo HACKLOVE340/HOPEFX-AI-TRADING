@@ -307,7 +307,8 @@ const Onboarding: React.FC = () => {
     } catch { /* non-fatal — never block completing onboarding */ }
   };
 
-  const finish = async () => { await persistOnboarding(); localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
+  // Persist best-effort in the background — never block navigation on it.
+  const finish = () => { void persistOnboarding(); localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
   const skip     = () => { localStorage.setItem(STORAGE_KEY, 'done'); navigate(destination); };
 
   const canAdvance = () => {

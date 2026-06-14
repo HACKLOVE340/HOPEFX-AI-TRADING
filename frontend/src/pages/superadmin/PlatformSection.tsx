@@ -186,7 +186,8 @@ const PlatformSection: React.FC = () => {
             onChange={e => set('default_new_user_plan', e.target.value)}
             options={[
               { value: 'free', label: 'Free' }, { value: 'starter', label: 'Starter' },
-              { value: 'professional', label: 'Professional' },   { value: 'elite', label: 'Elite' },
+              { value: 'professional', label: 'Professional' },
+              { value: 'enterprise', label: 'Enterprise' },   { value: 'elite', label: 'Elite' },
             ]}
           />
           <Select label="Default New User Role"
