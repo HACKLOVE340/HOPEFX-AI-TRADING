@@ -591,12 +591,21 @@ class SmartRouter:
 
             except TimeoutError:
                 self._states[broker_id].record_error()
-                last_error = "timeout"
+                # A timeout is an UNKNOWN outcome — the order may have filled
+                # while the response was slow. Do NOT try the next broker;
+                # re-routing would risk a duplicate fill. Return immediately and
+                # let the caller reconcile against the broker.
                 logger.error(
-                    "Router: broker=%s timed out after %.1fs",
+                    "Router: broker=%s timed out after %.1fs — NOT re-routing "
+                    "(order outcome unknown, manual reconciliation required)",
                     broker_id,
                     _ORDER_TIMEOUT_S,
                 )
+                return {
+                    "status": "unknown",
+                    "reason": f"timeout:{broker_id}",
+                    "broker": broker_id,
+                }
             except (RuntimeError, ConnectionError, ValueError) as exc:
                 self._states[broker_id].record_error()
                 last_error = str(exc)

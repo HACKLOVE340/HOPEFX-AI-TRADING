@@ -169,6 +169,22 @@ class SmartOrderRouter:
             result = await self._execute_with_timeout(primary_broker, order)
             return {**result, "routing": decision}
 
+        except TimeoutError as te:
+            # A timeout is NOT a confirmed failure — the primary may have received
+            # and filled the order while the response was merely slow. Failing
+            # over here would place a SECOND order and double the position. Treat
+            # the outcome as unknown and surface for reconciliation; do not retry.
+            logger.error(
+                "Primary broker %s timed out — NOT failing over (order outcome "
+                "unknown, manual reconciliation required): %s",
+                primary_broker,
+                te,
+            )
+            raise RuntimeError(
+                f"Order outcome unknown: {primary_broker} timed out — not re-routed "
+                "to avoid a duplicate fill"
+            ) from te
+
         except Exception as e:
             logger.error(
                 "Primary broker %s failed: %s",
