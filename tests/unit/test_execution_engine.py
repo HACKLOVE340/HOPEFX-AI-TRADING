@@ -206,6 +206,28 @@ class TestExecutionEngine:
         assert report.latency_ms >= 0
 
     @pytest.mark.asyncio
+    async def test_client_order_id_forwarded_when_broker_supports_it(self):
+        """ExecutionEngine passes the request_id as client_order_id for idempotency
+        to brokers whose place_order accepts it (here: **kwargs)."""
+        broker = _make_broker_manager(OrderStatus.FILLED)
+        captured: dict = {}
+        _orig = broker.place_order
+
+        def _spy(*args, **kwargs):
+            captured.update(kwargs)
+            return _orig(*args, **kwargs)
+
+        broker.place_order = _spy
+        engine = ExecutionEngine(broker, _make_risk_manager())
+        await engine.start()
+
+        req = ExecutionRequest(symbol="XAUUSD", side="BUY", quantity=1.0)
+        report = await engine.execute(req)
+
+        assert report.success is True
+        assert captured.get("client_order_id") == req.request_id
+
+    @pytest.mark.asyncio
     async def test_kill_switch_blocks(self):
         from kill_switch import KillSwitch
 

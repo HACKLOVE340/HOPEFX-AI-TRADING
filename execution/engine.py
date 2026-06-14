@@ -1310,16 +1310,33 @@ class ExecutionEngine:
             _CBOpen = None
 
         async def _place_order_async():
+            # Pass a stable client order id for idempotency to brokers that
+            # accept it (e.g. Binance -> newClientOrderId), so a retried
+            # submission dedupes server-side instead of creating a duplicate
+            # order. Only pass it when the broker's place_order signature accepts
+            # it (named param or **kwargs) — connectors that don't are called
+            # exactly as before, avoiding a TypeError.
+            _po_kwargs: dict[str, Any] = {
+                "symbol": request.symbol,
+                "side": side,
+                "order_type": order_type,
+                "quantity": request.quantity,
+                "price": request.price,
+                "stop_price": request.stop_price,
+            }
+            try:
+                import inspect
+
+                _params = inspect.signature(self._broker.place_order).parameters
+                if "client_order_id" in _params or any(
+                    p.kind == inspect.Parameter.VAR_KEYWORD for p in _params.values()
+                ):
+                    _po_kwargs["client_order_id"] = request.request_id
+            except (TypeError, ValueError):
+                pass
             return await loop.run_in_executor(
                 None,
-                lambda: self._broker.place_order(
-                    symbol=request.symbol,
-                    side=side,
-                    order_type=order_type,
-                    quantity=request.quantity,
-                    price=request.price,
-                    stop_price=request.stop_price,
-                ),
+                lambda: self._broker.place_order(**_po_kwargs),
             )
 
         if broker_breaker is not None:
