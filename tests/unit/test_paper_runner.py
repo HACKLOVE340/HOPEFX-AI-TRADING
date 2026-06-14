@@ -47,7 +47,8 @@ import pytest
 UTC = timezone.utc
 
 # Ensure project root is on sys.path
-_ROOT = Path(__file__).resolve().parent.parent
+# repo root — this test lives at repo_root/tests/unit/
+_ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
