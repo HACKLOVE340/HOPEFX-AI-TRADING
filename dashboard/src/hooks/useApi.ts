@@ -189,3 +189,131 @@ export const watchlistApi = {
   add:    (symbol: string)   => api.post('/watchlist', { symbol }),
   remove: (symbol: string)   => api.delete(`/watchlist/${symbol}`),
 };
+
+// ─── Dynamic Strategies ───────────────────────────────────────────────────────
+
+export const strategyApi = {
+  list:       ()                                => api.get('/strategies/dynamic'),
+  get:        (id: string)                      => api.get(`/strategies/dynamic/${id}`),
+  create:     (payload: object)                 => api.post('/strategies/dynamic', payload),
+  update:     (id: string, payload: object)     => api.put(`/strategies/dynamic/${id}`, payload),
+  delete:     (id: string)                      => api.delete(`/strategies/dynamic/${id}`),
+  deploy:     (id: string)                      => api.post(`/strategies/dynamic/${id}/deploy`),
+  pause:      (id: string)                      => api.post(`/strategies/dynamic/${id}/pause`),
+  activate:   (id: string)                      => api.post(`/strategies/dynamic/${id}/activate`),
+  backtest:   (id: string, params: object)      => api.post(`/strategies/dynamic/${id}/backtest`, params),
+  templates:  ()                                => api.get('/nocode/templates'),
+};
+
+// ─── Advanced Orders ──────────────────────────────────────────────────────────
+
+export const advancedOrdersApi = {
+  placeOCO:         (payload: object)           => api.post('/advanced-orders/oco', payload),
+  placeTrailing:    (payload: object)           => api.post('/advanced-orders/trailing-stop', payload),
+  placeStopLimit:   (payload: object)           => api.post('/advanced-orders/stop-limit', payload),
+  listActive:       ()                          => api.get('/advanced-orders/active'),
+  cancel:           (id: string)                => api.delete(`/advanced-orders/${id}`),
+};
+
+// ─── News & Sentiment ─────────────────────────────────────────────────────────
+
+export const newsApi = {
+  feed:         (params?: { limit?: number; symbol?: string }) =>
+    api.get('/news/feed', { params }),
+  sentiment:    (symbol?: string)               => api.get('/sentiment/latest', { params: { symbol } }),
+  nuclearScore: (symbol?: string)               => api.get('/news/nuclear-score', { params: { symbol } }),
+  calendar:     ()                              => api.get('/news/calendar'),
+};
+
+// ─── Copy Trading ─────────────────────────────────────────────────────────────
+
+export const copyTradingApi = {
+  leaderboard:  ()                              => api.get('/leaderboard'),
+  myCopies:     ()                              => api.get('/copy-trading/my-copies'),
+  startCopy:    (masterId: string, payload: object) =>
+    api.post(`/social/copy/${masterId}`, payload),
+  pauseCopy:    (copyId: string)                => api.post(`/copy-trading/copies/${copyId}/pause`),
+  resumeCopy:   (copyId: string)                => api.post(`/copy-trading/copies/${copyId}/resume`),
+  stopCopy:     (copyId: string)                => api.post(`/copy-trading/copies/${copyId}/stop`),
+  adjustRisk:   (copyId: string, payload: object) =>
+    api.patch(`/copy-trading/copies/${copyId}/risk`, payload),
+};
+
+// ─── Transparency ─────────────────────────────────────────────────────────────
+
+export const transparencyApi = {
+  decisions:    (params?: { limit?: number })    => api.get('/transparency/decisions', { params }),
+  explain:      (tradeId: string)               => api.get(`/transparency/explain/${tradeId}`),
+  auditLog:     (params?: { limit?: number })   => api.get('/transparency/audit-log', { params }),
+};
+
+// ─── ML Ops ───────────────────────────────────────────────────────────────────
+
+export const mlOpsApi = {
+  status:         ()                            => api.get('/ml-ops/status'),
+  triggerRetrain: (payload: object)             => api.post('/ml-ops/retrain', payload),
+  shadowStatus:   ()                            => api.get('/ml-ops/shadow/status'),
+  promoteShadow:  (modelId: string)             => api.post(`/ml-ops/shadow/${modelId}/promote`),
+  retrainHistory: ()                            => api.get('/ml-ops/retrain/history'),
+  modelMetrics:   (modelId: string)             => api.get(`/ml-ops/models/${modelId}/metrics`),
+};
+
+// ─── Observability ────────────────────────────────────────────────────────────
+
+export const observabilityApi = {
+  traces:       (params?: { limit?: number; service?: string }) =>
+    api.get('/observability/traces', { params }),
+  metrics:      (params?: { period?: string })  => api.get('/observability/metrics', { params }),
+  health:       ()                              => api.get('/health/detailed'),
+  alerts:       ()                              => api.get('/observability/alerts'),
+  services:     ()                              => api.get('/observability/services'),
+};
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+export const billingApi = {
+  subscription: ()                              => api.get('/billing/subscription'),
+  plans:        ()                              => api.get('/billing/plans'),
+  changePlan:   (planId: string)                => api.post('/billing/change-plan', { plan_id: planId }),
+  invoices:     ()                              => api.get('/billing/invoices'),
+  paymentMethod:()                              => api.get('/billing/payment-method'),
+  updatePayment:(payload: object)               => api.post('/billing/payment-method', payload),
+};
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list:         (params?: { limit?: number })   => api.get('/notifications', { params }),
+  markRead:     (id: string)                    => api.patch(`/notifications/${id}/read`),
+  markAllRead:  ()                              => api.post('/notifications/mark-all-read'),
+  preferences:  ()                              => api.get('/notifications/preferences'),
+  updatePrefs:  (payload: object)               => api.patch('/notifications/preferences', payload),
+};
+
+// ─── Community ────────────────────────────────────────────────────────────────
+
+export const communityApi = {
+  messages:     (channel: string, params?: { limit?: number; before?: string }) =>
+    api.get(`/community/${channel}/messages`, { params }),
+  send:         (channel: string, payload: { content: string }) =>
+    api.post(`/community/${channel}/messages`, payload),
+  channels:     ()                              => api.get('/community/channels'),
+  members:      (channel: string)               => api.get(`/community/${channel}/members`),
+};
+
+// ─── SuperAdmin ───────────────────────────────────────────────────────────────
+
+export const superAdminApi = {
+  systemHealth:     ()                          => api.get('/superadmin/system-health'),
+  infrastructure:   ()                          => api.get('/superadmin/infrastructure'),
+  nuclearControls:  ()                          => api.get('/superadmin/nuclear-controls'),
+  brokerManagement: ()                          => api.get('/superadmin/broker-management'),
+  whitelabel:       ()                          => api.get('/superadmin/whitelabel'),
+  reliability:      ()                          => api.get('/superadmin/reliability'),
+  financial:        ()                          => api.get('/superadmin/financial'),
+  reporting:        ()                          => api.get('/superadmin/reporting'),
+  killSwitch:       (payload: object)           => api.post('/superadmin/nuclear-controls/kill-switch', payload),
+  forceRollback:    (payload: object)           => api.post('/superadmin/reliability/rollback', payload),
+  tenantCreate:     (payload: object)           => api.post('/superadmin/whitelabel/tenants', payload),
+  tenantList:       ()                          => api.get('/superadmin/whitelabel/tenants'),
+};
