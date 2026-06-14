@@ -130,6 +130,15 @@ class LiveConnectionManager:
       - Heartbeat miss counter
     """
 
+    # Channels carrying account-private financial data. These must NEVER be
+    # delivered via the "empty subscription = all channels" firehose — a
+    # freshly-connected client would otherwise passively receive private
+    # balance/PnL/risk data without ever opting in. They require an explicit
+    # subscribe, and account/equity/risk should be pushed via send_to_user.
+    _PRIVATE_CHANNELS: frozenset[str] = frozenset(
+        {"account", "equity", "risk", "positions", "alerts"}
+    )
+
     def __init__(self) -> None:
         self._connections: dict[str, WebSocket] = {}
         self._subscriptions: dict[str, set[str]] = {}
@@ -215,9 +224,12 @@ class LiveConnectionManager:
         """
         # Serialize once — reuse the string for every send.
         payload = json.dumps(msg)
+        # Private channels require an explicit subscription; never deliver them
+        # via the implicit "empty subscription = all channels" firehose.
+        implicit_all_ok = channel not in self._PRIVATE_CHANNELS
         dead: list[str] = []
         for cid, subs in list(self._subscriptions.items()):
-            if channel in subs or not subs:
+            if channel in subs or (not subs and implicit_all_ok):
                 ws = self._connections.get(cid)
                 if ws:
                     try:
@@ -1269,6 +1281,12 @@ async def _account_update_broadcaster() -> None:
                     "open_trades": open_trades,
                 },
             }
+            # NOTE: single-account deployment — `broker` is the one global
+            # account, so broadcasting its metrics to all subscribers of the
+            # (now subscription-gated) private "account" channel is acceptable
+            # today. BEFORE enabling multi-tenant accounts this MUST become
+            # _manager.send_to_user(owner_id, "account", account_msg) so one
+            # user cannot receive another's balance/PnL.
             await _manager.broadcast("account", account_msg)
         except Exception as exc:
             logger.debug("account_update_broadcaster: %s", exc)
@@ -1868,12 +1886,15 @@ async def ws_notifications(websocket: WebSocket) -> None:
     last_heartbeat = asyncio.get_running_loop().time()
 
     try:
-        import redis.asyncio as aioredis
-        import os
+        # Use the shared factory so production TLS enforcement (_enforce_tls /
+        # IS_FORCE_TLS) applies — a direct aioredis.from_url(REDIS_URL) bypassed
+        # it and could carry notifications/PII over plaintext redis://.
+        from cache.redis_client import get_redis
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        # Strip password from dev URL if empty
-        r = aioredis.from_url(redis_url, decode_responses=True)
+        r = await get_redis(decode_responses=True)
+        if r is None:
+            await websocket.close(code=1011)
+            return
         pubsub = r.pubsub()
         await pubsub.subscribe(_NOTIF_CHANNEL)
 
@@ -1993,11 +2014,13 @@ async def ws_audit_events(websocket: WebSocket) -> None:
     last_heartbeat = asyncio.get_running_loop().time()
 
     try:
-        import redis.asyncio as aioredis
-        import os
+        # Shared factory → production TLS enforcement applies (see ws_notifications).
+        from cache.redis_client import get_redis
 
-        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-        r = aioredis.from_url(redis_url, decode_responses=True)
+        r = await get_redis(decode_responses=True)
+        if r is None:
+            await websocket.close(code=1011)
+            return
         pubsub = r.pubsub()
         await pubsub.subscribe(_AUDIT_CHANNEL)
 
