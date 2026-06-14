@@ -716,6 +716,16 @@ async def startup_event():
         _mount_gateway(app)
         _tasks_done.append("api_gateway")
 
+        # Wire roadmap components to event bus channels
+        try:
+            from core.roadmap_event_wiring import wire_roadmap_events
+            _roadmap_wired = await wire_roadmap_events(app_state)
+            _tasks_done.append("roadmap_event_wiring")
+            logger.info("Roadmap event wiring: %s", _roadmap_wired)
+        except Exception as _rw_err:
+            logger.warning("Roadmap event wiring failed (non-fatal): %s", _rw_err)
+            _tasks_failed.append(f"roadmap_event_wiring: {_rw_err}")
+
         app_state.initialized = True
         # app.state.app_state was already set in lifespan() before this task
         # started so StartupGateMiddleware could return 503 during boot.
@@ -814,6 +824,42 @@ async def shutdown_event():
             logger.info("[OK] Data layer orchestrator stopped")
     except Exception as _dl_stop_exc:
         logger.warning("Data layer orchestrator stop error: %s", _dl_stop_exc)
+
+    # ── Shutdown roadmap components ───────────────────────────────────────────
+    # Advanced Order Manager
+    _aom = getattr(app_state, "advanced_order_manager", None)
+    if _aom is not None and hasattr(_aom, "stop"):
+        try:
+            await _aom.stop()
+            logger.info("[OK] Advanced Order Manager stopped")
+        except Exception as _aom_err:
+            logger.warning("Advanced Order Manager stop error: %s", _aom_err)
+
+    # Continuous Learning Pipeline
+    _clp = getattr(app_state, "continuous_learning", None)
+    if _clp is not None and hasattr(_clp, "stop"):
+        try:
+            await _clp.stop()
+            logger.info("[OK] Continuous Learning Pipeline stopped")
+        except Exception as _clp_err:
+            logger.warning("Continuous Learning Pipeline stop error: %s", _clp_err)
+
+    # Secrets Vault
+    _sv = getattr(app_state, "secrets_vault", None)
+    if _sv is not None and hasattr(_sv, "close"):
+        try:
+            await _sv.close()
+            logger.info("[OK] Secrets Vault closed")
+        except Exception as _sv_err:
+            logger.warning("Secrets Vault close error: %s", _sv_err)
+
+    # OpenTelemetry
+    try:
+        from tracing.opentelemetry_setup import shutdown_telemetry
+        await shutdown_telemetry()
+        logger.info("[OK] OpenTelemetry shut down")
+    except Exception as _otel_err:
+        logger.warning("OpenTelemetry shutdown error: %s", _otel_err)
 
     logger.info("Shutdown complete.")
 
