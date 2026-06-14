@@ -421,3 +421,45 @@
 ───────────────────────────────────────────────────────────────────────────── */
 .sidebar-slide-in  { animation: slideInLeft  0.22s ease-out forwards; }
 .sidebar-slide-out { animation: slideOutLeft 0.22s ease-in  forwards; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   GLOBAL MOBILE SAFETY NET
+   Most pages style with INLINE grids / fixed widths that do not collapse on
+   phones (e.g. `grid-template-columns: repeat(4,1fr)`, `min-width: 560px`,
+   `width: 1200px`), which causes horizontal overflow and unusable layouts on
+   small screens. A stylesheet rule marked !important overrides the inline
+   `style` attribute, so the rules below force a safe single-column, no-overflow
+   layout on phones WITHOUT having to rewrite every page's inline markup.
+   Scoped to the authenticated app content area (.app-shell-scroller) so the
+   shell, sidebar drawer and desktop layouts are unaffected.
+───────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 639px) {
+  /* Collapse any inline multi-column grid in page content to a single column. */
+  .app-shell-scroller [style*="grid-template-columns"] {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Neutralize inline fixed min-widths that force the page to scroll sideways. */
+  .app-shell-scroller [style*="min-width"] {
+    min-width: 0 !important;
+  }
+
+  /* Cap any inline fixed pixel width to the viewport so nothing overflows. */
+  .app-shell-scroller [style*="width:"] {
+    max-width: 100% !important;
+  }
+
+  /* Raw (non-responsive) tables scroll within their own box, not the whole page. */
+  .app-shell-scroller table:not(.responsive-table) {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Flex rows wrap instead of overflowing on narrow screens. */
+  .app-shell-scroller [style*="display: flex"]:not([style*="column"]),
+  .app-shell-scroller [style*="display:flex"]:not([style*="column"]) {
+    flex-wrap: wrap;
+  }
+}
