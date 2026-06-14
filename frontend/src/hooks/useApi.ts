@@ -1424,6 +1424,14 @@ export const indicatorsApi = {
 // Backend: /api/news/* (news/__init__.py create_news_router)
 
 export const newsApi = {
+  /** Roadmap news feed with AI sentiment per article (api/news_feed.py). */
+  feed:             (params?: object)                         => api.get('/news/feed', { params }),
+  /** Nuclear-sentiment score for a symbol. */
+  nuclearScore:     (symbol = 'XAUUSD')                       => api.get('/news/nuclear-score', { params: { symbol } }),
+  /** News-driven economic calendar. */
+  calendar:         ()                                        => api.get('/news/calendar'),
+  /** Aggregated latest sentiment summary (api/sentiment prefix). */
+  sentimentLatest:  (symbol = 'XAUUSD')                       => api.get('/sentiment/latest', { params: { symbol } }),
   /** Latest news articles, optionally filtered by symbol. */
   latest:           (params?: { symbol?: string; limit?: number }) =>
                       api.get('/news/latest', { params }),
