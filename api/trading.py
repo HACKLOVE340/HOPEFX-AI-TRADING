@@ -2004,6 +2004,30 @@ async def get_account(
         except Exception as _exc:
             logger.debug("Paper account DB stats failed: %s", _exc)
 
+        # Reconcile currently-open broker positions. The DB stats above cover
+        # CLOSED-trade history, but open paper positions live in the broker (not
+        # the DB), so open_trades / unrealized / margin must come from there to
+        # match /positions. Without this the summary reported 0 open trades and
+        # $0 margin while positions were actually open.
+        _margin_used = 0.0
+        _MARGIN_RATE = 0.02  # 2% paper margin requirement (matches PaperTradingBroker)
+        try:
+            _bpos = await _broker_call("get_positions")
+            if _bpos:
+                _open_trades = len(_bpos)
+                _unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in _bpos), 2)
+                _margin_used = round(
+                    sum(
+                        abs(float(getattr(p, "quantity", 0) or 0.0))
+                        * float(getattr(p, "current_price", 0) or getattr(p, "entry_price", 0) or 0.0)
+                        * _MARGIN_RATE
+                        for p in _bpos
+                    ),
+                    2,
+                )
+        except Exception as _exc:
+            logger.debug("Broker position reconciliation failed: %s", _exc)
+
         _equity = round(_balance + _unrealized, 2)
         _daily_pnl_pct = round((_daily_pnl / _balance * 100) if _balance > 0 else 0.0, 4)
 
@@ -2019,9 +2043,9 @@ async def get_account(
             "account_id": user.sub,
             "balance": _balance,
             "equity": _equity,
-            "margin_used": 0.0,
-            "margin_free": _equity,
-            "margin_level": 0.0,
+            "margin_used": _margin_used,
+            "margin_free": round(max(_equity - _margin_used, 0.0), 2),
+            "margin_level": round((_equity / _margin_used * 100) if _margin_used > 0 else 0.0, 2),
             "daily_pnl": _daily_pnl,
             "daily_pnl_pct": _daily_pnl_pct,
             "total_pnl": _total_pnl,
@@ -2151,6 +2175,30 @@ async def get_account(
 
     except Exception as _exc:
         logger.debug("Account stats from DB failed: %s", _exc)
+
+    # ── Reconcile with the broker's live open positions ──────────────────────
+    # open_trades above comes from the DB position table, but paper-broker fills
+    # live in the broker (same source /positions reads). Without this, the
+    # summary reports 0 open trades / $0 margin while positions are actually
+    # open. Use get_positions() so /account always agrees with /positions.
+    try:
+        _bpos = await _broker_call("get_positions")
+        if _bpos:
+            _MARGIN_RATE = 0.02  # matches PaperTradingBroker paper margin
+            open_trades = len(_bpos)
+            unrealized = round(sum(float(getattr(p, "unrealized_pnl", 0) or 0.0) for p in _bpos), 2)
+            _bnotional = sum(
+                abs(float(getattr(p, "quantity", 0) or 0.0))
+                * float(getattr(p, "current_price", 0) or getattr(p, "entry_price", 0) or 0.0)
+                for p in _bpos
+            )
+            margin_used = round(_bnotional * _MARGIN_RATE, 2)
+            equity = round(balance + unrealized, 2)
+            margin_free = round(max(equity - margin_used, 0.0), 2)
+            margin_level = round((equity / margin_used * 100) if margin_used > 0 else 0.0, 2)
+            open_risk_pct = round((_bnotional / equity * 100) if equity > 0 else 0.0, 2)
+    except Exception as _exc:
+        logger.debug("Broker position reconciliation (live branch) failed: %s", _exc)
 
     # ── Kill switch state — use the injected helper so tests can override ─────
     kill_switch_active = False
