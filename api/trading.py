@@ -2637,15 +2637,34 @@ async def emergency_stop(
 
     Requires: role >= 'admin'. Logs the triggering user for audit trail.
     """
-    if not app_state or not app_state.brain:
+    # Activate the global kill switch FIRST. This is the hard halt that the
+    # order-placement path (_check_kill_switch) actually enforces — calling
+    # brain.emergency_stop() alone only sets a brain-internal flag and does
+    # NOT block new orders from being accepted.
+    ks = _get_kill_switch()
+    if ks is not None:
+        ks.activate(reason=f"Emergency stop triggered by user={user.sub}")
+
+    # Also signal the decision brain to halt its loop, when available.
+    if app_state and app_state.brain:
+        app_state.brain.emergency_stop()
+
+    if ks is None and (not app_state or not app_state.brain):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Brain not available",
+            detail="No kill switch or brain available to halt trading",
         )
 
-    app_state.brain.emergency_stop()
-    logger.critical("Emergency stop triggered by user=%s", user.sub)
-    return {"status": "emergency_stop_triggered", "triggered_by": user.sub}
+    logger.critical(
+        "Emergency stop triggered by user=%s — kill_switch_active=%s",
+        user.sub,
+        ks.is_active() if ks is not None else False,
+    )
+    return {
+        "status": "emergency_stop_triggered",
+        "triggered_by": user.sub,
+        "kill_switch_active": ks.is_active() if ks is not None else False,
+    }
 
 
 # ── Trade history ─────────────────────────────────────────────────────────────
