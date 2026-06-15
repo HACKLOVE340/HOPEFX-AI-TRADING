@@ -195,7 +195,10 @@ const DataInitialiser: React.FC = () => {
   const setNews   = useChartBotStore((s) => s.setNews);
   const setRisk   = useChartBotStore((s) => s.setRiskMetrics);
 
-  const { data: bars }      = useOHLCV(symbol, timeframe, 500);
+  // Deep timeframes pull far more bars so the chart can scroll back decades
+  // (daily gold history reaches ~2000); intraday stays light for speed.
+  const ohlcvLimit = timeframe === '1d' ? 8000 : timeframe === '1w' ? 2000 : 500;
+  const { data: bars }      = useOHLCV(symbol, timeframe, ohlcvLimit);
   const { data: levels }    = useLevels(symbol);
   const { data: trendlines }= useTrendlines(symbol);
   const { data: patterns }  = usePatterns(symbol);

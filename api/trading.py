@@ -2251,6 +2251,66 @@ async def get_prices(
     return {}
 
 
+def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
+    """Deep historical XAUUSD OHLCV from a bundled CSV (daily back to ~2000).
+
+    Used as a last-resort fallback for daily/weekly charts when the live price
+    engine and yfinance are both unavailable, so the chart can still render
+    decades of gold history (instead of a blank 503). Returns [] for intraday
+    timeframes since the CSV is daily granularity.
+    """
+    if timeframe not in ("1d", "1w", "1wk"):
+        return []
+    import os
+
+    import pandas as pd
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # Prefer the deepest history available.
+    path = next(
+        (
+            p
+            for p in (
+                os.path.join(repo_root, "data", "XAUUSD_50Y.csv"),
+                os.path.join(repo_root, "data", "XAUUSD_40Y.csv"),
+                os.path.join(repo_root, "data", "XAUUSD_5Y.csv"),
+            )
+            if os.path.exists(p)
+        ),
+        None,
+    )
+    if not path:
+        return []
+    try:
+        df = pd.read_csv(path)
+        df.columns = [c.lower() for c in df.columns]
+        if "date" not in df.columns or "close" not in df.columns:
+            return []
+        df["date"] = pd.to_datetime(df["date"], utc=True)
+        df = df.set_index("date").sort_index()
+        if timeframe in ("1w", "1wk"):
+            df = (
+                df.resample("1W")
+                .agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"})
+                .dropna(subset=["open", "close"])
+            )
+        df = df.tail(limit)
+        return [
+            {
+                "timestamp": int(ts.timestamp()),
+                "open": round(float(row["open"]), 5),
+                "high": round(float(row["high"]), 5),
+                "low": round(float(row["low"]), 5),
+                "close": round(float(row["close"]), 5),
+                "volume": round(float(row.get("volume", 0) or 0), 2),
+            }
+            for ts, row in df.iterrows()
+        ]
+    except Exception as exc:
+        logger.debug("Gold history CSV load failed: %s", exc)
+        return []
+
+
 @router.get(
     "/ohlcv/{symbol:path}",
     response_model=list[OHLCVBar],
@@ -2344,8 +2404,8 @@ async def get_ohlcv(
             "30m": ("30m", "60d"),
             "1h": ("1h", "60d"),  # ~1440 bars — fast, plenty of history
             "4h": ("1h", "60d"),  # fetch 1h then resample → 4h
-            "1d": ("1d", "5y"),
-            "1w": ("1wk", "10y"),
+            "1d": ("1d", "max"),  # full daily history (gold back to ~2000)
+            "1w": ("1wk", "max"),  # full weekly history
         }
         ticker_sym = _YF_MAP.get(symbol, symbol)
         interval, period = _TF_MAP.get(timeframe, ("1h", "60d"))
@@ -2394,6 +2454,15 @@ async def get_ohlcv(
             return bars
     except Exception as exc:
         logger.warning("OHLCV yfinance direct fallback failed for %s: %s", symbol, exc)
+
+    # ── Bundled deep-history CSV fallback (gold daily/weekly) ─────────────────
+    # When live feeds and yfinance are both unavailable, serve real gold history
+    # from the bundled CSV so daily/weekly charts still show decades of data.
+    if symbol == "XAUUSD":
+        csv_bars = _load_gold_history_csv(timeframe, limit)
+        if csv_bars:
+            logger.info("OHLCV gold CSV history: %s %s — %d bars", symbol, timeframe, len(csv_bars))
+            return csv_bars
 
     # All real data sources exhausted — return 503 so the frontend can display
     # a meaningful "data unavailable" state rather than rendering fake bars.
