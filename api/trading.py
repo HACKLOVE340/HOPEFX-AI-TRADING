@@ -2322,12 +2322,15 @@ def _load_gold_history_csv(timeframe: str, limit: int) -> list[dict]:
     import pandas as pd
 
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # Prefer the deepest history available.
+    # Prefer the clean 40Y file (daily, back to 2000, no corrupted bars).
+    # XAUUSD_50Y.csv is intentionally NOT used as the primary source: its
+    # pre-2000 bars are corrupted (isolated bad prints, e.g. $43 when gold was
+    # ~$270), which would feed bad data into charts. 40Y covers 2000→today
+    # cleanly, which is the supported chart range.
     path = next(
         (
             p
             for p in (
-                os.path.join(repo_root, "data", "XAUUSD_50Y.csv"),
                 os.path.join(repo_root, "data", "XAUUSD_40Y.csv"),
                 os.path.join(repo_root, "data", "XAUUSD_5Y.csv"),
             )
