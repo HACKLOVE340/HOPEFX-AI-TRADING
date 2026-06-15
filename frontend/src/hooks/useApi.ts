@@ -274,6 +274,14 @@ export const authApi = {
   // withCredentials ensures the browser sends the httpOnly refresh cookie.
   logout:   () => api.post('/auth/logout', {}, { withCredentials: true }),
   me:       ()                       => api.get<import('../store').User>('/auth/me'),
+  /**
+   * Restore an authenticated session on a cold page load / refresh.
+   * The access token is never persisted, so after a reload the in-memory
+   * token is null. This mints a fresh access token from the httpOnly refresh
+   * cookie and writes it (plus the user) into the store, returning the new
+   * token or null if no valid session exists.
+   */
+  restoreSession: (): Promise<string | null> => _silentRefresh(),
   register: (payload: { email: string; username: string; password: string }) =>
     api.post('/auth/register', payload),
   activateFreeTier: (userId: string, refCode?: string) =>

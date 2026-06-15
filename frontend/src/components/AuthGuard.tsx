@@ -89,21 +89,38 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({ children, requiredRole }) 
     if (syncedToken.current !== token) {
       syncedToken.current = token;
       setSyncing(true);
-      authApi.me()
-        .then((res) => {
-          const fresh = res.data;
-          // Grab the token after the interceptor may have restored it.
-          const currentToken = useStore.getState().token;
-          if (fresh && currentToken) {
-            const changed =
-              fresh.role  !== user?.role  ||
-              fresh.email !== user?.email ||
-              fresh.plan  !== user?.plan;
-            if (changed) setAuth(currentToken, fresh);
+      // Cold load / refresh: the in-memory token was cleared but a session is
+      // persisted. The httpOnly access-token cookie makes /me succeed WITHOUT
+      // triggering the 401→silent-refresh path, so the in-memory token (and
+      // isAuthenticated) would never be restored and the user would be bounced
+      // to /login. Restore the session from the refresh cookie first so the
+      // token + isAuthenticated are re-established before we decide.
+      const ensureSession: Promise<string | null> = token
+        ? Promise.resolve(token)
+        : authApi.restoreSession();
+
+      ensureSession
+        .then((restored) => {
+          if (!restored) {
+            // No valid session could be restored → force re-login.
+            clearAuth();
+            return;
           }
+          return authApi.me().then((res) => {
+            const fresh = res.data;
+            // Grab the token after restoreSession / the interceptor set it.
+            const currentToken = useStore.getState().token;
+            if (fresh && currentToken) {
+              const changed =
+                fresh.role  !== user?.role  ||
+                fresh.email !== user?.email ||
+                fresh.plan  !== user?.plan;
+              if (changed) setAuth(currentToken, fresh);
+            }
+          });
         })
         .catch(() => {
-          // /me failed even after silent-refresh attempt → force re-login.
+          // Restore or /me failed → force re-login.
           clearAuth();
         })
         .finally(() => setSyncing(false));
