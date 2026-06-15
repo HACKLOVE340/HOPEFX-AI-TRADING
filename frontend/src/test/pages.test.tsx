@@ -83,6 +83,8 @@ vi.mock('../hooks/useApi', () => ({
     myStrategies:   vi.fn().mockResolvedValue({ data: { strategies: [] } }),
     strategy:       vi.fn().mockResolvedValue({ data: { strategy: {}, reviews: [] } }),
     review:         vi.fn().mockResolvedValue({ data: {} }),
+    mySubscriptions: vi.fn().mockResolvedValue({ data: { subscriptions: [] } }),
+    unsubscribe:    vi.fn().mockResolvedValue({ data: {} }),
   },
   // CSRF helpers — imported by DangerSection, SecuritySection, TwoFactorSetup
   getCsrfToken:       vi.fn().mockResolvedValue('test-csrf-token'),

@@ -149,6 +149,23 @@ const Marketplace: React.FC = () => {
 
   useEffect(() => { loadStrategies(); }, [loadStrategies]);
   useEffect(() => { if (mainTab === 'my-listings') loadMyListings(); }, [mainTab, loadMyListings]);
+  // Hydrate the "✅ Subscribed" markers from the user's existing subscriptions
+  // so they reflect server state on load rather than resetting each refresh.
+  useEffect(() => {
+    let mounted = true;
+    marketplaceApi.mySubscriptions().then(r => {
+      if (!mounted) return;
+      const d = (r as { data: unknown }).data;
+      const rows: Array<Record<string, unknown>> = Array.isArray(d)
+        ? d as Array<Record<string, unknown>>
+        : ((d as { subscriptions?: Array<Record<string, unknown>> })?.subscriptions ?? []);
+      const ids = rows
+        .map(row => String(row.strategy_id ?? row.id ?? ''))
+        .filter(Boolean);
+      if (ids.length) setSubscribed(prev => new Set([...prev, ...ids]));
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
   useEffect(() => {
     let mounted = true;
     marketplaceApi.stats().then(r => {

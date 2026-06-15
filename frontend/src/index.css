@@ -333,6 +333,14 @@
   to { transform: rotate(360deg); }
 }
 
+/* Indeterminate progress: a bar sweeping left-to-right, used when the backend
+   reports activity but not a measurable percentage. */
+@keyframes indeterminate {
+  0%   { left: -40%; width: 40%; }
+  50%  { left: 25%;  width: 50%; }
+  100% { left: 100%; width: 40%; }
+}
+
 @keyframes tickerScroll {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }

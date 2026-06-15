@@ -1,7 +1,7 @@
 // settings/BillingSection.tsx — Subscription plan, billing info, transactions
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../../hooks/useApi';
+import { api, pricingApi } from '../../hooks/useApi';
 import type { BillingInfo } from './types';
 import { Card, SectionHeader, Button, StatusBadge, Divider } from './ui';
 
@@ -12,6 +12,37 @@ interface Transaction {
   description: string;
   status: string;
   created_at: string;
+}
+
+interface DisplayPlan {
+  id: string;
+  name: string;
+  price: string;
+  features: string[];
+  highlight?: boolean;
+}
+
+// Backend shape from GET /api/pricing/plans (subset we render here).
+interface ApiPlan {
+  id: string;
+  name: string;
+  price_usd_monthly: number;
+  badge?: string | null;
+  highlights?: string[];
+  features?: Record<string, boolean> | string[];
+}
+
+// Used only if /api/pricing/plans is unavailable, so the panel still renders.
+const FALLBACK_PLANS: DisplayPlan[] = [
+  { id: 'free',         name: 'Free',         price: '$0',      features: ['Paper trading', '5 signals/day', '3 backtests/mo', '1 strategy'] },
+  { id: 'starter',      name: 'Starter',      price: '$1,800',  features: ['Live trading', '20 signals/day', '10 backtests/mo', '3 strategies'] },
+  { id: 'professional', name: 'Professional', price: '$4,500',  features: ['AI charting', 'ML signals', 'Pattern recognition', 'Copy trading', 'API access'], highlight: true },
+  { id: 'enterprise',   name: 'Enterprise',   price: '$7,500',  features: ['Unlimited strategies', 'News integration', 'Research tools', 'Teams', 'Market replay'] },
+  { id: 'elite',        name: 'Elite',        price: '$10,000', features: ['Sub-accounts', 'Dedicated support', 'Custom development', 'White-label', '0.1% commission'] },
+];
+
+function formatPrice(usdMonthly: number): string {
+  return usdMonthly === 0 ? '$0' : '$' + usdMonthly.toLocaleString();
 }
 
 const PLAN_COLORS: Record<string, string> = {
@@ -27,6 +58,7 @@ const BillingSection: React.FC = () => {
   const navigate = useNavigate();
   const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [plans, setPlans] = useState<DisplayPlan[]>(FALLBACK_PLANS);
   const [loading, setLoading] = useState(true);
   const [txLoading, setTxLoading] = useState(true);
 
@@ -40,6 +72,26 @@ const BillingSection: React.FC = () => {
       .then((r) => setTransactions(r.data.transactions ?? []))
       .catch((err: unknown) => console.warn('[Settings/Billing] transactions:', err))
       .finally(() => setTxLoading(false));
+
+    // Source live pricing from the canonical catalogue so this panel never
+    // drifts from the real plan prices; fall back to a static list on error.
+    pricingApi.getPlans('monthly')
+      .then((r) => {
+        const apiPlans: ApiPlan[] = r.data?.plans ?? [];
+        if (!apiPlans.length) return;
+        setPlans(apiPlans.map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: formatPrice(p.price_usd_monthly),
+          highlight: Boolean(p.badge),
+          features: p.highlights?.length
+            ? p.highlights
+            : Array.isArray(p.features)
+              ? p.features
+              : FALLBACK_PLANS.find((f) => f.id === p.id)?.features ?? [],
+        })));
+      })
+      .catch((err: unknown) => console.warn('[Settings/Billing] plans:', err));
   }, []);
 
   const planColor = billing ? (PLAN_COLORS[billing.plan?.toLowerCase()] ?? '#3b82f6') : '#3b82f6';
@@ -122,13 +174,7 @@ const BillingSection: React.FC = () => {
       <Card>
         <h3 style={{ fontSize: 15, fontWeight: 700, color: '#e2e8f0', marginTop: 0, marginBottom: 16 }}>Available plans</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10 }}>
-          {[
-            { id: 'free',         name: 'Free',         price: '$0',      features: ['Paper trading', '5 signals/day', '3 backtests/mo', '1 strategy'] },
-            { id: 'starter',      name: 'Starter',      price: '$1,800',  features: ['Live trading', '20 signals/day', '10 backtests/mo', '3 strategies'] },
-            { id: 'professional', name: 'Professional', price: '$4,500',  features: ['AI charting', 'ML signals', 'Pattern recognition', 'Copy trading', 'API access'], highlight: true },
-            { id: 'enterprise',   name: 'Enterprise',   price: '$7,500',  features: ['Unlimited strategies', 'News integration', 'Research tools', 'Teams', 'Market replay'] },
-            { id: 'elite',        name: 'Elite',        price: '$10,000', features: ['Sub-accounts', 'Dedicated support', 'Custom development', 'White-label', '0.1% commission'] },
-          ].map(({ id, name, price, features, highlight }) => (
+          {plans.map(({ id, name, price, features, highlight }) => (
             <div key={id} style={{
               padding: '14px', borderRadius: 10,
               border: `1px solid ${highlight ? '#3b82f6' : '#334155'}`,

@@ -271,9 +271,7 @@ const AutoHealDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [scanning, setScanning]         = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
   const [avScanning, setAvScanning]     = useState(false);
-  const [avProgress, setAvProgress]     = useState(0);
   const [rebuilding, setRebuilding]     = useState(false);
   const [quarantining, setQuarantining] = useState<string | null>(null);
   const mountedRef = useRef(true);
@@ -313,29 +311,25 @@ const AutoHealDashboard: React.FC = () => {
     return () => clearInterval(id);
   }, [loadAll]);
 
+  // The scan endpoints are fire-and-forget triggers — the backend does not
+  // stream a measurable percentage — so we show an honest indeterminate
+  // indicator while the request is in flight rather than a fabricated number.
   const handleScan = async () => {
     setScanning(true);
-    setScanProgress(0);
-    // Simulate progress while scan runs (real progress from WS if available)
-    const interval = setInterval(() => setScanProgress(p => Math.min(p + 8, 90)), 400);
     try {
       await triggerScan();
-      setScanProgress(100);
       await loadAll();
     } catch { setError('Scan trigger failed'); }
-    finally { clearInterval(interval); setScanning(false); setTimeout(() => setScanProgress(0), 1500); }
+    finally { setScanning(false); }
   };
 
   const handleAvScan = async () => {
     setAvScanning(true);
-    setAvProgress(0);
-    const interval = setInterval(() => setAvProgress(p => Math.min(p + 5, 90)), 600);
     try {
       await triggerAvScan();
-      setAvProgress(100);
       await loadAll();
     } catch { setError('AV scan trigger failed'); }
-    finally { clearInterval(interval); setAvScanning(false); setTimeout(() => setAvProgress(0), 1500); }
+    finally { setAvScanning(false); }
   };
 
   const handleRebuild = async () => {
@@ -378,11 +372,11 @@ const AutoHealDashboard: React.FC = () => {
       <div style={actionBarStyle}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button style={actionBtnStyle} onClick={handleScan} disabled={scanning}>
-            {scanning ? `🔍 Scanning… ${scanProgress}%` : '🔍 Integrity Scan'}
+            {scanning ? '🔍 Scanning…' : '🔍 Integrity Scan'}
           </button>
           {scanning && (
-            <div style={{ width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
-              <div style={{ width: `${scanProgress}%`, height: '100%', background: '#3b82f6', borderRadius: 4, transition: 'width 0.3s ease' }} />
+            <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: 0, height: '100%', background: '#3b82f6', borderRadius: 4, animation: 'indeterminate 1.1s ease-in-out infinite' }} />
             </div>
           )}
         </div>
@@ -391,11 +385,11 @@ const AutoHealDashboard: React.FC = () => {
         </button>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <button style={{ ...actionBtnStyle, background: '#7c3aed' }} onClick={handleAvScan} disabled={avScanning}>
-            {avScanning ? `🛡️ AV Scan… ${avProgress}%` : '🛡️ AV Full Scan'}
+            {avScanning ? '🛡️ AV Scan…' : '🛡️ AV Full Scan'}
           </button>
           {avScanning && (
-            <div style={{ width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
-              <div style={{ width: `${avProgress}%`, height: '100%', background: '#7c3aed', borderRadius: 4, transition: 'width 0.3s ease' }} />
+            <div style={{ position: 'relative', width: '100%', background: '#1e293b', borderRadius: 4, height: 4, overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: 0, height: '100%', background: '#7c3aed', borderRadius: 4, animation: 'indeterminate 1.1s ease-in-out infinite' }} />
             </div>
           )}
         </div>
