@@ -405,196 +405,235 @@ def _detect_double_bottom(
 # ---------------------------------------------------------------------------
 
 
-def _classify_triangle(
-    high_slope: float,
-    low_slope: float,
+# ---------------------------------------------------------------------------
+# Triangle / Wedge / Channel patterns (windowed multi-detection)
+# ---------------------------------------------------------------------------
+
+
+def _linear_fit(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
+    """Least-squares fit returning (slope, intercept, r_squared).
+
+    r_squared measures how well the points sit on the line (1.0 = perfect),
+    and is used to weight pattern confidence so ragged trendlines score lower.
+    """
+    slope, intercept = _linear_slope(xs, ys)
+    n = len(ys)
+    if n == 0:
+        return slope, intercept, 0.0
+    mean_y = sum(ys) / n
+    ss_tot = sum((y - mean_y) ** 2 for y in ys)
+    ss_res = sum((y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys, strict=False))
+    if ss_tot == 0:
+        return slope, intercept, 1.0
+    return slope, intercept, _clamp(1.0 - ss_res / ss_tot)
+
+
+def _line_at(slope: float, intercept: float, x: float) -> float:
+    return slope * x + intercept
+
+
+def _classify_trendlines(
     prices: list[float],
     start: int,
     end: int,
+    high_slope: float,
+    high_int: float,
+    low_slope: float,
+    low_int: float,
+    avg_r2: float,
 ) -> ChartPattern | None:
-    """Return a triangle ChartPattern based on trendline slopes."""
-    flat = 1e-6
-    both_converge = high_slope < 0 and low_slope > 0
+    """Classify a pair of high/low trendlines over [start, end] into a pattern.
 
-    if both_converge:
-        apex = prices[start] + (prices[end] - prices[start]) / 2
+    Returns a triangle, wedge, or channel ChartPattern with fit-based
+    confidence and actionable price levels, or None if the geometry does not
+    match a recognised shape.
+    """
+    scale = sum(prices[start : end + 1]) / max(1, end - start + 1)
+    if scale <= 0:
+        return None
+
+    hi_end = _line_at(high_slope, high_int, end)
+    lo_end = _line_at(low_slope, low_int, end)
+    hi_start = _line_at(high_slope, high_int, start)
+    lo_start = _line_at(low_slope, low_int, start)
+    # Sanity: the "upper" line must sit above the "lower" line.
+    if hi_end <= lo_end or hi_start <= lo_start:
+        return None
+
+    # Classify on total displacement of each trendline across the window and on
+    # how the gap between them changes — far more robust than comparing raw
+    # per-bar slopes to an absolute threshold.
+    hi_disp = hi_end - hi_start
+    lo_disp = lo_end - lo_start
+    width_start = hi_start - lo_start
+    width_end = hi_end - lo_end
+    flat = scale * 4e-3  # a line is "flat" if it moves < ~0.4% of price overall
+    converging = width_end < width_start * 0.7
+
+    hi_rising, hi_falling, hi_flat = hi_disp > flat, hi_disp < -flat, abs(hi_disp) <= flat
+    lo_rising, lo_falling, lo_flat = lo_disp > flat, lo_disp < -flat, abs(lo_disp) <= flat
+
+    base_conf = _clamp(0.40 + 0.40 * avg_r2)
+
+    def mk(pattern_type, direction, conf, entry, target, stop, desc):
         return ChartPattern(
-            pattern_type="symmetrical_triangle",
-            direction="neutral",
+            pattern_type=pattern_type,
+            direction=direction,
             start_index=start,
             end_index=end,
-            confidence=0.65,
-            key_levels={"apex": round(apex, 5)},
-            description="Converging trendlines — breakout direction uncertain",
+            confidence=round(_clamp(conf), 4),
+            key_levels={
+                "upper_start": round(hi_start, 5),
+                "upper_end": round(hi_end, 5),
+                "lower_start": round(lo_start, 5),
+                "lower_end": round(lo_end, 5),
+            },
+            description=desc,
+            entry_price=round(max(entry, 0.0), 5),
+            target_price=round(max(target, 0.0), 5),
+            stop_loss=round(max(stop, 0.0), 5),
         )
 
-    high_flat = abs(high_slope) < flat
-    low_rising = low_slope > flat
-    if high_flat and low_rising:
-        return ChartPattern(
-            pattern_type="ascending_triangle",
-            direction="bullish",
-            start_index=start,
-            end_index=end,
-            confidence=0.70,
-            description="Flat resistance with rising support — bullish breakout likely",
+    # ── Triangles ──────────────────────────────────────────────────────────
+    if hi_flat and lo_rising:
+        height = hi_end - lo_start
+        return mk(
+            "ascending_triangle",
+            "bullish",
+            base_conf + 0.10,
+            hi_end,
+            hi_end + height,
+            lo_end,
+            "Flat resistance with rising support — bullish breakout likely",
+        )
+    if lo_flat and hi_falling:
+        height = hi_start - lo_end
+        return mk(
+            "descending_triangle",
+            "bearish",
+            base_conf + 0.10,
+            lo_end,
+            lo_end - height,
+            hi_end,
+            "Flat support with falling resistance — bearish breakout likely",
+        )
+    if hi_falling and lo_rising:
+        return mk(
+            "symmetrical_triangle",
+            "neutral",
+            base_conf,
+            prices[end],
+            0.0,
+            0.0,
+            "Converging trendlines — await breakout for direction",
         )
 
-    low_flat = abs(low_slope) < flat
-    high_falling = high_slope < -flat
-    if low_flat and high_falling:
-        return ChartPattern(
-            pattern_type="descending_triangle",
-            direction="bearish",
-            start_index=start,
-            end_index=end,
-            confidence=0.70,
-            description="Flat support with falling resistance — bearish breakout likely",
+    # ── Wedges (both lines slope the same way but converge) ──────────────────
+    if hi_rising and lo_rising and converging:
+        return mk(
+            "rising_wedge",
+            "bearish",
+            base_conf,
+            lo_end,
+            lo_end - width_end,
+            hi_end,
+            "Rising but converging trendlines — bearish reversal signal",
+        )
+    if hi_falling and lo_falling and converging:
+        return mk(
+            "falling_wedge",
+            "bullish",
+            base_conf,
+            hi_end,
+            hi_end + width_end,
+            lo_end,
+            "Falling but converging trendlines — bullish reversal signal",
+        )
+
+    # ── Channels (parallel sloping lines, gap roughly constant) ──────────────
+    roughly_parallel = not converging and abs(width_end - width_start) < width_start * 0.4
+    if roughly_parallel and hi_rising and lo_rising:
+        return mk(
+            "rising_channel",
+            "bullish",
+            base_conf - 0.05,
+            lo_end,
+            hi_end,
+            lo_end - width_end * 0.5,
+            "Parallel rising trendlines — upward trend continuation",
+        )
+    if roughly_parallel and hi_falling and lo_falling:
+        return mk(
+            "falling_channel",
+            "bearish",
+            base_conf - 0.05,
+            hi_end,
+            lo_end,
+            hi_end + width_end * 0.5,
+            "Parallel falling trendlines — downward trend continuation",
         )
 
     return None
 
 
-def _detect_triangle(
+def _merge_adjacent_extrema(indices: list[int], prices: list[float], want_max: bool, min_gap: int = 3) -> list[int]:
+    """Collapse runs of extrema closer than *min_gap* bars into a single index.
+
+    Swing detection often flags neighbouring bars (e.g. a flat top) as separate
+    extrema; merging them keeps the most extreme bar of each cluster so the
+    trendline scan sees distinct swings rather than duplicates.
+    """
+    if not indices:
+        return []
+    merged: list[int] = []
+    cluster: list[int] = [indices[0]]
+    for idx in indices[1:]:
+        if idx - cluster[-1] < min_gap:
+            cluster.append(idx)
+            continue
+        merged.append(max(cluster, key=lambda i: prices[i]) if want_max else min(cluster, key=lambda i: prices[i]))
+        cluster = [idx]
+    merged.append(max(cluster, key=lambda i: prices[i]) if want_max else min(cluster, key=lambda i: prices[i]))
+    return merged
+
+
+def _scan_trendlines(
     prices: list[float],
     peaks: list[int],
     troughs: list[int],
-) -> ChartPattern | None:
-    """Detect triangle patterns using peak and trough trendlines."""
-    if len(peaks) < 2 or len(troughs) < 2:
-        return None
+    window: int = 3,
+) -> list[ChartPattern]:
+    """Slide a window of consecutive peaks across the series, fitting upper and
+    lower trendlines in each window to detect every triangle / wedge / channel.
 
-    peak_xs = [float(p) for p in peaks[-3:]]
-    peak_ys = [prices[p] for p in peaks[-3:]]
-    trough_xs = [float(t) for t in troughs[-3:]]
-    trough_ys = [prices[t] for t in troughs[-3:]]
+    Unlike the previous single-shot logic (which only inspected the last few
+    swings), this surfaces multiple formations along the series, each scored by
+    trendline fit quality.
+    """
+    peaks = _merge_adjacent_extrema(peaks, prices, want_max=True)
+    troughs = _merge_adjacent_extrema(troughs, prices, want_max=False)
+    if len(peaks) < window or len(troughs) < 2:
+        return []
 
-    high_slope, _ = _linear_slope(peak_xs, peak_ys)
-    low_slope, _ = _linear_slope(trough_xs, trough_ys)
+    results: list[ChartPattern] = []
+    for i in range(len(peaks) - window + 1):
+        pk = peaks[i : i + window]
+        tr = [t for t in troughs if pk[0] <= t <= pk[-1]]
+        if len(tr) < 2:
+            continue
 
-    start = min(peaks[0], troughs[0])
-    end = max(peaks[-1], troughs[-1])
+        high_slope, high_int, high_r2 = _linear_fit([float(p) for p in pk], [prices[p] for p in pk])
+        low_slope, low_int, low_r2 = _linear_fit([float(t) for t in tr], [prices[t] for t in tr])
 
-    return _classify_triangle(high_slope, low_slope, prices, start, end)
-
-
-# ---------------------------------------------------------------------------
-# Wedge patterns
-# ---------------------------------------------------------------------------
-
-
-def _detect_wedge(
-    prices: list[float],
-    peaks: list[int],
-    troughs: list[int],
-) -> ChartPattern | None:
-    """Detect Rising (bearish) or Falling (bullish) Wedge."""
-    if len(peaks) < 2 or len(troughs) < 2:
-        return None
-
-    peak_xs = [float(p) for p in peaks[-3:]]
-    peak_ys = [prices[p] for p in peaks[-3:]]
-    trough_xs = [float(t) for t in troughs[-3:]]
-    trough_ys = [prices[t] for t in troughs[-3:]]
-
-    high_slope, _ = _linear_slope(peak_xs, peak_ys)
-    low_slope, _ = _linear_slope(trough_xs, trough_ys)
-
-    start = min(peaks[0], troughs[0])
-    end = max(peaks[-1], troughs[-1])
-
-    # Rising wedge: both trendlines slope up but converge
-    both_rising = high_slope > 0 and low_slope > 0
-    rising_converge = low_slope > high_slope > 0
-
-    if both_rising and rising_converge:
-        return ChartPattern(
-            pattern_type="rising_wedge",
-            direction="bearish",
-            start_index=start,
-            end_index=end,
-            confidence=0.65,
-            description="Both trendlines rising but converging — bearish reversal signal",
+        start = min(pk[0], tr[0])
+        end = max(pk[-1], tr[-1])
+        pattern = _classify_trendlines(
+            prices, start, end, high_slope, high_int, low_slope, low_int, (high_r2 + low_r2) / 2
         )
+        if pattern is not None:
+            results.append(pattern)
 
-    # Falling wedge: both trendlines slope down but converge
-    both_falling = high_slope < 0 and low_slope < 0
-    falling_converge = high_slope < low_slope < 0
-
-    if both_falling and falling_converge:
-        return ChartPattern(
-            pattern_type="falling_wedge",
-            direction="bullish",
-            start_index=start,
-            end_index=end,
-            confidence=0.65,
-            description="Both trendlines falling but converging — bullish reversal signal",
-        )
-
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Channel patterns
-# ---------------------------------------------------------------------------
-
-
-def _compute_channel_params(
-    prices: list[float],
-    peaks: list[int],
-    troughs: list[int],
-) -> tuple[float, float, float, float]:
-    """Return (high_slope, high_intercept, low_slope, low_intercept)."""
-    peak_xs = [float(p) for p in peaks[-4:]]
-    peak_ys = [prices[p] for p in peaks[-4:]]
-    trough_xs = [float(t) for t in troughs[-4:]]
-    trough_ys = [prices[t] for t in troughs[-4:]]
-
-    high_slope, high_intercept = _linear_slope(peak_xs, peak_ys)
-    low_slope, low_intercept = _linear_slope(trough_xs, trough_ys)
-    return high_slope, high_intercept, low_slope, low_intercept
-
-
-def _detect_channel(
-    prices: list[float],
-    peaks: list[int],
-    troughs: list[int],
-) -> ChartPattern | None:
-    """Detect Rising or Falling Channel (parallel trendlines)."""
-    if len(peaks) < 2 or len(troughs) < 2:
-        return None
-
-    high_slope, _, low_slope, _ = _compute_channel_params(prices, peaks, troughs)
-
-    slopes_parallel = abs(high_slope - low_slope) < abs(high_slope) * 0.3
-
-    if not slopes_parallel:
-        return None
-
-    start = min(peaks[0], troughs[0])
-    end = max(peaks[-1], troughs[-1])
-
-    if high_slope > 0:
-        return ChartPattern(
-            pattern_type="rising_channel",
-            direction="bullish",
-            start_index=start,
-            end_index=end,
-            confidence=0.60,
-            description="Parallel rising trendlines — trend continuation upward",
-        )
-
-    if high_slope < 0:
-        return ChartPattern(
-            pattern_type="falling_channel",
-            direction="bearish",
-            start_index=start,
-            end_index=end,
-            confidence=0.60,
-            description="Parallel falling trendlines — trend continuation downward",
-        )
-
-    return None
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -676,12 +715,13 @@ class ChartPatternDetector:
         if closes is None:
             return []
 
+        peaks, troughs = self._peaks_and_troughs(closes)
         patterns: list[ChartPattern] = []
         patterns.extend(self.detect_head_and_shoulders(df))
         patterns.extend(self.detect_double_tops_bottoms(df))
-        patterns.extend(self.detect_triangles(df))
         patterns.extend(self.detect_flags_pennants(df))
-        patterns.extend(self.detect_wedges(df))
+        # Triangles, wedges, and channels all come from one trendline scan.
+        patterns.extend(_scan_trendlines(closes, peaks, troughs))
 
         patterns = [p for p in patterns if p.confidence >= min_confidence]
         patterns.sort(key=lambda p: p.confidence, reverse=True)
@@ -744,6 +784,10 @@ class ChartPatternDetector:
         results.extend(_detect_double_bottom(closes, troughs, symmetry_tolerance=self.sensitivity))
         return results
 
+    _TRIANGLE_TYPES = {"ascending_triangle", "descending_triangle", "symmetrical_triangle"}
+    _WEDGE_TYPES = {"rising_wedge", "falling_wedge"}
+    _CHANNEL_TYPES = {"rising_channel", "falling_channel"}
+
     def detect_triangles(self, df: "pd.DataFrame") -> list[ChartPattern]:
         """
         Detect triangle patterns (ascending, descending, symmetrical).
@@ -758,11 +802,23 @@ class ChartPatternDetector:
         if closes is None or len(closes) < self.min_bars:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
-        results = []
-        p = _detect_triangle(closes, peaks, troughs)
-        if p:
-            results.append(p)
-        return results
+        return [p for p in _scan_trendlines(closes, peaks, troughs) if p.pattern_type in self._TRIANGLE_TYPES]
+
+    def detect_channels(self, df: "pd.DataFrame") -> list[ChartPattern]:
+        """
+        Detect rising and falling channel patterns (parallel trendlines).
+
+        Args:
+            df: OHLCV DataFrame.
+
+        Returns:
+            List of detected ChartPattern objects.
+        """
+        closes = self._get_closes(df)
+        if closes is None or len(closes) < self.min_bars:
+            return []
+        peaks, troughs = self._peaks_and_troughs(closes)
+        return [p for p in _scan_trendlines(closes, peaks, troughs) if p.pattern_type in self._CHANNEL_TYPES]
 
     def detect_flags_pennants(self, df: "pd.DataFrame") -> list[ChartPattern]:
         """
@@ -931,11 +987,7 @@ class ChartPatternDetector:
         if closes is None or len(closes) < self.min_bars:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
-        results = []
-        p = _detect_wedge(closes, peaks, troughs)
-        if p:
-            results.append(p)
-        return results
+        return [p for p in _scan_trendlines(closes, peaks, troughs) if p.pattern_type in self._WEDGE_TYPES]
 
     # ------------------------------------------------------------------
     # Legacy helpers kept for backward compatibility
@@ -957,17 +1009,13 @@ class ChartPatternDetector:
         peaks = _find_peaks(closes, self.swing_window)
         troughs = _find_troughs(closes, self.swing_window)
 
-        candidates: list[ChartPattern | None] = [
-            _detect_head_and_shoulders(closes, peaks, troughs),
-            _detect_inverse_head_and_shoulders(closes, peaks, troughs),
-            _detect_double_top(closes, peaks),
-            _detect_double_bottom(closes, troughs),
-            _detect_triangle(closes, peaks, troughs),
-            _detect_wedge(closes, peaks, troughs),
-            _detect_channel(closes, peaks, troughs),
-        ]
-
-        return [p for p in candidates if p is not None]
+        results: list[ChartPattern] = []
+        results.extend(_detect_head_and_shoulders(closes, peaks, troughs))
+        results.extend(_detect_inverse_head_and_shoulders(closes, peaks, troughs))
+        results.extend(_detect_double_top(closes, peaks))
+        results.extend(_detect_double_bottom(closes, troughs))
+        results.extend(_scan_trendlines(closes, peaks, troughs))
+        return results
 
     def get_summary(self, closes: list[float]) -> dict:
         """

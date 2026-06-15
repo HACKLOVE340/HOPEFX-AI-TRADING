@@ -1297,3 +1297,57 @@ class TestStrengthenedDetection:
         assert len(kept) == 2
         assert kept[0].confidence == 0.9
         assert kept[1].start_index == 50
+
+
+class TestTrendlineDetection:
+    """Tests for the windowed triangle/wedge/channel scanner."""
+
+    @staticmethod
+    def _ascending_triangle() -> pd.DataFrame:
+        closes: list[float] = []
+        lows = np.linspace(2000, 2045, 6)
+        for i in range(6):
+            nxt = lows[i] if i == 5 else lows[i + 1]
+            closes += list(np.linspace(lows[i], 2050, 5)) + list(np.linspace(2050, nxt, 5))
+        return _df_from_closes(closes)
+
+    @staticmethod
+    def _rising_channel() -> pd.DataFrame:
+        closes: list[float] = []
+        base = np.linspace(2000, 2090, 6)
+        for i in range(6):
+            nxt = base[i + 1] if i < 5 else base[i]
+            closes += list(np.linspace(base[i], base[i] + 25, 5)) + list(np.linspace(base[i] + 25, nxt, 5))
+        return _df_from_closes(closes)
+
+    def test_detects_ascending_triangle_with_levels(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        tris = ChartPatternDetector().detect_triangles(self._ascending_triangle())
+        assert any(t.pattern_type == "ascending_triangle" for t in tris)
+        for t in tris:
+            assert t.entry_price > 0 and t.target_price > 0 and t.stop_loss > 0
+            # Bullish breakout: target above entry, stop below.
+            assert t.target_price > t.entry_price > t.stop_loss
+
+    def test_detects_rising_channel(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        chans = ChartPatternDetector().detect_channels(self._rising_channel())
+        assert any(c.pattern_type == "rising_channel" for c in chans)
+
+    def test_trendline_confidence_in_range(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        for p in ChartPatternDetector().detect_triangles(self._ascending_triangle()):
+            assert 0.0 <= p.confidence <= 1.0
+
+    def test_merge_adjacent_extrema_collapses_clusters(self):
+        from analysis.patterns.chart_patterns import _merge_adjacent_extrema
+
+        prices = [10.0, 12.0, 11.0, 5.0, 6.0, 4.0]
+        # Peaks at 1 and 4 (adjacent indices 0,1,2 cluster / 3,4,5 cluster).
+        peaks = _merge_adjacent_extrema([0, 1, 2], prices, want_max=True)
+        assert peaks == [1]  # keeps the highest of the cluster
+        troughs = _merge_adjacent_extrema([3, 4, 5], prices, want_max=False)
+        assert troughs == [5]  # keeps the lowest of the cluster

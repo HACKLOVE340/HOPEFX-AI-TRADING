@@ -3688,6 +3688,88 @@ async def get_levels(
         return {"levels": [], "symbol": symbol, "error": "Detection unavailable"}
 
 
+def _df_timestamps_seconds(df) -> list[float] | None:
+    """Extract per-bar unix-second timestamps from an OHLCV DataFrame.
+
+    Handles a `time`/`timestamp`/`date` column in seconds, milliseconds, or
+    pandas datetime form. Returns None if no usable time column exists.
+    """
+    try:
+        import pandas as pd
+
+        col = next((c for c in ("time", "timestamp", "date", "datetime") if c in df.columns), None)
+        if col is None:
+            return None
+        series = df[col]
+        if pd.api.types.is_datetime64_any_dtype(series):
+            return [ts.timestamp() for ts in pd.to_datetime(series)]
+        out: list[float] = []
+        for v in series.tolist():
+            f = float(v)
+            out.append(f / 1000.0 if f > 1e10 else f)  # ms → s
+        return out
+    except Exception:  # nosec B110 — best-effort time extraction; caller falls back
+        return None
+
+
+def _build_trendlines_from_df(df) -> list[dict]:
+    """Fit upper (resistance) and lower (support) trendlines through recent
+    swing highs/lows and return them as chart-overlay ``TrendLine`` objects.
+
+    Output matches the frontend ``TrendLine`` shape (startTime/startPrice/
+    endTime/endPrice/type/strength/aiGenerated) so the chart can draw them
+    directly.
+    """
+    from analysis.patterns.chart_patterns import _find_peaks, _find_troughs, _linear_fit
+
+    cols = {c.lower(): c for c in df.columns}
+    if "high" not in cols or "low" not in cols or "close" not in cols:
+        return []
+
+    highs = df[cols["high"]].astype(float).tolist()
+    lows = df[cols["low"]].astype(float).tolist()
+    n = len(highs)
+    if n < 20:
+        return []
+
+    times = _df_timestamps_seconds(df) or [float(i) for i in range(n)]
+    scale = sum(highs) / n
+    flat = scale * 4e-3  # < ~0.4% total drift ⇒ horizontal
+
+    def line(name: str, indices: list[int], values: list[float]) -> dict | None:
+        # Use the most recent swings so the line reflects the current channel.
+        pts = indices[-6:]
+        if len(pts) < 2:
+            return None
+        xs = [float(i) for i in pts]
+        ys = [values[i] for i in pts]
+        slope, intercept, r2 = _linear_fit(xs, ys)
+        x0, x1 = pts[0], pts[-1]
+        start_price = slope * x0 + intercept
+        end_price = slope * x1 + intercept
+        disp = end_price - start_price
+        kind = "uptrend" if disp > flat else "downtrend" if disp < -flat else "horizontal"
+        return {
+            "id": name,
+            "startTime": times[x0],
+            "startPrice": round(start_price, 5),
+            "endTime": times[x1],
+            "endPrice": round(end_price, 5),
+            "type": kind,
+            "strength": round(r2, 4),
+            "aiGenerated": True,
+        }
+
+    out: list[dict] = []
+    resistance = line("resistance", _find_peaks(highs, 3), highs)
+    support = line("support", _find_troughs(lows, 3), lows)
+    if resistance:
+        out.append(resistance)
+    if support:
+        out.append(support)
+    return out
+
+
 @router.get("/trendlines", response_model=None, summary="Trendlines for a symbol")
 async def get_trendlines(
     symbol: str = Query(..., description="Trading symbol, e.g. XAU/USD"),
@@ -3696,10 +3778,11 @@ async def get_trendlines(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Detect trendlines (ascending/descending channels and wedges) from OHLCV data.
+    Detect support/resistance trendlines from OHLCV data.
 
-    Uses the AdvancedPatternDetector to identify trend-based patterns and
-    returns them in a format suitable for chart overlay rendering.
+    Fits an upper line through recent swing highs and a lower line through
+    recent swing lows and returns them as chart-overlay ``TrendLine`` objects
+    (startTime/startPrice/endTime/endPrice/type/strength).
     """
     norm = _normalise_symbol(symbol)
     ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
@@ -3709,37 +3792,7 @@ async def get_trendlines(
         return {"trendlines": [], "symbol": symbol, "note": "Insufficient OHLCV data"}
 
     try:
-        from analysis.patterns.advanced_patterns import AdvancedPatternDetector
-
-        detector = AdvancedPatternDetector()
-        patterns = detector.detect_all_patterns(df, min_confidence=0.5)
-
-        trendline_types = {
-            "ascending_channel",
-            "descending_channel",
-            "wedge",
-            "rising_wedge",
-            "falling_wedge",
-            "channel",
-        }
-        trendlines = []
-        for p in patterns:
-            ptype = str(getattr(p, "pattern_type", "")).lower()
-            if any(t in ptype for t in trendline_types):
-                trendlines.append(
-                    {
-                        "type": ptype,
-                        "direction": str(getattr(p, "direction", "neutral")).lower(),
-                        "confidence": float(getattr(p, "confidence", 0)),
-                        "start_index": int(getattr(p, "start_index", 0)),
-                        "end_index": int(getattr(p, "end_index", 0)),
-                        "support_slope": float(getattr(p, "support_slope", 0) or 0),
-                        "resistance_slope": float(getattr(p, "resistance_slope", 0) or 0),
-                        "target_price": float(getattr(p, "target_price", 0) or 0),
-                        "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
-                    }
-                )
-
+        trendlines = _build_trendlines_from_df(df)
         return {"trendlines": trendlines, "symbol": symbol, "count": len(trendlines)}
     except Exception as exc:
         logger.warning("Trendline detection failed for %s: %s", symbol, exc)
