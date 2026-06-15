@@ -21,7 +21,8 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from api.auth import TokenPayload, require_role
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ async def get_drift_status():
 
 
 @router.post("/retrain", response_model=dict)
-async def trigger_retraining(request: ManualRetrainRequest):
+async def trigger_retraining(request: ManualRetrainRequest, user: TokenPayload = Depends(require_role("admin"))):
     """
     Trigger a manual retraining run.
 
@@ -133,7 +134,7 @@ async def get_shadow_status():
 
 
 @router.post("/promote/{version_id}", response_model=dict)
-async def promote_model(version_id: str):
+async def promote_model(version_id: str, user: TokenPayload = Depends(require_role("admin"))):
     """
     Promote a shadow model to production.
 

@@ -23,7 +23,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from api.auth import TokenPayload, get_current_user
 from pydantic import BaseModel, Field
 
 UTC = timezone.utc
@@ -76,7 +77,7 @@ class StopLimitRequest(BaseModel):
 
 
 @router.post("/oco", response_model=dict)
-async def submit_oco(request: OCORequest):
+async def submit_oco(request: OCORequest, user: TokenPayload = Depends(get_current_user)):
     """
     Submit an OCO (One-Cancels-the-Other) order.
 
@@ -107,7 +108,7 @@ async def submit_oco(request: OCORequest):
 
 
 @router.post("/trailing-stop", response_model=dict)
-async def submit_trailing_stop(request: TrailingStopRequest):
+async def submit_trailing_stop(request: TrailingStopRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Submit a trailing stop order.
 
@@ -138,7 +139,7 @@ async def submit_trailing_stop(request: TrailingStopRequest):
 
 
 @router.post("/stop-limit", response_model=dict)
-async def submit_stop_limit(request: StopLimitRequest):
+async def submit_stop_limit(request: StopLimitRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Submit a stop-limit order.
 
@@ -177,7 +178,7 @@ async def submit_stop_limit(request: StopLimitRequest):
 
 
 @router.delete("/{order_id}", response_model=dict)
-async def cancel_advanced_order(order_id: str):
+async def cancel_advanced_order(order_id: str, user: TokenPayload = Depends(get_current_user)):
     """Cancel an active advanced order."""
     from execution.advanced_orders import get_advanced_order_manager
 

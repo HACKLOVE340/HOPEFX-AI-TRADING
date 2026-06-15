@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from api.auth import TokenPayload, get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ async def get_my_copies():
 
 
 @router.post("/copies/{copy_id}/pause")
-async def pause_copy(copy_id: str):
+async def pause_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
     """Pause an active copy trading subscription."""
     engine = _get_copy_engine()
     if not engine:
@@ -72,7 +73,7 @@ async def pause_copy(copy_id: str):
 
 
 @router.post("/copies/{copy_id}/resume")
-async def resume_copy(copy_id: str):
+async def resume_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
     """Resume a paused copy trading subscription."""
     engine = _get_copy_engine()
     if not engine:
@@ -88,7 +89,7 @@ async def resume_copy(copy_id: str):
 
 
 @router.post("/copies/{copy_id}/stop")
-async def stop_copy(copy_id: str):
+async def stop_copy(copy_id: str, user: TokenPayload = Depends(get_current_user)):
     """Stop and remove a copy trading subscription permanently."""
     engine = _get_copy_engine()
     if not engine:
@@ -104,7 +105,7 @@ async def stop_copy(copy_id: str):
 
 
 @router.patch("/copies/{copy_id}/risk")
-async def adjust_copy_risk(copy_id: str, payload: dict):
+async def adjust_copy_risk(copy_id: str, payload: dict, user: TokenPayload = Depends(get_current_user)):
     """
     Adjust risk settings for a copy trading subscription.
     Payload: { max_drawdown_pct, lot_multiplier, max_open_trades }

@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from api.auth import TokenPayload, get_current_user
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,7 @@ async def list_templates(
 
 
 @router.post("/deploy")
-async def deploy_template(request: DeployRequest):
+async def deploy_template(request: DeployRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Deploy a no-code strategy template as a live strategy.
     Compiles the template with provided parameters and registers it
@@ -156,7 +157,7 @@ async def deploy_template(request: DeployRequest):
 
 
 @router.post("/validate")
-async def validate_strategy(request: ValidateRequest):
+async def validate_strategy(request: ValidateRequest, user: TokenPayload = Depends(get_current_user)):
     """
     Validate a no-code strategy definition (nodes + edges).
     Checks for: valid node types, proper connections, no cycles in execution flow,

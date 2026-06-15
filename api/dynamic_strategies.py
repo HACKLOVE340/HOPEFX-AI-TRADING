@@ -102,7 +102,7 @@ def _require_admin():
 
 
 @router.post("/register", response_model=dict)
-async def register_strategy(request: RegisterStrategyRequest):
+async def register_strategy(request: RegisterStrategyRequest, user=_require_admin()):
     """
     Register a new dynamic strategy.
 
@@ -135,7 +135,7 @@ async def register_strategy(request: RegisterStrategyRequest):
 
 
 @router.post("/activate", response_model=dict)
-async def activate_strategy(request: ActivateStrategyRequest):
+async def activate_strategy(request: ActivateStrategyRequest, user=_require_admin()):
     """
     Activate a validated strategy version.
 
@@ -160,7 +160,7 @@ async def activate_strategy(request: ActivateStrategyRequest):
 
 
 @router.post("/deactivate", response_model=dict)
-async def deactivate_strategy(request: DeactivateStrategyRequest):
+async def deactivate_strategy(request: DeactivateStrategyRequest, user=_require_admin()):
     """
     Deactivate an active strategy without retiring it.
 
@@ -203,7 +203,7 @@ async def list_all_strategies():
 
 
 @router.post("/{name}/{action_type}", response_model=dict)
-async def strategy_action(name: str, action_type: str):
+async def strategy_action(name: str, action_type: str, user=_require_admin()):
     """
     Perform an action on a strategy by name.
     Supported actions: activate, deactivate, pause, resume.
