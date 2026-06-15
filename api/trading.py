@@ -3755,44 +3755,111 @@ async def get_chart_patterns(
     user: TokenPayload = Depends(get_current_user),
 ):
     """
-    Detect chart patterns (H&S, double top/bottom, triangles, flags, wedges).
+    Detect chart patterns for a symbol.
 
-    Returns patterns sorted by confidence descending, with entry/target/stop
-    price levels for each detected pattern.
+    Combines two engines so the result covers both classic reversal patterns
+    and the broader continuation/harmonic families:
+      * ChartPatternDetector  — head & shoulders, double top/bottom, triangles
+      * AdvancedPatternDetector — wedges, flags, pennants, rectangles, harmonics,
+        support/resistance
+
+    Returns patterns sorted by confidence descending, de-duplicated across both
+    engines, each with entry/target/stop price levels.
     """
     norm = _normalise_symbol(symbol)
     ohlcv = await _get_ohlcv_for_symbol(norm, timeframe, limit)
     df = _ohlcv_to_df(ohlcv)
 
     if df is None or df.empty:
-        return {"patterns": [], "symbol": symbol, "note": "Insufficient OHLCV data"}
+        return {
+            "patterns": [],
+            "symbol": symbol,
+            "count": 0,
+            "note": (
+                "No OHLCV data available for this symbol/timeframe yet. Pattern "
+                "detection needs at least ~20 bars of history."
+            ),
+        }
+    if len(df) < 20:
+        return {
+            "patterns": [],
+            "symbol": symbol,
+            "count": 0,
+            "bars": int(len(df)),
+            "note": (
+                f"Only {len(df)} bars available; need at least 20 to detect patterns. Try a longer/lower timeframe."
+            ),
+        }
 
+    # Use the last close as the entry fallback for patterns whose geometry does
+    # not pin a precise breakout level (e.g. symmetrical triangles).
+    try:
+        last_close = float(df[[c for c in df.columns if c.lower() == "close"][0]].iloc[-1])
+    except Exception:
+        last_close = 0.0
+
+    patterns: list[dict] = []
+
+    # ── Engine 1: classic reversal/continuation patterns ──────────────────────
     try:
         from analysis.patterns.chart_patterns import ChartPatternDetector
 
-        detector = ChartPatternDetector()
-        raw_patterns = detector.detect_patterns(df, min_confidence=min_confidence)
-
-        patterns = []
-        for p in raw_patterns:
+        for p in ChartPatternDetector().detect_patterns(df, min_confidence=min_confidence):
+            entry = float(getattr(p, "entry_price", 0) or 0) or last_close
             patterns.append(
                 {
                     "pattern_type": str(getattr(p, "pattern_type", "")),
                     "direction": str(getattr(p, "direction", "neutral")),
                     "confidence": float(getattr(p, "confidence", 0)),
-                    "entry_price": float(getattr(p, "entry_price", 0) or 0),
+                    "entry_price": entry,
                     "target_price": float(getattr(p, "target_price", 0) or 0),
                     "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
                     "start_index": int(getattr(p, "start_index", 0)),
                     "end_index": int(getattr(p, "end_index", 0)),
                     "description": str(getattr(p, "description", "")),
+                    "source": "classic",
                 }
             )
-
-        return {"patterns": patterns, "symbol": symbol, "count": len(patterns)}
     except Exception as exc:
-        logger.warning("Chart pattern detection failed for %s: %s", symbol, exc)
-        return {"patterns": [], "symbol": symbol, "error": "Detection unavailable"}
+        logger.warning("Classic pattern detection failed for %s: %s", symbol, exc)
+
+    # ── Engine 2: advanced families (wedges, flags, harmonics, S/R) ───────────
+    try:
+        from analysis.patterns.advanced_patterns import AdvancedPatternDetector
+
+        for p in AdvancedPatternDetector().detect_all_patterns(df, min_confidence=min_confidence):
+            patterns.append(
+                {
+                    "pattern_type": str(getattr(getattr(p, "pattern_type", ""), "value", "")),
+                    "direction": str(getattr(getattr(p, "direction", ""), "value", "neutral")),
+                    "confidence": float(getattr(p, "confidence", 0)),
+                    "entry_price": float(getattr(p, "entry_price", 0) or 0) or last_close,
+                    "target_price": float(getattr(p, "target_price", 0) or 0),
+                    "stop_loss": float(getattr(p, "stop_loss", 0) or 0),
+                    "start_index": int(getattr(p, "pattern_start_idx", 0)),
+                    "end_index": int(getattr(p, "pattern_end_idx", 0)),
+                    "description": f"{str(getattr(getattr(p, 'pattern_type', ''), 'value', '')).replace('_', ' ').title()} pattern",
+                    "source": "advanced",
+                }
+            )
+    except Exception as exc:
+        logger.warning("Advanced pattern detection failed for %s: %s", symbol, exc)
+
+    # De-duplicate across engines: keep the highest-confidence detection when two
+    # patterns of the same type overlap in index range.
+    patterns.sort(key=lambda d: d["confidence"], reverse=True)
+    merged: list[dict] = []
+    for cand in patterns:
+        if any(
+            cand["pattern_type"] == kept["pattern_type"]
+            and cand["start_index"] <= kept["end_index"]
+            and kept["start_index"] <= cand["end_index"]
+            for kept in merged
+        ):
+            continue
+        merged.append(cand)
+
+    return {"patterns": merged, "symbol": symbol, "count": len(merged), "bars": int(len(df))}
 
 
 @router.get("/equity-curve", response_model=None, summary="Equity curve data points")

@@ -5,11 +5,6 @@
 # No commercial use without explicit permission.
 """Chart Pattern Detection
 
-
-# ── Module constants ─────────────────────────────────────────────────────────
-_MIN_SWING_BARS = 2
-_MIN_PATTERN_BARS = 3
-
 Identifies classic chart patterns in price series:
 - Head and Shoulders (and Inverse)
 - Double Top / Double Bottom
@@ -47,6 +42,12 @@ class ChartPattern:
     end_index: int
     key_levels: dict = field(default_factory=dict)
     description: str = ""
+    # Actionable price levels derived from the pattern geometry. Populated by
+    # the reversal detectors so the API can return entry/target/stop directly
+    # rather than reporting 0.0 for every pattern.
+    entry_price: float = 0.0
+    target_price: float = 0.0
+    stop_loss: float = 0.0
 
     def to_dict(self) -> dict:
         return {
@@ -110,6 +111,35 @@ def _price_symmetry(a: float, b: float, tolerance: float = 0.02) -> bool:
     return abs(a - b) / abs(a) <= tolerance
 
 
+def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
+    """Clamp *x* into the [lo, hi] interval."""
+    return max(lo, min(hi, x))
+
+
+def _similarity_score(a: float, b: float, cap: float = 0.10) -> float:
+    """Score how close two prices are: 1.0 when equal, 0.0 at *cap* fractional gap.
+
+    Used to turn shoulder/peak symmetry into a continuous confidence input
+    instead of a binary pass/fail, so the reported confidence reflects how
+    well the pattern actually fits.
+    """
+    if a == 0:
+        return 1.0 if b == 0 else 0.0
+    rel = abs(a - b) / abs(a)
+    return _clamp(1.0 - rel / cap)
+
+
+def _prominence_score(height: float, reference: float, cap: float = 0.05) -> float:
+    """Score the prominence of a structure (e.g. valley depth) relative to price.
+
+    A deeper valley between two tops (or taller head over shoulders) is a
+    stronger, more tradable pattern. Saturates at *cap* (default 5% of price).
+    """
+    if reference == 0:
+        return 0.0
+    return _clamp(abs(height) / reference / cap)
+
+
 # ---------------------------------------------------------------------------
 # Head and Shoulders
 # ---------------------------------------------------------------------------
@@ -120,60 +150,67 @@ def _detect_head_and_shoulders(
     peaks: list[int],
     troughs: list[int],
     symmetry_tolerance: float = 0.03,
-) -> ChartPattern | None:
-    """Detect Head and Shoulders (bearish) from peak indices.
+) -> list[ChartPattern]:
+    """Detect every Head and Shoulders (bearish) occurrence from peak indices.
+
+    Scans all consecutive peak triples (not just the first match) and scores
+    each by shoulder symmetry and head prominence, so multiple real patterns
+    on the same series are surfaced with meaningful confidence.
 
     Args:
         symmetry_tolerance: Maximum fractional difference allowed between
                             the two shoulder heights to be considered similar.
     """
     if len(peaks) < 3 or len(troughs) < 2:
-        return None
+        return []
 
-    # Take the three most prominent peaks
+    results: list[ChartPattern] = []
     for k in range(len(peaks) - 2):
-        left_idx = peaks[k]
-        head_idx = peaks[k + 1]
-        right_idx = peaks[k + 2]
+        left_idx, head_idx, right_idx = peaks[k], peaks[k + 1], peaks[k + 2]
+        left_h, head_h, right_h = prices[left_idx], prices[head_idx], prices[right_idx]
 
-        left_h = prices[left_idx]
-        head_h = prices[head_idx]
-        right_h = prices[right_idx]
-
-        shoulders_similar = _price_symmetry(left_h, right_h, tolerance=symmetry_tolerance)
-        head_higher = head_h > left_h and head_h > right_h
-
-        if not (shoulders_similar and head_higher):
+        if not (
+            _price_symmetry(left_h, right_h, tolerance=symmetry_tolerance) and head_h > left_h and head_h > right_h
+        ):
             continue
 
-        # Neckline from the troughs between peaks
         between = [t for t in troughs if left_idx < t < right_idx]
         if len(between) < 2:
             continue
 
-        neck1_idx = between[0]
-        neck2_idx = between[-1]
-        neckline = (prices[neck1_idx] + prices[neck2_idx]) / 2
+        neckline = (prices[between[0]] + prices[between[-1]]) / 2
+        if neckline <= 0 or head_h <= neckline:
+            continue
         pattern_height = head_h - neckline
         target = neckline - pattern_height
 
-        return ChartPattern(
-            pattern_type="head_and_shoulders",
-            direction="bearish",
-            start_index=left_idx,
-            end_index=right_idx,
-            confidence=0.75,
-            key_levels={
-                "left_shoulder": round(left_h, 5),
-                "head": round(head_h, 5),
-                "right_shoulder": round(right_h, 5),
-                "neckline": round(neckline, 5),
-                "target": round(target, 5),
-            },
-            description="Classic bearish reversal pattern with three peaks",
+        # Confidence from shoulder symmetry + head prominence over the shoulders.
+        sym = _similarity_score(left_h, right_h)
+        prom = _prominence_score(head_h - max(left_h, right_h), neckline)
+        confidence = _clamp(0.45 + 0.35 * sym + 0.20 * prom)
+
+        results.append(
+            ChartPattern(
+                pattern_type="head_and_shoulders",
+                direction="bearish",
+                start_index=left_idx,
+                end_index=right_idx,
+                confidence=round(confidence, 4),
+                key_levels={
+                    "left_shoulder": round(left_h, 5),
+                    "head": round(head_h, 5),
+                    "right_shoulder": round(right_h, 5),
+                    "neckline": round(neckline, 5),
+                    "target": round(target, 5),
+                },
+                description="Bearish reversal: three peaks with a higher central head; breaks down through the neckline",
+                entry_price=round(neckline, 5),
+                target_price=round(target, 5),
+                stop_loss=round(head_h, 5),
+            )
         )
 
-    return None
+    return results
 
 
 def _detect_inverse_head_and_shoulders(
@@ -181,58 +218,62 @@ def _detect_inverse_head_and_shoulders(
     peaks: list[int],
     troughs: list[int],
     symmetry_tolerance: float = 0.03,
-) -> ChartPattern | None:
-    """Detect Inverse Head and Shoulders (bullish) from trough indices.
+) -> list[ChartPattern]:
+    """Detect every Inverse Head and Shoulders (bullish) occurrence.
 
     Args:
         symmetry_tolerance: Maximum fractional difference allowed between
                             the two shoulder lows to be considered similar.
     """
     if len(troughs) < 3 or len(peaks) < 2:
-        return None
+        return []
 
+    results: list[ChartPattern] = []
     for k in range(len(troughs) - 2):
-        left_idx = troughs[k]
-        head_idx = troughs[k + 1]
-        right_idx = troughs[k + 2]
+        left_idx, head_idx, right_idx = troughs[k], troughs[k + 1], troughs[k + 2]
+        left_l, head_l, right_l = prices[left_idx], prices[head_idx], prices[right_idx]
 
-        left_l = prices[left_idx]
-        head_l = prices[head_idx]
-        right_l = prices[right_idx]
-
-        shoulders_similar = _price_symmetry(left_l, right_l, tolerance=symmetry_tolerance)
-        head_lower = head_l < left_l and head_l < right_l
-
-        if not (shoulders_similar and head_lower):
+        if not (
+            _price_symmetry(left_l, right_l, tolerance=symmetry_tolerance) and head_l < left_l and head_l < right_l
+        ):
             continue
 
         between = [p for p in peaks if left_idx < p < right_idx]
         if len(between) < 2:
             continue
 
-        neck1_idx = between[0]
-        neck2_idx = between[-1]
-        neckline = (prices[neck1_idx] + prices[neck2_idx]) / 2
+        neckline = (prices[between[0]] + prices[between[-1]]) / 2
+        if neckline <= 0 or head_l >= neckline:
+            continue
         pattern_height = neckline - head_l
         target = neckline + pattern_height
 
-        return ChartPattern(
-            pattern_type="inverse_head_and_shoulders",
-            direction="bullish",
-            start_index=left_idx,
-            end_index=right_idx,
-            confidence=0.75,
-            key_levels={
-                "left_shoulder": round(left_l, 5),
-                "head": round(head_l, 5),
-                "right_shoulder": round(right_l, 5),
-                "neckline": round(neckline, 5),
-                "target": round(target, 5),
-            },
-            description="Classic bullish reversal pattern with three troughs",
+        sym = _similarity_score(left_l, right_l)
+        prom = _prominence_score(min(left_l, right_l) - head_l, neckline)
+        confidence = _clamp(0.45 + 0.35 * sym + 0.20 * prom)
+
+        results.append(
+            ChartPattern(
+                pattern_type="inverse_head_and_shoulders",
+                direction="bullish",
+                start_index=left_idx,
+                end_index=right_idx,
+                confidence=round(confidence, 4),
+                key_levels={
+                    "left_shoulder": round(left_l, 5),
+                    "head": round(head_l, 5),
+                    "right_shoulder": round(right_l, 5),
+                    "neckline": round(neckline, 5),
+                    "target": round(target, 5),
+                },
+                description="Bullish reversal: three troughs with a lower central head; breaks up through the neckline",
+                entry_price=round(neckline, 5),
+                target_price=round(target, 5),
+                stop_loss=round(head_l, 5),
+            )
         )
 
-    return None
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -244,88 +285,119 @@ def _detect_double_top(
     prices: list[float],
     peaks: list[int],
     symmetry_tolerance: float = 0.02,
-) -> ChartPattern | None:
-    """Detect Double Top (bearish) from peak indices.
+    min_separation: int = 5,
+) -> list[ChartPattern]:
+    """Detect every Double Top (bearish) occurrence from peak indices.
+
+    Requires the two highs to be similar, adequately separated, and to have a
+    genuine valley between them (confidence scales with valley depth) so that
+    adjacent noise is not reported as a pattern.
 
     Args:
-        symmetry_tolerance: Maximum fractional difference allowed between
-                            the two peak prices to be considered a valid double top.
+        symmetry_tolerance: Maximum fractional difference between the two highs.
+        min_separation: Minimum number of bars between the two highs.
     """
     if len(peaks) < 2:
-        return None
+        return []
 
+    results: list[ChartPattern] = []
     for k in range(len(peaks) - 1):
-        idx1 = peaks[k]
-        idx2 = peaks[k + 1]
-
+        idx1, idx2 = peaks[k], peaks[k + 1]
+        if idx2 - idx1 < min_separation:
+            continue
         if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
             continue
 
-        trough_prices = prices[idx1 : idx2 + 1]
-        support = min(trough_prices)
-        height = prices[idx1] - support
+        support = min(prices[idx1 : idx2 + 1])
+        top = max(prices[idx1], prices[idx2])
+        height = top - support
+        # Reject a "double top" with no meaningful trough between the highs.
+        if height <= 0 or _prominence_score(height, top, cap=0.01) <= 0.0:
+            continue
         target = support - height
 
-        return ChartPattern(
-            pattern_type="double_top",
-            direction="bearish",
-            start_index=idx1,
-            end_index=idx2,
-            confidence=0.70,
-            key_levels={
-                "top1": round(prices[idx1], 5),
-                "top2": round(prices[idx2], 5),
-                "support": round(support, 5),
-                "target": round(target, 5),
-            },
-            description="Two similar highs forming a resistance level",
+        sym = _similarity_score(prices[idx1], prices[idx2])
+        depth = _prominence_score(height, top)
+        confidence = _clamp(0.45 + 0.30 * sym + 0.25 * depth)
+
+        results.append(
+            ChartPattern(
+                pattern_type="double_top",
+                direction="bearish",
+                start_index=idx1,
+                end_index=idx2,
+                confidence=round(confidence, 4),
+                key_levels={
+                    "top1": round(prices[idx1], 5),
+                    "top2": round(prices[idx2], 5),
+                    "support": round(support, 5),
+                    "target": round(target, 5),
+                },
+                description="Bearish reversal: two similar highs and a valley; breaks down through the support",
+                entry_price=round(support, 5),
+                target_price=round(target, 5),
+                stop_loss=round(top, 5),
+            )
         )
 
-    return None
+    return results
 
 
 def _detect_double_bottom(
     prices: list[float],
     troughs: list[int],
     symmetry_tolerance: float = 0.02,
-) -> ChartPattern | None:
-    """Detect Double Bottom (bullish) from trough indices.
+    min_separation: int = 5,
+) -> list[ChartPattern]:
+    """Detect every Double Bottom (bullish) occurrence from trough indices.
 
     Args:
-        symmetry_tolerance: Maximum fractional difference allowed between
-                            the two trough prices to be considered a valid double bottom.
+        symmetry_tolerance: Maximum fractional difference between the two lows.
+        min_separation: Minimum number of bars between the two lows.
     """
     if len(troughs) < 2:
-        return None
+        return []
 
+    results: list[ChartPattern] = []
     for k in range(len(troughs) - 1):
-        idx1 = troughs[k]
-        idx2 = troughs[k + 1]
-
+        idx1, idx2 = troughs[k], troughs[k + 1]
+        if idx2 - idx1 < min_separation:
+            continue
         if not _price_symmetry(prices[idx1], prices[idx2], tolerance=symmetry_tolerance):
             continue
 
-        peak_prices = prices[idx1 : idx2 + 1]
-        resistance = max(peak_prices)
-        height = resistance - prices[idx1]
+        resistance = max(prices[idx1 : idx2 + 1])
+        bottom = min(prices[idx1], prices[idx2])
+        height = resistance - bottom
+        if height <= 0 or _prominence_score(height, resistance, cap=0.01) <= 0.0:
+            continue
         target = resistance + height
 
-        return ChartPattern(
-            pattern_type="double_bottom",
-            direction="bullish",
-            start_index=idx1,
-            end_index=idx2,
-            confidence=0.70,
-            key_levels={
-                "bottom1": round(prices[idx1], 5),
-                "bottom2": round(prices[idx2], 5),
-                "resistance": round(resistance, 5),
-                "target": round(target, 5),
-            },
-            description="Two similar lows forming a support level",
+        sym = _similarity_score(prices[idx1], prices[idx2])
+        depth = _prominence_score(height, resistance)
+        confidence = _clamp(0.45 + 0.30 * sym + 0.25 * depth)
+
+        results.append(
+            ChartPattern(
+                pattern_type="double_bottom",
+                direction="bullish",
+                start_index=idx1,
+                end_index=idx2,
+                confidence=round(confidence, 4),
+                key_levels={
+                    "bottom1": round(prices[idx1], 5),
+                    "bottom2": round(prices[idx2], 5),
+                    "resistance": round(resistance, 5),
+                    "target": round(target, 5),
+                },
+                description="Bullish reversal: two similar lows and a peak; breaks up through the resistance",
+                entry_price=round(resistance, 5),
+                target_price=round(target, 5),
+                stop_loss=round(bottom, 5),
+            )
         )
 
-    return None
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -613,7 +685,26 @@ class ChartPatternDetector:
 
         patterns = [p for p in patterns if p.confidence >= min_confidence]
         patterns.sort(key=lambda p: p.confidence, reverse=True)
-        return patterns
+        return self._dedupe(patterns)
+
+    @staticmethod
+    def _dedupe(patterns: list[ChartPattern]) -> list[ChartPattern]:
+        """Drop lower-confidence detections that overlap a kept one of the same type.
+
+        The scan can flag the same structure from several adjacent peak/trough
+        combinations; keeping only the strongest non-overlapping instance per
+        type avoids showing the trader duplicate cards for one formation.
+        Input is assumed already sorted by confidence descending.
+        """
+        kept: list[ChartPattern] = []
+        for p in patterns:
+            overlaps = any(
+                p.pattern_type == q.pattern_type and p.start_index <= q.end_index and q.start_index <= p.end_index
+                for q in kept
+            )
+            if not overlaps:
+                kept.append(p)
+        return kept
 
     def detect_head_and_shoulders(self, df: "pd.DataFrame") -> list[ChartPattern]:
         """
@@ -629,13 +720,9 @@ class ChartPatternDetector:
         if closes is None or len(closes) < self.min_bars:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
-        results = []
-        p = _detect_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity)
-        if p:
-            results.append(p)
-        p = _detect_inverse_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity)
-        if p:
-            results.append(p)
+        results: list[ChartPattern] = []
+        results.extend(_detect_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity))
+        results.extend(_detect_inverse_head_and_shoulders(closes, peaks, troughs, symmetry_tolerance=self.sensitivity))
         return results
 
     def detect_double_tops_bottoms(self, df: "pd.DataFrame") -> list[ChartPattern]:
@@ -652,13 +739,9 @@ class ChartPatternDetector:
         if closes is None or len(closes) < self.min_bars:
             return []
         peaks, troughs = self._peaks_and_troughs(closes)
-        results = []
-        p = _detect_double_top(closes, peaks, symmetry_tolerance=self.sensitivity)
-        if p:
-            results.append(p)
-        p = _detect_double_bottom(closes, troughs, symmetry_tolerance=self.sensitivity)
-        if p:
-            results.append(p)
+        results: list[ChartPattern] = []
+        results.extend(_detect_double_top(closes, peaks, symmetry_tolerance=self.sensitivity))
+        results.extend(_detect_double_bottom(closes, troughs, symmetry_tolerance=self.sensitivity))
         return results
 
     def detect_triangles(self, df: "pd.DataFrame") -> list[ChartPattern]:

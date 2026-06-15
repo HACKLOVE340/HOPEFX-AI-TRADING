@@ -1197,3 +1197,103 @@ class TestSupportResistanceDetector:
         det = SupportResistanceDetector()
         result = det.detect_levels(None)  # type: ignore[arg-type]
         assert isinstance(result, dict)
+
+
+# ================================================================
+# MULTI-PATTERN DETECTION & CONFIDENCE QUALITY (strengthened detector)
+# ================================================================
+
+
+def _df_from_closes(closes: list[float]) -> pd.DataFrame:
+    """Build an OHLCV frame from a close series with a datetime index."""
+    c = np.array(closes, dtype=float)
+    o = np.roll(c, 1)
+    o[0] = c[0]
+    idx = pd.date_range("2024-01-01", periods=len(c), freq="h")
+    return pd.DataFrame(
+        {
+            "open": o,
+            "high": np.maximum(o, c) + 0.5,
+            "low": np.minimum(o, c) - 0.5,
+            "close": c,
+            "volume": np.ones(len(c)) * 1000.0,
+        },
+        index=idx,
+    )
+
+
+def _double_top_double_bottom_series() -> list[float]:
+    """A series containing two double-tops and a double-bottom."""
+    return (
+        list(np.linspace(2000, 2050, 12))
+        + list(np.linspace(2050, 1990, 12))
+        + list(np.linspace(1990, 2049, 12))
+        + list(np.linspace(2049, 1970, 12))
+        + list(np.linspace(1970, 2030, 10))
+        + list(np.linspace(2030, 1972, 10))
+        + list(np.linspace(1972, 2031, 10))
+    )
+
+
+class TestStrengthenedDetection:
+    """Tests for the multi-occurrence detector with fit-based confidence."""
+
+    def test_detects_multiple_patterns(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        det = ChartPatternDetector()
+        df = _df_from_closes(_double_top_double_bottom_series())
+        patterns = det.detect_patterns(df, min_confidence=0.0)
+        # The old detector returned at most one per type; the new one finds several.
+        assert len(patterns) >= 3
+
+    def test_reversal_patterns_have_price_levels(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        det = ChartPatternDetector()
+        df = _df_from_closes(_double_top_double_bottom_series())
+        reversals = [
+            p
+            for p in det.detect_patterns(df, min_confidence=0.0)
+            if p.pattern_type in {"double_top", "double_bottom", "head_and_shoulders", "inverse_head_and_shoulders"}
+        ]
+        assert reversals, "expected at least one reversal pattern"
+        for p in reversals:
+            # entry/target/stop must be real, non-zero levels (the previous bug
+            # reported 0.0 for every pattern).
+            assert p.entry_price > 0
+            assert p.target_price > 0
+            assert p.stop_loss > 0
+
+    def test_confidence_is_not_a_constant(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        det = ChartPatternDetector()
+        df = _df_from_closes(_double_top_double_bottom_series())
+        confs = {round(p.confidence, 3) for p in det.detect_patterns(df, min_confidence=0.0)}
+        # Fit-based scoring should produce a spread of values, not one hardcoded number.
+        assert len(confs) >= 2
+
+    def test_double_top_levels_are_consistent(self):
+        from analysis.patterns.chart_patterns import ChartPatternDetector
+
+        det = ChartPatternDetector()
+        df = _df_from_closes(_double_top_double_bottom_series())
+        tops = [p for p in det.detect_patterns(df, min_confidence=0.0) if p.pattern_type == "double_top"]
+        assert tops
+        for p in tops:
+            # Bearish double top: target below entry, stop above entry.
+            assert p.target_price < p.entry_price < p.stop_loss
+
+    def test_dedupe_removes_overlapping_same_type(self):
+        from analysis.patterns.chart_patterns import ChartPattern, ChartPatternDetector
+
+        overlapping = [
+            ChartPattern("double_top", "bearish", 0.9, 10, 30),
+            ChartPattern("double_top", "bearish", 0.8, 20, 40),  # overlaps the first
+            ChartPattern("double_top", "bearish", 0.7, 50, 70),  # disjoint — kept
+        ]
+        kept = ChartPatternDetector._dedupe(overlapping)
+        assert len(kept) == 2
+        assert kept[0].confidence == 0.9
+        assert kept[1].start_index == 50

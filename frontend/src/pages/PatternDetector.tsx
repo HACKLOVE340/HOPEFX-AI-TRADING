@@ -14,7 +14,7 @@ import { extractApiError } from '../lib/utils';
 
 interface DetectedPattern {
   pattern_type: string;
-  direction: 'bullish' | 'bearish';
+  direction: 'bullish' | 'bearish' | 'neutral';
   confidence: number;
   entry_price: number;
   target_price: number;
@@ -35,12 +35,13 @@ interface PatternResponse {
 const SYMBOLS = ['XAU/USD', 'XAG/USD', 'EUR/USD', 'GBP/USD', 'BTC/USD', 'ETH/USD'] as const;
 const TIMEFRAMES = ['1m', '5m', '15m', '1h', '4h', '1d'] as const;
 
-/** CamelCase / PascalCase → Title Case with ampersand variants */
+/** snake_case / camelCase / PascalCase → Title Case with ampersand variants */
 function formatPatternName(raw: string): string {
   return raw
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/^([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .replace('And', '&')
+    .replace(/_/g, ' ')                       // snake_case → spaces
+    .replace(/([a-z])([A-Z])/g, '$1 $2')      // camelCase → spaced
+    .replace(/\band\b/gi, '&')                // "and" → "&"
+    .replace(/\b\w/g, (c) => c.toUpperCase()) // Title Case
     .trim();
 }
 
@@ -69,7 +70,8 @@ interface PatternCardProps {
 
 const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) => {
   const bullish = pattern.direction === 'bullish';
-  const dirColor = bullish ? '#4ade80' : '#f87171';
+  const neutral = pattern.direction === 'neutral';
+  const dirColor = neutral ? '#94a3b8' : bullish ? '#4ade80' : '#f87171';
   const barColor = confidenceColor(pattern.confidence);
   const pct = Math.round(pattern.confidence * 100);
 
@@ -82,9 +84,9 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
         </div>
         <span style={{
           fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 20,
-          background: bullish ? '#14532d' : '#450a0a',
+          background: neutral ? '#1e293b' : bullish ? '#14532d' : '#450a0a',
           color: dirColor,
-          border: `1px solid ${bullish ? '#166534' : '#7f1d1d'}`,
+          border: `1px solid ${neutral ? '#334155' : bullish ? '#166534' : '#7f1d1d'}`,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
         }}>
@@ -136,7 +138,7 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
         </p>
       )}
 
-      {pattern.confidence >= 0.5 && (
+      {pattern.confidence >= 0.5 && !neutral && (
         <button
           onClick={() => onTrade(pattern)}
           style={{
@@ -149,6 +151,11 @@ const PatternCard: React.FC<PatternCardProps> = ({ pattern, symbol, onTrade }) =
         >
           ⚡ {bullish ? 'BUY' : 'SELL'} {symbol} — Trade This Pattern
         </button>
+      )}
+      {pattern.confidence >= 0.5 && neutral && (
+        <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '6px 0' }}>
+          Direction unconfirmed — await breakout before trading
+        </div>
       )}
     </div>
   );
