@@ -572,9 +572,10 @@ const AppShell: React.FC = () => {
             <Route path="/sub-accounts"    element={wrap(gated('sub-accounts', <SubAccounts />))} />
             <Route path="/elite"           element={wrap(gated('elite',        <EliteDashboard />))} />
             <Route path="/checkout"        element={wrap(<AuthGuard><CryptoCheckout /></AuthGuard>)} />
-            {/* /upgrade = canonical Upgrade Plan; /pricing kept as alias */}
+            {/* /upgrade = canonical in-app Upgrade Plan. Public /pricing lives in
+                the public route group below so logged-out visitors get the clean
+                pricing page (no app shell) the landing footer links to. */}
             <Route path="/upgrade"         element={wrap(<PricingPage />)} />
-            <Route path="/pricing"         element={<Navigate to="/upgrade" replace />} />
             {/* /docs inside AppShell so sidebar stays visible for logged-in users */}
             <Route path="/docs"            element={wrap(<DocsPage />)} />
             <Route path="/settings"        element={wrap(gated('settings',     <Settings />))} />
