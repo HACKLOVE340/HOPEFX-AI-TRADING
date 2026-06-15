@@ -19,6 +19,8 @@ All endpoints require authentication except webhooks (verified by HMAC signature
 """
 
 import logging
+import os
+import re
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, UploadFile
@@ -30,7 +32,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/kyc", tags=["kyc"])
 
-# ── Request / response models ─────────────────────────────────────────────────
+# Safe filename characters for KYC upload local storage
+_SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]")
+# Maximum length for sanitized filenames stored locally
+_MAX_FILENAME_LENGTH = 100
 
 
 class CreateApplicantRequest(BaseModel):
@@ -376,9 +381,14 @@ async def kyc_upload_document_alias(
 
         # Local filesystem fallback
         if file_url is None:
-            upload_dir = _os.path.join("data", "kyc_uploads", user.sub)
+            # Sanitize user.sub (JWT sub claim): replace all path separators and unsafe chars
+            _safe_sub = _SAFE_FILENAME_RE.sub("_", user.sub.replace("\\", "/").replace("/", "_"))[:64] or "unknown"
+            upload_dir = _os.path.join("data", "kyc_uploads", _safe_sub)
             _os.makedirs(upload_dir, exist_ok=True)
-            local_path = _os.path.join(upload_dir, f"{doc_id}_{file.filename or 'document'}")
+            # Sanitize: truncate first, then strip directory components and replace unsafe chars
+            _raw_name = os.path.basename((file.filename or "document")[:_MAX_FILENAME_LENGTH])
+            _safe_name = _SAFE_FILENAME_RE.sub("_", _raw_name) or "document"
+            local_path = _os.path.join(upload_dir, f"{doc_id}_{_safe_name}")
             with open(local_path, "wb") as fh:
                 fh.write(content)
             file_url = local_path

@@ -49,6 +49,7 @@ def _check_cert_expiry(hostname: str, port: int = 443) -> dict[str, Any]:
     """Check TLS certificate expiry for a hostname."""
     try:
         ctx = ssl.create_default_context()
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2  # reject TLS 1.0 / 1.1
         with ctx.wrap_socket(socket.socket(), server_hostname=hostname) as s:
             s.settimeout(5)
             s.connect((hostname, port))

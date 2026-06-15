@@ -19,6 +19,7 @@ POST /api/broker/stamp-oanda      — stamp real OANDA account_id into paper clo
 from __future__ import annotations
 
 import logging
+import re
 import time
 from datetime import timezone
 
@@ -35,6 +36,9 @@ _HTTP_NOT_FOUND = HTTPStatus.NOT_FOUND.value
 _HTTP_FORBIDDEN = HTTPStatus.FORBIDDEN.value
 # Minimum broker name length for validation
 _MIN_BROKER_NAME_LEN = 4
+# OANDA account ID format: NNN-NNN-N..N-NNN (digits only, separated by hyphens,
+# third group length is variable)
+_OANDA_ACCOUNT_ID_RE = re.compile(r"^\d{3}-\d{3}-\d+-\d{3}$")
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +124,8 @@ async def _test_oanda(req: BrokerTestRequest, start: float) -> BrokerTestRespons
         return BrokerTestResponse(ok=False, broker="oanda", error="API key is required")
     if not req.accountId:
         return BrokerTestResponse(ok=False, broker="oanda", error="Account ID is required")
+    if not _OANDA_ACCOUNT_ID_RE.match(req.accountId):
+        return BrokerTestResponse(ok=False, broker="oanda", error="Invalid account ID format")
 
     base = "https://api-fxpractice.oanda.com" if req.practice else "https://api-fxtrade.oanda.com"
     url = f"{base}/v3/accounts/{req.accountId}/summary"

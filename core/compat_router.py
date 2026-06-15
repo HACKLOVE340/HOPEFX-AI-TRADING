@@ -51,7 +51,10 @@ async def dashboard_stats(user: TokenPayload = Depends(_get_current_user)):
 @compat_router.get("/trades", summary="Recent trade history (alias for /trading/trades)")
 async def trades_alias(limit: int = 50, user: TokenPayload = Depends(_get_current_user)):
     """Return recent closed trades — delegates to /api/trading/trades."""
-    return RedirectResponse(url=f"/api/trading/trades?limit={limit}", status_code=307)
+    # Clamp limit to a safe integer range before embedding in the redirect URL
+    # (CodeQL: avoid untrusted input flowing unsanitised into the redirect URL).
+    _safe_limit = max(1, min(int(limit), 1000))
+    return RedirectResponse(url=f"/api/trading/trades?limit={_safe_limit}", status_code=307)
 
 
 @compat_router.get("/market-data/live", summary="Live XAU/USD market data")
