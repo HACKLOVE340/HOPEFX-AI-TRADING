@@ -202,7 +202,7 @@ const Marketplace: React.FC = () => {
   return (
     <div className="page-content">
       <div style={st.pageHeader}>
-        <div><h1 style={st.heading}>Strategy Marketplace</h1>{stats&&<p style={st.statsLine}>{stats.total_strategies} strategies · {stats.total_subscribers.toLocaleString()} subscribers</p>}</div>
+        <div><h1 style={st.heading}>Strategy Marketplace</h1>{stats&&<p style={st.statsLine}>{stats.total_strategies ?? 0} strategies · {(stats.total_subscribers ?? 0).toLocaleString()} subscribers</p>}</div>
         <button
           onClick={() => navigate('/ai-strategy')}
           style={{ background:'rgba(167,139,250,0.12)', border:'1px solid rgba(167,139,250,0.35)', borderRadius:8, color:'#a78bfa', fontSize:13, fontWeight:700, padding:'8px 18px', cursor:'pointer' }}

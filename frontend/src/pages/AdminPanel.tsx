@@ -93,9 +93,10 @@ const severityColor = (sev: string) =>
   sev === 'critical' ? '#f87171' : sev === 'warning' ? '#fbbf24' : '#60a5fa';
 
 const eventColor = (type: string) => {
-  if (type.includes('fail') || type.includes('ban') || type.includes('block')) return '#f87171';
-  if (type.includes('warn') || type.includes('withdraw')) return '#fbbf24';
-  if (type.includes('trade') || type.includes('signal')) return '#60a5fa';
+  const t = (type ?? '').toLowerCase();
+  if (t.includes('fail') || t.includes('ban') || t.includes('block')) return '#f87171';
+  if (t.includes('warn') || t.includes('withdraw')) return '#fbbf24';
+  if (t.includes('trade') || t.includes('signal')) return '#60a5fa';
   return '#94a3b8';
 };
 

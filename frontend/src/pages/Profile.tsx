@@ -105,7 +105,11 @@ const Profile: React.FC = () => {
   if (error)   return <div style={s.page}><div style={s.errorBox}>{error}<button onClick={loadProfile} style={s.retryBtn}>Retry</button></div></div>;
   if (!profile) return null;
 
-  const st = profile.stats;
+  // stats may be absent for a brand-new profile — fall back to zeros so the
+  // stats grid renders instead of crashing the whole page.
+  const st = profile.stats ?? {
+    total_trades: 0, win_rate: 0, avg_pnl: 0, sharpe_ratio: 0, total_return_pct: 0,
+  };
 
   return (
     <div className="page-content">
@@ -202,11 +206,11 @@ const Profile: React.FC = () => {
       </div>
 
       {/* Strategies */}
-      {profile.strategies.length > 0 && (
+      {(profile.strategies?.length ?? 0) > 0 && (
         <div style={s.card}>
-          <h3 style={s.cardTitle}>Strategies ({profile.strategies.length})</h3>
+          <h3 style={s.cardTitle}>Strategies ({profile.strategies?.length ?? 0})</h3>
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {profile.strategies.map(str=>(
+            {profile.strategies?.map(str=>(
               <div key={str.strategy_id} style={s.stratRow}>
                 <span style={{fontWeight:600,color:'#f1f5f9'}}>{str.name}</span>
                 <span style={{fontSize:13,color:'#64748b'}}>{str.subscribers} subscribers</span>
@@ -218,7 +222,7 @@ const Profile: React.FC = () => {
       )}
 
       {/* Recent signals */}
-      {profile.recent_signals.length > 0 && (
+      {(profile.recent_signals?.length ?? 0) > 0 && (
         <div style={s.card}>
           <h3 style={s.cardTitle}>Recent Signals</h3>
           <table style={s.table}>
