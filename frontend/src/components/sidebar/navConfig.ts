@@ -66,6 +66,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/prop-firm',        label: 'Prop Firm',       icon: '🛡️', group: 'tools', plan: 'professional', featureKey: 'prop-firm'        },
   { path: '/copy-trading',     label: 'Copy Trading',    icon: '🔁', group: 'tools', plan: 'professional', featureKey: 'copy-trading'     },
   { path: '/risk-calculator',  label: 'Risk Calculator', icon: '🧮', group: 'tools', plan: 'starter',      featureKey: 'risk-calculator'  },
+  { path: '/strategy-builder', label: 'Strategy Builder', icon: '🧩', group: 'tools', plan: 'professional' },
 
   // ── Analytics ─────────────────────────────────────────────────────────────
   { path: '/performance',  label: 'Performance',    icon: '🏆', group: 'analytics', plan: 'free',         featureKey: 'performance'  },

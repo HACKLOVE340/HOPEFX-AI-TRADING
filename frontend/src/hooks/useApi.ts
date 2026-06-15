@@ -808,15 +808,14 @@ export const explainabilityApi = {
 
 // ── No-Code Strategy Builder ──────────────────────────────────────────────────
 
+// Backend: api/nocode.py (prefix /api/nocode) — template-driven no-code builder.
+// The previous /nocode/strategies|blocks paths never existed in the backend.
 export const nocodeApi = {
-  listStrategies:   ()                         => api.get('/nocode/strategies'),
-  createStrategy:   (body: object)             => api.post('/nocode/strategies', body),
-  getStrategy:      (id: string)               => api.get(`/nocode/strategies/${id}`),
-  updateStrategy:   (id: string, body: object) => api.patch(`/nocode/strategies/${id}`, body),
-  deleteStrategy:   (id: string)               => api.delete(`/nocode/strategies/${id}`),
-  compileStrategy:  (id: string)               => api.post(`/nocode/strategies/${id}/compile`),
-  backtestStrategy: (id: string, params: object) => api.post(`/nocode/strategies/${id}/backtest`, params),
-  listBlocks:       ()                         => api.get('/nocode/blocks'),
+  templates:  (category?: string)    => api.get('/nocode/templates', { params: category ? { category } : {} }),
+  nodeTypes:  ()                     => api.get('/nocode/node-types'),
+  validate:   (body: { nodes: unknown[]; edges?: unknown[] }) => api.post('/nocode/validate', body),
+  deploy:     (body: { template_id: string; parameters?: object; symbol?: string; timeframe?: string }) =>
+                api.post('/nocode/deploy', body),
 };
 
 // ── Execution Transparency ────────────────────────────────────────────────────
