@@ -60,9 +60,6 @@ const BASE_NAV = [
   { path: '/correlation',  icon: Activity,        label: 'Correlation',     minRole: 'trader'     as UserRole, group: 'analysis' },
   { path: '/indicators',   icon: FlaskConical,    label: 'Indicators',      minRole: 'trader'     as UserRole, group: 'analysis' },
   { path: '/walk-forward', icon: GitBranch,       label: 'Walk Forward',    minRole: 'trader'     as UserRole, group: 'analysis' },
-  { path: '/strategy-builder', icon: Blocks,      label: 'Strategy Builder', minRole: 'trader'    as UserRole, group: 'analysis' },
-  { path: '/news',         icon: Radio,           label: 'News & Sentiment', minRole: 'user'      as UserRole, group: 'analysis' },
-  { path: '/transparency', icon: Eye,             label: 'Trade Explain',    minRole: 'trader'    as UserRole, group: 'analysis' },
   // ── Social / community ────────────────────────────────────────────────────
   { path: '/copy-trading', icon: Users,           label: 'Copy Trading',    minRole: 'trader'     as UserRole, group: 'social' },
   { path: '/leaderboard',  icon: Trophy,          label: 'Leaderboard',     minRole: 'user'       as UserRole, group: 'social' },
@@ -79,8 +76,6 @@ const BASE_NAV = [
   // ── Admin ─────────────────────────────────────────────────────────────────
   { path: '/admin',        icon: Shield,          label: 'Admin Panel',     minRole: 'admin'      as UserRole, group: 'admin' },
   { path: '/superadmin',   icon: Crown,           label: 'SuperAdmin',      minRole: 'superadmin' as UserRole, group: 'admin' },
-  { path: '/superadmin/ml',icon: Brain,           label: 'ML Operations',   minRole: 'superadmin' as UserRole, group: 'admin' },
-  { path: '/superadmin/observability', icon: Gauge, label: 'Observability', minRole: 'superadmin' as UserRole, group: 'admin' },
   { path: '/whitelabel',   icon: Globe,           label: 'Whitelabel',      minRole: 'superadmin' as UserRole, group: 'admin' },
 ]
 

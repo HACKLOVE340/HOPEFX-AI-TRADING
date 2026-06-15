@@ -42,13 +42,8 @@ import SuperAdminDashboard  from './pages/SuperAdminDashboard'
 import ReliabilityDashboard from './pages/ReliabilityDashboard'
 
 // ── New roadmap pages ─────────────────────────────────────────────────────────
-import { StrategyBuilder }     from './pages/StrategyBuilder'
-import { MLDashboard }         from './pages/MLDashboard'
-import { NewsSentiment }       from './pages/NewsSentiment'
-import { Transparency }        from './pages/Transparency'
 import { NotificationsCenter } from './pages/NotificationsCenter'
 import { Billing }             from './pages/Billing'
-import { Observability }       from './pages/Observability'
 import { CommunityChat }       from './pages/CommunityChat'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
@@ -126,17 +121,12 @@ function App() {
         <Route path="/correlation"  element={<AuthGuard><Layout><ErrorBoundary label="Correlation"><CorrelationDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/indicators"   element={<AuthGuard><Layout><ErrorBoundary label="Indicators"><CustomIndicators /></ErrorBoundary></Layout></AuthGuard>} />
         {/* ── New roadmap pages ──────────────────────────────────────── */}
-        <Route path="/strategy-builder" element={<AuthGuard><Layout><ErrorBoundary label="Strategy Builder"><StrategyBuilder /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/news"             element={<AuthGuard><Layout><ErrorBoundary label="News & Sentiment"><NewsSentiment /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/transparency"     element={<AuthGuard><Layout><ErrorBoundary label="Transparency"><Transparency /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/notifications"    element={<AuthGuard><Layout><ErrorBoundary label="Notifications"><NotificationsCenter /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/billing"          element={<AuthGuard><Layout><ErrorBoundary label="Billing"><Billing /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/chat"             element={<AuthGuard><Layout><ErrorBoundary label="Community Chat"><CommunityChat /></ErrorBoundary></Layout></AuthGuard>} />
         {/* Superadmin-only routes */}
         <Route path="/superadmin"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="SuperAdmin"><SuperAdminDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/superadmin/reliability" element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Reliability"><ReliabilityDashboard /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/superadmin/ml"    element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="ML Ops"><MLDashboard /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/superadmin/observability" element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Observability"><Observability /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/whitelabel"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Whitelabel"><WhitelabelAdmin /></ErrorBoundary></Layout></AuthGuard>} />
 
         {/* ── Fallback ───────────────────────────────────────────────────── */}
