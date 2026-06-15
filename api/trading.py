@@ -457,9 +457,37 @@ async def _validate_order(order: "OrderRequest") -> None:
         ) from pf_exc
 
 
+def _order_reference_price(symbol: str) -> float:
+    """Best-effort current price for pre-trade notional sizing.
+
+    Returns 0.0 when no price is available (caller skips the notional gate
+    rather than blocking all trading on a transient price-feed gap).
+    """
+    try:
+        pe = getattr(app_state, "price_engine", None)
+        if pe is not None and hasattr(pe, "get_last_price"):
+            for sym in (symbol, _normalise_symbol(symbol)):
+                tick = pe.get_last_price(sym)
+                if tick is not None:
+                    bid = float(getattr(tick, "bid", 0) or 0)
+                    ask = float(getattr(tick, "ask", 0) or 0)
+                    mid = (bid + ask) / 2 if (bid and ask) else (ask or bid)
+                    if mid > 0:
+                        return mid
+        br = getattr(app_state, "broker", None)
+        if br is not None and hasattr(br, "get_market_price"):
+            p = float(br.get_market_price(symbol) or 0)
+            if p > 0:
+                return p
+    except Exception:
+        logger.debug("Order reference price lookup failed for %s", symbol)
+    return 0.0
+
+
 async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
     """
-    Run RiskManager.assess_risk() against current account state.
+    Run RiskManager.assess_risk() against current account state, then validate
+    the pending order's notional against the per-position size / margin limit.
 
     Raises HTTP 403 when risk limits are breached.
     Raises HTTP 503 when the check itself fails (fail-safe: block the order).
@@ -483,6 +511,34 @@ async def _run_standard_risk_check(order: "OrderRequest", user_id: str) -> None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail=f"Risk check failed: {reason_str}"
             ) from None
+
+        # Order-level size / margin gate. assess_risk() above only checks
+        # AGGREGATE account health — it never sees the pending order, so a single
+        # oversized order (e.g. 90 lots on a small account) would otherwise pass.
+        # Validate the new order's notional against the per-position size limit
+        # (equity * max_position_size_pct), open-position count, daily-loss and
+        # drawdown caps via RiskManager.can_open_position().
+        ref_price = _order_reference_price(order.symbol)
+        if ref_price > 0:
+            notional = abs(order.quantity) * ref_price
+            ok, size_reason = app_state.risk_manager.can_open_position(notional)
+            if not ok:
+                logger.warning(
+                    "Order blocked by position-size gate: user=%s symbol=%s notional=%.2f reason=%s",
+                    user_id,
+                    order.symbol,
+                    notional,
+                    size_reason,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Risk check failed: {size_reason}",
+                ) from None
+        else:
+            logger.warning(
+                "Position-size gate skipped — no reference price for %s (other gates still apply)",
+                order.symbol,
+            )
     except HTTPException:
         raise
     except Exception as exc:
