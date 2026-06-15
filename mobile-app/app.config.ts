@@ -35,11 +35,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   userInterfaceStyle: 'dark',
   icon: './src/assets/icon.png',
-  splash: {
-    image: './src/assets/splash.png',
-    resizeMode: 'contain',
-    backgroundColor: '#0a0f1c',
-  },
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: true,
@@ -73,6 +68,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [
     'expo-router',
     'expo-secure-store',
+    [
+      // SDK 55 moved the splash screen out of the top-level config into the
+      // expo-splash-screen plugin.
+      'expo-splash-screen',
+      {
+        image: './src/assets/splash.png',
+        resizeMode: 'contain',
+        backgroundColor: '#0a0f1c',
+      },
+    ],
     [
       'expo-notifications',
       {

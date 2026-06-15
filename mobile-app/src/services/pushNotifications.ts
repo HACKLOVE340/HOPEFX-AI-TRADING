@@ -28,6 +28,15 @@ import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 import { apiClient } from './apiClient';
 
+/**
+ * The fields we read off a permission response. `NotificationPermissionsStatus`
+ * inherits these from `PermissionResponse` in `expo-modules-core`, but that base
+ * package is hoisted under `expo/node_modules`, so the inherited members are not
+ * always visible to the type checker. Reading them through this local shape keeps
+ * the call sites type-safe regardless of how the dependency tree is laid out.
+ */
+type PermissionFields = { granted: boolean; canAskAgain: boolean };
+
 // ── Foreground handler — show banner + haptic ─────────────────────────────────
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
@@ -38,9 +47,12 @@ Notifications.setNotificationHandler({
     triggerHaptic(type);
 
     return {
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge:  true,
+      // expo-notifications SDK 53+ replaced shouldShowAlert with
+      // shouldShowBanner + shouldShowList.
+      shouldShowBanner: true,
+      shouldShowList:   true,
+      shouldPlaySound:  true,
+      shouldSetBadge:   true,
     };
   },
 });
@@ -186,23 +198,24 @@ class PushNotificationService {
       return null;
     }
 
-    // Request permissions
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
+    // Request permissions. SDK 55 exposes a `.granted` boolean on the
+    // PermissionResponse — prefer it over the (now untyped) `.status` field.
+    const existing = (await Notifications.getPermissionsAsync()) as PermissionFields;
+    let granted = existing.granted;
 
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync({
+    if (!granted) {
+      const requested = (await Notifications.requestPermissionsAsync({
         ios: {
           allowAlert: true,
           allowBadge: true,
           allowSound: true,
           allowCriticalAlerts: true,
         },
-      });
-      finalStatus = status;
+      })) as PermissionFields;
+      granted = requested.granted;
     }
 
-    if (finalStatus !== 'granted') {
+    if (!granted) {
       console.log('[Push] Permission denied');
       return null;
     }
@@ -274,7 +287,9 @@ class PushNotificationService {
         sound: opts.sound ?? 'default',
         ...(Platform.OS === 'android' && { channelId: opts.channelId ?? 'general' }),
       },
-      trigger: opts.seconds ? { seconds: opts.seconds } : null,
+      trigger: opts.seconds
+        ? { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: opts.seconds }
+        : null,
     });
   }
 
@@ -321,8 +336,9 @@ class PushNotificationService {
    * Returns the current push permission status ('granted' | 'denied' | 'undetermined').
    */
   async getPermissionStatus(): Promise<string> {
-    const { status } = await Notifications.getPermissionsAsync();
-    return status;
+    const perms = (await Notifications.getPermissionsAsync()) as PermissionFields;
+    if (perms.granted) return 'granted';
+    return perms.canAskAgain ? 'undetermined' : 'denied';
   }
 
   /**
