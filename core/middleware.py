@@ -65,8 +65,9 @@ def _build_csp(allowed_origins: list[str]) -> str:
         f"default-src 'self'; "
         f"script-src {script_src}; "
         f"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-        # QR code images for 2FA setup (api.qrserver.com) + data URIs for LWC charts
-        f"img-src 'self' data: blob: https://api.qrserver.com; "
+        # QR code images for 2FA setup (api.qrserver.com), data URIs for LWC charts,
+        # and OpenStreetMap tiles for the Security Operations attack map.
+        f"img-src 'self' data: blob: https://api.qrserver.com https://*.tile.openstreetmap.org; "
         # Google Fonts CDN + self-hosted fonts
         f"font-src 'self' https://fonts.gstatic.com; "
         f"connect-src {connect_src}; "
