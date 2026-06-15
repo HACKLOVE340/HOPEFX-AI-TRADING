@@ -31,10 +31,11 @@ Usage
         event_bus=bus,
     )
 """
+
 from __future__ import annotations
 
 import asyncio
-import hashlib
+import contextlib
 import logging
 import os
 import time
@@ -63,7 +64,7 @@ _TRAINING_DATA_DAYS = int(os.getenv("ML_TRAINING_DATA_DAYS", "90"))
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
 try:
-    from prometheus_client import Counter, Gauge, Histogram
+    from prometheus_client import Counter, Gauge
 
     _drift_detections = Counter(
         "hopefx_ml_drift_detections_total",
@@ -128,6 +129,7 @@ class ShadowState(Enum):
 @dataclass
 class DriftReport:
     """Report from a drift detection check."""
+
     timestamp: datetime
     drift_type: DriftType
     score: float
@@ -151,6 +153,7 @@ class DriftReport:
 @dataclass
 class ShadowResult:
     """Accumulated results from shadow model deployment."""
+
     model_version: str
     predictions: int = 0
     correct_predictions: int = 0
@@ -213,7 +216,7 @@ class DriftDetector:
         self._current_window[feature_name].append(value)
         # Keep window bounded
         if len(self._current_window[feature_name]) > self._window_size:
-            self._current_window[feature_name] = self._current_window[feature_name][-self._window_size:]
+            self._current_window[feature_name] = self._current_window[feature_name][-self._window_size :]
 
     def check_drift(self) -> DriftReport:
         """
@@ -256,9 +259,7 @@ class DriftDetector:
             affected_features=affected,
         )
 
-    def _calculate_psi(
-        self, reference: np.ndarray, current: np.ndarray, bins: int = 20
-    ) -> float:
+    def _calculate_psi(self, reference: np.ndarray, current: np.ndarray, bins: int = 20) -> float:
         """
         Calculate Population Stability Index (PSI).
 
@@ -288,9 +289,7 @@ class DriftDetector:
         psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))
         return float(psi)
 
-    def check_prediction_drift(
-        self, recent_predictions: np.ndarray, reference_predictions: np.ndarray
-    ) -> DriftReport:
+    def check_prediction_drift(self, recent_predictions: np.ndarray, reference_predictions: np.ndarray) -> DriftReport:
         """Check for drift in prediction distributions using KS test."""
         from scipy import stats
 
@@ -375,7 +374,9 @@ class RetrainingOrchestrator:
             self._state = RetrainingState.COLLECTING_DATA
             training_data = await self._collect_training_data()
             if training_data is None or len(training_data) < 1000:
-                logger.warning("Insufficient training data (%d samples)", len(training_data) if training_data is not None else 0)
+                logger.warning(
+                    "Insufficient training data (%d samples)", len(training_data) if training_data is not None else 0
+                )
                 self._state = RetrainingState.FAILED
                 if _PROM_OK:
                     _retraining_runs.labels(outcome="insufficient_data").inc()
@@ -410,7 +411,8 @@ class RetrainingOrchestrator:
 
             logger.info(
                 "Retraining completed: version=%s accuracy=%.4f",
-                version_id, metrics.get("oos_accuracy", 0),
+                version_id,
+                metrics.get("oos_accuracy", 0),
             )
             return version_id
 
@@ -457,9 +459,7 @@ class RetrainingOrchestrator:
             logger.error("Data collection failed: %s", exc)
             return None
 
-    async def _train_model(
-        self, training_data: np.ndarray
-    ) -> tuple[Path | None, dict[str, float]]:
+    async def _train_model(self, training_data: np.ndarray) -> tuple[Path | None, dict[str, float]]:
         """Train a new model using the existing training pipeline."""
         try:
             from ml.train_advanced import AdvancedTrainer
@@ -485,6 +485,7 @@ class RetrainingOrchestrator:
             # Fallback: use the basic training pipeline
             try:
                 from ml.training import train_model
+
                 model_path = Path(f"ml/saved_models/retrained_{int(time.time())}.pkl")
                 metrics = train_model(training_data, str(model_path))
                 return model_path, metrics
@@ -495,9 +496,7 @@ class RetrainingOrchestrator:
             logger.error("Model training failed: %s", exc)
             return None, {}
 
-    async def _validate_model(
-        self, model_path: Path, metrics: dict[str, float]
-    ) -> bool:
+    async def _validate_model(self, model_path: Path, metrics: dict[str, float]) -> bool:
         """Validate the trained model meets minimum quality thresholds."""
         min_accuracy = float(os.getenv("ML_MIN_OOS_ACCURACY", "0.55"))
         min_sharpe = float(os.getenv("ML_MIN_SHARPE_RATIO", "0.5"))
@@ -508,14 +507,16 @@ class RetrainingOrchestrator:
         if accuracy < min_accuracy:
             logger.warning(
                 "Model validation failed: accuracy %.4f < threshold %.4f",
-                accuracy, min_accuracy,
+                accuracy,
+                min_accuracy,
             )
             return False
 
         if sharpe < min_sharpe:
             logger.warning(
                 "Model validation failed: Sharpe %.4f < threshold %.4f",
-                sharpe, min_sharpe,
+                sharpe,
+                min_sharpe,
             )
             return False
 
@@ -526,9 +527,7 @@ class RetrainingOrchestrator:
 
         return True
 
-    async def _register_model(
-        self, model_path: Path, metrics: dict[str, float]
-    ) -> str:
+    async def _register_model(self, model_path: Path, metrics: dict[str, float]) -> str:
         """Register the new model in the model registry."""
         if self._model_registry and hasattr(self._model_registry, "register"):
             version = self._model_registry.register(
@@ -616,9 +615,7 @@ class ShadowDeployment:
 
         return predictions
 
-    def record_pnl(
-        self, version_id: str, shadow_pnl: float, champion_pnl: float
-    ) -> None:
+    def record_pnl(self, version_id: str, shadow_pnl: float, champion_pnl: float) -> None:
         """Record P&L comparison between shadow and champion."""
         if version_id in self._shadows:
             self._shadows[version_id].total_pnl += shadow_pnl
@@ -699,7 +696,9 @@ class ChampionChallenger:
         if not is_significant:
             logger.info(
                 "Challenger %s not statistically significant yet (n=%d, acc=%.4f)",
-                version_id, result.predictions, result.accuracy,
+                version_id,
+                result.predictions,
+                result.accuracy,
             )
             return False
 
@@ -713,13 +712,15 @@ class ChampionChallenger:
                 return False
 
         # Record promotion
-        self._promotion_history.append({
-            "version_id": version_id,
-            "promoted_at": datetime.now(UTC).isoformat(),
-            "accuracy": result.accuracy,
-            "pnl_improvement": result.pnl_improvement,
-            "predictions": result.predictions,
-        })
+        self._promotion_history.append(
+            {
+                "version_id": version_id,
+                "promoted_at": datetime.now(UTC).isoformat(),
+                "accuracy": result.accuracy,
+                "pnl_improvement": result.pnl_improvement,
+                "predictions": result.predictions,
+            }
+        )
 
         # Update shadow state
         result.state = ShadowState.PROMOTED
@@ -802,10 +803,8 @@ class ContinuousLearningPipeline:
 
         # Subscribe to prediction events for drift tracking
         if self._event_bus:
-            try:
+            with contextlib.suppress(Exception):
                 self._event_bus.subscribe_local("ml:prediction", self._on_prediction)
-            except Exception:
-                pass
 
         logger.info("ContinuousLearningPipeline started")
 
@@ -814,17 +813,15 @@ class ContinuousLearningPipeline:
         self._running = False
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
         logger.info("ContinuousLearningPipeline stopped")
 
     def _on_prediction(self, message: dict) -> None:
         """Handle prediction events for drift tracking."""
         features = message.get("features", {})
         for feature_name, value in features.items():
-            if isinstance(value, (int, float)):
+            if isinstance(value, int | float):
                 self._drift_detector.add_observation(feature_name, float(value))
 
     async def _initialize_reference_distributions(self) -> None:
@@ -834,9 +831,7 @@ class ContinuousLearningPipeline:
                 ref_data = self._data_store.get_training_features()
                 if ref_data is not None:
                     for col_name in ref_data.columns if hasattr(ref_data, "columns") else []:
-                        self._drift_detector.set_reference(
-                            col_name, np.array(ref_data[col_name])
-                        )
+                        self._drift_detector.set_reference(col_name, np.array(ref_data[col_name]))
         except Exception as exc:
             logger.debug("Reference distribution init failed: %s", exc)
 
@@ -898,9 +893,7 @@ class ContinuousLearningPipeline:
             return
 
         for version_id in list(self._shadow.get_shadow_results().keys()):
-            promoted = await self._champion_challenger.promote_if_ready(
-                self._shadow, version_id
-            )
+            promoted = await self._champion_challenger.promote_if_ready(self._shadow, version_id)
             if promoted:
                 logger.info("Model promoted from shadow: %s", version_id)
 
@@ -917,9 +910,7 @@ class ContinuousLearningPipeline:
         actual_outcome: float | None = None,
     ) -> dict[str, float]:
         """Run shadow predictions and return results."""
-        return await self._shadow.run_shadow_prediction(
-            features, champion_prediction, actual_outcome
-        )
+        return await self._shadow.run_shadow_prediction(features, champion_prediction, actual_outcome)
 
     def health(self) -> dict[str, Any]:
         """Return pipeline health metrics."""
@@ -929,14 +920,8 @@ class ContinuousLearningPipeline:
             "can_retrain": self._retraining.can_retrain,
             "drift_history_count": len(self._drift_history),
             "latest_drift": self._drift_history[-1].to_dict() if self._drift_history else None,
-            "shadow_models": {
-                k: v.to_dict() for k, v in self._shadow.get_shadow_results().items()
-            },
-            "promotion_history": (
-                self._champion_challenger.promotion_history
-                if self._champion_challenger
-                else []
-            ),
+            "shadow_models": {k: v.to_dict() for k, v in self._shadow.get_shadow_results().items()},
+            "promotion_history": (self._champion_challenger.promotion_history if self._champion_challenger else []),
         }
 
 

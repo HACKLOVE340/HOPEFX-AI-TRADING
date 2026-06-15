@@ -8,6 +8,7 @@ Copy Trading Management API — serves the frontend CopyTrading page.
 Provides: /api/copy-trading/my-copies, /api/copy-trading/copies/{id}/pause|resume|stop
 Connected to: social/advanced_copy_trading.py
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,9 +24,11 @@ def _get_copy_engine():
     """Retrieve the copy trading engine from app state."""
     try:
         from core.app_state import app_state
+
         engine = getattr(app_state, "copy_trading_engine", None)
         if engine is None:
             from social.advanced_copy_trading import AdvancedCopyTrading
+
             engine = AdvancedCopyTrading()
             app_state.copy_trading_engine = engine
         return engine

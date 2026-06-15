@@ -110,8 +110,7 @@ class _OandaFallback:
         rounded_units = round(oanda_units)
         if rounded_units == 0:
             raise ValueError(
-                f"_OandaFallback: order size {units} rounds to 0 units — rejected "
-                "(below OANDA's 1-unit minimum)"
+                f"_OandaFallback: order size {units} rounds to 0 units — rejected (below OANDA's 1-unit minimum)"
             )
         instrument = symbol.replace("/", "_")
         url = f"{self._base_url}/v3/accounts/{self._account_id}/orders"

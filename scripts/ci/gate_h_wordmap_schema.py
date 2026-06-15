@@ -49,9 +49,7 @@ def main() -> int:
 
     # ── Rule 2: Required top-level key ────────────────────────────────────────
     if "nuclear_risk" not in data:
-        violations.append(
-            "missing required top-level key `nuclear_risk`"
-        )
+        violations.append("missing required top-level key `nuclear_risk`")
         # Can't continue structural checks without this key
         _report(violations)
         return 1
@@ -59,9 +57,7 @@ def main() -> int:
     nuclear_risk = data["nuclear_risk"]
 
     if not isinstance(nuclear_risk, dict):
-        violations.append(
-            f"`nuclear_risk` must be a JSON object, got {type(nuclear_risk).__name__}"
-        )
+        violations.append(f"`nuclear_risk` must be a JSON object, got {type(nuclear_risk).__name__}")
         _report(violations)
         return 1
 
@@ -70,16 +66,11 @@ def main() -> int:
     for category, keywords in nuclear_risk.items():
         # ── Rule 6: category name format ─────────────────────────────────────
         if not CATEGORY_PATTERN.match(category):
-            violations.append(
-                f"category name `{category}` must be lowercase with underscores only"
-            )
+            violations.append(f"category name `{category}` must be lowercase with underscores only")
 
         # ── Rule 3: keywords must be dict[str, float] ─────────────────────────
         if not isinstance(keywords, dict):
-            violations.append(
-                f"category `{category}`: expected a JSON object, "
-                f"got {type(keywords).__name__}"
-            )
+            violations.append(f"category `{category}`: expected a JSON object, got {type(keywords).__name__}")
             continue
 
         # ── Rule 5: no empty categories ───────────────────────────────────────
@@ -90,27 +81,21 @@ def main() -> int:
         for kw, weight in keywords.items():
             # ── Rule 7: keyword string validation ─────────────────────────────
             if not isinstance(kw, str) or not kw.strip():
-                violations.append(
-                    f"category `{category}`: keyword must be a non-empty string, "
-                    f"got {kw!r}"
-                )
+                violations.append(f"category `{category}`: keyword must be a non-empty string, got {kw!r}")
                 continue
             if len(kw) > MAX_KEYWORD_LENGTH:
                 violations.append(
-                    f"category `{category}`: keyword `{kw[:40]}...` exceeds "
-                    f"{MAX_KEYWORD_LENGTH} characters"
+                    f"category `{category}`: keyword `{kw[:40]}...` exceeds {MAX_KEYWORD_LENGTH} characters"
                 )
 
             # ── Rule 3 + 4: weight must be float in [0.0, 10.0] ───────────────
-            if not isinstance(weight, (int, float)):
+            if not isinstance(weight, int | float):
                 violations.append(
-                    f"category `{category}`, keyword `{kw}`: "
-                    f"weight must be a number, got {type(weight).__name__}"
+                    f"category `{category}`, keyword `{kw}`: weight must be a number, got {type(weight).__name__}"
                 )
             elif not (0.0 <= float(weight) <= 10.0):
                 violations.append(
-                    f"category `{category}`, keyword `{kw}`: "
-                    f"weight {weight} is outside valid range [0.0, 10.0]"
+                    f"category `{category}`, keyword `{kw}`: weight {weight} is outside valid range [0.0, 10.0]"
                 )
 
             total_keywords += 1

@@ -26,6 +26,7 @@ Usage:
     pred_node = registry.create_node("prediction", model_name="gold_direction_v3")
     result = await pred_node.execute(market_data)
 """
+
 from __future__ import annotations
 
 import logging
@@ -76,6 +77,7 @@ class MarketRegime(Enum):
 @dataclass
 class MLNodeResult:
     """Result from an ML node execution."""
+
     node_type: MLNodeType
     value: float | None = None
     confidence: float = 0.0
@@ -223,7 +225,7 @@ class PredictionNode(BaseMLNode):
         # Default: use all available numeric indicators
         indicators = data.get("indicators", {})
         if indicators:
-            values = [float(v) for v in indicators.values() if isinstance(v, (int, float))]
+            values = [float(v) for v in indicators.values() if isinstance(v, int | float)]
             return np.array(values) if values else None
 
         return None
@@ -342,9 +344,7 @@ class EnsembleNode(BaseMLNode):
             latency_ms=latency,
         )
 
-    def _combine(
-        self, results: list[MLNodeResult], method: EnsembleMethod
-    ) -> tuple[float, float]:
+    def _combine(self, results: list[MLNodeResult], method: EnsembleMethod) -> tuple[float, float]:
         """Combine predictions using the specified method."""
         values = [r.value for r in results if r.value is not None]
         confidences = [r.confidence for r in results]
@@ -356,15 +356,12 @@ class EnsembleNode(BaseMLNode):
             return float(np.mean(values)), float(np.mean(confidences))
 
         elif method == EnsembleMethod.WEIGHTED_AVERAGE:
-            weights = [
-                float(child.config.get("weight", 1.0))
-                for child in self._child_nodes[:len(values)]
-            ]
+            weights = [float(child.config.get("weight", 1.0)) for child in self._child_nodes[: len(values)]]
             total_weight = sum(weights)
             if total_weight == 0:
                 return float(np.mean(values)), float(np.mean(confidences))
-            weighted_val = sum(v * w for v, w in zip(values, weights)) / total_weight
-            weighted_conf = sum(c * w for c, w in zip(confidences, weights)) / total_weight
+            weighted_val = sum(v * w for v, w in zip(values, weights, strict=False)) / total_weight
+            weighted_conf = sum(c * w for c, w in zip(confidences, weights, strict=False)) / total_weight
             return weighted_val, weighted_conf
 
         elif method == EnsembleMethod.MAJORITY_VOTE:
@@ -416,13 +413,10 @@ class RegimeNode(BaseMLNode):
 
             # ADX-like directional strength
             sma_20 = np.mean(prices_arr[-20:])
-            sma_50 = np.mean(prices_arr[-50:]) if len(prices_arr) >= 50 else sma_20
             price_vs_sma = (prices_arr[-1] - sma_20) / sma_20
 
             # Classify regime
-            regime, confidence = self._classify_regime(
-                volatility, trend_strength, price_vs_sma, returns
-            )
+            regime, confidence = self._classify_regime(volatility, trend_strength, price_vs_sma, returns)
 
             latency = (time.time() - start) * 1000
             self._execution_count += 1
@@ -591,9 +585,7 @@ class MLNodeRegistry:
         self._nodes: dict[str, BaseMLNode] = {}
         self._node_counter = 0
 
-    def create_node(
-        self, node_type: str, config: dict[str, Any] | None = None, **kwargs: Any
-    ) -> BaseMLNode:
+    def create_node(self, node_type: str, config: dict[str, Any] | None = None, **kwargs: Any) -> BaseMLNode:
         """Create a new ML node of the specified type."""
         self._node_counter += 1
         node_id = f"ml_node_{self._node_counter}"

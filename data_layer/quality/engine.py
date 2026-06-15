@@ -560,8 +560,7 @@ class DataQualityEngine:
             _single_factor = float(os.getenv("DQE_SINGLE_SOURCE_CONF_FACTOR", "0.5"))
             conf *= _single_factor
             logger.warning(
-                "DQE consensus from a single source %s — confidence degraded to %.3f "
-                "(no cross-validation)",
+                "DQE consensus from a single source %s — confidence degraded to %.3f (no cross-validation)",
                 next(iter(inliers)).value if inliers else "?",
                 conf,
             )

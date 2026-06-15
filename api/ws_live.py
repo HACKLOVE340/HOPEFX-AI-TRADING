@@ -135,9 +135,7 @@ class LiveConnectionManager:
     # freshly-connected client would otherwise passively receive private
     # balance/PnL/risk data without ever opting in. They require an explicit
     # subscribe, and account/equity/risk should be pushed via send_to_user.
-    _PRIVATE_CHANNELS: frozenset[str] = frozenset(
-        {"account", "equity", "risk", "positions", "alerts"}
-    )
+    _PRIVATE_CHANNELS: frozenset[str] = frozenset({"account", "equity", "risk", "positions", "alerts"})
 
     def __init__(self) -> None:
         self._connections: dict[str, WebSocket] = {}

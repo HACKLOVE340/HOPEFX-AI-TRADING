@@ -719,6 +719,7 @@ async def startup_event():
         # Wire roadmap components to event bus channels
         try:
             from core.roadmap_event_wiring import wire_roadmap_events
+
             _roadmap_wired = await wire_roadmap_events(app_state)
             _tasks_done.append("roadmap_event_wiring")
             logger.info("Roadmap event wiring: %s", _roadmap_wired)
@@ -856,6 +857,7 @@ async def shutdown_event():
     # OpenTelemetry
     try:
         from tracing.opentelemetry_setup import shutdown_telemetry
+
         await shutdown_telemetry()
         logger.info("[OK] OpenTelemetry shut down")
     except Exception as _otel_err:

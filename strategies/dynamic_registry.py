@@ -40,14 +40,14 @@ Usage
     # Get all active dynamic strategies
     active = registry.get_active_strategies()
 """
+
 from __future__ import annotations
 
 import ast
 import asyncio
+import contextlib
 import hashlib
-import importlib
 import logging
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -59,29 +59,67 @@ logger = logging.getLogger(__name__)
 
 # ── Safety: forbidden AST nodes and names ─────────────────────────────────────
 
-_FORBIDDEN_IMPORTS = frozenset({
-    "os", "sys", "subprocess", "shutil", "pathlib",
-    "socket", "http", "urllib", "requests", "aiohttp",
-    "ctypes", "multiprocessing", "threading",
-    "signal", "pty", "fcntl", "resource",
-    "importlib", "builtins", "__builtin__",
-})
+_FORBIDDEN_IMPORTS = frozenset(
+    {
+        "os",
+        "sys",
+        "subprocess",
+        "shutil",
+        "pathlib",
+        "socket",
+        "http",
+        "urllib",
+        "requests",
+        "aiohttp",
+        "ctypes",
+        "multiprocessing",
+        "threading",
+        "signal",
+        "pty",
+        "fcntl",
+        "resource",
+        "importlib",
+        "builtins",
+        "__builtin__",
+    }
+)
 
-_FORBIDDEN_CALLS = frozenset({
-    "eval", "exec", "compile", "open", "input",
-    "__import__", "getattr", "setattr", "delattr",
-    "globals", "locals", "vars", "dir",
-    "breakpoint", "exit", "quit",
-})
+_FORBIDDEN_CALLS = frozenset(
+    {
+        "eval",
+        "exec",
+        "compile",
+        "open",
+        "input",
+        "__import__",
+        "getattr",
+        "setattr",
+        "delattr",
+        "globals",
+        "locals",
+        "vars",
+        "dir",
+        "breakpoint",
+        "exit",
+        "quit",
+    }
+)
 
-_FORBIDDEN_ATTRIBUTES = frozenset({
-    "__subclasses__", "__bases__", "__mro__",
-    "__code__", "__globals__", "__builtins__",
-})
+_FORBIDDEN_ATTRIBUTES = frozenset(
+    {
+        "__subclasses__",
+        "__bases__",
+        "__mro__",
+        "__code__",
+        "__globals__",
+        "__builtins__",
+    }
+)
 
 
 class StrategyState(Enum):
     """Lifecycle state of a dynamic strategy."""
+
     DRAFT = "draft"
     VALIDATING = "validating"
     VALIDATED = "validated"
@@ -94,6 +132,7 @@ class StrategyState(Enum):
 @dataclass
 class StrategyVersion:
     """A single version of a dynamically loaded strategy."""
+
     version_id: str
     name: str
     source_code: str
@@ -141,38 +180,27 @@ class ASTSafetyValidator(ast.NodeVisitor):
         for alias in node.names:
             module_root = alias.name.split(".")[0]
             if module_root in _FORBIDDEN_IMPORTS:
-                self.errors.append(
-                    f"Line {node.lineno}: forbidden import '{alias.name}'"
-                )
+                self.errors.append(f"Line {node.lineno}: forbidden import '{alias.name}'")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module:
             module_root = node.module.split(".")[0]
             if module_root in _FORBIDDEN_IMPORTS:
-                self.errors.append(
-                    f"Line {node.lineno}: forbidden import from '{node.module}'"
-                )
+                self.errors.append(f"Line {node.lineno}: forbidden import from '{node.module}'")
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Name):
             if node.func.id in _FORBIDDEN_CALLS:
-                self.errors.append(
-                    f"Line {node.lineno}: forbidden call to '{node.func.id}()'"
-                )
-        elif isinstance(node.func, ast.Attribute):
-            if node.func.attr in _FORBIDDEN_CALLS:
-                self.errors.append(
-                    f"Line {node.lineno}: forbidden call to '.{node.func.attr}()'"
-                )
+                self.errors.append(f"Line {node.lineno}: forbidden call to '{node.func.id}()'")
+        elif isinstance(node.func, ast.Attribute) and node.func.attr in _FORBIDDEN_CALLS:
+            self.errors.append(f"Line {node.lineno}: forbidden call to '.{node.func.attr}()'")
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         if node.attr in _FORBIDDEN_ATTRIBUTES:
-            self.errors.append(
-                f"Line {node.lineno}: forbidden attribute access '.{node.attr}'"
-            )
+            self.errors.append(f"Line {node.lineno}: forbidden attribute access '.{node.attr}'")
         self.generic_visit(node)
 
 
@@ -223,10 +251,8 @@ class DynamicStrategyRegistry:
         self._running = False
         if self._subscriber_task:
             self._subscriber_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._subscriber_task
-            except asyncio.CancelledError:
-                pass
         logger.info("DynamicStrategyRegistry stopped")
 
     # ── Public API ────────────────────────────────────────────────────────────
@@ -296,7 +322,9 @@ class DynamicStrategyRegistry:
 
         logger.info(
             "Strategy registered: name=%s version_id=%s hash=%s",
-            name, version_id, source_hash[:12],
+            name,
+            version_id,
+            source_hash[:12],
         )
         return version_id
 
@@ -313,8 +341,7 @@ class DynamicStrategyRegistry:
                 raise ValueError(f"Version not found: {version_id}")
             if version.state not in (StrategyState.VALIDATED, StrategyState.PAUSED):
                 raise ValueError(
-                    f"Cannot activate strategy in state '{version.state.value}'. "
-                    f"Must be 'validated' or 'paused'."
+                    f"Cannot activate strategy in state '{version.state.value}'. Must be 'validated' or 'paused'."
                 )
 
             # Deactivate previous version for this strategy name
@@ -371,8 +398,7 @@ class DynamicStrategyRegistry:
             "active_strategies": len(self._active),
             "active_names": list(self._active.keys()),
             "states": {
-                state.value: sum(1 for v in self._versions.values() if v.state == state)
-                for state in StrategyState
+                state.value: sum(1 for v in self._versions.values() if v.state == state) for state in StrategyState
             },
         }
 
@@ -448,6 +474,7 @@ class DynamicStrategyRegistry:
         # Inject base strategy classes so user code can inherit from them
         try:
             from strategies.base import BaseStrategy, Signal, SignalType, StrategyConfig
+
             allowed_globals["BaseStrategy"] = BaseStrategy
             allowed_globals["Signal"] = Signal
             allowed_globals["SignalType"] = SignalType
@@ -457,28 +484,24 @@ class DynamicStrategyRegistry:
 
         # Compile and execute in isolated namespace
         code_obj = compile(source_code, f"<dynamic:{name}>", "exec")
-        exec(code_obj, allowed_globals)  # noqa: S102 — intentional, sandboxed exec
+        exec(code_obj, allowed_globals)
 
         # Find the strategy class (must subclass BaseStrategy or have generate_signal)
         strategy_class = None
         for obj_name, obj in allowed_globals.items():
-            if (
-                isinstance(obj, type)
-                and obj_name != "BaseStrategy"
-                and hasattr(obj, "generate_signal")
-            ):
+            if isinstance(obj, type) and obj_name != "BaseStrategy" and hasattr(obj, "generate_signal"):
                 strategy_class = obj
                 break
 
         if strategy_class is None:
             raise ValueError(
-                "No valid strategy class found. "
-                "The code must define a class with a 'generate_signal' method."
+                "No valid strategy class found. The code must define a class with a 'generate_signal' method."
             )
 
         # Instantiate with default config
         try:
             from strategies.base import StrategyConfig as _SC
+
             instance = strategy_class(config=_SC(name=name, symbol="XAU_USD"))
         except Exception:
             instance = strategy_class(config={"name": name, "symbol": "XAU_USD"})
@@ -495,13 +518,12 @@ class DynamicStrategyRegistry:
 
         # Check that generate_signal accepts the right signature
         import inspect
+
         try:
             sig = inspect.signature(instance.generate_signal)
             params = list(sig.parameters.keys())
             if len(params) < 1:
-                errors.append(
-                    "generate_signal() must accept at least one parameter (market data)"
-                )
+                errors.append("generate_signal() must accept at least one parameter (market data)")
         except (ValueError, TypeError):
             pass  # Cannot inspect — skip
 
@@ -517,6 +539,7 @@ class DynamicStrategyRegistry:
 
         try:
             from database.models import DynamicStrategy
+
             session = self._db_session_factory()
             try:
                 records = session.query(DynamicStrategy).all()
@@ -536,23 +559,20 @@ class DynamicStrategyRegistry:
                     # Re-compile active strategies
                     if version.state == StrategyState.ACTIVE:
                         try:
-                            version.instance = self._compile_strategy(
-                                version.name, version.source_code
-                            )
+                            version.instance = self._compile_strategy(version.name, version.source_code)
                             self._active[version.name] = version
                         except Exception as exc:
                             logger.error(
                                 "Failed to recompile active strategy %s: %s",
-                                version.name, exc,
+                                version.name,
+                                exc,
                             )
                             version.state = StrategyState.FAILED
                             version.validation_errors = [f"Recompilation failed: {exc}"]
 
                     self._versions[version.version_id] = version
 
-                logger.info(
-                    "DynamicStrategyRegistry: loaded %d versions from DB", len(records)
-                )
+                logger.info("DynamicStrategyRegistry: loaded %d versions from DB", len(records))
             finally:
                 session.close()
         except ImportError:
@@ -567,13 +587,10 @@ class DynamicStrategyRegistry:
 
         try:
             from database.models import DynamicStrategy
+
             session = self._db_session_factory()
             try:
-                record = (
-                    session.query(DynamicStrategy)
-                    .filter(DynamicStrategy.version_id == version.version_id)
-                    .first()
-                )
+                record = session.query(DynamicStrategy).filter(DynamicStrategy.version_id == version.version_id).first()
                 if record:
                     record.state = version.state.value
                     record.activated_at = version.activated_at
@@ -608,11 +625,14 @@ class DynamicStrategyRegistry:
             return
         try:
             import json
-            payload = json.dumps({
-                "version_id": version_id,
-                "action": action,
-                "timestamp": datetime.now(UTC).isoformat(),
-            })
+
+            payload = json.dumps(
+                {
+                    "version_id": version_id,
+                    "action": action,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            )
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(
                 None,
@@ -628,6 +648,7 @@ class DynamicStrategyRegistry:
 
         try:
             import json
+
             pubsub = self._redis.pubsub()
             pubsub.subscribe(self._CH_STRATEGY_UPDATE)
 
@@ -645,9 +666,7 @@ class DynamicStrategyRegistry:
                             await self._sync_deactivation(version_id)
 
                     except Exception as exc:
-                        logger.warning(
-                            "DynamicStrategyRegistry: failed to process update: %s", exc
-                        )
+                        logger.warning("DynamicStrategyRegistry: failed to process update: %s", exc)
 
                 await asyncio.sleep(0.1)
         except asyncio.CancelledError:

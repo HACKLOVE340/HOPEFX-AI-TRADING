@@ -55,6 +55,7 @@ except ImportError as _ml_import_err:
     class RandomForestTradingClassifier(_MissingMLClass):  # type: ignore[no-redef]
         pass
 
+
 # RL nuclear decision agent path constant — used by NuclearHopeFXSupervisor
 RL_NUCLEAR_MODEL_PATH: str = "ml/rl_models/nuclear_decision_ppo.zip"
 RL_NUCLEAR_VECNORM_PATH: str = "ml/rl_models/nuclear_decision_vecnorm.pkl"

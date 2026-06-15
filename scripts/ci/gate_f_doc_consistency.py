@@ -162,7 +162,7 @@ def _top_level_names(py_file: Path) -> frozenset[str]:
         return frozenset()
     names: set[str] = set()
     for node in ast.iter_child_nodes(tree):
-        if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+        if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
             names.add(node.name)
         elif isinstance(node, ast.Assign):
             for target in node.targets:
@@ -177,10 +177,7 @@ def _repo_defines_name(name: str) -> bool:
     pattern_func = re.compile(rf"^def {re.escape(name)}\b", re.MULTILINE)
     for py_file in REPO_ROOT.rglob("*.py"):
         # Skip virtual environments and cache dirs
-        if any(
-            part in py_file.parts
-            for part in (".venv", "venv", "__pycache__", "node_modules")
-        ):
+        if any(part in py_file.parts for part in (".venv", "venv", "__pycache__", "node_modules")):
             continue
         try:
             src = py_file.read_text(encoding="utf-8")
@@ -198,9 +195,7 @@ def check_doc(md_path: Path) -> list[str]:
 
     for block_line, code in blocks:
         # ── Rule 1: from <module> import <name> ──────────────────────────────
-        for match in re.finditer(
-            r"^from\s+([\w.]+)\s+import\s+([\w,\t *]+)", code, re.MULTILINE
-        ):
+        for match in re.finditer(r"^from\s+([\w.]+)\s+import\s+([\w,\t *]+)", code, re.MULTILINE):
             module = match.group(1)
             imported_names = [n.strip() for n in match.group(2).split(",")]
 
@@ -209,9 +204,7 @@ def check_doc(md_path: Path) -> list[str]:
 
             py_file = _module_path_to_file(module)
             if py_file is None:
-                violations.append(
-                    f"{md_path.name}:{block_line}: module `{module}` not found in repo"
-                )
+                violations.append(f"{md_path.name}:{block_line}: module `{module}` not found in repo")
                 continue
 
             defined = _top_level_names(py_file)
@@ -256,10 +249,7 @@ def main() -> int:
         print("[gate-f] FAIL — documentation/code consistency violations:\n")
         for v in all_violations:
             print(f"  ✗ {v}")
-        print(
-            f"\n  {len(all_violations)} violation(s). "
-            "Update the documentation snippet to match the actual API."
-        )
+        print(f"\n  {len(all_violations)} violation(s). Update the documentation snippet to match the actual API.")
         return 1
 
     print(f"[gate-f] PASS — checked {len(DOCS_TO_SCAN)} docs, no violations")

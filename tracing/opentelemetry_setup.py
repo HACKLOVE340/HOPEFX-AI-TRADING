@@ -44,13 +44,13 @@ Usage
         span.set_attribute("signal.strength", 0.85)
         result = await evaluate(signal)
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from functools import wraps
 from typing import Any, Callable
 
@@ -105,12 +105,14 @@ async def init_telemetry() -> bool:
         )
 
         # Build resource with service metadata
-        resource = Resource.create({
-            SERVICE_NAME: _SERVICE_NAME,
-            SERVICE_VERSION: _VERSION,
-            "deployment.environment": _ENVIRONMENT,
-            "service.namespace": "hopefx",
-        })
+        resource = Resource.create(
+            {
+                SERVICE_NAME: _SERVICE_NAME,
+                SERVICE_VERSION: _VERSION,
+                "deployment.environment": _ENVIRONMENT,
+                "service.namespace": "hopefx",
+            }
+        )
 
         # Configure sampler
         if _SAMPLER == "parentbased_traceidratio":
@@ -158,14 +160,15 @@ async def init_telemetry() -> bool:
         _initialized = True
         logger.info(
             "OpenTelemetry initialized: service=%s endpoint=%s sampler=%s(%.2f)",
-            _SERVICE_NAME, _EXPORTER_ENDPOINT, _SAMPLER, _SAMPLER_ARG,
+            _SERVICE_NAME,
+            _EXPORTER_ENDPOINT,
+            _SAMPLER,
+            _SAMPLER_ARG,
         )
         return True
 
     except ImportError as exc:
-        logger.warning(
-            "OpenTelemetry packages not installed — tracing disabled: %s", exc
-        )
+        logger.warning("OpenTelemetry packages not installed — tracing disabled: %s", exc)
         _initialized = False
         return False
     except Exception as exc:
@@ -177,63 +180,53 @@ async def init_telemetry() -> bool:
 def _instrument_libraries() -> None:
     """Auto-instrument common libraries."""
     # FastAPI / Starlette
-    try:
+    with suppress(Exception):
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+
         FastAPIInstrumentor.instrument()
-    except (ImportError, Exception):
-        pass
 
     # HTTPX (for broker API calls)
-    try:
+    with suppress(Exception):
         from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
         HTTPXClientInstrumentor.instrument()
-    except (ImportError, Exception):
-        pass
 
     # Requests
-    try:
+    with suppress(Exception):
         from opentelemetry.instrumentation.requests import RequestsInstrumentor
+
         RequestsInstrumentor().instrument()
-    except (ImportError, Exception):
-        pass
 
     # Redis
-    try:
+    with suppress(Exception):
         from opentelemetry.instrumentation.redis import RedisInstrumentor
+
         RedisInstrumentor().instrument()
-    except (ImportError, Exception):
-        pass
 
     # SQLAlchemy
-    try:
+    with suppress(Exception):
         from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+
         SQLAlchemyInstrumentor().instrument()
-    except (ImportError, Exception):
-        pass
 
     # aiohttp
-    try:
+    with suppress(Exception):
         from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
+
         AioHttpClientInstrumentor().instrument()
-    except (ImportError, Exception):
-        pass
 
 
 async def shutdown_telemetry() -> None:
     """Gracefully shut down telemetry providers."""
-    global _initialized, _tracer_provider, _meter_provider
+    global _initialized
 
     if _tracer_provider:
-        try:
+        with suppress(Exception):
             _tracer_provider.shutdown()
-        except Exception:
-            pass
 
     if _meter_provider:
-        try:
+        with suppress(Exception):
             _meter_provider.shutdown()
-        except Exception:
-            pass
 
     _initialized = False
     logger.info("OpenTelemetry shut down")
@@ -251,6 +244,7 @@ def get_tracer(name: str) -> Any:
     """
     if _initialized:
         from opentelemetry import trace
+
         return trace.get_tracer(name, _VERSION)
 
     return _NoOpTracer()
@@ -264,6 +258,7 @@ def get_meter(name: str) -> Any:
     """
     if _initialized:
         from opentelemetry import metrics
+
         return metrics.get_meter(name, _VERSION)
 
     return _NoOpMeter()
@@ -294,14 +289,10 @@ class TraceContextPropagator:
         if not _initialized:
             return carrier
 
-        try:
-            from opentelemetry import context
-            from opentelemetry.propagators import textmap
+        with suppress(Exception):
             from opentelemetry.propagate import inject
 
             inject(carrier)
-        except Exception:
-            pass
 
         return carrier
 
@@ -317,7 +308,6 @@ class TraceContextPropagator:
             return None
 
         try:
-            from opentelemetry import context
             from opentelemetry.propagate import extract
 
             return extract(carrier)
@@ -375,10 +365,12 @@ def traced(
         def check_risk(trade):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         name = span_name or f"{func.__module__}.{func.__qualname__}"
 
         if asyncio.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
                 tracer = get_tracer(func.__module__ or "hopefx")
@@ -392,12 +384,12 @@ def traced(
                     except Exception as exc:
                         if record_exception:
                             span.record_exception(exc)
-                            span.set_status(
-                                _get_error_status(str(exc))
-                            )
+                            span.set_status(_get_error_status(str(exc)))
                         raise
+
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
                 tracer = get_tracer(func.__module__ or "hopefx")
@@ -411,10 +403,9 @@ def traced(
                     except Exception as exc:
                         if record_exception:
                             span.record_exception(exc)
-                            span.set_status(
-                                _get_error_status(str(exc))
-                            )
+                            span.set_status(_get_error_status(str(exc)))
                         raise
+
             return sync_wrapper
 
     return decorator
@@ -424,6 +415,7 @@ def _get_error_status(description: str) -> Any:
     """Get an error status object."""
     try:
         from opentelemetry.trace import StatusCode, Status
+
         return Status(StatusCode.ERROR, description)
     except ImportError:
         return None
@@ -512,16 +504,29 @@ class TradingSpans:
 
 class _NoOpSpan:
     """No-op span when OTel is not available."""
-    def set_attribute(self, key: str, value: Any) -> None: pass
-    def add_event(self, name: str, attributes: dict | None = None) -> None: pass
-    def record_exception(self, exc: Exception) -> None: pass
-    def set_status(self, status: Any) -> None: pass
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
+
+    def set_attribute(self, key: str, value: Any) -> None:
+        pass
+
+    def add_event(self, name: str, attributes: dict | None = None) -> None:
+        pass
+
+    def record_exception(self, exc: Exception) -> None:
+        pass
+
+    def set_status(self, status: Any) -> None:
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
 
 
 class _NoOpTracer:
     """No-op tracer when OTel is not available."""
+
     def start_as_current_span(self, name: str, **kwargs) -> _NoOpSpan:
         return _NoOpSpan()
 
@@ -531,6 +536,7 @@ class _NoOpTracer:
 
 class _NoOpMeter:
     """No-op meter when OTel is not available."""
+
     def create_counter(self, name: str, **kwargs) -> Any:
         return _NoOpInstrument()
 
@@ -543,5 +549,9 @@ class _NoOpMeter:
 
 class _NoOpInstrument:
     """No-op metric instrument."""
-    def add(self, value: float, attributes: dict | None = None) -> None: pass
-    def record(self, value: float, attributes: dict | None = None) -> None: pass
+
+    def add(self, value: float, attributes: dict | None = None) -> None:
+        pass
+
+    def record(self, value: float, attributes: dict | None = None) -> None:
+        pass

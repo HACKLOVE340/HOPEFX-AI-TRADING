@@ -36,9 +36,7 @@ def test_single_source_confidence_is_degraded():
     t2 = _tick(FeedSource.METALS_DEV)
 
     _, conf_single, _ = dqe.cross_source_consensus({FeedSource.GOLDAPI: t1})
-    _, conf_multi, _ = dqe.cross_source_consensus(
-        {FeedSource.GOLDAPI: t1, FeedSource.METALS_DEV: t2}
-    )
+    _, conf_multi, _ = dqe.cross_source_consensus({FeedSource.GOLDAPI: t1, FeedSource.METALS_DEV: t2})
 
     assert conf_single > 0.0
     # Two aligned sources cross-validate → higher confidence than a lone source.

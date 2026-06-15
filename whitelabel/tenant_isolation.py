@@ -41,13 +41,12 @@ Usage
     cache = NamespacedCache(redis_client, tenant_id)
     await cache.set("portfolio_value", "125000.50", ttl=60)
 """
+
 from __future__ import annotations
 
 import asyncio
 import contextvars
-import hashlib
 import logging
-import time
 from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable
@@ -57,9 +56,7 @@ logger = logging.getLogger(__name__)
 
 # ── Tenant Context ────────────────────────────────────────────────────────────
 
-_tenant_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "tenant_id", default=None
-)
+_tenant_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar("tenant_id", default=None)
 
 
 def get_tenant_id() -> str | None:
@@ -87,7 +84,7 @@ def require_tenant() -> str:
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 
 try:
-    from prometheus_client import Counter, Histogram
+    from prometheus_client import Counter
 
     _isolation_violations = Counter(
         "hopefx_tenant_isolation_violations_total",
@@ -181,9 +178,11 @@ class TenantIsolationMiddleware:
         token = auth_header[7:]
         try:
             import jwt
+
             # Decode without verification to extract claims
             # (verification happens in the auth middleware)
             import os
+
             secret = os.getenv("JWT_SECRET", "")
             if not secret:
                 # Decode unverified for tenant extraction only
@@ -271,14 +270,13 @@ class TenantAwareSession:
 
     def delete(self, instance: Any) -> None:
         """Delete with tenant_id verification."""
-        if hasattr(instance, "tenant_id"):
-            if instance.tenant_id != self._tenant_id:
-                if _PROM_OK:
-                    _isolation_violations.labels(source="delete").inc()
-                raise PermissionError(
-                    f"Cross-tenant delete violation: attempted to delete from tenant "
-                    f"'{instance.tenant_id}' in context '{self._tenant_id}'"
-                )
+        if hasattr(instance, "tenant_id") and instance.tenant_id != self._tenant_id:
+            if _PROM_OK:
+                _isolation_violations.labels(source="delete").inc()
+            raise PermissionError(
+                f"Cross-tenant delete violation: attempted to delete from tenant "
+                f"'{instance.tenant_id}' in context '{self._tenant_id}'"
+            )
         self._session.delete(instance)
 
     def commit(self) -> None:
@@ -357,10 +355,7 @@ class NamespacedCache:
 
         try:
             namespaced_key = self._key(key)
-            if ttl:
-                result = self._redis.setex(namespaced_key, ttl, value)
-            else:
-                result = self._redis.set(namespaced_key, value)
+            result = self._redis.setex(namespaced_key, ttl, value) if ttl else self._redis.set(namespaced_key, value)
 
             if asyncio.iscoroutine(result):
                 await result
@@ -424,7 +419,8 @@ class NamespacedCache:
 
             logger.info(
                 "NamespacedCache: flushed %d keys for tenant %s",
-                deleted, self._tenant_id,
+                deleted,
+                self._tenant_id,
             )
             return deleted
         except Exception as exc:
@@ -482,54 +478,60 @@ def generate_rls_migration() -> str:
     ]
 
     for table in tables_with_tenant:
-        sql_parts.extend([
-            f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;",
-            f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;",
-            "",
-            f"-- Policy for {table}: users can only see their tenant's data",
-            f"CREATE POLICY tenant_isolation_{table} ON {table}",
-            f"    USING (tenant_id = current_setting('app.current_tenant_id'));",
-            "",
-            f"-- Policy for {table}: users can only insert into their tenant",
-            f"CREATE POLICY tenant_insert_{table} ON {table}",
-            f"    FOR INSERT",
-            f"    WITH CHECK (tenant_id = current_setting('app.current_tenant_id'));",
-            "",
-            f"-- Policy for {table}: users can only update their tenant's data",
-            f"CREATE POLICY tenant_update_{table} ON {table}",
-            f"    FOR UPDATE",
-            f"    USING (tenant_id = current_setting('app.current_tenant_id'))",
-            f"    WITH CHECK (tenant_id = current_setting('app.current_tenant_id'));",
-            "",
-            f"-- Policy for {table}: users can only delete their tenant's data",
-            f"CREATE POLICY tenant_delete_{table} ON {table}",
-            f"    FOR DELETE",
-            f"    USING (tenant_id = current_setting('app.current_tenant_id'));",
-            "",
-        ])
+        sql_parts.extend(
+            [
+                f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;",
+                f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY;",
+                "",
+                f"-- Policy for {table}: users can only see their tenant's data",
+                f"CREATE POLICY tenant_isolation_{table} ON {table}",
+                "    USING (tenant_id = current_setting('app.current_tenant_id'));",
+                "",
+                f"-- Policy for {table}: users can only insert into their tenant",
+                f"CREATE POLICY tenant_insert_{table} ON {table}",
+                "    FOR INSERT",
+                "    WITH CHECK (tenant_id = current_setting('app.current_tenant_id'));",
+                "",
+                f"-- Policy for {table}: users can only update their tenant's data",
+                f"CREATE POLICY tenant_update_{table} ON {table}",
+                "    FOR UPDATE",
+                "    USING (tenant_id = current_setting('app.current_tenant_id'))",
+                "    WITH CHECK (tenant_id = current_setting('app.current_tenant_id'));",
+                "",
+                f"-- Policy for {table}: users can only delete their tenant's data",
+                f"CREATE POLICY tenant_delete_{table} ON {table}",
+                "    FOR DELETE",
+                "    USING (tenant_id = current_setting('app.current_tenant_id'));",
+                "",
+            ]
+        )
 
     # Add superadmin bypass policy
-    sql_parts.extend([
-        "-- Superadmin bypass: allows superadmin role to access all tenants",
-        "-- Apply to each table:",
-    ])
+    sql_parts.extend(
+        [
+            "-- Superadmin bypass: allows superadmin role to access all tenants",
+            "-- Apply to each table:",
+        ]
+    )
     for table in tables_with_tenant:
         sql_parts.append(
             f"CREATE POLICY superadmin_bypass_{table} ON {table}"
             f"    USING (current_setting('app.is_superadmin', true) = 'true');"
         )
 
-    sql_parts.extend([
-        "",
-        "-- Helper function to set tenant context per connection",
-        "CREATE OR REPLACE FUNCTION set_tenant_context(p_tenant_id TEXT, p_is_superadmin BOOLEAN DEFAULT FALSE)",
-        "RETURNS VOID AS $$",
-        "BEGIN",
-        "    PERFORM set_config('app.current_tenant_id', p_tenant_id, true);",
-        "    PERFORM set_config('app.is_superadmin', p_is_superadmin::TEXT, true);",
-        "END;",
-        "$$ LANGUAGE plpgsql;",
-    ])
+    sql_parts.extend(
+        [
+            "",
+            "-- Helper function to set tenant context per connection",
+            "CREATE OR REPLACE FUNCTION set_tenant_context(p_tenant_id TEXT, p_is_superadmin BOOLEAN DEFAULT FALSE)",
+            "RETURNS VOID AS $$",
+            "BEGIN",
+            "    PERFORM set_config('app.current_tenant_id', p_tenant_id, true);",
+            "    PERFORM set_config('app.is_superadmin', p_is_superadmin::TEXT, true);",
+            "END;",
+            "$$ LANGUAGE plpgsql;",
+        ]
+    )
 
     return "\n".join(sql_parts)
 
@@ -592,13 +594,12 @@ def tenant_scoped(func: Callable) -> Callable:
 
     Raises PermissionError if no tenant context is active.
     """
+
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
         tenant_id = get_tenant_id()
         if not tenant_id:
-            raise PermissionError(
-                f"Function '{func.__name__}' requires a tenant context"
-            )
+            raise PermissionError(f"Function '{func.__name__}' requires a tenant context")
         return await func(*args, **kwargs)
 
     return wrapper

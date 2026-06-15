@@ -8,6 +8,7 @@ Trade Transparency & Explainability API.
 Exposes decision logs, factor breakdowns, and audit trails.
 Connected to: transparency/engine.py, core/decision/HOPEFXDecisionEngine.py
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,9 +24,11 @@ def _get_transparency_engine():
     """Retrieve the transparency engine from app state."""
     try:
         from core.app_state import app_state
+
         engine = getattr(app_state, "transparency_engine", None)
         if engine is None:
             from transparency.engine import TransparencyEngine
+
             engine = TransparencyEngine()
             app_state.transparency_engine = engine
         return engine
@@ -37,6 +40,7 @@ def _get_decision_store():
     """Retrieve the decision store for logged trade decisions."""
     try:
         from core.app_state import app_state
+
         store = getattr(app_state, "decision_store", None)
         if store is None:
             app_state.decision_store = []
@@ -85,7 +89,7 @@ async def explain_trade(trade_id: str):
 
     # Find the decision
     decision = None
-    for d in (store or []):
+    for d in store or []:
         if d.get("id") == trade_id:
             decision = d
             break
@@ -116,6 +120,7 @@ async def get_audit_log(
     """
     try:
         from core.app_state import app_state
+
         audit_log = getattr(app_state, "audit_log", [])
     except Exception:
         audit_log = []

@@ -156,8 +156,7 @@ def _check_live_trading_default(content: str) -> str | None:
             return None  # Correct — default=False found
         if re.search(r"default\s*=\s*True", window_text):
             return (
-                "FEATURE_LIVE_TRADING _FeatureDef has default=True — "
-                "live trading must default to False (opt-in only)"
+                "FEATURE_LIVE_TRADING _FeatureDef has default=True — live trading must default to False (opt-in only)"
             )
     # FEATURE_LIVE_TRADING string was found by L-1 but no default= found in window
     return None  # L-1 already caught missing declaration; avoid double error
@@ -176,20 +175,13 @@ def _run_rule(rule: _Rule) -> list[str]:
 
     content = rule.file.read_text(encoding="utf-8")
 
-    if rule.must_match is not None:
-        if not re.search(rule.must_match, content, re.MULTILINE):
-            failures.append(
-                f"[{rule.name}] MISSING required pattern {rule.must_match!r}\n"
-                f"    → {rule.help}"
-            )
+    if rule.must_match is not None and not re.search(rule.must_match, content, re.MULTILINE):
+        failures.append(f"[{rule.name}] MISSING required pattern {rule.must_match!r}\n    → {rule.help}")
 
     if rule.must_not_match is not None:
         m = re.search(rule.must_not_match, content, re.MULTILINE)
         if m:
-            failures.append(
-                f"[{rule.name}] FORBIDDEN pattern matched: {m.group()!r}\n"
-                f"    → {rule.help}"
-            )
+            failures.append(f"[{rule.name}] FORBIDDEN pattern matched: {m.group()!r}\n    → {rule.help}")
 
     return failures
 

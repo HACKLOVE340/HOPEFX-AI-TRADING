@@ -50,18 +50,17 @@ Usage
     # Convert to executable strategy
     strategy = StateMachineStrategy(sm)
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
-import numpy as np
 
 UTC = timezone.utc
 logger = logging.getLogger(__name__)
@@ -111,6 +110,7 @@ class ComparisonOperator(Enum):
 @dataclass
 class Condition:
     """A single condition that must be met for a transition."""
+
     condition_type: ConditionType
     params: dict[str, Any] = field(default_factory=dict)
 
@@ -220,6 +220,7 @@ class Condition:
 @dataclass
 class Action:
     """An action to execute on state entry or exit."""
+
     action_type: ActionType
     params: dict[str, Any] = field(default_factory=dict)
 
@@ -233,6 +234,7 @@ class Action:
 @dataclass
 class Transition:
     """A transition between two states."""
+
     transition_id: str
     from_state: str
     to_state: str
@@ -264,6 +266,7 @@ class Transition:
 @dataclass
 class State:
     """A state in the finite state machine."""
+
     name: str
     is_initial: bool = False
     is_terminal: bool = False
@@ -287,6 +290,7 @@ class State:
 @dataclass
 class StateMachineDefinition:
     """Complete definition of a state machine strategy."""
+
     machine_id: str
     name: str
     description: str = ""
@@ -365,16 +369,12 @@ class StateMachineBuilder:
         if entry_actions:
             for action_def in entry_actions:
                 action_type = ActionType(action_def.get("type", "log_event"))
-                state.entry_actions.append(
-                    Action(action_type=action_type, params=action_def.get("params", {}))
-                )
+                state.entry_actions.append(Action(action_type=action_type, params=action_def.get("params", {})))
 
         if exit_actions:
             for action_def in exit_actions:
                 action_type = ActionType(action_def.get("type", "log_event"))
-                state.exit_actions.append(
-                    Action(action_type=action_type, params=action_def.get("params", {}))
-                )
+                state.exit_actions.append(Action(action_type=action_type, params=action_def.get("params", {})))
 
         sm.states[name] = state
 
@@ -457,9 +457,7 @@ class StateMachineBuilder:
 
     def export_to_python(self, sm: StateMachineDefinition) -> str:
         """Export the state machine to executable Python strategy code."""
-        class_name = "".join(
-            word.capitalize() for word in sm.name.replace("-", " ").split()
-        ) + "Strategy"
+        class_name = "".join(word.capitalize() for word in sm.name.replace("-", " ").split()) + "Strategy"
 
         code = f'''"""
 Auto-generated State Machine Strategy: {sm.name}
@@ -704,22 +702,22 @@ class {class_name}(BaseStrategy):
             code += f'            "entry_actions": {[a.to_dict() for a in state.entry_actions]},\n'
             code += f'            "exit_actions": {[a.to_dict() for a in state.exit_actions]},\n'
             code += f'            "max_dwell_seconds": {state.max_dwell_seconds},\n'
-            code += f'        }},\n'
+            code += "        },\n"
 
-        code += '    }\n\n'
-        code += '    _TRANSITIONS = [\n'
+        code += "    }\n\n"
+        code += "    _TRANSITIONS = [\n"
 
         # Add transition definitions
         for t in sm.transitions:
-            code += f'        {{\n'
+            code += "        {\n"
             code += f'            "from": "{t.from_state}",\n'
             code += f'            "to": "{t.to_state}",\n'
             code += f'            "conditions": {[c.to_dict() for c in t.conditions]},\n'
             code += f'            "logic": "{t.condition_logic}",\n'
             code += f'            "priority": {t.priority},\n'
-            code += f'        }},\n'
+            code += "        },\n"
 
-        code += '    ]\n'
+        code += "    ]\n"
 
         return code
 

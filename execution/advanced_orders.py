@@ -62,9 +62,11 @@ Usage
         activation_price=1935.00,
     )
 """
+
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 import uuid
@@ -148,6 +150,7 @@ class FillType(Enum):
 @dataclass
 class OCOOrder:
     """One-Cancels-the-Other order pairing SL and TP."""
+
     order_id: str
     position_id: str
     symbol: str
@@ -190,6 +193,7 @@ class OCOOrder:
 @dataclass
 class TrailingStopOrder:
     """Dynamic stop-loss that follows price movement."""
+
     order_id: str
     position_id: str
     symbol: str
@@ -234,6 +238,7 @@ class TrailingStopOrder:
 @dataclass
 class StopLimitOrder:
     """Stop order that becomes a limit order at the stop price."""
+
     order_id: str
     position_id: str
     symbol: str
@@ -440,6 +445,7 @@ class AdvancedOrderManager:
         if self._event_bus:
             try:
                 from core.event_bus import CH_TICK
+
                 self._event_bus.subscribe_local(CH_TICK, self._on_tick)
             except ImportError:
                 logger.debug("EventBus not available for tick subscription")
@@ -456,10 +462,8 @@ class AdvancedOrderManager:
         self._running = False
         if self._monitor_task:
             self._monitor_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._monitor_task
-            except asyncio.CancelledError:
-                pass
         logger.info("AdvancedOrderManager stopped")
 
     # ── Tick handler ──────────────────────────────────────────────────────────
@@ -517,12 +521,12 @@ class AdvancedOrderManager:
                 order.state = AdvancedOrderState.ACTIVE
                 logger.info(
                     "OCO submitted natively: order_id=%s sl_broker=%s tp_broker=%s",
-                    order_id, sl_id, tp_id,
+                    order_id,
+                    sl_id,
+                    tp_id,
                 )
             except Exception as exc:
-                logger.warning(
-                    "Native OCO submission failed, falling back to in-memory: %s", exc
-                )
+                logger.warning("Native OCO submission failed, falling back to in-memory: %s", exc)
                 order.state = AdvancedOrderState.ACTIVE
                 order.native_broker_support = False
         else:
@@ -595,9 +599,7 @@ class AdvancedOrderManager:
                 order.state = AdvancedOrderState.ACTIVE
                 order.activated = activation_price is None
             except Exception as exc:
-                logger.warning(
-                    "Native trailing stop failed, falling back to in-memory: %s", exc
-                )
+                logger.warning("Native trailing stop failed, falling back to in-memory: %s", exc)
                 order.state = AdvancedOrderState.ACTIVE
                 order.native_broker_support = False
                 order.activated = activation_price is None
@@ -611,9 +613,7 @@ class AdvancedOrderManager:
 
         if _PROM_OK:
             _trailing_stops_submitted.inc()
-            _order_latency.labels(order_type="trailing_stop").observe(
-                time.monotonic() - start_time
-            )
+            _order_latency.labels(order_type="trailing_stop").observe(time.monotonic() - start_time)
 
         return order_id
 
@@ -662,9 +662,7 @@ class AdvancedOrderManager:
                 order.native_broker_support = True
                 order.state = AdvancedOrderState.ACTIVE
             except Exception as exc:
-                logger.warning(
-                    "Native stop-limit failed, falling back to in-memory: %s", exc
-                )
+                logger.warning("Native stop-limit failed, falling back to in-memory: %s", exc)
                 order.state = AdvancedOrderState.ACTIVE
                 order.native_broker_support = False
         else:
@@ -675,9 +673,7 @@ class AdvancedOrderManager:
             self._stop_limit_orders[order_id] = order
 
         if _PROM_OK:
-            _order_latency.labels(order_type="stop_limit").observe(
-                time.monotonic() - start_time
-            )
+            _order_latency.labels(order_type="stop_limit").observe(time.monotonic() - start_time)
 
         return order_id
 
@@ -766,14 +762,13 @@ class AdvancedOrderManager:
                     elif price >= order.take_profit_price:
                         triggered = True
                         fill_type = FillType.TAKE_PROFIT
-                else:
-                    # Short position: SL above entry, TP below entry
-                    if price >= order.stop_loss_price:
-                        triggered = True
-                        fill_type = FillType.STOP_LOSS
-                    elif price <= order.take_profit_price:
-                        triggered = True
-                        fill_type = FillType.TAKE_PROFIT
+                # Short position: SL above entry, TP below entry
+                elif price >= order.stop_loss_price:
+                    triggered = True
+                    fill_type = FillType.STOP_LOSS
+                elif price <= order.take_profit_price:
+                    triggered = True
+                    fill_type = FillType.TAKE_PROFIT
 
                 if triggered and fill_type:
                     await self._execute_oco_fill(order, price, fill_type)
@@ -798,11 +793,10 @@ class AdvancedOrderManager:
                             order.activated = True
                             order.highest_price = price
                             order.current_stop_price = price - (order.trail_distance_pips * 0.01)
-                    else:
-                        if price <= order.activation_price:
-                            order.activated = True
-                            order.lowest_price = price
-                            order.current_stop_price = price + (order.trail_distance_pips * 0.01)
+                    elif price <= order.activation_price:
+                        order.activated = True
+                        order.lowest_price = price
+                        order.current_stop_price = price + (order.trail_distance_pips * 0.01)
                     continue
 
                 if not order.activated:
@@ -852,9 +846,8 @@ class AdvancedOrderManager:
                     if order.side.upper() in ("BUY", "LONG"):
                         if price >= order.stop_price:
                             triggered = True
-                    else:
-                        if price <= order.stop_price:
-                            triggered = True
+                    elif price <= order.stop_price:
+                        triggered = True
 
                     if triggered:
                         order.triggered = True
@@ -863,9 +856,7 @@ class AdvancedOrderManager:
 
     # ── Execution ─────────────────────────────────────────────────────────────
 
-    async def _execute_oco_fill(
-        self, order: OCOOrder, price: float, fill_type: FillType
-    ) -> None:
+    async def _execute_oco_fill(self, order: OCOOrder, price: float, fill_type: FillType) -> None:
         """Execute an OCO fill — close position and publish event."""
         order.state = AdvancedOrderState.FILLED
         order.fill_type = fill_type
@@ -873,11 +864,7 @@ class AdvancedOrderManager:
         order.filled_at = datetime.now(UTC)
 
         # Calculate slippage
-        target_price = (
-            order.stop_loss_price
-            if fill_type == FillType.STOP_LOSS
-            else order.take_profit_price
-        )
+        target_price = order.stop_loss_price if fill_type == FillType.STOP_LOSS else order.take_profit_price
         order.slippage = abs(price - target_price)
 
         # Execute market close via broker
@@ -894,7 +881,8 @@ class AdvancedOrderManager:
                     if attempt == _MAX_RETRIES - 1:
                         logger.error(
                             "OCO fill execution failed after %d retries: %s",
-                            _MAX_RETRIES, exc,
+                            _MAX_RETRIES,
+                            exc,
                         )
                         order.state = AdvancedOrderState.FAILED
                         return
@@ -908,12 +896,13 @@ class AdvancedOrderManager:
 
         logger.info(
             "OCO filled: order_id=%s type=%s price=%.5f slippage=%.5f",
-            order.order_id, fill_type.value, price, order.slippage,
+            order.order_id,
+            fill_type.value,
+            price,
+            order.slippage,
         )
 
-    async def _execute_trailing_fill(
-        self, order: TrailingStopOrder, price: float
-    ) -> None:
+    async def _execute_trailing_fill(self, order: TrailingStopOrder, price: float) -> None:
         """Execute a trailing stop fill."""
         order.state = AdvancedOrderState.FILLED
         order.fill_price = price
@@ -933,7 +922,8 @@ class AdvancedOrderManager:
                     if attempt == _MAX_RETRIES - 1:
                         logger.error(
                             "Trailing stop execution failed after %d retries: %s",
-                            _MAX_RETRIES, exc,
+                            _MAX_RETRIES,
+                            exc,
                         )
                         order.state = AdvancedOrderState.FAILED
                         return
@@ -947,17 +937,15 @@ class AdvancedOrderManager:
 
         logger.info(
             "Trailing stop filled: order_id=%s price=%.5f stop_price=%.5f",
-            order.order_id, price, order.current_stop_price,
+            order.order_id,
+            price,
+            order.current_stop_price,
         )
 
     async def _execute_stop_limit(self, order: StopLimitOrder, price: float) -> None:
         """Execute a stop-limit order (place limit order at broker)."""
         # Check if current price is within limit
-        can_fill = False
-        if order.side.upper() in ("BUY", "LONG"):
-            can_fill = price <= order.limit_price
-        else:
-            can_fill = price >= order.limit_price
+        can_fill = price <= order.limit_price if order.side.upper() in ("BUY", "LONG") else price >= order.limit_price
 
         if can_fill and self._adapter:
             for attempt in range(_MAX_RETRIES):
@@ -976,7 +964,8 @@ class AdvancedOrderManager:
                     if attempt == _MAX_RETRIES - 1:
                         logger.error(
                             "Stop-limit execution failed after %d retries: %s",
-                            _MAX_RETRIES, exc,
+                            _MAX_RETRIES,
+                            exc,
                         )
                         order.state = AdvancedOrderState.FAILED
                     await asyncio.sleep(_RETRY_DELAY_S)
@@ -984,7 +973,8 @@ class AdvancedOrderManager:
             # Price moved past limit — order cannot be filled at desired price
             logger.warning(
                 "Stop-limit triggered but price %.5f past limit %.5f — waiting",
-                price, order.limit_price,
+                price,
+                order.limit_price,
             )
 
     # ── Event Publishing ──────────────────────────────────────────────────────
@@ -996,6 +986,7 @@ class AdvancedOrderManager:
 
         try:
             from core.event_bus import CH_ORDER
+
             event = {
                 "type": "advanced_order_fill",
                 "order_id": order.order_id,
@@ -1032,19 +1023,16 @@ class AdvancedOrderManager:
         orders: list[dict[str, Any]] = []
 
         for o in self._oco_orders.values():
-            if o.state == AdvancedOrderState.ACTIVE:
-                if position_id is None or o.position_id == position_id:
-                    orders.append(o.to_dict())
+            if o.state == AdvancedOrderState.ACTIVE and (position_id is None or o.position_id == position_id):
+                orders.append(o.to_dict())
 
         for o in self._trailing_orders.values():
-            if o.state == AdvancedOrderState.ACTIVE:
-                if position_id is None or o.position_id == position_id:
-                    orders.append(o.to_dict())
+            if o.state == AdvancedOrderState.ACTIVE and (position_id is None or o.position_id == position_id):
+                orders.append(o.to_dict())
 
         for o in self._stop_limit_orders.values():
-            if o.state == AdvancedOrderState.ACTIVE:
-                if position_id is None or o.position_id == position_id:
-                    orders.append(o.to_dict())
+            if o.state == AdvancedOrderState.ACTIVE and (position_id is None or o.position_id == position_id):
+                orders.append(o.to_dict())
 
         return orders
 
@@ -1052,31 +1040,16 @@ class AdvancedOrderManager:
         """Return manager health metrics."""
         return {
             "running": self._running,
-            "active_oco": sum(
-                1 for o in self._oco_orders.values()
-                if o.state == AdvancedOrderState.ACTIVE
-            ),
-            "active_trailing": sum(
-                1 for o in self._trailing_orders.values()
-                if o.state == AdvancedOrderState.ACTIVE
-            ),
+            "active_oco": sum(1 for o in self._oco_orders.values() if o.state == AdvancedOrderState.ACTIVE),
+            "active_trailing": sum(1 for o in self._trailing_orders.values() if o.state == AdvancedOrderState.ACTIVE),
             "active_stop_limit": sum(
-                1 for o in self._stop_limit_orders.values()
-                if o.state == AdvancedOrderState.ACTIVE
+                1 for o in self._stop_limit_orders.values() if o.state == AdvancedOrderState.ACTIVE
             ),
-            "total_orders": (
-                len(self._oco_orders)
-                + len(self._trailing_orders)
-                + len(self._stop_limit_orders)
-            ),
+            "total_orders": (len(self._oco_orders) + len(self._trailing_orders) + len(self._stop_limit_orders)),
             "tracked_symbols": list(self._latest_prices.keys()),
             "native_oco": self._adapter.supports_native_oco if self._adapter else False,
-            "native_trailing": (
-                self._adapter.supports_native_trailing_stop if self._adapter else False
-            ),
-            "native_stop_limit": (
-                self._adapter.supports_native_stop_limit if self._adapter else False
-            ),
+            "native_trailing": (self._adapter.supports_native_trailing_stop if self._adapter else False),
+            "native_stop_limit": (self._adapter.supports_native_stop_limit if self._adapter else False),
         }
 
 

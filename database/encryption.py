@@ -57,8 +57,8 @@ except ImportError:
     _SQLA_AVAILABLE = False
 
 # ── Key bootstrap ──────────────────────────────────────────────────────────────
-_NONCE_BYTES = 12   # 96 bits — standard for AES-GCM
-_TAG_BYTES   = 16   # 128-bit authentication tag (GCM default)
+_NONCE_BYTES = 12  # 96 bits — standard for AES-GCM
+_TAG_BYTES = 16  # 128-bit authentication tag (GCM default)
 _AES_KEY_BYTES = 32  # AES-256: 256 bits = 32 bytes
 
 
@@ -76,8 +76,7 @@ def _load_key() -> bytes | None:
         key = base64.urlsafe_b64decode(raw + "==")  # pad to multiple of 4
         if len(key) != _AES_KEY_BYTES:
             logger.error(
-                "DB_ENCRYPTION_KEY decoded to %d bytes; must be exactly %d. "
-                "Field-level encryption disabled.",
+                "DB_ENCRYPTION_KEY decoded to %d bytes; must be exactly %d. Field-level encryption disabled.",
                 len(key),
                 _AES_KEY_BYTES,
             )
@@ -132,6 +131,7 @@ if _SQLA_AVAILABLE:
                 return value
 
             import os
+
             nonce = os.urandom(_NONCE_BYTES)
             ciphertext_and_tag = cipher.encrypt(nonce, value.encode(), None)
             blob = nonce + ciphertext_and_tag  # nonce ‖ ciphertext ‖ tag
@@ -154,8 +154,8 @@ if _SQLA_AVAILABLE:
                     # Value is shorter than minimum encrypted form — treat as
                     # legacy plaintext stored before encryption was enabled.
                     logger.debug(
-                        "EncryptedString: value too short to be encrypted "
-                        "(%d bytes); returning as plaintext.", len(blob),
+                        "EncryptedString: value too short to be encrypted (%d bytes); returning as plaintext.",
+                        len(blob),
                     )
                     return value
                 nonce = blob[:_NONCE_BYTES]

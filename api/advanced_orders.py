@@ -17,11 +17,11 @@ Endpoints:
     GET    /api/orders/advanced/{order_id}     — Get order details
     GET    /api/orders/advanced/health         — Manager health metrics
 """
+
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -40,6 +40,7 @@ router = APIRouter(
 
 class OCORequest(BaseModel):
     """Request body for submitting an OCO order."""
+
     position_id: str = Field(..., description="Position ID to protect")
     symbol: str = Field(default="XAU_USD", description="Trading symbol")
     side: str = Field(..., description="Closing side (BUY or SELL)")
@@ -50,27 +51,25 @@ class OCORequest(BaseModel):
 
 class TrailingStopRequest(BaseModel):
     """Request body for submitting a trailing stop order."""
+
     position_id: str = Field(..., description="Position ID to protect")
     symbol: str = Field(default="XAU_USD", description="Trading symbol")
     side: str = Field(..., description="Closing side (BUY or SELL)")
     quantity: float = Field(..., gt=0, description="Order quantity in lots")
     trail_distance_pips: float = Field(..., gt=0, description="Trail distance in pips")
-    activation_price: float | None = Field(
-        default=None, description="Price at which trailing begins (optional)"
-    )
+    activation_price: float | None = Field(default=None, description="Price at which trailing begins (optional)")
 
 
 class StopLimitRequest(BaseModel):
     """Request body for submitting a stop-limit order."""
+
     position_id: str = Field(..., description="Position ID")
     symbol: str = Field(default="XAU_USD", description="Trading symbol")
     side: str = Field(..., description="Order side (BUY or SELL)")
     quantity: float = Field(..., gt=0, description="Order quantity in lots")
     stop_price: float = Field(..., gt=0, description="Stop trigger price")
     limit_price: float = Field(..., gt=0, description="Limit price once triggered")
-    expires_at: str | None = Field(
-        default=None, description="Expiration time (ISO 8601)"
-    )
+    expires_at: str | None = Field(default=None, description="Expiration time (ISO 8601)")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -155,9 +154,7 @@ async def submit_stop_limit(request: StopLimitRequest):
         try:
             expires = datetime.fromisoformat(request.expires_at)
         except ValueError as exc:
-            raise HTTPException(
-                status_code=422, detail=f"Invalid expires_at format: {exc}"
-            ) from exc
+            raise HTTPException(status_code=422, detail=f"Invalid expires_at format: {exc}") from exc
 
     try:
         order_id = await manager.submit_stop_limit(

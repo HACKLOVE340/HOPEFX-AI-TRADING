@@ -90,9 +90,7 @@ def _is_legacy_import(node: ast.Import | ast.ImportFrom) -> tuple[bool, str]:
     return False, ""
 
 
-def _is_data_layer_internal(
-    node: ast.Import | ast.ImportFrom, file_path: Path
-) -> tuple[bool, str]:
+def _is_data_layer_internal(node: ast.Import | ast.ImportFrom, file_path: Path) -> tuple[bool, str]:
     """Return (is_violation, reason) for data_layer internal import from outside."""
     # Skip files inside data_layer/ — they can import each other freely
     try:
@@ -126,7 +124,7 @@ def check_file(py_file: Path) -> list[tuple[str, bool]]:
     rel = py_file.relative_to(REPO_ROOT)
 
     for node in ast.walk(tree):
-        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+        if not isinstance(node, ast.Import | ast.ImportFrom):
             continue
 
         is_legacy, reason = _is_legacy_import(node)
@@ -154,10 +152,7 @@ def main() -> int:
         if not pkg_dir.is_dir():
             continue
         for py_file in sorted(pkg_dir.rglob("*.py")):
-            if any(
-                part in py_file.parts
-                for part in (".venv", "venv", "__pycache__", "node_modules")
-            ):
+            if any(part in py_file.parts for part in (".venv", "venv", "__pycache__", "node_modules")):
                 continue
             for msg, is_known in check_file(py_file):
                 if is_known:
@@ -194,13 +189,9 @@ def main() -> int:
         return 1
 
     status = "PASS" if not known_warnings else "PASS (with known warnings)"
-    print(
-        f"[gate-g] {status} — checked {len(GUARDED_PACKAGES)} packages, "
-        "no new legacy imports"
-    )
+    print(f"[gate-g] {status} — checked {len(GUARDED_PACKAGES)} packages, no new legacy imports")
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-

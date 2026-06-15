@@ -9,6 +9,7 @@ Provides: /api/observability/traces, /api/observability/metrics,
            /api/observability/alerts, /api/observability/services
 Connected to: tracing/opentelemetry_setup.py, core/health.py
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,7 @@ def _get_telemetry():
     """Retrieve the telemetry system from app state."""
     try:
         from core.app_state import app_state
+
         return getattr(app_state, "telemetry", None)
     except Exception:
         return None
@@ -82,6 +84,7 @@ async def get_metrics(
     if not metrics:
         # Provide live system metrics as fallback
         import os
+
         try:
             load_avg = os.getloadavg()
         except (AttributeError, OSError):
@@ -113,6 +116,7 @@ async def get_observability_alerts(
     """
     try:
         from core.app_state import app_state
+
         alerts = getattr(app_state, "observability_alerts", [])
     except Exception:
         alerts = []
@@ -133,6 +137,7 @@ async def get_services():
     """
     try:
         from core.app_state import app_state
+
         registry = getattr(app_state, "component_registry", None)
     except Exception:
         registry = None
@@ -142,32 +147,41 @@ async def get_services():
         try:
             components = registry.list_components() if hasattr(registry, "list_components") else []
             for comp in components:
-                services.append({
-                    "name": comp.get("name", "unknown"),
-                    "status": comp.get("status", "unknown"),
-                    "uptime_seconds": comp.get("uptime_seconds", 0),
-                    "last_heartbeat": comp.get("last_heartbeat", ""),
-                    "version": comp.get("version", "1.0.0"),
-                })
+                services.append(
+                    {
+                        "name": comp.get("name", "unknown"),
+                        "status": comp.get("status", "unknown"),
+                        "uptime_seconds": comp.get("uptime_seconds", 0),
+                        "last_heartbeat": comp.get("last_heartbeat", ""),
+                        "version": comp.get("version", "1.0.0"),
+                    }
+                )
         except Exception as e:
             logger.warning(f"Service listing failed: {e}")
 
     # Always include core services
     core_services = [
-        "decision_engine", "risk_manager", "trade_executor",
-        "data_orchestrator", "ml_inference", "news_scorer",
-        "event_bus", "smart_router",
+        "decision_engine",
+        "risk_manager",
+        "trade_executor",
+        "data_orchestrator",
+        "ml_inference",
+        "news_scorer",
+        "event_bus",
+        "smart_router",
     ]
     existing_names = {s["name"] for s in services}
     for svc in core_services:
         if svc not in existing_names:
-            services.append({
-                "name": svc,
-                "status": "active",
-                "uptime_seconds": int(time.time() - getattr(app_state, "_start_time", time.time())),
-                "last_heartbeat": datetime.now(timezone.utc).isoformat(),
-                "version": "1.0.0",
-            })
+            services.append(
+                {
+                    "name": svc,
+                    "status": "active",
+                    "uptime_seconds": int(time.time() - getattr(app_state, "_start_time", time.time())),
+                    "last_heartbeat": datetime.now(timezone.utc).isoformat(),
+                    "version": "1.0.0",
+                }
+            )
 
     return {"services": services}
 

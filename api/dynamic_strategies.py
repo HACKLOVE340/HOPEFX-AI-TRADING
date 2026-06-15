@@ -19,6 +19,7 @@ Endpoints:
     GET    /api/strategies/dynamic/versions      — List all versions
     GET    /api/strategies/dynamic/health        — Registry health metrics
 """
+
 from __future__ import annotations
 
 import logging
@@ -39,6 +40,7 @@ router = APIRouter(
 
 class RegisterStrategyRequest(BaseModel):
     """Request body for registering a new dynamic strategy."""
+
     name: str = Field(..., min_length=1, max_length=100, description="Strategy name")
     source_code: str = Field(..., min_length=10, description="Python source code")
     symbol: str = Field(default="XAU_USD", description="Trading symbol")
@@ -47,16 +49,19 @@ class RegisterStrategyRequest(BaseModel):
 
 class ActivateStrategyRequest(BaseModel):
     """Request body for activating a strategy version."""
+
     version_id: str = Field(..., description="Version ID to activate")
 
 
 class DeactivateStrategyRequest(BaseModel):
     """Request body for deactivating a strategy."""
+
     name: str = Field(..., description="Strategy name to deactivate")
 
 
 class StrategyVersionResponse(BaseModel):
     """Response model for a strategy version."""
+
     version_id: str
     name: str
     source_hash: str
@@ -77,6 +82,7 @@ def _get_current_user():
     """Get the current authenticated user."""
     try:
         from api.auth import get_current_user
+
         return Depends(get_current_user)
     except ImportError:
         return None
@@ -86,6 +92,7 @@ def _require_admin():
     """Require admin role."""
     try:
         from api.auth import require_role
+
         return Depends(require_role("admin"))
     except ImportError:
         return None
@@ -118,8 +125,7 @@ async def register_strategy(request: RegisterStrategyRequest):
         return {
             "status": "success",
             "version_id": version_id,
-            "message": f"Strategy '{request.name}' registered successfully. "
-                       f"Call /activate to make it live.",
+            "message": f"Strategy '{request.name}' registered successfully. Call /activate to make it live.",
         }
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

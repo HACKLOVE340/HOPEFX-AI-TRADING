@@ -8,6 +8,7 @@ No-Code Strategy Builder API — serves the frontend Strategy Builder page.
 Provides: /api/nocode/templates, /api/nocode/deploy, /api/nocode/validate
 Connected to: nocode/builder.py, nocode/state_machine.py, nocode/ml_nodes.py
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,6 +26,7 @@ router = APIRouter(prefix="/api/nocode", tags=["No-Code Builder"])
 
 class DeployRequest(BaseModel):
     """Request body for deploying a no-code strategy template."""
+
     template_id: str = Field(..., description="Template ID to deploy")
     parameters: dict = Field(default_factory=dict, description="Override parameters")
     symbol: str = Field(default="XAU_USD", description="Trading symbol")
@@ -33,6 +35,7 @@ class DeployRequest(BaseModel):
 
 class ValidateRequest(BaseModel):
     """Request body for validating a no-code strategy definition."""
+
     nodes: list[dict] = Field(..., description="List of strategy nodes")
     edges: list[dict] = Field(default_factory=list, description="Node connections")
 
@@ -50,6 +53,7 @@ async def list_templates(
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
         templates = builder.get_templates(category=category)
         return {"templates": templates, "total": len(templates)}
@@ -112,6 +116,7 @@ async def deploy_template(request: DeployRequest):
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder
+
         builder = NoCodeStrategyBuilder()
 
         # Compile template to executable strategy
@@ -124,6 +129,7 @@ async def deploy_template(request: DeployRequest):
 
         # Register in dynamic strategy registry
         from strategies.dynamic_registry import get_dynamic_registry
+
         registry = get_dynamic_registry()
         version_id = await registry.register_strategy(
             name=compiled["name"],
@@ -158,6 +164,7 @@ async def validate_strategy(request: ValidateRequest):
     """
     try:
         from nocode.state_machine import StateMachineEngine
+
         engine = StateMachineEngine()
         result = engine.validate_graph(nodes=request.nodes, edges=request.edges)
         return result
@@ -179,9 +186,19 @@ async def get_node_types():
     node_types = {
         "indicators": [
             {"id": "rsi", "name": "RSI", "params": ["period"], "outputs": ["value"]},
-            {"id": "macd", "name": "MACD", "params": ["fast", "slow", "signal"], "outputs": ["macd", "signal", "histogram"]},
+            {
+                "id": "macd",
+                "name": "MACD",
+                "params": ["fast", "slow", "signal"],
+                "outputs": ["macd", "signal", "histogram"],
+            },
             {"id": "atr", "name": "ATR", "params": ["period"], "outputs": ["value"]},
-            {"id": "bollinger", "name": "Bollinger Bands", "params": ["period", "std_dev"], "outputs": ["upper", "middle", "lower"]},
+            {
+                "id": "bollinger",
+                "name": "Bollinger Bands",
+                "params": ["period", "std_dev"],
+                "outputs": ["upper", "middle", "lower"],
+            },
             {"id": "ema", "name": "EMA", "params": ["period"], "outputs": ["value"]},
             {"id": "sma", "name": "SMA", "params": ["period"], "outputs": ["value"]},
             {"id": "stochastic", "name": "Stochastic", "params": ["k_period", "d_period"], "outputs": ["k", "d"]},
@@ -189,8 +206,19 @@ async def get_node_types():
         ],
         "conditions": [
             {"id": "crossover", "name": "Crossover", "inputs": ["line_a", "line_b"], "outputs": ["signal"]},
-            {"id": "threshold", "name": "Threshold", "inputs": ["value"], "params": ["level", "direction"], "outputs": ["signal"]},
-            {"id": "time_filter", "name": "Time Filter", "params": ["start_hour", "end_hour", "days"], "outputs": ["allowed"]},
+            {
+                "id": "threshold",
+                "name": "Threshold",
+                "inputs": ["value"],
+                "params": ["level", "direction"],
+                "outputs": ["signal"],
+            },
+            {
+                "id": "time_filter",
+                "name": "Time Filter",
+                "params": ["start_hour", "end_hour", "days"],
+                "outputs": ["allowed"],
+            },
             {"id": "spread_filter", "name": "Spread Filter", "params": ["max_spread_pips"], "outputs": ["allowed"]},
         ],
         "actions": [
@@ -200,14 +228,39 @@ async def get_node_types():
             {"id": "trailing_stop", "name": "Trailing Stop", "inputs": ["position"], "params": ["distance_pips"]},
         ],
         "ml_nodes": [
-            {"id": "ml_predict", "name": "ML Prediction", "params": ["model_name", "confidence_threshold"], "outputs": ["prediction", "confidence"]},
-            {"id": "sentiment_score", "name": "Sentiment Score", "params": ["source"], "outputs": ["score", "direction"]},
-            {"id": "anomaly_detect", "name": "Anomaly Detection", "params": ["sensitivity"], "outputs": ["is_anomaly", "score"]},
+            {
+                "id": "ml_predict",
+                "name": "ML Prediction",
+                "params": ["model_name", "confidence_threshold"],
+                "outputs": ["prediction", "confidence"],
+            },
+            {
+                "id": "sentiment_score",
+                "name": "Sentiment Score",
+                "params": ["source"],
+                "outputs": ["score", "direction"],
+            },
+            {
+                "id": "anomaly_detect",
+                "name": "Anomaly Detection",
+                "params": ["sensitivity"],
+                "outputs": ["is_anomaly", "score"],
+            },
         ],
         "risk": [
-            {"id": "position_size", "name": "Position Sizer", "params": ["risk_percent", "method"], "outputs": ["lot_size"]},
+            {
+                "id": "position_size",
+                "name": "Position Sizer",
+                "params": ["risk_percent", "method"],
+                "outputs": ["lot_size"],
+            },
             {"id": "max_drawdown", "name": "Max Drawdown Guard", "params": ["max_dd_percent"], "outputs": ["allowed"]},
-            {"id": "correlation_filter", "name": "Correlation Filter", "params": ["max_correlation"], "outputs": ["allowed"]},
+            {
+                "id": "correlation_filter",
+                "name": "Correlation Filter",
+                "params": ["max_correlation"],
+                "outputs": ["allowed"],
+            },
         ],
     }
     return {"node_types": node_types}

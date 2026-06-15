@@ -47,15 +47,16 @@ Usage
     # Get all secrets for a service
     broker_creds = await secrets.get_group("broker")
 """
+
 from __future__ import annotations
 
 import asyncio
-import hashlib
+import contextlib
 import logging
 import os
 import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -108,6 +109,7 @@ except Exception:
 @dataclass
 class CachedSecret:
     """A cached secret value with TTL."""
+
     key: str
     value: str
     fetched_at: float
@@ -122,6 +124,7 @@ class CachedSecret:
 @dataclass
 class SecretMetadata:
     """Metadata about a secret."""
+
     key: str
     version: str
     created_at: datetime | None = None
@@ -165,9 +168,8 @@ class SecretsProvider(ABC):
     async def list_secrets(self) -> list[str]:
         """List all available secret keys."""
 
-    async def close(self) -> None:
+    async def close(self) -> None:  # noqa: B027 — optional cleanup hook; not all providers need it
         """Close provider connections."""
-        pass
 
 
 # ── HashiCorp Vault Provider ─────────────────────────────────────────────────
@@ -393,6 +395,7 @@ class AWSSecretsProvider(SecretsProvider):
             # AWS returns either SecretString or SecretBinary
             if "SecretString" in response:
                 import json
+
                 try:
                     data = json.loads(response["SecretString"])
                     return data.get("value", response["SecretString"])
@@ -417,6 +420,7 @@ class AWSSecretsProvider(SecretsProvider):
 
         try:
             import json
+
             secret_name = f"{_AWS_PREFIX}{group}"
             response = self._client.get_secret_value(SecretId=secret_name)
 
@@ -435,6 +439,7 @@ class AWSSecretsProvider(SecretsProvider):
 
         try:
             import json
+
             secret_name = f"{_AWS_PREFIX}{key}"
             secret_string = json.dumps({"value": value})
 
@@ -481,13 +486,11 @@ class AWSSecretsProvider(SecretsProvider):
         try:
             secrets = []
             paginator = self._client.get_paginator("list_secrets")
-            for page in paginator.paginate(
-                Filters=[{"Key": "name", "Values": [_AWS_PREFIX]}]
-            ):
+            for page in paginator.paginate(Filters=[{"Key": "name", "Values": [_AWS_PREFIX]}]):
                 for secret in page.get("SecretList", []):
                     name = secret["Name"]
                     if name.startswith(_AWS_PREFIX):
-                        secrets.append(name[len(_AWS_PREFIX):])
+                        secrets.append(name[len(_AWS_PREFIX) :])
             return secrets
         except Exception as exc:
             logger.error("AWS list_secrets failed: %s", exc)
@@ -532,7 +535,7 @@ class EnvironmentProvider(SecretsProvider):
         result = {}
         for key, value in os.environ.items():
             if key.startswith(prefix):
-                short_key = key[len(prefix):].lower()
+                short_key = key[len(prefix) :].lower()
                 result[short_key] = value
         return result
 
@@ -694,10 +697,8 @@ class SecretsManager:
         """Shut down the secrets manager."""
         if self._rotation_task:
             self._rotation_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._rotation_task
-            except asyncio.CancelledError:
-                pass
 
         if self._provider:
             await self._provider.close()
@@ -739,9 +740,7 @@ class SecretsManager:
                 await asyncio.sleep(_ROTATION_CHECK)
 
                 # Refresh expired cache entries
-                expired_keys = [
-                    k for k, v in self._cache.items() if v.is_expired
-                ]
+                expired_keys = [k for k, v in self._cache.items() if v.is_expired]
 
                 for key in expired_keys:
                     try:
@@ -753,7 +752,7 @@ class SecretsManager:
                                 fetched_at=time.time(),
                                 ttl=_CACHE_TTL,
                             )
-                    except Exception:
+                    except Exception:  # noqa: S110 — best-effort cache refresh; failures are non-fatal
                         pass
 
                 if expired_keys:

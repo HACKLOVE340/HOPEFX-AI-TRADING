@@ -8,6 +8,7 @@ News Feed & Sentiment API — serves the frontend News & Sentiment page.
 Provides: /api/news/feed, /api/news/nuclear-score, /api/news/calendar
 Connected to: news/nuclear_wordmap_scorer.py, data_layer/feeds/news/
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +26,11 @@ def _get_news_manager():
     """Retrieve the news feed manager from app state."""
     try:
         from core.app_state import app_state
+
         mgr = getattr(app_state, "news_feed_manager", None)
         if mgr is None:
             from data_layer.feeds.news.base import NewsFeedManager
+
             mgr = NewsFeedManager()
             app_state.news_feed_manager = mgr
         return mgr
@@ -40,9 +43,11 @@ def _get_nuclear_scorer():
     """Retrieve the nuclear wordmap scorer."""
     try:
         from core.app_state import app_state
+
         scorer = getattr(app_state, "nuclear_scorer", None)
         if scorer is None:
             from news.nuclear_wordmap_scorer import NuclearWordmapScorer
+
             scorer = NuclearWordmapScorer()
             app_state.nuclear_scorer = scorer
         return scorer
@@ -74,22 +79,22 @@ async def get_news_feed(
                 nuclear_score = 0
                 if scorer and article.get("title"):
                     with contextlib.suppress(Exception):
-                        nuclear_score = scorer.score_text(
-                            article.get("title", "") + " " + article.get("summary", "")
-                        )
+                        nuclear_score = scorer.score_text(article.get("title", "") + " " + article.get("summary", ""))
 
-                articles.append({
-                    "id": article.get("id", ""),
-                    "title": article.get("title", ""),
-                    "source": article.get("source", ""),
-                    "published_at": article.get("published_at", ""),
-                    "url": article.get("url", ""),
-                    "sentiment": article.get("sentiment", "neutral"),
-                    "impact": article.get("impact", "low"),
-                    "nuclear_score": nuclear_score,
-                    "symbols": article.get("symbols", []),
-                    "summary": article.get("summary", ""),
-                })
+                articles.append(
+                    {
+                        "id": article.get("id", ""),
+                        "title": article.get("title", ""),
+                        "source": article.get("source", ""),
+                        "published_at": article.get("published_at", ""),
+                        "url": article.get("url", ""),
+                        "sentiment": article.get("sentiment", "neutral"),
+                        "impact": article.get("impact", "low"),
+                        "nuclear_score": nuclear_score,
+                        "symbols": article.get("symbols", []),
+                        "summary": article.get("summary", ""),
+                    }
+                )
         except Exception as e:
             logger.error(f"News feed fetch failed: {e}")
 
@@ -153,6 +158,7 @@ async def get_economic_calendar(
     """
     try:
         from core.app_state import app_state
+
         calendar = getattr(app_state, "economic_calendar", None)
         if calendar:
             events = await calendar.get_upcoming(days_ahead=days_ahead)

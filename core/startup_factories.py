@@ -3539,9 +3539,7 @@ async def init_secrets_vault(s: Any) -> Any | None:
         success = await manager.initialize()
         if success:
             s.secrets_vault = manager
-            logger.info(
-                "SecretsManager initialised (provider=%s)", manager.provider_name
-            )
+            logger.info("SecretsManager initialised (provider=%s)", manager.provider_name)
             return manager
         else:
             logger.warning("SecretsManager initialisation returned False")

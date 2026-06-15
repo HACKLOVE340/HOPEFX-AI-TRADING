@@ -23,7 +23,9 @@ os.environ.setdefault("SECURITY_JWT_SECRET", "test-only-jwt-secret-key-minimum-3
 os.environ.setdefault("JWT_SECRET_KEY", "test-only-jwt-secret-key-minimum-32-chars!!")
 
 # Load auth/jwt.py directly to avoid auth/__init__.py pulling in EmailStr
-_spec = importlib.util.spec_from_file_location("auth_jwt", pathlib.Path(__file__).resolve().parents[2] / "auth" / "jwt.py")
+_spec = importlib.util.spec_from_file_location(
+    "auth_jwt", pathlib.Path(__file__).resolve().parents[2] / "auth" / "jwt.py"
+)
 _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 

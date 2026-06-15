@@ -19,6 +19,7 @@ Usage
     from core.roadmap_event_wiring import wire_roadmap_events
     await wire_roadmap_events(app_state)
 """
+
 from __future__ import annotations
 
 import logging

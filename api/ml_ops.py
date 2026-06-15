@@ -16,6 +16,7 @@ Endpoints:
     POST   /api/mlops/shadow/deploy       — Deploy model in shadow mode
     POST   /api/mlops/promote/{version}   — Promote a shadow model
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,11 +34,13 @@ router = APIRouter(
 
 class ManualRetrainRequest(BaseModel):
     """Request body for triggering manual retraining."""
+
     reason: str = Field(default="manual", description="Reason for retraining")
 
 
 class ShadowDeployRequest(BaseModel):
     """Request body for deploying a model in shadow mode."""
+
     version_id: str = Field(..., description="Model version to deploy in shadow")
 
 
@@ -146,9 +149,7 @@ async def promote_model(version_id: str):
             detail="Champion/Challenger system not initialized.",
         )
 
-    promoted = await pipeline._champion_challenger.promote_if_ready(
-        pipeline._shadow, version_id
-    )
+    promoted = await pipeline._champion_challenger.promote_if_ready(pipeline._shadow, version_id)
 
     if promoted:
         return {

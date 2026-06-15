@@ -26,7 +26,7 @@ VERSIONS_DIR = REPO_ROOT / "alembic" / "versions"
 _REVISION_RE = re.compile(r'^revision\s*(?::\s*\S+)?\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
 # Matches: down_revision: str | ... = "abc123" or = None or = ("a", "b")
 _DOWN_RE = re.compile(
-    r'^down_revision\s*(?::\s*\S+(?:\s*\|\s*\S+)*)?\s*=\s*(.+)$',
+    r"^down_revision\s*(?::\s*\S+(?:\s*\|\s*\S+)*)?\s*=\s*(.+)$",
     re.MULTILINE,
 )
 
@@ -124,9 +124,7 @@ def _check_broken_links(migrations: dict[str, set[str] | None]) -> list[str]:
             continue
         for parent in parents:
             if parent not in migrations:
-                failures.append(
-                    f"Revision {rev_id!r} references unknown parent {parent!r}"
-                )
+                failures.append(f"Revision {rev_id!r} references unknown parent {parent!r}")
     return failures
 
 
@@ -137,10 +135,7 @@ def _check_single_root(migrations: dict[str, set[str] | None]) -> tuple[list[str
     if len(roots) == 0:
         failures.append("No root migration found (every revision has a down_revision).")
     elif len(roots) > 1:
-        failures.append(
-            f"Multiple root migrations found (expected 1, got {len(roots)}): "
-            + ", ".join(sorted(roots))
-        )
+        failures.append(f"Multiple root migrations found (expected 1, got {len(roots)}): " + ", ".join(sorted(roots)))
     return failures, roots
 
 
@@ -198,10 +193,7 @@ def _check_reachability(
 
     unreachable = set(migrations) - reachable
     if unreachable:
-        return [
-            f"{len(unreachable)} migration(s) unreachable from root: "
-            + ", ".join(sorted(unreachable))
-        ]
+        return [f"{len(unreachable)} migration(s) unreachable from root: " + ", ".join(sorted(unreachable))]
     return []
 
 

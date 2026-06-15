@@ -40,7 +40,6 @@ DISABLED     Feature has been intentionally turned off or removed from the activ
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 from datetime import timezone

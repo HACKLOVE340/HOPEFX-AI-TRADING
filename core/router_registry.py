@@ -728,6 +728,7 @@ def register_routers(
     # ── Dynamic Strategy Registry (/api/strategies/dynamic) ───────────────────
     try:
         from api.dynamic_strategies import router as dynamic_strategies_router
+
         _include_router_deduped(app, dynamic_strategies_router)
         logger.info("Dynamic Strategy Registry router registered (/api/strategies/dynamic)")
     except Exception as _dsr_err:
@@ -736,6 +737,7 @@ def register_routers(
     # ── Advanced Orders (/api/orders/advanced) ────────────────────────────────
     try:
         from api.advanced_orders import router as advanced_orders_router
+
         _include_router_deduped(app, advanced_orders_router)
         logger.info("Advanced Orders router registered (/api/orders/advanced)")
     except Exception as _ao_err:
@@ -744,6 +746,7 @@ def register_routers(
     # ── ML Ops Continuous Learning (/api/ml-ops) ──────────────────────────────
     try:
         from api.ml_ops import router as ml_ops_router
+
         _include_router_deduped(app, ml_ops_router)
         logger.info("ML Ops router registered (/api/ml-ops)")
     except Exception as _mlops_err:
@@ -752,6 +755,7 @@ def register_routers(
     # ── Transparency Router (/api/transparency) ──────────────────────────────────
     try:
         from api.transparency import router as transparency_router
+
         _include_router_deduped(app, transparency_router)
         logger.info("Transparency router registered (/api/transparency)")
     except Exception as _trans_err:
@@ -761,6 +765,7 @@ def register_routers(
     try:
         from api.news_feed import router as news_feed_router
         from api.news_feed import sentiment_router
+
         _include_router_deduped(app, news_feed_router)
         _include_router_deduped(app, sentiment_router)
         logger.info("News Feed & Sentiment routers registered (/api/news, /api/sentiment)")
@@ -770,6 +775,7 @@ def register_routers(
     # ── Observability Router (/api/observability) ─────────────────────────────────
     try:
         from api.observability import router as observability_router
+
         _include_router_deduped(app, observability_router)
         logger.info("Observability router registered (/api/observability)")
     except Exception as _obs_err:
@@ -778,6 +784,7 @@ def register_routers(
     # ── Copy Trading Router (/api/copy-trading) ──────────────────────────────────
     try:
         from api.copy_trading import router as copy_trading_router
+
         _include_router_deduped(app, copy_trading_router)
         logger.info("Copy Trading router registered (/api/copy-trading)")
     except Exception as _copy_err:
@@ -786,6 +793,7 @@ def register_routers(
     # ── No-Code Builder Router (/api/nocode) ─────────────────────────────────────
     try:
         from api.nocode import router as nocode_router
+
         _include_router_deduped(app, nocode_router)
         logger.info("No-Code Builder router registered (/api/nocode)")
     except Exception as _nocode_err:

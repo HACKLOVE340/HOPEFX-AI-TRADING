@@ -181,8 +181,7 @@ class SmartOrderRouter:
                 te,
             )
             raise RuntimeError(
-                f"Order outcome unknown: {primary_broker} timed out — not re-routed "
-                "to avoid a duplicate fill"
+                f"Order outcome unknown: {primary_broker} timed out — not re-routed to avoid a duplicate fill"
             ) from te
 
         except Exception as e:
