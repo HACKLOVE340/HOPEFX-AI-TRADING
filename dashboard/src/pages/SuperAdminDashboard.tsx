@@ -399,12 +399,6 @@ export default function SuperAdminDashboard() {
             badge="live"
             badgeColor="bg-green-500/20 text-green-400 border-green-500/30"
           />
-          <QuickLink
-            icon={Users}
-            label="Copy Trading"
-            description="Master traders, copy subscriptions, risk management, performance"
-            href="/copy-trading"
-          />
         </div>
       </div>
 

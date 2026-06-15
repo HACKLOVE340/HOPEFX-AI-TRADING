@@ -6,7 +6,6 @@ import { Layout } from './components/Layout'
 import { Dashboard }        from './pages/Dashboard'
 import { Trading }          from './pages/Trading'
 import Positioning          from './pages/Positioning'
-import { CopyTrading }      from './pages/CopyTrading'
 import { Leaderboard }      from './pages/Leaderboard'
 import { Wallet }           from './pages/Wallet'
 import { Settings }         from './pages/Settings'
@@ -40,11 +39,6 @@ import CustomIndicators     from './pages/CustomIndicators'
 import WhitelabelAdmin      from './pages/WhitelabelAdmin'
 import SuperAdminDashboard  from './pages/SuperAdminDashboard'
 import ReliabilityDashboard from './pages/ReliabilityDashboard'
-
-// ── New roadmap pages ─────────────────────────────────────────────────────────
-import { NotificationsCenter } from './pages/NotificationsCenter'
-import { Billing }             from './pages/Billing'
-import { CommunityChat }       from './pages/CommunityChat'
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 import AuthGuard from './components/AuthGuard'
@@ -98,7 +92,6 @@ function App() {
         <Route path="/trading"      element={<AuthGuard><Layout><ErrorBoundary label="Trading"><Trading /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/positions"    element={<AuthGuard><Layout><ErrorBoundary label="Positions"><Positioning /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/prop-firm"    element={<AuthGuard><Layout><ErrorBoundary label="Prop Firm"><PropFirmTracker /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/copy-trading" element={<AuthGuard><Layout><ErrorBoundary label="Copy Trading"><CopyTrading /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/wallet"       element={<AuthGuard><Layout><ErrorBoundary label="Wallet"><Wallet /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/performance"  element={<AuthGuard><Layout><ErrorBoundary label="Performance"><Performance /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/pnl"          element={<AuthGuard><Layout><ErrorBoundary label="P&L Dashboard"><PnLDashboard /></ErrorBoundary></Layout></AuthGuard>} />
@@ -120,10 +113,6 @@ function App() {
         <Route path="/ab-testing"   element={<AuthGuard><Layout><ErrorBoundary label="A/B Testing"><ABTesting /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/correlation"  element={<AuthGuard><Layout><ErrorBoundary label="Correlation"><CorrelationDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/indicators"   element={<AuthGuard><Layout><ErrorBoundary label="Indicators"><CustomIndicators /></ErrorBoundary></Layout></AuthGuard>} />
-        {/* ── New roadmap pages ──────────────────────────────────────── */}
-        <Route path="/notifications"    element={<AuthGuard><Layout><ErrorBoundary label="Notifications"><NotificationsCenter /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/billing"          element={<AuthGuard><Layout><ErrorBoundary label="Billing"><Billing /></ErrorBoundary></Layout></AuthGuard>} />
-        <Route path="/chat"             element={<AuthGuard><Layout><ErrorBoundary label="Community Chat"><CommunityChat /></ErrorBoundary></Layout></AuthGuard>} />
         {/* Superadmin-only routes */}
         <Route path="/superadmin"   element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="SuperAdmin"><SuperAdminDashboard /></ErrorBoundary></Layout></AuthGuard>} />
         <Route path="/superadmin/reliability" element={<AuthGuard requiredRole="superadmin"><Layout><ErrorBoundary label="Reliability"><ReliabilityDashboard /></ErrorBoundary></Layout></AuthGuard>} />
