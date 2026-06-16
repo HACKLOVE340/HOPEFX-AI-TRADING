@@ -84,6 +84,28 @@ def _check_kill_switch() -> None:
         )
 
 
+def _check_trading_paused() -> None:
+    """Raise HTTP 503 when an administrator has paused trading (soft halt).
+
+    Pause state is set by the superadmin /engine/pause endpoint via the shared
+    config store. This is a softer, easily-reversible halt distinct from the
+    kill switch — but it must still block new order placement, which it did
+    not before (the engine_status flag was never read on the order path).
+    """
+    try:
+        from core.config_store import config_store
+
+        if config_store is not None and str(config_store.get("engine_paused", "0")) == "1":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Trading is paused by an administrator.",
+            )
+    except HTTPException:
+        raise
+    except Exception:  # nosec B110 — config store unavailable; do not hard-block on a read error
+        logger.debug("Engine pause check skipped — config store unavailable")
+
+
 # ---------------------------------------------------------------------------
 # Live deployment gates
 #
@@ -907,6 +929,7 @@ async def place_order(
     """
     _check_subscription_gate(user.sub, user.role)
     _check_kill_switch()  # hard block — must be first
+    _check_trading_paused()  # soft halt set by superadmin /engine/pause
     _check_live_deployment_gates()  # Sharpe gate + CI model guard
     # Rate limit enforced via Depends(_order_rate_limit_dep) above.
     await _validate_order(order)

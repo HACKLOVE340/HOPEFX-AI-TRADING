@@ -755,17 +755,42 @@ async def toggle_kill_switch(body: KillSwitchBody, user: TokenPayload = Depends(
     cs = _get_config_store()
     if cs:
         cs.set("kill_switch_active", "1" if body.enabled else "0")
+    deactivate_ok = True
     try:
-        from kill_switch import KillSwitch
+        # Use the GLOBAL kill switch singleton — the same instance the order
+        # path enforces via _check_kill_switch(). A fresh KillSwitch() would not
+        # share in-memory state and (on disable) could not be reliably cleared.
+        import os as _os
 
-        ks = KillSwitch()
+        from app import kill_switch as _ks
+
         if body.enabled:
-            ks.activate("Superadmin kill switch")
+            _ks.activate("Superadmin kill switch")
         else:
-            ks.deactivate()
+            try:
+                _ks.deactivate(token=_os.getenv("HOPEFX_KILL_SWITCH_TOKEN") or None)
+            except PermissionError as _pe:
+                deactivate_ok = False
+                logger.warning("Superadmin kill switch deactivation refused: %s", _pe)
+            # Clear the on-disk flag/state so the 2s background poll cannot
+            # immediately re-activate after a successful deactivation.
+            if deactivate_ok:
+                for _attr in ("_flag_file", "_state_file"):
+                    _p = getattr(_ks, _attr, None)
+                    if _p is not None:
+                        try:
+                            _p.unlink(missing_ok=True)
+                        except OSError as _oe:
+                            logger.debug("could not remove %s: %s", _p, _oe)
     except Exception as exc:
-        logger.debug("kill_switch module: %s", exc)
+        logger.warning("Superadmin kill switch toggle error: %s", exc)
     _log_superadmin_action(user, "kill_switch", str(body.enabled))
+    if not body.enabled and not deactivate_ok:
+        return {
+            "ok": False,
+            "kill_switch_active": True,
+            "error": "Kill switch deactivation refused — set HOPEFX_KILL_SWITCH_TOKEN to enable disabling.",
+        }
     return {"ok": True, "kill_switch_active": body.enabled}
 
 
@@ -774,6 +799,10 @@ async def pause_trading(body: PauseBody, user: TokenPayload = Depends(_require_s
     cfg = _load_engine_config()
     cfg["engine_status"] = "paused"
     _save_engine_config(cfg)
+    # Set the shared pause flag the order path now enforces (_check_trading_paused).
+    cs = _get_config_store()
+    if cs:
+        cs.set("engine_paused", "1")
     _log_superadmin_action(user, "pause_trading", body.reason)
     return {"ok": True, "engine_status": "paused"}
 
@@ -783,6 +812,9 @@ async def resume_trading(user: TokenPayload = Depends(_require_superadmin)) -> d
     cfg = _load_engine_config()
     cfg["engine_status"] = "running"
     _save_engine_config(cfg)
+    cs = _get_config_store()
+    if cs:
+        cs.set("engine_paused", "0")
     _log_superadmin_action(user, "resume_trading")
     return {"ok": True, "engine_status": "running"}
 
