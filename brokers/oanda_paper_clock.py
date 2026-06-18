@@ -89,6 +89,7 @@ class OandaPaperClock:
         self,
         account_id: str = "",
         environment: str = "practice",
+        broker: str = "oanda",
     ) -> bool:
         """
         Start the clock on first real OANDA connection.
@@ -147,11 +148,12 @@ class OandaPaperClock:
         stamp = {
             "started_utc": started_utc_str,
             "target_days": _TARGET_DAYS,
+            "broker": broker,
             "account_id": masked,
             "environment": environment,
             "live_gate_opens": live_gate_opens,
             "note": (
-                f"OANDA paper trading clock running since {started_dt.date()}. "
+                f"{broker} paper trading clock running since {started_dt.date()}. "
                 f"Live trading gate opens after {_TARGET_DAYS} days "
                 f"({live_gate_opens[:10]})."
             ),

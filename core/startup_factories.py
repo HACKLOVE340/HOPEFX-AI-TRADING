@@ -959,6 +959,7 @@ async def init_broker(s: Any) -> Any:
         mt5_broker = await _try_connect_mt5(log_activity)
         if mt5_broker is not None:
             await _publish_broker_status(broker_type="mt5", connected=True)
+            _start_paper_trading_clock("mt5", practice=True)
             return mt5_broker
         logger.error(
             "[BROKER] MT5 connection failed (check MT5_SERVER / MT5_LOGIN / MT5_PASSWORD). "
@@ -996,6 +997,7 @@ async def init_broker(s: Any) -> Any:
 
     broker = await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
     await _publish_broker_status(broker_type="paper", connected=True)
+    _start_paper_trading_clock("paper", practice=True)
     return broker
 
 
@@ -1109,11 +1111,14 @@ async def _try_connect_oanda(
         return None
 
 
-def _start_oanda_paper_clock(account_id: str, practice: bool) -> None:
+def _start_paper_trading_clock(broker_type: str, account_id: str = "", practice: bool = True) -> None:
     """
-    Start the 30-day OANDA paper trading clock via OandaPaperClock.
+    Start the 30-day paper-trading clock for the ACTIVE broker (any type).
 
-    Falls back to the legacy JSON stamp when the clock module is unavailable.
+    The live-trading gate requires a completed 30-day paper run before live
+    trading is allowed — and that requirement applies to EVERY broker, not just
+    OANDA. Called whenever a broker connects in practice/paper mode so the gate
+    is broker-agnostic. Falls back to the legacy JSON stamp on error.
     """
     try:
         from brokers.oanda_paper_clock import get_clock
@@ -1121,10 +1126,16 @@ def _start_oanda_paper_clock(account_id: str, practice: bool) -> None:
         get_clock().maybe_start(
             account_id=account_id,
             environment="practice" if practice else "live",
+            broker=broker_type,
         )
     except Exception as exc:
-        logger.warning("OandaPaperClock.maybe_start failed (non-fatal): %s", exc)
+        logger.warning("Paper-trading clock start failed (non-fatal): %s", exc)
         _stamp_oanda_paper_start(account_id, practice)
+
+
+def _start_oanda_paper_clock(account_id: str, practice: bool) -> None:
+    """Backward-compatible alias — OANDA path delegates to the generic clock."""
+    _start_paper_trading_clock("oanda", account_id, practice)
 
 
 async def _connect_paper_broker(
