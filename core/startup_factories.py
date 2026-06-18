@@ -995,6 +995,26 @@ async def init_broker(s: Any) -> Any:
             )
         log_activity("OANDA broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)")
 
+    # Factory-registered connectors (alpaca, binance, bybit, ccxt, ibkr, cme, …).
+    # They implement BrokerConnector and gain place_market_order via the base
+    # adapter, so the order router drives them uniformly.
+    if broker_type not in ("paper", "mt5", "oanda"):
+        factory_broker = await _try_connect_factory_broker(broker_type, log_activity)
+        if factory_broker is not None:
+            await _publish_broker_status(broker_type=broker_type, connected=True)
+            _start_paper_trading_clock(broker_type, practice=True)
+            return factory_broker
+        logger.error(
+            "[BROKER] '%s' connection failed. Set FALLBACK_TO_PAPER=true to allow paper fallback.",
+            broker_type,
+        )
+        if os.getenv("FALLBACK_TO_PAPER", "false").lower() not in ("1", "true", "yes"):
+            raise RuntimeError(
+                f"Configured broker '{broker_type}' is unavailable and FALLBACK_TO_PAPER is not set. "
+                "Fix broker credentials/SDK or set FALLBACK_TO_PAPER=true to start in paper mode."
+            )
+        log_activity(f"{broker_type} broker unavailable — falling back to paper trading (FALLBACK_TO_PAPER=true)")
+
     broker = await _connect_paper_broker(s, broker_type, oanda_token, oanda_account, log_activity)
     await _publish_broker_status(broker_type="paper", connected=True)
     _start_paper_trading_clock("paper", practice=True)
@@ -1108,6 +1128,56 @@ async def _try_connect_oanda(
 
     except Exception as exc:
         logger.warning("OANDA broker init failed (%s) — falling back to paper broker.", exc)
+        return None
+
+
+# Maps a broker type to the env vars its BrokerConnector config expects.
+_BROKER_ENV_CONFIG: dict[str, dict[str, str]] = {
+    "alpaca": {"api_key": "ALPACA_API_KEY", "api_secret": "ALPACA_API_SECRET", "paper": "ALPACA_PAPER"},
+    "binance": {"api_key": "BINANCE_API_KEY", "api_secret": "BINANCE_API_SECRET", "testnet": "BINANCE_TESTNET"},
+    "bybit": {"api_key": "BYBIT_API_KEY", "api_secret": "BYBIT_API_SECRET", "testnet": "BYBIT_TESTNET"},
+    "ccxt": {"exchange": "CCXT_EXCHANGE", "api_key": "CCXT_API_KEY", "api_secret": "CCXT_API_SECRET"},
+    "ibkr": {"host": "IBKR_HOST", "port": "IBKR_PORT", "client_id": "IBKR_CLIENT_ID", "account": "IBKR_ACCOUNT"},
+    "cme": {"host": "IBKR_HOST", "port": "IBKR_PORT", "client_id": "IBKR_CLIENT_ID", "account": "IBKR_ACCOUNT"},
+}
+_BROKER_BOOL_KEYS = frozenset({"paper", "testnet"})
+
+
+def _broker_config_from_env(broker_type: str) -> dict[str, Any]:
+    """Build a BrokerConnector config dict from conventional env vars."""
+    cfg: dict[str, Any] = {}
+    for cfg_key, env_var in _BROKER_ENV_CONFIG.get(broker_type, {}).items():
+        val = os.getenv(env_var)
+        if val is None:
+            continue
+        cfg[cfg_key] = val.lower() in ("1", "true", "yes") if cfg_key in _BROKER_BOOL_KEYS else val
+    return cfg
+
+
+async def _try_connect_factory_broker(broker_type: str, log_activity: Any) -> Any:
+    """Instantiate + connect a BrokerFactory-registered connector (alpaca, binance,
+    bybit, ccxt, ibkr, cme, …). Returns the connected broker or None on failure.
+
+    These connectors implement BrokerConnector and inherit place_market_order
+    from the base adapter, so the live order router drives them uniformly.
+    """
+    try:
+        from brokers.factory import BrokerFactory
+
+        broker = BrokerFactory.create_broker(broker_type, config=_broker_config_from_env(broker_type))
+        if broker is None:
+            logger.warning("[BROKER] factory has no connector registered for '%s'", broker_type)
+            return None
+        connect = broker.connect()
+        ok = await connect if asyncio.iscoroutine(connect) else connect
+        if not ok:
+            logger.warning("[BROKER] %s.connect() returned False (check credentials / SDK)", broker_type)
+            return None
+        log_activity(f"{broker_type} broker connected via BrokerFactory")
+        logger.info("[BROKER] %s connected via BrokerFactory", broker_type)
+        return broker
+    except Exception as exc:
+        logger.warning("[BROKER] factory connect failed for %s: %s", broker_type, exc)
         return None
 
 

@@ -292,6 +292,56 @@ class AccountInfo:
         return getattr(self, key, default)
 
 
+@dataclass
+class MarketOrderResult:
+    """Normalised market-order fill result.
+
+    Returned by ``BrokerConnector.place_market_order`` so the live order router
+    can read ``order_id`` / ``average_fill_price`` / ``filled_quantity`` /
+    ``status`` uniformly regardless of each broker's native ``Order`` shape
+    (some expose ``id`` + ``average_price``, others ``order_id`` +
+    ``average_fill_price``).
+    """
+
+    order_id: str
+    average_fill_price: float
+    filled_quantity: float
+    status: str
+    pnl: float = 0.0
+    commission: float = 0.0
+    slippage: float = 0.0
+    raw: Any = None
+
+    @property
+    def fill_price(self) -> float:
+        """Alias used by some call sites."""
+        return self.average_fill_price
+
+    @classmethod
+    def from_order(cls, order: Any) -> "MarketOrderResult":
+        """Build from any broker Order/result by probing common field names."""
+
+        def _g(*names: str, default: Any = None) -> Any:
+            for n in names:
+                v = getattr(order, n, None)
+                if v is not None:
+                    return v
+            return default
+
+        status = _g("status", default="")
+        status_str = getattr(status, "value", status)
+        return cls(
+            order_id=str(_g("order_id", "id", default="") or ""),
+            average_fill_price=float(_g("average_fill_price", "average_price", "price", default=0.0) or 0.0),
+            filled_quantity=float(_g("filled_quantity", "quantity", default=0.0) or 0.0),
+            status=str(status_str or ""),
+            pnl=float(_g("pnl", "realized_pnl", default=0.0) or 0.0),
+            commission=float(_g("commission", default=0.0) or 0.0),
+            slippage=float(_g("slippage", default=0.0) or 0.0),
+            raw=order,
+        )
+
+
 class BrokerConnector(ABC):
     """
     Abstract base class for all broker connectors.
@@ -446,6 +496,50 @@ class BrokerConnector(ABC):
                 logger.error("%s.cancel_all_orders: close_position(%s) raised: %s", self.name, symbol, exc)
 
         return cancelled
+
+    async def place_market_order(
+        self,
+        symbol: str,
+        side: "OrderSide | str",
+        quantity: float,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        **kwargs: Any,
+    ) -> MarketOrderResult:
+        """Uniform market-order entry point used by the live order router.
+
+        Adapts the connector's ``place_order()`` (OrderSide/OrderType enums,
+        broker-native Order return) to the ``(symbol, side, quantity)`` contract
+        the router calls, and normalises the result to ``MarketOrderResult`` so
+        ``order_id`` / ``average_fill_price`` / ``filled_quantity`` / ``status``
+        are readable regardless of broker. Handles both sync and async
+        ``place_order`` bodies.
+
+        Bracket ``stop_loss`` / ``take_profit`` are not applied at market entry
+        here (per-broker support varies); they are logged and ignored so a
+        connector without bracket support never raises on extra kwargs.
+        """
+        side_enum = side if isinstance(side, OrderSide) else OrderSide(str(side).upper())
+        if stop_loss is not None or take_profit is not None:
+            logger.debug(
+                "%s.place_market_order: bracket SL/TP not applied at entry (per-broker); SL=%s TP=%s",
+                self.name,
+                stop_loss,
+                take_profit,
+            )
+        result = self.place_order(
+            symbol=symbol,
+            side=side_enum,
+            order_type=OrderType.MARKET,
+            quantity=quantity,
+            price=None,
+            stop_price=None,
+        )
+        if asyncio.iscoroutine(result):
+            result = await result
+        if result is None:
+            raise RuntimeError(f"{self.name}: market order rejected (place_order returned None)")
+        return MarketOrderResult.from_order(result)
 
     def is_connected(self) -> bool:
         """
