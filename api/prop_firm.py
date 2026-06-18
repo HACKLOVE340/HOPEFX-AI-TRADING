@@ -84,6 +84,10 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
 
         # Try to get the engine from app state first
         engine = getattr(app_state, "prop_compliance_engine", None)
+        # Track whether this is live engine state or the pre-init config fallback,
+        # so the response clearly signals when no trades have been recorded yet
+        # rather than presenting default limits as if they were live metrics.
+        _engine_live = engine is not None
 
         if engine is None:
             # Build a read-only engine from config file for status display
@@ -110,7 +114,9 @@ async def prop_firm_status(user: TokenPayload = Depends(get_current_user)):
         ks_active = raw.get("kill_switch", False)
 
         # AI message
-        if ks_active:
+        if not _engine_live:
+            ai_msg = "ℹ️ Showing default challenge limits — prop-firm engine not yet initialised (no trades recorded)"
+        elif ks_active:
             ai_msg = "🔴 CHALLENGE PROTECTED — all positions closed (drawdown limit reached)"
         elif paused:
             ai_msg = "🛑 TRADING PAUSED — approaching drawdown limit"

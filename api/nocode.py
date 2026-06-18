@@ -47,10 +47,15 @@ class ValidateRequest(BaseModel):
 @router.get("/templates")
 async def list_templates(
     category: str | None = Query(None, description="Filter by category"),
+    user: TokenPayload = Depends(get_current_user),
 ):
     """
     List available no-code strategy templates.
     Templates include pre-built strategies that users can deploy with parameter overrides.
+
+    Requires authentication — templates are proprietary strategy IP and must
+    not be exposed to unauthenticated callers (deploy/validate already require
+    auth; this endpoint was previously open).
     """
     try:
         from nocode.builder import NoCodeStrategyBuilder

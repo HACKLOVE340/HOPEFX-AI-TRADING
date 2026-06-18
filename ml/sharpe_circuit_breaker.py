@@ -257,7 +257,15 @@ class SharpeCircuitBreaker:
     # ── Background loop ───────────────────────────────────────────────────────
 
     async def run(self) -> None:
-        """Run the evaluation loop until cancelled."""
+        """Run the evaluation loop until cancelled.
+
+        Idempotent: if a loop is already running (e.g. run() was scheduled
+        twice), the second call returns immediately so duplicate evaluation
+        loops can never race on the same circuit-breaker state.
+        """
+        if self._running:
+            logger.debug("SharpeCircuitBreaker.run() called while already running — ignoring duplicate start")
+            return
         self._running = True
         logger.info(
             "SharpeCircuitBreaker started (window=%d trades, min_sharpe=%.2f, consecutive=%d, interval=%.0fs)",

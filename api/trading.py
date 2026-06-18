@@ -890,7 +890,14 @@ def _check_subscription_gate(user_id: str, role: str = "user") -> None:
                 },
             )
     except ImportError:
-        ...  # nosec B110
+        # Monetization module unavailable — fail OPEN on the subscription gate
+        # (do not block trading because billing is down), but make it LOUD so an
+        # accidental bypass of the paywall in production is never silent.
+        logger.warning(
+            "Subscription gate bypassed for user=%s — monetization module unavailable. "
+            "Live trading proceeded WITHOUT a plan check.",
+            user_id,
+        )
 
 
 @router.post(
