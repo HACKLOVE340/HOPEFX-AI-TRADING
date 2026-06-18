@@ -97,6 +97,7 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/wallet',         label: 'Wallet',           icon: '💰', group: 'account', plan: 'starter',  featureKey: 'wallet'         },
   { path: '/notifications',  label: 'Notifications',    icon: '🔔', group: 'account', plan: 'free',     featureKey: 'notifications'  },
   { path: '/kyc',            label: 'KYC Verification', icon: '🪪', group: 'account', plan: 'free',     featureKey: 'kyc'            },
+  { path: '/academy',        label: 'Academy',          icon: '🎓', group: 'account', plan: 'free',     featureKey: 'academy'        },
   { path: '/mobile',         label: 'Mobile App',       icon: '📱', group: 'account', plan: 'free',     featureKey: 'mobile'         },
   { path: '/sub-accounts',   label: 'Sub-Accounts',     icon: '👥', group: 'account', plan: 'elite',    featureKey: 'sub-accounts'   },
   { path: '/elite',          label: 'Elite Hub',        icon: '⭐', group: 'account', plan: 'elite',    featureKey: 'elite'          },

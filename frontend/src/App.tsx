@@ -106,6 +106,7 @@ const NotificationsPage   = React.lazy(() => import('./pages/NotificationsPage')
 const KYCPage             = React.lazy(() => import('./pages/KYCPage'));
 const ChatPage            = React.lazy(() => import('./pages/ChatPage'));
 const MobilePage          = React.lazy(() => import('./pages/MobilePage'));
+const Academy             = React.lazy(() => import('./pages/Academy'));
 
 // ── Admin-only (legacy /admin route redirects to /audit — the admin landing) ──
 const AdminPanel        = React.lazy(() => import('./pages/AdminPanel'));
@@ -584,6 +585,7 @@ const AppShell: React.FC = () => {
             <Route path="/kyc"             element={wrap(<AuthGuard><KYCPage /></AuthGuard>)} />
             <Route path="/chat"            element={wrap(<AuthGuard><ChatPage /></AuthGuard>)} />
             <Route path="/mobile"          element={wrap(<AuthGuard><MobilePage /></AuthGuard>)} />
+            <Route path="/academy"         element={wrap(<AuthGuard><Academy /></AuthGuard>)} />
 
             {/* Admin */}
             <Route path="/admin"        element={wrap(adminOnly(<AdminPanel />))} />

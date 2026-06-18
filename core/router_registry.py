@@ -318,6 +318,16 @@ def register_routers(
     except Exception as _pricing_err:
         logger.warning("Pricing router not registered: %s", _pricing_err)
 
+    # ── Video tutorials / Academy (/api/tutorials) ────────────────────────────
+    try:
+        from api.tutorials import router as tutorials_router
+
+        if tutorials_router is not None:
+            _include_router_deduped(app, tutorials_router)
+            logger.info("Tutorials router registered (/api/tutorials)")
+    except Exception as _tut_err:
+        logger.warning("Tutorials router not registered: %s", _tut_err)
+
     if feature_flags.ADVANCED_TRADING:
         from api.advanced_trading import _adv_router as advanced_compat_router
         from api.advanced_trading import public_router as advanced_public_router

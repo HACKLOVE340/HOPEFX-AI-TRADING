@@ -87,6 +87,7 @@ export const PLAN_FEATURES: Record<string, Plan> = {
   // so new users can track their paper trades from day one.
   journal:      'free',
   performance:  'free',
+  academy:      'free',   // Academy page is free; individual episodes gate per-plan server-side
 
   // ── Starter ───────────────────────────────────────────────────────────────
   alerts:             'starter',

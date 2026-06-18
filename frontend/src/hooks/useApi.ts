@@ -987,6 +987,15 @@ export const pricingApi = {
     api.post('/pricing/estimate', body),
 };
 
+// ── Tutorials / Academy ───────────────────────────────────────────────────────
+
+export const tutorialsApi = {
+  /** Full episode catalogue with per-episode lock flags for the caller's plan. */
+  list: () => api.get('/tutorials'),
+  /** One episode; returns video_url only if the caller's plan grants access (else 403). */
+  get:  (episode: number) => api.get(`/tutorials/${episode}`),
+};
+
 // ── LLM / AI Provider ─────────────────────────────────────────────────────────
 
 export const llmApi = {
