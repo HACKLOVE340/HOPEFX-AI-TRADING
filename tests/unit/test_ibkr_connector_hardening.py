@@ -50,10 +50,33 @@ _fake.Contract = _Contract
 _fake.MarketOrder, _fake.LimitOrder, _fake.StopOrder = _market, _limit, _stop
 _fake.IB = type("IB", (), {})
 _fake.Trade = type("Trade", (), {})
-sys.modules["ib_insync"] = _fake
 
-ibkr = importlib.import_module("brokers.ibkr_connector")
-importlib.reload(ibkr)
+# Connector module handle, populated by the module-scoped fixture below.
+ibkr = None
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _inject_fake_ib_insync():
+    """Inject the fake ib_insync only for this module's tests, then restore.
+
+    Injecting at import/collection time would pollute sys.modules globally and
+    make unrelated tests (e.g. the factory's ib-availability skip) misbehave.
+    Scoping it to this module keeps the rest of the suite isolated.
+    """
+    global ibkr
+    _saved = sys.modules.get("ib_insync")
+    sys.modules["ib_insync"] = _fake
+    ibkr = importlib.import_module("brokers.ibkr_connector")
+    importlib.reload(ibkr)
+    try:
+        yield
+    finally:
+        if _saved is not None:
+            sys.modules["ib_insync"] = _saved
+        else:
+            sys.modules.pop("ib_insync", None)
+        importlib.reload(ibkr)  # restore real (IB_AVAILABLE=False) state
+
 
 from brokers.base import MarketOrderResult, OrderSide, OrderStatus, OrderType
 

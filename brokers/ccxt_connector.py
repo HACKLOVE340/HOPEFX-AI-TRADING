@@ -93,6 +93,12 @@ class CCXTConnector(BrokerConnector):
             params: dict[str, Any] = {
                 "apiKey": self.config.get("api_key", ""),
                 "secret": self.config.get("api_secret", ""),
+                # Self-throttle to the exchange's published rate limits — without
+                # this ccxt fires requests unthrottled and risks an IP ban.
+                "enableRateLimit": True,
+                # Per-request timeout in ms (ccxt default 10000) so a trading call
+                # fails fast instead of hanging on a stuck socket. Tunable.
+                "timeout": int(self.config.get("timeout_ms", 15000)),
             }
             if self.config.get("password"):
                 params["password"] = self.config["password"]
