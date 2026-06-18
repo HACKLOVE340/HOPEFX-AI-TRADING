@@ -42,10 +42,21 @@ interface ToastContextValue {
 
 const ToastContext = createContext<ToastContextValue | null>(null);
 
+// No-op fallback used when no <ToastProvider> is mounted (e.g. in unit tests
+// or an isolated render). Toasts are non-critical UI feedback, so a missing
+// provider must never crash the page — it just silently drops the toast.
+// Production always mounts ToastProvider in App.tsx, so the real toasts show.
+const _NOOP_TOAST: ToastContextValue = {
+  add: () => '',
+  remove: () => {},
+  success: () => '',
+  error: () => '',
+  warning: () => '',
+  info: () => '',
+};
+
 export function useToast(): ToastContextValue {
-  const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used inside <ToastProvider>');
-  return ctx;
+  return useContext(ToastContext) ?? _NOOP_TOAST;
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────

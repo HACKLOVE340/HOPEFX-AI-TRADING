@@ -18,6 +18,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamsApi } from '../hooks/useApi';
 import { useStore } from '../store';
 import { extractApiError } from '../lib/utils';
+import { useToast } from '../components/Toast';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ function StatCard({ label, value, color }: { label: string; value: string; color
 
 function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
   const qc = useQueryClient();
+  const toast = useToast();
   const currentUser = useStore(s => s.user);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState('trader');
@@ -119,6 +121,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['team-detail', team.team_id] }),
     onError: (err: unknown) => {
       console.error('[TeamsPage] removeMember error:', err);
+      toast.error(extractApiError(err, 'Failed to remove member.'));
     },
   });
 
@@ -251,6 +254,7 @@ function TeamDetail({ team, onClose }: { team: Team; onClose: () => void }) {
 
 const TeamsPage: React.FC = () => {
   const navigate = useNavigate();
+  const toast = useToast();
   const qc = useQueryClient();
   const [selected, setSelected]   = useState<Team | null>(null);
   const [showCreate, setShowCreate] = useState(false);
@@ -282,6 +286,7 @@ const TeamsPage: React.FC = () => {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['teams'] }); setSelected(null); },
     onError: (err: unknown) => {
       console.error('[TeamsPage] deleteTeam error:', err);
+      toast.error(extractApiError(err, 'Failed to delete team.'));
     },
   });
 

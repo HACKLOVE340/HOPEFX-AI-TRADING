@@ -203,22 +203,23 @@ const Wallet: React.FC = () => {
     await api.post('/payments/deposit', { amount: parseFloat(amount) });
     setActionMsg(`Deposit of $${amount} initiated.`);
     setActionMode(null);
-    // Refresh balance
+    // Refresh balance. Functional updates so the callback doesn't close over
+    // balance/frozen/pendingBal — keeps the memoised callback stable.
     const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
-    setBalance(r.data?.balance ?? balance);
-    setFrozen(r.data?.frozen ?? frozen);
-    setPendingBal(r.data?.pending ?? pendingBal);
-  }, [balance, frozen, pendingBal]);
+    setBalance(prev => r.data?.balance ?? prev);
+    setFrozen(prev => r.data?.frozen ?? prev);
+    setPendingBal(prev => r.data?.pending ?? prev);
+  }, []);
 
   const handleWithdraw = useCallback(async (amount: string) => {
     await api.post('/payments/withdraw', { amount: parseFloat(amount) });
     setActionMsg(`Withdrawal of $${amount} submitted.`);
     setActionMode(null);
     const r = await api.get<{ balance: number; frozen: number; pending: number }>('/billing/balance');
-    setBalance(r.data?.balance ?? balance);
-    setFrozen(r.data?.frozen ?? frozen);
-    setPendingBal(r.data?.pending ?? pendingBal);
-  }, [balance, frozen, pendingBal]);
+    setBalance(prev => r.data?.balance ?? prev);
+    setFrozen(prev => r.data?.frozen ?? prev);
+    setPendingBal(prev => r.data?.pending ?? prev);
+  }, []);
 
   const totalDeposited = transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
   const totalWithdrawn = Math.abs(transactions.filter(t => t.type === 'withdrawal').reduce((s, t) => s + t.amount, 0));

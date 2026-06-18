@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { chatApi } from '../hooks/useApi';
 import { useStore, selectUser } from '../store';
 import { getWsBase } from '../lib/utils';
+import { useToast } from '../components/Toast';
 
 interface ChatRoom {
   id: string;
@@ -45,6 +46,7 @@ const ChatPage: React.FC = () => {
   const user = useStore(selectUser);
   const token = useStore(s => s.token);
 
+  const toast = useToast();
   const [rooms, setRooms]           = useState<ChatRoom[]>([]);
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
   const [messages, setMessages]     = useState<ChatMessage[]>([]);
@@ -140,9 +142,10 @@ const ChatPage: React.FC = () => {
     try {
       await chatApi.sendMessage(activeRoom.id, content);
     } catch {
-      // Remove optimistic on failure
+      // Remove optimistic message, restore the draft, and tell the user.
       setMessages(prev => prev.filter(m => m.id !== optimistic.id));
       setInput(content);
+      toast.error('Message failed to send — check your connection and try again.');
     } finally { setSending(false); inputRef.current?.focus(); }
   };
 

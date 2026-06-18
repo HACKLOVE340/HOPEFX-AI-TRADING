@@ -11,6 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store';
 import { aiStrategyApi, llmApi } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useToast } from '../components/Toast';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,8 @@ const pct = (n: number) => `${n >= 0 ? '+' : ''}${fmt(n)}%`;
 
 const AIStrategyGenerator: React.FC = () => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const [prompt, setPrompt]         = useState('');
   const [symbol, setSymbol]         = useState('XAU_USD');
@@ -149,10 +153,20 @@ const AIStrategyGenerator: React.FC = () => {
   };
 
   const handleDeleteStrategy = async (strategyId: string) => {
+    const ok = await confirm({
+      title: 'Delete strategy?',
+      description: 'This permanently removes the strategy and cannot be undone.',
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!ok) return;
     try {
       await aiStrategyApi.deleteStrategy(strategyId);
       setHistory(prev => prev.filter(s => s.strategy_id !== strategyId));
-    } catch { /* non-fatal */ }
+      toast.success('Strategy deleted.');
+    } catch (e) {
+      toast.error(extractApiError(e, 'Failed to delete strategy.'));
+    }
   };
 
   return (

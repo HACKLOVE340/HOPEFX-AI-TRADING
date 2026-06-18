@@ -41,7 +41,10 @@ const ConfirmContext = createContext<ConfirmContextValue | null>(null);
 
 export function useConfirm(): (opts: ConfirmOptions) => Promise<boolean> {
   const ctx = useContext(ConfirmContext);
-  if (!ctx) throw new Error('useConfirm must be used inside <ConfirmDialogProvider>');
+  // Fail-safe when no provider is mounted (e.g. unit tests / isolated render):
+  // resolve to false (cancel) so a destructive action never proceeds without an
+  // explicit confirmation. Production mounts ConfirmDialogProvider in App.tsx.
+  if (!ctx) return async () => false;
   return ctx.confirm;
 }
 
