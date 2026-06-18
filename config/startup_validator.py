@@ -433,6 +433,30 @@ def _validate_cors_wildcard(errors: list[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _validate_trading_mode(errors: list[str]) -> None:
+    """Fail closed on contradictory paper/live trading-mode configuration.
+
+    Blocking inconsistencies (e.g. FEATURE_LIVE_TRADING=true with a paper
+    broker, or live enabled outside production) are added to ``errors`` so the
+    process refuses to start. Advisory NOTE-level conditions (real-money broker
+    staged behind the flag, live flag against a demo account) are logged loudly
+    but do not block startup.
+    """
+    try:
+        from core.live_trading_gate import validate_trading_mode_config
+
+        ok, issues = validate_trading_mode_config()
+        for issue in issues:
+            if issue.startswith("NOTE:"):
+                logger.warning("Trading-mode advisory — %s", issue)
+            else:
+                errors.append(f"Trading-mode misconfiguration: {issue}")
+        if ok:
+            logger.info("Trading-mode config consistent.")
+    except Exception as exc:  # pragma: no cover - never block startup on the validator itself
+        logger.debug("Trading-mode validation skipped: %s", exc)
+
+
 def validate_environment(*, strict: bool = True) -> None:
     """
     Validate all required environment variables.
@@ -460,6 +484,7 @@ def validate_environment(*, strict: bool = True) -> None:
         _validate_crypto_webhook_secret(errors)
 
     _validate_broker(errors, dev_mode)
+    _validate_trading_mode(errors)
     _validate_llm_backend(errors)
     _validate_stripe(errors)
     _validate_optional_vars(errors)

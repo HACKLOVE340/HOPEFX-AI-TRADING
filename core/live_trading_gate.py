@@ -83,6 +83,47 @@ _MIN_TRADES = int(os.getenv("LIVE_GATE_MIN_TRADES", "600"))
 _PAPER_DAYS = int(os.getenv("LIVE_GATE_PAPER_DAYS", "30"))
 
 
+def validate_trading_mode_config() -> tuple[bool, list[str]]:
+    """Detect contradictory trading-mode configuration ('paper vs live' traps).
+
+    Live trading is governed by several independent env vars that can disagree:
+      FEATURE_LIVE_TRADING  — master live switch (default false)
+      BROKER_TYPE           — paper | oanda | ibkr (default paper)
+      APP_ENV / ENVIRONMENT — development | staging | production
+      OANDA_PRACTICE        — demo (true) vs real-money (false) OANDA account
+
+    Returns ``(is_consistent, issues)``. Only contradictions that could lead to
+    *unintended live routing* are blocking; safe-but-noteworthy states are
+    returned as advisory issues prefixed with 'NOTE:' and do NOT flip
+    is_consistent to False. Used both at startup (logged loudly) and by the
+    live gate, which fails CLOSED on any blocking inconsistency.
+    """
+    live = os.getenv("FEATURE_LIVE_TRADING", "false").lower() == "true"
+    broker = os.getenv("BROKER_TYPE", "paper").lower()
+    app_env = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "development")).lower()
+    oanda_practice = os.getenv("OANDA_PRACTICE", "true").lower() == "true"
+
+    blocking: list[str] = []
+    advisory: list[str] = []
+
+    # Dangerous / incoherent for live routing → block.
+    if live and broker in ("paper", ""):
+        blocking.append("FEATURE_LIVE_TRADING=true but BROKER_TYPE=paper — live intent with a paper broker")
+    if live and app_env not in ("production", "prod", "live"):
+        blocking.append(f"FEATURE_LIVE_TRADING=true while APP_ENV={app_env!r} (expected 'production')")
+
+    # Safe but worth surfacing loudly → advisory.
+    if not live and broker == "oanda" and not oanda_practice:
+        advisory.append(
+            "NOTE: BROKER_TYPE=oanda + OANDA_PRACTICE=false (real-money account) is staged while "
+            "FEATURE_LIVE_TRADING is off — a real-money broker is one flag away from live"
+        )
+    if live and broker == "oanda" and oanda_practice:
+        advisory.append("NOTE: live flag on but OANDA_PRACTICE=true — orders route to the OANDA demo account")
+
+    return (len(blocking) == 0), (blocking + advisory)
+
+
 @dataclass
 class GateResult:
     """Result of a live trading gate check."""
@@ -303,6 +344,21 @@ class LiveTradingGate:
             "Sharpe gate: no backtest report found. Run: python backtest/multi_symbol_backtest.py --years 10"
         )
 
+    def _check_config_consistency(self) -> tuple[bool, str]:
+        """Check 0: trading-mode env vars must be mutually consistent.
+
+        Fails CLOSED on any contradiction that could route live orders
+        unexpectedly (e.g. FEATURE_LIVE_TRADING=true with a paper broker, or
+        live enabled outside production). Advisory NOTE-level issues do not
+        block but are surfaced in the message.
+        """
+        ok, issues = validate_trading_mode_config()
+        if ok:
+            note = "; ".join(i for i in issues if i.startswith("NOTE:"))
+            return True, ("Trading-mode config consistent" + (f" ({note})" if note else ""))
+        blocking = [i for i in issues if not i.startswith("NOTE:")]
+        return False, "Trading-mode config inconsistent: " + "; ".join(blocking)
+
     def _check_feature_flag(self) -> tuple[bool, str]:
         """Check 5: FEATURE_LIVE_TRADING=true must be set."""
         # Re-read env at check time (allows runtime toggle)
@@ -324,6 +380,7 @@ class LiveTradingGate:
         but all checks are still evaluated for the status dict.
         """
         check_fns = [
+            ("config_consistency", self._check_config_consistency),
             ("kill_switch", self._check_kill_switch),
             ("paper_clock", self._check_paper_clock),
             ("oos_accuracy", self._check_oos_accuracy),
