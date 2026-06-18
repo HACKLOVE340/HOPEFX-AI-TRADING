@@ -509,7 +509,8 @@ class IBKRConnector(BrokerConnector):
 
         # Kill-switch check — hard block
         if self._kill_switch and self._kill_switch.is_active():
-            reason = getattr(self._kill_switch, "_reason", "kill switch active")
+            # Use the public `reason` property (not the private `_reason` attr).
+            reason = getattr(self._kill_switch, "reason", None) or "kill switch active"
             raise RuntimeError(f"IBKRConnector.place_order blocked by kill switch: {reason}")
 
         if order_type == OrderType.LIMIT and price is None:
