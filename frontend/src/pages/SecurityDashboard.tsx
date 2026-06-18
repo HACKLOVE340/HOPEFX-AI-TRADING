@@ -59,6 +59,9 @@ async function fetchAttacks(): Promise<AttackLog> {
 
 async function fetchLockdown(): Promise<LockdownStatus> {
   const { data } = await api.get<LockdownStatus>('/security/lockdown');
+  // A 200 with an empty/null body would otherwise set `lockdown` undefined and
+  // crash the later `lockdown.lockdown_active` reads. Mirror the state default.
+  if (!data) return { lockdown_active: false };
   return data;
 }
 

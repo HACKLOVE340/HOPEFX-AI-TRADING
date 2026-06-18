@@ -217,10 +217,12 @@ const SubAccounts: React.FC = () => {
         api.get<{ teams: Team[] }>('/accounts/teams'),
       ]);
       if (!mountedRef.current) return;
-      setAccounts(accRes.data.accounts);
-      setTeams(teamRes.data.teams);
-      if (teamRes.data.teams.length > 0 && !selectedTeam) {
-        setSelectedTeam(teamRes.data.teams[0]!);
+      const accounts = accRes.data.accounts ?? [];
+      const teams    = teamRes.data.teams ?? [];
+      setAccounts(accounts);
+      setTeams(teams);
+      if (teams.length > 0 && !selectedTeam) {
+        setSelectedTeam(teams[0]!);
       }
     } catch (e: unknown) {
       if (!mountedRef.current) return;

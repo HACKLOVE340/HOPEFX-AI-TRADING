@@ -76,6 +76,20 @@ function pnlColor(pnl: number | null): string {
   return pnl >= 0 ? '#4ade80' : '#f87171';
 }
 
+/**
+ * Defensive normaliser: the render path reads `entry.side.toUpperCase()` and
+ * `entry.tags.length/.map` directly. If the backend ever omits `tags` or `side`
+ * (e.g. a partial/legacy row) those would throw and blank the whole list, so
+ * coerce them to safe defaults at the ingestion boundary.
+ */
+function normalizeEntry(e: JournalEntry): JournalEntry {
+  return {
+    ...e,
+    side: typeof e.side === 'string' ? e.side : '',
+    tags: Array.isArray(e.tags) ? e.tags : [],
+  };
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 const TradeJournal: React.FC = () => {
@@ -110,14 +124,14 @@ const TradeJournal: React.FC = () => {
       if (!mountedRef.current) return;
       if (tradesRes.status === 'fulfilled') {
         const d = tradesRes.value.data as JournalEntry[] | { trades?: JournalEntry[] };
-        setTrades(Array.isArray(d) ? d : (d.trades ?? []));
+        setTrades((Array.isArray(d) ? d : (d.trades ?? [])).map(normalizeEntry));
       } else { setTrades([]); }
       if (statsRes.status === 'fulfilled') {
         setStats(statsRes.value.data as JournalStats);
       } else { setStats(null); }
       if (mistakesRes.status === 'fulfilled') {
         const d = mistakesRes.value.data as JournalEntry[] | { mistakes?: JournalEntry[] };
-        setMistakes(Array.isArray(d) ? d : (d.mistakes ?? []));
+        setMistakes((Array.isArray(d) ? d : (d.mistakes ?? [])).map(normalizeEntry));
       } else { setMistakes([]); }
     } finally {
       if (mountedRef.current) setLoading(false);
