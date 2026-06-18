@@ -370,3 +370,36 @@ groups:
             The P&L reconciler has not published metrics in over 24 hours.
             Ensure the reconciliation background task is running and the broker
             is connected. Run: python -m ml.pnl_reconciler --reconcile
+
+  - name: hopefx-ml-regime
+    rules:
+
+      # Fold-2 below-chance regime — ref: docs/FOLD2_REGIME_ANALYSIS.md
+      # Walk-forward Fold 2 = 44.4% (below chance). Model abstains in
+      # HIGH_VOL_PARABOLIC (parabolic blow-off / post-bubble crash).
+      - alert: HopeFXFold2ParabolicRegime
+        expr: hopefx_regime_conditional_regime_fraction{regime="high_vol_parabolic"} > 0.20
+        for: 30m
+        labels:
+          severity: warning
+          component: ml-regime
+        annotations:
+          summary: "Market in Fold-2 below-chance regime (HIGH_VOL_PARABOLIC)"
+          description: >
+            {{ $value | humanizePercentage }} of recent bars match the documented
+            Fold-2 parabolic / post-bubble regime (model scored 44.4% there). The
+            model is abstaining; expect reduced signal coverage. Do NOT override.
+            Ref: docs/FOLD2_REGIME_ANALYSIS.md.
+
+      - alert: HopeFXFold2AbstainActive
+        expr: rate(hopefx_regime_conditional_predict_total{regime="high_vol_parabolic"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+          component: ml-regime
+        annotations:
+          summary: "Model abstaining on live signals (Fold-2 parabolic regime)"
+          description: >
+            Live predictions landed in HIGH_VOL_PARABOLIC over the last 15m
+            (close > 1.30*MA200, or rv14 > 2.5*rv90 with price <= 75% of 200-bar
+            peak). Confirm risk sizing is reduced. Ref: docs/FOLD2_REGIME_ANALYSIS.md.

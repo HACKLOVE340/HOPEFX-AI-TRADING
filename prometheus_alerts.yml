@@ -421,3 +421,39 @@ groups:
             The startup probe has not returned 200 after 10 minutes.
             The pod is likely stuck. Check container logs and consider
             restarting the pod.
+
+  - name: hopefx_ml_regime
+    rules:
+
+      # ── Fold-2 below-chance regime (parabolic blow-off / post-bubble crash) ──
+      # Ref: docs/FOLD2_REGIME_ANALYSIS.md — walk-forward Fold 2 scored 44.4%
+      # (below chance). The RegimeConditionalModel abstains (neutral) when the
+      # market enters HIGH_VOL_PARABOLIC; these alerts surface that condition.
+      - alert: HopeFXFold2ParabolicRegime
+        expr: hopefx_regime_conditional_regime_fraction{regime="high_vol_parabolic"} > 0.20
+        for: 30m
+        labels:
+          severity: warning
+          component: ml-regime
+        annotations:
+          summary: "Market in Fold-2 below-chance regime (HIGH_VOL_PARABOLIC)"
+          description: >
+            {{ $value | humanizePercentage }} of recent bars match the documented
+            Fold-2 parabolic / post-bubble regime where the model scored below
+            chance (44.4% in walk-forward Fold 2). The model is abstaining (neutral)
+            — expect reduced signal coverage. Do NOT override the abstain.
+            Ref: docs/FOLD2_REGIME_ANALYSIS.md.
+
+      - alert: HopeFXFold2AbstainActive
+        expr: rate(hopefx_regime_conditional_predict_total{regime="high_vol_parabolic"}[15m]) > 0
+        for: 15m
+        labels:
+          severity: warning
+          component: ml-regime
+        annotations:
+          summary: "Model abstaining on live signals (Fold-2 parabolic regime)"
+          description: >
+            Live predictions have landed in the HIGH_VOL_PARABOLIC regime over the
+            last 15m, so the model is returning neutral/abstain (Fold-2 conditions:
+            close > 1.30*MA200, or rv14 > 2.5*rv90 with price <= 75% of the 200-bar
+            peak). Confirm risk sizing is reduced. Ref: docs/FOLD2_REGIME_ANALYSIS.md.
