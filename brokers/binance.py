@@ -9,6 +9,7 @@ Binance Broker Connector
 Implements real crypto trading with Binance REST API and WebSocket.
 """
 
+import contextlib
 import hashlib
 import hmac
 import logging
@@ -31,6 +32,46 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# (connect, read) timeout in seconds applied to EVERY Binance HTTP call. Without
+# this a hung socket on an order POST could block indefinitely — unacceptable on
+# a trading path. Override via BINANCE_HTTP_TIMEOUT="connect,read".
+import os as _os
+
+
+def _load_timeout() -> tuple[float, float]:
+    raw = _os.getenv("BINANCE_HTTP_TIMEOUT", "5,20")
+    try:
+        c, r = raw.split(",")
+        return (float(c), float(r))
+    except Exception:
+        return (5.0, 20.0)
+
+
+_REQUEST_TIMEOUT = _load_timeout()
+# recvWindow bounds how long a signed request is valid server-side; protects
+# against clock skew causing -1021 timestamp rejections on order placement.
+_RECV_WINDOW_MS = int(_os.getenv("BINANCE_RECV_WINDOW_MS", "5000"))
+
+
+def _session_with_timeout(timeout: tuple[float, float]) -> Any:
+    """Create a requests.Session whose every request carries a default timeout.
+
+    Wraps the instance ``request`` method so all get/post/delete calls inherit
+    the timeout in one place (Session.get/post/delete all route through
+    ``request``), instead of relying on each call site to pass it. Uses
+    ``requests.Session()`` directly so it stays patchable in tests.
+    """
+    sess = requests.Session()
+    _orig_request = sess.request
+
+    def _timed(*args: Any, **kwargs: Any) -> Any:
+        kwargs.setdefault("timeout", timeout)
+        return _orig_request(*args, **kwargs)
+
+    with contextlib.suppress(Exception):  # mock objects may forbid attr assignment
+        sess.request = _timed  # type: ignore[method-assign]
+    return sess
 
 
 class BinanceConnector(BrokerConnector):
@@ -87,19 +128,15 @@ class BinanceConnector(BrokerConnector):
             bool: True if connection successful
         """
         try:
-            self.session = requests.Session()
+            self.session = _session_with_timeout(_REQUEST_TIMEOUT)
             self.session.headers.update({"X-MBX-APIKEY": self.api_key})
 
             # Test connection
             response = self.session.get(f"{self.base_url}/api/v3/ping")
             response.raise_for_status()
 
-            # Test API key permissions
-            timestamp = int(time.time() * 1000)
-            params = {"timestamp": timestamp}
-            signature = self._generate_signature(params)
-            params["signature"] = signature
-
+            # Test API key permissions (signed request)
+            params = self._sign({})
             response = self.session.get(
                 f"{self.base_url}/api/v3/account",
                 params=params,
@@ -168,14 +205,12 @@ class BinanceConnector(BrokerConnector):
             # Format symbol (remove /)
             binance_symbol = symbol.replace("/", "").upper()
 
-            # Build order parameters
-            timestamp = int(time.time() * 1000)
+            # Build order parameters (timestamp + recvWindow + signature added by _sign)
             params = {
                 "symbol": binance_symbol,
                 "side": side.value,
                 "type": self._convert_order_type(order_type),
                 "quantity": self._format_quantity(binance_symbol, quantity),
-                "timestamp": timestamp,
             }
 
             # Idempotency: a caller-supplied client_order_id is sent as
@@ -197,8 +232,8 @@ class BinanceConnector(BrokerConnector):
                     params["price"] = str(price)
                     params["timeInForce"] = "GTC"
 
-            # Sign request
-            params["signature"] = self._generate_signature(params)
+            # Sign request (adds timestamp + recvWindow + signature)
+            params = self._sign(params)
 
             # Send order
             response = self.session.post(f"{self.base_url}/api/v3/order", params=params)
@@ -237,7 +272,7 @@ class BinanceConnector(BrokerConnector):
                     if float(result.get("executedQty") or 0) > 0
                     else (float(result.get("price", 0)) if result.get("price") else None)
                 ),
-                timestamp=datetime.fromtimestamp(result["transactTime"] / 1000),
+                timestamp=datetime.fromtimestamp(result["transactTime"] / 1000, tz=UTC),
                 metadata=result,
             )
 
@@ -271,14 +306,12 @@ class BinanceConnector(BrokerConnector):
 
         try:
             binance_symbol = symbol.replace("/", "").upper()
-            timestamp = int(time.time() * 1000)
-
-            params = {
-                "symbol": binance_symbol,
-                "orderId": order_id,
-                "timestamp": timestamp,
-            }
-            params["signature"] = self._generate_signature(params)
+            params = self._sign(
+                {
+                    "symbol": binance_symbol,
+                    "orderId": order_id,
+                }
+            )
 
             response = self.session.delete(
                 f"{self.base_url}/api/v3/order",
@@ -316,14 +349,12 @@ class BinanceConnector(BrokerConnector):
 
         try:
             binance_symbol = symbol.replace("/", "").upper()
-            timestamp = int(time.time() * 1000)
-
-            params = {
-                "symbol": binance_symbol,
-                "orderId": order_id,
-                "timestamp": timestamp,
-            }
-            params["signature"] = self._generate_signature(params)
+            params = self._sign(
+                {
+                    "symbol": binance_symbol,
+                    "orderId": order_id,
+                }
+            )
 
             response = self.session.get(f"{self.base_url}/api/v3/order", params=params)
             response.raise_for_status()
@@ -347,7 +378,7 @@ class BinanceConnector(BrokerConnector):
                     if float(result.get("executedQty") or 0) > 0
                     else (float(result.get("price", 0)) if result.get("price") else None)
                 ),
-                timestamp=datetime.fromtimestamp(result["time"] / 1000),
+                timestamp=datetime.fromtimestamp(result["time"] / 1000, tz=UTC),
                 metadata=result,
             )
 
@@ -373,9 +404,7 @@ class BinanceConnector(BrokerConnector):
             return []
 
         try:
-            timestamp = int(time.time() * 1000)
-            params = {"timestamp": timestamp}
-            params["signature"] = self._generate_signature(params)
+            params = self._sign({})
 
             response = self.session.get(
                 f"{self.base_url}/api/v3/account",
@@ -443,9 +472,7 @@ class BinanceConnector(BrokerConnector):
 
         try:
             # Get current balance
-            timestamp = int(time.time() * 1000)
-            params = {"timestamp": timestamp}
-            params["signature"] = self._generate_signature(params)
+            params = self._sign({})
 
             response = self.session.get(
                 f"{self.base_url}/api/v3/account",
@@ -505,9 +532,7 @@ class BinanceConnector(BrokerConnector):
             return None
 
         try:
-            timestamp = int(time.time() * 1000)
-            params = {"timestamp": timestamp}
-            params["signature"] = self._generate_signature(params)
+            params = self._sign({})
 
             response = self.session.get(
                 f"{self.base_url}/api/v3/account",
@@ -599,7 +624,7 @@ class BinanceConnector(BrokerConnector):
             for kline in response.json():
                 candles.append(
                     {
-                        "timestamp": datetime.fromtimestamp(kline[0] / 1000),
+                        "timestamp": datetime.fromtimestamp(kline[0] / 1000, tz=UTC),
                         "open": float(kline[1]),
                         "high": float(kline[2]),
                         "low": float(kline[3]),
@@ -614,6 +639,18 @@ class BinanceConnector(BrokerConnector):
             logger.error("Failed to get market data for %s: %s", symbol, e)
 
             return None
+
+    def _sign(self, params: dict) -> dict:
+        """Add timestamp + recvWindow + HMAC signature to a signed request.
+
+        Centralises signed-request preparation so every authenticated call gets
+        a fresh timestamp and a recvWindow (clock-skew protection). The
+        signature must be computed last, over all other params.
+        """
+        params["timestamp"] = int(time.time() * 1000)
+        params["recvWindow"] = _RECV_WINDOW_MS
+        params["signature"] = self._generate_signature(params)
+        return params
 
     def _generate_signature(self, params: dict) -> str:
         """Generate HMAC SHA256 signature for Binance API"""
