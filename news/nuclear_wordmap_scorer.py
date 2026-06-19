@@ -399,3 +399,9 @@ class NuclearWordMapScorer:
             )
 
         return keywords
+
+
+# Back-compat alias: api/news_feed.py imports ``NuclearWordmapScorer`` (lowercase
+# "map"). Without this alias that import raises ImportError, which is swallowed by
+# the caller's try/except and silently disables nuclear scoring on the news feed.
+NuclearWordmapScorer = NuclearWordMapScorer
