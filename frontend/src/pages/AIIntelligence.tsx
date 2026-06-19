@@ -16,6 +16,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { signalsApi } from '../hooks/useApi';
 import { MlSafetyStrip } from '../components/intelligence/MlSafetyStrip';
+import { RiskTransparencyStrip } from '../components/intelligence/RiskTransparencyStrip';
 import { SignalIntelligenceCard } from '../components/intelligence/SignalIntelligenceCard';
 import type { EngineSignal, SignalAnalyticsReport } from '../types';
 
@@ -67,6 +68,11 @@ const AIIntelligence: React.FC = () => {
         <p style={{ fontSize: 13, color: '#64748b', marginTop: 4, marginBottom: 0 }}>
           Live model health, signal-engine output, and signal-quality analytics — the reasoning behind every trade.
         </p>
+      </div>
+
+      {/* Risk state — what to check before acting on anything below */}
+      <div style={{ marginBottom: 16 }}>
+        <RiskTransparencyStrip />
       </div>
 
       {/* ML safety gates */}
