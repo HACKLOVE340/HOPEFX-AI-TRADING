@@ -124,6 +124,7 @@ ml/saved_models/*.pkl
 ml/saved_models/*.joblib
 ml/saved_models/*_training_report.json
 ml/saved_models/*_meta.json
+ml/saved_models/ab_baseline_report.json
 # model_checksums.json is tracked so CI can verify model integrity
 # !ml/saved_models/model_checksums.json
 

@@ -165,6 +165,32 @@ class TestWalkForwardEval:
         result = walk_forward_eval(X, y, n_splits=2)
         assert len(result["folds"]) == 2
 
+    @pytest.mark.parametrize(("horizon", "expected_gap"), [(1, 1), (5, 5), (10, 10)])
+    def test_purge_gap_matches_horizon(self, monkeypatch, horizon, expected_gap):
+        """Regression: CV must purge `horizon` bars between train and test,
+        otherwise overlapping forward-return labels leak the future into the
+        validation fold and inflate accuracy."""
+        import sklearn.model_selection as skms
+
+        captured = {}
+        real_tscv = skms.TimeSeriesSplit
+
+        def _spy(*args, **kwargs):
+            captured["gap"] = kwargs.get("gap")
+            return real_tscv(*args, **kwargs)
+
+        monkeypatch.setattr(skms, "TimeSeriesSplit", _spy)
+
+        # Enough samples that gap=10 with 2 splits is valid.
+        rng = np.random.default_rng(7)
+        X = pd.DataFrame(rng.normal(size=(200, 4)), columns=[f"f{i}" for i in range(4)])
+        y = pd.Series((rng.normal(size=200) > 0).astype(int))
+
+        from ml.train_advanced import walk_forward_eval
+
+        walk_forward_eval(X, y, n_splits=2, horizon=horizon)
+        assert captured["gap"] == expected_gap
+
 
 # ── OOS evaluation ────────────────────────────────────────────────────────────
 

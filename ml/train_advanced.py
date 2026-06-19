@@ -433,10 +433,18 @@ def walk_forward_eval(
     X: pd.DataFrame,
     y: pd.Series,
     n_splits: int = 8,
+    horizon: int = 1,
 ) -> dict:
     """
     Walk-forward cross-validation with the stacking ensemble.
     Uses a simpler (faster) model for CV to avoid O(n²) fitting time.
+
+    The label at bar t is a forward return over ``horizon`` bars
+    (close[t+horizon]), so the last ``horizon`` training labels overlap the
+    validation window. We purge that overlap by setting the TimeSeriesSplit
+    ``gap`` to ``horizon`` — without it the reported CV accuracy is inflated by
+    look-ahead leakage. (gap=horizon is the minimum purge; horizon=1 reproduces
+    the previous behaviour exactly.)
     """
     import xgboost as xgb
     from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
@@ -444,7 +452,9 @@ def walk_forward_eval(
     from sklearn.pipeline import Pipeline
     from sklearn.preprocessing import StandardScaler
 
-    tscv = TimeSeriesSplit(n_splits=n_splits, gap=1)
+    gap = max(int(horizon), 1)
+    tscv = TimeSeriesSplit(n_splits=n_splits, gap=gap)
+    logger.info("Walk-forward CV: %d splits, purge gap=%d bars (horizon=%d)", n_splits, gap, horizon)
     fold_results = []
 
     # Use plain XGBoost for CV — no calibration wrapper so each fold trains
@@ -1186,6 +1196,14 @@ def main():
         else:
             X_cv, y_cv = X.iloc[:-oos_n], y.iloc[:-oos_n]
             X_oos, y_oos = X.iloc[-oos_n:], y.iloc[-oos_n:]
+            # Purge the last `horizon` train bars: their forward-return labels
+            # (close[t+horizon]) reach into the OOS window, so keeping them
+            # leaks OOS price data into training. Drop them so the train/OOS
+            # boundary is clean.
+            _purge = max(int(args.horizon), 0)
+            if _purge > 0 and len(X_cv) > _purge:
+                X_cv, y_cv = X_cv.iloc[:-_purge], y_cv.iloc[:-_purge]
+                logger.info("Purged %d boundary bars between train/CV and OOS (horizon=%d)", _purge, args.horizon)
             logger.info(
                 "OOS split: train/CV=%d bars, OOS=%d bars (last %.1f years, %s → %s)",
                 len(X_cv),
@@ -1200,7 +1218,7 @@ def main():
         "\n=== Walk-forward CV (XGBoost + calibration, %d folds) ===",
         args.splits,
     )
-    wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits)
+    wf = walk_forward_eval(X_cv, y_cv, n_splits=args.splits, horizon=args.horizon)
 
     logger.info(
         "Walk-forward  acc=%.3f±%.3f  f1=%.3f  auc=%.3f  p=%.4f  significant=%s",
@@ -1348,6 +1366,7 @@ class AdvancedTrainerConfig:
     model_dir: str = "ml/saved_models"
     feature_importance: bool = True
     sharpe_gate: bool = True
+    horizon: int = 1  # forward-return label horizon; drives CV purge gap
 
 
 class AdvancedTrainer:
@@ -1404,15 +1423,20 @@ class AdvancedTrainer:
                 f"need at least {min_n} ({self.config.min_years} years)."
             )
 
+        _horizon = max(int(getattr(self.config, "horizon", 1)), 1)
         if oos_n > 0 and len(X_all) > oos_n:
             X_cv, X_oos = X_all.iloc[:-oos_n], X_all.iloc[-oos_n:]
             y_cv, y_oos = y_all.iloc[:-oos_n], y_all.iloc[-oos_n:]
+            # Purge horizon boundary bars so forward-return labels don't leak
+            # OOS prices into training (matches the CLI OOS split).
+            if _horizon > 0 and len(X_cv) > _horizon:
+                X_cv, y_cv = X_cv.iloc[:-_horizon], y_cv.iloc[:-_horizon]
         else:
             X_cv, X_oos = X_all, X_all.iloc[0:0]
             y_cv, y_oos = y_all, y_all.iloc[0:0]
 
-        # 3. Walk-forward cross-validation
-        wf = walk_forward_eval(X_cv, y_cv)
+        # 3. Walk-forward cross-validation (gap purges the label horizon)
+        wf = walk_forward_eval(X_cv, y_cv, horizon=_horizon)
 
         # 4. Final model on full in-sample data
         import os as _os
