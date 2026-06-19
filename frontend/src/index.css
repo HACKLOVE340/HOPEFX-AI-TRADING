@@ -171,8 +171,11 @@
     @apply px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-5;
     display: flex;
     flex-direction: column;
-    flex: 1;
-    min-height: 0;
+    /* flex: 1 0 auto — grow to fill the scroller when content is short, but size
+       to content (never shrink below it) when tall, so the .app-shell-scroller
+       can scroll to reveal everything. Plain `flex: 1` (= 1 1 0%) clamped every
+       page to the viewport height and trapped taller content. */
+    flex: 1 0 auto;
     width: 100%;
     max-width: 1536px; /* screen-2xl */
     margin-left: auto;

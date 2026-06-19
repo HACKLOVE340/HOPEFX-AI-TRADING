@@ -168,8 +168,8 @@ function DashboardInner() {
 
   return (
     <div
-      className="flex flex-col bg-[#080c14] overflow-hidden"
-      style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0, height: 0 }}
+      className="flex flex-col bg-[#080c14] overflow-y-auto"
+      style={{ fontFamily: "'Inter', system-ui, sans-serif", flex: 1, minHeight: 0 }}
     >
       {/* ── Top: price ticker + account bar + quick actions ─────────────── */}
       <PanelErrorBoundary title="Price Ticker">
@@ -182,8 +182,10 @@ function DashboardInner() {
 
       {/* ── Main grid — desktop: 12-col fixed; mobile: scrollable stack ── */}
 
-      {/* Desktop (lg+): original 12-col grid */}
-      <div className="hidden lg:grid flex-1 min-h-0 grid-cols-12 grid-rows-2 gap-2 p-2 overflow-hidden">
+      {/* Desktop (lg+): 12-col grid with content-sized rows (min 280px) so
+          panels grow to fit their content instead of clipping/overlapping.
+          The page scrolls when the cockpit is taller than the viewport. */}
+      <div className="hidden lg:grid grid-cols-12 auto-rows-[minmax(280px,auto)] gap-2 p-2">
         <div className="col-span-5 row-span-2 min-h-0">
           <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
         </div>
@@ -222,7 +224,7 @@ function DashboardInner() {
 
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
       {/* Desktop */}
-      <div className="hidden lg:grid h-52 shrink-0 grid-cols-12 gap-2 px-2 pb-2">
+      <div className="hidden lg:grid min-h-[240px] grid-cols-12 gap-2 px-2 pb-2">
         <div className="col-span-5 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
         </div>
