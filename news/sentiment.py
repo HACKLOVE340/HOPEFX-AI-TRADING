@@ -15,6 +15,7 @@ Author: HOPEFX Development Team
 """
 
 import logging
+import os
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -213,7 +214,7 @@ class FinancialSentimentAnalyzer:
         "warning",
     }
 
-    def __init__(self, use_vader: bool = True):
+    def __init__(self, use_vader: bool = True, use_finbert: bool | None = None):
         self.use_vader = use_vader and VADER_AVAILABLE
 
         if self.use_vader:
@@ -224,6 +225,22 @@ class FinancialSentimentAnalyzer:
                 logger.warning("VADER requested but not available")
 
         self.logger = logging.getLogger(self.__class__.__name__)
+
+        # Optional FinBERT upgrade. When enabled (env NEWS_FINBERT_SENTIMENT=true
+        # by default, override via the kwarg) the analyzer prefers the
+        # transformer over VADER/keywords. FinBERTScorer itself degrades to VADER
+        # when transformers/torch are unavailable, so enabling this is always
+        # safe — behaviour is unchanged unless the deps are actually installed.
+        if use_finbert is None:
+            use_finbert = os.getenv("NEWS_FINBERT_SENTIMENT", "true").lower() in ("1", "true", "yes")
+        self._finbert = None
+        if use_finbert:
+            try:
+                from data_layer.sentiment.engine import FinBERTScorer
+
+                self._finbert = FinBERTScorer()
+            except Exception as exc:  # pragma: no cover - import guard
+                self.logger.debug("FinBERT scorer unavailable (%s) — using VADER/keywords", exc)
 
     def analyze(self, text: str, title: str = "") -> SentimentScore:
         """
@@ -239,6 +256,18 @@ class FinancialSentimentAnalyzer:
         try:
             # Combine title and text (weight title more)
             combined_text = f"{title} {title} {text}"
+
+            # Prefer FinBERT (real financial transformer) when available.
+            if self._finbert is not None and self._finbert.is_available:
+                polarity = float(self._finbert.score(combined_text))  # [-1, 1]
+                magnitude = min(abs(polarity), 1.0)
+                return SentimentScore(
+                    polarity=polarity,
+                    subjectivity=magnitude,            # strong sentiment ≈ more subjective
+                    confidence=max(magnitude, 0.5),    # softmax prob of winning class
+                    label=self._get_label(polarity),
+                    compound_score=polarity,
+                )
 
             # Get VADER sentiment if available
             if self.vader:
