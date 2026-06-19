@@ -18,6 +18,7 @@ import { signalsApi } from '../hooks/useApi';
 import { MlSafetyStrip } from '../components/intelligence/MlSafetyStrip';
 import { RiskTransparencyStrip } from '../components/intelligence/RiskTransparencyStrip';
 import { SignalIntelligenceCard } from '../components/intelligence/SignalIntelligenceCard';
+import { SignalDistribution } from '../components/intelligence/SignalDistribution';
 import type { EngineSignal, SignalAnalyticsReport } from '../types';
 
 const Stat: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color }) => (
@@ -112,6 +113,14 @@ const AIIntelligence: React.FC = () => {
           <div style={{ fontSize: 13, color: '#475569' }}>Analytics unavailable.</div>
         )}
       </div>
+
+      {/* Signal distribution — where/when the engine finds edge */}
+      {a && a.signals_generated > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <SectionTitle>Signal Distribution</SectionTitle>
+          <SignalDistribution analytics={a} />
+        </div>
+      )}
 
       {/* Live engine signals */}
       <div>
