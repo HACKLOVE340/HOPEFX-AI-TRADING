@@ -118,7 +118,7 @@ function buildLevels(
 
 export function OrderBookDepth() {
   const micro = useStore((s) => s.microstructure);
-  const tick  = useStore((s) => s.prices['XAU_USD'] as PriceTick | undefined);
+  const tick  = useStore((s) => s.prices['XAU/USD'] as PriceTick | undefined);
 
   // Explicit parentheses: ?? has lower precedence than ?: so without them
   // `tick?.mid ?? micro ? ... : 0` would parse as `(tick?.mid ?? micro) ? ... : 0`.

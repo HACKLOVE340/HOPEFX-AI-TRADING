@@ -8,8 +8,14 @@ import React, { useEffect, useRef } from 'react';
 import { createChart, AreaSeries } from 'lightweight-charts';
 import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import { useStore } from '../../store';
+import type { PriceTick } from '../../store';
 import { Panel } from '../ui/Panel';
 import { fmtPrice, cn } from '../../lib/utils';
+
+// Stable empty-array reference. Returning a fresh `[]` from a zustand selector
+// breaks useSyncExternalStore's snapshot caching and triggers an infinite
+// re-render loop (React error #185).
+const EMPTY_HISTORY: PriceTick[] = [];
 
 // ── Pressure gauge (SVG arc rings) ────────────────────────────────────────────
 
@@ -164,7 +170,7 @@ function DeltaChart({ history }: { history: number[] }) {
 
 export function MicrostructurePanel() {
   const micro    = useStore((s) => s.microstructure);
-  const history  = useStore((s) => s.priceHistory['XAU_USD'] ?? []);
+  const history  = useStore((s) => s.priceHistory['XAU/USD'] ?? EMPTY_HISTORY);
   const deltaHist = history.slice(-40).map((t) => t.mid);
 
   if (!micro) {

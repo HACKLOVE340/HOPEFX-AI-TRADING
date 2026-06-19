@@ -164,9 +164,9 @@ export function SentimentGauge() {
         <div className="px-4 pt-3 pb-2 border-b border-[#1e2d3d] shrink-0">
           <ArcGauge score={score} />
 
-          {/* Score + stats row */}
-          <div className="flex items-center justify-between mt-2 px-2">
-            <div className="flex flex-col items-center">
+          {/* Score + stats — 2×2 grid so the labels never collide in a narrow panel */}
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2 px-2">
+            <div className="flex flex-col items-center min-w-0">
               <span className="text-[9px] text-slate-600 uppercase tracking-wider">Score</span>
               <span
                 className="font-mono tabular-nums text-sm font-bold"
