@@ -251,6 +251,11 @@ jobs:
         env:
           PYTHONPATH: .
 
+      - name: Gate M — ML edge regression
+        run: python scripts/ci/gate_m_ml_edge.py
+        env:
+          PYTHONPATH: .
+
       - name: Print OOS metrics summary
         run: |
           python - <<'PYEOF'

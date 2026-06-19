@@ -776,3 +776,26 @@ jobs:
           python-version: "3.11"
       - name: Run Gate L
         run: python scripts/ci/gate_l_safety_invariants.py
+
+  gate-m-ml-edge:
+    name: Gate M — ML edge regression (ML must beat the rule baseline)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+      - name: Cache pip packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ci-3.11-${{ hashFiles('requirements-ci.txt') }}
+      - name: Install dependencies
+        run: pip install --retries 5 --timeout 60 -r requirements-ci.txt
+      - name: Run Gate M
+        run: python scripts/ci/gate_m_ml_edge.py
