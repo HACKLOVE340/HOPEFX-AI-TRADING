@@ -18,7 +18,9 @@ import React, {
   createContext, useCallback, useContext, useEffect,
   useRef, useState,
 } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useStore } from '../store';
+import { NAV_ITEMS } from './sidebar/navConfig';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -172,14 +174,31 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 
 export const CommandPalette: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const favorites      = useStore((s) => s.favorites);
+  const toggleFavorite = useStore((s) => s.toggleFavorite);
   const [open, setOpen]         = useState(false);
   const [query, setQuery]       = useState('');
   const [selected, setSelected] = useState(0);
   const [dynamicItems, setDynamicItems] = useState<CommandItem[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Context-aware quick actions (e.g. pin the page you're currently on).
+  const actionItems: CommandItem[] = [];
+  const currentNav = NAV_ITEMS.find((i) => location.pathname.startsWith(i.path) && i.path !== '/');
+  if (currentNav) {
+    const pinned = favorites.includes(currentNav.path);
+    actionItems.push({
+      id: 'action-pin-current',
+      label: pinned ? `Unpin "${currentNav.label}" from favorites` : `Pin "${currentNav.label}" to favorites`,
+      icon: pinned ? '★' : '☆',
+      category: 'Actions',
+      action: () => toggleFavorite(currentNav.path),
+    });
+  }
+
   const staticItems = buildStaticCommands(navigate);
-  const allItems    = [...staticItems, ...dynamicItems];
+  const allItems    = [...actionItems, ...staticItems, ...dynamicItems];
 
   const filtered = allItems
     .filter(item => fuzzyMatch(query, item.label) || fuzzyMatch(query, item.desc ?? '') || fuzzyMatch(query, item.category ?? ''))

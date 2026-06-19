@@ -14,7 +14,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan,
-  selectFavorites, selectCollapsedGroups,
+  selectFavorites, selectCollapsedGroups, selectRecentPaths,
 } from '../../store';
 import { ThemeToggle } from '../ThemeToggle';
 import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
@@ -315,6 +315,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   const clearAuth = useStore((s) => s.clearAuth);
   const favorites       = useStore(selectFavorites);
   const collapsedGroups = useStore(selectCollapsedGroups);
+  const recentPaths     = useStore(selectRecentPaths);
   const toggleFavorite  = useStore((s) => s.toggleFavorite);
   const toggleGroup     = useStore((s) => s.toggleGroup);
   const pushRecentPath  = useStore((s) => s.pushRecentPath);
@@ -390,6 +391,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         return true;
       });
   }, [favorites, admin, superAdmin]);
+
+  // Recently-visited items: exclude the current page and anything already
+  // pinned (to avoid duplication with Favorites), cap at 4.
+  const recentItems = useMemo(() => {
+    return recentPaths
+      .filter((p) => p !== location.pathname && !favoriteSet.has(p))
+      .map((p) => NAV_ITEMS.find((i) => i.path === p))
+      .filter((i): i is NavItem => {
+        if (!i) return false;
+        if (i.superAdminOnly) return superAdmin;
+        if (i.adminOnly)      return admin;
+        return true;
+      })
+      .slice(0, 4);
+  }, [recentPaths, location.pathname, favoriteSet, admin, superAdmin]);
 
   return (
     <aside style={{
@@ -511,6 +527,32 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
                     collapsed={false}
                     unreadCount={unreadCount}
                     isFavorite
+                    onToggleFavorite={toggleFavorite}
+                    onNavigate={onNavigate}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Recent — recently visited, expanded sidebar only */}
+            {!collapsed && recentItems.length > 0 && (
+              <div>
+                <div style={{
+                  fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+                  letterSpacing: '0.08em', padding: '8px 14px 4px',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <span>🕘</span> Recent
+                </div>
+                {recentItems.map((item) => (
+                  <NavItemRow
+                    key={`recent-${item.path}`}
+                    item={item}
+                    active={isActive(item)}
+                    locked={isLocked(item)}
+                    collapsed={false}
+                    unreadCount={unreadCount}
+                    isFavorite={favoriteSet.has(item.path)}
                     onToggleFavorite={toggleFavorite}
                     onNavigate={onNavigate}
                   />
