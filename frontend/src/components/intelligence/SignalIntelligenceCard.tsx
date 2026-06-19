@@ -82,7 +82,7 @@ export const SignalIntelligenceCard: React.FC<{ signal: EngineSignal }> = ({ sig
   const stale = signal.is_valid === false;
 
   return (
-    <div style={{
+    <div className="hover-lift" style={{
       background: '#0d1421', border: '1px solid #1e293b', borderRadius: 12,
       padding: 14, opacity: stale ? 0.6 : 1,
     }}>

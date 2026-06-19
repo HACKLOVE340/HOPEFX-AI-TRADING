@@ -19,6 +19,9 @@ import { MlSafetyStrip } from '../components/intelligence/MlSafetyStrip';
 import { RiskTransparencyStrip } from '../components/intelligence/RiskTransparencyStrip';
 import { SignalIntelligenceCard } from '../components/intelligence/SignalIntelligenceCard';
 import { SignalDistribution } from '../components/intelligence/SignalDistribution';
+import { EmptyState } from '../components/EmptyState';
+import { Spinner } from '../components/Spinner';
+import { PanelSkeleton } from '../components/ui/Skeleton';
 import type { EngineSignal, SignalAnalyticsReport } from '../types';
 
 const Stat: React.FC<{ label: string; value: string; sub?: string; color?: string }> = ({ label, value, sub, color }) => (
@@ -60,7 +63,7 @@ const AIIntelligence: React.FC = () => {
   const totalOutcomes = a ? a.hit_rate.tp + a.hit_rate.sl + a.hit_rate.expired : 0;
 
   return (
-    <div style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
+    <div className="fade-in" style={{ padding: 20, maxWidth: 1100, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 18 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc', margin: 0 }}>
@@ -91,7 +94,9 @@ const AIIntelligence: React.FC = () => {
           Signal Quality
         </SectionTitle>
         {analyticsQuery.isLoading ? (
-          <div style={{ fontSize: 13, color: '#475569' }}>Loading analytics…</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
+            <Spinner size="sm" /> Loading analytics…
+          </div>
         ) : a ? (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Stat label="Signals generated" value={a.signals_generated.toLocaleString()} />
@@ -132,19 +137,24 @@ const AIIntelligence: React.FC = () => {
           Live Engine Signals
         </SectionTitle>
         {signalsQuery.isLoading ? (
-          <div style={{ fontSize: 13, color: '#475569' }}>Loading signals…</div>
-        ) : signals.length === 0 ? (
           <div style={{
-            background: '#0d1421', border: '1px dashed #1e293b', borderRadius: 12,
-            padding: '32px 16px', textAlign: 'center',
+            display: 'grid', gap: 12,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
           }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#94a3b8' }}>No active signals</div>
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 4 }}>
-              The engine is monitoring the market — signals appear here as they fire.
-            </div>
+            {Array.from({ length: 3 }).map((_, i) => <PanelSkeleton key={i} rows={5} />)}
           </div>
+        ) : signals.length === 0 ? (
+          <EmptyState
+            icon="📡"
+            title="No active signals"
+            description="The engine is monitoring the market — signals appear here as they fire."
+            links={[
+              { label: 'Generate AI signals', href: '/ai-strategy', icon: '✨' },
+              { label: 'View signal feed', href: '/signals', icon: '📡' },
+            ]}
+          />
         ) : (
-          <div style={{
+          <div className="stagger" style={{
             display: 'grid', gap: 12,
             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
           }}>
