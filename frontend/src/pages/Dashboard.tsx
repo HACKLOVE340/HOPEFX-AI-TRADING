@@ -17,7 +17,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createChart, AreaSeries, type IChartApi, type ISeriesApi, ColorType } from 'lightweight-charts';
-import { PageHeader, EmptyState, CrossLinkBar } from '../components';
+import { PageHeader, EmptyState, CrossLinkBar, Spinner } from '../components';
 import { PanelSkeleton } from '../components/ui/Skeleton';
 import { useFlashHighlight, useFlashMap } from '../hooks/useFlashHighlight';
 import {
@@ -366,7 +366,11 @@ const MlAccuracyCard: React.FC = () => {
     return <p style={{ color: '#f87171', fontSize: 13, padding: '16px 0' }}>{mlErr}</p>;
   }
   if (!data) {
-    return <p style={{ color: '#475569', fontSize: 13, padding: '16px 0' }}>Loading model metrics…</p>;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13, padding: '16px 0' }}>
+        <Spinner size="sm" /> Loading model metrics…
+      </div>
+    );
   }
   // Guard against partial API responses — all numeric fields may be absent
   // on first evaluation or when the model has not yet accumulated enough signals.
@@ -463,8 +467,8 @@ const MarketRegimePanel: React.FC = () => {
 
   if (err || !regime) {
     return (
-      <div style={{ color: '#475569', fontSize: 13 }}>
-        {err ? 'Regime data unavailable.' : 'Loading…'}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#475569', fontSize: 13 }}>
+        {err ? 'Regime data unavailable.' : <><Spinner size="sm" /> Loading…</>}
       </div>
     );
   }
@@ -636,7 +640,7 @@ const Dashboard: React.FC = () => {
   const acc = account;
 
   return (
-    <div className="page-content">
+    <div className="page-content fade-in">
       <PageHeader
         title="Dashboard"
         subtitle="Real-time trading overview"

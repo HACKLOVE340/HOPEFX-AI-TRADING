@@ -86,7 +86,7 @@ const SymbolCard: React.FC<SymbolCardProps> = ({ symbol, tick, history, selected
       onClick={onClick}
       style={{ background: selected ? undefined : flash, transition: 'background 0.4s ease' }}
       className={cn(
-        'flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border text-left transition-all',
+        'hover-lift flex flex-col gap-1.5 px-3 py-2.5 rounded-lg border text-left transition-all',
         'min-w-[148px] flex-shrink-0',
         selected
           ? 'bg-[#1e3a5f] border-[#3b82f6] shadow-[0_0_0_1px_#3b82f6]'
@@ -500,7 +500,7 @@ const Trade: React.FC = () => {
   }, []);
 
   return (
-    <div className="page-content gap-3 sm:gap-4">
+    <div className="page-content gap-3 sm:gap-4 fade-in">
 
       <PageHeader
         title="Trade"
@@ -557,7 +557,7 @@ const Trade: React.FC = () => {
       <KeyboardHints />
 
       {/* Symbol selector strip — numbers 1-6 select via keyboard */}
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
+      <div className="stagger flex gap-2 overflow-x-auto pb-1 scrollbar-thin scrollbar-thumb-[#1e2d3d]">
         {SYMBOLS.map((sym, i) => (
           <SymbolCard
             key={sym}

@@ -594,7 +594,7 @@ const Portfolio: React.FC = () => {
   };
 
   return (
-    <div className="page-content gap-3 sm:gap-4">
+    <div className="page-content gap-3 sm:gap-4 fade-in">
 
       <PageHeader
         title="Portfolio"
