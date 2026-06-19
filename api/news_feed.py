@@ -40,20 +40,42 @@ def _get_news_manager():
 
 
 def _get_nuclear_scorer():
-    """Retrieve the nuclear wordmap scorer."""
+    """Retrieve the geopolitical risk scorer (WORDMAP + optional LLM).
+
+    Returns an LLMGeopoliticalScorer, which wraps the deterministic
+    NuclearWordMapScorer and adds an optional LLM extraction path (gated by
+    GEOPOLITICAL_LLM_EXTRACTION). The wrapper is always safe: with the flag off
+    it scores via the WORDMAP exactly as before.
+    """
     try:
         from core.app_state import app_state
 
         scorer = getattr(app_state, "nuclear_scorer", None)
         if scorer is None:
-            from news.nuclear_wordmap_scorer import NuclearWordmapScorer
+            from news.geopolitical_llm import LLMGeopoliticalScorer
 
-            scorer = NuclearWordmapScorer()
+            scorer = LLMGeopoliticalScorer()
             app_state.nuclear_scorer = scorer
         return scorer
     except Exception as e:
         logger.warning(f"Nuclear scorer init failed: {e}")
         return None
+
+
+async def _severity(scorer, text: str) -> int:
+    """Return the 0–10 geopolitical severity for a text.
+
+    Uses the scorer's async LLM path when available (falls back to WORDMAP
+    internally). Previously this module called a non-existent ``score_text``
+    method, so every Exception was swallowed and the score was always 0 — this
+    restores real scoring and adds the LLM upgrade.
+    """
+    try:
+        severity, _action, _score, _meta = await scorer.score_event_llm(text)
+        return int(severity)
+    except Exception as exc:
+        logger.debug("severity scoring failed: %s", exc)
+        return 0
 
 
 @router.get("/feed")
@@ -78,8 +100,9 @@ async def get_news_feed(
                 # Score each article with nuclear wordmap
                 nuclear_score = 0
                 if scorer and article.get("title"):
-                    with contextlib.suppress(Exception):
-                        nuclear_score = scorer.score_text(article.get("title", "") + " " + article.get("summary", ""))
+                    nuclear_score = await _severity(
+                        scorer, article.get("title", "") + " " + article.get("summary", "")
+                    )
 
                 articles.append(
                     {
@@ -125,16 +148,11 @@ async def get_nuclear_score(
         with contextlib.suppress(Exception):
             articles = await mgr.get_latest(limit=20, symbol=symbol)
 
-    # Aggregate nuclear score
+    # Aggregate nuclear score (severity 0–10 per article)
     scores = []
     for article in articles:
-        try:
-            text = article.get("title", "") + " " + article.get("summary", "")
-            score = scorer.score_text(text)
-            scores.append(score)
-        except Exception as _exc:
-            logger.debug("news sentiment scoring failed for item: %s", _exc)
-            continue
+        text = article.get("title", "") + " " + article.get("summary", "")
+        scores.append(await _severity(scorer, text))
 
     avg_score = sum(scores) / len(scores) if scores else 0
     max_score = max(scores) if scores else 0
@@ -143,7 +161,8 @@ async def get_nuclear_score(
         "symbol": symbol,
         "score": round(avg_score, 2),
         "max_score": round(max_score, 2),
-        "alert": abs(avg_score) > 50 or abs(max_score) > 75,
+        # Severity scale 0–10: ≥7 = hedge/nuclear, ≥5 = pause new entries.
+        "alert": max_score >= 7 or avg_score >= 5,
         "articles_analyzed": len(scores),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -203,16 +222,12 @@ async def get_sentiment_latest(
     if scorer and articles:
         scores = []
         for article in articles:
-            try:
-                text = article.get("title", "") + " " + article.get("summary", "")
-                score = scorer.score_text(text)
-                scores.append(score)
-            except Exception as _exc:
-                logger.debug("news sentiment scoring failed for item: %s", _exc)
-                continue
+            text = article.get("title", "") + " " + article.get("summary", "")
+            scores.append(await _severity(scorer, text))
         if scores:
             overall_score = sum(scores) / len(scores)
-            nuclear_alert = abs(overall_score) > 50
+            # Severity scale 0–10: ≥5 means at least "pause new entries".
+            nuclear_alert = overall_score >= 5
 
     return {
         "symbol": symbol or "XAUUSD",

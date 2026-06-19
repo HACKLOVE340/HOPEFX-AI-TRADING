@@ -246,7 +246,8 @@ def _load_csv(path: str) -> pd.DataFrame:
     cols = {c.lower(): c for c in df.columns}
     ts = cols.get("timestamp") or cols.get("date") or cols.get("time")
     if ts:
-        df.index = pd.to_datetime(df[ts], errors="coerce", utc=True).tz_localize(None)
+        dt = pd.to_datetime(df[ts], errors="coerce", utc=True)
+        df.index = dt.dt.tz_localize(None)
         df = df.drop(columns=[ts])
     df.columns = [c.lower() for c in df.columns]
     return df[["open", "high", "low", "close", "volume"]].dropna()
