@@ -1,0 +1,39 @@
+{
+  "episode": 13,
+  "title": "Prop Firm Challenge Guide",
+  "level": "Intermediate",
+  "scenes": [
+    {
+      "heading": "Prop Firm Challenge Guide",
+      "narration": "Welcome to HOPEFX Academy, episode 13: Prop Firm Challenge Guide. Prop firm rules (FTMO, MyFF, The5ers, TopStep), prop-firm mode config, monitoring progress and a passing strategy.",
+      "duration_s": 10
+    },
+    {
+      "heading": "Prop firm rules overview",
+      "narration": "Prop firm rules overview. In this section we cover prop firm rules overview as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 13
+    },
+    {
+      "heading": "Configure prop firm mode",
+      "narration": "Configure prop firm mode. In this section we cover configure prop firm mode as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 13
+    },
+    {
+      "heading": "Monitor challenge progress",
+      "narration": "Monitor challenge progress. In this section we cover monitor challenge progress as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Strategy for passing",
+      "narration": "Strategy for passing. In this section we cover strategy for passing as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Wrap-up",
+      "narration": "That wraps episode 13. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode.",
+      "duration_s": 10
+    }
+  ],
+  "total_duration_s": 70,
+  "voice_script": "Welcome to HOPEFX Academy, episode 13: Prop Firm Challenge Guide. Prop firm rules (FTMO, MyFF, The5ers, TopStep), prop-firm mode config, monitoring progress and a passing strategy.\n\nProp firm rules overview. In this section we cover prop firm rules overview as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.\n\nConfigure prop firm mode. In this section we cover configure prop firm mode as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.\n\nMonitor challenge progress. In this section we cover monitor challenge progress as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.\n\nStrategy for passing. In this section we cover strategy for passing as part of Prop Firm Challenge Guide. Follow along on screen as each step is demonstrated in the platform.\n\nThat wraps episode 13. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode."
+}

@@ -1,0 +1,13 @@
+Welcome to HOPEFX Academy, episode 15: Monitoring with Grafana. Start Grafana/Prometheus, walk the trading/ML/health dashboards and wire up Telegram + email alerts.
+
+Start Grafana and Prometheus. In this section we cover start grafana and prometheus as part of Monitoring with Grafana. Follow along on screen as each step is demonstrated in the platform.
+
+Trading Performance dashboard. In this section we cover trading performance dashboard as part of Monitoring with Grafana. Follow along on screen as each step is demonstrated in the platform.
+
+ML Model Metrics dashboard. In this section we cover ml model metrics dashboard as part of Monitoring with Grafana. Follow along on screen as each step is demonstrated in the platform.
+
+System Health dashboard. In this section we cover system health dashboard as part of Monitoring with Grafana. Follow along on screen as each step is demonstrated in the platform.
+
+Setting up alerts. In this section we cover setting up alerts as part of Monitoring with Grafana. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 15. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

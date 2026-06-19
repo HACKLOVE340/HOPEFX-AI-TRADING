@@ -1,0 +1,17 @@
+Welcome to HOPEFX Academy, episode 7: SMC/ICT Strategy. Smart Money Concepts: order blocks, fair value gaps, liquidity sweeps, the 8 optimal setups, and fusing SMC with ML.
+
+SMC theory. In this section we cover smc theory as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+Order blocks. In this section we cover order blocks as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+Fair value gaps. In this section we cover fair value gaps as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+Liquidity sweeps. In this section we cover liquidity sweeps as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+Built-in SMC strategy. In this section we cover built-in smc strategy as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+ITS-8-OS. In this section we cover its-8-os as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+Combining SMC with ML. In this section we cover combining smc with ml as part of SMC/ICT Strategy. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 7. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

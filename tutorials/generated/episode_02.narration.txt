@@ -1,0 +1,13 @@
+Welcome to HOPEFX Academy, episode 2: Installation & Setup. Clone, install, configure the .env secrets, run migrations and verify a green health check.
+
+Prerequisites check. In this section we cover prerequisites check as part of Installation & Setup. Follow along on screen as each step is demonstrated in the platform.
+
+Clone and install. In this section we cover clone and install as part of Installation & Setup. Follow along on screen as each step is demonstrated in the platform.
+
+Environment configuration. In this section we cover environment configuration as part of Installation & Setup. Follow along on screen as each step is demonstrated in the platform.
+
+Database setup and first run. In this section we cover database setup and first run as part of Installation & Setup. Follow along on screen as each step is demonstrated in the platform.
+
+Verify the installation. In this section we cover verify the installation as part of Installation & Setup. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 2. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

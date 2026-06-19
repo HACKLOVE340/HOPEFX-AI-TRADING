@@ -1,0 +1,39 @@
+{
+  "episode": 1,
+  "title": "Introduction to HOPEFX",
+  "level": "Beginner",
+  "scenes": [
+    {
+      "heading": "Introduction to HOPEFX",
+      "narration": "Welcome to HOPEFX Academy, episode 1: Introduction to HOPEFX. What HOPEFX is, the four-layer architecture, and a live demo of signals and the ML model.",
+      "duration_s": 10
+    },
+    {
+      "heading": "What is HOPEFX?",
+      "narration": "What is HOPEFX?. In this section we cover what is hopefx? as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Architecture overview",
+      "narration": "Architecture overview. In this section we cover architecture overview as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 11
+    },
+    {
+      "heading": "Live demo",
+      "narration": "Live demo. In this section we cover live demo as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 11
+    },
+    {
+      "heading": "What's next",
+      "narration": "What's next. In this section we cover what's next as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 11
+    },
+    {
+      "heading": "Wrap-up",
+      "narration": "That wraps episode 1. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode.",
+      "duration_s": 10
+    }
+  ],
+  "total_duration_s": 65,
+  "voice_script": "Welcome to HOPEFX Academy, episode 1: Introduction to HOPEFX. What HOPEFX is, the four-layer architecture, and a live demo of signals and the ML model.\n\nWhat is HOPEFX?. In this section we cover what is hopefx? as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.\n\nArchitecture overview. In this section we cover architecture overview as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.\n\nLive demo. In this section we cover live demo as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.\n\nWhat's next. In this section we cover what's next as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.\n\nThat wraps episode 1. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode."
+}

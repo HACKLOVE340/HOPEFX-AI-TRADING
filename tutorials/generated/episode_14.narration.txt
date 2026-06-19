@@ -1,0 +1,11 @@
+Welcome to HOPEFX Academy, episode 14: Social Trading & Copy Trading. Opt into the social feed, browse the leaderboard, follow traders and set up automatic copy trading.
+
+Opt in to the social feed. In this section we cover opt in to the social feed as part of Social Trading & Copy Trading. Follow along on screen as each step is demonstrated in the platform.
+
+Browse the leaderboard. In this section we cover browse the leaderboard as part of Social Trading & Copy Trading. Follow along on screen as each step is demonstrated in the platform.
+
+Follow a trader. In this section we cover follow a trader as part of Social Trading & Copy Trading. Follow along on screen as each step is demonstrated in the platform.
+
+Auto copy trading setup. In this section we cover auto copy trading setup as part of Social Trading & Copy Trading. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 14. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

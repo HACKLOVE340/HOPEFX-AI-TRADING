@@ -1,0 +1,44 @@
+{
+  "episode": 3,
+  "title": "Your First Backtest",
+  "level": "Beginner",
+  "scenes": [
+    {
+      "heading": "Your First Backtest",
+      "narration": "Welcome to HOPEFX Academy, episode 3: Your First Backtest. Smoke test, real 50-year gold backtest, running it via the API, and how to read the results honestly.",
+      "duration_s": 11
+    },
+    {
+      "heading": "What is backtesting?",
+      "narration": "What is backtesting?. In this section we cover what is backtesting? as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Smoke test (30 seconds)",
+      "narration": "Smoke test (30 seconds). In this section we cover smoke test (30 seconds) as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Real data backtest",
+      "narration": "Real data backtest. In this section we cover real data backtest as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Backtest via the API",
+      "narration": "Backtest via the API. In this section we cover backtest via the api as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Interpreting results",
+      "narration": "Interpreting results. In this section we cover interpreting results as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 11
+    },
+    {
+      "heading": "Wrap-up",
+      "narration": "That wraps episode 3. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode.",
+      "duration_s": 10
+    }
+  ],
+  "total_duration_s": 80,
+  "voice_script": "Welcome to HOPEFX Academy, episode 3: Your First Backtest. Smoke test, real 50-year gold backtest, running it via the API, and how to read the results honestly.\n\nWhat is backtesting?. In this section we cover what is backtesting? as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.\n\nSmoke test (30 seconds). In this section we cover smoke test (30 seconds) as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.\n\nReal data backtest. In this section we cover real data backtest as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.\n\nBacktest via the API. In this section we cover backtest via the api as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.\n\nInterpreting results. In this section we cover interpreting results as part of Your First Backtest. Follow along on screen as each step is demonstrated in the platform.\n\nThat wraps episode 3. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode."
+}

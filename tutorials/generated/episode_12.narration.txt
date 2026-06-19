@@ -1,0 +1,11 @@
+Welcome to HOPEFX Academy, episode 12: Deploying to Production. Pre-deployment checklist, Docker Compose, Nginx + TLS, and monitoring with Grafana/Prometheus.
+
+Pre-deployment checklist. In this section we cover pre-deployment checklist as part of Deploying to Production. Follow along on screen as each step is demonstrated in the platform.
+
+Docker Compose deployment. In this section we cover docker compose deployment as part of Deploying to Production. Follow along on screen as each step is demonstrated in the platform.
+
+Nginx + TLS. In this section we cover nginx + tls as part of Deploying to Production. Follow along on screen as each step is demonstrated in the platform.
+
+Monitoring. In this section we cover monitoring as part of Deploying to Production. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 12. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

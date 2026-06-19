@@ -1,0 +1,86 @@
+name: Generate Tutorials
+
+# Self-updating tutorial videos: when an episode script (or the generator) changes,
+# regenerate the affected storyboards/manifests and commit them so the Academy
+# stays in sync with the app. Rendered MP4s are produced where the media tools +
+# voice/avatar keys are available; otherwise the storyboard manifests are refreshed.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/tutorials.py"            # episode catalogue (script source of truth)
+      - "docs/VIDEO_TUTORIALS.md"     # long-form scripts
+      - "tutorials/**"                # the generator itself
+      - "scripts/generate_tutorials.py"
+  schedule:
+    - cron: "0 6 * * 1"              # weekly safety re-sync (Mondays 06:00 UTC)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Force-regenerate every episode"
+        type: boolean
+        default: false
+      provider:
+        description: "Video provider (narrated_slides | avatar)"
+        type: string
+        default: "narrated_slides"
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Regenerate tutorial storyboards/videos
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write   # commits refreshed manifests/registry back to the repo
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip packages
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-ci-3.11-${{ hashFiles('requirements-ci.txt') }}
+
+      - name: Install dependencies
+        run: pip install --retries 5 --timeout 60 -r requirements-ci.txt
+
+      # Render tools for the free narrated-slides provider. ffmpeg via apt;
+      # Pillow + a local TTS via pip. Avatar/premium voices are opt-in via secrets.
+      - name: Install render tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+          pip install Pillow pyttsx3 || true
+
+      - name: Generate tutorials
+        env:
+          TUTORIAL_VIDEO_PROVIDER: ${{ github.event.inputs.provider || 'narrated_slides' }}
+          TUTORIAL_TTS_API_KEY: ${{ secrets.TUTORIAL_TTS_API_KEY }}
+          TUTORIAL_AVATAR_API_KEY: ${{ secrets.TUTORIAL_AVATAR_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            python scripts/generate_tutorials.py --force
+          else
+            python scripts/generate_tutorials.py
+          fi
+
+      - name: Commit refreshed manifests/registry
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tutorials/generated/registry.json tutorials/generated/*.manifest.json tutorials/generated/*.narration.txt
+          if git diff --cached --quiet; then
+            echo "Tutorials unchanged - nothing to commit."
+          else
+            git commit -m "chore(academy): regenerate tutorial storyboards [skip ci]"
+            git push
+          fi

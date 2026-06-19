@@ -1,0 +1,44 @@
+{
+  "episode": 5,
+  "title": "Technical Indicators Deep Dive",
+  "level": "Intermediate",
+  "scenes": [
+    {
+      "heading": "Technical Indicators Deep Dive",
+      "narration": "Welcome to HOPEFX Academy, episode 5: Technical Indicators Deep Dive. Every built-in indicator explained: moving averages, oscillators, volatility, trend and volume.",
+      "duration_s": 8
+    },
+    {
+      "heading": "Moving averages",
+      "narration": "Moving averages. In this section we cover moving averages as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 11
+    },
+    {
+      "heading": "Oscillators",
+      "narration": "Oscillators. In this section we cover oscillators as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 10
+    },
+    {
+      "heading": "Volatility",
+      "narration": "Volatility. In this section we cover volatility as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 10
+    },
+    {
+      "heading": "Trend",
+      "narration": "Trend. In this section we cover trend as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 10
+    },
+    {
+      "heading": "Volume",
+      "narration": "Volume. In this section we cover volume as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 10
+    },
+    {
+      "heading": "Wrap-up",
+      "narration": "That wraps episode 5. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode.",
+      "duration_s": 10
+    }
+  ],
+  "total_duration_s": 69,
+  "voice_script": "Welcome to HOPEFX Academy, episode 5: Technical Indicators Deep Dive. Every built-in indicator explained: moving averages, oscillators, volatility, trend and volume.\n\nMoving averages. In this section we cover moving averages as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.\n\nOscillators. In this section we cover oscillators as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.\n\nVolatility. In this section we cover volatility as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.\n\nTrend. In this section we cover trend as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.\n\nVolume. In this section we cover volume as part of Technical Indicators Deep Dive. Follow along on screen as each step is demonstrated in the platform.\n\nThat wraps episode 5. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode."
+}

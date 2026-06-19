@@ -128,6 +128,15 @@ ml/saved_models/ab_baseline_report.json
 # model_checksums.json is tracked so CI can verify model integrity
 # !ml/saved_models/model_checksums.json
 
+# Rendered tutorial media is heavy + hosted externally; the small storyboard
+# manifests + registry under tutorials/generated/ ARE tracked so the Academy can
+# serve generation status without re-running the pipeline.
+tutorials/generated/*.mp4
+tutorials/generated/*.mov
+tutorials/generated/*.wav
+tutorials/generated/*.mp3
+tutorials/generated/*.png
+
 # Runtime-generated data files
 backtest/results/
 data/paper_trading_gate.json

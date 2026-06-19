@@ -1,0 +1,13 @@
+Welcome to HOPEFX Academy, episode 9: Training the ML Model. When to retrain, the smoke test, a full production retrain, verifying the new model and fallback behaviour.
+
+When to retrain. In this section we cover when to retrain as part of Training the ML Model. Follow along on screen as each step is demonstrated in the platform.
+
+Smoke test first. In this section we cover smoke test first as part of Training the ML Model. Follow along on screen as each step is demonstrated in the platform.
+
+Full production retrain. In this section we cover full production retrain as part of Training the ML Model. Follow along on screen as each step is demonstrated in the platform.
+
+Verify the new model. In this section we cover verify the new model as part of Training the ML Model. Follow along on screen as each step is demonstrated in the platform.
+
+Fallback behaviour. In this section we cover fallback behaviour as part of Training the ML Model. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 9. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

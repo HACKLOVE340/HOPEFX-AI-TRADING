@@ -89,3 +89,22 @@ def test_admin_bypasses_gate(role: str) -> None:
 
 def test_unknown_episode_404() -> None:
     assert _client().get("/api/tutorials/999").status_code == 404
+
+
+def test_generated_video_url_surfaces_from_registry(monkeypatch) -> None:
+    """A rendered video in the generation registry must surface in the catalogue
+    (published=true) and the detail endpoint, with no code change to _EPISODES."""
+    import tutorials.generator as gen
+
+    monkeypatch.setattr(
+        gen, "load_registry",
+        lambda: {"1": {"status": "rendered", "video_url": "https://cdn.example/ep1.mp4"}},
+    )
+
+    client = _client()
+    cat = {e["episode"]: e for e in client.get("/api/tutorials").json()["episodes"]}
+    assert cat[1]["published"] is True   # free episode now has a generated video
+    assert cat[2]["published"] is False  # no registry entry → still not published
+
+    detail = client.get("/api/tutorials/1").json()
+    assert detail["video_url"] == "https://cdn.example/ep1.mp4"

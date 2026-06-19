@@ -214,8 +214,29 @@ def _has_access(user: Any, required_plan: str) -> bool:
         return _PLAN_RANK.get(user_plan, 0) >= _PLAN_RANK.get(required_plan, 0)
 
 
+def _generated_video_url(episode: int) -> str | None:
+    """Look up a generated video URL from the tutorials generation registry.
+
+    The self-updating generator (tutorials/generator.py) writes a registry
+    mapping episode → {status, video_url, ...}. When an episode has been rendered
+    to a playable URL it surfaces here automatically; otherwise None (the script
+    is still a storyboard/manifest awaiting render). Best-effort: any failure
+    falls back to the hardcoded ``video_url`` (None).
+    """
+    try:
+        from tutorials.generator import load_registry
+
+        entry = load_registry().get(str(episode))
+        if entry:
+            return entry.get("video_url")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("tutorials registry lookup failed (%s)", exc)
+    return None
+
+
 def _public_view(ep: dict[str, Any], locked: bool) -> dict[str, Any]:
     """Catalogue projection — never leaks the video_url for a locked episode."""
+    video_url = ep.get("video_url") or _generated_video_url(ep["episode"])
     return {
         "episode": ep["episode"],
         "title": ep["title"],
@@ -229,7 +250,7 @@ def _public_view(ep: dict[str, Any], locked: bool) -> dict[str, Any]:
         "locked": locked,
         # Published flag lets the UI distinguish "locked behind plan" from
         # "not filmed yet" without exposing the URL itself.
-        "published": ep.get("video_url") is not None,
+        "published": video_url is not None,
     }
 
 
@@ -299,5 +320,6 @@ if _FASTAPI_AVAILABLE:
             )
 
         view = _public_view(ep, locked=False)
-        view["video_url"] = ep.get("video_url")  # may be None if not yet filmed
+        # Prefer an explicitly-set URL, else the generated one from the registry.
+        view["video_url"] = ep.get("video_url") or _generated_video_url(episode)
         return view

@@ -1,0 +1,11 @@
+Welcome to HOPEFX Academy, episode 8: ML Trading Introduction. Why ML for trading, the production model, the feature categories, and the abstain mechanism.
+
+Why ML for trading?. In this section we cover why ml for trading? as part of ML Trading Introduction. Follow along on screen as each step is demonstrated in the platform.
+
+The production model. In this section we cover the production model as part of ML Trading Introduction. Follow along on screen as each step is demonstrated in the platform.
+
+Feature categories. In this section we cover feature categories as part of ML Trading Introduction. Follow along on screen as each step is demonstrated in the platform.
+
+The abstain mechanism. In this section we cover the abstain mechanism as part of ML Trading Introduction. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 8. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

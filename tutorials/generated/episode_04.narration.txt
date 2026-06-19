@@ -1,0 +1,11 @@
+Welcome to HOPEFX Academy, episode 4: Interactive Charting. The chart engine, adding indicators, themes/export and live updates over the WebSocket feed.
+
+Creating a candlestick chart. In this section we cover creating a candlestick chart as part of Interactive Charting. Follow along on screen as each step is demonstrated in the platform.
+
+Adding indicators. In this section we cover adding indicators as part of Interactive Charting. Follow along on screen as each step is demonstrated in the platform.
+
+Themes and export. In this section we cover themes and export as part of Interactive Charting. Follow along on screen as each step is demonstrated in the platform.
+
+Real-time chart via WebSocket. In this section we cover real-time chart via websocket as part of Interactive Charting. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 4. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

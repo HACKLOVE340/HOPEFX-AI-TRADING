@@ -1,0 +1,39 @@
+{
+  "episode": 6,
+  "title": "Building Your First Strategy",
+  "level": "Intermediate",
+  "scenes": [
+    {
+      "heading": "Building Your First Strategy",
+      "narration": "Welcome to HOPEFX Academy, episode 6: Building Your First Strategy. Write a BaseStrategy subclass, generate signals, register it and backtest it end-to-end.",
+      "duration_s": 9
+    },
+    {
+      "heading": "Strategy structure (BaseStrategy)",
+      "narration": "Strategy structure (BaseStrategy). In this section we cover strategy structure (basestrategy) as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Signal generation logic",
+      "narration": "Signal generation logic. In this section we cover signal generation logic as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Register and test",
+      "narration": "Register and test. In this section we cover register and test as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Backtest the strategy",
+      "narration": "Backtest the strategy. In this section we cover backtest the strategy as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.",
+      "duration_s": 12
+    },
+    {
+      "heading": "Wrap-up",
+      "narration": "That wraps episode 6. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode.",
+      "duration_s": 10
+    }
+  ],
+  "total_duration_s": 67,
+  "voice_script": "Welcome to HOPEFX Academy, episode 6: Building Your First Strategy. Write a BaseStrategy subclass, generate signals, register it and backtest it end-to-end.\n\nStrategy structure (BaseStrategy). In this section we cover strategy structure (basestrategy) as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.\n\nSignal generation logic. In this section we cover signal generation logic as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.\n\nRegister and test. In this section we cover register and test as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.\n\nBacktest the strategy. In this section we cover backtest the strategy as part of Building Your First Strategy. Follow along on screen as each step is demonstrated in the platform.\n\nThat wraps episode 6. The commands and code shown are in the HOPEFX repository \u2014 see the documentation, and continue with the next episode."
+}

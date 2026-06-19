@@ -1,0 +1,11 @@
+Welcome to HOPEFX Academy, episode 10: Connecting OANDA. Create a practice account, configure credentials, validate connectivity and the 30-day paper-trading gate.
+
+Create a practice account. In this section we cover create a practice account as part of Connecting OANDA. Follow along on screen as each step is demonstrated in the platform.
+
+Configure credentials. In this section we cover configure credentials as part of Connecting OANDA. Follow along on screen as each step is demonstrated in the platform.
+
+Validate connectivity. In this section we cover validate connectivity as part of Connecting OANDA. Follow along on screen as each step is demonstrated in the platform.
+
+The 30-day paper trading gate. In this section we cover the 30-day paper trading gate as part of Connecting OANDA. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 10. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

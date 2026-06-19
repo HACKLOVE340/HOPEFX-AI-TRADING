@@ -1,0 +1,11 @@
+Welcome to HOPEFX Academy, episode 1: Introduction to HOPEFX. What HOPEFX is, the four-layer architecture, and a live demo of signals and the ML model.
+
+What is HOPEFX?. In this section we cover what is hopefx? as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.
+
+Architecture overview. In this section we cover architecture overview as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.
+
+Live demo. In this section we cover live demo as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.
+
+What's next. In this section we cover what's next as part of Introduction to HOPEFX. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 1. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.

@@ -1,0 +1,13 @@
+Welcome to HOPEFX Academy, episode 11: Risk Management Masterclass. Kelly position sizing, daily loss/drawdown limits, the 8-step CVaR pre-trade gate, and the kill switch.
+
+Position sizing (Kelly). In this section we cover position sizing (kelly) as part of Risk Management Masterclass. Follow along on screen as each step is demonstrated in the platform.
+
+Daily loss & drawdown limits. In this section we cover daily loss & drawdown limits as part of Risk Management Masterclass. Follow along on screen as each step is demonstrated in the platform.
+
+The 8-step pre-trade gate (CVaR). In this section we cover the 8-step pre-trade gate (cvar) as part of Risk Management Masterclass. Follow along on screen as each step is demonstrated in the platform.
+
+Kill switch. In this section we cover kill switch as part of Risk Management Masterclass. Follow along on screen as each step is demonstrated in the platform.
+
+VaR and CVaR explained. In this section we cover var and cvar explained as part of Risk Management Masterclass. Follow along on screen as each step is demonstrated in the platform.
+
+That wraps episode 11. The commands and code shown are in the HOPEFX repository — see the documentation, and continue with the next episode.
