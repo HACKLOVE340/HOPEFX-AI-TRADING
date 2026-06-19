@@ -187,6 +187,20 @@ interface SystemEventSlice {
   clearSystemAlert: () => void;
 }
 
+// ─── UI preferences slice ─────────────────────────────────────────────────────
+// Persisted sidebar personalisation: pinned (favorite) nav items, collapsed
+// group state, and a short MRU list of recently-visited paths. All three are
+// purely cosmetic, so they are safe to persist to localStorage.
+
+interface UiSlice {
+  favorites:       string[];   // nav item paths the user has pinned
+  collapsedGroups: string[];   // nav group ids the user has collapsed
+  recentPaths:     string[];   // most-recently-visited paths (newest first)
+  toggleFavorite:  (path: string) => void;
+  toggleGroup:     (groupId: string) => void;
+  pushRecentPath:  (path: string) => void;
+}
+
 // ─── Combined store type ──────────────────────────────────────────────────────
 
 export type AppStore =
@@ -198,7 +212,8 @@ export type AppStore =
   OrchestratorSlice &
   AlertsSlice &
   WsSlice &
-  SystemEventSlice;
+  SystemEventSlice &
+  UiSlice;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -400,6 +415,45 @@ export const useStore = create<AppStore>()(
 
         clearSystemAlert: () =>
           set({ systemAlert: null }, false, 'system/clear'),
+
+        // ── UI preferences ──────────────────────────────────────────────────────
+        favorites:       [],
+        collapsedGroups: [],
+        recentPaths:     [],
+
+        toggleFavorite: (path) =>
+          set(
+            (state) => ({
+              favorites: state.favorites.includes(path)
+                ? state.favorites.filter((p) => p !== path)
+                : [...state.favorites, path],
+            }),
+            false,
+            'ui/toggleFavorite',
+          ),
+
+        toggleGroup: (groupId) =>
+          set(
+            (state) => ({
+              collapsedGroups: state.collapsedGroups.includes(groupId)
+                ? state.collapsedGroups.filter((g) => g !== groupId)
+                : [...state.collapsedGroups, groupId],
+            }),
+            false,
+            'ui/toggleGroup',
+          ),
+
+        pushRecentPath: (path) =>
+          set(
+            (state) => {
+              if (state.recentPaths[0] === path) return state;
+              return {
+                recentPaths: [path, ...state.recentPaths.filter((p) => p !== path)].slice(0, 6),
+              };
+            },
+            false,
+            'ui/pushRecentPath',
+          ),
       }),
       {
         name: 'hopefx-store',
@@ -421,6 +475,10 @@ export const useStore = create<AppStore>()(
           plan:               state.plan,
           trial:              state.trial,
           trialDaysRemaining: state.trialDaysRemaining,
+          // Sidebar personalisation — purely cosmetic, safe to persist.
+          favorites:          state.favorites,
+          collapsedGroups:    state.collapsedGroups,
+          recentPaths:        state.recentPaths,
         }),
         onRehydrateStorage: () => (rehydratedState) => {
           // Called once localStorage rehydration is complete.
@@ -478,6 +536,9 @@ export const selectPlan               = (s: AppStore) => s.plan;
 export const selectTrial              = (s: AppStore) => s.trial;
 export const selectTrialDaysRemaining = (s: AppStore) => s.trialDaysRemaining;
 export const selectSystemAlert        = (s: AppStore) => s.systemAlert;
+export const selectFavorites          = (s: AppStore) => s.favorites;
+export const selectCollapsedGroups    = (s: AppStore) => s.collapsedGroups;
+export const selectRecentPaths        = (s: AppStore) => s.recentPaths;
 
 // ─── Hydration hook ───────────────────────────────────────────────────────────
 // Use this in any component/hook that must wait for localStorage rehydration

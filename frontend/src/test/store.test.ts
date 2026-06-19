@@ -389,3 +389,86 @@ describe('selectors', () => {
     expect(selectPriceHistory('XAU/USD')(useStore.getState())).toHaveLength(1);
   });
 });
+
+// ─── UI preferences slice ─────────────────────────────────────────────────────
+
+describe('ui slice — favorites', () => {
+  beforeEach(() => {
+    useStore.setState({ favorites: [], collapsedGroups: [], recentPaths: [] });
+  });
+
+  it('starts with no favorites', () => {
+    expect(useStore.getState().favorites).toEqual([]);
+  });
+
+  it('toggleFavorite pins a path', () => {
+    useStore.getState().toggleFavorite('/trade');
+    expect(useStore.getState().favorites).toEqual(['/trade']);
+  });
+
+  it('toggleFavorite unpins an already-pinned path', () => {
+    useStore.getState().toggleFavorite('/trade');
+    useStore.getState().toggleFavorite('/trade');
+    expect(useStore.getState().favorites).toEqual([]);
+  });
+
+  it('keeps multiple favorites in insertion order', () => {
+    useStore.getState().toggleFavorite('/trade');
+    useStore.getState().toggleFavorite('/portfolio');
+    expect(useStore.getState().favorites).toEqual(['/trade', '/portfolio']);
+  });
+
+  it('removes only the targeted favorite', () => {
+    useStore.getState().toggleFavorite('/trade');
+    useStore.getState().toggleFavorite('/portfolio');
+    useStore.getState().toggleFavorite('/trade');
+    expect(useStore.getState().favorites).toEqual(['/portfolio']);
+  });
+});
+
+describe('ui slice — collapsed groups', () => {
+  beforeEach(() => {
+    useStore.setState({ favorites: [], collapsedGroups: [], recentPaths: [] });
+  });
+
+  it('toggleGroup collapses then expands a group', () => {
+    useStore.getState().toggleGroup('analytics');
+    expect(useStore.getState().collapsedGroups).toContain('analytics');
+    useStore.getState().toggleGroup('analytics');
+    expect(useStore.getState().collapsedGroups).not.toContain('analytics');
+  });
+});
+
+describe('ui slice — recent paths', () => {
+  beforeEach(() => {
+    useStore.setState({ favorites: [], collapsedGroups: [], recentPaths: [] });
+  });
+
+  it('pushRecentPath prepends the newest path', () => {
+    useStore.getState().pushRecentPath('/trade');
+    useStore.getState().pushRecentPath('/portfolio');
+    expect(useStore.getState().recentPaths[0]).toBe('/portfolio');
+  });
+
+  it('de-duplicates and moves a repeat visit to the front', () => {
+    useStore.getState().pushRecentPath('/trade');
+    useStore.getState().pushRecentPath('/portfolio');
+    useStore.getState().pushRecentPath('/trade');
+    expect(useStore.getState().recentPaths).toEqual(['/trade', '/portfolio']);
+  });
+
+  it('is a no-op when the newest path is pushed again', () => {
+    useStore.getState().pushRecentPath('/trade');
+    const before = useStore.getState().recentPaths;
+    useStore.getState().pushRecentPath('/trade');
+    expect(useStore.getState().recentPaths).toBe(before);
+  });
+
+  it('caps the list at 6 entries', () => {
+    for (const p of ['/a', '/b', '/c', '/d', '/e', '/f', '/g', '/h']) {
+      useStore.getState().pushRecentPath(p);
+    }
+    expect(useStore.getState().recentPaths).toHaveLength(6);
+    expect(useStore.getState().recentPaths[0]).toBe('/h');
+  });
+});

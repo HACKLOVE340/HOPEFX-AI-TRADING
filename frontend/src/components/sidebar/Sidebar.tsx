@@ -12,10 +12,14 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan } from '../../store';
+import {
+  useStore, selectIsAuth, selectUser, selectWsStatus, selectPlan,
+  selectFavorites, selectCollapsedGroups,
+} from '../../store';
 import { ThemeToggle } from '../ThemeToggle';
 import { isAdmin, isSuperAdmin, hasFeatureAccess, PLAN_LABELS, PLAN_COLORS } from '../../lib/subscription';
 import { NAV_ITEMS, NAV_GROUPS } from './navConfig';
+import type { NavItem } from './navConfig';
 import { authApi, notificationsApi } from '../../hooks/useApi';
 import type { Plan } from '../../lib/subscription';
 
@@ -137,18 +141,124 @@ const TradingModeBadge: React.FC<{ collapsed: boolean }> = ({ collapsed }) => {
   );
 };
 
-// ── Group label ───────────────────────────────────────────────────────────────
-const GroupLabel: React.FC<{ label: string; collapsed: boolean }> = ({ label, collapsed }) => {
+// ── Collapsible group label ─────────────────────────────────────────────────
+// In the expanded sidebar the header is a button that collapses/expands the
+// group. In the icon-only sidebar it degrades to a plain divider.
+const GroupLabel: React.FC<{
+  label: string;
+  collapsed: boolean;
+  groupCollapsed?: boolean;
+  onToggle?: () => void;
+}> = ({ label, collapsed, groupCollapsed, onToggle }) => {
   if (collapsed) return <div style={{ height: 1, background: '#1e293b', margin: '6px 8px' }} />;
   return (
-    <div style={{
-      fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
-      letterSpacing: '0.08em', padding: '14px 14px 4px',
-    }}>
+    <button
+      onClick={onToggle}
+      aria-expanded={!groupCollapsed}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+        letterSpacing: '0.08em', padding: '14px 14px 4px', textAlign: 'left',
+        fontFamily: 'inherit',
+      }}
+    >
+      <span style={{
+        fontSize: 9, transition: 'transform 0.15s',
+        transform: groupCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+        display: 'inline-block', width: 8,
+      }}>
+        ▼
+      </span>
       {label}
-    </div>
+    </button>
   );
 };
+
+// ── Reusable nav item row ───────────────────────────────────────────────────
+// Shared by the Favorites section, recents, search results and grouped nav so
+// pin/lock/badge behaviour stays consistent everywhere.
+interface NavItemRowProps {
+  item:             NavItem;
+  active:           boolean;
+  locked:           boolean;
+  collapsed:        boolean;
+  unreadCount:      number;
+  isFavorite:       boolean;
+  onToggleFavorite: (path: string) => void;
+  onNavigate?:      () => void;
+}
+
+const NavItemRow: React.FC<NavItemRowProps> = ({
+  item, active, locked, collapsed, unreadCount, isFavorite, onToggleFavorite, onNavigate,
+}) => (
+  <NavLink
+    to={locked ? '/upgrade' : item.path}
+    className="hopefx-navrow"
+    title={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
+    onClick={onNavigate}
+    style={{
+      display: 'flex', alignItems: 'center',
+      gap: 10, padding: '10px 14px',
+      minHeight: 44,
+      textDecoration: 'none', fontSize: 13, fontWeight: 500,
+      transition: 'background 0.15s, color 0.15s',
+      borderRadius: '0 6px 6px 0', marginRight: 8,
+      background:  active ? '#1e3a5f' : 'transparent',
+      color:       active ? '#60a5fa' : locked ? '#334155' : '#94a3b8',
+      borderLeft:  active ? '3px solid #3b82f6' : '3px solid transparent',
+      justifyContent: collapsed ? 'center' : 'flex-start',
+      opacity: locked ? 0.6 : 1,
+      position: 'relative',
+      cursor: locked ? 'not-allowed' : 'pointer',
+    }}
+  >
+    <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
+      {item.icon}
+    </span>
+    {!collapsed && (
+      <>
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
+          {item.label}
+        </span>
+        {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
+        {item.path === '/notifications' && unreadCount > 0 && (
+          <span style={{
+            minWidth: 16, height: 16, borderRadius: 8,
+            background: '#ef4444', color: '#fff',
+            fontSize: 9, fontWeight: 800, lineHeight: '16px',
+            textAlign: 'center', padding: '0 4px', flexShrink: 0,
+          }}>
+            {unreadCount > 99 ? '99+' : unreadCount}
+          </span>
+        )}
+        {/* Pin / unpin — appears on row hover, stays visible when pinned */}
+        {!locked && (
+          <button
+            className={`hopefx-pin${isFavorite ? ' pinned' : ''}`}
+            title={isFavorite ? 'Unpin from favorites' : 'Pin to favorites'}
+            aria-label={isFavorite ? 'Unpin from favorites' : 'Pin to favorites'}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(item.path); }}
+            style={{
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: isFavorite ? '#fbbf24' : '#475569',
+              fontSize: 12, lineHeight: 1, padding: 2, flexShrink: 0,
+            }}
+          >
+            {isFavorite ? '★' : '☆'}
+          </button>
+        )}
+      </>
+    )}
+    {collapsed && item.path === '/notifications' && unreadCount > 0 && (
+      <span style={{
+        position: 'absolute', top: 4, right: 4,
+        width: 8, height: 8, borderRadius: '50%',
+        background: '#ef4444',
+      }} />
+    )}
+  </NavLink>
+);
 
 // ── Search box ────────────────────────────────────────────────────────────────
 const SearchBox: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => (
@@ -203,8 +313,19 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
   const user      = useStore(selectUser);
   const plan      = useStore(selectPlan);
   const clearAuth = useStore((s) => s.clearAuth);
+  const favorites       = useStore(selectFavorites);
+  const collapsedGroups = useStore(selectCollapsedGroups);
+  const toggleFavorite  = useStore((s) => s.toggleFavorite);
+  const toggleGroup     = useStore((s) => s.toggleGroup);
+  const pushRecentPath  = useStore((s) => s.pushRecentPath);
   const [search, setSearch] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Track recently-visited nav items (only real nav destinations, not aliases).
+  useEffect(() => {
+    const match = NAV_ITEMS.find((i) => location.pathname.startsWith(i.path) && i.path !== '/');
+    if (match) pushRecentPath(match.path);
+  }, [location.pathname, pushRecentPath]);
 
   useEffect(() => {
     if (!isAuth) return;
@@ -248,6 +369,27 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
              item.path.toLowerCase().includes(searchLower);
     });
   }, [searchLower, admin, superAdmin]);
+
+  // Per-item access/state helpers shared by all render paths.
+  const isLocked = (item: NavItem) =>
+    !admin && item.featureKey
+      ? !hasFeatureAccess(user?.role ?? 'user', plan, item.featureKey)
+      : false;
+  const isActive = (item: NavItem) => location.pathname.startsWith(item.path);
+  const favoriteSet = useMemo(() => new Set(favorites), [favorites]);
+
+  // Resolve pinned paths back to nav items the user is actually allowed to see.
+  const favoriteItems = useMemo(() => {
+    if (!favorites.length) return [];
+    return favorites
+      .map((p) => NAV_ITEMS.find((i) => i.path === p))
+      .filter((i): i is NavItem => {
+        if (!i) return false;
+        if (i.superAdminOnly) return superAdmin;
+        if (i.adminOnly)      return admin;
+        return true;
+      });
+  }, [favorites, admin, superAdmin]);
 
   return (
     <aside style={{
@@ -310,6 +452,14 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
         display: 'flex', flexDirection: 'column',
         overflowY: 'auto', overflowX: 'hidden',
       }}>
+        {/* Hover-reveal behaviour for the pin button (can't be done inline). */}
+        <style>{`
+          .hopefx-pin { opacity: 0; transition: opacity 0.12s, color 0.12s; }
+          .hopefx-navrow:hover .hopefx-pin { opacity: 0.7; }
+          .hopefx-pin:hover { opacity: 1 !important; color: #fbbf24 !important; }
+          .hopefx-pin.pinned { opacity: 1; }
+        `}</style>
+
         {/* ── Search results mode ── */}
         {filteredItems && !collapsed ? (
           filteredItems.length === 0 ? (
@@ -324,118 +474,87 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle, onNavigate }) =>
               }}>
                 {filteredItems.length} result{filteredItems.length !== 1 ? 's' : ''}
               </div>
-              {filteredItems.map((item) => {
-                const active = location.pathname.startsWith(item.path);
-                const locked = !admin && item.featureKey
-                  ? !hasFeatureAccess(user?.role ?? 'user', plan, item.featureKey)
-                  : false;
-                return (
-                  <NavLink
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => { setSearch(''); onNavigate?.(); }}
-                    style={{
-                      display: 'flex', alignItems: 'center',
-                      gap: 10, padding: '10px 14px',
-                      minHeight: 44,
-                      textDecoration: 'none', fontSize: 13, fontWeight: 500,
-                      transition: 'background 0.15s, color 0.15s',
-                      borderRadius: '0 6px 6px 0', marginRight: 8,
-                      background:  active ? '#1e3a5f' : 'rgba(59,130,246,0.06)',
-                      color:       active ? '#60a5fa' : locked ? '#334155' : '#94a3b8',
-                      borderLeft:  active ? '3px solid #3b82f6' : '3px solid #1e3a5f',
-                      opacity: locked ? 0.6 : 1,
-                    }}
-                  >
-                    <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
-                      {item.icon}
-                    </span>
-                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
-                      {item.label}
-                    </span>
-                    {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
-                  </NavLink>
-                );
-              })}
+              {filteredItems.map((item) => (
+                <NavItemRow
+                  key={item.path}
+                  item={item}
+                  active={isActive(item)}
+                  locked={isLocked(item)}
+                  collapsed={false}
+                  unreadCount={unreadCount}
+                  isFavorite={favoriteSet.has(item.path)}
+                  onToggleFavorite={toggleFavorite}
+                  onNavigate={() => { setSearch(''); onNavigate?.(); }}
+                />
+              ))}
             </div>
           )
         ) : (
           /* ── Normal grouped nav ── */
-          visibleGroups.map((group) => {
-            const items = NAV_ITEMS.filter((item) => {
-              if (item.group !== group.id)  return false;
-              if (item.superAdminOnly)      return superAdmin;
-              if (item.adminOnly)           return admin;
-              return true;
-            });
-
-            if (items.length === 0) return null;
-
-            return (
-              <div key={group.id}>
-                <GroupLabel label={group.label} collapsed={collapsed} />
-                {items.map((item) => {
-                  const active  = location.pathname.startsWith(item.path);
-                  const locked  = !admin && item.featureKey
-                    ? !hasFeatureAccess(user?.role ?? 'user', plan, item.featureKey)
-                    : false;
-
-                  return (
-                    <NavLink
-                      key={item.path}
-                      to={locked ? '/upgrade' : item.path}
-                      title={collapsed ? (locked ? `${item.label} — upgrade to ${item.plan}` : item.label) : undefined}
-                      onClick={onNavigate}
-                      style={{
-                        display: 'flex', alignItems: 'center',
-                        gap: 10, padding: '10px 14px',
-                        minHeight: 44,
-                        textDecoration: 'none', fontSize: 13, fontWeight: 500,
-                        transition: 'background 0.15s, color 0.15s',
-                        borderRadius: '0 6px 6px 0', marginRight: 8,
-                        background:  active ? '#1e3a5f' : 'transparent',
-                        color:       active ? '#60a5fa' : locked ? '#334155' : '#94a3b8',
-                        borderLeft:  active ? '3px solid #3b82f6' : '3px solid transparent',
-                        justifyContent: collapsed ? 'center' : 'flex-start',
-                        opacity: locked ? 0.6 : 1,
-                        position: 'relative',
-                        cursor: locked ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      <span style={{ fontSize: 15, flexShrink: 0, width: 20, textAlign: 'center' }}>
-                        {item.icon}
-                      </span>
-                      {!collapsed && (
-                        <>
-                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', flex: 1 }}>
-                            {item.label}
-                          </span>
-                          {locked && item.plan && <LockBadge requiredPlan={item.plan} />}
-                          {item.path === '/notifications' && unreadCount > 0 && (
-                            <span style={{
-                              minWidth: 16, height: 16, borderRadius: 8,
-                              background: '#ef4444', color: '#fff',
-                              fontSize: 9, fontWeight: 800, lineHeight: '16px',
-                              textAlign: 'center', padding: '0 4px', flexShrink: 0,
-                            }}>
-                              {unreadCount > 99 ? '99+' : unreadCount}
-                            </span>
-                          )}
-                        </>
-                      )}
-                    {collapsed && item.path === '/notifications' && unreadCount > 0 && (
-                      <span style={{
-                        position: 'absolute', top: 4, right: 4,
-                        width: 8, height: 8, borderRadius: '50%',
-                        background: '#ef4444',
-                      }} />
-                    )}
-                    </NavLink>
-                  );
-                })}
+          <>
+            {/* Favorites — pinned items, expanded sidebar only */}
+            {!collapsed && favoriteItems.length > 0 && (
+              <div>
+                <div style={{
+                  fontSize: 10, fontWeight: 700, color: '#334155', textTransform: 'uppercase',
+                  letterSpacing: '0.08em', padding: '8px 14px 4px',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}>
+                  <span style={{ color: '#fbbf24' }}>★</span> Favorites
+                </div>
+                {favoriteItems.map((item) => (
+                  <NavItemRow
+                    key={`fav-${item.path}`}
+                    item={item}
+                    active={isActive(item)}
+                    locked={isLocked(item)}
+                    collapsed={false}
+                    unreadCount={unreadCount}
+                    isFavorite
+                    onToggleFavorite={toggleFavorite}
+                    onNavigate={onNavigate}
+                  />
+                ))}
               </div>
-            );
-          })
+            )}
+
+            {visibleGroups.map((group) => {
+              const items = NAV_ITEMS.filter((item) => {
+                if (item.group !== group.id)  return false;
+                if (item.superAdminOnly)      return superAdmin;
+                if (item.adminOnly)           return admin;
+                return true;
+              });
+
+              if (items.length === 0) return null;
+
+              const groupCollapsed = !collapsed && collapsedGroups.includes(group.id);
+
+              return (
+                <div key={group.id}>
+                  <GroupLabel
+                    label={group.label}
+                    collapsed={collapsed}
+                    groupCollapsed={groupCollapsed}
+                    onToggle={() => toggleGroup(group.id)}
+                  />
+                  {!groupCollapsed && items.map((item) => (
+                    <NavItemRow
+                      key={item.path}
+                      item={item}
+                      active={isActive(item)}
+                      locked={isLocked(item)}
+                      collapsed={collapsed}
+                      unreadCount={unreadCount}
+                      isFavorite={favoriteSet.has(item.path)}
+                      onToggleFavorite={toggleFavorite}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              );
+            })}
+          </>
         )}
       </nav>
 
