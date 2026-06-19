@@ -182,26 +182,27 @@ function DashboardInner() {
 
       {/* ── Main grid — desktop: 12-col fixed; mobile: scrollable stack ── */}
 
-      {/* Desktop (lg+): 12-col grid with content-sized rows (min 280px) so
-          panels grow to fit their content instead of clipping/overlapping.
-          The page scrolls when the cockpit is taller than the viewport. */}
-      <div className="hidden lg:grid grid-cols-12 auto-rows-[minmax(280px,auto)] gap-2 p-2">
-        <div className="col-span-5 row-span-2 min-h-0">
+      {/* Desktop (lg+): 12-col grid. Rows are bounded (300–380px) so one tall
+          panel (e.g. Risk's feed-source list) scrolls internally instead of
+          ballooning the whole row. Each cell is `grid` so its Panel stretches
+          to fill the cell — no empty gaps. The page scrolls if it overflows. */}
+      <div className="hidden lg:grid grid-cols-12 auto-rows-[minmax(300px,380px)] gap-2 p-2">
+        <div className="grid col-span-5 row-span-2 min-h-0">
           <Suspense fallback={<ChartSkeleton />}><EquityCurveChart /></Suspense>
         </div>
-        <div className="col-span-3 row-span-2 min-h-0">
+        <div className="grid col-span-3 row-span-2 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={6} />}><LiveSignalFeedGuarded /></Suspense>
         </div>
-        <div className="col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><RiskDashboardGuarded /></Suspense>
         </div>
-        <div className="col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={8} />}><OrderBookDepthGuarded /></Suspense>
         </div>
-        <div className="col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><SentimentGaugeGuarded /></Suspense>
         </div>
-        <div className="col-span-2 row-span-1 min-h-0">
+        <div className="grid col-span-2 row-span-1 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={5} />}><MicrostructurePanelGuarded /></Suspense>
         </div>
       </div>
@@ -224,14 +225,14 @@ function DashboardInner() {
 
       {/* ── Bottom row: macro calendar · orchestrator health · ML model ─── */}
       {/* Desktop */}
-      <div className="hidden lg:grid min-h-[240px] grid-cols-12 gap-2 px-2 pb-2">
-        <div className="col-span-5 min-h-0">
+      <div className="hidden lg:grid h-[260px] grid-cols-12 gap-2 px-2 pb-2">
+        <div className="grid col-span-5 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={3} />}><MacroCalendarGuarded /></Suspense>
         </div>
-        <div className="col-span-4 min-h-0">
+        <div className="grid col-span-4 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><OrchestratorHealthGridGuarded /></Suspense>
         </div>
-        <div className="col-span-3 min-h-0">
+        <div className="grid col-span-3 min-h-0">
           <Suspense fallback={<PanelSkeleton rows={4} />}><MLModelPanelGuarded /></Suspense>
         </div>
       </div>
