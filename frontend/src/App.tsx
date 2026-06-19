@@ -81,6 +81,7 @@ const WalkForward          = React.lazy(() => import('./pages/WalkForward'));
 const ABTesting            = React.lazy(() => import('./pages/ABTesting'));
 const TCADashboard         = React.lazy(() => import('./pages/TCADashboard'));
 const PatternDetector      = React.lazy(() => import('./pages/PatternDetector'));
+const AIIntelligence       = React.lazy(() => import('./pages/AIIntelligence'));
 
 // ── Community ─────────────────────────────────────────────────────────────────
 const Leaderboard  = React.lazy(() => import('./pages/Leaderboard'));
@@ -537,6 +538,7 @@ const AppShell: React.FC = () => {
             <Route path="/risk-calc"         element={<Navigate to="/risk-calculator" replace />} />
 
             {/* Analytics */}
+            <Route path="/intelligence" element={wrap(gated('ai-strategy',  <AIIntelligence />))} />
             <Route path="/performance"  element={wrap(gated('performance',  <Performance />))} />
             <Route path="/pnl"          element={wrap(gated('performance',  <PnLDashboard />))} />
             <Route path="/ai-strategy"  element={wrap(gated('ai-strategy',  <AIStrategyGenerator />))} />

@@ -341,6 +341,8 @@ export const mlApi = {
   accuracy: ()               => api.get('/ml/accuracy'),
   models:   ()               => api.get('/ml/models'),
   features: ()               => api.get('/ml/features'),
+  // Inference health + safety gates (staleness, drift, fallback rate, calibration).
+  health:   ()               => api.get('/ml/health'),
 };
 
 // ── Accounts / Teams ──────────────────────────────────────────────────────────

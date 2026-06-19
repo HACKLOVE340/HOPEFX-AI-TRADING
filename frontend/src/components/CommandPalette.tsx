@@ -77,6 +77,7 @@ function buildStaticCommands(navigate: ReturnType<typeof useNavigate>): CommandI
     { id: 'nav-calendar',     label: 'Economic Calendar',      icon: '📅', category: 'Trading',    action: go('/calendar') },
     // AI & Analytics
     { id: 'nav-terminal',     label: 'Trading Terminal',       icon: '🖥️', category: 'Trading',    action: go('/terminal') },
+    { id: 'nav-intelligence', label: 'AI Intelligence',        icon: '🧠', category: 'AI',         action: go('/intelligence') },
     { id: 'nav-ai-strategy',  label: 'AI Strategy Generator',  icon: '🤖', category: 'AI',         action: go('/ai-strategy') },
     { id: 'nav-ai-chart',     label: 'AI Chart Dashboard',     icon: '🧠', category: 'AI',         action: go('/ai-chart') },
     { id: 'nav-correlation',  label: 'Correlation Dashboard',  icon: '🔗', category: 'AI',         action: go('/correlation') },

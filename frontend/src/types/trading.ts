@@ -212,6 +212,77 @@ export interface Signal {
   readonly regime?:      string;
 }
 
+/** Categorical confidence tier emitted by the signal engine. */
+export type SignalStrength =
+  | 'very_strong' | 'strong' | 'moderate' | 'weak' | 'very_weak';
+
+/**
+ * EngineSignal — the raw signal shape returned by GET /api/signals/* (api/signals.py
+ * TradingSignal.to_dict). Distinct from `Signal` above: it carries the full
+ * intelligence context (strength tier, strategy consensus, regime/session,
+ * raw pre-calibration probability, model version) that the UI can surface.
+ */
+export interface EngineSignal {
+  readonly id:                  string;
+  readonly symbol:              string;
+  readonly direction:           'buy' | 'sell' | 'hold';
+  readonly strength:            SignalStrength;
+  readonly confidence:          number;   // calibrated, 0–1
+  readonly price:               number;
+  readonly entry_price:         number;
+  readonly stop_loss:           number;
+  readonly take_profit:         number;
+  readonly risk_reward_ratio:   number;
+  readonly timeframe:           string;
+  readonly strategies_agreeing: string[];
+  readonly total_strategies:    number;
+  readonly regime:              string;
+  readonly session:             string;
+  readonly expiry:              string;
+  readonly timestamp:           string;
+  readonly metadata?:           Record<string, unknown>;  // probability, model_version, source…
+  readonly is_valid?:           boolean;
+}
+
+/** Response of GET /api/ml/health (api/ml.py MLHealthResponse). */
+export interface MlHealth {
+  readonly status:                  'ok' | 'degraded' | 'unavailable';
+  readonly model_loaded:            boolean;
+  readonly model_id:                string | null;
+  readonly feature_count:           number;
+  readonly oos_accuracy:            number | null;
+  readonly last_trained_at:         string | null;
+  readonly predict_count:           number;
+  readonly fallback_count:          number;
+  readonly fallback_rate:           number;
+  readonly non_neutral_rate:        number;
+  readonly signal_window_size:      number;
+  readonly last_latency_ms:         number;
+  readonly uptime_seconds:          number | null;
+  readonly calibrator_available:    boolean;
+  readonly online_learning_enabled: boolean;
+  readonly mtf_fusion_enabled:      boolean;
+  readonly threshold_long:          number;
+  readonly threshold_short:         number;
+  readonly signal_filter?:          Record<string, unknown>;
+  readonly pipeline?:               Record<string, unknown>;
+  readonly checked_at:              string;
+}
+
+/** Response of GET /api/signals/analytics (api/signals.py SignalAnalytics.to_dict). */
+export interface SignalAnalyticsReport {
+  readonly signals_generated:    number;
+  readonly signals_by_direction: Record<string, number>;
+  readonly signals_by_strength:  Record<string, number>;
+  readonly signals_by_symbol:    Record<string, number>;
+  readonly hit_rate:             { tp: number; sl: number; expired: number };
+  readonly tp_rate:              number;
+  readonly sl_rate:              number;
+  readonly avg_confidence:       number;
+  readonly avg_rr_ratio:         number;
+  readonly hourly_distribution:  Record<string, number>;
+}
+
 // ── Account metrics ───────────────────────────────────────────────────────────
 
 export interface AccountMetrics {
