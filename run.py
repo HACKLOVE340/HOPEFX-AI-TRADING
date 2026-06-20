@@ -185,7 +185,15 @@ def _setup_env(args: argparse.Namespace) -> None:
     os.environ["INGEST_EXCHANGE"] = broker_exchange_map.get(args.broker, "oanda")
     os.environ["DEFAULT_BROKER"] = args.broker
     os.environ["BROKER"] = args.broker
-    os.environ["TRADING_MODE"] = args.mode
+    # TRADING_MODE is the paper/live trading concept consumed by the engine,
+    # connect_to_life and the heartbeat — NOT the run mode. Only the explicit
+    # paper/live run modes set it. For api/backtest we preserve whatever the
+    # user configured in .env (defaulting to the safe "paper") so launching the
+    # API server never silently clobbers a deliberate TRADING_MODE=live.
+    if args.mode in ("paper", "live"):
+        os.environ["TRADING_MODE"] = args.mode
+    else:
+        os.environ.setdefault("TRADING_MODE", "paper")
 
     # Symbol override
     if getattr(args, "symbol", None):
