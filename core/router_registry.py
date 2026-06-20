@@ -141,7 +141,11 @@ def register_routers(
     from api.chat import router as chat_router
     from api.explain import router as explain_router
     from api.health import router as health_router
-    from api.landing import router as landing_router
+    # api.landing (static templates/landing.html served at / and /landing) is
+    # intentionally NOT registered: it shadowed the live React SPA landing
+    # (frontend LandingPage.tsx, which has the real-time price ticker). With it
+    # gone, '/' and '/landing' fall through to the SPA catch-all in
+    # core/page_routes.py and render the live landing page.
     from api.pages import router as pages_router
     from api.macro import router as macro_router
     from api.ml import router as ml_router
@@ -222,7 +226,6 @@ def register_routers(
         explain_router,
         macro_router,
         broker_router,
-        landing_router,
         payments_router,
         settings_router,
         settings_extended_router,
