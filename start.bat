@@ -104,26 +104,38 @@ if not exist ".env" (
     echo [OK] .env found
 )
 
-:: ── 7. Build frontend if not built ────────────────────────────────────────────
-if not exist "static\index.html" (
-    echo [INFO] Building React frontend...
+:: ── 7. Build frontend if missing OR stale (code changed since last build) ─────
+:: static\ is a gitignored build artifact. Rebuild when the checked-out commit
+:: differs from the one stamped in static\.build-commit, so pulling new code
+:: doesn't silently keep serving the old UI.
+set "CURRENT_COMMIT="
+for /f %%i in ('git rev-parse HEAD 2^>nul') do set "CURRENT_COMMIT=%%i"
+set "BUILT_COMMIT="
+if exist "static\.build-commit" set /p BUILT_COMMIT=<static\.build-commit
+set "NEED_BUILD=0"
+if not exist "static\index.html" set "NEED_BUILD=1"
+if not "%CURRENT_COMMIT%"=="%BUILT_COMMIT%" set "NEED_BUILD=1"
+if "%NEED_BUILD%"=="1" (
+    echo [INFO] Building React frontend ^(missing or stale^)...
     where npm >nul 2>&1
     if not errorlevel 1 (
         if exist "frontend\package.json" (
-            cd frontend
+            pushd frontend
             npm install --silent && npm run build
-            if errorlevel 1 (
-                echo [WARN] Frontend build failed. API will still start without UI.
-            ) else (
+            set "BUILD_RC=!errorlevel!"
+            popd
+            if "!BUILD_RC!"=="0" (
+                echo %CURRENT_COMMIT%>static\.build-commit
                 echo [OK] Frontend built
+            ) else (
+                echo [WARN] Frontend build failed. API will still start without UI.
             )
-            cd ..
         )
     ) else (
         echo [WARN] npm not found. Skipping frontend build. API will still start.
     )
 ) else (
-    echo [OK] Frontend already built
+    echo [OK] Frontend already built and up to date
 )
 
 :: ── 8. Set defaults and start ─────────────────────────────────────────────────

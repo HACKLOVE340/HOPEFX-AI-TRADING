@@ -116,24 +116,33 @@ Get-Content ".env" | Where-Object { $_ -notmatch "^\s*#" -and $_ -match "=" } | 
     [System.Environment]::SetEnvironmentVariable($kv[0].Trim(), $kv[1].Trim(), "Process")
 }
 
-# ── 9. Build frontend if not built ────────────────────────────────────────────
-if (-not (Test-Path "static\index.html")) {
+# ── 9. Build frontend if missing OR stale (code changed since last build) ──────
+# static\ is a gitignored build artifact. Rebuild when the checked-out commit
+# differs from the one stamped in static\.build-commit, so pulling new code
+# doesn't silently keep serving the old UI.
+$currentCommit = (git rev-parse HEAD 2>$null)
+if (-not $currentCommit) { $currentCommit = "unknown" }
+$builtCommit = if (Test-Path "static\.build-commit") { (Get-Content "static\.build-commit" -Raw).Trim() } else { "none" }
+$needBuild = (-not (Test-Path "static\index.html")) -or ($currentCommit -ne $builtCommit)
+if ($needBuild) {
     if ((Get-Command npm -ErrorAction SilentlyContinue) -and (Test-Path "frontend\package.json")) {
-        Write-Host "[INFO] Building React frontend..." -ForegroundColor Cyan
+        Write-Host "[INFO] Building React frontend (missing or stale)..." -ForegroundColor Cyan
         Push-Location frontend
         npm install --silent
         npm run build
+        $buildRc = $LASTEXITCODE
         Pop-Location
-        if ($LASTEXITCODE -ne 0) {
+        if ($buildRc -ne 0) {
             Write-Host "[WARN] Frontend build failed. API will still start without UI." -ForegroundColor Yellow
         } else {
+            Set-Content -Path "static\.build-commit" -Value $currentCommit -NoNewline
             Write-Host "[OK] Frontend built" -ForegroundColor Green
         }
     } else {
         Write-Host "[WARN] npm not found. Skipping frontend build. API will still start." -ForegroundColor Yellow
     }
 } else {
-    Write-Host "[OK] Frontend already built" -ForegroundColor Green
+    Write-Host "[OK] Frontend already built and up to date" -ForegroundColor Green
 }
 
 # ── 10. Start server ──────────────────────────────────────────────────────────

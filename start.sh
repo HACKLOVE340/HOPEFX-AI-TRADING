@@ -23,20 +23,34 @@ set -a
 [ -f .env ] && source .env
 set +a
 
-# ── Frontend build — auto-build if static/index.html is missing ──────────────
-# The static/ directory is gitignored (build artifact). Build it automatically
-# on first run so the server can serve the React SPA without a manual step.
+# ── Frontend build — auto-build if missing OR stale (source changed) ─────────
+# The static/ directory is gitignored (build artifact). Build it on first run,
+# and REBUILD whenever the checked-out commit differs from the one the current
+# build was made from — otherwise pulling new code silently keeps serving the
+# old UI. The built commit is stamped in static/.build-commit.
+CURRENT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+BUILT_COMMIT="$(cat static/.build-commit 2>/dev/null || echo none)"
+NEED_BUILD=0
 if [ ! -f "static/index.html" ]; then
-    echo "[INFO] Frontend not built — running 'npm run build' in frontend/..."
+    NEED_BUILD=1
+    echo "[INFO] Frontend not built — building..."
+elif [ "$CURRENT_COMMIT" != "$BUILT_COMMIT" ]; then
+    NEED_BUILD=1
+    echo "[INFO] Frontend build is stale (code changed since last build) — rebuilding..."
+else
+    echo "[INFO] Frontend already built and up to date (static/.build-commit matches HEAD)"
+fi
+if [ "$NEED_BUILD" = "1" ]; then
     if command -v npm >/dev/null 2>&1 && [ -f "frontend/package.json" ]; then
-        (cd frontend && npm install --silent && npm run build) \
-            && echo "[INFO] Frontend built successfully → static/" \
-            || echo "[WARN] Frontend build failed — API will still start, but / will show no UI"
+        if (cd frontend && npm install --silent && npm run build); then
+            echo "$CURRENT_COMMIT" > static/.build-commit
+            echo "[INFO] Frontend built successfully → static/"
+        else
+            echo "[WARN] Frontend build failed — API will still start, but / may show stale/no UI"
+        fi
     else
         echo "[WARN] npm not found or frontend/package.json missing — skipping frontend build"
     fi
-else
-    echo "[INFO] Frontend already built (static/index.html exists)"
 fi
 
 # ── Environment defaults ─────────────────────────────────────────────────────
