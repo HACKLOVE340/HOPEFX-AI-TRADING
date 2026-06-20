@@ -52,7 +52,7 @@ async def wire_roadmap_events(app_state: Any) -> list[str]:
                     else:
                         await registry.reload_all()
 
-            bus.subscribe_handler(CH_SYSTEM, _on_strategy_reload)
+            bus.subscribe_local(CH_SYSTEM, _on_strategy_reload)
             wired.append("dynamic_strategy_registry")
             logger.info("Wired: DynamicStrategyRegistry -> CH_SYSTEM (strategy_reload)")
     except Exception as exc:
@@ -77,7 +77,7 @@ async def wire_roadmap_events(app_state: Any) -> list[str]:
                         ask=float(ask),
                     )
 
-            bus.subscribe_handler(CH_TICK, _on_tick_for_orders)
+            bus.subscribe_local(CH_TICK, _on_tick_for_orders)
             wired.append("advanced_order_manager")
             logger.info("Wired: AdvancedOrderManager -> CH_TICK (trigger evaluation)")
     except Exception as exc:
@@ -95,7 +95,7 @@ async def wire_roadmap_events(app_state: Any) -> list[str]:
                 if msg.get("type") in ("fill", "closed"):
                     await cl_pipeline.record_trade_outcome(msg)
 
-            bus.subscribe_handler(CH_ORDER, _on_order_for_learning)
+            bus.subscribe_local(CH_ORDER, _on_order_for_learning)
             wired.append("continuous_learning")
             logger.info("Wired: ContinuousLearningPipeline -> CH_ORDER (trade outcomes)")
     except Exception as exc:
@@ -123,8 +123,8 @@ async def wire_roadmap_events(app_state: Any) -> list[str]:
                 span.set_attribute("breach.type", msg.get("breach_type", "unknown"))
                 span.set_attribute("breach.severity", msg.get("severity", "unknown"))
 
-        bus.subscribe_handler(CH_SIGNAL, _on_signal_for_telemetry)
-        bus.subscribe_handler(CH_BREACH, _on_breach_for_telemetry)
+        bus.subscribe_local(CH_SIGNAL, _on_signal_for_telemetry)
+        bus.subscribe_local(CH_BREACH, _on_breach_for_telemetry)
         wired.append("telemetry")
         logger.info("Wired: Telemetry -> CH_SIGNAL, CH_BREACH (span creation)")
     except Exception as exc:
@@ -146,7 +146,7 @@ async def wire_roadmap_events(app_state: Any) -> list[str]:
                 elif msg_type == "tenant_deprovisioned" and tenant_id:
                     await tenant_mgr.deprovision_tenant(tenant_id)
 
-            bus.subscribe_handler(CH_SYSTEM, _on_tenant_event)
+            bus.subscribe_local(CH_SYSTEM, _on_tenant_event)
             wired.append("tenant_isolation")
             logger.info("Wired: TenantIsolationManager -> CH_SYSTEM (tenant lifecycle)")
     except Exception as exc:

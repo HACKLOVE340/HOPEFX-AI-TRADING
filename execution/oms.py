@@ -566,3 +566,8 @@ class ComplexOrderManager:
         # If slice is fully filled, reveal next
         if filled_slice.filled_quantity >= filled_slice.quantity:
             self._reveal_slice(parent_id, display_size)
+
+
+# Public alias — the Order Management System entry point is the order lifecycle
+# manager. Code such as hopefx_engine imports `OMS` from this module.
+OMS = OrderLifecycleManager
