@@ -174,6 +174,10 @@ class MLInferenceStrategy:
         self.fallback_bars = 0
         self.model_bars = 0
         self.model_version: str | None = None
+        # Feature-source coverage — makes "thin data" visible/measurable.
+        self.macro_bars = 0
+        self.mtf_bars = 0
+        self.online_bars = 0
 
     def __call__(self, *, timestamp, symbol, tick, positions, capital, history) -> list[dict]:
         if symbol != self.symbol:
@@ -202,6 +206,13 @@ class MLInferenceStrategy:
         else:
             self.model_bars += 1
             self.model_version = res.get("model_version")
+            # Track which enrichment sources actually fed the signal.
+            if res.get("macro_active"):
+                self.macro_bars += 1
+            if res.get("mtf_active"):
+                self.mtf_bars += 1
+            if res.get("online_active"):
+                self.online_bars += 1
 
         direction = res.get("direction", "neutral")
         if direction not in ("long", "short") or direction == self._last_dir:
@@ -251,10 +262,18 @@ def run_backtest(
     )
     metrics = engine.run(start_date=start, end_date=end)
     if strategy == "ml":
+        mb = getattr(strat, "model_bars", 0) or 1
         logger.info(
             "  ML coverage: %d bars on real model (%s), %d fallback bars",
             getattr(strat, "model_bars", 0),
             getattr(strat, "model_version", None) or "?",
             getattr(strat, "fallback_bars", 0),
+        )
+        logger.info(
+            "  Feature sources active: macro=%.0f%%  MTF=%.0f%%  online=%.0f%%  "
+            "(0%% = that data source is not connected → those features are zero-imputed)",
+            100 * getattr(strat, "macro_bars", 0) / mb,
+            100 * getattr(strat, "mtf_bars", 0) / mb,
+            100 * getattr(strat, "online_bars", 0) / mb,
         )
     return metrics
