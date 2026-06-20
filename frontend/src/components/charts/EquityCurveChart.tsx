@@ -207,11 +207,11 @@ export function EquityCurveChart() {
 
           {perf && (
             <div className="flex items-center gap-6 px-4 py-2.5 border-t border-[#1e2d3d] shrink-0">
-              <MetricTile label="Win Rate"      value={`${perf.win_rate.toFixed(1)}%`}         valueColor="#00e676" compact />
+              <MetricTile label="Win Rate"      value={Number.isFinite(perf.win_rate) ? `${perf.win_rate.toFixed(1)}%` : '—'} valueColor="#00e676" compact />
               <MetricTile label="Profit Factor" value={fmtRatio(perf.profit_factor)}            valueColor="#00d4ff" compact />
               <MetricTile label="Total Trades"  value={perf.total_trades.toString()}            compact />
               <MetricTile label="Avg Trade"     value={fmtPrice(perf.avg_trade_pnl, 2)}        valueColor={pnlColor(perf.avg_trade_pnl)} compact />
-              <MetricTile label="CVaR 95%"      value={`${(perf.cvar_95 * 100).toFixed(1)}%`} valueColor="#ff3b5c" compact />
+              <MetricTile label="CVaR 95%"      value={Number.isFinite(perf.cvar_95) ? `${(perf.cvar_95 * 100).toFixed(1)}%` : '—'} valueColor="#ff3b5c" compact />
             </div>
           )}
         </div>

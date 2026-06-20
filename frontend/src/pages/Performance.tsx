@@ -400,7 +400,7 @@ const Performance: React.FC = () => {
           <div style={s.card}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={s.cardTitle}>Equity Curve</h3>
-              {equity.length > 1 && (
+              {equity.length > 1 && Number.isFinite(equity[0].v) && equity[0].v !== 0 && (
                 <span style={{ fontSize: 12, fontWeight: 600, color: equity[equity.length-1].v >= equity[0].v ? '#00e676' : '#ff1744' }}>
                   {equity[equity.length-1].v >= equity[0].v ? '+' : ''}{(((equity[equity.length-1].v - equity[0].v) / equity[0].v) * 100).toFixed(2)}%
                 </span>
