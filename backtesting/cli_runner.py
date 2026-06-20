@@ -27,6 +27,15 @@ from backtesting.engine import BacktestEngine, DataFrameDataHandler
 
 logger = logging.getLogger("backtest.cli")
 
+# Capture the genuine pandas shift BEFORE the backtest's no_lookahead_context
+# guard monkeypatches it. The inference feature pipeline legitimately uses
+# shift(-1) for label creation (the label is dropped before prediction), which
+# the guard flags as look-ahead. MLInferenceStrategy restores the real shift
+# only around predict(); the prediction window is already sliced to the current
+# bar, so no real future data leaks in.
+_REAL_DF_SHIFT = pd.DataFrame.shift
+_REAL_SERIES_SHIFT = pd.Series.shift
+
 ROOT = Path(__file__).parent.parent
 _DATE_COLS = ("date", "timestamp", "datetime", "time")
 
@@ -174,6 +183,10 @@ class MLInferenceStrategy:
         if len(win) < 100:  # InferenceEngine._MIN_BARS
             return []
 
+        # Let the model's internal pipeline (incl. label-creation shift(-1)) run
+        # with the real pandas shift; restore the guard's version afterwards.
+        _saved_df, _saved_s = pd.DataFrame.shift, pd.Series.shift
+        pd.DataFrame.shift, pd.Series.shift = _REAL_DF_SHIFT, _REAL_SERIES_SHIFT
         try:
             res = self._engine.predict(win, symbol=self._pred_symbol)
         except RuntimeError:
@@ -181,6 +194,8 @@ class MLInferenceStrategy:
             return []
         except Exception:
             return []
+        finally:
+            pd.DataFrame.shift, pd.Series.shift = _saved_df, _saved_s
 
         if res.get("fallback"):
             self.fallback_bars += 1
