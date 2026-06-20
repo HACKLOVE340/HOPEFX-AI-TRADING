@@ -1,0 +1,19 @@
+# requirements-cpu.txt — CPU-only PyTorch for hosts without a GPU (typical VPS).
+#
+# torch is an OPTIONAL transitive dep of transformers / sentence-transformers /
+# stable-baselines3. On Linux, a bare `pip install -r requirements.txt` pulls the
+# CUDA build (torch + ~5 GB of nvidia-* wheels) — useless and disk-busting on a
+# CPU box.
+#
+# Install this FIRST (CPU torch, ~200 MB), THEN the main file (which then finds
+# torch already satisfied and skips the CUDA wheels):
+#
+#     pip install -r requirements-cpu.txt
+#     pip install -r requirements.txt
+#
+# NOTE: uses --index-url (not --extra-index-url) so the CPU wheel is chosen
+# deterministically. This file lists ONLY torch, so pointing the index at the
+# PyTorch CPU repo is safe. GPU hosts: skip this; use the CUDA note in
+# requirements.txt instead.
+--index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0

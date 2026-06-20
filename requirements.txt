@@ -81,6 +81,8 @@ shap>=0.44.0
 # ── Semantic embeddings (HOPEFXBrain attack intent classification) ─────────────
 # sentence-transformers pulls torch; pin to avoid accidental GPU builds on CPU nodes.
 # On GPU nodes: pip install torch --index-url https://download.pytorch.org/whl/cu121
+# On CPU nodes: run `pip install -r requirements-cpu.txt` BEFORE this file so the
+#   CUDA torch + ~5GB of nvidia-* wheels are NOT pulled transitively.
 # then pip install sentence-transformers
 sentence-transformers>=5.0.0,<6.0.0
 
