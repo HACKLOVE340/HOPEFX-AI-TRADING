@@ -129,28 +129,40 @@ if exist "static\.build-commit" set /p BUILT_COMMIT=<static\.build-commit
 set "NEED_BUILD=0"
 if not exist "static\index.html" set "NEED_BUILD=1"
 if not "%CURRENT_COMMIT%"=="%BUILT_COMMIT%" set "NEED_BUILD=1"
+:: Run the build in a subroutine to avoid deeply-nested ()-block parsing issues
+:: and so npm.cmd is invoked with `call` from inside the frontend directory.
 if "%NEED_BUILD%"=="1" (
-    echo [INFO] Building React frontend ^(missing or stale^)...
-    where npm >nul 2>&1
-    if not errorlevel 1 (
-        if exist "frontend\package.json" (
-            pushd frontend
-            npm install --silent && npm run build
-            set "BUILD_RC=!errorlevel!"
-            popd
-            if "!BUILD_RC!"=="0" (
-                echo %CURRENT_COMMIT%>static\.build-commit
-                echo [OK] Frontend built
-            ) else (
-                echo [WARN] Frontend build failed. API will still start without UI.
-            )
-        )
-    ) else (
-        echo [WARN] npm not found. Skipping frontend build. API will still start.
-    )
+    call :build_frontend
 ) else (
     echo [OK] Frontend already built and up to date
 )
+goto :after_frontend
+
+:build_frontend
+where npm >nul 2>&1
+if errorlevel 1 (
+    echo [WARN] npm not found. Skipping frontend build. API will still start.
+    goto :eof
+)
+if not exist "frontend\package.json" (
+    echo [WARN] frontend\package.json not found. Skipping frontend build.
+    goto :eof
+)
+echo [INFO] Building React frontend ^(missing or stale^)...
+pushd "%~dp0frontend"
+call npm install --silent
+call npm run build
+set "BUILD_RC=!errorlevel!"
+popd
+if "!BUILD_RC!"=="0" (
+    >"%~dp0static\.build-commit" echo !CURRENT_COMMIT!
+    echo [OK] Frontend built
+) else (
+    echo [WARN] Frontend build failed. API will still start without UI.
+)
+goto :eof
+
+:after_frontend
 
 :: ── 8. Set defaults and start ─────────────────────────────────────────────────
 if not defined APP_ENV  set APP_ENV=development
