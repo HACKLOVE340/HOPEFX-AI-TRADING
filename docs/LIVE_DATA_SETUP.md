@@ -56,10 +56,24 @@ pip install yfinance vaderSentiment feedparser
 - `yfinance` → free Yahoo OHLCV fallback (`GC=F` for gold) — works with no key.
 - `vaderSentiment` + `feedparser` → real news-sentiment scoring (you saw
   "VADER not available — keyword-only scoring" in the logs without these).
+- `torch>=2.1.1` → enables the LSTM signal layer, RL/PPO agent and EWC online
+  learner (without it those fall back to stubs and predictions are degraded).
 
 ---
 
 ## Verifying real data is flowing
+
+**Start here — the feed self-test** (checks every feed's key + egress at once):
+```bash
+python scripts/check_feeds.py
+```
+It prints a per-feed table (key set? reachable? live?), confirms the macro
+offline fallback, and exits non-zero until the required feeds (gold spot,
+OHLCV/MTF) are green. Then confirm the model actually consumes them:
+```bash
+python run.py --mode backtest --strategy ml   # "Feature sources active" should rise above macro=100% MTF=0%
+```
+
 
 1. **Readiness** (needs Postgres + Redis for full green; SQLite/fakeredis is
    degraded): `curl localhost:8000/api/health/ready` → `ready: true`.
