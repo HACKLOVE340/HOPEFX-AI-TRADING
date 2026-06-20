@@ -18,7 +18,7 @@ import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import type { UserRole } from '../store';
 import { Eye, EyeOff, Activity, AlertCircle, Loader2, ShieldCheck } from 'lucide-react';
 import { extractApiError } from '../lib/utils';
-import AuthBackground from '../components/AuthBackground';
+import AppBackground from '../components/AppBackground';
 
 // ── Error normaliser ──────────────────────────────────────────────────────────
 
@@ -169,7 +169,7 @@ const Login: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <AuthBackground />
+      <AppBackground variant="auth" />
       <div style={s.card}>
         {/* Logo */}
         <Link to="/" style={s.logoLink}>

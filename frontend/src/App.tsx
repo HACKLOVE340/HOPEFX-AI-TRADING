@@ -22,6 +22,7 @@ import {
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import AuthGuard from './components/AuthGuard';
+import AppBackground from './components/AppBackground';
 import AdminGuard from './components/AdminGuard';
 import SuperAdminGuard from './components/SuperAdminGuard';
 import SubscriptionGate from './components/SubscriptionGate';
@@ -451,10 +452,13 @@ const AppShell: React.FC = () => {
   if (!hydrated) return <PageFallback />;
 
   return (
-    <div
-      className="app-shell"
-      style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
-    >
+    <>
+      {/* App-wide animated backdrop (subtle variant), behind the shell */}
+      <AppBackground variant="app" />
+      <div
+        className="app-shell"
+        style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}
+      >
       {/* Banners push content down instead of overlapping */}
       <TrialBanner />
       <NoLiveFeedBanner />
@@ -497,7 +501,7 @@ const AppShell: React.FC = () => {
           </>
         )}
 
-      <main className="app-shell-main" style={{ background: 'var(--bg, #0f172a)' }}>
+      <main className="app-shell-main" style={{ background: 'transparent' }}>
         {/* PageScroller: scrollable wrapper for all non-terminal pages.
             Terminal pages (TradingDashboard, ChartDashboard) manage their own
             overflow internally and use flex:1 to fill this container. */}
@@ -625,6 +629,7 @@ const AppShell: React.FC = () => {
       </main>
       </div>
     </div>
+    </>
   );
 };
 

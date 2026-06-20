@@ -15,7 +15,7 @@ import { useStore } from '../store';
 import { authApi, prefetchCsrfToken } from '../hooks/useApi';
 import { extractApiError } from '../lib/utils';
 import { Eye, EyeOff, Activity, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
-import AuthBackground from '../components/AuthBackground';
+import AppBackground from '../components/AppBackground';
 
 // ── Plan badge ────────────────────────────────────────────────────────────────
 
@@ -235,7 +235,7 @@ const Register: React.FC = () => {
 
   return (
     <div style={s.page}>
-      <AuthBackground />
+      <AppBackground variant="auth" />
       <div style={s.card}>
         {/* Logo */}
         <Link to="/" style={s.logoLink}>

@@ -236,7 +236,11 @@
     flex-direction: column;
     height: 100vh;
     overflow: hidden;
-    background: var(--bg, #0f172a);
+    /* Transparent so the fixed AppBackground shows through; z-index lifts all
+       shell content above that backdrop (which sits at z-index 0). */
+    background: transparent;
+    position: relative;
+    z-index: 1;
     color: var(--text, #f1f5f9);
   }
 
