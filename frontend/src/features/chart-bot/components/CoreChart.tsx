@@ -550,8 +550,8 @@ const CoreChart: React.FC<CoreChartProps> = ({
         {noData && (
           <div style={styles.loadingOverlay}>
             <span style={styles.loadingText}>
-              No market data for {symbol} {timeframe}. Configure a price feed
-              (OANDA_API_KEY / GOLDAPI_IO_KEY) or check your connection.
+              No market data for {symbol} {timeframe} yet — fetching from the
+              live price layer. If this persists, check your internet connection.
             </span>
           </div>
         )}

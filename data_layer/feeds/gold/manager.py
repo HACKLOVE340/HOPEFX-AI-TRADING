@@ -42,6 +42,7 @@ from data_layer.feeds.gold.goldapi import GoldAPIFeed
 from data_layer.feeds.gold.metalpriceapi import MetalpriceAPIFeed
 from data_layer.feeds.gold.metals_api import MetalsAPIFeed
 from data_layer.feeds.gold.metals_dev import MetalsDevFeed
+from data_layer.feeds.gold.yahoo import YahooGoldFeed
 from data_layer.quality.engine import dqe
 from data_layer.types import FeedSource, GoldTick, TickQuality
 
@@ -51,18 +52,22 @@ logger = logging.getLogger(__name__)
 _POLL_INTERVALS: dict[FeedSource, float] = {
     FeedSource.GOLDAPI: 5.0,
     FeedSource.METALS_DEV: 10.0,
+    FeedSource.YAHOO: 5.0,
     FeedSource.METALS_API: 60.0,
     FeedSource.METALPRICEAPI: 60.0,
     FeedSource.COMMODITY_API: 60.0,
 }
 
-# Priority order for primary source selection (index 0 = highest priority)
+# Priority order for primary source selection (index 0 = highest priority).
+# Keyed providers rank above Yahoo when configured; Yahoo is the keyless
+# baseline that keeps prices flowing with no API key at all.
 _PRIORITY: list[FeedSource] = [
     FeedSource.GOLDAPI,
     FeedSource.METALS_DEV,
     FeedSource.METALS_API,
     FeedSource.METALPRICEAPI,
     FeedSource.COMMODITY_API,
+    FeedSource.YAHOO,
 ]
 
 
@@ -84,6 +89,7 @@ class GoldFeedManager:
             FeedSource.METALS_API: MetalsAPIFeed(),
             FeedSource.METALS_DEV: MetalsDevFeed(),
             FeedSource.COMMODITY_API: CommodityAPIFeed(),
+            FeedSource.YAHOO: YahooGoldFeed(),
         }
         self._latest: dict[FeedSource, GoldTick] = {}
         self._consensus_tick: GoldTick | None = None
@@ -141,9 +147,9 @@ class GoldFeedManager:
         configured = [(src, feed) for src, feed in self._feeds.items() if feed.is_configured]
         if not configured:
             logger.info(
-                "GoldFeedManager: no gold feed API keys configured — live gold prices unavailable. "
-                "Set at least one of: GOLDAPI_IO_KEY, METALS_DEV_KEY, "
-                "METALS_API_KEY, METALPRICEAPI_KEY, COMMODITY_PRICE_API_KEY"
+                "GoldFeedManager: no gold feeds available — live gold prices unavailable. "
+                "The keyless Yahoo feed is the default; configure a keyed provider "
+                "(GOLDAPI_IO_KEY, METALS_DEV_KEY, etc.) only for higher-frequency data."
             )
             return
 

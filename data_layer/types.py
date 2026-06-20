@@ -35,6 +35,7 @@ class FeedSource(StrEnum):
     METALS_API = "metals_api"
     METALS_DEV = "metals_dev"
     COMMODITY_API = "commodity_api"
+    YAHOO = "yahoo"  # keyless Yahoo Finance feed — default when no API keys set
     AGGREGATED = "aggregated"  # computed mid price from multiple real sources
     SYNTHETIC = AGGREGATED  # backwards-compat alias — use AGGREGATED
     REPLAY = "replay"  # historical replay engine
