@@ -808,6 +808,18 @@ async def shutdown_event():
         except Exception as _pe_err:
             logger.warning("Price engine stop error: %s", _pe_err)
 
+    # Stop the trading engine (auto-started in init_trading_engine) + its task
+    _trading_engine = getattr(app_state, "engine", None)
+    if _trading_engine is not None and hasattr(_trading_engine, "stop"):
+        try:
+            await _trading_engine.stop()
+            logger.info("[OK] Trading engine stopped")
+        except Exception as _te_err:
+            logger.warning("Trading engine stop error: %s", _te_err)
+    _engine_task = getattr(app_state, "engine_task", None)
+    if _engine_task is not None and not _engine_task.done():
+        _engine_task.cancel()
+
     if app_state.db_engine:
         app_state.db_engine.dispose()
         logger.info("[OK] Database engine disposed")

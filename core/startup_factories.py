@@ -2844,7 +2844,45 @@ async def init_trading_engine(s: Any) -> Any | None:
         if getattr(s, "brain", None) is not None or getattr(s, "strategy_brain", None) is not None:
             engine._brain = s.brain or s.strategy_brain
         s.engine = engine
+        # Admin/health endpoints read app_state.hopefx_engine — keep both in sync
+        # so the dashboard sees the engine instead of reporting it "offline".
+        s.hopefx_engine = engine
         logger.info("HopeFXEngine initialised and wired to app_state.engine")
+
+        # ── Gated, non-blocking auto-start ────────────────────────────────────
+        # Paper mode auto-starts so the engine is online and paper-trades when a
+        # data feed is present. LIVE trading is NEVER auto-started: it requires
+        # BOTH ENGINE_AUTOSTART=true AND LIVE_TRADING_ENABLED=true, and still
+        # passes the kill switch + Sharpe/CI deployment gates before any real
+        # order. start() runs as a background task so a slow/absent price feed
+        # can't block app startup or crash it.
+        mode = os.getenv("TRADING_MODE", "paper").lower()
+        if mode == "live":
+            autostart = (
+                os.getenv("ENGINE_AUTOSTART", "false").lower() == "true"
+                and os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
+            )
+        else:
+            autostart = os.getenv("ENGINE_AUTOSTART", "true").lower() == "true"
+
+        if autostart:
+            async def _run_engine() -> None:
+                try:
+                    await engine.start()
+                except asyncio.CancelledError:
+                    raise  # clean shutdown — let cancellation propagate
+                except (Exception, SystemExit) as _eexc:  # never let the engine crash the app
+                    logger.warning("HopeFXEngine autostart failed (non-fatal): %s", _eexc)
+
+            s.engine_task = asyncio.create_task(_run_engine())
+            logger.info("HopeFXEngine autostart scheduled (mode=%s)", mode)
+        else:
+            logger.info(
+                "HopeFXEngine autostart disabled (mode=%s) — set ENGINE_AUTOSTART=true%s to enable.",
+                mode,
+                " and LIVE_TRADING_ENABLED=true" if mode == "live" else "",
+            )
+
         return engine
     except Exception as exc:
         logger.warning("HopeFXEngine init failed (non-fatal): %s", exc)
