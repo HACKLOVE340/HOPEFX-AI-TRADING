@@ -3677,8 +3677,8 @@ async def init_dynamic_strategy_registry(s: Any) -> Any | None:
         await registry.start()
         s.dynamic_strategy_registry = registry
         logger.info(
-            "DynamicStrategyRegistry initialised (%d strategies loaded)",
-            len(registry.list_strategies()),
+            "DynamicStrategyRegistry initialised (%d strategy versions loaded)",
+            len(registry.get_all_versions()),
         )
         return registry
     except Exception as exc:

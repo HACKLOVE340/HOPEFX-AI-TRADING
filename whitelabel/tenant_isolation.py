@@ -603,3 +603,36 @@ def tenant_scoped(func: Callable) -> Callable:
         return await func(*args, **kwargs)
 
     return wrapper
+
+
+class TenantIsolationManager:
+    """Facade over the tenant-isolation primitives, expected by the startup
+    factory (``init_tenant_isolation``).
+
+    Holds the DB engine + cache and hands out tenant-scoped sessions/caches via
+    the existing TenantAwareSession / NamespacedCache wrappers. Kept intentionally
+    thin — the enforcement logic lives in those classes and the middleware.
+    """
+
+    def __init__(self, db_engine: Any = None, cache: Any = None) -> None:
+        self.db_engine = db_engine
+        self.cache = cache
+        self._initialized = False
+
+    async def initialize(self) -> bool:
+        """No heavy setup required — RLS is enforced per-request by the
+        middleware/session wrappers. Marks the manager ready."""
+        self._initialized = True
+        return True
+
+    def session_for(self, session: Any, tenant_id: str) -> TenantAwareSession:
+        """Wrap a SQLAlchemy session so all queries are tenant-scoped."""
+        return TenantAwareSession(session, tenant_id)
+
+    def cache_for(self, tenant_id: str) -> NamespacedCache | None:
+        """Return a tenant-namespaced cache wrapper, or None if no cache."""
+        return NamespacedCache(self.cache, tenant_id) if self.cache is not None else None
+
+    @property
+    def is_ready(self) -> bool:
+        return self._initialized

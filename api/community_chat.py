@@ -505,17 +505,25 @@ async def chat_ws(room_id: str, websocket: WebSocket) -> None:
                 _chat_user_id = None
 
         if _chat_user_id is None:
-            # Must accept before closing — FastAPI requires accept() before close()
-            await websocket.accept()
-            await websocket.send_text(
-                json.dumps({"type": "error", "code": "AUTH_REQUIRED", "message": "Valid JWT required"})
-            )
-            await websocket.close(code=4001)
+            # Must accept before closing — FastAPI requires accept() before close().
+            # Guard every send/close: the client may already be gone, which
+            # otherwise surfaces as an unhandled ASGI ConnectionClosed error.
+            try:
+                await websocket.accept()
+                await websocket.send_text(
+                    json.dumps({"type": "error", "code": "AUTH_REQUIRED", "message": "Valid JWT required"})
+                )
+                await websocket.close(code=4001)
+            except Exception:  # noqa: S110  # nosec B110 — client disconnected before we replied
+                pass
             return
     else:
         _chat_user_id = "anonymous"
 
-    await websocket.accept()
+    try:
+        await websocket.accept()
+    except Exception:  # nosec B110 — client disconnected during handshake
+        return
 
     # Register connection — enforce per-room limit to prevent memory DoS
     if room_id not in _CHAT_CONNECTIONS:

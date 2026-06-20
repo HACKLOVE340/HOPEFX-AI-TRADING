@@ -81,6 +81,18 @@ def _parse_date(text: str | None) -> datetime:
     return datetime.now(UTC)
 
 
+def _as_utc(dt: datetime | None) -> datetime:
+    """Coerce any datetime to tz-aware UTC.
+
+    feedparser yields naive datetimes (from time.struct_time), which then can't
+    be compared against tz-aware cutoffs ("can't compare offset-naive and
+    offset-aware datetimes") — this normalises both sides.
+    """
+    if dt is None:
+        return datetime.now(UTC)
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt.astimezone(UTC)
+
+
 def _xml_text(el: _stdlib_ET.Element | None) -> str:
     return (el.text or "").strip() if el is not None else ""
 
@@ -443,7 +455,7 @@ class RSSFeedProvider(NewsProvider):
                     for entry in feed.entries:
                         try:
                             article = self.format_article(entry, feed_name)
-                            if article.published_at >= cutoff_time:
+                            if _as_utc(article.published_at) >= cutoff_time:
                                 all_articles.append(article)
                         except Exception as e:
                             self.logger.warning("Error formatting RSS entry: %s", e)
@@ -570,7 +582,7 @@ class MultiSourceAggregator:
             all_articles = self._deduplicate(all_articles)
 
         # Sort by published date (newest first)
-        all_articles.sort(key=lambda x: x.published_at, reverse=True)
+        all_articles.sort(key=lambda x: _as_utc(x.published_at), reverse=True)
 
         self.logger.info("Aggregated %s unique articles", len(all_articles))
 
